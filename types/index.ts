@@ -20,7 +20,7 @@ export interface Book {
 export interface PersonalizationData {
   childName: string;
   childAge: string;
-  language: 'English' | 'Chinese' | 'Spanish' | 'French';
+  language: Language;
   dedication: string;
   photo?: File | null;
   photoUrl?: string; // For preview display

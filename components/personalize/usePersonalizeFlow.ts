@@ -14,6 +14,21 @@ const normalizeStep = (step: number | undefined): PersonalizeStep => {
   return 2;
 };
 
+const normalizeLanguage = (value: string | undefined): Language => {
+  switch (value) {
+    case 'English':
+    case 'en':
+      return 'en';
+    case 'Chinese':
+    case 'cn_s':
+      return 'cn_s';
+    case 'cn_t':
+      return 'cn_t';
+    default:
+      return 'en';
+  }
+};
+
 export type PersonalizeDraft = {
   bookID: string;
   step: PersonalizeStep;
@@ -22,6 +37,7 @@ export type PersonalizeDraft = {
     childAge: string;
     language: Language;
     bookType: 'digital' | 'basic' | 'premium' | 'supreme';
+    dedication: string;
     photo?: File;
   };
 };
@@ -47,8 +63,9 @@ export function usePersonalizeFlow(book: Book | undefined) {
         personalization: {
           childName: resumeData.personalization?.childName ?? '',
           childAge: resumeData.personalization?.childAge ?? '',
-          language: resumeData.personalization?.language ?? 'en',
+          language: normalizeLanguage(resumeData.personalization?.language),
           bookType: resumeData.personalization?.bookType ?? 'basic',
+          dedication: resumeData.personalization?.dedication ?? '',
         },
       });
     } else {
@@ -60,6 +77,7 @@ export function usePersonalizeFlow(book: Book | undefined) {
           childAge: '',
           language: 'en',
           bookType: 'basic',
+          dedication: '',
         },
       });
     }
