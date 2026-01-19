@@ -7,6 +7,13 @@ import { Book, Language } from '@/types';
 
 export type PersonalizeStep = 1 | 2 | 2.5 | 3;
 
+const normalizeStep = (step: number | undefined): PersonalizeStep => {
+  if (step === 1 || step === 2 || step === 2.5 || step === 3) {
+    return step;
+  }
+  return 2;
+};
+
 export type PersonalizeDraft = {
   bookID: string;
   step: PersonalizeStep;
@@ -36,7 +43,7 @@ export function usePersonalizeFlow(book: Book | undefined) {
     if (resumeData && resumeData.bookID === book.bookID) {
       setDraft({
         bookID: book.bookID,
-        step: resumeData.savedStep ?? 2,
+        step: normalizeStep(resumeData.savedStep),
         personalization: {
           childName: resumeData.personalization?.childName ?? '',
           childAge: resumeData.personalization?.childAge ?? '',
