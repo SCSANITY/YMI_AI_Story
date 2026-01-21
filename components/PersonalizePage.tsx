@@ -704,6 +704,34 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   };
 
   const renderProductShowcase = () => {
+      const includedItems = {
+          digital: [
+              'Vibrant Digital Copy: High-definition PDF optimized for tablet viewing.',
+              'Toolkit: 5 curated prompts to spark deep parent-child dialogue.',
+              'Anywhere Access: Instant, eco-friendly delivery for mobile storytelling.',
+          ],
+          basic: [
+              'All Digital Features Included.',
+              'Premium Heirloom Binding: Durable, archival-quality hardcover with matte-finish pages.',
+              'Tactile Literacy: Develops fine motor skills and focus through physical page-turning.',
+              'Smudge-Proof Art: High-pigment printing designed to resist little fingerprints.',
+          ],
+          premium: [
+              'All Hardcover Features Included.',
+              'Cinematic Narrator: Pre-loaded professional voiceover with character acting.',
+              'Rich Soundscapes: Layered background scores (nature sounds and magical chimes).',
+              'Self-Guided Reading: Enables children to explore the story independently through sound cues.',
+          ],
+          supreme: [
+              'All Immersive Features Included.',
+              'Parent-Voice Integration: The book is custom-programmed with your actual voice.',
+              'Bespoke Dedication: A personalized "Letter to My Child" printed on the opening page.',
+              'Emotional Anchor: Provides a permanent sense of security by preserving your voice for a lifetime.',
+          ],
+      } as const
+
+      const items = includedItems[bookType] ?? includedItems.digital
+
       return (
           <div className="mt-4 p-4 bg-amber-50/50 rounded-xl border border-amber-100">
               <h5 className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -711,50 +739,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                   What is Included
               </h5>
               <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-gray-700">
-                      <div className="min-w-[16px]"><Check className="h-4 w-4 text-green-500" /></div>
-                      <span>{
-                        bookType === 'digital'
-                          ? 'Instant PDF + mobile story access'
-                          : bookType === 'basic'
-                          ? 'High-quality matte paper'
-                          : bookType === 'premium'
-                          ? 'Premium glossy paper'
-                          : 'Tear-proof synthetic paper'
-                      }</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-gray-700">
-                      <div className="min-w-[16px]"><Check className="h-4 w-4 text-green-500" /></div>
-                      <span>{
-                        bookType === 'digital'
-                          ? 'Digital-first layout'
-                          : bookType === 'basic'
-                          ? 'Durable Softcover'
-                          : 'Heirloom Hardcover Binding'
-                      }</span>
-                  </li>
-                   <li className="flex items-center gap-2 text-sm text-gray-700">
-                      <div className="min-w-[16px]"><Check className="h-4 w-4 text-green-500" /></div>
-                      <span>{
-                        bookType === 'digital'
-                          ? 'Shareable digital keepsake'
-                          : bookType === 'basic'
-                          ? 'Standard Color Printing'
-                          : 'Vibrant 6-Color HD Printing'
-                      }</span>
-                  </li>
-                  {bookType === 'premium' && (
-                      <li className="flex items-center gap-2 text-sm text-gray-700 font-bold">
-                          <div className="min-w-[16px]"><Sparkles className="h-4 w-4 text-purple-500" /></div>
-                          <span>Recordable Voice Add-on</span>
+                  {items.map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-sm text-gray-700">
+                          <div className="min-w-[16px] pt-0.5">
+                              <Check className="h-4 w-4 text-green-500" />
+                          </div>
+                          <span>{item}</span>
                       </li>
-                  )}
-                  {bookType === 'supreme' && (
-                      <li className="flex items-center gap-2 text-sm text-gray-700 font-bold">
-                          <div className="min-w-[16px]"><HeadphonesIcon className="h-4 w-4 text-purple-500" /></div>
-                          <span>Interactive Audio Module</span>
-                      </li>
-                  )}
+                  ))}
               </ul>
           </div>
       );
@@ -972,20 +964,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     <label className="text-sm font-bold text-gray-700">Book Type</label>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                         <button onClick={() => setBookType('digital')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'digital' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">Digital</div>
-                                            <div className="text-xs text-gray-500">PDF Only</div>
+                                            <div className="text-sm font-bold text-gray-900">Cloud Explorer</div>
+                                            <div className="text-xs text-gray-500">PDF only</div>
                                         </button>
                                         <button onClick={() => setBookType('basic')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'basic' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">Standard</div>
-                                            <div className="text-xs text-gray-500">Softcover</div>
+                                            <div className="text-sm font-bold text-gray-900">Classic</div>
+                                            <div className="text-xs text-gray-500">Hardcover Edition</div>
                                         </button>
                                         <button onClick={() => setBookType('premium')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'premium' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-blue-900">Premium</div>
-                                            <div className="text-xs text-blue-600">Voice Add-on</div>
+                                            <div className="text-sm font-bold text-blue-900">Immersive</div>
+                                            <div className="text-xs text-blue-600">Enchanted Audio</div>
                                         </button>
                                         <button onClick={() => setBookType('supreme')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'supreme' ? 'border-gray-900 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">Deluxe</div>
-                                            <div className="text-xs text-gray-500">Touch Audio</div>
+                                            <div className="text-sm font-bold text-gray-900">Legacy Signature</div>
+                                            <div className="text-xs text-gray-500">Your Voice Version</div>
                                         </button>
                                     </div>
                                     {renderProductShowcase()}
