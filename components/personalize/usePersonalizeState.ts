@@ -12,6 +12,9 @@ export function usePersonalizeState() {
   const [selectedLang, setSelectedLang] = useState('English');
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoAssetId, setPhotoAssetId] = useState<string | null>(null);
+  const [photoStoragePath, setPhotoStoragePath] = useState<string | null>(null);
+  const [faceImageUrl, setFaceImageUrl] = useState<string | null>(null);
 
   // --- Book Type ---
   const [bookType, setBookType] =
@@ -40,6 +43,15 @@ export function usePersonalizeState() {
 
     photoPreview,
     setPhotoPreview,
+
+    photoAssetId,
+    setPhotoAssetId,
+
+    photoStoragePath,
+    setPhotoStoragePath,
+
+    faceImageUrl,
+    setFaceImageUrl,
 
     bookType,
     setBookType,

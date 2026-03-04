@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useRouter, usePathname } from 'next/navigation';
-import { Globe, ShoppingCart, LogOut, Heart, Menu, X, ArrowLeft, Headphones, Package } from 'lucide-react';
+import { Globe, ShoppingCart, LogOut, Heart, Menu, X, ArrowLeft, Headphones, Package, BookOpen } from 'lucide-react';
 import { Button } from '@/components/Button';
 
 export const Navbar: React.FC = () => {
@@ -19,6 +19,8 @@ export const Navbar: React.FC = () => {
     logout,
   } = useGlobalContext();
 
+  const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+
   const [isLangMenuOpen, setLangMenuOpen] = useState(false);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -28,6 +30,7 @@ export const Navbar: React.FC = () => {
 
   // ✅ 在 personalize 动态路由页隐藏全局 Navbar（避免重复）
   const isPersonalizeRoute = pathname?.startsWith('/personalize/');
+  const isCheckoutRoute = pathname?.startsWith('/checkout');
   
 
   // Close dropdowns when clicking outside
@@ -47,13 +50,11 @@ export const Navbar: React.FC = () => {
   if (isPersonalizeRoute) return null;
 
   const handleCartClick = () => {
-    if (!user) openLoginModal();
-    else router.push('/cart');
+    router.push('/cart');
   };
 
   const handleFavoritesClick = () => {
-    if (!user) openLoginModal();
-    else router.push('/favorites');
+    router.push('/favorites');
   };
 
   const handleBooksClick = () => {
@@ -78,7 +79,7 @@ export const Navbar: React.FC = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Left: Logo + Back */}
         <div className="flex items-center gap-2">
-          {pathname !== '/' && (
+          {pathname !== '/' && !isCheckoutRoute && (
             <button onClick={() => router.push('/')} className="mr-2 p-1 hover:bg-gray-100 rounded-full">
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </button>
@@ -122,6 +123,9 @@ export const Navbar: React.FC = () => {
           <button onClick={() => router.push('/support')} className="transition-colors hover:text-gray-900 hover:scale-105 transform duration-200">
             Support
           </button>
+          <button onClick={() => router.push('/my-books')} className="transition-colors hover:text-gray-900 hover:scale-105 transform duration-200">
+            My Books
+          </button>
         </div>
 
         {/* Right: Actions */}
@@ -160,9 +164,9 @@ export const Navbar: React.FC = () => {
           {/* Cart */}
           <Button variant="ghost" size="sm" onClick={handleCartClick} className="relative px-2">
             <ShoppingCart className="h-5 w-5 text-gray-700" />
-            {cart.length > 0 && (
+            {cartCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
-                {cart.length}
+                {cartCount}
               </span>
             )}
           </Button>
@@ -206,6 +210,14 @@ export const Navbar: React.FC = () => {
                     </button>
 
                     <button
+                      onClick={() => { router.push('/my-books'); setUserMenuOpen(false); }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      My Books
+                    </button>
+
+                    <button
                       onClick={() => { router.push('/support'); setUserMenuOpen(false); }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
@@ -224,7 +236,7 @@ export const Navbar: React.FC = () => {
                 )}
               </div>
             ) : (
-              <Button onClick={openLoginModal} size="sm">Log In</Button>
+              <Button onClick={() => openLoginModal()} size="sm">Log In</Button>
             )}
           </div>
         </div>
@@ -237,6 +249,7 @@ export const Navbar: React.FC = () => {
           <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">Books</button>
           <button onClick={() => { handleFavoritesClick(); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">My Favourites</button>
           <button onClick={() => { router.push('/orders'); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">My Orders</button>
+          <button onClick={() => { router.push('/my-books'); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">My Books</button>
           <button onClick={() => { router.push('/support'); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">Support</button>
         </div>
       )}

@@ -9,12 +9,11 @@ import { Button } from '@/components/Button';
 export default function CartPage() {
   const router = useRouter();
   const {
-    user,
     cart,
     removeFromCart,
     prepareCheckout,
     resumePersonalization,
-    openLoginModal,
+    updateCartQuantity,
   } = useGlobalContext();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -26,18 +25,17 @@ export default function CartPage() {
     }
     setSelectedIds(prev => {
       const existing = new Set(prev);
-      const next = cart.map(item => item.id).filter(id => existing.has(id));
-      return next.length > 0 ? next : cart.map(item => item.id);
+      return cart.map(item => item.id).filter(id => existing.has(id));
     });
   }, [cart]);
 
   const selectedItems = cart.filter(item => selectedIds.includes(item.id));
   const selectedTotal = useMemo(
-    () => selectedItems.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price), 0),
+    () => selectedItems.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0),
     [selectedItems]
   );
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0);
   const allSelected = cart.length > 0 && selectedIds.length === cart.length;
 
   const toggleSelectAll = () => {
@@ -50,24 +48,48 @@ export default function CartPage() {
   };
 
   const handleCheckout = () => {
-    if (!user) {
-      openLoginModal();
-      return;
-    }
-
-    const items = selectedItems.length > 0 ? selectedItems : cart;
+    const items = selectedItems;
+    if (!items.length) return;
     prepareCheckout(items);
-    router.push('/checkout');
+    const ids = items.map(item => item.id).join(',');
+    const suffix = ids ? `?ids=${encodeURIComponent(ids)}` : '';
+    router.push(`/checkout${suffix}`);
+  };
+
+  const goToPreview = (itemId: string, bookID: string) => {
+    const target = cart.find(entry => entry.id === itemId);
+    if (target) {
+      resumePersonalization(target);
+    }
+    const creationId = target?.creationId;
+    const previewJobId = target?.personalization?.previewJobId;
+    if (typeof window !== 'undefined' && creationId) {
+      try {
+        window.sessionStorage.setItem(
+          `ymi_preview_${creationId}`,
+          JSON.stringify({
+            coverUrl: target?.book?.coverUrl ?? null,
+            jobId: previewJobId ?? null,
+          })
+        );
+      } catch {
+        // ignore cache errors
+      }
+    }
+    const params = new URLSearchParams({ view: 'preview' });
+    if (creationId) params.set('creationId', creationId);
+    if (previewJobId) params.set('jobId', previewJobId);
+    router.push(`/personalize/${bookID}?${params.toString()}`);
   };
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-8">
+      <div className="page-surface min-h-screen flex items-center justify-center p-8">
         <div className="max-w-lg text-center space-y-6">
           <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
             <ShoppingCart className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-serif font-bold text-gray-900">Your cart is empty</h1>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Your cart is empty</h1>
           <p className="text-gray-600">Pick a storybook and start personalizing. Your magic awaits.</p>
           <Button size="lg" onClick={() => router.push('/')} className="rounded-full px-8">Browse Books</Button>
         </div>
@@ -76,13 +98,14 @@ export default function CartPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10">
+    <div className="page-surface min-h-screen">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
           <ShoppingCart className="h-5 w-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif font-bold text-gray-900">Your Cart</h1>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Your Cart</h1>
           <p className="text-gray-500 text-sm">Select items to checkout or edit.</p>
         </div>
       </div>
@@ -98,7 +121,7 @@ export default function CartPage() {
           </button>
 
           {cart.map((item) => (
-            <div key={item.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 md:p-6 flex gap-4">
+            <div key={item.id} className="glass-panel rounded-2xl p-4 md:p-6 flex gap-4">
               <button
                 onClick={() => toggleSelection(item.id)}
                 className="mt-2 text-amber-600"
@@ -107,16 +130,66 @@ export default function CartPage() {
                 {selectedIds.includes(item.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-gray-400" />}
               </button>
 
-              <img src={item.book.coverUrl} alt={item.book.title} className="w-24 h-32 object-cover rounded-xl shadow-sm" />
+              <button
+                type="button"
+                onClick={() => goToPreview(item.id, item.bookID)}
+                className="block"
+              >
+                <img
+                  src={item.book.coverUrl}
+                  alt={item.book.title}
+                  className="w-24 h-32 object-cover rounded-xl shadow-sm saturate-110 contrast-110 brightness-105"
+                  loading="lazy"
+                  decoding="async"
+                  fetchPriority="low"
+                />
+              </button>
               <div className="flex-1">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="font-serif text-lg font-bold text-gray-900">{item.book.title}</h2>
+                    <button
+                      type="button"
+                      onClick={() => goToPreview(item.id, item.bookID)}
+                      className="text-left"
+                    >
+                      <h2 className="font-display text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors">{item.book.title}</h2>
+                    </button>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">{item.book.author}</p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-gray-900">${(item.priceAtPurchase ?? item.book.price).toFixed(2)}</div>
-                    <div className="text-xs text-gray-500">Qty 1</div>
+                  <div className="text-right space-y-2">
+                    <div className="text-lg font-bold text-gray-900">
+                      ${((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1)).toFixed(2)}
+                    </div>
+                    <div className="flex items-center justify-end">
+                      <div className="inline-flex items-center rounded-full border border-gray-200 bg-white shadow-sm px-1 py-0.5">
+                        <button
+                          type="button"
+                          className="h-7 w-7 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 inline-flex items-center justify-center"
+                          onClick={() => updateCartQuantity(item.id, Math.max(1, (item.quantity ?? 1) - 1))}
+                          aria-label="Decrease quantity"
+                        >
+                          <span className="text-base font-semibold leading-none">-</span>
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.quantity ?? 1}
+                          onChange={(event) => {
+                            const nextValue = Number.parseInt(event.target.value, 10);
+                            updateCartQuantity(item.id, Number.isNaN(nextValue) ? 1 : nextValue);
+                          }}
+                          className="w-12 h-7 bg-transparent text-center text-xs font-semibold text-gray-700 leading-none outline-none appearance-none"
+                        />
+                        <button
+                          type="button"
+                          className="h-7 w-7 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 inline-flex items-center justify-center"
+                          onClick={() => updateCartQuantity(item.id, (item.quantity ?? 1) + 1)}
+                          aria-label="Increase quantity"
+                        >
+                          <span className="text-base font-semibold leading-none">+</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -152,7 +225,7 @@ export default function CartPage() {
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit">
+        <div className="glass-panel rounded-2xl p-6 h-fit">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h3>
           <div className="space-y-2 text-sm text-gray-600">
             <div className="flex items-center justify-between">
@@ -181,11 +254,10 @@ export default function CartPage() {
             <Sparkles className="h-5 w-5 mr-2" /> Checkout Selected
           </Button>
           <p className="text-xs text-gray-500 mt-3">You can select one or multiple items.</p>
-          {!user && (
-            <p className="text-xs text-gray-500 mt-2">You will be asked to log in before checkout.</p>
-          )}
+          <p className="text-xs text-gray-500 mt-2">Checkout requires a verified email.</p>
         </div>
       </div>
+    </div>
     </div>
   );
 }

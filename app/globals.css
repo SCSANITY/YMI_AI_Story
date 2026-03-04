@@ -8,7 +8,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -22,5 +22,75 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-cutive), "Cutive", "Georgia", serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.font-title {
+  font-family: var(--font-playfair), "Playfair Display", "Georgia", serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-surface {
+  position: relative;
+  background:
+    radial-gradient(1200px 600px at 6% -12%, rgba(255, 223, 190, 0.24), transparent 62%),
+    radial-gradient(1000px 560px at 92% 6%, rgba(255, 236, 210, 0.2), transparent 60%),
+    radial-gradient(700px 520px at 35% 90%, rgba(255, 243, 228, 0.16), transparent 70%),
+    linear-gradient(180deg, rgba(255, 247, 236, 0.82), rgba(255, 255, 255, 1));
+}
+
+.page-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='0.45'/></svg>");
+  opacity: 0.07;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.page-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+.glass-panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 252, 0.78)),
+    radial-gradient(180px 120px at 12% 10%, rgba(255, 250, 244, 0.3), transparent 62%);
+  border: 1px solid rgba(238, 242, 246, 0.7);
+  box-shadow:
+    0 22px 52px rgba(16, 24, 40, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(240, 244, 248, 0.5);
+  backdrop-filter: blur(20px) saturate(155%);
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.glass-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0.5px;
+  border-radius: inherit;
+  border: 1px solid rgba(230, 236, 242, 0.6);
+  box-shadow: inset 0 0 14px rgba(230, 236, 242, 0.3);
+  opacity: 0.6;
+  pointer-events: none;
 }

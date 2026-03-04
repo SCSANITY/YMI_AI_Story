@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Book, Language } from '@/types';
+import { isUuid } from '@/lib/validators';
 
 export type PersonalizeStep = 1 | 2 | 2.5 | 3;
 
@@ -39,15 +40,20 @@ export type PersonalizeDraft = {
     bookType: 'digital' | 'basic' | 'premium' | 'supreme';
     dedication: string;
     photo?: File;
+    assetId?: string;
+    storagePath?: string;
+    faceImageUrl?: string;
+    voiceAssetId?: string;
+    voiceStoragePath?: string;
+    previewJobId?: string;
+    creationId?: string;
   };
 };
 
 export function usePersonalizeFlow(book: Book | undefined) {
   const {
-    user,
     resumeData,
     addToCart,
-    openLoginModal,
   } = useGlobalContext();
 
   const [draft, setDraft] = useState<PersonalizeDraft | null>(null);
@@ -66,6 +72,15 @@ export function usePersonalizeFlow(book: Book | undefined) {
           language: normalizeLanguage(resumeData.personalization?.language),
           bookType: resumeData.personalization?.bookType ?? 'basic',
           dedication: resumeData.personalization?.dedication ?? '',
+          assetId: resumeData.personalization?.assetId,
+          storagePath: resumeData.personalization?.storagePath,
+          faceImageUrl: resumeData.personalization?.faceImageUrl,
+          voiceAssetId: resumeData.personalization?.voiceAssetId,
+          voiceStoragePath: resumeData.personalization?.voiceStoragePath,
+          previewJobId: isUuid(resumeData.personalization?.previewJobId)
+            ? resumeData.personalization?.previewJobId
+            : undefined,
+          creationId: resumeData.personalization?.creationId,
         },
       });
     } else {
@@ -78,6 +93,13 @@ export function usePersonalizeFlow(book: Book | undefined) {
           language: 'en',
           bookType: 'basic',
           dedication: '',
+          assetId: undefined,
+          storagePath: undefined,
+          faceImageUrl: undefined,
+          voiceAssetId: undefined,
+          voiceStoragePath: undefined,
+          previewJobId: undefined,
+          creationId: undefined,
         },
       });
     }
@@ -107,16 +129,11 @@ export function usePersonalizeFlow(book: Book | undefined) {
   );
 
   /** 加入购物车（唯一出口） */
-  const commitToCart = useCallback(() => {
+  const commitToCart = useCallback(async () => {
     if (!draft || !book) return;
 
-    if (!user) {
-      openLoginModal();
-      return;
-    }
-
-    addToCart(book, draft.personalization, draft.step);
-  }, [draft, book, user, addToCart, openLoginModal]);
+    await addToCart(book, draft.personalization, draft.step);
+  }, [draft, book, addToCart]);
 
   return {
     draft,

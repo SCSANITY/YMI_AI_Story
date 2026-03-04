@@ -1,19 +1,57 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Headphones, ArrowLeft, Send } from 'lucide-react';
-import { useGlobalContext } from '@/contexts/GlobalContext';
+import { ArrowLeft, Send } from 'lucide-react';
 import { Button } from '@/components/Button';
 
 export default function SupportOrderPage() {
   const router = useRouter();
   const params = useParams();
-  const { orders } = useGlobalContext();
   const orderId = params?.orderID as string | undefined;
-  const order = orders.find(o => o.id === orderId);
+  const [order, setOrder] = useState<{
+    id: string;
+    displayId?: string | null;
+    status?: string | null;
+    total?: number | null;
+    createdAt?: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!orderId) return;
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/orders/${orderId}`, { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (!data?.order) {
+          setOrder(null);
+          return;
+        }
+        setOrder({
+          id: data.order.id,
+          displayId: data.order.displayId ?? null,
+          status: data.order.status ?? null,
+          total: Number(data.total ?? 0),
+          createdAt: data.order.createdAt ?? null,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setOrder(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-8 py-10">
@@ -22,8 +60,13 @@ export default function SupportOrderPage() {
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif font-bold text-gray-900">Support Ticket</h1>
-          <p className="text-gray-500 text-sm">Order reference: {orderId}</p>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Support Ticket</h1>
+          <p className="text-gray-500 text-sm">
+            Order reference:{' '}
+            <span className="font-mono tabular-nums tracking-wide">
+              {order?.displayId ?? orderId}
+            </span>
+          </p>
         </div>
       </div>
 
@@ -43,11 +86,16 @@ export default function SupportOrderPage() {
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-3">Order summary</h2>
-          {order ? (
+          {loading ? (
+            <p className="text-sm text-gray-500">Loading order...</p>
+          ) : order ? (
             <div className="text-sm text-gray-600 space-y-2">
-              <div><span className="font-semibold">Status:</span> {order.status}</div>
-              <div><span className="font-semibold">Total:</span> ${order.total.toFixed(2)}</div>
-              <div><span className="font-semibold">Placed:</span> {new Date(order.date).toLocaleString()}</div>
+              <div><span className="font-semibold">Status:</span> {order.status ?? 'Unknown'}</div>
+              <div><span className="font-semibold">Total:</span> ${(order.total ?? 0).toFixed(2)}</div>
+              <div>
+                <span className="font-semibold">Placed:</span>{' '}
+                {order.createdAt ? new Date(order.createdAt).toLocaleString() : 'Unknown'}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-gray-500">This order is not in the demo data yet.</p>

@@ -1,5 +1,9 @@
 import { Book } from '@/types';
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+const templateCover = (templateId: string, fileName: string) =>
+  `${SUPABASE_URL}/storage/v1/object/public/app-templates/${templateId}/${fileName}`;
+
 export const BOOKS: Book[] = [
   {
     bookID: 'moonbeam-journey',
@@ -13,11 +17,11 @@ export const BOOKS: Book[] = [
     gender: 'Neutral'
   },
   {
-    bookID: 'dragon-rider-academy',
-    title: 'Dragon Rider Academy',
+    bookID: 'Seed_story',
+    title: 'Miracle Seeds',
     author: 'Marcus Flame',
     price: 29.99,
-    coverUrl: 'https://images.unsplash.com/photo-1612152482319-5d66cb66991c?auto=format&fit=crop&q=80&w=600',
+    coverUrl: templateCover('Seed_story', '01.jpg'),
     description: 'Join the academy and learn to fly dragons in this thrilling adventure specially made for brave hearts.',
     category: 'Fantasy',
     ageRange: '6-8',
@@ -79,7 +83,7 @@ export const BOOKS: Book[] = [
     gender: 'Boy'
   },
   {
-    bookID: 'goodnight-little-bear',
+    bookID: 'Music_story',
     title: 'Goodnight, Little Bear',
     author: 'Mama Ursa',
     price: 19.99,

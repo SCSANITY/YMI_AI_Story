@@ -1,16 +1,22 @@
-'use client'
-import React, { useState, useMemo } from 'react';
+﻿'use client'
+import React, { useState, useMemo, useEffect } from 'react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { BOOKS } from '@/data/books';
 import { Book } from '@/types';
-import { Heart, Search, Sparkles, Filter, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Heart, Search, Sparkles, Filter, ChevronDown, X } from 'lucide-react';
 import { Button } from './Button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 
 export const BookList: React.FC = () => {
-  const { toggleFavorite, favorites, openLoginModal} = useGlobalContext();
+  const { toggleFavorite, favorites } = useGlobalContext();
+  const [coverMap, setCoverMap] = useState<Record<string, string>>({});
+  const [titleMap, setTitleMap] = useState<Record<string, string>>({});
+  const [typeMap, setTypeMap] = useState<Record<string, string>>({});
+  const [descMap, setDescMap] = useState<Record<string, string>>({});
+  const [ratingMap, setRatingMap] = useState<Record<string, { average: number; count: number }>>({});
 
   // Filter States
   const [search, setSearch] = useState('');
@@ -39,12 +45,89 @@ export const BookList: React.FC = () => {
     });
   }, [search, category, age, gender]);
 
+  useEffect(() => {
+    let isMounted = true;
+    type TemplateRow = {
+      template_id?: string | null
+      name?: string | null
+      story_type?: string | null
+      description?: string | null
+      cover_image_path?: string | null
+    }
+
+    const loadCovers = async () => {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('is_active', true);
+
+      if (!isMounted) return;
+      if (error || !data) return;
+
+      const coverLookup: Record<string, string> = {};
+      const titleLookup: Record<string, string> = {};
+      const typeLookup: Record<string, string> = {};
+      const descLookup: Record<string, string> = {};
+
+      ;(data as TemplateRow[]).forEach((row) => {
+        if (row?.template_id && row?.name) {
+          titleLookup[row.template_id] = String(row.name);
+        }
+
+        if (row?.template_id && row?.story_type) {
+          typeLookup[row.template_id] = String(row.story_type);
+        }
+
+        if (row?.template_id && row?.description) {
+          descLookup[row.template_id] = String(row.description);
+        }
+
+        if (!row?.template_id) return;
+        const rawPath = String(row.cover_image_path || '').trim();
+        if (!rawPath) return;
+        if (rawPath.startsWith('http')) {
+          coverLookup[row.template_id] = rawPath;
+          return;
+        }
+        const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '');
+        const { data: publicUrl } = supabase.storage
+          .from('app-templates')
+          .getPublicUrl(cleaned);
+        if (publicUrl?.publicUrl) {
+          coverLookup[row.template_id] = publicUrl.publicUrl;
+        }
+      });
+
+      setCoverMap(coverLookup);
+      setTitleMap(titleLookup);
+      setTypeMap(typeLookup);
+      setDescMap(descLookup);
+    };
+
+    loadCovers();
+
+    fetch('/api/reviews/summary', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : { summary: {} }))
+      .then((data) => {
+        if (!isMounted) return;
+        const summary = data?.summary ?? {};
+        if (summary && typeof summary === 'object') {
+          setRatingMap(summary as Record<string, { average: number; count: number }>);
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setRatingMap({});
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleFavoriteClick = (e: React.MouseEvent, book: Book) => {
     e.stopPropagation();
-    const result = toggleFavorite(book);
-    if (!result.success && result.error === 'login_required') {
-      openLoginModal();
-    }
+    toggleFavorite(book);
   };
 
 const router = useRouter();
@@ -62,11 +145,11 @@ const handlePersonalize = (bookID: string) => {
   const activeFilterCount = [category, age, gender].filter(x => x !== 'All').length;
 
   return (
-    <section id="books" className="py-12 md:py-24 bg-gradient-to-b from-amber-50/50 via-white to-orange-50/30 min-h-screen">
+    <section id="books" className="page-surface py-12 md:py-24 min-h-screen">
       <div className="container mx-auto px-4 md:px-6 lg:px-12">
         
         <div className="text-center mb-8 md:mb-16">
-            <h2 className="text-2xl md:text-5xl font-serif font-bold text-gray-900 mb-2 md:mb-6">Discover Your Next Adventure</h2>
+            <h2 className="text-2xl md:text-5xl font-title text-gray-900 mb-2 md:mb-6">Discover Your Next Adventure</h2>
             <p className="text-gray-600 max-w-2xl mx-auto text-sm md:text-lg">Browse our collection of personalized stories tailored for every child.</p>
         </div>
 
@@ -83,7 +166,7 @@ const handlePersonalize = (bookID: string) => {
                         placeholder="Search titles..." 
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-9 h-10 md:h-12 rounded-lg border border-gray-200 bg-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200 focus:bg-white transition-colors"
+                        className="w-full pl-9 h-10 md:h-12 rounded-lg border border-gray-200 bg-white/50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-200 focus:bg-white transition-colors"
                     />
                 </div>
                 
@@ -190,21 +273,23 @@ const handlePersonalize = (bookID: string) => {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}
-                    className="group flex flex-col h-full bg-white rounded-xl md:rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer"
+                    className="group flex flex-col h-full glass-panel rounded-xl md:rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer"
                     onClick={() => handlePersonalize(book.bookID)}
                     >
                     {/* Image Area */}
-                    <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
+                    <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
                         <img 
-                            src={book.coverUrl} 
-                            alt={book.title}
-                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            src={coverMap[book.bookID] || book.coverUrl} 
+                            alt={titleMap[book.bookID] || book.title}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
                         />
                         
                         {/* Tags - Smaller on mobile */}
                         <div className="absolute top-2 left-2 md:top-3 md:left-3 flex gap-2">
                              <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur-sm text-[8px] md:text-[10px] font-bold uppercase tracking-wider rounded-md text-gray-800 shadow-sm">
-                                {book.category}
+                                {typeMap[book.bookID] || book.category}
                              </span>
                         </div>
 
@@ -220,18 +305,24 @@ const handlePersonalize = (bookID: string) => {
                     </div>
 
                     {/* Content Area - Compact on mobile */}
-                    <div className="flex flex-col flex-grow p-3 md:p-6">
-                        <div className="mb-auto">
-                            <h3 className="font-serif text-sm md:text-lg font-bold text-gray-900 leading-tight mb-1 md:mb-2 group-hover:text-amber-600 transition-colors line-clamp-2 md:line-clamp-none">{book.title}</h3>
+                    <div className="flex flex-col flex-1 p-3 md:p-6">
+                        <div className="flex flex-col flex-1">
+                            <h3 className="font-display text-sm md:text-lg font-medium text-gray-900 leading-tight mb-1 md:mb-2 group-hover:text-amber-600 transition-colors line-clamp-2 md:line-clamp-none">{titleMap[book.bookID] || book.title}</h3>
                             <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wide mb-1 md:mb-3">{book.author}</p>
-                            <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed hidden md:block">{book.description}</p>
+                            <p className="text-sm text-gray-600 leading-relaxed hidden md:block">{descMap[book.bookID] || book.description}</p>
                         </div>
                         
-                        <div className="mt-2 md:mt-6 pt-2 md:pt-4 border-t border-gray-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
+                        <div className="mt-auto pt-2 md:pt-4 border-t border-gray-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
                             <span className="text-[10px] md:text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 md:px-3 md:py-1 rounded-full whitespace-nowrap">{book.ageRange} Years</span>
-                            
-                            <div className="flex items-center gap-1 text-amber-600 text-[10px] md:text-sm font-bold opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-0 md:translate-x-2 group-hover:translate-x-0">
-                                <span className="md:inline">Create</span> <Sparkles className="h-3 w-3" />
+                            <div className="flex items-center gap-2">
+                                {ratingMap[book.bookID]?.count ? (
+                                  <div className="text-[10px] md:text-xs text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded-full">
+                                    Rating {ratingMap[book.bookID].average.toFixed(1)} ({ratingMap[book.bookID].count})
+                                  </div>
+                                ) : null}
+                                <div className="flex items-center gap-1 text-amber-600 text-[10px] md:text-sm font-bold">
+                                    <span className="md:inline">Create</span> <Sparkles className="h-3 w-3" />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -245,3 +336,4 @@ const handlePersonalize = (bookID: string) => {
     </section>
   );
 };
+

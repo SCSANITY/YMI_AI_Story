@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Facebook, Instagram, Music2, Mail, Phone } from 'lucide-react';
 
 export const Footer: React.FC = () => {
@@ -45,8 +46,8 @@ export const Footer: React.FC = () => {
           <div className="space-y-4 text-sm">
             <h3 className="text-gray-900 font-semibold text-base">Customer Area</h3>
             <ul className="space-y-2 text-gray-600">
-              <li><a href="/favorites" className="hover:text-amber-600">My Account</a></li>
-              <li><a href="/orders" className="hover:text-amber-600">Orders</a></li>
+              <li><Link href="/favorites" className="hover:text-amber-600">My Account</Link></li>
+              <li><Link href="/orders" className="hover:text-amber-600">Orders</Link></li>
               <li><a href="#" className="hover:text-amber-600">Terms</a></li>
               <li><a href="#" className="hover:text-amber-600">Privacy Policy</a></li>
             </ul>

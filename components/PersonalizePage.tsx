@@ -1,14 +1,18 @@
 'use client'
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { BOOKS } from '@/data/books';
 import { Button } from '@/components/Button';
-import { ChevronLeft, ChevronRight, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, Globe, User as UserIcon, LogOut, Package, HeadphonesIcon, BookOpen, Star, Info, Play, Check, Book } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, Globe, User as UserIcon, LogOut, Package, HeadphonesIcon, BookOpen, Star, Info, Play, Check, Book, AlertTriangle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
+import { uploadUserAsset } from '@/services/assets';
+import { createPreviewJob, getJob, getPreviewPages, getPreviewUrl } from '@/services/jobs';
+import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
+import { isUuid } from '@/lib/validators';
 
 
 
@@ -20,18 +24,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
   const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, language, setLanguage, cart} = useGlobalContext();
+  const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   const book = BOOKS.find(b => b.bookID === bookID);
-  console.log('[Personalize] bookID from route:', bookID);
-  console.log('[Personalize] available BOOKS ids:', BOOKS.map(b => b.bookID));
   const router = useRouter();
-    const {
-    draft,
-    step: flowStep,
-    personalization,
-    setStep: flowSetStep,
-    updatePersonalization,
-    commitToCart,
-    } = usePersonalizeFlow(book);
+  const searchParams = useSearchParams();
+  const viewMode = searchParams?.get('view') || 'edit';
+  const creationIdParam = searchParams?.get('creationId') || null;
+  const previewJobIdParam = searchParams?.get('jobId') || null;
+  const { step: flowStep } = usePersonalizeFlow(book);
 
   const handleExitFlow = () => {
   setShowExitConfirm(true);
@@ -45,6 +45,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     selectedLang, setSelectedLang,
     photo, setPhoto,
     photoPreview, setPhotoPreview,
+    photoAssetId, setPhotoAssetId,
+    photoStoragePath, setPhotoStoragePath,
+    faceImageUrl, setFaceImageUrl,
     bookType, setBookType,
     loadingText, setLoadingText,
     progress, setProgress,
@@ -101,7 +104,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   // --- Flipbook Engine State ---
   const TOTAL_SPREADS = 15;
   const PAGE_WIDTH = 380; 
-  const PAGE_HEIGHT = 500; // Fixed height for ratio calculations
+  const PAGE_HEIGHT = 380; // Square page for preview model
+  const PREVIEW_HEIGHT = PAGE_HEIGHT + 40;
   const ANIMATION_DURATION = 0.8; 
   
   const [currentSpread, setCurrentSpread] = useState(0); 
@@ -111,9 +115,44 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioName, setAudioName] = useState<string>('');
+  const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
+  const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
+  const [previewJobId, setPreviewJobId] = useState<string | null>(null);
+  const [creationId, setCreationId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewPages, setPreviewPages] = useState<string[]>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const generationInFlightRef = useRef(false);
+  const checkoutInFlightRef = useRef(false);
+  const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(null);
+  const [templateTitle, setTemplateTitle] = useState<string | null>(null);
+  const [templateDescription, setTemplateDescription] = useState<string | null>(null);
+  const [recentFaces, setRecentFaces] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string }>>([]);
+  type RecentProfileItem = {
+    asset_id: string
+    metadata?: { child_name?: string; child_age?: number; name?: string; age?: number; gender?: string }
+  }
+  const [recentProfiles, setRecentProfiles] = useState<RecentProfileItem[]>([]);
+  const [showNameHistory, setShowNameHistory] = useState(false);
+  const [showAgeHistory, setShowAgeHistory] = useState(false);
+  const nameBoxRef = useRef<HTMLDivElement | null>(null);
+  const ageBoxRef = useRef<HTMLDivElement | null>(null);
+  const hasCartItemForPreview = useMemo(() => {
+    if (!bookID || !creationId) return false;
+    return cart.some(item => item.bookID === bookID && item.creationId === creationId);
+  }, [cart, bookID, creationId]);
 
   // --- Mobile Responsive State ---
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const resolvedBook = useMemo(() => {
+    if (!book) return null;
+    return {
+      ...book,
+      title: templateTitle ?? book.title,
+      coverUrl: templateCoverUrl ?? book.coverUrl,
+      description: templateDescription ?? book.description,
+    };
+  }, [book, templateTitle, templateCoverUrl, templateDescription]);
 
   // --- Calculations ---
   const currentPrice = book
@@ -152,28 +191,21 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     if (resumeData && resumeData.bookID === bookID) {
         fsm.restore({
         hasDraft: !!resumeData.personalization,
-        savedStage: 'FORM',
+        savedStage: viewMode === 'preview' ? 'PREVIEW' : 'FORM',
+        })
+    } else if (viewMode === 'preview' && (creationIdParam || previewJobIdParam)) {
+        fsm.restore({
+        hasDraft: true,
+        savedStage: 'PREVIEW',
         })
     } else {
         fsm.startForm()
     }
 
     didInitFSM.current = true
-  }, [bookID, resumeData, fsm])
+  }, [bookID, resumeData, fsm, viewMode, creationIdParam, previewJobIdParam])
 
 
-
-  useEffect(() => {
-    if (!resumeData) return
-    if (resumeData.bookID !== bookID) return
-
-    fsm.restore({
-        hasDraft: !!resumeData.personalization,
-        savedStage: 'FORM',
-    })
-
-    didInitFSM.current = true
-  }, [resumeData, bookID])
 
   useEffect(() => {
     if (!resumeData) return
@@ -187,11 +219,246 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setSelectedLang((data.language as any) || 'English')
     setBookType(data.bookType || 'basic')
     setPhotoPreview(data.photoUrl || null)
+    setPhotoAssetId(data.assetId || null)
+    setPhotoStoragePath(data.storagePath || null)
+    setFaceImageUrl(data.faceImageUrl || null)
+    setVoiceAssetId(data.voiceAssetId || null)
+    setVoiceStoragePath(data.voiceStoragePath || null)
+    setPreviewJobId(isUuid(data.previewJobId) ? data.previewJobId : null)
+    setCreationId(data.creationId ?? null)
     resumePersonalization(null)
-  }, [resumeData, bookID, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, resumePersonalization])
+  }, [resumeData, bookID, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization])
+
+  useEffect(() => {
+    if (resumeData && resumeData.bookID !== bookID) {
+      resumePersonalization(null)
+    }
+  }, [resumeData, bookID, resumePersonalization])
+
+  const resolveCreationId = useCallback(async () => {
+    if (creationId) return creationId
+    if (creationIdParam && isUuid(creationIdParam)) {
+      setCreationId(creationIdParam)
+      return creationIdParam
+    }
+    if (typeof window !== 'undefined') {
+      const fromLocation = new URLSearchParams(window.location.search).get('creationId')
+      if (fromLocation && isUuid(fromLocation)) {
+        setCreationId(fromLocation)
+        return fromLocation
+      }
+    }
+    const fallbackJobId = previewJobId ?? previewJobIdParam
+    if (!fallbackJobId) return null
+    try {
+      const url = user?.customerId
+        ? `/api/creations/resolve?jobId=${encodeURIComponent(fallbackJobId)}&customerId=${encodeURIComponent(
+            user.customerId
+          )}`
+        : `/api/creations/resolve?jobId=${encodeURIComponent(fallbackJobId)}`
+      const res = await fetch(url, { credentials: 'include' })
+      if (!res.ok) return null
+      const data = await res.json()
+      if (data?.creationId) {
+        setCreationId(data.creationId)
+        return data.creationId as string
+      }
+    } catch {
+      // no-op
+    }
+    return null
+  }, [creationId, creationIdParam, previewJobId, previewJobIdParam, user?.customerId])
+
+  useEffect(() => {
+    if (creationIdParam && isUuid(creationIdParam)) {
+      setCreationId((prev) => (prev ? prev : creationIdParam))
+    }
+    if (previewJobIdParam && isUuid(previewJobIdParam)) {
+      setPreviewJobId((prev) => (prev ? prev : previewJobIdParam))
+    }
+  }, [creationIdParam, previewJobIdParam, setCreationId, setPreviewJobId])
+
+  useEffect(() => {
+    if (viewMode !== 'preview') return
+    if (!creationId) return
+    if (previewPages.length > 0) return
+
+    if (typeof window === 'undefined') return
+    const cacheKey = `ymi_preview_${creationId}`
+    const cached = window.sessionStorage.getItem(cacheKey)
+    if (!cached) return
+    try {
+      const parsed = JSON.parse(cached)
+      const coverUrl = parsed?.coverUrl
+      if (coverUrl) {
+        setPreviewPages([coverUrl])
+        setPreviewUrl(coverUrl)
+      }
+      if (!previewJobId && parsed?.jobId) {
+        setPreviewJobId(parsed.jobId)
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }, [viewMode, creationId, previewPages.length, previewJobId])
+
+  useEffect(() => {
+    if (viewMode !== 'preview') return
+    if (!previewJobId) return
+    let isActive = true
+
+    const loadPreview = async () => {
+      try {
+        const urls = await getPreviewPages(previewJobId, [0, 1], { size: 'small' })
+        if (!isActive) return
+        setPreviewPages(urls)
+        if (urls[0]) {
+          setPreviewUrl(urls[0])
+        }
+      } catch {
+        // no-op
+      }
+    }
+
+    loadPreview()
+
+    return () => {
+      isActive = false
+    }
+  }, [viewMode, previewJobId])
+
+  useEffect(() => {
+    if (viewMode !== 'preview') return
+    if (!creationId) return
+
+    let isActive = true
+    const cacheKey = `ymi_creation_${creationId}`
+
+    const loadCreation = async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const cached = window.sessionStorage.getItem(cacheKey)
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached)
+              const creation = parsed?.creation ?? parsed
+              if (creation) {
+                if (!previewJobId && creation.preview_job_id) {
+                  setPreviewJobId(creation.preview_job_id)
+                }
+
+                const snapshot = creation.customize_snapshot ?? {}
+                const overrides = snapshot.textOverrides ?? snapshot.text_overrides ?? {}
+                const nextName = overrides.child_name ?? overrides.childName ?? ''
+                const nextAge = overrides.child_age ?? overrides.childAge ?? overrides.age ?? ''
+                const nextLang = overrides.language ?? snapshot.language ?? 'English'
+                const nextType = overrides.book_type ?? snapshot.bookType ?? 'basic'
+
+                if (nextName) setName(String(nextName))
+                if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
+                if (nextLang) setSelectedLang(nextLang as any)
+                if (nextType) setBookType(nextType as any)
+
+                if (!templateTitle && creation.templates?.name) {
+                  setTemplateTitle(creation.templates.name)
+                }
+                if (!templateDescription && creation.templates?.description) {
+                  setTemplateDescription(creation.templates.description)
+                }
+                if (!templateCoverUrl && creation.templates?.cover_image_path) {
+                  const rawPath = String(creation.templates.cover_image_path || '').trim()
+                  if (rawPath) {
+                    if (rawPath.startsWith('http')) {
+                      setTemplateCoverUrl(rawPath)
+                    } else {
+                      const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '')
+                      const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned)
+                      if (publicUrl?.publicUrl) {
+                        setTemplateCoverUrl(publicUrl.publicUrl)
+                      }
+                    }
+                  }
+                }
+              }
+            } catch {
+              // ignore cache parse errors
+            }
+          }
+        }
+
+        const url = user?.customerId
+          ? `/api/creations/${encodeURIComponent(creationId)}?customerId=${encodeURIComponent(user.customerId)}`
+          : `/api/creations/${encodeURIComponent(creationId)}`
+        const res = await fetch(url, { credentials: 'include' })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!isActive) return
+        const creation = data?.creation
+        if (!creation) return
+
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(cacheKey, JSON.stringify({ creation }))
+        }
+
+        if (!previewJobId && creation.preview_job_id) {
+          setPreviewJobId(creation.preview_job_id)
+        }
+
+        const snapshot = creation.customize_snapshot ?? {}
+        const overrides = snapshot.textOverrides ?? snapshot.text_overrides ?? {}
+        const nextName = overrides.child_name ?? overrides.childName ?? ''
+        const nextAge = overrides.child_age ?? overrides.childAge ?? overrides.age ?? ''
+        const nextLang = overrides.language ?? snapshot.language ?? 'English'
+        const nextType = overrides.book_type ?? snapshot.bookType ?? 'basic'
+
+        if (nextName) setName(String(nextName))
+        if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
+        if (nextLang) setSelectedLang(nextLang as any)
+        if (nextType) setBookType(nextType as any)
+
+        if (!templateTitle && creation.templates?.name) {
+          setTemplateTitle(creation.templates.name)
+        }
+        if (!templateDescription && creation.templates?.description) {
+          setTemplateDescription(creation.templates.description)
+        }
+        if (!templateCoverUrl && creation.templates?.cover_image_path) {
+          const rawPath = String(creation.templates.cover_image_path || '').trim()
+          if (rawPath) {
+            if (rawPath.startsWith('http')) {
+              setTemplateCoverUrl(rawPath)
+            } else {
+              const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '')
+              const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned)
+              if (publicUrl?.publicUrl) {
+                setTemplateCoverUrl(publicUrl.publicUrl)
+              }
+            }
+          }
+        }
+      } catch {
+        // no-op
+      }
+    }
+
+    loadCreation()
+
+    return () => {
+      isActive = false
+    }
+  }, [viewMode, creationId, user?.customerId, previewJobId, name, age, selectedLang, bookType, templateTitle, templateDescription, templateCoverUrl, setName, setAge, setSelectedLang, setBookType, setTemplateTitle, setTemplateDescription, setTemplateCoverUrl])
 
   useEffect(() => {
     if (resumeData && resumeData.bookID === bookID) return
+    if (
+      viewMode === 'preview' &&
+      (creationIdParam || creationId || previewJobIdParam || previewJobId)
+    ) {
+      return
+    }
+    if (stage === 'GENERATING' || stage === 'PREVIEW') {
+      return
+    }
 
     setName('')
     setAge('')
@@ -199,59 +466,419 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setBookType('basic')
     setPhoto(null)
     setPhotoPreview(null)
-  }, [bookID, resumeData, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview])
+    setPhotoAssetId(null)
+    setPhotoStoragePath(null)
+    setFaceImageUrl(null)
+    setTemplateCoverUrl(null)
+    setTemplateTitle(null)
+    setTemplateDescription(null)
+    setRecentFaces([])
+    setVoiceAssetId(null)
+    setVoiceStoragePath(null)
+    setPreviewJobId(null)
+    setCreationId(null)
+    setPreviewUrl(null)
+    setPreviewPages([])
+  }, [bookID, resumeData, viewMode, creationIdParam, creationId, previewJobIdParam, previewJobId, stage, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, setPreviewUrl, setTemplateCoverUrl, setTemplateTitle, setTemplateDescription])
 
-  // Loading Sequence - Optimized to 4 seconds
   useEffect(() => {
-  if (stage !== 'GENERATING') return;
+    if (stage !== 'GENERATING') return;
+    if (generationInFlightRef.current) return;
+    generationInFlightRef.current = true;
 
-  setProgress(0);
-  const messages = [
-    "Analyzing cuteness levels...",
-    "Sprinkling star dust...",
-    `Translating to ${selectedLang}...`,
-    "Binding the pages with magic...",
-    "Polishing the cover...",
-    "Almost there..."
-  ];
+    let isActive = true;
+    let textInterval: number | null = null;
+    let progressInterval: number | null = null;
+    let progressTarget = 6;
+    let lastRampAt = Date.now();
+    const startedAt = Date.now();
+    const PREVIEW_MAX_WAIT_MS = 10 * 60 * 1000;
+    const PREVIEW_POLL_INTERVAL_MS = 2000;
 
-  let i = 0;
-  setLoadingText(messages[0]);
+    setPreviewError(null);
+    setProgress(0);
 
-  const textInterval = setInterval(() => {
-    i = (i + 1) % messages.length;
-    setLoadingText(messages[i]);
-  }, 800);
+    const messages = [
+      "Analyzing cuteness levels...",
+      "Sprinkling star dust...",
+      `Translating to ${selectedLang}...`,
+      "Binding the pages with magic...",
+      "Polishing the cover...",
+      "Almost there..."
+    ];
 
-  const totalSteps = 4000 / 50;
-  const increment = 100 / totalSteps;
+    let i = 0;
+    setLoadingText(messages[0]);
 
-  const progressInterval = setInterval(() => {
-    setProgress(prev => (prev >= 100 ? 100 : prev + increment));
-  }, 50);
+    textInterval = window.setInterval(() => {
+      i = (i + 1) % messages.length;
+      setLoadingText(messages[i]);
+    }, 4200);
 
-  const timeout = setTimeout(() => {
-    finishGenerating();
-  }, 4000);
+    progressInterval = window.setInterval(() => {
+      const now = Date.now();
+      if (now - lastRampAt >= 2500) {
+        const elapsed = now - startedAt;
+        const cap = elapsed < 30_000 ? 40 : elapsed < 90_000 ? 68 : elapsed < 180_000 ? 82 : 90;
+        if (progressTarget < cap) {
+          progressTarget += 1;
+        }
+        lastRampAt = now;
+      }
 
-  return () => {
-    clearInterval(textInterval);
-    clearInterval(progressInterval);
-    clearTimeout(timeout);
-  };
-    }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText]);
+      setProgress(prev => {
+        if (prev >= progressTarget) return prev;
+        const remaining = progressTarget - prev;
+        const step = remaining > 20 ? 3 : remaining > 8 ? 2 : 1;
+        return Math.min(progressTarget, prev + step);
+      });
+    }, 220);
+
+    const run = async () => {
+      try {
+        if (!book) throw new Error('Book not found')
+        if (!photo && !photoAssetId) throw new Error('Please upload a photo before generating the preview')
+
+        setPreviewUrl(null)
+        setPreviewPages([])
+
+        let faceAssetId = photoAssetId
+
+        if (photo) {
+          const faceAsset = await uploadUserAsset(photo, 'face_image', 'face', user?.customerId)
+          if (!isActive) return
+          setPhotoAssetId(faceAsset.asset_id)
+          setPhotoStoragePath(faceAsset.storage_path)
+          setFaceImageUrl(faceAsset.signed_url ?? null)
+          faceAssetId = faceAsset.asset_id
+        }
+
+        setVoiceAssetId(null)
+        setVoiceStoragePath(null)
+
+        const parsedAge = Number.parseInt(age, 10)
+        const textOverrides = {
+          child_name: name,
+          child_age: Number.isNaN(parsedAge) ? age : parsedAge,
+          dedication: '',
+          language: selectedLang,
+          book_type: bookType,
+        }
+
+        if (!user?.customerId && name && age) {
+          fetch('/api/user/profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              child_name: name,
+              child_age: Number.isNaN(parsedAge) ? age : parsedAge,
+              customerId: null,
+            }),
+            credentials: 'include',
+          }).catch(() => {})
+        } else if (user?.customerId && name && age) {
+          fetch('/api/user/profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              child_name: name,
+              child_age: Number.isNaN(parsedAge) ? age : parsedAge,
+              customerId: user.customerId,
+            }),
+            credentials: 'include',
+          }).catch(() => {})
+        }
+
+        if (!faceAssetId) {
+          throw new Error('Missing face asset for preview')
+        }
+
+        const created = await createPreviewJob(
+          book.bookID,
+          faceAssetId,
+          textOverrides,
+          undefined,
+          user?.customerId
+        )
+        if (!created?.jobId) {
+          throw new Error('Preview job missing jobId')
+        }
+        if (!isActive) return
+        setPreviewJobId(created.jobId)
+        setCreationId(created.creationId)
+        if (!isActive) return
+
+        let fetchFailures = 0
+        while (isActive) {
+          let job
+          try {
+            job = await getJob(created.jobId)
+            fetchFailures = 0
+          } catch (err) {
+            fetchFailures += 1
+            if (fetchFailures >= 8) {
+              throw err
+            }
+            await new Promise((resolve) => setTimeout(resolve, PREVIEW_POLL_INTERVAL_MS))
+            continue
+          }
+          const serverProgress =
+            typeof job.progress === 'number' && Number.isFinite(job.progress)
+              ? Math.max(0, Math.min(95, job.progress))
+              : null
+          if (serverProgress !== null) {
+            progressTarget = Math.max(progressTarget, serverProgress)
+          }
+
+          if (job.status === 'done') {
+            progressTarget = Math.max(progressTarget, 96)
+            setProgress(prev => (prev < 96 ? 96 : prev))
+            try {
+              const urls = await getPreviewPages(created.jobId, [0, 1], { size: 'small' })
+              if (!isActive) return
+              setPreviewPages(urls)
+              if (urls[0]) {
+                setPreviewUrl(urls[0])
+              } else {
+                const url = await getPreviewUrl(created.jobId)
+                if (!isActive) return
+                setPreviewUrl(url)
+              }
+            } catch {
+              if (!isActive) return
+              setPreviewError('Preview is ready but images failed to load. Please refresh.')
+            }
+            setProgress(100)
+            finishGenerating()
+            return
+          }
+
+          if (job.status === 'failed') {
+            throw new Error(job.error_message || 'Preview generation failed. Please try again.')
+          }
+
+          if (Date.now() - startedAt > PREVIEW_MAX_WAIT_MS) {
+            throw new Error('Preview generation timed out. Please try again.')
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, PREVIEW_POLL_INTERVAL_MS))
+        }
+      } catch (error: any) {
+        if (!isActive) return
+        setPreviewError(error?.message ?? 'Preview generation failed.')
+        setProgress(0)
+        reset()
+      } finally {
+        generationInFlightRef.current = false;
+      }
+    }
+
+    run()
+
+    return () => {
+      isActive = false;
+      if (textInterval) window.clearInterval(textInterval);
+      if (progressInterval) window.clearInterval(progressInterval);
+    };
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, photo, audioFile, user, reset]);
+
+  useEffect(() => {
+    if (!bookID) return;
+
+    let isActive = true;
+
+    const loadTemplateInfo = async () => {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('name, description, cover_image_path')
+        .eq('template_id', bookID)
+        .maybeSingle();
+
+      if (!isActive) return;
+      if (error || !data) return;
+
+      const rawPath = String(data.cover_image_path || '').trim();
+      let coverUrl: string | null = null;
+      if (rawPath) {
+        if (rawPath.startsWith('http')) {
+          coverUrl = rawPath;
+        } else {
+          const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '');
+          const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned);
+          coverUrl = publicUrl?.publicUrl ?? null;
+        }
+      }
+
+      setTemplateCoverUrl(coverUrl);
+      setTemplateTitle(typeof data.name === 'string' ? data.name : null);
+      setTemplateDescription(typeof data.description === 'string' ? data.description : null);
+    };
+
+    loadTemplateInfo();
+
+    return () => {
+      isActive = false;
+    };
+  }, [bookID]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadUserAssets = async () => {
+      const params = user?.customerId ? `?customerId=${user.customerId}` : '';
+      const response = await fetch(`/api/user-assets${params}`, { credentials: 'include' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!isActive) return;
+      const faces = Array.isArray(data?.faces) ? data.faces : [];
+      setRecentFaces(faces);
+    };
+
+    loadUserAssets();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user?.customerId]);
+
+  useEffect(() => {
+    setRecentProfiles([]);
+  }, [user?.customerId]);
+
+  const loadProfiles = useCallback(async () => {
+    const params = user?.customerId ? `?customerId=${user.customerId}` : '';
+    const response = await fetch(`/api/user/profiles${params}`, { credentials: 'include' });
+    if (!response.ok) return;
+    const data = await response.json();
+    const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+    setRecentProfiles(profiles);
+  }, [user?.customerId]);
+
+  useEffect(() => {
+    if (!previewPages.length) return
+
+    previewPages.forEach((url) => {
+      if (!url) return
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = url
+    })
+  }, [previewPages])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (nameBoxRef.current && nameBoxRef.current.contains(target)) {
+        return;
+      }
+      if (ageBoxRef.current && ageBoxRef.current.contains(target)) {
+        return;
+      }
+      setShowNameHistory(false);
+      setShowAgeHistory(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
 
 
 
   // --- Handlers ---
+  const handleDeleteFace = useCallback(async (assetId: string) => {
+    setRecentFaces((prev) => prev.filter((face) => face.asset_id !== assetId));
+    if (photoAssetId === assetId) {
+      setPhotoAssetId(null);
+      setPhotoStoragePath(null);
+      setFaceImageUrl(null);
+      setPhotoPreview(null);
+    }
+
+    try {
+      await fetch('/api/user-assets', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_id: assetId,
+          customerId: user?.customerId ?? null,
+        }),
+        credentials: 'include',
+      });
+    } catch (e) {
+      // no-op
+    }
+  }, [user?.customerId, photoAssetId, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setPhotoPreview]);
+
+  const handleDeleteProfile = useCallback(async (payload: { assetId?: string; field?: 'name' | 'age'; value?: string | number }) => {
+    if (payload.assetId) {
+      setRecentProfiles((prev) => prev.filter((profile) => profile.asset_id !== payload.assetId));
+    } else if (payload.field && payload.value !== undefined && payload.value !== null) {
+      const targetValue = String(payload.value);
+      setRecentProfiles((prev) => {
+        const next: RecentProfileItem[] = []
+        for (const profile of prev) {
+          const meta = { ...(profile.metadata || {}) } as Record<string, unknown>
+          const nameValue = meta.name ?? meta.child_name
+          const ageValue = meta.age ?? meta.child_age
+
+          if (payload.field === 'name') {
+            if (nameValue !== undefined && nameValue !== null && String(nameValue) === targetValue) {
+              delete meta.name
+              delete meta.child_name
+            }
+          } else if (payload.field === 'age') {
+            if (ageValue !== undefined && ageValue !== null && String(ageValue) === targetValue) {
+              delete meta.age
+              delete meta.child_age
+            }
+          }
+
+          const remainingName = meta.name ?? meta.child_name
+          const remainingAge = meta.age ?? meta.child_age
+          const hasName = remainingName !== undefined && remainingName !== null && String(remainingName).length > 0
+          const hasAge = remainingAge !== undefined && remainingAge !== null && String(remainingAge).length > 0
+
+          if (hasName || hasAge) {
+            next.push({ ...profile, metadata: meta as RecentProfileItem['metadata'] })
+          }
+        }
+        return next
+      });
+    }
+
+    try {
+      const body = payload.assetId
+        ? { asset_id: payload.assetId, customerId: user?.customerId ?? null }
+        : {
+            field: payload.field,
+            value: payload.value,
+            customerId: user?.customerId ?? null,
+          }
+      const response = await fetch('/api/user/profiles', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        credentials: 'include',
+      });
+      if (!response.ok) return;
+    } catch (e) {
+      // no-op
+    }
+  }, [user?.customerId, loadProfiles]);
 
   const handleBack = () => {
     if (!fsm.canBack) return
 
+    const hasCartItemForBook = cart.some(item => item.bookID === bookID);
+    if ((hasCartItemForPreview || hasCartItemForBook) && fsm.backIntent === 'CONFIRM_EXIT') {
+      fsm.startForm()
+      return
+    }
+
     switch (fsm.backIntent) {
         case 'EXIT_FLOW':
-        fsm.requestExit()
+        router.push('/')
         break
 
         case 'CONFIRM_EXIT':
@@ -308,17 +935,33 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, []);
 
 
-  const performAddToCart = useCallback(() => {
+  const performAddToCart = useCallback(async () => {
     if (!fsm.canAddToCart) return
-    if (!book) return
+    if (!resolvedBook) return
 
-    if (!user) {
-        openLoginModal()
-        return
+    const ensuredCreationId =
+      (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null) ||
+      (creationId && isUuid(creationId) ? creationId : null) ||
+      (typeof window !== 'undefined'
+        ? (() => {
+            const raw = new URLSearchParams(window.location.search).get('creationId')
+            return raw && isUuid(raw) ? raw : null
+          })()
+        : null) ||
+      (await resolveCreationId())
+    if (!ensuredCreationId) {
+      console.error('Missing creationId for cart', {
+        creationId,
+        creationIdParam,
+        previewJobId,
+        previewJobIdParam,
+        viewMode,
+      })
+      return
     }
 
-    addToCart(
-        book!,
+    const item = await addToCart(
+        resolvedBook!,
         {
         childName: name,
         childAge: age,
@@ -326,36 +969,140 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         dedication: '',
         bookType,
         photoUrl: photoPreview ?? undefined,
+        assetId: photoAssetId ?? undefined,
+        storagePath: photoStoragePath ?? undefined,
+        faceImageUrl: faceImageUrl ?? undefined,
+        textOverrides: {
+          child_name: name,
+          child_age: Number.isNaN(Number.parseInt(age, 10)) ? age : Number.parseInt(age, 10),
+          dedication: '',
+          language: selectedLang,
+          book_type: bookType,
         },
-        flowStep
+        voiceAssetId: voiceAssetId ?? undefined,
+        voiceStoragePath: voiceStoragePath ?? undefined,
+        previewJobId: previewJobId ?? undefined,
+        creationId: ensuredCreationId ?? undefined,
+        },
+        flowStep,
+        undefined,
+        previewPages[0] || previewUrl || undefined
     )
 
-    triggerCartToast();
+    if (item) {
+      triggerCartToast();
+    }
     shouldAnimateToCartRef.current = false;
-    }, [fsm.canAddToCart, book, user, openLoginModal, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, triggerCartToast]);
+    }, [fsm.canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, triggerCartToast]);
 
 
-   const performCheckout = useCallback(() => {
+  const performCheckout = useCallback(async () => {
         if (!fsm.canCheckout) return
+        if (checkoutInFlightRef.current) return
+        checkoutInFlightRef.current = true
 
-        if (!user) {
-            openLoginModal()
-            return
-        }
-        if (book) {
-            const checkoutItem = {
-                id: Math.random().toString(36).substr(2, 9),
-                bookID: book.bookID,
-                quantity: 1,
-                book: book,
-                priceAtPurchase: currentPrice,
-                personalization: { childName: name, childAge: age, language: selectedLang as any, dedication: '', bookType, photoUrl: photoPreview ?? undefined }
-            };
-            prepareCheckout([checkoutItem]);
+        try {
+        if (resolvedBook) {
+    const ensuredCreationId =
+      (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null) ||
+      (creationId && isUuid(creationId) ? creationId : null) ||
+      (typeof window !== 'undefined'
+        ? (() => {
+            const raw = new URLSearchParams(window.location.search).get('creationId')
+            return raw && isUuid(raw) ? raw : null
+          })()
+        : null) ||
+      (await resolveCreationId())
+            if (!ensuredCreationId) {
+              console.error('Missing creationId for cart')
+              return
+            }
+            const personalization = {
+              childName: name,
+              childAge: age,
+              language: selectedLang as any,
+              dedication: '',
+              bookType,
+              photoUrl: photoPreview ?? undefined,
+              assetId: photoAssetId ?? undefined,
+              storagePath: photoStoragePath ?? undefined,
+              faceImageUrl: faceImageUrl ?? undefined,
+              textOverrides: {
+                child_name: name,
+                child_age: Number.isNaN(Number.parseInt(age, 10)) ? age : Number.parseInt(age, 10),
+                dedication: '',
+                language: selectedLang,
+                book_type: bookType,
+              },
+              voiceAssetId: voiceAssetId ?? undefined,
+              voiceStoragePath: voiceStoragePath ?? undefined,
+              previewJobId: previewJobId ?? undefined,
+              creationId: ensuredCreationId ?? undefined,
+            }
 
-            router.push('/checkout');
+            const existingItem = ensuredCreationId
+              ? cart.find(item => item.creationId === ensuredCreationId)
+              : undefined
+            const productType =
+              personalization.bookType === 'digital'
+                ? 'ebook'
+                : personalization.bookType === 'premium'
+                ? 'audio'
+                : 'physical'
+
+            const quantity = existingItem?.quantity ?? 1
+            const payload = {
+              customerId: user?.customerId ?? null,
+              items: [
+                {
+                  cartItemId: existingItem?.id ?? null,
+                  creationId: ensuredCreationId ?? null,
+                  productType,
+                  quantity,
+                  priceAtPurchase:
+                    personalization.bookType === 'premium'
+                      ? resolvedBook.price + 20
+                      : personalization.bookType === 'supreme'
+                      ? resolvedBook.price + 50
+                      : resolvedBook.price,
+                },
+              ],
+            }
+
+            const response = await fetch('/api/orders/start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(payload),
+            })
+
+            if (!response.ok) {
+              return
+            }
+
+            const data = await response.json()
+            const cartItemId = Array.isArray(data?.cartItemIds) ? data.cartItemIds[0] : existingItem?.id
+            const orderId = typeof data?.orderId === 'string' ? data.orderId : null
+            const checkoutItem = existingItem ?? {
+              id: cartItemId,
+              bookID: resolvedBook.bookID,
+              quantity,
+              book: resolvedBook,
+              personalization,
+              savedStep: flowStep,
+              priceAtPurchase: payload.items[0].priceAtPurchase,
+              creationId: ensuredCreationId ?? undefined,
+            }
+
+            if (!checkoutItem?.id) return
+
+            prepareCheckout([checkoutItem])
+            router.push(orderId ? `/checkout?orderId=${orderId}` : '/checkout')
         }
-    }, [fsm.canCheckout, user, openLoginModal, book, name, age, selectedLang, bookType, currentPrice, photoPreview, prepareCheckout, router]);
+        } finally {
+          checkoutInFlightRef.current = false
+        }
+    }, [fsm.canCheckout, resolvedBook, name, age, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId]);
 
   const handleAddToCartClick = () => {
     if (!fsm.canAddToCart || isExiting) return;
@@ -411,11 +1158,15 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
           setPhoto(file);
           setPhotoPreview(URL.createObjectURL(file));
+          setPhotoAssetId(null);
+          setPhotoStoragePath(null);
+          setFaceImageUrl(null);
+          setPreviewUrl(null);
       }
   };
 
@@ -499,7 +1250,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                   {/* Hardcover Shine Effect */}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/10 z-20 pointer-events-none" />
                   
-                  <img src={book?.coverUrl} className="w-full h-full object-cover mix-blend-multiply opacity-95" />
+                  <img
+                    src={previewPages[0] || templateCoverUrl || book?.coverUrl || ''}
+                    className="w-full h-full object-cover mix-blend-multiply opacity-95"
+                    decoding="async"
+                    loading="eager"
+                    fetchPriority="high"
+                  />
                   
                   {/* Hardcover Ridge at binding */}
                   <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent z-30" />
@@ -525,53 +1282,50 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               </div>
           );
       }
-      // 2. Inside Left
-      if (spreadIndex === 1 && side === 'left') {
+      // 2 & 3. First inside spread (full 01.png across both pages)
+      if (spreadIndex === 1 && (side === 'left' || side === 'right')) {
+          const spreadImage = previewPages[1] || '';
+          const isLeftSide = side === 'left';
           return (
-            <div className="w-full h-full relative border-r border-gray-200 overflow-hidden rounded-l-sm" style={commonPageStyle}>
+            <div
+              className={`w-full h-full relative overflow-hidden ${isLeftSide ? 'rounded-l-sm border-r border-gray-200' : 'rounded-r-sm'}`}
+              style={commonPageStyle}
+            >
+                {spreadImage ? (
+                  <div className="absolute inset-0 overflow-hidden">
+                    <img
+                      src={spreadImage}
+                      alt="Preview spread"
+                      className="absolute top-0 h-full max-w-none object-cover"
+                      style={{
+                        width: '200%',
+                        left: isLeftSide ? '0%' : '-100%',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-50">
+                    <Camera className="h-10 w-10" />
+                  </div>
+                )}
                 <div className="absolute inset-0 pointer-events-none z-10" style={{ background: bindingShadow }} />
-                <div className="p-10 h-full flex flex-col justify-center text-center">
-                    <p className="font-serif text-gray-500 italic mb-4 text-sm">Dedication</p>
-                    <p className="font-serif text-xl text-gray-800 leading-relaxed italic">"For the bravest adventurer I know."</p>
-                    <div className="mt-8 border-t border-gray-300 w-12 mx-auto" />
-                    <p className="mt-4 text-xs text-gray-500 font-serif">For {name}</p>
-                </div>
-                {!isFlipping && (
-                    <div className="absolute top-1/2 left-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full hover:bg-gray-200 transition-colors"
-                         onClick={(e) => { e.stopPropagation(); turnPage('prev'); }}>
+
+                {!isFlipping && isLeftSide && (
+                    <div
+                      className="absolute top-1/2 left-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full bg-white/65 hover:bg-white/90 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); turnPage('prev'); }}
+                    >
                         <ChevronLeft className="h-8 w-8 text-gray-500" />
                     </div>
                 )}
-            </div>
-          );
-      }
-      // 3. Inside Right
-      if (spreadIndex === 1 && side === 'right') {
-          return (
-            <div className="w-full h-full relative overflow-hidden rounded-r-sm" style={commonPageStyle}>
-                  <div className="absolute inset-0 pointer-events-none z-10" style={{ background: bindingShadow }} />
-                  <div className="p-8 h-full flex flex-col relative z-0">
-                      <span className="absolute top-4 right-4 text-gray-400 font-serif text-xs">1</span>
-                      <h3 className="font-serif text-2xl font-bold text-gray-900 mb-4">Chapter One</h3>
-                      <p className="text-sm text-gray-800 leading-loose mb-4">
-                          The morning sun peeked through the window, waking <span className="font-bold text-blue-600">{name || "the hero"}</span> up. 
-                      </p>
-                      <div className="flex-1 bg-white p-2 rounded-lg shadow-sm border border-gray-200 rotate-2">
-                          {photoPreview ? (
-                              <img src={photoPreview} className="w-full h-full object-cover" />
-                          ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-50">
-                                  <Camera className="h-10 w-10" />
-                              </div>
-                          )}
-                      </div>
-                  </div>
-                  {!isFlipping && (
-                    <div className="absolute top-1/2 right-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full hover:bg-gray-200 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); turnPage('next'); }}>
+                {!isFlipping && !isLeftSide && (
+                    <div
+                      className="absolute top-1/2 right-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full bg-white/65 hover:bg-white/90 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); turnPage('next'); }}
+                    >
                         <ChevronRight className="h-8 w-8 text-gray-500" />
                     </div>
-                  )}
+                )}
             </div>
           );
       }
@@ -608,7 +1362,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       );
   };
 
-  const isFormValid = name.length > 0 && age.length > 0 && (photo !== null || !!photoPreview);
+  const isFormValid = name.length > 0 && age.length > 0 && (photo !== null || !!photoAssetId);
   if (!book) return <div>Book not found</div>;
 
   const staticLeftIndex = (isFlipping && flipDirection === 'prev') ? currentSpread - 1 : currentSpread;
@@ -753,7 +1507,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans relative z-20">
+    <div className="page-surface min-h-screen flex flex-col font-sans relative z-20">
       
       {/* Fly Animation Portal Effect */}
       <AnimatePresence>
@@ -785,20 +1539,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showCartToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.98 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg"
-          >
-            Added to cart
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-amber-100 shadow-sm">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -827,9 +1567,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
                 <Button ref={cartIconRef} variant="ghost" size="sm" onClick={() => router.push('/cart')} className="relative px-2">
                     <ShoppingCart className="h-5 w-5 text-gray-700" />
-                    {cart.length > 0 && (
+                    {cartCount > 0 && (
                         <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">
-                            {cart.length}
+                            {cartCount}
                         </span>
                     )}
                 </Button>
@@ -851,7 +1591,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         )}
                     </div>
                     ) : (
-                        <Button onClick={openLoginModal} size="sm">Log In</Button>
+                        <Button onClick={() => openLoginModal()} size="sm">Log In</Button>
                     )}
                 </div>
             </div>
@@ -876,9 +1616,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                 >
                      <div className="lg:col-span-5 space-y-6">
                         <div className="bg-white/60 backdrop-blur-md border border-white p-6 rounded-2xl shadow-lg">
-                            <img src={book.coverUrl} className="w-full aspect-[3/4] object-cover rounded-lg shadow-xl mb-6 border-4 border-white" />
-                            <h2 className="text-2xl font-serif font-bold text-gray-900 mb-2">{book.title}</h2>
-                            <p className="text-gray-600 text-sm leading-relaxed mb-6">{book.description}</p>
+                            <img src={templateCoverUrl || book.coverUrl} className="w-full aspect-[3/4] object-cover rounded-lg shadow-xl mb-6 border-4 border-white" />
+                            <h2 className="text-2xl font-serif font-bold text-gray-900 mb-2">{templateTitle || book.title}</h2>
+                            <p className="text-gray-600 text-sm leading-relaxed mb-6">{templateDescription || book.description}</p>
                             
                             <div className="space-y-3">
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">Magic Attributes</h4>
@@ -904,44 +1644,240 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                             </div>
 
                             <div className="space-y-6 flex-grow">
-                                <div className="border-2 border-dashed border-purple-200 rounded-2xl p-6 text-center bg-purple-50/50 hover:bg-purple-50 transition-colors relative group cursor-pointer">
-                                    <input type="file" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" accept="image/*" />
+                                <div className="border-2 border-dashed border-amber-200 rounded-2xl p-6 text-center bg-amber-50/60 hover:bg-amber-50 transition-colors relative group cursor-pointer">
+                                    <input type="file" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-30" accept="image/*" />
                                     {photoPreview ? (
-                                        <div className="relative z-20">
+                                        <div className="relative z-10 pointer-events-none">
                                             <img src={photoPreview} className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
-                                            <p className="text-xs text-purple-600 mt-2 font-medium">Click to change photo</p>
+                                            <p className="text-xs text-amber-600 mt-2 font-medium">Click to change photo</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-2">
-                                            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto text-purple-600 group-hover:scale-110 transition-transform">
-                                                <Camera className="h-8 w-8" />
-                                            </div>
+                                        <div className="space-y-4 pointer-events-none">
+                                            <motion.div
+                                                className="relative w-18 h-18 mx-auto"
+                                                animate={{ y: [0, -4, 0] }}
+                                                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                                            >
+                                                <span className="absolute inset-0 rounded-full bg-amber-300/40 blur-xl animate-pulse-slow" />
+                                                <span className="absolute inset-2 rounded-full bg-amber-200/40 blur-lg animate-pulse" />
+                                                <div className="relative w-18 h-18 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shadow-[0_8px_20px_rgba(234,179,8,0.25)] ring-4 ring-amber-100">
+                                                    <Camera className="h-9 w-9" />
+                                                </div>
+                                            </motion.div>
                                             <h4 className="font-bold text-gray-900">Upload Child's Photo</h4>
-                                            <p className="text-xs text-gray-500">For best results, use a clear front-facing photo</p>
+                                            <div className="rounded-2xl border border-amber-100 bg-white/70 p-3 shadow-sm">
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {[0, 1, 2].map((item) => (
+                                                        <div key={`good-${item}`} className="relative mx-auto">
+                                                            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
+                                                                <UserIcon className="h-6 w-6" />
+                                                            </div>
+                                                            <div className="absolute -right-1 -bottom-1 h-5 w-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                                                                <Check className="h-3 w-3" />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-2 grid grid-cols-3 gap-2">
+                                                    {[0, 1, 2].map((item) => (
+                                                        <div key={`bad-${item}`} className="relative mx-auto">
+                                                            <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-700">
+                                                                <UserIcon className="h-6 w-6" />
+                                                            </div>
+                                                            <div className="absolute -right-1 -bottom-1 h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center">
+                                                                <span className="text-xs font-bold leading-none">×</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-3 text-xs text-gray-500 text-left">
+                                                    Tips: good lighting, no hats or sunglasses, eyes visible.
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
+                                {recentFaces.length > 0 && (
+                                  <div className="flex flex-wrap gap-3">
+                                    {recentFaces.map((face) => (
+                                      <div key={face.asset_id} className="relative w-12 h-12">
+                                        <button
+                                          type="button"
+                                          className="w-12 h-12 rounded-full overflow-hidden border border-white shadow-sm hover:ring-2 hover:ring-amber-300 transition"
+                                          onClick={() => {
+                                            if (!face.signed_url) return;
+                                            setPhoto(null);
+                                            setPhotoPreview(face.signed_url);
+                                            setFaceImageUrl(face.signed_url);
+                                            setPhotoAssetId(face.asset_id);
+                                            setPhotoStoragePath(face.storage_path ?? null);
+                                          }}
+                                        >
+                                          <img
+                                            src={face.signed_url ?? ''}
+                                            alt="Recent face"
+                                            className="w-full h-full object-cover"
+                                          />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white text-gray-500 border border-gray-200 shadow hover:text-red-500 hover:border-red-200 transition flex items-center justify-center"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            handleDeleteFace(face.asset_id);
+                                          }}
+                                        >
+                                          <X className="h-2.5 w-2.5" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
 
                                 <div className="grid md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold text-gray-700">Hero's Name</label>
+                                    <div ref={nameBoxRef} className="space-y-2 relative">
+                                        <label className="text-sm font-bold text-gray-700">Name</label>
                                         <input 
                                             type="text" 
                                             value={name} 
                                             onChange={(e) => setName(e.target.value)} 
+                                            onFocus={() => {
+                                              loadProfiles();
+                                              setShowNameHistory(true);
+                                              setShowAgeHistory(false);
+                                            }}
                                             placeholder="e.g. Oliver" 
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none transition-all placeholder:text-gray-400 text-gray-800 font-medium" 
                                         />
+                                        {showNameHistory && (
+                                          <div
+                                            className="absolute z-30 mt-2 w-full rounded-xl border border-amber-100 bg-white shadow-lg p-2 max-h-44 overflow-auto"
+                                            onMouseDown={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                            }}
+                                          >
+                                            {Array.from(
+                                              new Set(
+                                                recentProfiles
+                                                  .map((profile) => profile.metadata?.name ?? profile.metadata?.child_name)
+                                                  .filter((value): value is string => Boolean(value))
+                                                  .map((value) => String(value))
+                                              )
+                                            ).length === 0 ? (
+                                              <div className="px-3 py-2 text-xs text-gray-400">No history</div>
+                                            ) : (
+                                              Array.from(
+                                                new Set(
+                                                  recentProfiles
+                                                    .map((profile) => profile.metadata?.name ?? profile.metadata?.child_name)
+                                                    .filter((value): value is string => Boolean(value))
+                                                    .map((value) => String(value))
+                                                )
+                                              ).map((value) => (
+                                                  <div
+                                                    key={value}
+                                                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-amber-50 transition"
+                                                  >
+                                                    <button
+                                                      type="button"
+                                                      className="flex-1 text-left text-sm text-gray-700"
+                                                      onMouseDown={(event) => {
+                                                        event.preventDefault();
+                                                        setName(value);
+                                                        setShowNameHistory(false);
+                                                      }}
+                                                    >
+                                                      {value}
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      className="text-gray-400 hover:text-red-500 transition"
+                                                      onMouseDown={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleDeleteProfile({ field: 'name', value });
+                                                      }}
+                                                    >
+                                                      <X className="h-3 w-3" />
+                                                    </button>
+                                                  </div>
+                                                ))
+                                            )}
+                                          </div>
+                                        )}
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold text-gray-700">Hero's Age</label>
+                                    <div ref={ageBoxRef} className="space-y-2 relative">
+                                        <label className="text-sm font-bold text-gray-700">Age</label>
                                         <input 
                                             type="number" 
                                             value={age} 
                                             onChange={(e) => setAge(e.target.value)} 
+                                            onFocus={() => {
+                                              loadProfiles();
+                                              setShowAgeHistory(true);
+                                              setShowNameHistory(false);
+                                            }}
                                             placeholder="e.g. 5" 
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none transition-all placeholder:text-gray-400 text-gray-800 font-medium" 
                                         />
+                                        {showAgeHistory && (
+                                          <div
+                                            className="absolute z-30 mt-2 w-full rounded-xl border border-amber-100 bg-white shadow-lg p-2 max-h-44 overflow-auto"
+                                            onMouseDown={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                            }}
+                                          >
+                                            {Array.from(
+                                              new Set(
+                                                recentProfiles
+                                                  .map((profile) => profile.metadata?.age ?? profile.metadata?.child_age)
+                                                  .filter((value): value is number => value !== undefined && value !== null)
+                                                  .map((value) => String(value))
+                                              )
+                                            ).length === 0 ? (
+                                              <div className="px-3 py-2 text-xs text-gray-400">No history</div>
+                                            ) : (
+                                              Array.from(
+                                                new Set(
+                                                  recentProfiles
+                                                    .map((profile) => profile.metadata?.age ?? profile.metadata?.child_age)
+                                                    .filter((value): value is number => value !== undefined && value !== null)
+                                                    .map((value) => String(value))
+                                                )
+                                              ).map((value) => (
+                                                  <div
+                                                    key={value}
+                                                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-amber-50 transition"
+                                                  >
+                                                    <button
+                                                      type="button"
+                                                      className="flex-1 text-left text-sm text-gray-700"
+                                                      onMouseDown={(event) => {
+                                                        event.preventDefault();
+                                                        setAge(value);
+                                                        setShowAgeHistory(false);
+                                                      }}
+                                                    >
+                                                      {value}
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      className="text-gray-400 hover:text-red-500 transition"
+                                                      onMouseDown={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        handleDeleteProfile({ field: 'age', value });
+                                                      }}
+                                                    >
+                                                      <X className="h-3 w-3" />
+                                                    </button>
+                                                  </div>
+                                                ))
+                                            )}
+                                          </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -994,6 +1930,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                 const file = e.target.files && e.target.files[0];
                                                 setAudioFile(file ?? null);
                                                 setAudioName(file ? file.name : '');
+                                                setVoiceAssetId(null);
+                                                setVoiceStoragePath(null);
                                             }}
                                             className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-full file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-blue-500"
                                         />
@@ -1012,6 +1950,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 >
                                     {isSupreme ? "Coming Soon" : <><Sparkles className="h-6 w-6" /> {isFormValid ? "Generate Magic Preview" : "Complete Details to Continue"}</>}
                                 </button>
+                                {previewError && (
+                                  <p className="text-xs text-red-500 mt-2">{previewError}</p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1033,15 +1974,15 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
                     <div 
                         className="relative mb-8 md:mb-12 select-none flex justify-center perspective-2000" 
-                        style={{ height: isMobile ? 260 : 550 }}
+                        style={{ height: isMobile ? Math.round(PREVIEW_HEIGHT * 0.55) : PREVIEW_HEIGHT }}
                     >
                          {/* Responsive Scaler Wrapper */}
                          <div style={{ transform: `scale(${isMobile ? 0.45 : 1})`, transformOrigin: 'top center', width: PAGE_WIDTH * 2 }}>
                             <motion.div 
-                                className="relative w-full flex justify-center h-[520px]" 
+                                className="relative w-full flex justify-center" 
                                 animate={{ x: (currentSpread === 0 && !isFlipping) ? -190 : 0 }} 
                                 transition={{ duration: ANIMATION_DURATION, ease: "easeInOut" }} 
-                                style={{ transformStyle: 'preserve-3d', perspective: '2500px' }}
+                                style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: PREVIEW_HEIGHT }}
                             >
                                  
                                  {/* 3D Book Thickness (LEFT = Center Binding) */}
@@ -1213,7 +2154,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                             >
                                 {loadingText}
                             </motion.h3>
-                            <p className="text-gray-500 text-sm font-mono">Estimated wait time: ~4 seconds</p>
+                            <p className="text-gray-500 text-sm font-mono">Estimated wait time: ~4seconds</p>
                         </div>
                         
                         {/* Progress Bar Container */}

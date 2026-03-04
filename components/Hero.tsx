@@ -38,7 +38,7 @@ export const Hero: React.FC = () => {
                 </motion.div>
 
                 {/* Headline */}
-                <h1 className="text-5xl md:text-7xl font-serif font-bold text-gray-900 tracking-tight leading-[1.1] drop-shadow-sm">
+                <h1 className="text-5xl md:text-7xl font-title text-gray-900 tracking-tight leading-[1.1] drop-shadow-sm">
                     Turn Your Child <br/>
                     Into The <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600">Hero.</span>
                 </h1>
