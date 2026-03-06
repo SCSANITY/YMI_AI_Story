@@ -67,6 +67,7 @@ function CheckoutPageContent() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const emailDropdownRef = useRef<HTMLDivElement | null>(null);
   const stripeCheckoutEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+  const skipIdentityVerification = Boolean(user?.email);
   const selectedIdsFromQuery = useMemo(() => {
     const raw = searchParams?.get('ids');
     if (!raw) return [];
@@ -332,11 +333,11 @@ function CheckoutPageContent() {
     setPendingAuthIdentity(false);
     setIdentityMode('auth');
     setIdentityEmail(user.email);
-    setIdentityVerified(false);
+    setIdentityVerified(true);
     resetIdentityVerification();
-    setIsIdentityModalOpen(true);
-    void requestIdentityOtp(user.email);
-  }, [pendingAuthIdentity, requestIdentityOtp, resetIdentityVerification, user?.email]);
+    setIsIdentityModalOpen(false);
+    setStep('payment');
+  }, [pendingAuthIdentity, resetIdentityVerification, user?.email]);
 
   const handleAddressNext = () => {
     if (!form.email.trim()) {
@@ -385,6 +386,15 @@ function CheckoutPageContent() {
         .catch(() => {});
     }
     setFormError('');
+    if (skipIdentityVerification) {
+      setIdentityMode('auth');
+      setIdentityEmail(user?.email || normalizedEmail);
+      setIdentityVerified(true);
+      setIsIdentityModalOpen(false);
+      setStep('payment');
+      return;
+    }
+
     setIdentityMode(null);
     setIdentityEmail('');
     setIdentityVerified(false);
@@ -433,14 +443,16 @@ function CheckoutPageContent() {
     if (user?.email) {
       setIdentityMode('auth');
       setIdentityEmail(user.email);
-      setIdentityVerified(false);
-      await requestIdentityOtp(user.email);
+      setIdentityVerified(true);
+      resetIdentityVerification();
+      setIsIdentityModalOpen(false);
+      setStep('payment');
       return;
     }
 
     setPendingAuthIdentity(true);
     openLoginModal('login', form.email.trim() || undefined);
-  }, [form.email, openLoginModal, requestIdentityOtp, user?.email]);
+  }, [form.email, openLoginModal, resetIdentityVerification, user?.email]);
 
   const chooseSignupIdentity = useCallback(() => {
     setPendingAuthIdentity(true);
@@ -593,23 +605,25 @@ function CheckoutPageContent() {
       return;
     }
 
-    if (!identityMode || !identityVerified) {
+    if (!skipIdentityVerification && (!identityMode || !identityVerified)) {
       setFormError('Please complete identity verification before payment.');
       setIsIdentityModalOpen(true);
       return;
     }
 
-    if (identityMode === 'auth' && !user) {
+    if (!skipIdentityVerification && identityMode === 'auth' && !user) {
       setFormError('Your login session has expired. Please verify again.');
       setIdentityVerified(false);
       setIsIdentityModalOpen(true);
       return;
     }
 
+    const effectiveIdentityMode: 'guest' | 'auth' = skipIdentityVerification ? 'auth' : (identityMode as 'guest' | 'auth');
+
     if (stripeCheckoutEnabled) {
-      void startStripeHostedCheckout(identityMode);
+      void startStripeHostedCheckout(effectiveIdentityMode);
     } else {
-      void finalizeOrder(identityMode);
+      void finalizeOrder(effectiveIdentityMode);
     }
   };
 
@@ -853,7 +867,7 @@ function CheckoutPageContent() {
             <>
               <h2 className="text-lg font-bold text-gray-900">Pay Securely</h2>
               <div className="space-y-3">
-                {!identityVerified ? (
+                {!identityVerified && !skipIdentityVerification ? (
                   <>
                     <div className="rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-sm text-amber-800">
                       Complete identity verification before payment.
@@ -869,22 +883,32 @@ function CheckoutPageContent() {
                 ) : (
                   <>
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
-                      Verified as{' '}
-                      <span className="font-semibold">
-                        {identityMode === 'auth' ? 'logged-in account' : 'guest checkout'}
-                      </span>
-                      {identityEmail ? ` (${identityEmail})` : ''}.
+                      {skipIdentityVerification ? (
+                        <>
+                          Signed in as <span className="font-semibold">{user?.email}</span>. You can continue to payment.
+                        </>
+                      ) : (
+                        <>
+                          Verified as{' '}
+                          <span className="font-semibold">
+                            {identityMode === 'auth' ? 'logged-in account' : 'guest checkout'}
+                          </span>
+                          {identityEmail ? ` (${identityEmail})` : ''}.
+                        </>
+                      )}
                     </div>
                     <div className="flex gap-3">
-                      <Button
-                        size="lg"
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => setIsIdentityModalOpen(true)}
-                        disabled={isPlacingOrder}
-                      >
-                        Switch identity
-                      </Button>
+                      {!skipIdentityVerification && (
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={() => setIsIdentityModalOpen(true)}
+                          disabled={isPlacingOrder}
+                        >
+                          Switch identity
+                        </Button>
+                      )}
                       <Button size="lg" className="flex-1 rounded-full" onClick={handlePlaceOrder} disabled={isPlacingOrder}>
                         {isPlacingOrder
                           ? 'Processing...'
@@ -988,7 +1012,7 @@ function CheckoutPageContent() {
         </div>
       </div>
 
-      {isIdentityModalOpen && (
+      {isIdentityModalOpen && !skipIdentityVerification && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4">
           <div className="w-full max-w-xl rounded-2xl bg-white border border-gray-100 shadow-2xl p-6 space-y-5">
             <div className="flex items-center justify-between">
