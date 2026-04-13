@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Star } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useGlobalContext } from '@/contexts/GlobalContext'
+import { useI18n } from '@/lib/useI18n'
 
 type OrderForReview = {
   id: string
@@ -16,6 +17,7 @@ type OrderForReview = {
 const REVIEWABLE_STATUSES = new Set(['shipped', 'cancelled', 'refunded'])
 
 export default function OrderReviewPage() {
+  const { t } = useI18n()
   const params = useParams()
   const router = useRouter()
   const { user, checkoutEmail } = useGlobalContext()
@@ -84,7 +86,7 @@ export default function OrderReviewPage() {
   const saveReview = async () => {
     if (!order?.id) return
     if (!rating || rating < 1 || rating > 5) {
-      setError('Please select a rating from 1 to 5 stars.')
+      setError(t('orderReview.invalidRating'))
       return
     }
 
@@ -105,7 +107,7 @@ export default function OrderReviewPage() {
     setSaving(false)
 
     if (!response.ok || !data?.saved) {
-      setError(data?.error || 'Failed to save review.')
+      setError(data?.error || t('orderReview.saveFailed'))
       return
     }
 
@@ -115,7 +117,7 @@ export default function OrderReviewPage() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center p-8">
-        <div className="text-sm text-gray-500">Loading review form...</div>
+        <div className="text-sm text-gray-500">{t('orderReview.loading')}</div>
       </div>
     )
   }
@@ -124,9 +126,9 @@ export default function OrderReviewPage() {
     return (
       <div className="min-h-[70vh] flex items-center justify-center p-8">
         <div className="max-w-lg text-center space-y-6">
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Order not found</h1>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orderReview.notFoundTitle')}</h1>
           <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/orders')}>
-            Back to Orders
+            {t('orderDetail.backToOrders')}
           </Button>
         </div>
       </div>
@@ -143,22 +145,22 @@ export default function OrderReviewPage() {
           onClick={() => router.push('/orders')}
         >
           <ArrowLeft className="h-4 w-4" />
-          <span className="ml-2">Back</span>
+          <span className="ml-2">{t('common.back')}</span>
         </Button>
         <div>
-          <div className="text-xs text-gray-500 uppercase tracking-wide">Review order</div>
-          <div className="text-2xl font-title text-gray-900">{order.displayId ?? order.id}</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wide">{t('orderReview.title')}</div>
+          <div className="text-2xl font-semibold tracking-[0.05em] tabular-nums text-gray-900">{order.displayId ?? order.id}</div>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
         {!canReview ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            This order is not in completed status yet. Review becomes available after fulfillment.
+            {t('orderReview.unavailable')}
           </div>
         ) : (
           <>
-            <h2 className="text-lg font-semibold text-gray-900">Rate your experience</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('orderReview.rateExperience')}</h2>
             <div className="flex items-center gap-2">
               {[1, 2, 3, 4, 5].map((value) => (
                 <button
@@ -176,15 +178,15 @@ export default function OrderReviewPage() {
             </div>
             <textarea
               className="w-full min-h-[140px] rounded-xl border border-gray-200 p-3 text-sm"
-              placeholder="Tell us what you liked (optional)"
+              placeholder={t('orderReview.tellUs')}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
             />
             {error && <p className="text-xs text-red-500">{error}</p>}
-            {saved && <p className="text-xs text-emerald-600">Review saved. Thank you.</p>}
+            {saved && <p className="text-xs text-emerald-600">{t('orderReview.saved')}</p>}
             <div className="flex gap-3">
               <Button size="lg" className="rounded-full px-8" onClick={saveReview} disabled={saving}>
-                {saving ? 'Saving...' : 'Submit Review'}
+                {saving ? t('orderReview.saving') : t('orderReview.submit')}
               </Button>
               <Button
                 size="lg"
@@ -192,7 +194,7 @@ export default function OrderReviewPage() {
                 className="rounded-full px-8"
                 onClick={() => router.push('/orders')}
               >
-                Back to Orders
+                {t('orderDetail.backToOrders')}
               </Button>
             </div>
           </>
@@ -201,4 +203,3 @@ export default function OrderReviewPage() {
     </div>
   )
 }
-

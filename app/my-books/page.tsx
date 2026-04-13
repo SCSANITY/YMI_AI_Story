@@ -3,11 +3,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { Button } from '@/components/Button'
+import { BookCardCover } from '@/components/BookCardCover'
 import { BookOpen, ShoppingCart, Trash2, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { BOOKS } from '@/data/books'
 import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
+import { useI18n } from '@/lib/useI18n'
 
 type CreationItem = {
   creation_id: string
@@ -27,9 +29,11 @@ type CreationItem = {
 
 const normalizeLanguage = (value: unknown): PersonalizationData['language'] => {
   const raw = String(value ?? '').trim().toLowerCase()
-  if (raw === 'cn_s' || raw === 'zh-cn' || raw === 'chinese' || raw === 'simplified') return 'cn_s'
-  if (raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') return 'cn_t'
-  return 'en'
+  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
+    return 'Traditional Chinese'
+  }
+  if (raw === 'spanish' || raw === 'es') return 'Spanish'
+  return 'English'
 }
 
 const resolveCover = (row: CreationItem) => {
@@ -65,6 +69,7 @@ const toPersonalization = (item: CreationItem): PersonalizationData => {
 
 export default function MyBooksPage() {
   const router = useRouter()
+  const { t } = useI18n()
   const { user, addToCart, hydrateCheckoutItems } = useGlobalContext()
   const [items, setItems] = useState<CreationItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -103,6 +108,7 @@ export default function MyBooksPage() {
       author: fallbackBook?.author || 'YMI',
       price: fallbackBook?.price || 0,
       coverUrl,
+      showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
       description: item.templates?.description || fallbackBook?.description || '',
       category: fallbackBook?.category || 'Adventure',
       ageRange: fallbackBook?.ageRange || '3-5',
@@ -121,6 +127,7 @@ export default function MyBooksPage() {
       author: fallbackBook?.author || 'YMI',
       price: fallbackBook?.price || 0,
       coverUrl,
+      showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
       description: item.templates?.description || fallbackBook?.description || '',
       category: fallbackBook?.category || 'Adventure',
       ageRange: fallbackBook?.ageRange || '3-5',
@@ -181,7 +188,7 @@ export default function MyBooksPage() {
   }
 
   const handleDelete = async (item: CreationItem) => {
-    const confirmed = window.confirm('Delete this book? This action cannot be undone.')
+    const confirmed = window.confirm(t('myBooks.deleteConfirm'))
     if (!confirmed) return
 
     const response = await fetch('/api/my-books', {
@@ -227,7 +234,7 @@ export default function MyBooksPage() {
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
-        <div className="text-sm text-gray-500">Loading your books...</div>
+        <div className="text-sm text-gray-500">{t('myBooks.loading')}</div>
       </div>
     )
   }
@@ -240,52 +247,54 @@ export default function MyBooksPage() {
             <BookOpen className="h-5 w-5 text-amber-600" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">My Books</h1>
-            <p className="text-gray-500 text-sm">Your personalized story library.</p>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('myBooks.title')}</h1>
+            <p className="text-gray-500 text-sm">{t('myBooks.subtitle')}</p>
           </div>
         </div>
 
         {items.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-sm text-gray-500 text-center">
-            No books yet. Generate a preview to start your library.
+            {t('myBooks.empty')}
           </div>
         ) : (
           <div className={gridClass}>
             {items.map((item) => (
-              <div
-                key={item.creation_id}
-                className="group relative flex flex-col h-full glass-panel rounded-2xl overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-500"
-              >
-                <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
+                <div
+                  key={item.creation_id}
+                  className="group book-card-hoverable relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out md:hover:-translate-y-1"
+                >
+                <BookCardCover
+                  src={resolveCover(item)}
+                  alt={item.templates?.name || item.template_id}
+                  loading="lazy"
+                  decoding="async"
+                >
                   <button
                     type="button"
                     onClick={() => goToPreview(item)}
-                    className="block h-full w-full"
+                    className="absolute inset-0 z-10 block h-full w-full"
                   >
-                    <img
-                      src={resolveCover(item)}
-                      alt={item.templates?.name || item.template_id}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
                   </button>
+
+                  {/* Hover sheen sweep */}
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out" style={{ background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%)' }} />
+
                   <button
                     type="button"
                     onClick={() => handleDelete(item)}
-                    className="absolute top-2 right-2 md:top-3 md:right-3 h-6 w-6 rounded-full bg-white/80 text-gray-300 hover:text-red-500 hover:bg-white/95 shadow-sm opacity-0 group-hover:opacity-100 transition"
+                    className="absolute top-2 right-2 z-20 md:top-3 md:right-3 h-6 w-6 rounded-full bg-white/80 text-gray-300 hover:text-red-500 hover:bg-white/95 shadow-sm opacity-0 group-hover:opacity-100 transition"
                     aria-label="Delete"
                   >
                     <Trash2 className="h-3.5 w-3.5 mx-auto" />
                   </button>
-                  <div className="absolute top-2 left-2 md:top-3 md:left-3 flex gap-2">
+                  <div className="absolute top-2 left-2 z-20 md:top-3 md:left-3 flex gap-2">
                     <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur-sm text-[8px] md:text-[10px] font-bold uppercase tracking-wider rounded-md text-gray-800 shadow-sm">
                       {item.templates?.story_type || 'Story'}
                     </span>
                   </div>
-                </div>
+                </BookCardCover>
 
-                <div className="flex flex-col flex-1 p-5 md:p-7">
+                <div className="glass-panel rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-10 md:pt-14 px-4 md:px-5 pb-4 md:pb-5">
                   <div className="flex flex-col flex-1">
                     <button type="button" onClick={() => goToPreview(item)} className="text-left">
                       <h3 className="font-display text-base md:text-lg font-medium text-gray-900 leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">
@@ -293,7 +302,7 @@ export default function MyBooksPage() {
                       </h3>
                     </button>
                     <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
-                      {item.templates?.description || 'Personalized storybook'}
+                      {item.templates?.description || t('common.personalizedStorybook')}
                     </p>
                   </div>
 
@@ -305,7 +314,7 @@ export default function MyBooksPage() {
                       onClick={() => handleAddToCart(item)}
                     >
                       <ShoppingCart className="h-4 w-4 mr-2" />
-                      Add to Cart
+                      {t('myBooks.addToCart')}
                     </Button>
                     <Button
                       size="sm"
@@ -313,7 +322,7 @@ export default function MyBooksPage() {
                       onClick={() => handleBuyNow(item)}
                     >
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Buy Now
+                      {t('myBooks.buyNow')}
                     </Button>
                   </div>
                 </div>

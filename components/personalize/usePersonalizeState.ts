@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { StoryLanguage } from '@/types';
 
 export type PersonalizeStep = 1 | 2 | 2.5 | 3;
 
@@ -9,7 +10,7 @@ export function usePersonalizeState() {
   const [step, setStep] = useState<PersonalizeStep>(1);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
-  const [selectedLang, setSelectedLang] = useState('English');
+  const [selectedLang, setSelectedLang] = useState<StoryLanguage>('English');
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoAssetId, setPhotoAssetId] = useState<string | null>(null);

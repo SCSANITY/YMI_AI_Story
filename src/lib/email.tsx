@@ -8,6 +8,7 @@ import {
 } from '@/components/emails/OrderReceiptEmail'
 import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
 import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
+import { CheckoutCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 
 const resendApiKey = process.env.RESEND_API_KEY || ''
 const defaultFrom = process.env.EMAIL_FROM || 'Ymi Story <no-reply@localhost>'
@@ -109,6 +110,7 @@ type SendOrderConfirmationEmailParams = {
   orderId: string
   displayId?: string | null
   total: number
+  currency?: CheckoutCurrency
   items: ReceiptItem[]
   address?: ReceiptAddress
 }
@@ -123,6 +125,7 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
         orderId={params.orderId}
         displayId={params.displayId}
         total={params.total}
+        currency={normalizeCheckoutCurrency(params.currency)}
         items={params.items}
         address={params.address}
         trackUrl={buildAbsoluteUrl(`/orders/${params.orderId}`)}

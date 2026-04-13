@@ -1,83 +1,155 @@
-'use client';
+'use client'
 
-import React, { useState, useRef, useEffect } from 'react';
-import { useGlobalContext } from '@/contexts/GlobalContext';
-import { useRouter, usePathname } from 'next/navigation';
-import { Globe, ShoppingCart, LogOut, Heart, Menu, X, ArrowLeft, Headphones, Package, BookOpen } from 'lucide-react';
-import { Button } from '@/components/Button';
+import React, { useEffect, useRef, useState } from 'react'
+import { useGlobalContext } from '@/contexts/GlobalContext'
+import { usePathname, useRouter } from 'next/navigation'
+import {
+  ArrowLeft,
+  BookOpen,
+  Gift,
+  Heart,
+  LogOut,
+  Menu,
+  Package,
+  PencilLine,
+  ShoppingCart,
+  X,
+} from 'lucide-react'
+import { Button } from '@/components/Button'
+import { useI18n } from '@/lib/useI18n'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import { MyRewardsModal } from '@/components/MyRewardsModal'
 
 export const Navbar: React.FC = () => {
-  const router = useRouter();
-  const pathname = usePathname();
+  const router = useRouter()
+  const pathname = usePathname()
+  const { user, cart, openLoginModal, logout } = useGlobalContext()
+  const { t } = useI18n()
+  const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0)
 
-  const {
-    user,
-    cart,
-    language,
-    setLanguage,
-    openLoginModal,
-    logout,
-  } = useGlobalContext();
+  const [isUserMenuOpen, setUserMenuOpen] = useState(false)
+  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isRewardsOpen, setRewardsOpen] = useState(false)
+  const [rewardVoucherCount, setRewardVoucherCount] = useState(0)
+  const [urlHash, setUrlHash] = useState('')
+  const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number } | null>(null)
 
-  const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+  const userRef = useRef<HTMLDivElement>(null)
+  const navContainerRef = useRef<HTMLDivElement>(null)
+  const homeRef = useRef<HTMLButtonElement>(null)
+  const booksRef = useRef<HTMLButtonElement>(null)
+  const favoritesRef = useRef<HTMLButtonElement>(null)
+  const collaborationRef = useRef<HTMLButtonElement>(null)
+  const supportRef = useRef<HTMLButtonElement>(null)
+  const myBooksRef = useRef<HTMLButtonElement>(null)
 
-  const [isLangMenuOpen, setLangMenuOpen] = useState(false);
-  const [isUserMenuOpen, setUserMenuOpen] = useState(false);
-  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isPersonalizeRoute = pathname?.startsWith('/personalize/')
+  const isCheckoutRoute = pathname?.startsWith('/checkout')
+  const isHomePage = pathname === '/'
+  const isBooksActive = isHomePage && urlHash === '#books'
+  const isHomeActive = isHomePage && urlHash !== '#books'
 
-  const langRef = useRef<HTMLDivElement>(null);
-  const userRef = useRef<HTMLDivElement>(null);
-
-  // ✅ 在 personalize 动态路由页隐藏全局 Navbar（避免重复）
-  const isPersonalizeRoute = pathname?.startsWith('/personalize/');
-  const isCheckoutRoute = pathname?.startsWith('/checkout');
-  
-
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (langRef.current && !langRef.current.contains(event.target as Node)) {
-        setLangMenuOpen(false);
-      }
       if (userRef.current && !userRef.current.contains(event.target as Node)) {
-        setUserMenuOpen(false);
+        setUserMenuOpen(false)
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
-  if (isPersonalizeRoute) return null;
+  useEffect(() => {
+    if (!user?.customerId) {
+      setRewardVoucherCount(0)
+      return
+    }
 
-  const handleCartClick = () => {
-    router.push('/cart');
-  };
+    let cancelled = false
 
-  const handleFavoritesClick = () => {
-    router.push('/favorites');
-  };
+    fetch('/api/account/reward-vouchers', {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+      .then((res) => (res.ok ? res.json() : { active: [] }))
+      .then((data) => {
+        if (cancelled) return
+        setRewardVoucherCount(Array.isArray(data?.active) ? data.active.length : 0)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setRewardVoucherCount(0)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isRewardsOpen, pathname, user?.customerId])
+
+  // Re-read hash on every pathname change (e.g. router.push('/#books') from another page)
+  useEffect(() => {
+    setUrlHash(window.location.hash)
+  }, [pathname])
+
+  // Track in-page hash changes (e.g. scrolling, history.pushState)
+  useEffect(() => {
+    const updateHash = () => setUrlHash(window.location.hash)
+    window.addEventListener('hashchange', updateHash)
+    return () => window.removeEventListener('hashchange', updateHash)
+  }, [])
+
+  // Scroll to #books section when landing on /#books from another page
+  useEffect(() => {
+    if (pathname === '/' && urlHash === '#books') {
+      const timer = setTimeout(() => {
+        document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' })
+      }, 80)
+      return () => clearTimeout(timer)
+    }
+  }, [pathname, urlHash])
+
+  useEffect(() => {
+    let activeRef: React.RefObject<HTMLButtonElement | null>
+    if (pathname === '/favorites') activeRef = favoritesRef
+    else if (pathname === '/collaboration') activeRef = collaborationRef
+    else if (pathname === '/support') activeRef = supportRef
+    else if (pathname === '/my-books') activeRef = myBooksRef
+    else if (isHomePage) activeRef = isBooksActive ? booksRef : homeRef
+    else { setIndicatorStyle(null); return }
+
+    const container = navContainerRef.current
+    const btn = activeRef.current
+    if (!btn || !container) { setIndicatorStyle(null); return }
+    const containerRect = container.getBoundingClientRect()
+    const btnRect = btn.getBoundingClientRect()
+    setIndicatorStyle({ left: btnRect.left - containerRect.left, width: btnRect.width })
+  }, [isHomePage, isBooksActive, pathname])
+
+  const handleHomeClick = () => {
+    if (pathname === '/') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      window.history.pushState(null, '', '/')
+      setUrlHash('')
+    } else {
+      router.push('/')
+    }
+  }
 
   const handleBooksClick = () => {
-    router.push('/#books');
-  };
-
-  const handleLanguageSelect = (lang: 'en' | 'cn_s' | 'cn_t') => {
-    setLanguage(lang);
-    setLangMenuOpen(false);
-  };
-
-  const getLangLabel = (lang: string) => {
-    switch (lang) {
-      case 'cn_s': return 'CN (简)';
-      case 'cn_t': return 'CN (繁)';
-      default: return 'EN';
+    if (pathname === '/') {
+      document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' })
+      window.history.pushState(null, '', '/#books')
+      setUrlHash('#books')
+    } else {
+      router.push('/#books')
     }
-  };
+  }
+
+  if (isPersonalizeRoute) return null
 
   return (
-    <nav className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/80 backdrop-blur-md transition-all duration-300">
+    <nav className="sticky top-0 z-40 w-full bg-white/55 backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        {/* Left: Logo + Back */}
         <div className="flex items-center gap-2">
           {pathname !== '/' && !isCheckoutRoute && (
             <button onClick={() => router.push('/')} className="mr-2 p-1 hover:bg-gray-100 rounded-full">
@@ -94,75 +166,75 @@ export const Navbar: React.FC = () => {
 
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); router.push('/'); }}
+            onClick={(e) => {
+              e.preventDefault()
+              router.push('/')
+            }}
             className="flex items-center space-x-2"
           >
-            <span className="text-xl font-bold tracking-tighter text-gray-900 bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-600">
+            <span className="font-title text-xl text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-600">
               YMI
             </span>
           </a>
         </div>
 
-        {/* Center: Desktop Links */}
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-          <button onClick={() => router.push('/')} className="transition-colors hover:text-gray-900 hover:scale-105 transform duration-200">
-            Home
-          </button>
-          <button onClick={handleBooksClick} className="transition-colors hover:text-gray-900 hover:scale-105 transform duration-200">
-            Books
-          </button>
-
+        <div className="hidden md:flex items-center gap-8 text-sm font-medium relative" ref={navContainerRef}>
+          {/* Sliding amber indicator */}
+          {indicatorStyle && (
+            <div
+              className="absolute bottom-0 h-0.5 bg-amber-500 rounded-full pointer-events-none transition-all duration-300 ease-out"
+              style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+            />
+          )}
           <button
-            onClick={handleFavoritesClick}
-            className="flex items-center gap-1.5 transition-colors text-gray-600 hover:text-red-500 hover:scale-105 transform duration-200"
+            ref={homeRef}
+            onClick={handleHomeClick}
+            className={`transition-colors duration-200 pb-0.5 ${isHomeActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            {t('navbar.home')}
+          </button>
+          <button
+            ref={booksRef}
+            onClick={handleBooksClick}
+            className={`transition-colors duration-200 pb-0.5 ${isBooksActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            {t('navbar.books')}
+          </button>
+          <button
+            ref={favoritesRef}
+            onClick={() => router.push('/favorites')}
+            className={`flex items-center gap-1.5 transition-colors duration-200 pb-0.5 ${pathname === '/favorites' ? 'text-gray-900' : 'text-gray-500 hover:text-red-500'}`}
           >
             <Heart className="h-4 w-4" />
-            <span>My Favourites</span>
+            <span>{t('navbar.favorites')}</span>
           </button>
-
-          <button onClick={() => router.push('/support')} className="transition-colors hover:text-gray-900 hover:scale-105 transform duration-200">
-            Support
+          <button
+            ref={myBooksRef}
+            onClick={() => router.push('/my-books')}
+            className={`transition-colors duration-200 pb-0.5 ${pathname === '/my-books' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            {t('navbar.myBooks')}
           </button>
-          <button onClick={() => router.push('/my-books')} className="transition-colors hover:text-gray-900 hover:scale-105 transform duration-200">
-            My Books
+          <button
+            ref={collaborationRef}
+            onClick={() => router.push('/collaboration')}
+            className={`transition-colors duration-200 pb-0.5 ${pathname === '/collaboration' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            {t('navbar.collaboration')}
+          </button>
+          <button
+            ref={supportRef}
+            onClick={() => router.push('/support')}
+            className={`transition-colors duration-200 pb-0.5 ${pathname === '/support' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            {t('navbar.support')}
           </button>
         </div>
 
-        {/* Right: Actions */}
         <div className="flex items-center gap-2 sm:gap-4">
-          {/* Language Selector */}
-          <div className="relative" ref={langRef}>
-            <Button variant="ghost" size="sm" onClick={() => setLangMenuOpen(!isLangMenuOpen)} className="gap-1 px-2">
-              <Globe className="h-4 w-4" />
-              <span className="uppercase text-xs font-semibold">{getLangLabel(language)}</span>
-            </Button>
+          <LanguageSwitcher menuClassName="w-40 animate-in fade-in zoom-in-95" />
 
-            {isLangMenuOpen && (
-              <div className="absolute right-0 mt-2 w-40 rounded-md border border-gray-100 bg-white shadow-lg py-1 animate-in fade-in zoom-in-95">
-                <button
-                  onClick={() => handleLanguageSelect('en')}
-                  className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${language === 'en' ? 'font-bold text-gray-900' : 'text-gray-600'}`}
-                >
-                  English
-                </button>
-                <button
-                  onClick={() => handleLanguageSelect('cn_s')}
-                  className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${language === 'cn_s' ? 'font-bold text-gray-900' : 'text-gray-600'}`}
-                >
-                  简体中文
-                </button>
-                <button
-                  onClick={() => handleLanguageSelect('cn_t')}
-                  className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${language === 'cn_t' ? 'font-bold text-gray-900' : 'text-gray-600'}`}
-                >
-                  繁體中文
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Cart */}
-          <Button variant="ghost" size="sm" onClick={handleCartClick} className="relative px-2">
+          <Button variant="ghost" size="sm" onClick={() => router.push('/cart')} className="relative px-2">
             <ShoppingCart className="h-5 w-5 text-gray-700" />
             {cartCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
@@ -171,88 +243,135 @@ export const Navbar: React.FC = () => {
             )}
           </Button>
 
-          {/* User */}
           <div className="relative" ref={userRef}>
             {user ? (
               <div className="flex items-center">
                 <button
                   onClick={() => setUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-2 focus:outline-none transition-transform hover:scale-105"
+                  className="relative flex items-center gap-2 focus:outline-none transition-transform hover:scale-105"
                 >
                   <img
                     src={user.avatar}
                     alt={user.name}
                     className="h-8 w-8 rounded-full border border-gray-200 object-cover shadow-sm"
                   />
+                  {rewardVoucherCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+                      {rewardVoucherCount > 9 ? '9+' : rewardVoucherCount}
+                    </span>
+                  ) : null}
                 </button>
 
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 rounded-md border border-gray-100 bg-white shadow-lg py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-white/85 bg-white/92 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_14px_38px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.92)] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="px-4 py-2 border-b border-gray-50">
                       <p className="text-sm font-semibold text-gray-900">{user.name}</p>
                       <p className="text-xs text-gray-500 truncate">{user.email}</p>
                     </div>
 
                     <button
-                      onClick={() => { router.push('/favorites'); setUserMenuOpen(false); }}
+                      onClick={() => {
+                        router.push('/account')
+                        setUserMenuOpen(false)
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <PencilLine className="h-4 w-4" />
+                      {t('navbar.myAccount')}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        router.push('/favorites')
+                        setUserMenuOpen(false)
+                      }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Heart className="h-4 w-4" />
-                      My Favourites
+                      {t('navbar.favorites')}
                     </button>
 
                     <button
-                      onClick={() => { router.push('/orders'); setUserMenuOpen(false); }}
+                      onClick={() => {
+                        setUserMenuOpen(false)
+                        setRewardsOpen(true)
+                      }}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Gift className="h-4 w-4" />
+                        {t('navbar.myRewards')}
+                      </span>
+                      {rewardVoucherCount > 0 ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                          {rewardVoucherCount > 9 ? '9+' : rewardVoucherCount}
+                        </span>
+                      ) : null}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        router.push('/orders')
+                        setUserMenuOpen(false)
+                      }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Package className="h-4 w-4" />
-                      My Orders
+                      {t('navbar.myOrders')}
                     </button>
 
                     <button
-                      onClick={() => { router.push('/my-books'); setUserMenuOpen(false); }}
+                      onClick={() => {
+                        router.push('/my-books')
+                        setUserMenuOpen(false)
+                      }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <BookOpen className="h-4 w-4" />
-                      My Books
+                      {t('navbar.myBooks')}
                     </button>
 
                     <button
-                      onClick={() => { router.push('/support'); setUserMenuOpen(false); }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Headphones className="h-4 w-4" />
-                      Support
-                    </button>
-
-                    <button
-                      onClick={() => { logout(); setUserMenuOpen(false); }}
+                      onClick={() => {
+                        logout()
+                        setUserMenuOpen(false)
+                      }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <LogOut className="h-4 w-4" />
-                      Log out
+                      {t('navbar.logOut')}
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <Button onClick={() => openLoginModal()} size="sm">Log In</Button>
+              <Button onClick={() => openLoginModal()} size="sm">
+                {t('navbar.logIn')}
+              </Button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Mobile Menu */}
+      <MyRewardsModal
+        open={isRewardsOpen}
+        user={user}
+        onClose={() => setRewardsOpen(false)}
+      />
+
       {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-4 shadow-lg animate-in slide-in-from-top-2">
-          <button onClick={() => { router.push('/'); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">Home</button>
-          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">Books</button>
-          <button onClick={() => { handleFavoritesClick(); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">My Favourites</button>
-          <button onClick={() => { router.push('/orders'); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">My Orders</button>
-          <button onClick={() => { router.push('/my-books'); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">My Books</button>
-          <button onClick={() => { router.push('/support'); setMobileMenuOpen(false); }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">Support</button>
+        <div className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-4 space-y-4 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
+          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.home')}</button>
+          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.books')}</button>
+          <button onClick={() => { router.push('/favorites'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.favorites')}</button>
+          <button onClick={() => { router.push('/my-books'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.myBooks')}</button>
+          <button onClick={() => { router.push('/collaboration'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.collaboration')}</button>
+          <button onClick={() => { router.push('/support'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.support')}</button>
+          <button onClick={() => { router.push('/orders'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.myOrders')}</button>
         </div>
       )}
     </nav>
-  );
-};
+  )
+}
+
+

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { randomUUID } from 'crypto'
 import { getOrCreateAnonSession } from '@/lib/session'
+import { buildUserAssetStoragePath } from '@/lib/userAssetsStorage'
 
 function getExtension(fileName: string, contentType: string) {
   const dotIndex = fileName.lastIndexOf('.')
@@ -31,8 +32,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Role is required' }, { status: 400 })
   }
 
-  if (assetType !== 'face_image') {
-    return NextResponse.json({ error: 'Only face_image uploads are supported' }, { status: 400 })
+  if (assetType !== 'face_image' && assetType !== 'profile_avatar') {
+    return NextResponse.json({ error: 'Only face_image and profile_avatar uploads are supported' }, { status: 400 })
+  }
+  if (assetType === 'profile_avatar' && !customerId) {
+    return NextResponse.json({ error: 'profile_avatar uploads require customerId' }, { status: 400 })
+  }
+  if (!String(file.type || '').startsWith('image/')) {
+    return NextResponse.json({ error: 'Only image uploads are supported for this asset type' }, { status: 400 })
   }
 
   const anonSessionId = customerId ? null : await getOrCreateAnonSession()
@@ -41,8 +48,13 @@ export async function POST(request: Request) {
   const ownerId = customerId ? String(customerId) : String(anonSessionId)
   const extension = getExtension(file.name, file.type || 'application/octet-stream')
   const assetId = randomUUID()
-  const fileName = `${assetId}.${extension}`
-  const storagePath = `user-assets/${fileName}`
+  const storagePath = buildUserAssetStoragePath({
+    ownerType,
+    ownerId,
+    assetType,
+    assetId,
+    extension,
+  })
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const { error: uploadError } = await supabaseAdmin.storage
@@ -68,8 +80,9 @@ export async function POST(request: Request) {
       metadata: {
         role,
         original_name: file.name,
-        created_for: 'preview',
-        source: 'upload',
+        created_for: assetType === 'profile_avatar' ? 'profile' : 'preview',
+        source: assetType === 'profile_avatar' ? 'profile' : 'upload',
+        content_type: file.type || null,
       },
     })
     .select()

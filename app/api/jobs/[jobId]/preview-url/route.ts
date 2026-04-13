@@ -29,13 +29,20 @@ export async function GET(
     | {
         storage_path?: string
         bucket?: string
-        pages?: { page_index: number; storage_path: string; storage_path_full?: string }[]
+        pages?: { page_index: number; preview_order?: number; storage_path: string; storage_path_full?: string }[]
       }
     | null
   const bucket = outputAssets?.bucket || 'raw-private'
 
   const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
-  const sortedPages = [...pages].sort((a, b) => a.page_index - b.page_index)
+  const sortedPages = [...pages].sort((a, b) => {
+    const orderA = typeof a.preview_order === 'number' ? a.preview_order : Number.MAX_SAFE_INTEGER
+    const orderB = typeof b.preview_order === 'number' ? b.preview_order : Number.MAX_SAFE_INTEGER
+    if (orderA !== orderB) {
+      return orderA - orderB
+    }
+    return a.page_index - b.page_index
+  })
 
   let requestedIndices: number[] | null = null
   if (pagesParam) {

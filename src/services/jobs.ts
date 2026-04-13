@@ -3,7 +3,9 @@ import { isUuid } from '@/lib/validators'
 export interface JobRecord {
   job_id: string
   job_type: 'preview' | 'final'
-  status: 'queued' | 'running' | 'done' | 'failed'
+  story_language?: 'English' | 'Traditional Chinese' | 'Spanish' | null
+  selected_book_type?: 'Cloud Explorer' | 'Classic' | 'Immersive' | 'Signature Voice' | null
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancel_requested' | 'cancelled'
   progress?: number | null
   error_message?: string | null
   input_snapshot: Record<string, unknown>
@@ -131,6 +133,46 @@ export async function getJob(jobId: string): Promise<JobRecord> {
   return (await response.json()) as JobRecord
 }
 
+export async function cancelPreviewJob(
+  jobId: string,
+  options?: { creationId?: string | null; customerId?: string | null }
+): Promise<{ ok: boolean; status: JobRecord['status']; jobId: string }> {
+  if (!jobId) throw new Error('Missing job ID')
+  if (!isUuid(jobId)) {
+    throw new Error(`Invalid job ID: ${jobId}`)
+  }
+
+  const response = await fetch(`/api/jobs/${jobId}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      creationId: options?.creationId ?? null,
+      customerId: options?.customerId ?? null,
+    }),
+  })
+
+  if (!response.ok) {
+    let details = ''
+    try {
+      const data = await response.json()
+      if (data?.error) {
+        details = `: ${data.error}`
+      }
+    } catch {
+      // no-op
+    }
+    throw new Error(`Failed to cancel preview job${details}`)
+  }
+
+  const data = await response.json()
+  return {
+    ok: Boolean(data?.ok),
+    status: data?.status as JobRecord['status'],
+    jobId: String(data?.jobId ?? jobId),
+  }
+}
+
 export async function getPreviewUrl(jobId: string): Promise<string> {
   if (!jobId) {
     throw new Error('Missing job ID')
@@ -152,7 +194,7 @@ export async function getPreviewUrl(jobId: string): Promise<string> {
 
 export async function getPreviewPages(
   jobId: string,
-  pageIndices: number[] = [0, 1],
+  pageIndices?: number[],
   options?: { size?: 'small' | 'full' }
 ): Promise<string[]> {
   if (!jobId) {
@@ -163,7 +205,7 @@ export async function getPreviewPages(
   }
 
   const params = new URLSearchParams()
-  if (pageIndices.length) {
+  if (Array.isArray(pageIndices) && pageIndices.length) {
     params.set('pages', pageIndices.join(','))
   }
   if (options?.size) {

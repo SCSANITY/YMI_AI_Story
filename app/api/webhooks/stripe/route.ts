@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { getStripeServer } from '@/lib/stripe'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orderFulfillment'
+import { finalizeReferralRewardForPaidOrder } from '@/lib/referrals'
 
 export const runtime = 'nodejs'
 
@@ -114,6 +115,7 @@ export async function POST(request: Request) {
       amount,
       currency,
     })
+    await finalizeReferralRewardForPaidOrder(orderId)
     return NextResponse.json({ received: true, order: result })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Failed to finalize stripe order' }, { status: 500 })

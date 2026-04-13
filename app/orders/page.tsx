@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Package, ChevronRight, Truck, Hourglass, CircleCheck } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
+import { useI18n } from '@/lib/useI18n';
+import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing';
 
 type OrderSummary = {
   order_id: string;
@@ -12,6 +14,7 @@ type OrderSummary = {
   order_status?: string | null;
   created_at?: string | null;
   total?: number;
+  display_currency?: CheckoutCurrency;
   item_count?: number;
   cover_url?: string | null;
   first_item_name?: string | null;
@@ -28,23 +31,14 @@ const getOrderTab = (status?: string | null): OrderTab => {
   return 'shipping';
 };
 
-const statusLabel = (status?: string | null) => {
-  const value = String(status ?? '').toLowerCase();
-  if (value === 'unpaid') return 'Pending Payment';
-  if (value === 'paid') return 'Paid';
-  if (value === 'processing') return 'In Production';
-  if (value === 'shipped') return 'Completed';
-  if (value === 'cancelled') return 'Cancelled';
-  if (value === 'refunded') return 'Refunded';
-  return 'In Transit';
-};
-
 export default function OrdersPage() {
   const router = useRouter();
-  const { user, checkoutEmail } = useGlobalContext();
+  const { t } = useI18n();
+  const { user, checkoutEmail, refreshCart } = useGlobalContext();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<OrderTab>('shipping');
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,10 +77,52 @@ export default function OrdersPage() {
 
   const visibleOrders = grouped[activeTab];
 
+  const statusLabel = (status?: string | null) => {
+    const value = String(status ?? '').toLowerCase();
+    if (value === 'unpaid') return t('orders.status.unpaid');
+    if (value === 'paid') return t('orders.status.paid');
+    if (value === 'processing') return t('orders.status.processing');
+    if (value === 'shipped') return t('orders.status.shipped');
+    if (value === 'cancelled') return t('orders.status.cancelled');
+    if (value === 'refunded') return t('orders.status.refunded');
+    return t('orders.status.default');
+  };
+
+  const handleDeletePending = async (orderId: string) => {
+    if (deletingOrderId) return;
+    const confirmed = window.confirm(t('orders.deletePendingConfirm'));
+    if (!confirmed) return;
+
+    setDeletingOrderId(orderId);
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          customerId: user?.customerId ?? null,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || t('orders.deletePendingFailed'));
+      }
+
+      setOrders((prev) => prev.filter((order) => order.order_id !== orderId));
+      await refreshCart();
+    } catch (error) {
+      console.error('Pending order delete failed:', error);
+      window.alert(error instanceof Error ? error.message : t('orders.deletePendingFailed'));
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center p-8">
-        <div className="text-sm text-gray-500">Loading your orders...</div>
+        <div className="text-sm text-gray-500">{t('common.loading')}</div>
       </div>
     );
   }
@@ -98,10 +134,10 @@ export default function OrdersPage() {
           <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
             <Package className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">No orders yet</h1>
-          <p className="text-gray-600">Start by creating a magical storybook.</p>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orders.emptyTitle')}</h1>
+          <p className="text-gray-600">{t('orders.emptyDescription')}</p>
           <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/')}>
-            Browse Books
+            {t('common.browseBooks')}
           </Button>
         </div>
       </div>
@@ -115,8 +151,8 @@ export default function OrdersPage() {
           <Package className="h-5 w-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">My Orders</h1>
-          <p className="text-gray-500 text-sm">Track your In Transit, Pending Payment, and Completed orders.</p>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orders.title')}</h1>
+          <p className="text-gray-500 text-sm">{t('orders.subtitle')}</p>
         </div>
       </div>
 
@@ -132,7 +168,7 @@ export default function OrdersPage() {
         >
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Truck className="h-4 w-4" />
-            In Transit
+            {t('orders.inTransit')}
           </div>
           <div className="text-xs mt-1">{grouped.shipping.length} order(s)</div>
         </button>
@@ -147,7 +183,7 @@ export default function OrdersPage() {
         >
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Hourglass className="h-4 w-4" />
-            Pending Payment
+            {t('orders.pendingPayment')}
           </div>
           <div className="text-xs mt-1">{grouped.unpaid.length} order(s)</div>
         </button>
@@ -162,7 +198,7 @@ export default function OrdersPage() {
         >
           <div className="flex items-center gap-2 text-sm font-semibold">
             <CircleCheck className="h-4 w-4" />
-            Completed
+            {t('orders.completed')}
           </div>
           <div className="text-xs mt-1">{grouped.finished.length} order(s)</div>
         </button>
@@ -170,7 +206,7 @@ export default function OrdersPage() {
 
       {visibleOrders.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
-          No orders in this category yet.
+          {t('orders.noCategoryOrders')}
         </div>
       ) : (
         <div className="space-y-4">
@@ -200,15 +236,15 @@ export default function OrdersPage() {
                     className="w-16 h-20 rounded-lg object-cover bg-gray-100"
                   />
                   <div>
-                    <div className="text-xs text-gray-500 font-mono tabular-nums tracking-wide">
+                    <div className="text-xs text-gray-500 font-medium tabular-nums tracking-[0.14em]">
                       #{order.display_id ?? order.order_id}
                     </div>
                     <div className="text-lg font-semibold text-gray-900">
-                      {order.first_item_name || 'Personalized storybook'}
+                      {order.first_item_name || t('common.personalizedStorybook')}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {order.item_count ?? 0} item{(order.item_count ?? 0) === 1 ? '' : 's'} | $
-                      {Number(order.total ?? 0).toFixed(2)}
+                      {order.item_count ?? 0} item{(order.item_count ?? 0) === 1 ? '' : 's'} |{' '}
+                      {formatMajorCurrencyValue(Number(order.total ?? 0), order.display_currency ?? 'USD')}
                     </div>
                     <div className="text-xs mt-1 text-amber-700 font-semibold">{statusLabel(order.order_status)}</div>
                   </div>
@@ -216,13 +252,24 @@ export default function OrdersPage() {
 
                 <div className="flex items-center gap-2">
                   {isUnpaidCard && (
-                    <Button
-                      size="sm"
-                      className="rounded-full"
-                      onClick={() => router.push(`/checkout?orderId=${encodeURIComponent(order.order_id)}`)}
-                    >
-                      Continue Payment
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => router.push(`/checkout?orderId=${encodeURIComponent(order.order_id)}`)}
+                      >
+                        {t('orders.continuePayment')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full border-red-200 text-red-600 hover:border-red-300 hover:text-red-700"
+                        disabled={deletingOrderId === order.order_id}
+                        onClick={() => void handleDeletePending(order.order_id)}
+                      >
+                        {t('orders.deletePending')}
+                      </Button>
+                    </>
                   )}
                   {isShippingCard && (
                     <Button
@@ -231,7 +278,7 @@ export default function OrdersPage() {
                       className="rounded-full"
                       onClick={() => router.push(`/orders/${order.order_id}`)}
                     >
-                      View Details
+                      {t('orders.viewDetails')}
                     </Button>
                   )}
                   {isFinishedCard && (
@@ -241,7 +288,7 @@ export default function OrdersPage() {
                       className="rounded-full"
                       onClick={() => router.push(`/orders/${order.order_id}/review`)}
                     >
-                      Rate & Review
+                      {t('orders.rateReview')}
                     </Button>
                   )}
                   {(isShippingCard || isFinishedCard) && <ChevronRight className="h-4 w-4 text-gray-400" />}

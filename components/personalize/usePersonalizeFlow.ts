@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
-import { Book, Language } from '@/types';
+import { Book, StoryLanguage } from '@/types';
 import { isUuid } from '@/lib/validators';
 
 export type PersonalizeStep = 1 | 2 | 2.5 | 3;
@@ -15,18 +15,21 @@ const normalizeStep = (step: number | undefined): PersonalizeStep => {
   return 2;
 };
 
-const normalizeLanguage = (value: string | undefined): Language => {
+const normalizeLanguage = (value: string | undefined): StoryLanguage => {
   switch (value) {
     case 'English':
-    case 'en':
-      return 'en';
+      return 'English';
+    case 'Traditional Chinese':
     case 'Chinese':
-    case 'cn_s':
-      return 'cn_s';
     case 'cn_t':
-      return 'cn_t';
+    case 'zh-hk':
+    case 'traditional':
+      return 'Traditional Chinese';
+    case 'Spanish':
+    case 'es':
+      return 'Spanish';
     default:
-      return 'en';
+      return 'English';
   }
 };
 
@@ -36,7 +39,7 @@ export type PersonalizeDraft = {
   personalization: {
     childName: string;
     childAge: string;
-    language: Language;
+    language: StoryLanguage;
     bookType: 'digital' | 'basic' | 'premium' | 'supreme';
     dedication: string;
     photo?: File;
@@ -90,7 +93,7 @@ export function usePersonalizeFlow(book: Book | undefined) {
         personalization: {
           childName: '',
           childAge: '',
-          language: 'en',
+          language: 'English',
           bookType: 'basic',
           dedication: '',
           assetId: undefined,

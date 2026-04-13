@@ -1,6 +1,7 @@
-﻿import * as React from 'react'
+import * as React from 'react'
 import { Hr, Section, Text } from '@react-email/components'
 import { EmailLayout } from './EmailLayout'
+import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing'
 
 export type ReceiptItem = {
   name: string
@@ -21,11 +22,20 @@ type OrderReceiptEmailProps = {
   displayId?: string | null
   items: ReceiptItem[]
   total: number
+  currency?: CheckoutCurrency
   address?: ReceiptAddress
   trackUrl?: string
 }
 
-export function OrderReceiptEmail({ orderId, displayId, items, total, address, trackUrl }: OrderReceiptEmailProps) {
+export function OrderReceiptEmail({
+  orderId,
+  displayId,
+  items,
+  total,
+  currency = 'USD',
+  address,
+  trackUrl,
+}: OrderReceiptEmailProps) {
   const label = displayId || orderId
   return (
     <EmailLayout
@@ -46,13 +56,13 @@ export function OrderReceiptEmail({ orderId, displayId, items, total, address, t
             <Section key={`${item.name}-${idx}`} style={styles.itemRow}>
               <Text style={styles.itemName}>{item.name}</Text>
               <Text style={styles.rowText}>
-                x{item.quantity} · ${item.unitPrice.toFixed(2)}
+                x{item.quantity} - {formatMajorCurrencyValue(item.unitPrice, currency)}
               </Text>
             </Section>
           ))
         )}
         <Hr style={styles.hr} />
-        <Text style={styles.total}>Total: ${total.toFixed(2)}</Text>
+        <Text style={styles.total}>Total: {formatMajorCurrencyValue(total, currency)}</Text>
       </Section>
 
       {address ? (

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
+import { buildUserAssetStoragePath } from '@/lib/userAssetsStorage'
 
 function getExtension(fileName: string, contentType: string) {
   const dotIndex = fileName.lastIndexOf('.')
@@ -25,8 +26,8 @@ export async function POST(request: Request) {
   if (!assetType || typeof assetType !== 'string') {
     return NextResponse.json({ error: 'Asset type is required' }, { status: 400 })
   }
-  if (assetType !== 'face_image') {
-    return NextResponse.json({ error: 'Only face_image uploads are supported' }, { status: 400 })
+  if (assetType !== 'face_image' && assetType !== 'voice_sample' && assetType !== 'profile_avatar') {
+    return NextResponse.json({ error: 'Only face_image, voice_sample and profile_avatar uploads are supported' }, { status: 400 })
   }
   if (!fileName || typeof fileName !== 'string') {
     return NextResponse.json({ error: 'file_name is required' }, { status: 400 })
@@ -34,14 +35,29 @@ export async function POST(request: Request) {
   if (!role || typeof role !== 'string') {
     return NextResponse.json({ error: 'role is required' }, { status: 400 })
   }
-
-  if (!customerId) {
-    await getOrCreateAnonSession()
+  if (assetType === 'profile_avatar' && !customerId) {
+    return NextResponse.json({ error: 'profile_avatar uploads require customerId' }, { status: 400 })
   }
+  if ((assetType === 'face_image' || assetType === 'profile_avatar') && !String(contentType).startsWith('image/')) {
+    return NextResponse.json({ error: 'Only image uploads are supported for this asset type' }, { status: 400 })
+  }
+  if (assetType === 'voice_sample' && !String(contentType).startsWith('audio/')) {
+    return NextResponse.json({ error: 'Only audio uploads are supported for voice_sample' }, { status: 400 })
+  }
+
+  const ownerType = customerId ? 'customer' : 'anon'
+  const anonSessionId = ownerType === 'anon' ? await getOrCreateAnonSession() : null
+  const ownerId = ownerType === 'customer' ? String(customerId) : String(anonSessionId)
 
   const extension = getExtension(fileName, contentType)
   const assetId = randomUUID()
-  const storagePath = `user-assets/${assetId}.${extension}`
+  const storagePath = buildUserAssetStoragePath({
+    ownerType,
+    ownerId,
+    assetType,
+    assetId,
+    extension,
+  })
 
   const { data: signed, error: signedError } = await supabaseAdmin.storage
     .from('raw-private')

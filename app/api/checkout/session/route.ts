@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
+import {
+  CheckoutCurrency,
+  convertUsdToCurrency,
+  normalizeCheckoutCurrency,
+  toMinorUnit,
+} from '@/lib/locale-pricing'
 
 type SessionItemInput = {
   id?: string
@@ -28,6 +34,7 @@ export async function POST(request: Request) {
     const billingAddress = body?.billingAddress ?? null
     const customerId = body?.customerId ? String(body.customerId) : null
     const isGuest = Boolean(body?.isGuest)
+    const currency = normalizeCheckoutCurrency(body?.currency) as CheckoutCurrency
     const rawItems = Array.isArray(body?.items) ? (body.items as SessionItemInput[]) : []
     const selectedCartItemIds = rawItems
       .map((item) => item?.id || item?.cartItemId || '')
@@ -40,7 +47,7 @@ export async function POST(request: Request) {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('order_id, order_status')
+      .select('order_id, order_status, discount_amount_usd, applied_discount_code, applied_discount_type')
       .eq('order_id', orderId)
       .maybeSingle()
     if (orderError || !order?.order_id) {
@@ -57,6 +64,7 @@ export async function POST(request: Request) {
         customer_id: customerId ?? null,
         shipping_address: shippingAddress,
         billing_address: billingAddress,
+        checkout_currency: currency,
       })
       .eq('order_id', orderId)
 
@@ -91,15 +99,16 @@ export async function POST(request: Request) {
 
     const lineItems = cartItems.map((item: any) => {
       const qty = Math.max(1, Number(item.quantity ?? 1))
-      const unitPrice = Math.max(0, Number(item.price_at_purchase ?? 0))
-      const amountCents = Math.round(unitPrice * 100)
+      const unitPriceUsd = Math.max(0, Number(item.price_at_purchase ?? 0))
+      const unitPrice = convertUsdToCurrency(unitPriceUsd, currency)
+      const amountMinor = toMinorUnit(unitPrice, currency)
       const templateId = item?.creations?.template_id ?? 'custom-story-book'
       const title = item?.creations?.templates?.name ?? `Story Book (${templateId})`
       return {
         quantity: qty,
         price_data: {
-          currency: 'usd',
-          unit_amount: amountCents,
+          currency: currency.toLowerCase(),
+          unit_amount: amountMinor,
           product_data: {
             name: title,
             metadata: {
@@ -113,11 +122,37 @@ export async function POST(request: Request) {
 
     const baseUrl = getBaseUrl(request)
     const stripe = getStripeServer()
+    const discountAmountUsd = Math.max(0, Number(order.discount_amount_usd ?? 0))
+    let stripeDiscounts: { coupon: string }[] | undefined
+
+    if (discountAmountUsd > 0) {
+      const amountOffMajor = convertUsdToCurrency(discountAmountUsd, currency)
+      const amountOffMinor = toMinorUnit(amountOffMajor, currency)
+      if (amountOffMinor > 0) {
+        const coupon = await stripe.coupons.create({
+          amount_off: amountOffMinor,
+          currency: currency.toLowerCase(),
+          duration: 'once',
+          name:
+            order.applied_discount_type === 'coupon'
+              ? `YMI Reward Voucher ${order.applied_discount_code || ''}`.trim()
+              : `YMI Invite Code ${order.applied_discount_code || ''}`.trim(),
+          metadata: {
+            order_id: orderId,
+            discount_code: String(order.applied_discount_code || ''),
+            discount_type: String(order.applied_discount_type || ''),
+          },
+        })
+        stripeDiscounts = [{ coupon: coupon.id }]
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       client_reference_id: orderId,
       customer_email: email,
       line_items: lineItems,
+      discounts: stripeDiscounts,
       success_url: `${baseUrl}/checkout/success?orderId=${encodeURIComponent(orderId)}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/checkout?orderId=${encodeURIComponent(orderId)}`,
       metadata: {
@@ -125,10 +160,18 @@ export async function POST(request: Request) {
         customer_id: customerId ?? '',
         is_guest: String(isGuest),
         email,
+        checkout_currency: currency,
+        applied_discount_code: String(order.applied_discount_code || ''),
+        applied_discount_type: String(order.applied_discount_type || ''),
+        discount_amount_usd: String(discountAmountUsd || 0),
       },
       payment_intent_data: {
         metadata: {
           order_id: orderId,
+          checkout_currency: currency,
+          applied_discount_code: String(order.applied_discount_code || ''),
+          applied_discount_type: String(order.applied_discount_type || ''),
+          discount_amount_usd: String(discountAmountUsd || 0),
         },
       },
     })

@@ -4,10 +4,12 @@ import React, { useEffect, useState, useTransition } from 'react';
 import { X, Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useGlobalContext } from '@/contexts/GlobalContext';
+import { useI18n } from '@/lib/useI18n';
 
 const SIGNUP_OTP_LENGTH = 8;
 
 export function LoginModal() {
+  const { t } = useI18n();
   const {
     isLoginModalOpen,
     closeLoginModal,
@@ -53,7 +55,7 @@ export function LoginModal() {
     }
     if (result?.otpRequired) {
       setSignupStep('verify');
-      setInfo(`Verification code sent. Enter the ${SIGNUP_OTP_LENGTH}-digit code from your email.`);
+      setInfo(t('login.verificationSent', { length: SIGNUP_OTP_LENGTH }));
       return;
     }
     setError('Failed to send verification code.');
@@ -99,7 +101,7 @@ export function LoginModal() {
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-gray-100">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Welcome back</h2>
+          <h2 className="text-lg font-bold text-gray-900">{t('login.title')}</h2>
           <button onClick={closeLoginModal} className="p-2 rounded-full hover:bg-gray-100">
             <X className="h-4 w-4 text-gray-500" />
           </button>
@@ -120,7 +122,7 @@ export function LoginModal() {
                 mode === 'login' ? 'bg-white text-gray-900 shadow' : ''
               }`}
             >
-              Log in
+              {t('login.logIn')}
             </button>
             <button
               type="button"
@@ -135,14 +137,14 @@ export function LoginModal() {
                 mode === 'signup' ? 'bg-white text-gray-900 shadow' : ''
               }`}
             >
-              Sign up
+              {t('login.signUp')}
             </button>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-6 space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</label>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('login.email')}</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
@@ -159,7 +161,7 @@ export function LoginModal() {
 
           {(mode === 'login' || !isSignupVerify) && (
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Password</label>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('login.password')}</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -176,13 +178,13 @@ export function LoginModal() {
 
           {isSignupVerify && (
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Verification Code</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('login.verificationCode')}</label>
               <input
                 type="text"
                 inputMode="numeric"
                 maxLength={SIGNUP_OTP_LENGTH}
                 className="w-full h-11 rounded-lg border border-gray-200 px-3 text-sm tracking-[0.3em]"
-                placeholder={`Enter ${SIGNUP_OTP_LENGTH}-digit code`}
+                placeholder={t('login.enterCode', { length: SIGNUP_OTP_LENGTH })}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, SIGNUP_OTP_LENGTH))}
                 required
@@ -198,12 +200,12 @@ export function LoginModal() {
 
           <Button type="submit" size="lg" className="w-full rounded-full" disabled={isPending}>
             {isPending
-              ? 'Please wait...'
+              ? t('login.pleaseWait')
               : mode === 'signup'
                 ? isSignupVerify
-                  ? 'Verify & create account'
-                  : 'Send verification code'
-                : 'Log in'}
+                  ? t('login.verifyAndCreate')
+                  : t('login.sendVerificationCode')
+                : t('login.logIn')}
           </Button>
 
           {isSignupVerify && (
@@ -219,13 +221,13 @@ export function LoginModal() {
               }}
               disabled={isPending}
             >
-              Resend code
+              {t('login.resendCode')}
             </button>
           )}
 
           <div className="flex items-center gap-3 text-xs text-gray-400">
             <span className="h-px flex-1 bg-gray-200" />
-            Or continue with
+            {t('login.orContinue')}
             <span className="h-px flex-1 bg-gray-200" />
           </div>
 
@@ -234,7 +236,7 @@ export function LoginModal() {
             disabled
             className="w-full rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-400"
           >
-            Social Login coming soon
+            {t('login.socialSoon')}
           </button>
         </form>
       </div>

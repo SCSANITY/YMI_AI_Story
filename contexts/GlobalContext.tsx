@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData } from '@/types';
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
+import { UI_LOCALES } from '@/lib/i18n-config';
 import {
   login as loginAction,
   signup as signupAction,
@@ -12,7 +13,44 @@ import {
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
-const DEFAULT_AVATAR = 'https://picsum.photos/100/100';
+const DEFAULT_AVATAR = '/default-avatar.svg';
+
+type AccountProfileResponse = {
+  customerId: string;
+  email: string;
+  displayName: string | null;
+  avatarAssetId: string | null;
+  avatarStoragePath: string | null;
+  avatarSignedUrl: string | null;
+};
+
+const getFallbackUserName = (email: string, displayName?: string | null) => {
+  const nextDisplayName = String(displayName ?? '').trim();
+  if (nextDisplayName) return nextDisplayName;
+  const [prefix] = String(email || '').split('@');
+  return prefix || 'Customer';
+};
+
+const applyAccountProfileToUser = (
+  baseUser: User,
+  profile?: AccountProfileResponse | null
+): User => ({
+  ...baseUser,
+  name: getFallbackUserName(baseUser.email, profile?.displayName),
+  avatar: profile?.avatarSignedUrl || DEFAULT_AVATAR,
+  avatarAssetId: profile?.avatarAssetId ?? undefined,
+  avatarStoragePath: profile?.avatarStoragePath ?? undefined,
+});
+const normalizeStoryLanguage = (value: unknown) => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
+    return 'Traditional Chinese';
+  }
+  if (raw === 'spanish' || raw === 'es') {
+    return 'Spanish';
+  }
+  return 'English';
+};
 
 export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -29,6 +67,14 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
   const [resumeData, setResumeData] = useState<CartItem | null>(null);
 
+  const fetchAccountProfile = useCallback(async () => {
+    const response = await fetch('/api/user/account-profile', {
+      credentials: 'include',
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as AccountProfileResponse;
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -40,13 +86,45 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     const savedUser = localStorage.getItem('ymi_user');
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser) as User;
+      setUser({
+        ...parsed,
+        avatar: parsed.avatar || DEFAULT_AVATAR,
+        name: parsed.name || getFallbackUserName(parsed.email),
+      });
+    }
+
+    const savedLanguage = localStorage.getItem('ymi_language') as Language | null;
+    if (savedLanguage && savedLanguage in UI_LOCALES) {
+      setLanguageState(savedLanguage);
+    }
 
     const savedCheckoutEmail = localStorage.getItem('ymi_checkout_email');
     if (savedCheckoutEmail) setCheckoutEmail(savedCheckoutEmail);
 
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const hydrateAccountProfile = async () => {
+      if (!user?.customerId) return;
+      const profile = await fetchAccountProfile();
+      if (!active || !profile) return;
+      setUser((prev) => {
+        if (!prev || prev.customerId !== user.customerId) return prev;
+        return applyAccountProfileToUser(prev, profile);
+      });
+    };
+
+    void hydrateAccountProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [fetchAccountProfile, user?.customerId]);
 
   const mapCartItems = useCallback((items: any[]) => {
     return items.map((row: any) => {
@@ -71,6 +149,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         author: fallbackBook?.author || 'YMI',
         price: fallbackBook?.price || Number(row.price_at_purchase ?? 0) || 0,
         coverUrl,
+        showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
         description: creation.templates?.description || fallbackBook?.description || '',
         category: fallbackBook?.category || 'Adventure',
         ageRange: fallbackBook?.ageRange || '3-5',
@@ -79,7 +158,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const overrides = creation.customize_snapshot?.textOverrides ?? creation.customize_snapshot?.text_overrides ?? {};
       const childName = overrides.child_name ?? overrides.childName ?? '';
       const childAge = overrides.child_age ?? overrides.childAge ?? overrides.age ?? '';
-      const language = overrides.language ?? creation.customize_snapshot?.language ?? 'English';
+      const language = normalizeStoryLanguage(overrides.language ?? creation.customize_snapshot?.language);
       const bookType = overrides.book_type ?? creation.customize_snapshot?.bookType ?? 'basic';
 
       return {
@@ -92,7 +171,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           ...(creation.customize_snapshot ?? {}),
           childName: String(childName),
           childAge: String(childAge),
-          language: language as any,
+          language,
           bookType,
           previewJobId:
             creation.customize_snapshot?.previewJobId ??
@@ -230,6 +309,13 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     localStorage.setItem('ymi_checkout_email', checkoutEmail);
   }, [checkoutEmail]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('ymi_language', language);
+    const htmlLang = UI_LOCALES[language]?.htmlLang ?? 'en';
+    document.documentElement.setAttribute('lang', htmlLang);
+  }, [language]);
+
   const finalizeAuth = useCallback(async (email: string, authUserId?: string | null) => {
     let customerId: string | undefined = undefined;
 
@@ -257,14 +343,27 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.error('Login merge failed:', error);
     }
 
-    setUser({
+    const baseUser: User = {
       id: authUserId ?? `customer_${Date.now().toString(36)}`,
-      name: email.split('@')[0],
+      name: getFallbackUserName(email),
       email,
       avatar: DEFAULT_AVATAR,
       customerId,
+    };
+
+    const profile = customerId ? await fetchAccountProfile().catch(() => null) : null;
+    setUser(applyAccountProfileToUser(baseUser, profile));
+  }, [cart, favorites, fetchAccountProfile]);
+
+  const refreshUserProfile = useCallback(async () => {
+    if (!user?.customerId) return;
+    const profile = await fetchAccountProfile();
+    if (!profile) return;
+    setUser((prev) => {
+      if (!prev || prev.customerId !== user.customerId) return prev;
+      return applyAccountProfileToUser(prev, profile);
     });
-  }, [cart, favorites]);
+  }, [fetchAccountProfile, user?.customerId]);
 
   const login = useCallback(async (email: string, password: string, mode: 'login' | 'signup' = 'login') => {
     if (!email || !password) {
@@ -503,7 +602,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         : {
             childName: '',
             childAge: '',
-            language: 'en',
+            language: 'English',
             dedication: '',
             creationId,
           }
@@ -702,6 +801,8 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     restoreCheckout,
     clearCart,
     removeOrderedItems,
+    refreshCart: refreshCartFromDb,
+    refreshUserProfile,
     toggleFavorite,
     setLanguage,
     setCheckoutEmail,

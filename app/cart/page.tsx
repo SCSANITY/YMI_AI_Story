@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation';
 import { ShoppingCart, Trash2, Pencil, Sparkles, CheckSquare, Square } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
+import { useI18n } from '@/lib/useI18n';
+import { formatLocaleCurrency } from '@/lib/locale-pricing';
 
 export default function CartPage() {
+  const { t, language } = useI18n();
   const router = useRouter();
   const {
     cart,
@@ -89,9 +92,9 @@ export default function CartPage() {
           <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
             <ShoppingCart className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Your cart is empty</h1>
-          <p className="text-gray-600">Pick a storybook and start personalizing. Your magic awaits.</p>
-          <Button size="lg" onClick={() => router.push('/')} className="rounded-full px-8">Browse Books</Button>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('cart.emptyTitle')}</h1>
+          <p className="text-gray-600">{t('cart.emptyDescription')}</p>
+          <Button size="lg" onClick={() => router.push('/')} className="rounded-full px-8">{t('common.browseBooks')}</Button>
         </div>
       </div>
     );
@@ -105,8 +108,8 @@ export default function CartPage() {
           <ShoppingCart className="h-5 w-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Your Cart</h1>
-          <p className="text-gray-500 text-sm">Select items to checkout or edit.</p>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('cart.title')}</h1>
+          <p className="text-gray-500 text-sm">{t('cart.subtitle')}</p>
         </div>
       </div>
 
@@ -117,7 +120,7 @@ export default function CartPage() {
             className="flex items-center gap-2 text-sm font-semibold text-gray-600"
           >
             {allSelected ? <CheckSquare className="h-4 w-4 text-amber-600" /> : <Square className="h-4 w-4" />}
-            {allSelected ? 'Unselect all' : 'Select all'}
+            {allSelected ? t('cart.unselectAll') : t('cart.selectAll')}
           </button>
 
           {cart.map((item) => (
@@ -156,9 +159,9 @@ export default function CartPage() {
                     </button>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">{item.book.author}</p>
                   </div>
-                  <div className="text-right space-y-2">
+                    <div className="text-right space-y-2">
                     <div className="text-lg font-bold text-gray-900">
-                      ${((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1)).toFixed(2)}
+                      {formatLocaleCurrency((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), language)}
                     </div>
                     <div className="flex items-center justify-end">
                       <div className="inline-flex items-center rounded-full border border-gray-200 bg-white shadow-sm px-1 py-0.5">
@@ -194,9 +197,9 @@ export default function CartPage() {
                 </div>
 
                 <div className="mt-3 text-sm text-gray-600 space-y-1">
-                  <div><span className="font-semibold">Hero:</span> {item.personalization?.childName || 'Unknown'}</div>
-                  <div><span className="font-semibold">Age:</span> {item.personalization?.childAge || 'N/A'}</div>
-                  <div><span className="font-semibold">Language:</span> {item.personalization?.language || 'English'}</div>
+                  <div><span className="font-semibold">{t('cart.heroLabel')}:</span> {item.personalization?.childName || t('common.unknown')}</div>
+                  <div><span className="font-semibold">{t('cart.ageLabel')}:</span> {item.personalization?.childAge || t('common.unknown')}</div>
+                  <div><span className="font-semibold">{t('cart.languageLabel')}:</span> {item.personalization?.language || t('language.en')}</div>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-3">
@@ -209,7 +212,7 @@ export default function CartPage() {
                       router.push(`/personalize/${item.bookID}`);
                     }}
                   >
-                    <Pencil className="h-4 w-4 mr-2" /> Edit
+                    <Pencil className="h-4 w-4 mr-2" /> {t('cart.edit')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -217,7 +220,7 @@ export default function CartPage() {
                     className="rounded-full text-red-500 hover:text-red-600"
                     onClick={() => removeFromCart(item.id)}
                   >
-                    <Trash2 className="h-4 w-4 mr-2" /> Remove
+                    <Trash2 className="h-4 w-4 mr-2" /> {t('common.remove')}
                   </Button>
                 </div>
               </div>
@@ -226,23 +229,23 @@ export default function CartPage() {
         </div>
 
         <div className="glass-panel rounded-2xl p-6 h-fit">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h3>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">{t('cart.summary')}</h3>
           <div className="space-y-2 text-sm text-gray-600">
             <div className="flex items-center justify-between">
-              <span>Cart Total</span>
-              <span className="text-gray-900 font-semibold">${subtotal.toFixed(2)}</span>
+              <span>{t('cart.cartTotal')}</span>
+              <span className="text-gray-900 font-semibold">{formatLocaleCurrency(subtotal, language)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>Selected</span>
-              <span className="text-gray-900 font-semibold">${selectedTotal.toFixed(2)}</span>
+              <span>{t('cart.selected')}</span>
+              <span className="text-gray-900 font-semibold">{formatLocaleCurrency(selectedTotal, language)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>Shipping</span>
-              <span className="text-gray-900 font-semibold">Free</span>
+              <span>{t('checkout.shippingDetails')}</span>
+              <span className="text-gray-900 font-semibold">{t('common.free')}</span>
             </div>
             <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-base">
-              <span className="font-bold text-gray-900">Total</span>
-              <span className="font-bold text-gray-900">${(selectedItems.length > 0 ? selectedTotal : subtotal).toFixed(2)}</span>
+              <span className="font-bold text-gray-900">{t('common.total')}</span>
+              <span className="font-bold text-gray-900">{formatLocaleCurrency(selectedItems.length > 0 ? selectedTotal : subtotal, language)}</span>
             </div>
           </div>
           <Button
@@ -251,10 +254,10 @@ export default function CartPage() {
             onClick={handleCheckout}
             disabled={selectedItems.length === 0}
           >
-            <Sparkles className="h-5 w-5 mr-2" /> Checkout Selected
+            <Sparkles className="h-5 w-5 mr-2" /> {t('cart.checkoutSelected')}
           </Button>
-          <p className="text-xs text-gray-500 mt-3">You can select one or multiple items.</p>
-          <p className="text-xs text-gray-500 mt-2">Checkout requires a verified email.</p>
+          <p className="text-xs text-gray-500 mt-3">{t('cart.selectHint')}</p>
+          <p className="text-xs text-gray-500 mt-2">{t('cart.verifyHint')}</p>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
+import { releaseOrderDiscountCode } from '@/lib/referrals'
 
 export async function POST(request: Request) {
   const body = await request.json()
@@ -10,6 +11,7 @@ export async function POST(request: Request) {
     ? body.orderIds
     : []
   const customerId = body?.customerId ?? null
+  const orderId = body?.orderId ? String(body.orderId) : null
 
   if (cartItemIds.length === 0) {
     return NextResponse.json({ error: 'Missing cart item IDs' }, { status: 400 })
@@ -33,6 +35,17 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: 'Failed to cancel order' }, { status: 500 })
+  }
+
+  if (orderId) {
+    try {
+      await releaseOrderDiscountCode(orderId)
+    } catch (releaseError: any) {
+      return NextResponse.json(
+        { error: releaseError?.message || 'Failed to release order discount' },
+        { status: 500 }
+      )
+    }
   }
 
   return NextResponse.json({ ok: true })

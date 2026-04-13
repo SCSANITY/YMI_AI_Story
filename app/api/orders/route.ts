@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orderFulfillment'
+import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
+import { finalizeReferralRewardForPaidOrder } from '@/lib/referrals'
+import {
+  getDisplayUnitPrice,
+  getOrderDisplayCurrency,
+  getOrderDisplayTotal,
+  getOrderCheckoutCurrency,
+} from '@/lib/order-display'
 
 export async function POST(request: Request) {
   const body = await request.json()
@@ -8,6 +16,7 @@ export async function POST(request: Request) {
   const items = Array.isArray(body?.items) ? body.items : []
   const isGuest = Boolean(body?.isGuest)
   const incomingOrderId = body?.orderId ?? null
+  const checkoutCurrency = normalizeCheckoutCurrency(body?.currency)
 
   if (!email || items.length === 0) {
     return NextResponse.json({ error: 'Invalid order payload' }, { status: 400 })
@@ -61,6 +70,7 @@ export async function POST(request: Request) {
         email,
         shipping_address: shippingAddress,
         billing_address: body?.billingAddress ?? null,
+        checkout_currency: checkoutCurrency,
         order_status: 'unpaid',
       })
       .select('order_id')
@@ -76,11 +86,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to resolve order' }, { status: 500 })
   }
 
-  const totalAmount = items.reduce((sum: number, item: any) => {
+  await supabaseAdmin
+    .from('orders')
+    .update({
+      checkout_currency: checkoutCurrency,
+      email,
+      customer_id: customerId,
+      shipping_address: shippingAddress,
+      billing_address: body?.billingAddress ?? null,
+    })
+    .eq('order_id', orderId)
+
+  const { data: discountRow } = await supabaseAdmin
+    .from('orders')
+    .select('discount_amount_usd')
+    .eq('order_id', orderId)
+    .maybeSingle()
+
+  const totalAmountUsd = items.reduce((sum: number, item: any) => {
     const price = Number(item.priceAtPurchase ?? 0)
     const quantity = Number(item.quantity ?? 1)
     return sum + price * quantity
   }, 0)
+  const discountAmountUsd = Math.max(0, Number(discountRow?.discount_amount_usd ?? 0))
+  const totalAmount = convertUsdToCurrency(Math.max(0, totalAmountUsd - discountAmountUsd), checkoutCurrency)
 
   try {
     const result = await finalizeOrderPayment({
@@ -91,10 +120,11 @@ export async function POST(request: Request) {
       billingAddress: body?.billingAddress ?? null,
       provider: 'demo',
       amount: totalAmount,
-      currency: 'usd',
+      currency: checkoutCurrency,
       cartItemIds,
       receiptItems: items,
     })
+    await finalizeReferralRewardForPaidOrder(orderId)
     return NextResponse.json(result)
   } catch (error: any) {
     if (error?.code === 'final_queue_overloaded') {
@@ -128,6 +158,13 @@ export async function GET(request: Request) {
         order_id,
         display_id,
         order_status,
+        payment_id,
+        checkout_currency,
+        applied_discount_code,
+        applied_discount_type,
+        applied_coupon_code_id,
+        applied_referral_code_id,
+        discount_amount_usd,
         created_at,
         email,
         shipping_address,
@@ -169,6 +206,26 @@ export async function GET(request: Request) {
   }
 
   const orderRows = orders ?? []
+  const paymentIds = orderRows
+    .map((order: any) => order.payment_id)
+    .filter((value: string | null) => Boolean(value)) as string[]
+  const paymentMap = new Map<string, { amount: number; currency: string }>()
+
+  if (paymentIds.length > 0) {
+    const { data: payments } = await supabaseAdmin
+      .from('payments')
+      .select('payment_id, amount, currency')
+      .in('payment_id', paymentIds)
+
+    for (const payment of payments ?? []) {
+      if (!payment.payment_id) continue
+      paymentMap.set(payment.payment_id, {
+        amount: Number(payment.amount ?? 0),
+        currency: String(payment.currency ?? 'USD'),
+      })
+    }
+  }
+
   const jobIds = orderRows
     .flatMap((order: any) => order.cart_items ?? [])
     .map((item: any) => item.creations?.preview_job_id)
@@ -206,11 +263,21 @@ export async function GET(request: Request) {
 
   const result = orderRows.map((order: any) => {
     const items = Array.isArray(order.cart_items) ? order.cart_items : []
-    const total = items.reduce((sum: number, item: any) => {
+    const baseUsdTotal = items.reduce((sum: number, item: any) => {
       const price = Number(item.price_at_purchase ?? 0)
       const quantity = Number(item.quantity ?? 1)
       return sum + price * quantity
     }, 0)
+    const payment = order.payment_id ? paymentMap.get(order.payment_id) ?? null : null
+    const checkoutCurrency = getOrderCheckoutCurrency(order.checkout_currency)
+    const displayCurrency = getOrderDisplayCurrency(order.checkout_currency, payment?.currency)
+    const displayTotal = getOrderDisplayTotal({
+      baseUsdTotal,
+      discountUsd: Number(order.discount_amount_usd ?? 0),
+      checkoutCurrency,
+      paymentAmount: payment?.amount ?? null,
+      paymentCurrency: payment?.currency,
+    })
     const firstItem = items[0] ?? null
     const previewJobId = firstItem?.creations?.preview_job_id ?? null
     const coverUrl = previewJobId ? previewUrlMap.get(previewJobId) ?? null : null
@@ -222,6 +289,9 @@ export async function GET(request: Request) {
         creation_id: item.creation_id,
         quantity: item.quantity ?? 1,
         price_at_purchase: item.price_at_purchase ?? null,
+        display_unit_price: getDisplayUnitPrice(Number(item.price_at_purchase ?? 0), displayCurrency),
+        display_line_total: getDisplayUnitPrice(Number(item.price_at_purchase ?? 0), displayCurrency) * Number(item.quantity ?? 1),
+        display_currency: displayCurrency,
         template_name: item?.creations?.templates?.name ?? null,
         cover_url: itemCoverUrl,
       }
@@ -233,7 +303,15 @@ export async function GET(request: Request) {
       order_status: order.order_status,
       created_at: order.created_at,
       email: order.email ?? null,
-      total,
+      total: displayTotal,
+      checkout_currency: checkoutCurrency,
+      applied_discount_code: order.applied_discount_code ?? null,
+      applied_discount_type: order.applied_discount_type ?? null,
+      applied_coupon_code_id: order.applied_coupon_code_id ?? null,
+      applied_referral_code_id: order.applied_referral_code_id ?? null,
+      discount_amount_usd: Number(order.discount_amount_usd ?? 0),
+      display_currency: displayCurrency,
+      display_total: displayTotal,
       item_count: items.length,
       cover_url: coverUrl,
       first_item_name: firstItem?.creations?.templates?.name ?? null,

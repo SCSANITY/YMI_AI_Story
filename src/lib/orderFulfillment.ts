@@ -1,8 +1,24 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendOrderConfirmationEmail } from '@/lib/email'
 import { checkJobQueueGuard } from '@/lib/jobQueue'
+import { mapBookTypeToDisplay } from '@/lib/bookType'
+import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 
 type OrderStatus = 'unpaid' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'refunded'
+type StoryLanguage = 'English' | 'Traditional Chinese' | 'Spanish'
+
+const DEFAULT_STORY_LANGUAGE: StoryLanguage = 'English'
+
+function normalizeStoryLanguage(value: unknown): StoryLanguage {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
+    return 'Traditional Chinese'
+  }
+  if (raw === 'spanish' || raw === 'es') {
+    return 'Spanish'
+  }
+  return DEFAULT_STORY_LANGUAGE
+}
 
 export type CheckoutItemInput = {
   id: string
@@ -151,6 +167,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   if (!orderId) throw new Error('Missing orderId')
   if (!customerId) throw new Error('Missing customerId for payment')
   if (!email) throw new Error('Missing email for payment')
+  const normalizedCurrency = normalizeCheckoutCurrency(currency)
 
   const { data: lockRow } = await supabaseAdmin
     .from('orders')
@@ -218,7 +235,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         customer_id: customerId,
         order_id: orderId,
         amount: resolvedAmount,
-        currency,
+        currency: normalizedCurrency,
         provider,
         provider_ref: providerRef,
         status: 'succeeded',
@@ -240,6 +257,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       email,
       shipping_address: shippingAddress,
       billing_address: billingAddress,
+      checkout_currency: normalizedCurrency,
       order_status: 'paid',
     })
     .eq('order_id', orderId)
@@ -288,12 +306,12 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         ? receiptItems.map((item) => ({
             name: String(item.bookID || 'Custom Story Book'),
             quantity: Number(item.quantity ?? 1),
-            unitPrice: Number(item.priceAtPurchase ?? 0),
+            unitPrice: convertUsdToCurrency(Number(item.priceAtPurchase ?? 0), normalizedCurrency),
           }))
         : cartItems.map((item) => ({
             name: String(item.creations?.template_id || 'Custom Story Book'),
             quantity: Number(item.quantity ?? 1),
-            unitPrice: Number(item.price_at_purchase ?? 0),
+            unitPrice: convertUsdToCurrency(Number(item.price_at_purchase ?? 0), normalizedCurrency),
           }))
 
     await sendOrderConfirmationEmail({
@@ -301,6 +319,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       orderId,
       displayId: existingOrder.display_id ?? null,
       total: resolvedAmount,
+      currency: normalizedCurrency,
       items: emailItems,
       address: {
         firstName: String(shippingAddress?.firstName ?? ''),
@@ -405,6 +424,16 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         creation_id: item.creation_id,
         template_id: creation.template_id,
         job_type: 'final',
+        story_language: normalizeStoryLanguage(
+          creation?.customize_snapshot?.textOverrides?.language ??
+            creation?.customize_snapshot?.text_overrides?.language ??
+            creation?.customize_snapshot?.language
+        ),
+        selected_book_type: mapBookTypeToDisplay(
+          creation?.customize_snapshot?.textOverrides?.book_type ??
+            creation?.customize_snapshot?.text_overrides?.book_type ??
+            creation?.customize_snapshot?.bookType
+        ),
         status: 'queued',
         input_snapshot: {
           face_source_path: storagePath ? `raw-private/${storagePath}` : null,

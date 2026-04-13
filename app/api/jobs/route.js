@@ -2,8 +2,21 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
 import { checkJobQueueGuard } from '@/lib/jobQueue'
+import { mapBookTypeToDisplay } from '@/lib/bookType'
 
 const MAX_TEXT_PROFILES = 5
+const DEFAULT_STORY_LANGUAGE = 'English'
+
+function normalizeStoryLanguage(value) {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
+    return 'Traditional Chinese'
+  }
+  if (raw === 'spanish' || raw === 'es') {
+    return 'Spanish'
+  }
+  return DEFAULT_STORY_LANGUAGE
+}
 
 async function saveTextProfile({
   ownerType,
@@ -155,6 +168,8 @@ export async function POST(request) {
   }
 
   const rawFacePath = `raw-private/${asset.storage_path}`
+  const storyLanguage = normalizeStoryLanguage(textOverrides?.language)
+  const selectedBookType = mapBookTypeToDisplay(textOverrides?.book_type)
   const customizeSnapshot = {
     storagePath: asset.storage_path ?? null,
     textOverrides: textOverrides ?? null,
@@ -189,6 +204,8 @@ export async function POST(request) {
         template_id: templateId,
         creation_id: creation.creation_id,
         job_type: 'preview',
+        story_language: storyLanguage,
+        selected_book_type: selectedBookType,
         status: 'queued',
         progress: 0,
         input_snapshot: {
@@ -280,10 +297,14 @@ export async function PATCH(request) {
     text_overrides: textOverrides ?? (job.input_snapshot || {}).text_overrides,
     params: params ?? (job.input_snapshot || {}).params,
   }
+  const storyLanguage = normalizeStoryLanguage(inputSnapshot?.text_overrides?.language)
+  const selectedBookType = mapBookTypeToDisplay(inputSnapshot?.text_overrides?.book_type)
 
   const { error: updateError } = await supabaseAdmin
     .from('jobs')
     .update({
+      story_language: storyLanguage,
+      selected_book_type: selectedBookType,
       input_snapshot: inputSnapshot,
       updated_at: new Date().toISOString(),
     })

@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 
-export type AssetType = 'face_image' | 'text_profile'
+export type AssetType = 'face_image' | 'text_profile' | 'voice_sample' | 'profile_avatar'
 
 export interface UserAssetRecord {
   asset_id: string
@@ -74,7 +74,7 @@ async function optimizeFaceImage(file: File): Promise<File> {
 export async function uploadUserAsset(
   file: File,
   type: AssetType,
-  role: 'face' | 'text',
+  role: 'face' | 'text' | 'voice' | 'avatar',
   customerId?: string
 ): Promise<UserAssetRecord> {
   if (!file) throw new Error('File is required')

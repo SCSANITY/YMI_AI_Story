@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
+import { isValidUserAssetStoragePath } from '@/lib/userAssetsStorage'
 
 const MAX_FACE_IMAGES = 8
 
@@ -13,6 +14,8 @@ export async function POST(request: Request) {
   const customerId = body?.customerId ?? null
   const originalName = body?.original_name || body?.originalName || null
   const contentType = body?.content_type || body?.contentType || null
+  const createdFor = assetType === 'profile_avatar' ? 'profile' : 'preview'
+  const source = assetType === 'profile_avatar' ? 'profile' : 'upload'
 
   if (!assetId || typeof assetId !== 'string') {
     return NextResponse.json({ error: 'asset_id is required' }, { status: 400 })
@@ -26,10 +29,13 @@ export async function POST(request: Request) {
   if (!role || typeof role !== 'string') {
     return NextResponse.json({ error: 'role is required' }, { status: 400 })
   }
+  if (assetType === 'profile_avatar' && !customerId) {
+    return NextResponse.json({ error: 'profile_avatar uploads require customerId' }, { status: 400 })
+  }
   if (!storagePath.startsWith('user-assets/')) {
     return NextResponse.json({ error: 'invalid storage_path' }, { status: 400 })
   }
-  if (!storagePath.includes(assetId)) {
+  if (!isValidUserAssetStoragePath(storagePath, assetId)) {
     return NextResponse.json({ error: 'asset_id mismatch' }, { status: 400 })
   }
 
@@ -49,8 +55,8 @@ export async function POST(request: Request) {
       metadata: {
         role,
         original_name: originalName,
-        created_for: 'preview',
-        source: 'upload',
+        created_for: createdFor,
+        source,
         content_type: contentType,
       },
     })
@@ -69,18 +75,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to sign asset URL' }, { status: 500 })
   }
 
-  const { data: assets } = await supabaseAdmin
-    .from('user_assets')
-    .select('asset_id')
-    .eq('owner_type', ownerType)
-    .eq(ownerType === 'anon' ? 'anon_session_id' : 'customer_id', ownerId)
-    .eq('asset_type', 'face_image')
-    .order('created_at', { ascending: true })
+  if (assetType === 'face_image') {
+    const { data: assets } = await supabaseAdmin
+      .from('user_assets')
+      .select('asset_id')
+      .eq('owner_type', ownerType)
+      .eq(ownerType === 'anon' ? 'anon_session_id' : 'customer_id', ownerId)
+      .eq('asset_type', 'face_image')
+      .order('created_at', { ascending: true })
 
-  if (assets && assets.length > MAX_FACE_IMAGES) {
-    const toRemove = assets.slice(0, assets.length - MAX_FACE_IMAGES).map((row) => row.asset_id)
-    if (toRemove.length) {
-      await supabaseAdmin.from('user_assets').delete().in('asset_id', toRemove)
+    if (assets && assets.length > MAX_FACE_IMAGES) {
+      const toRemove = assets.slice(0, assets.length - MAX_FACE_IMAGES).map((row) => row.asset_id)
+      if (toRemove.length) {
+        await supabaseAdmin.from('user_assets').delete().in('asset_id', toRemove)
+      }
     }
   }
 

@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Heart, Sparkles } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
+import { BookCardCover } from '@/components/BookCardCover';
 import { supabase } from '@/lib/supabase';
+import { useI18n } from '@/lib/useI18n';
 
 export default function FavoritesPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const { favorites, toggleFavorite, user, isHydrated } = useGlobalContext();
   const [coverMap, setCoverMap] = useState<Record<string, string>>({});
   const [titleMap, setTitleMap] = useState<Record<string, string>>({});
@@ -84,9 +87,9 @@ export default function FavoritesPage() {
           <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
             <Heart className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">No favorites yet</h1>
-          <p className="text-gray-600">Browse the collection and tap the heart to save a book.</p>
-          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/')}>Browse Books</Button>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('favorites.emptyTitle')}</h1>
+          <p className="text-gray-600">{t('favorites.emptyDescription')}</p>
+          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/#books')}>{t('common.browseBooks')}</Button>
         </div>
       </div>
     );
@@ -100,54 +103,45 @@ export default function FavoritesPage() {
           <Heart className="h-5 w-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">My Favorites</h1>
-          <p className="text-gray-500 text-sm">Your saved storybooks.</p>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('favorites.title')}</h1>
+          <p className="text-gray-500 text-sm">{t('favorites.subtitle')}</p>
         </div>
       </div>
       {!user && (
         <div className="mb-6 text-xs text-gray-500">
-          Log in to sync your favorites across devices.
+          {t('favorites.syncHint')}
         </div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8">
-        {favorites.map((book) => (
+        {favorites.map((book) => {
+          const coverSrc = coverMap[book.bookID] || book.coverUrl
+
+          return (
           <div
             key={book.bookID}
-            className="group flex flex-col h-full glass-panel rounded-xl md:rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-2 transition-all duration-500 cursor-pointer"
+            className="group book-card-hoverable relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out md:hover:-translate-y-1"
             onClick={() => router.push(`/personalize/${book.bookID}`)}
           >
-            <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
-              <img
-                src={coverMap[book.bookID] || book.coverUrl}
-                alt={titleMap[book.bookID] || book.title}
-                className="h-full w-full object-cover"
-              />
-
-              <div className="absolute top-2 left-2 md:top-3 md:left-3 flex gap-2">
-                <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur-sm text-[8px] md:text-[10px] font-bold uppercase tracking-wider rounded-md text-gray-800 shadow-sm">
-                  {typeMap[book.bookID] || book.category}
-                </span>
-              </div>
-
+            <BookCardCover src={coverSrc} alt={titleMap[book.bookID] || book.title} coverZoom={book.coverZoom}>
               <button
                 onClick={(event) => {
                   event.stopPropagation();
                   toggleFavorite(book);
                 }}
-                className="absolute top-2 right-2 md:top-3 md:right-3 p-1.5 md:p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-all transform active:scale-90 opacity-100 md:opacity-0 group-hover:opacity-100 translate-y-0 md:translate-y-2 group-hover:translate-y-0"
+                className="absolute top-2 right-2 z-20 md:top-3 md:right-3 p-1.5 md:p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-all transform active:scale-90 opacity-100 md:opacity-0 group-hover:opacity-100 translate-y-0 md:translate-y-2 group-hover:translate-y-0"
               >
                 <Heart className="h-4 w-4 md:h-5 md:w-5 fill-red-500 text-red-500" />
               </button>
-            </div>
+            </BookCardCover>
 
-            <div className="flex flex-col flex-1 p-3 md:p-6">
+            <div className="glass-panel rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-10 md:pt-14 px-3 md:px-5 pb-3 md:pb-5">
               <div className="flex flex-col flex-1">
                 <h3 className="font-display text-sm md:text-lg font-medium text-gray-900 leading-tight mb-1 md:mb-2 group-hover:text-amber-600 transition-colors line-clamp-2 md:line-clamp-none">
                   {titleMap[book.bookID] || book.title}
                 </h3>
                 <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wide mb-1 md:mb-3">
-                  {book.author}
+                  {typeMap[book.bookID] || book.category}
                 </p>
                 <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
                   {descMap[book.bookID] || book.description}
@@ -156,7 +150,7 @@ export default function FavoritesPage() {
 
               <div className="mt-auto pt-2 md:pt-4 border-t border-gray-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
                 <span className="text-[10px] md:text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 md:px-3 md:py-1 rounded-full whitespace-nowrap">
-                  {book.ageRange} Years
+                  {book.ageRange} {t('common.yearsSuffix')}
                 </span>
                 <Button
                   size="sm"
@@ -166,12 +160,12 @@ export default function FavoritesPage() {
                     router.push(`/personalize/${book.bookID}`);
                   }}
                 >
-                  <Sparkles className="h-3 w-3 mr-1" /> Personalize
+                  <Sparkles className="h-3 w-3 mr-1" /> {t('favorites.personalize')}
                 </Button>
               </div>
             </div>
           </div>
-        ))}
+        )})}
       </div>
       </div>
     </div>

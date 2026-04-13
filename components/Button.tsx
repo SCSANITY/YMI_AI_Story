@@ -13,13 +13,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   size = 'md',
   ...props 
 }, ref) => {
-  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:pointer-events-none disabled:opacity-50';
-  
+  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-400 disabled:pointer-events-none disabled:opacity-50';
+
   const variants = {
-    primary: 'bg-gray-900 text-gray-50 hover:bg-gray-900/90 shadow',
-    secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-100/80',
-    ghost: 'hover:bg-gray-100 hover:text-gray-900',
-    outline: 'border border-gray-200 bg-white hover:bg-gray-100 hover:text-gray-900',
+    primary: 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-400 hover:to-orange-400 shadow-sm shadow-amber-200/60',
+    secondary: 'bg-amber-50 text-amber-900 border border-amber-200/60 hover:bg-amber-100',
+    ghost: 'text-gray-600 hover:bg-amber-50 hover:text-amber-800',
+    outline: 'border border-amber-200 bg-white hover:bg-amber-50 text-gray-700',
   };
 
   const sizes = {

@@ -3,27 +3,53 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { BOOKS } from '@/data/books';
 import { Button } from '@/components/Button';
-import { ChevronLeft, ChevronRight, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, Globe, User as UserIcon, LogOut, Package, HeadphonesIcon, BookOpen, Star, Info, Play, Check, Book, AlertTriangle, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Play, Check, Book, AlertTriangle, X, Share2, CircleHelp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
 import { uploadUserAsset } from '@/services/assets';
-import { createPreviewJob, getJob, getPreviewPages, getPreviewUrl } from '@/services/jobs';
+import { cancelPreviewJob, createPreviewJob, getJob, getPreviewPages, getPreviewUrl } from '@/services/jobs';
 import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
 import { isUuid } from '@/lib/validators';
+import { useI18n } from '@/lib/useI18n';
+import { formatLocaleCurrency } from '@/lib/locale-pricing';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { ShareDialog } from '@/components/ShareDialog';
+import { MiniGame } from '@/components/MiniGame';
+import { VoiceRecorderPanel } from '@/components/personalize/VoiceRecorderPanel';
+import type { StoryLanguage } from '@/types';
 
+const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
+    return 'Traditional Chinese';
+  }
+  if (raw === 'spanish' || raw === 'es') {
+    return 'Spanish';
+  }
+  return 'English';
+};
 
+const GOOD_PHOTO_EXAMPLES = [
+  { src: '/personalize-photo-samples/good-01.jpg', alt: 'Good photo example 1' },
+  { src: '/personalize-photo-samples/good-02.jpg', alt: 'Good photo example 2' },
+  { src: '/personalize-photo-samples/good-03.jpg', alt: 'Good photo example 3' },
+];
 
-
+const BAD_PHOTO_EXAMPLES = [
+  { src: '/personalize-photo-samples/bad-01.jpg', alt: 'Bad photo example 1' },
+  { src: '/personalize-photo-samples/bad-02.jpg', alt: 'Bad photo example 2' },
+  { src: '/personalize-photo-samples/bad-03.jpg', alt: 'Bad photo example 3' },
+];
 
 export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const fsm = usePersonalizeStage()
+  const { t } = useI18n()
 
-
-  const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, language, setLanguage, cart} = useGlobalContext();
+  const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, language, cart} = useGlobalContext();
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   const book = BOOKS.find(b => b.bookID === bookID);
   const router = useRouter();
@@ -32,12 +58,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const creationIdParam = searchParams?.get('creationId') || null;
   const previewJobIdParam = searchParams?.get('jobId') || null;
   const { step: flowStep } = usePersonalizeFlow(book);
-
-  const handleExitFlow = () => {
-  setShowExitConfirm(true);
-    };
-
-
 
   const {
     name, setName,
@@ -72,7 +92,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     uiProgress,
     } = fsm;
 
-  //推翻Steps
+  //?函蕃Steps
   const PROGRESS_MAP = {
     STORY: 0,
     CUSTOMIZE: 1,
@@ -83,7 +103,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
   // --- Header Menu States ---
-  const [isLangMenuOpen, setLangMenuOpen] = useState(false);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   
  
@@ -98,6 +117,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const exitRunningRef = useRef(false);
   const [showCartToast, setShowCartToast] = useState(false);
   const toastTimerRef = useRef<number | null>(null);
+  const [showPreviewCancelledToast, setShowPreviewCancelledToast] = useState(false);
+  const previewCancelToastTimerRef = useRef<number | null>(null);
+  const previewCancelRequestedRef = useRef(false);
+  const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(40);
 
 
 
@@ -113,8 +136,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [flipDirection, setFlipDirection] = useState<'next' | 'prev' | null>(null);
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [audioName, setAudioName] = useState<string>('');
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
@@ -122,26 +143,74 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewPages, setPreviewPages] = useState<string[]>([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [previewShareUrl, setPreviewShareUrl] = useState<string | null>(null);
+  const [isPreparingShare, setIsPreparingShare] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const generationInFlightRef = useRef(false);
   const checkoutInFlightRef = useRef(false);
   const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(null);
   const [templateTitle, setTemplateTitle] = useState<string | null>(null);
   const [templateDescription, setTemplateDescription] = useState<string | null>(null);
   const [recentFaces, setRecentFaces] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string }>>([]);
+  const [recentVoices, setRecentVoices] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string | null; metadata?: { duration_seconds?: number | null } }>>([]);
+  const [voiceSignedUrl, setVoiceSignedUrl] = useState<string | null>(null);
+  const [voiceValidationError, setVoiceValidationError] = useState<string | null>(null);
   type RecentProfileItem = {
     asset_id: string
     metadata?: { child_name?: string; child_age?: number; name?: string; age?: number; gender?: string }
   }
+
+  const handleOpenPreviewShare = useCallback(async () => {
+    if (!creationId) {
+      setShareError(t('share.previewUnavailable'));
+      return;
+    }
+
+    setIsPreparingShare(true);
+    setShareError(null);
+
+    try {
+      const response = await fetch('/api/share/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          creationId,
+          customerId: user?.customerId ?? null,
+        }),
+      });
+      const data = response.ok ? await response.json() : await response.json().catch(() => null);
+      if (!response.ok || !data?.shareUrl) {
+        setShareError(data?.error || t('share.previewCreateFailed'));
+        return;
+      }
+      setPreviewShareUrl(data.shareUrl);
+      setIsShareDialogOpen(true);
+    } catch {
+      setShareError(t('share.previewCreateFailed'));
+    } finally {
+      setIsPreparingShare(false);
+    }
+  }, [creationId, t, user?.customerId]);
   const [recentProfiles, setRecentProfiles] = useState<RecentProfileItem[]>([]);
   const [showNameHistory, setShowNameHistory] = useState(false);
   const [showAgeHistory, setShowAgeHistory] = useState(false);
+  const [showLanguageOptions, setShowLanguageOptions] = useState(false);
+  const [expandedBookFaq, setExpandedBookFaq] = useState<number | null>(0);
+  const [activeShowcaseIndex, setActiveShowcaseIndex] = useState(0);
+  const [desktopShowcaseThumbSize, setDesktopShowcaseThumbSize] = useState(72);
+  const [desktopMainShowcaseSize, setDesktopMainShowcaseSize] = useState(520);
+  const [desktopThumbColumnWidth, setDesktopThumbColumnWidth] = useState(78);
   const nameBoxRef = useRef<HTMLDivElement | null>(null);
   const ageBoxRef = useRef<HTMLDivElement | null>(null);
-  const hasCartItemForPreview = useMemo(() => {
-    if (!bookID || !creationId) return false;
-    return cart.some(item => item.bookID === bookID && item.creationId === creationId);
-  }, [cart, bookID, creationId]);
-
+  const languageBoxRef = useRef<HTMLDivElement | null>(null);
+  const voicePanelRef = useRef<HTMLDivElement | null>(null);
+  const mainShowcaseRef = useRef<HTMLDivElement | null>(null);
+  const showcaseThumbRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const showcaseRowRef = useRef<HTMLDivElement | null>(null);
+  const showcaseThumbViewportRef = useRef<HTMLDivElement | null>(null);
+  const uploadPanelRef = useRef<HTMLDivElement | null>(null);
   // --- Mobile Responsive State ---
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const resolvedBook = useMemo(() => {
@@ -163,17 +232,178 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       : book.price
     : 0;
   const isSupreme = bookType === 'supreme';
+  const requiresVoiceSample = bookType === 'supreme';
   const isMobile = windowWidth < 768;
+  const mobilePreviewScale = Math.min(0.58, Math.max(0.4, (windowWidth - 24) / (PAGE_WIDTH * 2)));
+  const previewScale = isMobile ? mobilePreviewScale : 1;
+  const previewStageHeight = isMobile ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
+  const previewShareImageUrl = previewPages[0] || previewUrl || resolvedBook?.coverUrl || null;
+  const maxSpreadIndex = Math.max(TOTAL_SPREADS, Math.max(0, previewPages.length - 1));
+  const currentVoiceSample = useMemo(() => {
+    if (!voiceAssetId) return null;
+    return recentVoices.find((voice) => voice.asset_id === voiceAssetId) ?? null;
+  }, [recentVoices, voiceAssetId]);
+
+  const resolvedVoiceSignedUrl = voiceSignedUrl || currentVoiceSample?.signed_url || null;
+  const showcaseImages = useMemo(() => {
+    if (!resolvedBook) return [];
+    const images = Array.isArray(resolvedBook.showcaseImages) ? resolvedBook.showcaseImages.filter(Boolean) : [];
+    const normalized = images.length > 0 ? [...images] : [resolvedBook.coverUrl];
+    while (normalized.length < 9) {
+      normalized.push(resolvedBook.coverUrl);
+    }
+    return normalized.slice(0, 9);
+  }, [resolvedBook]);
+  const activeShowcaseImage = showcaseImages[activeShowcaseIndex] || showcaseImages[0] || resolvedBook?.coverUrl || '';
+  const bookFaqItems = useMemo(() => {
+    const storyTitle = templateTitle || book?.title || 'this story';
+    return [
+      {
+        question: t('personalize.bookFaq1Question'),
+        answer: t('personalize.bookFaq1Answer', { title: storyTitle }),
+      },
+      {
+        question: t('personalize.bookFaq2Question'),
+        answer: t('personalize.bookFaq2Answer'),
+      },
+      {
+        question: t('personalize.bookFaq3Question'),
+        answer: t('personalize.bookFaq3Answer'),
+      },
+    ];
+  }, [book?.title, t, templateTitle]);
+
+  useEffect(() => {
+    setActiveShowcaseIndex(0);
+  }, [bookID]);
+
+  useEffect(() => {
+    if (!viewState.showForm) return;
+    if (showcaseImages.length <= 1) return;
+
+    const interval = window.setInterval(() => {
+      setActiveShowcaseIndex((prev) => (prev + 1) % showcaseImages.length);
+    }, 4000);
+
+    return () => window.clearInterval(interval);
+  }, [showcaseImages.length, viewState.showForm]);
+
+  useEffect(() => {
+    if (showcaseImages.length === 0) return;
+    setActiveShowcaseIndex((prev) => (prev >= showcaseImages.length ? 0 : prev));
+  }, [showcaseImages.length]);
+
+  useEffect(() => {
+    if (isMobile) return;
+    const rowNode = showcaseRowRef.current;
+    const node = mainShowcaseRef.current;
+    const uploadNode = uploadPanelRef.current;
+    if (!node || !rowNode || !uploadNode) return;
+
+    const GAP = 8;
+    const MIN_THUMB_SIZE = 68;
+    const MAX_THUMB_SIZE = 76;
+    const COLUMN_GAP = 12;
+    const SCROLL_SLOT = 8;
+    const MIN_MAIN_SIZE = 420;
+
+    const recompute = () => {
+      const rowRect = rowNode.getBoundingClientRect();
+      const uploadRect = uploadNode.getBoundingClientRect();
+      const rowWidth = rowNode.getBoundingClientRect().width;
+      const desiredMainSize = Math.floor(uploadRect.bottom - rowRect.top);
+      if (!desiredMainSize || !rowWidth) return;
+
+      const solveForVisibleCount = (count: number) => {
+        const maxSizeByWidth = Math.floor(
+          (
+            rowWidth
+            - COLUMN_GAP
+            - SCROLL_SLOT
+            + (GAP * (count - 1)) / count
+          ) / (1 + 1 / count)
+        );
+        const nextMainSize = Math.max(MIN_MAIN_SIZE, Math.min(desiredMainSize, maxSizeByWidth));
+        const nextThumbSize = Math.floor((nextMainSize - GAP * (count - 1)) / count);
+        return { mainSize: nextMainSize, thumbSize: nextThumbSize };
+      };
+
+      const optionSix = solveForVisibleCount(6);
+      const optionFive = solveForVisibleCount(5);
+      const preferred = optionSix.thumbSize >= MIN_THUMB_SIZE ? optionSix : optionFive;
+      const clampedThumbSize = Math.min(MAX_THUMB_SIZE, Math.max(preferred.thumbSize, MIN_THUMB_SIZE));
+
+      setDesktopMainShowcaseSize(preferred.mainSize);
+      setDesktopShowcaseThumbSize(clampedThumbSize);
+      setDesktopThumbColumnWidth(clampedThumbSize + SCROLL_SLOT);
+    };
+
+    recompute();
+
+    const observer = new ResizeObserver(recompute);
+    observer.observe(rowNode);
+    observer.observe(uploadNode);
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [isMobile, resolvedBook?.coverUrl, showcaseImages.length, windowWidth]);
+
+  useEffect(() => {
+    const viewport = showcaseThumbViewportRef.current;
+    const target = showcaseThumbRefs.current[activeShowcaseIndex];
+    if (!viewport || !target) return;
+
+    if (isMobile) {
+      const targetCenter = target.offsetLeft + target.offsetWidth / 2;
+      const nextLeft = Math.max(0, targetCenter - viewport.clientWidth / 2);
+      viewport.scrollTo({ left: nextLeft, behavior: 'smooth' });
+      return;
+    }
+
+    const buffer = 8;
+    const currentTop = viewport.scrollTop;
+    const targetTop = target.offsetTop;
+    const targetBottom = targetTop + target.offsetHeight;
+    const viewportTop = currentTop;
+    const viewportBottom = currentTop + viewport.clientHeight;
+
+    let nextTop = currentTop;
+
+    if (targetTop < viewportTop + buffer) {
+      nextTop = Math.max(0, targetTop - buffer);
+    } else if (targetBottom > viewportBottom - buffer) {
+      nextTop = targetBottom - viewport.clientHeight + buffer;
+    }
+
+    if (nextTop !== currentTop) {
+      viewport.scrollTo({ top: nextTop, behavior: 'smooth' });
+    }
+  }, [activeShowcaseIndex, isMobile]);
+
+  useEffect(() => {
+    if (!viewState.showLoading) {
+      setLoadingCountdownSeconds(40);
+      return;
+    }
+
+    setLoadingCountdownSeconds(40);
+
+    const interval = window.setInterval(() => {
+      setLoadingCountdownSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [viewState.showLoading]);
 
   // Determine Visual State for Animations
   const isClosing = isFlipping && flipDirection === 'prev' && currentSpread === 1;
   const isVisualBookOpen = currentSpread > 0 || (isFlipping && flipDirection === 'next' && currentSpread === 0);
   const isBookClosed = !isVisualBookOpen;
 
-  //FSM【只执行一次】保护
+  //FSM??扯?銝甈～???
   const didInitFSM = useRef(false);
 
-  /*临时debug
+  /*銝湔debug
   useEffect(() => {
   console.log('[FSM] stage =', stage, 'uiProgress =', uiProgress)
     }, [stage, uiProgress])*/
@@ -216,7 +446,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     setName(data.childName || '')
     setAge(data.childAge || '')
-    setSelectedLang((data.language as any) || 'English')
+    setSelectedLang(normalizeStoryLanguage(data.language))
     setBookType(data.bookType || 'basic')
     setPhotoPreview(data.photoUrl || null)
     setPhotoAssetId(data.assetId || null)
@@ -224,6 +454,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setFaceImageUrl(data.faceImageUrl || null)
     setVoiceAssetId(data.voiceAssetId || null)
     setVoiceStoragePath(data.voiceStoragePath || null)
+    setVoiceSignedUrl(null)
     setPreviewJobId(isUuid(data.previewJobId) ? data.previewJobId : null)
     setCreationId(data.creationId ?? null)
     resumePersonalization(null)
@@ -309,7 +540,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     const loadPreview = async () => {
       try {
-        const urls = await getPreviewPages(previewJobId, [0, 1], { size: 'small' })
+        const urls = await getPreviewPages(previewJobId, undefined, { size: 'small' })
         if (!isActive) return
         setPreviewPages(urls)
         if (urls[0]) {
@@ -356,7 +587,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
                 if (nextName) setName(String(nextName))
                 if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
-                if (nextLang) setSelectedLang(nextLang as any)
+                if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
                 if (nextType) setBookType(nextType as any)
 
                 if (!templateTitle && creation.templates?.name) {
@@ -413,7 +644,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
         if (nextName) setName(String(nextName))
         if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
-        if (nextLang) setSelectedLang(nextLang as any)
+        if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
         if (nextType) setBookType(nextType as any)
 
         if (!templateTitle && creation.templates?.name) {
@@ -475,16 +706,34 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setRecentFaces([])
     setVoiceAssetId(null)
     setVoiceStoragePath(null)
+    setVoiceSignedUrl(null)
+    setVoiceValidationError(null)
     setPreviewJobId(null)
     setCreationId(null)
     setPreviewUrl(null)
     setPreviewPages([])
   }, [bookID, resumeData, viewMode, creationIdParam, creationId, previewJobIdParam, previewJobId, stage, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, setPreviewUrl, setTemplateCoverUrl, setTemplateTitle, setTemplateDescription])
 
+  const replacePersonalizeUrl = useCallback((params?: URLSearchParams | null) => {
+    if (typeof window === 'undefined') return;
+    const query = params?.toString();
+    const nextUrl = query ? `/personalize/${bookID}?${query}` : `/personalize/${bookID}`;
+    window.history.replaceState(window.history.state, '', nextUrl);
+  }, [bookID]);
+
+  const replacePreviewUrl = useCallback((nextCreationId: string, nextJobId: string) => {
+    const params = new URLSearchParams();
+    params.set('view', 'preview');
+    params.set('creationId', nextCreationId);
+    params.set('jobId', nextJobId);
+    replacePersonalizeUrl(params);
+  }, [replacePersonalizeUrl]);
+
   useEffect(() => {
     if (stage !== 'GENERATING') return;
     if (generationInFlightRef.current) return;
     generationInFlightRef.current = true;
+    previewCancelRequestedRef.current = false;
 
     let isActive = true;
     let textInterval: number | null = null;
@@ -493,18 +742,22 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     let lastRampAt = Date.now();
     const startedAt = Date.now();
     const PREVIEW_MAX_WAIT_MS = 10 * 60 * 1000;
-    const PREVIEW_POLL_INTERVAL_MS = 2000;
+    const getPreviewPollDelayMs = () => {
+      const elapsed = Date.now() - startedAt;
+      const base = elapsed < 60_000 ? 9000 : elapsed < 120_000 ? 5000 : 2000;
+      return base + Math.floor(Math.random() * 350);
+    };
 
     setPreviewError(null);
     setProgress(0);
 
     const messages = [
-      "Analyzing cuteness levels...",
-      "Sprinkling star dust...",
-      `Translating to ${selectedLang}...`,
-      "Binding the pages with magic...",
-      "Polishing the cover...",
-      "Almost there..."
+      t('personalize.printingMagic'),
+      t('personalize.creatingStorybook'),
+      `${t('common.loading')} ${selectedLang}...`,
+      t('personalize.didYouKnow'),
+      t('personalize.printingMagic'),
+      t('common.loading')
     ];
 
     let i = 0;
@@ -553,9 +806,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           faceAssetId = faceAsset.asset_id
         }
 
-        setVoiceAssetId(null)
-        setVoiceStoragePath(null)
-
         const parsedAge = Number.parseInt(age, 10)
         const textOverrides = {
           child_name: name,
@@ -603,6 +853,17 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         if (!created?.jobId) {
           throw new Error('Preview job missing jobId')
         }
+        if (previewCancelRequestedRef.current) {
+          try {
+            await cancelPreviewJob(created.jobId, {
+              creationId: created.creationId,
+              customerId: user?.customerId ?? null,
+            })
+          } catch (error) {
+            console.warn('Failed to cancel preview job after creation:', error)
+          }
+          return
+        }
         if (!isActive) return
         setPreviewJobId(created.jobId)
         setCreationId(created.creationId)
@@ -619,7 +880,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             if (fetchFailures >= 8) {
               throw err
             }
-            await new Promise((resolve) => setTimeout(resolve, PREVIEW_POLL_INTERVAL_MS))
+            await new Promise((resolve) => setTimeout(resolve, getPreviewPollDelayMs()))
             continue
           }
           const serverProgress =
@@ -634,7 +895,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             progressTarget = Math.max(progressTarget, 96)
             setProgress(prev => (prev < 96 ? 96 : prev))
             try {
-              const urls = await getPreviewPages(created.jobId, [0, 1], { size: 'small' })
+              const urls = await getPreviewPages(created.jobId, undefined, { size: 'small' })
               if (!isActive) return
               setPreviewPages(urls)
               if (urls[0]) {
@@ -648,6 +909,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               if (!isActive) return
               setPreviewError('Preview is ready but images failed to load. Please refresh.')
             }
+            replacePreviewUrl(created.creationId, created.jobId)
             setProgress(100)
             finishGenerating()
             return
@@ -657,14 +919,21 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             throw new Error(job.error_message || 'Preview generation failed. Please try again.')
           }
 
+          if (job.status === 'cancel_requested' || job.status === 'cancelled') {
+            return
+          }
+
           if (Date.now() - startedAt > PREVIEW_MAX_WAIT_MS) {
             throw new Error('Preview generation timed out. Please try again.')
           }
 
-          await new Promise((resolve) => setTimeout(resolve, PREVIEW_POLL_INTERVAL_MS))
+          await new Promise((resolve) => setTimeout(resolve, getPreviewPollDelayMs()))
         }
       } catch (error: any) {
         if (!isActive) return
+        if (previewCancelRequestedRef.current) {
+          return
+        }
         setPreviewError(error?.message ?? 'Preview generation failed.')
         setProgress(0)
         reset()
@@ -680,7 +949,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       if (textInterval) window.clearInterval(textInterval);
       if (progressInterval) window.clearInterval(progressInterval);
     };
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, photo, audioFile, user, reset]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, photo, user, reset, replacePreviewUrl, t]);
 
   useEffect(() => {
     if (!bookID) return;
@@ -731,7 +1000,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       const data = await response.json();
       if (!isActive) return;
       const faces = Array.isArray(data?.faces) ? data.faces : [];
+      const voices = Array.isArray(data?.voices) ? data.voices : [];
       setRecentFaces(faces);
+      setRecentVoices(voices);
     };
 
     loadUserAssets();
@@ -743,7 +1014,30 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   useEffect(() => {
     setRecentProfiles([]);
+    setRecentVoices([]);
   }, [user?.customerId]);
+
+  useEffect(() => {
+    if (voiceSignedUrl) return;
+    if (!currentVoiceSample?.signed_url) return;
+    setVoiceSignedUrl(currentVoiceSample.signed_url);
+  }, [currentVoiceSample?.signed_url, voiceSignedUrl]);
+
+  useEffect(() => {
+    if (!requiresVoiceSample || voiceAssetId) {
+      setVoiceValidationError(null);
+    }
+  }, [requiresVoiceSample, voiceAssetId]);
+
+  useEffect(() => {
+    if (!voiceValidationError) return;
+    if (!requiresVoiceSample) return;
+    if (!viewState.showForm) return;
+    const id = window.setTimeout(() => {
+      voicePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [requiresVoiceSample, viewState.showForm, voiceValidationError]);
 
   const loadProfiles = useCallback(async () => {
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
@@ -774,8 +1068,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       if (ageBoxRef.current && ageBoxRef.current.contains(target)) {
         return;
       }
+      if (languageBoxRef.current && languageBoxRef.current.contains(target)) {
+        return;
+      }
       setShowNameHistory(false);
       setShowAgeHistory(false);
+      setShowLanguageOptions(false);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -870,12 +1168,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const handleBack = () => {
     if (!fsm.canBack) return
 
-    const hasCartItemForBook = cart.some(item => item.bookID === bookID);
-    if ((hasCartItemForPreview || hasCartItemForBook) && fsm.backIntent === 'CONFIRM_EXIT') {
-      fsm.startForm()
-      return
-    }
-
     switch (fsm.backIntent) {
         case 'EXIT_FLOW':
         router.push('/')
@@ -887,20 +1179,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
         default:
         break
-        }
+    }
     }
 
 
 
-  const confirmExit = (intent: 'ADD_TO_CART' | 'EXIT') => {
-    setShowExitConfirm(false)
-
-    if (intent === 'ADD_TO_CART') {
-        fsm.requestAddToCart()
-    } else {
-        fsm.requestExit()
-    }
-  }
+  const dismissExitConfirm = useCallback(() => {
+    setShowExitConfirm(false);
+  }, []);
 
 
   const triggerFlyToCart = useCallback(() => {
@@ -934,10 +1220,183 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     }, 1600);
   }, []);
 
+  const triggerPreviewCancelledToast = useCallback(() => {
+    setShowPreviewCancelledToast(true);
+    if (previewCancelToastTimerRef.current) {
+      window.clearTimeout(previewCancelToastTimerRef.current);
+    }
+    previewCancelToastTimerRef.current = window.setTimeout(() => {
+      setShowPreviewCancelledToast(false);
+      previewCancelToastTimerRef.current = null;
+    }, 1800);
+  }, []);
+
+  const persistDraftForCustomizeReturn = useCallback((options?: { clearPreviewRefs?: boolean }) => {
+    if (!book) return;
+    const clearPreviewRefs = options?.clearPreviewRefs === true
+
+    resumePersonalization({
+      id: clearPreviewRefs ? `draft-${bookID}` : creationId ?? `draft-${bookID}`,
+      creationId: clearPreviewRefs ? undefined : creationId ?? undefined,
+      bookID: book.bookID,
+      quantity: 1,
+      book: resolvedBook ?? book,
+      personalization: {
+        childName: name,
+        childAge: age,
+        language: selectedLang,
+        dedication: '',
+        bookType,
+        photo: photo ?? undefined,
+        photoUrl: photoPreview ?? undefined,
+        assetId: photoAssetId ?? undefined,
+        storagePath: photoStoragePath ?? undefined,
+        faceImageUrl: faceImageUrl ?? undefined,
+        voiceAssetId: voiceAssetId ?? undefined,
+        voiceStoragePath: voiceStoragePath ?? undefined,
+        previewJobId: clearPreviewRefs ? undefined : previewJobId ?? undefined,
+        creationId: clearPreviewRefs ? undefined : creationId ?? undefined,
+      },
+      savedStep: 2,
+      priceAtPurchase: currentPrice,
+    });
+  }, [
+    age,
+    book,
+    bookID,
+    bookType,
+    creationId,
+    currentPrice,
+    faceImageUrl,
+    name,
+    photo,
+    photoAssetId,
+    photoPreview,
+    photoStoragePath,
+    previewJobId,
+    resolvedBook,
+    resumePersonalization,
+    selectedLang,
+    voiceAssetId,
+    voiceStoragePath,
+  ]);
+
+  const requestPreviewCancellation = useCallback(
+    async (options?: { jobId?: string | null; creationId?: string | null; showToast?: boolean }) => {
+      previewCancelRequestedRef.current = true;
+
+      const targetJobId = options?.jobId ?? previewJobId;
+      const targetCreationId = options?.creationId ?? creationId;
+
+      persistDraftForCustomizeReturn({ clearPreviewRefs: true });
+      setPreviewError(null);
+      setPreviewJobId(null);
+      setCreationId(null);
+      setPreviewUrl(null);
+      setPreviewPages([]);
+      setProgress(0);
+      fsm.startForm();
+
+      if (options?.showToast !== false) {
+        triggerPreviewCancelledToast();
+      }
+
+      if (!targetJobId) return;
+
+      try {
+        await cancelPreviewJob(targetJobId, {
+          creationId: targetCreationId ?? null,
+          customerId: user?.customerId ?? null,
+        });
+      } catch (error) {
+        console.warn('Failed to cancel preview job:', error);
+      }
+    },
+    [
+      creationId,
+      fsm,
+      persistDraftForCustomizeReturn,
+      previewJobId,
+      setCreationId,
+      setPreviewJobId,
+      setPreviewPages,
+      setPreviewUrl,
+      setProgress,
+      triggerPreviewCancelledToast,
+      user?.customerId,
+    ]
+  );
+
+  useEffect(() => {
+    if (stage !== 'GENERATING') return;
+    if (typeof window === 'undefined') return;
+
+    const currentParams = new URLSearchParams(window.location.search);
+    if (currentParams.get('view') !== 'loading') {
+      currentParams.set('view', 'loading');
+      const nextUrl = `/personalize/${bookID}?${currentParams.toString()}`;
+      window.history.pushState({ ...window.history.state, ymiPersonalizeStage: 'loading' }, '', nextUrl);
+    }
+
+    const handlePopState = () => {
+      const currentView = new URLSearchParams(window.location.search).get('view') || 'edit';
+      if (currentView === 'loading') return;
+      void requestPreviewCancellation();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [bookID, requestPreviewCancellation, stage]);
+
+  useEffect(() => {
+    if (stage !== 'FORM') return;
+    if (viewMode !== 'loading') return;
+    replacePersonalizeUrl(null);
+  }, [replacePersonalizeUrl, stage, viewMode]);
+
+  const returnToCustomizeFromPreview = useCallback(() => {
+    persistDraftForCustomizeReturn();
+    setShowExitConfirm(false);
+    router.replace(`/personalize/${bookID}`);
+    fsm.startForm();
+  }, [bookID, fsm, persistDraftForCustomizeReturn, router]);
+
+  const ensurePremiumVoiceSample = useCallback(() => {
+    if (!requiresVoiceSample) {
+      setVoiceValidationError(null);
+      return true;
+    }
+    if (voiceAssetId) {
+      setVoiceValidationError(null);
+      return true;
+    }
+
+    setVoiceValidationError(t('personalize.voiceSampleRequired'));
+    if (stage === 'PREVIEW') {
+      returnToCustomizeFromPreview();
+    } else {
+      voicePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return false;
+  }, [requiresVoiceSample, stage, voiceAssetId, returnToCustomizeFromPreview]);
+
+  const handleVoiceUploadComplete = useCallback(
+    ({ assetId, storagePath, signedUrl }: { assetId: string; storagePath: string; signedUrl?: string | null }) => {
+      setVoiceAssetId(assetId);
+      setVoiceStoragePath(storagePath);
+      setVoiceSignedUrl(signedUrl ?? null);
+      setVoiceValidationError(null);
+    },
+    []
+  );
+
 
   const performAddToCart = useCallback(async () => {
     if (!fsm.canAddToCart) return
     if (!resolvedBook) return
+    if (!ensurePremiumVoiceSample()) return null
 
     const ensuredCreationId =
       (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null) ||
@@ -957,7 +1416,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         previewJobIdParam,
         viewMode,
       })
-      return
+      return null
     }
 
     const item = await addToCart(
@@ -965,7 +1424,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         {
         childName: name,
         childAge: age,
-        language: selectedLang as any,
+        language: selectedLang,
         dedication: '',
         bookType,
         photoUrl: photoPreview ?? undefined,
@@ -993,12 +1452,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       triggerCartToast();
     }
     shouldAnimateToCartRef.current = false;
-    }, [fsm.canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, triggerCartToast]);
+    return item ?? null;
+    }, [fsm.canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, triggerCartToast, ensurePremiumVoiceSample]);
 
 
   const performCheckout = useCallback(async () => {
         if (!fsm.canCheckout) return
         if (checkoutInFlightRef.current) return
+        if (!ensurePremiumVoiceSample()) return
         checkoutInFlightRef.current = true
 
         try {
@@ -1020,7 +1481,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             const personalization = {
               childName: name,
               childAge: age,
-              language: selectedLang as any,
+              language: selectedLang,
               dedication: '',
               bookType,
               photoUrl: photoPreview ?? undefined,
@@ -1102,19 +1563,28 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [fsm.canCheckout, resolvedBook, name, age, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId]);
+    }, [fsm.canCheckout, resolvedBook, name, age, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample]);
 
   const handleAddToCartClick = () => {
     if (!fsm.canAddToCart || isExiting) return;
+    if (!ensurePremiumVoiceSample()) return;
     shouldAnimateToCartRef.current = true;
     triggerFlyToCart();
     fsm.requestAddToCart();
+  };
+
+  const handleCheckoutClick = () => {
+    if (!ensurePremiumVoiceSample()) return;
+    fsm.requestCheckout();
   };
 
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) {
         window.clearTimeout(toastTimerRef.current);
+      }
+      if (previewCancelToastTimerRef.current) {
+        window.clearTimeout(previewCancelToastTimerRef.current);
       }
     };
   }, []);
@@ -1141,7 +1611,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             await performCheckout()
             break
             case 'EXIT':
-            router.back()
+            returnToCustomizeFromPreview()
             break
         }
         fsm.completeExit()
@@ -1153,7 +1623,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     }
 
     run()
-    }, [fsm.exitPhase, fsm.exitIntent, fsm.completeExit, fsm.failExit, performAddToCart, performCheckout, router])
+    }, [fsm.exitPhase, fsm.exitIntent, fsm.completeExit, fsm.failExit, performAddToCart, performCheckout, returnToCustomizeFromPreview])
 
 
 
@@ -1172,7 +1642,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
 /*--------------
- *刷新页面后，仍然停留在 FORM / PREVIEW
+ *?瑟憿菟??隞????FORM / PREVIEW
  *---------------*/
 
   useEffect(() => {
@@ -1188,7 +1658,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   // --- Flip Logic ---
   const turnPage = (direction: 'next' | 'prev') => {
       if (isFlipping) return;
-      if (direction === 'next' && currentSpread >= TOTAL_SPREADS) return;
+      if (direction === 'next' && currentSpread >= maxSpreadIndex) return;
       if (direction === 'prev' && currentSpread <= 0) return;
 
       setFlipDirection(direction);
@@ -1265,13 +1735,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                   <div className="absolute top-4 right-4 z-30">
                      <label className="cursor-pointer bg-white/90 hover:bg-white text-gray-800 text-xs font-bold px-3 py-2 rounded-full shadow-lg flex items-center gap-2 transition-transform hover:scale-105">
                          <Camera className="h-4 w-4 text-amber-500" />
-                         <span>Change Photo</span>
+                         <span>{t('personalize.changePhoto')}</span>
                          <input type="file" onChange={handlePhotoUpload} className="hidden" accept="image/*" />
                      </label>
-                  </div>
-
-                  <div className="absolute bottom-12 left-0 right-0 text-center bg-white/80 backdrop-blur-sm py-4 text-gray-900 z-20 shadow-lg mx-8 rounded-lg border border-white/50">
-                      <h3 className="font-serif text-2xl italic text-amber-900">{name || "Your"}'s Adventure</h3>
                   </div>
                   {!isFlipping && (
                     <div className="absolute top-1/2 right-4 transform -translate-y-1/2 animate-pulse text-white drop-shadow-lg z-30 cursor-pointer p-3 bg-black/20 rounded-full hover:bg-black/40 transition-colors"
@@ -1282,9 +1748,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               </div>
           );
       }
-      // 2 & 3. First inside spread (full 01.png across both pages)
-      if (spreadIndex === 1 && (side === 'left' || side === 'right')) {
-          const spreadImage = previewPages[1] || '';
+      // Real preview spreads follow the configured preview page order after the cover.
+      if (spreadIndex > 0 && spreadIndex < previewPages.length && (side === 'left' || side === 'right')) {
+          const spreadImage = previewPages[spreadIndex] || '';
           const isLeftSide = side === 'left';
           return (
             <div
@@ -1337,13 +1803,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             <div className="absolute inset-0 pointer-events-none z-10" style={{ background: bindingShadow }} />
             <div className="absolute inset-0 p-8 filter blur-[2px] opacity-60 flex flex-col">
                 <span className="absolute top-4 right-4 text-gray-400 font-serif text-xs">{pageNum}</span>
-                <h3 className="font-serif text-xl font-bold text-gray-800 mb-4">Page {pageNum}</h3>
+                <h3 className="font-serif text-xl font-bold text-gray-800 mb-4">{t('personalize.pageLabel', { num: pageNum })}</h3>
                 <div className="mt-4 h-32 bg-gray-200/50 rounded-md"></div>
             </div>
             <div className="absolute inset-0 flex items-center justify-center z-20">
                 <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-gray-100 flex items-center gap-2">
                     <Lock className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs font-bold text-gray-600">Locked</span>
+                    <span className="text-xs font-bold text-gray-600">{t('personalize.locked')}</span>
                 </div>
             </div>
             {!isFlipping && side === 'left' && (
@@ -1363,7 +1829,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   };
 
   const isFormValid = name.length > 0 && age.length > 0 && (photo !== null || !!photoAssetId);
-  if (!book) return <div>Book not found</div>;
+  if (!book) return <div>{t('common.unknown')}</div>;
 
   const staticLeftIndex = (isFlipping && flipDirection === 'prev') ? currentSpread - 1 : currentSpread;
   const isLeftPageVisible = staticLeftIndex > 0;
@@ -1376,23 +1842,18 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       backgroundColor: 'white',
       transformStyle: 'preserve-3d'
   };
+  const previewBookShadow = 'drop-shadow(10px 22px 36px rgba(0,0,0,0.16)) drop-shadow(4px 8px 14px rgba(0,0,0,0.08))';
   
-  // Helper Functions for Render
-  const getLangLabel = (lang: string) => {
-      switch(lang) {
-          case 'cn_s': return 'CN (简)';
-          case 'cn_t': return 'CN (繁)';
-          default: return 'EN';
-      }
-  };
 
   const renderProgressSteps = () => {
     // Premium Progress Bar
     const steps = [
-        { num: 1, label: "Story", icon: Book },
-        { num: 2, label: "Customize", icon: Sparkles },
-        { num: 3, label: "Preview", icon: Wand2 },
+        { num: 1, label: t('personalize.stepStory'), icon: Book },
+        { num: 2, label: t('personalize.stepCustomize'), icon: Sparkles },
+        { num: 3, label: t('personalize.stepPreview'), icon: Wand2 },
+        { num: 4, label: t('personalize.stepOrder'), icon: Package },
     ];
+    const fillPercent = Math.max(0, Math.min(100, (currentProgressIndex / (steps.length - 1)) * 100))
 
     return (
       <div className="max-w-2xl mx-auto mb-10 relative hidden md:block px-4">
@@ -1402,23 +1863,17 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
              <motion.div 
                 className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full"
                 initial={false}
-                animate={{ width: currentProgressIndex === 2
-                                    ? '100%'
-                                    : currentProgressIndex === 1
-                                    ? '50%'
-                                    : '0%', 
-                }}
+                animate={{ width: `${fillPercent}%` }}
                 transition={{ duration: 0.5, ease: "easeInOut" }}
              />
           </div>
 
           <div className="relative flex justify-between z-10 w-full">
-               {steps.map((s, idx) => {
+               {steps.map((s) => {
                    // Logic: Step is considered "active" or "completed" based on current step
                         const stepIndex = s.num - 1
                         const isCompleted = currentProgressIndex > stepIndex
                         const isActive = currentProgressIndex === stepIndex
-                        const isUpcoming = currentProgressIndex < stepIndex;
 
 
                    return (
@@ -1460,27 +1915,28 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const renderProductShowcase = () => {
       const includedItems = {
           digital: [
-              'Vibrant Digital Copy: High-definition PDF optimized for tablet viewing.',
-              'Toolkit: 5 curated prompts to spark deep parent-child dialogue.',
-              'Anywhere Access: Instant, eco-friendly delivery for mobile storytelling.',
+              t('personalize.included.digital1'),
+              t('personalize.included.digital2'),
+              t('personalize.included.digital3'),
+              t('personalize.included.digital4'),
           ],
           basic: [
-              'All Digital Features Included.',
-              'Premium Heirloom Binding: Durable, archival-quality hardcover with matte-finish pages.',
-              'Tactile Literacy: Develops fine motor skills and focus through physical page-turning.',
-              'Smudge-Proof Art: High-pigment printing designed to resist little fingerprints.',
+              t('personalize.included.basic1'),
+              t('personalize.included.basic2'),
+              t('personalize.included.basic3'),
+              t('personalize.included.basic4'),
           ],
           premium: [
-              'All Hardcover Features Included.',
-              'Cinematic Narrator: Pre-loaded professional voiceover with character acting.',
-              'Rich Soundscapes: Layered background scores (nature sounds and magical chimes).',
-              'Self-Guided Reading: Enables children to explore the story independently through sound cues.',
+              t('personalize.included.premium1'),
+              t('personalize.included.premium2'),
+              t('personalize.included.premium3'),
+              t('personalize.included.premium4'),
           ],
           supreme: [
-              'All Immersive Features Included.',
-              'Parent-Voice Integration: The book is custom-programmed with your actual voice.',
-              'Bespoke Dedication: A personalized "Letter to My Child" printed on the opening page.',
-              'Emotional Anchor: Provides a permanent sense of security by preserving your voice for a lifetime.',
+              t('personalize.included.supreme1'),
+              t('personalize.included.supreme2'),
+              t('personalize.included.supreme3'),
+              t('personalize.included.supreme4'),
           ],
       } as const
 
@@ -1490,7 +1946,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           <div className="mt-4 p-4 bg-amber-50/50 rounded-xl border border-amber-100">
               <h5 className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-3 flex items-center gap-2">
                   <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                  What is Included
+                  {t('personalize.whatIncluded')}
               </h5>
               <ul className="space-y-2">
                   {items.map((item) => (
@@ -1539,31 +1995,38 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showPreviewCancelledToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="fixed bottom-5 left-1/2 z-[120] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-white/80 bg-white/92 px-4 py-3 shadow-[0_18px_50px_rgba(218,119,31,0.18)] backdrop-blur-xl"
+          >
+            <div className="flex items-center gap-3 text-sm font-semibold text-gray-800">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <X className="h-4 w-4" />
+              </div>
+              <span>{t('personalize.previewCancelledToast')}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-amber-100 shadow-sm">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
             <button onClick={handleBack} className="flex items-center gap-2 text-gray-600 hover:text-amber-600 transition-colors">
                 <ChevronLeft className="h-5 w-5" />
-                <span className="text-sm font-medium">Back</span>
+                <span className="text-sm font-medium">{t('common.back')}</span>
             </button>
             <div className="text-gray-900 font-serif font-bold text-lg hidden sm:block">
                 {book.title}
             </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
-                <div className="relative">
-                    <Button variant="ghost" size="sm" onClick={() => setLangMenuOpen(!isLangMenuOpen)} className="gap-1 px-2">
-                        <Globe className="h-4 w-4" />
-                        <span className="uppercase text-xs font-semibold">{getLangLabel(language)}</span>
-                    </Button>
-                    {isLangMenuOpen && (
-                        <div className="absolute right-0 mt-2 w-40 rounded-md border border-gray-100 bg-white shadow-lg py-1 z-50">
-                             <button onClick={() => { setLanguage('en'); setLangMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50">English</button>
-                             <button onClick={() => { setLanguage('cn_s'); setLangMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50">简体中文</button>
-                             <button onClick={() => { setLanguage('cn_t'); setLangMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50">繁體中文</button>
-                        </div>
-                    )}
-                </div>
+                <LanguageSwitcher menuClassName="w-44 rounded-md border border-gray-100 bg-white shadow-lg py-1" />
 
                 <Button ref={cartIconRef} variant="ghost" size="sm" onClick={() => router.push('/cart')} className="relative px-2">
                     <ShoppingCart className="h-5 w-5 text-gray-700" />
@@ -1585,13 +2048,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 <div className="px-4 py-2 border-b border-gray-50">
                                     <p className="text-sm font-semibold text-gray-900">{user.name}</p>
                                 </div>
-                                <button onClick={() => { router.push('/orders'); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"><Package className="h-4 w-4" />My Orders</button>
-                                <button onClick={() => { logout(); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" />Log out</button>
+                                <button onClick={() => { router.push('/orders'); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"><Package className="h-4 w-4" />{t('navbar.myOrders')}</button>
+                                <button onClick={() => { logout(); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" />{t('navbar.logOut')}</button>
                             </div>
                         )}
                     </div>
                     ) : (
-                        <Button onClick={() => openLoginModal()} size="sm">Log In</Button>
+                        <Button onClick={() => openLoginModal()} size="sm">{t('navbar.logIn')}</Button>
                     )}
                 </div>
             </div>
@@ -1599,7 +2062,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-grow container mx-auto px-4 py-8 relative">
+      <main className="flex-grow container mx-auto px-4 py-6 md:py-7 relative">
         
         {renderProgressSteps()}
 
@@ -1612,86 +2075,227 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             {viewState.showForm && (
                 <motion.div 
                     key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                    className="max-w-6xl mx-auto grid lg:grid-cols-12 gap-8"
+                    className="mx-auto grid max-w-[1320px] lg:grid-cols-12 gap-6 lg:gap-7"
                 >
-                     <div className="lg:col-span-5 space-y-6">
-                        <div className="bg-white/60 backdrop-blur-md border border-white p-6 rounded-2xl shadow-lg">
-                            <img src={templateCoverUrl || book.coverUrl} className="w-full aspect-[3/4] object-cover rounded-lg shadow-xl mb-6 border-4 border-white" />
-                            <h2 className="text-2xl font-serif font-bold text-gray-900 mb-2">{templateTitle || book.title}</h2>
-                            <p className="text-gray-600 text-sm leading-relaxed mb-6">{templateDescription || book.description}</p>
+                    <div className="order-2 space-y-4 md:space-y-5 lg:order-1 lg:col-span-6">
+                        <div className="bg-white/50 backdrop-blur-md border border-white/82 p-3.5 md:p-4 rounded-[1.1rem] shadow-[0_16px_30px_-28px_rgba(0,0,0,0.22)]">
+                            <div className="mb-4 md:mb-5">
+                                <div
+                                  ref={showcaseRowRef}
+                                  className="flex flex-col gap-2.5 md:grid md:items-start md:gap-3"
+                                  style={isMobile ? undefined : { gridTemplateColumns: `${desktopThumbColumnWidth}px minmax(0, 1fr)` }}
+                                >
+                                    <div className="order-2 md:order-1 md:shrink-0">
+                                        <div className="relative">
+                                        <div
+                                          ref={showcaseThumbViewportRef}
+                                          className="thumb-scroll-column flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-2 md:overflow-y-auto md:overflow-x-hidden md:pr-[6px] md:pb-0"
+                                          style={
+                                            isMobile
+                                              ? undefined
+                                              : { width: `${desktopThumbColumnWidth}px`, height: `${desktopMainShowcaseSize}px` }
+                                          }
+                                        >
+                                        {showcaseImages.map((image, index) => {
+                                          const isActive = index === activeShowcaseIndex;
+
+                                          return (
+                                            <button
+                                              key={`${image}-${index}`}
+                                              ref={(node) => {
+                                                showcaseThumbRefs.current[index] = node;
+                                              }}
+                                              type="button"
+                                              onClick={() => setActiveShowcaseIndex(index)}
+                                              className={`group relative aspect-square overflow-hidden rounded-[0.82rem] border transition-all duration-300 shrink-0 ${
+                                                isActive
+                                                  ? 'border-amber-300/95 bg-white/85 ring-2 ring-amber-200/55 shadow-[0_8px_18px_-18px_rgba(217,119,6,0.24)]'
+                                                  : 'border-gray-200/60 bg-white/30 hover:border-amber-200/80'
+                                              }`}
+                                              style={
+                                                isMobile
+                                                  ? { width: '4rem', height: '4rem' }
+                                                  : { width: `${desktopShowcaseThumbSize}px`, height: `${desktopShowcaseThumbSize}px` }
+                                              }
+                                              aria-label={`Show preview image ${index + 1}`}
+                                            >
+                                              <div className="aspect-square overflow-hidden rounded-[inherit]">
+                                                <img
+                                                  src={image}
+                                                  alt={`${templateTitle || book.title} showcase ${index + 1}`}
+                                                  onError={(event) => {
+                                                    const target = event.currentTarget;
+                                                    if (resolvedBook?.coverUrl && target.src !== resolvedBook.coverUrl) {
+                                                      target.src = resolvedBook.coverUrl;
+                                                    }
+                                                  }}
+                                                  className={`h-full w-full object-cover transition-transform duration-500 ${isActive ? 'scale-[1.04]' : 'scale-100 group-hover:scale-[1.03]'}`}
+                                                />
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                        </div>
+                                        {!isMobile ? (
+                                          <>
+                                            <div className="pointer-events-none absolute inset-x-0 top-0 h-5 rounded-t-[0.82rem] bg-gradient-to-b from-white/96 via-white/72 to-transparent" />
+                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 rounded-b-[0.82rem] bg-gradient-to-t from-white/96 via-white/72 to-transparent" />
+                                          </>
+                                        ) : null}
+                                        </div>
+                                    </div>
+
+                                    <div className="order-1 md:order-2 min-w-0">
+                                        <div
+                                          ref={mainShowcaseRef}
+                                          className="relative aspect-square overflow-hidden rounded-[0.96rem] bg-[#f6efe7] shadow-[0_16px_24px_-22px_rgba(0,0,0,0.18)]"
+                                          style={isMobile ? undefined : { width: `${desktopMainShowcaseSize}px`, maxWidth: '100%' }}
+                                        >
+                                            <AnimatePresence mode="wait">
+                                                <motion.img
+                                                    key={activeShowcaseImage}
+                                                    src={activeShowcaseImage}
+                                                    alt={`${templateTitle || book.title} showcase main`}
+                                                    onError={(event) => {
+                                                      const target = event.currentTarget;
+                                                      if (resolvedBook?.coverUrl && target.src !== resolvedBook.coverUrl) {
+                                                        target.src = resolvedBook.coverUrl;
+                                                      }
+                                                    }}
+                                                    className="absolute inset-0 h-full w-full object-cover"
+                                                    initial={{ opacity: 0, x: 18, scale: 1.02 }}
+                                                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, x: -18, scale: 0.985 }}
+                                                    transition={{ duration: 0.42, ease: 'easeOut' }}
+                                                />
+                                            </AnimatePresence>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <h2 className="text-[1.58rem] md:text-[1.68rem] font-serif font-bold text-gray-900 mb-2">{templateTitle || book.title}</h2>
+                            <p className="text-gray-600 text-sm leading-relaxed mb-4 md:mb-5">{templateDescription || book.description}</p>
                             
                             <div className="space-y-3">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">Magic Attributes</h4>
+                                <h4 className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">{t('personalize.magicAttributes')}</h4>
                                 <div className="flex items-center justify-between text-sm text-gray-700">
-                                    <span className="flex items-center gap-2"><Heart className="h-4 w-4 text-pink-400" /> Kindness</span>
+                                    <span className="flex items-center gap-2"><Heart className="h-4 w-4 text-pink-400" /> {t('personalize.kindness')}</span>
                                     <div className="w-24 h-1.5 bg-gray-100 rounded-full"><div className="w-[90%] h-full bg-pink-400 rounded-full"></div></div>
                                 </div>
                                 <div className="flex items-center justify-between text-sm text-gray-700">
-                                    <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-blue-400" /> Courage</span>
+                                    <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-blue-400" /> {t('personalize.courage')}</span>
                                     <div className="w-24 h-1.5 bg-gray-100 rounded-full"><div className="w-[80%] h-full bg-blue-400 rounded-full"></div></div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="lg:col-span-7">
-                        <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-amber-50 h-full flex flex-col">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
-                                    <Sparkles className="h-6 w-6 text-amber-500" /> Customize
+                        <div className="bg-white/65 backdrop-blur-md border border-white/80 rounded-[0.96rem] shadow-[0_14px_24px_-24px_rgba(0,0,0,0.2)] p-4">
+                            <div className="flex items-center gap-2 mb-4">
+                                <CircleHelp className="h-5 w-5 text-amber-500" />
+                                <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-amber-600">
+                                    About This Story
                                 </h3>
-                                <div className="text-2xl font-bold text-amber-600">${currentPrice}</div>
                             </div>
 
-                            <div className="space-y-6 flex-grow">
-                                <div className="border-2 border-dashed border-amber-200 rounded-2xl p-6 text-center bg-amber-50/60 hover:bg-amber-50 transition-colors relative group cursor-pointer">
+                            <div className="space-y-3">
+                                {bookFaqItems.map((item, index) => {
+                                  const isOpen = expandedBookFaq === index;
+
+                                  return (
+                                    <div
+                                      key={item.question}
+                                      className="rounded-2xl border border-amber-100/80 bg-white/80 overflow-hidden"
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedBookFaq((prev) => (prev === index ? null : index))}
+                                        className="w-full flex items-start justify-between gap-3 px-4 py-4 text-left hover:bg-amber-50/60 transition-colors"
+                                      >
+                                        <span className="text-sm font-semibold text-gray-800 leading-6">{item.question}</span>
+                                        <span className="mt-0.5 text-amber-500 shrink-0">
+                                          <ChevronDown
+                                            className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+                                          />
+                                        </span>
+                                      </button>
+                                      {isOpen ? (
+                                        <div className="px-4 pb-4 text-sm leading-6 text-gray-600">
+                                          {item.answer}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="order-1 lg:order-2 lg:col-span-6">
+                        <div className="bg-white/78 backdrop-blur-sm rounded-[1.14rem] p-4 md:p-5 shadow-[0_18px_28px_-26px_rgba(0,0,0,0.18)] border border-amber-50/80 h-full flex flex-col">
+                            <div className="flex justify-between items-center mb-5">
+                                <h3 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
+                                    <Sparkles className="h-6 w-6 text-amber-500" /> {t('personalize.customize')}
+                                </h3>
+                                <div className="text-2xl font-bold text-amber-600">{formatLocaleCurrency(currentPrice, language)}</div>
+                            </div>
+
+                            <div className="space-y-5 md:space-y-6 flex-grow">
+                                <div className="border-2 border-dashed border-amber-200 rounded-[1rem] p-4 md:p-[18px] text-center bg-amber-50/60 hover:bg-amber-50 transition-colors relative group cursor-pointer">
                                     <input type="file" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-30" accept="image/*" />
                                     {photoPreview ? (
                                         <div className="relative z-10 pointer-events-none">
-                                            <img src={photoPreview} className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
-                                            <p className="text-xs text-amber-600 mt-2 font-medium">Click to change photo</p>
+                                            <img src={photoPreview} className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
+                                            <p className="text-xs text-amber-600 mt-1.5 font-medium">{t('personalize.clickToChangePhoto')}</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-4 pointer-events-none">
+                                        <div className="space-y-3 pointer-events-none">
                                             <motion.div
-                                                className="relative w-18 h-18 mx-auto"
+                                                className="relative w-16 h-16 mx-auto"
                                                 animate={{ y: [0, -4, 0] }}
                                                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                                             >
                                                 <span className="absolute inset-0 rounded-full bg-amber-300/40 blur-xl animate-pulse-slow" />
                                                 <span className="absolute inset-2 rounded-full bg-amber-200/40 blur-lg animate-pulse" />
-                                                <div className="relative w-18 h-18 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shadow-[0_8px_20px_rgba(234,179,8,0.25)] ring-4 ring-amber-100">
-                                                    <Camera className="h-9 w-9" />
+                                                <div className="relative w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shadow-[0_8px_18px_rgba(234,179,8,0.22)] ring-4 ring-amber-100">
+                                                    <Camera className="h-8 w-8" />
                                                 </div>
                                             </motion.div>
-                                            <h4 className="font-bold text-gray-900">Upload Child's Photo</h4>
-                                            <div className="rounded-2xl border border-amber-100 bg-white/70 p-3 shadow-sm">
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    {[0, 1, 2].map((item) => (
-                                                        <div key={`good-${item}`} className="relative mx-auto">
-                                                            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
-                                                                <UserIcon className="h-6 w-6" />
+                                            <h4 className="font-bold text-gray-900">{t('personalize.uploadChildPhoto')}</h4>
+                                            <div className="mx-auto w-full max-w-[450px] rounded-[1.05rem] border border-amber-100/95 bg-white/82 p-3.5 shadow-[0_12px_28px_rgba(245,158,11,0.1)]">
+                                                <div className="grid grid-cols-3 gap-1.5">
+                                                    {GOOD_PHOTO_EXAMPLES.map((item) => (
+                                                        <div key={item.src} className="relative">
+                                                            <div className="aspect-[6/5] overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50 shadow-[0_6px_14px_rgba(16,185,129,0.1)]">
+                                                                <img
+                                                                    src={item.src}
+                                                                    alt={item.alt}
+                                                                    className="h-full w-full object-cover"
+                                                                />
                                                             </div>
-                                                            <div className="absolute -right-1 -bottom-1 h-5 w-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
-                                                                <Check className="h-3 w-3" />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="mt-2 grid grid-cols-3 gap-2">
-                                                    {[0, 1, 2].map((item) => (
-                                                        <div key={`bad-${item}`} className="relative mx-auto">
-                                                            <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-700">
-                                                                <UserIcon className="h-6 w-6" />
-                                                            </div>
-                                                            <div className="absolute -right-1 -bottom-1 h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center">
-                                                                <span className="text-xs font-bold leading-none">×</span>
+                                                            <div className="absolute -right-1 -bottom-1 h-[18px] w-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
+                                                                <Check className="h-2.5 w-2.5" />
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-3 text-xs text-gray-500 text-left">
-                                                    Tips: good lighting, no hats or sunglasses, eyes visible.
+                                                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                                                    {BAD_PHOTO_EXAMPLES.map((item) => (
+                                                        <div key={item.src} className="relative">
+                                                            <div className="aspect-[6/5] overflow-hidden rounded-xl border border-rose-100 bg-rose-50 shadow-[0_6px_14px_rgba(244,63,94,0.1)]">
+                                                                <img
+                                                                    src={item.src}
+                                                                    alt={item.alt}
+                                                                    className="h-full w-full object-cover"
+                                                                />
+                                                            </div>
+                                                            <div className="absolute -right-1 -bottom-1 h-[18px] w-[18px] rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
+                                                                <X className="h-2.5 w-2.5" />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="mt-2.5 text-[11px] leading-5 text-gray-500 text-left">
+                                                    {t('personalize.photoTips')}
                                                 </div>
                                             </div>
                                         </div>
@@ -1736,7 +2340,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
                                 <div className="grid md:grid-cols-2 gap-6">
                                     <div ref={nameBoxRef} className="space-y-2 relative">
-                                        <label className="text-sm font-bold text-gray-700">Name</label>
+                                        <label className="text-sm font-bold text-gray-700">{t('personalize.nameLabel')}</label>
                                         <input 
                                             type="text" 
                                             value={name} 
@@ -1745,8 +2349,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                               loadProfiles();
                                               setShowNameHistory(true);
                                               setShowAgeHistory(false);
+                                              setShowLanguageOptions(false);
                                             }}
-                                            placeholder="e.g. Oliver" 
+                                            placeholder={t('personalize.namePlaceholder')} 
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none transition-all placeholder:text-gray-400 text-gray-800 font-medium" 
                                         />
                                         {showNameHistory && (
@@ -1765,7 +2370,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                   .map((value) => String(value))
                                               )
                                             ).length === 0 ? (
-                                              <div className="px-3 py-2 text-xs text-gray-400">No history</div>
+                                              <div className="px-3 py-2 text-xs text-gray-400">{t('personalize.noHistory')}</div>
                                             ) : (
                                               Array.from(
                                                 new Set(
@@ -1808,7 +2413,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                         )}
                                     </div>
                                     <div ref={ageBoxRef} className="space-y-2 relative">
-                                        <label className="text-sm font-bold text-gray-700">Age</label>
+                                        <label className="text-sm font-bold text-gray-700">{t('personalize.ageLabel')}</label>
                                         <input 
                                             type="number" 
                                             value={age} 
@@ -1817,8 +2422,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                               loadProfiles();
                                               setShowAgeHistory(true);
                                               setShowNameHistory(false);
+                                              setShowLanguageOptions(false);
                                             }}
-                                            placeholder="e.g. 5" 
+                                            placeholder={t('personalize.agePlaceholder')} 
                                             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none transition-all placeholder:text-gray-400 text-gray-800 font-medium" 
                                         />
                                         {showAgeHistory && (
@@ -1837,7 +2443,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                   .map((value) => String(value))
                                               )
                                             ).length === 0 ? (
-                                              <div className="px-3 py-2 text-xs text-gray-400">No history</div>
+                                              <div className="px-3 py-2 text-xs text-gray-400">{t('personalize.noHistory')}</div>
                                             ) : (
                                               Array.from(
                                                 new Set(
@@ -1881,65 +2487,91 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-sm font-bold text-gray-700">Story Language</label>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {['English', 'Chinese'].map((lang) => (
-                                            <button 
-                                                key={lang}
-                                                onClick={() => setSelectedLang(lang)}
-                                                className={`py-3 px-4 rounded-xl border-2 font-medium transition-all ${selectedLang === lang ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-600 hover:border-amber-300'}`}
-                                            >
-                                                {lang}
-                                            </button>
-                                        ))}
+                                <div className="space-y-3">
+                                    <label className="text-sm font-bold text-gray-700">{t('personalize.storyLanguage')}</label>
+                                    <div ref={languageBoxRef} className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setShowLanguageOptions((prev) => !prev);
+                                            setShowNameHistory(false);
+                                            setShowAgeHistory(false);
+                                          }}
+                                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-gray-800 font-medium outline-none transition-all focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
+                                        >
+                                          {selectedLang === 'English'
+                                            ? t('personalize.storyLanguageEnglish')
+                                            : selectedLang === 'Traditional Chinese'
+                                            ? t('personalize.storyLanguageTraditionalChinese')
+                                            : t('personalize.storyLanguageSpanish')}
+                                        </button>
+                                        <ChevronDown className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 transition-transform ${showLanguageOptions ? 'rotate-180' : ''}`} />
+                                        {showLanguageOptions && (
+                                          <div
+                                            className="absolute z-30 mt-2 w-full rounded-xl border border-amber-100 bg-white shadow-lg p-2 overflow-auto"
+                                            onMouseDown={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                            }}
+                                          >
+                                            {[
+                                              { value: 'English' as StoryLanguage, label: t('personalize.storyLanguageEnglish') },
+                                              { value: 'Traditional Chinese' as StoryLanguage, label: t('personalize.storyLanguageTraditionalChinese') },
+                                              { value: 'Spanish' as StoryLanguage, label: t('personalize.storyLanguageSpanish') },
+                                            ].map((lang) => (
+                                              <button
+                                                key={lang.value}
+                                                type="button"
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                                                  selectedLang === lang.value
+                                                    ? 'bg-amber-50 text-amber-700 font-semibold'
+                                                    : 'text-gray-700 hover:bg-amber-50'
+                                                }`}
+                                                onMouseDown={(event) => {
+                                                  event.preventDefault();
+                                                  setSelectedLang(lang.value);
+                                                  setShowLanguageOptions(false);
+                                                }}
+                                              >
+                                                {lang.label}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
                                     </div>
                                 </div>
 
                                 <div className="space-y-3">
-                                    <label className="text-sm font-bold text-gray-700">Book Type</label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <label className="text-sm font-bold text-gray-700">{t('personalize.bookType')}</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                         <button onClick={() => setBookType('digital')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'digital' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">Cloud Explorer</div>
-                                            <div className="text-xs text-gray-500">PDF only</div>
+                                            <div className="text-sm font-bold text-gray-900">{t('personalize.bookTypeDigitalTitle')}</div>
+                                            <div className="text-xs text-gray-500">{t('personalize.bookTypeDigitalSubtitle')}</div>
                                         </button>
                                         <button onClick={() => setBookType('basic')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'basic' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">Classic</div>
-                                            <div className="text-xs text-gray-500">Hardcover Edition</div>
-                                        </button>
-                                        <button onClick={() => setBookType('premium')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'premium' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-blue-900">Immersive</div>
-                                            <div className="text-xs text-blue-600">Enchanted Audio</div>
+                                            <div className="text-sm font-bold text-gray-900">{t('personalize.bookTypeBasicTitle')}</div>
+                                            <div className="text-xs text-gray-500">{t('personalize.bookTypeBasicSubtitle')}</div>
                                         </button>
                                         <button onClick={() => setBookType('supreme')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'supreme' ? 'border-gray-900 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">Legacy Signature</div>
-                                            <div className="text-xs text-gray-500">Your Voice Version</div>
+                                            <div className="text-sm font-bold text-gray-900">{t('personalize.bookTypeSupremeTitle')}</div>
+                                            <div className="text-xs text-gray-500">{t('personalize.bookTypeSupremeSubtitle')}</div>
                                         </button>
                                     </div>
+                                    {requiresVoiceSample ? (
+                                      <div ref={voicePanelRef}>
+                                        <VoiceRecorderPanel
+                                          customerId={user?.customerId}
+                                          existingAssetId={voiceAssetId}
+                                          existingStoragePath={voiceStoragePath}
+                                          existingSignedUrl={resolvedVoiceSignedUrl}
+                                          validationError={voiceValidationError}
+                                          onUploadComplete={handleVoiceUploadComplete}
+                                          onClearValidation={() => setVoiceValidationError(null)}
+                                        />
+                                      </div>
+                                    ) : null}
                                     {renderProductShowcase()}
                                 </div>
-                                {bookType === 'premium' && (
-                                    <div className="border-2 border-dashed border-blue-200 rounded-2xl p-5 bg-blue-50/50">
-                                        <label className="text-sm font-bold text-blue-900 flex items-center gap-2 mb-3">
-                                            <HeadphonesIcon className="h-4 w-4" /> Upload Voice Recording
-                                        </label>
-                                        <input
-                                            type="file"
-                                            accept="audio/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files && e.target.files[0];
-                                                setAudioFile(file ?? null);
-                                                setAudioName(file ? file.name : '');
-                                                setVoiceAssetId(null);
-                                                setVoiceStoragePath(null);
-                                            }}
-                                            className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-full file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-blue-500"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-2">
-                                            {audioName ? `Selected: ${audioName}` : 'Optional for premium preview. Real upload will connect later.'}
-                                        </p>
-                                    </div>
-                                )}
                             </div>
 
                             <div className="pt-8 mt-4 border-t border-gray-100">
@@ -1948,7 +2580,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     disabled={!isFormValid || isSupreme} 
                                     className={`w-full h-16 rounded-full font-bold text-lg flex items-center justify-center gap-3 transition-all duration-500 shadow-xl ${(!isFormValid || isSupreme) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:scale-[1.02] shadow-amber-200'}`}
                                 >
-                                    {isSupreme ? "Coming Soon" : <><Sparkles className="h-6 w-6" /> {isFormValid ? "Generate Magic Preview" : "Complete Details to Continue"}</>}
+                                    {isSupreme ? t('personalize.comingSoon') : <><Sparkles className="h-6 w-6" /> {isFormValid ? t('personalize.generateMagicPreview') : t('personalize.completeDetails')}</>}
                                 </button>
                                 {previewError && (
                                   <p className="text-xs text-red-500 mt-2">{previewError}</p>
@@ -1968,21 +2600,24 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     className="max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[600px] py-6 md:py-10"
                 >
                     <div className="text-center mb-6 md:mb-10 text-gray-800">
-                        <h2 className="text-2xl md:text-3xl font-serif font-bold mb-2">Preview {name}'s Story</h2>
-                        <p className="text-gray-600 text-sm md:text-base">Flip through the first few pages of your masterpiece.</p>
+                        <h2 className="text-2xl md:text-3xl font-serif font-bold mb-2">{t('personalize.previewTitle', { name })}</h2>
+                        <p className="text-gray-600 text-sm md:text-base">{t('personalize.previewSubtitle')}</p>
                     </div>
 
                     <div 
-                        className="relative mb-8 md:mb-12 select-none flex justify-center perspective-2000" 
-                        style={{ height: isMobile ? Math.round(PREVIEW_HEIGHT * 0.55) : PREVIEW_HEIGHT }}
+                        className="relative mb-7 md:mb-12 flex select-none justify-center perspective-2000" 
+                        style={{ height: previewStageHeight }}
                     >
                          {/* Responsive Scaler Wrapper */}
-                         <div style={{ transform: `scale(${isMobile ? 0.45 : 1})`, transformOrigin: 'top center', width: PAGE_WIDTH * 2 }}>
+                         <div
+                            className="shrink-0"
+                            style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center', width: PAGE_WIDTH * 2 }}
+                         >
                             <motion.div 
                                 className="relative w-full flex justify-center" 
                                 animate={{ x: (currentSpread === 0 && !isFlipping) ? -190 : 0 }} 
                                 transition={{ duration: ANIMATION_DURATION, ease: "easeInOut" }} 
-                                style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: PREVIEW_HEIGHT }}
+                                style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: PREVIEW_HEIGHT, filter: previewBookShadow }}
                             >
                                  
                                  {/* 3D Book Thickness (LEFT = Center Binding) */}
@@ -2029,10 +2664,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
                                  {/* Static Pages Layer */}
                                  <div className="absolute top-0 w-full h-full flex justify-center">
-                                    <div className={`relative h-full shadow-2xl ${isLeftPageVisible ? 'opacity-100' : 'opacity-0'}`} style={{ width: PAGE_WIDTH }}>
+                                    <div className={`relative h-full ${isLeftPageVisible ? 'opacity-100' : 'opacity-0'}`} style={{ width: PAGE_WIDTH }}>
                                         {renderPageContent('left', staticLeftIndex)}
                                     </div>
-                                    <div className="relative h-full shadow-2xl" style={{ width: PAGE_WIDTH }}>
+                                    <div className="relative h-full" style={{ width: PAGE_WIDTH }}>
                                         {(isFlipping && flipDirection === 'next') ? renderPageContent('right', currentSpread + 1) : renderPageContent('right', currentSpread)}
                                     </div>
                                 </div>
@@ -2109,18 +2744,50 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row justify-center gap-4 sm:gap-6 w-full max-w-md sm:max-w-none">
-                         <Button ref={addToCartBtnRef} onClick={handleAddToCartClick} size="lg" variant="outline" className="h-12 md:h-14 w-full sm:w-auto px-8 text-base md:text-lg font-bold rounded-full border-2 border-amber-500 text-amber-600 bg-white hover:bg-amber-50 relative z-20">
-                            <ShoppingCart className="h-5 w-5 mr-2" />
-                            Add to Cart - ${currentPrice}
+                    <div className="flex w-full max-w-md flex-col justify-center gap-3 px-2 sm:max-w-none sm:flex-row sm:gap-4 md:gap-5">
+                        <Button
+                            onClick={handleOpenPreviewShare}
+                            size="lg"
+                            variant="secondary"
+                            className="glass-action-btn glass-action-btn--neutral relative z-20 h-11 w-full rounded-full px-5 text-sm font-semibold sm:w-auto sm:px-7 md:h-12 md:px-8 md:text-base"
+                            disabled={isPreparingShare || !creationId}
+                        >
+                            <Share2 className="mr-2 h-4 w-4 md:h-5 md:w-5" />
+                            {isPreparingShare ? t('common.loading') : t('share.previewButton')}
                         </Button>
-                        <Button onClick={fsm.requestCheckout} size="lg" className="h-12 md:h-14 w-full sm:w-auto px-12 text-base md:text-lg font-bold rounded-full shadow-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white border border-white/20 transform transition-all hover:scale-105">
-                            Checkout Now
+                         <Button
+                            ref={addToCartBtnRef}
+                            onClick={handleAddToCartClick}
+                            size="lg"
+                            variant="outline"
+                            className="glass-action-btn glass-action-btn--amber relative z-20 h-11 w-full rounded-full px-5 text-sm font-semibold sm:w-auto sm:px-7 md:h-12 md:px-8 md:text-base"
+                         >
+                            <ShoppingCart className="mr-2 h-4 w-4 md:h-5 md:w-5" />
+                            {t('personalize.addToCartPrice', { price: formatLocaleCurrency(currentPrice, language) })}
+                        </Button>
+                        <Button
+                            onClick={handleCheckoutClick}
+                            size="lg"
+                            className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-6 text-sm font-semibold sm:w-auto sm:px-9 md:h-12 md:px-10 md:text-base"
+                        >
+                            {t('personalize.checkoutNow')}
                         </Button>
                     </div>
+                    {shareError ? <p className="mt-3 text-center text-xs text-red-500">{shareError}</p> : null}
                 </motion.div>
             )}
         </AnimatePresence>
+
+        <ShareDialog
+          open={isShareDialogOpen && Boolean(previewShareUrl)}
+          onClose={() => setIsShareDialogOpen(false)}
+          title={t('share.previewTitle')}
+          description={t('share.previewDescription')}
+          shareUrl={previewShareUrl || ''}
+          shareText={t('share.previewTemplate')}
+          previewImageUrl={previewShareImageUrl}
+          note={t('share.previewNote')}
+        />
 
         {/* Loading Overlay */}
         <AnimatePresence>
@@ -2154,12 +2821,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                             >
                                 {loadingText}
                             </motion.h3>
-                            <p className="text-gray-500 text-sm font-mono">Estimated wait time: ~4seconds</p>
+                            <p className="text-gray-500 text-sm font-mono">
+                              {loadingCountdownSeconds > 0
+                                ? t('personalize.estimatedWait', { seconds: loadingCountdownSeconds })
+                                : t('personalize.almostThere')}
+                            </p>
                         </div>
                         
                         {/* Progress Bar Container */}
-                        <div className="w-full max-w-lg mx-auto">
-                             <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden relative shadow-inner mb-6">
+                        <div className="w-full max-w-2xl mx-auto">
+                             <div className="w-full max-w-lg mx-auto bg-gray-200 rounded-full h-2 overflow-hidden relative shadow-inner mb-6">
                                 <motion.div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full" style={{ width: `${progress}%` }} />
                                 <motion.div 
                                     className="absolute top-0 bottom-0 w-20 bg-white/30 skew-x-[-20deg]" 
@@ -2168,20 +2839,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 />
                             </div>
 
-                            {/* New Video/Media Window for Loading Content */}
-                            <div className="relative w-full aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-2xl border-4 border-white/50 group">
-                                <img 
-                                    src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop" 
-                                    className="w-full h-full object-cover opacity-80"
-                                    alt="Magic Process" 
-                                />
-                                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white p-4">
-                                     <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mb-3 animate-pulse">
-                                         <Play className="h-5 w-5 fill-white text-white ml-1" />
-                                     </div>
-                                     <p className="font-bold text-lg tracking-wide">Printing Magic...</p>
-                                     <p className="text-xs opacity-70">Creating your personalized storybook</p>
-                                </div>
+                            {/* Mini Game — play while waiting */}
+                            <div className="flex justify-center">
+                              <MiniGame />
                             </div>
 
                              {/* Tip text below video */}
@@ -2190,7 +2850,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 className="text-amber-900 text-sm font-medium flex items-center justify-center gap-2 mt-4"
                              >
                                  <Info className="h-4 w-4 text-amber-500" /> 
-                                 <span>Did you know? Each book is hand-bound by our expert wizards.</span>
+                                 <span>{t('personalize.didYouKnow')}</span>
                              </motion.p>
                         </div>
                     </div>
@@ -2201,12 +2861,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         {showExitConfirm && (
           <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
               <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 text-center">
-                  <ShoppingCart className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Wait! Don't lose your magic.</h3>
-                  <p className="text-gray-600 mb-6">You have customized a beautiful book. Would you like to add it to your cart before leaving?</p>
+                  <BookOpen className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">{t('personalize.exitConfirmTitle')}</h3>
+                  <p className="text-gray-600 mb-6">{t('personalize.exitConfirmBody')}</p>
                   <div className="flex gap-3 justify-center">
-                      <Button variant="outline" onClick={() => confirmExit('EXIT')}>No, Just Leave</Button>
-                      <Button variant="primary" onClick={() => confirmExit('ADD_TO_CART')}>Yes, Add to Cart</Button>
+                      <Button variant="outline" onClick={dismissExitConfirm}>{t('personalize.exitConfirmStay')}</Button>
+                      <Button variant="primary" onClick={returnToCustomizeFromPreview}>{t('personalize.exitConfirmBack')}</Button>
                   </div>
               </div>
           </div>
@@ -2215,3 +2875,5 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     </div>
   );
 };
+
+

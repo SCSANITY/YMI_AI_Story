@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Headphones, ChevronRight } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
+import { useI18n } from '@/lib/useI18n';
+import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing';
 
 export default function SupportPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const { user, checkoutEmail } = useGlobalContext();
   const [orderId, setOrderId] = useState('');
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -63,32 +66,32 @@ export default function SupportPage() {
           <Headphones className="h-5 w-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Support Center</h1>
-          <p className="text-gray-500 text-sm">Find help for your order or reach our team.</p>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('support.title')}</h1>
+          <p className="text-gray-500 text-sm">{t('support.subtitle')}</p>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-[1.2fr_1fr] gap-8">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-          <h2 className="text-lg font-bold text-gray-900">Lookup an order</h2>
+          <h2 className="text-lg font-bold text-gray-900">{t('support.lookupTitle')}</h2>
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               className="flex-1 h-11 rounded-lg border border-gray-200 px-3 text-sm"
-              placeholder="Enter order ID"
+              placeholder={t('support.lookupPlaceholder')}
               value={orderId}
               onChange={(e) => setOrderId(e.target.value)}
             />
-            <Button size="sm" className="rounded-full px-6" onClick={handleLookup}>Find</Button>
+            <Button size="sm" className="rounded-full px-6" onClick={handleLookup}>{t('common.find')}</Button>
           </div>
-          <p className="text-xs text-gray-500">Demo tip: copy an order ID from the list.</p>
+          <p className="text-xs text-gray-500">{t('support.lookupHint')}</p>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Recent orders</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4">{t('support.recentOrders')}</h2>
           {isLoading ? (
-            <p className="text-sm text-gray-500">Loading recent orders...</p>
+            <p className="text-sm text-gray-500">{t('support.loadingRecent')}</p>
           ) : recentOrders.length === 0 ? (
-            <p className="text-sm text-gray-500">No demo orders yet.</p>
+            <p className="text-sm text-gray-500">{t('support.noRecent')}</p>
           ) : (
             <div className="space-y-3">
               {recentOrders.slice(0, 3).map(order => (
@@ -101,7 +104,9 @@ export default function SupportPage() {
                     <div className="text-xs text-gray-500 font-mono tabular-nums tracking-wide">
                       #{order.displayId ?? order.id}
                     </div>
-                    <div className="text-sm font-semibold text-gray-900">${Number(order.total ?? 0).toFixed(2)}</div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      {formatMajorCurrencyValue(Number(order.total ?? 0), (order.displayCurrency ?? 'USD') as CheckoutCurrency)}
+                    </div>
                   </div>
                   <ChevronRight className="h-4 w-4 text-gray-400" />
                 </button>

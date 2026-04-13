@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const ownerId = customerId || anonSessionId
 
   if (!ownerId) {
-    return NextResponse.json({ faces: [], profiles: [] })
+    return NextResponse.json({ faces: [], profiles: [], voices: [] })
   }
 
   const { data: assets, error } = await supabaseAdmin
@@ -33,11 +33,12 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
 
   if (error || !assets) {
-    return NextResponse.json({ faces: [], profiles: [] })
+    return NextResponse.json({ faces: [], profiles: [], voices: [] })
   }
 
   const faces = assets.filter((row: any) => row.asset_type === 'face_image').slice(0, 8)
   const profiles = assets.filter((row: any) => row.asset_type === 'text_profile').slice(0, 10)
+  const voices = assets.filter((row: any) => row.asset_type === 'voice_sample').slice(0, 5)
 
   const facesWithUrls = await Promise.all(
     faces.map(async (face: any) => {
@@ -49,7 +50,17 @@ export async function GET(request: Request) {
     })
   )
 
-  return NextResponse.json({ faces: facesWithUrls, profiles })
+  const voicesWithUrls = await Promise.all(
+    voices.map(async (voice: any) => {
+      if (!voice.storage_path) return { ...voice, signed_url: null }
+      const { data: signed } = await supabaseAdmin.storage
+        .from('raw-private')
+        .createSignedUrl(voice.storage_path, 60 * 60 * 24)
+      return { ...voice, signed_url: signed?.signedUrl ?? null }
+    })
+  )
+
+  return NextResponse.json({ faces: facesWithUrls, profiles, voices: voicesWithUrls })
 }
 
 export async function DELETE(request: Request) {

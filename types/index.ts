@@ -4,6 +4,8 @@ export interface User {
   email: string;
   avatar: string;
   customerId?: string;
+  avatarAssetId?: string;
+  avatarStoragePath?: string;
 }
 
 export interface Book {
@@ -12,16 +14,20 @@ export interface Book {
   author: string;
   price: number;
   coverUrl: string;
+  showcaseImages: string[];
   description: string;
   category: 'Adventure' | 'Fantasy' | 'Bedtime' | 'Learning' | 'Animals';
   ageRange: '0-2' | '3-5' | '6-8' | '9-12';
   gender: 'Boy' | 'Girl' | 'Neutral';
+  coverZoom?: number;
 }
+
+export type StoryLanguage = 'English' | 'Traditional Chinese' | 'Spanish';
 
 export interface PersonalizationData {
   childName: string;
   childAge: string;
-  language: Language;
+  language: StoryLanguage;
   dedication: string;
   photo?: File | null;
   photoUrl?: string; // For preview display
@@ -80,7 +86,28 @@ export interface Order {
   };
 }
 
-export type Language = 'en' | 'cn_s' | 'cn_t';
+export type Language = 'en' | 'cn_s' | 'cn_t' | 'ja' | 'es' | 'ko';
+
+export type CollaborationLeadGender =
+  | 'female'
+  | 'male'
+  | 'non_binary'
+  | 'prefer_not_to_say';
+
+export interface CollaborationLeadForm {
+  nickname: string;
+  gender: CollaborationLeadGender | '';
+  email: string;
+  phone: string;
+  whatsapp_or_wechat: string;
+  instagram: string;
+  tiktok: string;
+  youtube: string;
+  xiaohongshu: string;
+  notes: string;
+}
+
+export type CollaborationLeadCreatePayload = CollaborationLeadForm
 
 export interface ToggleFavoriteResult {
   success: boolean;
@@ -120,6 +147,8 @@ export interface GlobalContextType {
   removeFromCheckout: (itemId: string) => void;
   clearCheckout: () => void;
   removeOrderedItems: (itemIds: string[]) => void;
+  refreshCart: () => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
   toggleFavorite: (book: Book) => ToggleFavoriteResult;
   setLanguage: (lang: Language) => void;
   setCheckoutEmail: (email: string) => void;
