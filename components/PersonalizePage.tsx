@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { BOOKS } from '@/data/books';
 import { Button } from '@/components/Button';
-import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Play, Check, Book, AlertTriangle, X, Share2, CircleHelp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Check, Book, X, Share2, CircleHelp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
@@ -77,16 +77,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const {
     stage,
-    startForm,
-    generatePreview,
     finishGenerating,
     reset,
-    backIntent,
-    restore,
-    canAddToCart,
-    canCheckout,
-    canBack,
-    exitIntent, 
     isExiting,
     viewState,
     uiProgress,
@@ -115,8 +107,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [flyTarget, setFlyTarget] = useState({ x: 0, y: 0 });
   const shouldAnimateToCartRef = useRef(false);
   const exitRunningRef = useRef(false);
-  const [showCartToast, setShowCartToast] = useState(false);
-  const toastTimerRef = useRef<number | null>(null);
   const [showPreviewCancelledToast, setShowPreviewCancelledToast] = useState(false);
   const previewCancelToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
@@ -742,10 +732,45 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     let lastRampAt = Date.now();
     const startedAt = Date.now();
     const PREVIEW_MAX_WAIT_MS = 10 * 60 * 1000;
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const getPreviewPollDelayMs = () => {
       const elapsed = Date.now() - startedAt;
-      const base = elapsed < 60_000 ? 9000 : elapsed < 120_000 ? 5000 : 2000;
-      return base + Math.floor(Math.random() * 350);
+      const base = elapsed < 20_000 ? 1500 : elapsed < 60_000 ? 2500 : 4000;
+      return base + Math.floor(Math.random() * 180);
+    };
+    const getPreviewAssetRetryDelayMs = (attempt: number) =>
+      Math.min(1400, 250 + attempt * 250) + Math.floor(Math.random() * 90);
+    const loadReadyPreviewAssets = async (jobId: string) => {
+      let lastError: unknown = null;
+
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        try {
+          const urls = await getPreviewPages(jobId, undefined, { size: 'small' });
+          if (urls.length) {
+            return {
+              urls,
+              primaryUrl: urls[0] ?? null,
+            };
+          }
+
+          const url = await getPreviewUrl(jobId);
+          if (url) {
+            return {
+              urls: [url],
+              primaryUrl: url,
+            };
+          }
+        } catch (error) {
+          lastError = error;
+        }
+
+        if (attempt < 5) {
+          await wait(getPreviewAssetRetryDelayMs(attempt));
+        }
+      }
+
+      if (lastError) throw lastError;
+      throw new Error('Preview is ready but images are still processing. Please refresh.');
     };
 
     setPreviewError(null);
@@ -880,7 +905,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             if (fetchFailures >= 8) {
               throw err
             }
-            await new Promise((resolve) => setTimeout(resolve, getPreviewPollDelayMs()))
+            await wait(getPreviewPollDelayMs())
             continue
           }
           const serverProgress =
@@ -895,15 +920,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             progressTarget = Math.max(progressTarget, 96)
             setProgress(prev => (prev < 96 ? 96 : prev))
             try {
-              const urls = await getPreviewPages(created.jobId, undefined, { size: 'small' })
+              const previewAssets = await loadReadyPreviewAssets(created.jobId)
               if (!isActive) return
-              setPreviewPages(urls)
-              if (urls[0]) {
-                setPreviewUrl(urls[0])
-              } else {
-                const url = await getPreviewUrl(created.jobId)
-                if (!isActive) return
-                setPreviewUrl(url)
+              setPreviewPages(previewAssets.urls)
+              if (previewAssets.primaryUrl) {
+                setPreviewUrl(previewAssets.primaryUrl)
               }
             } catch {
               if (!isActive) return
@@ -927,7 +948,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             throw new Error('Preview generation timed out. Please try again.')
           }
 
-          await new Promise((resolve) => setTimeout(resolve, getPreviewPollDelayMs()))
+          await wait(getPreviewPollDelayMs())
         }
       } catch (error: any) {
         if (!isActive) return
@@ -1209,17 +1230,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     window.setTimeout(() => setShowFlyAnimation(false), 800);
   }, []);
 
-  const triggerCartToast = useCallback(() => {
-    setShowCartToast(true);
-    if (toastTimerRef.current) {
-      window.clearTimeout(toastTimerRef.current);
-    }
-    toastTimerRef.current = window.setTimeout(() => {
-      setShowCartToast(false);
-      toastTimerRef.current = null;
-    }, 1600);
-  }, []);
-
   const triggerPreviewCancelledToast = useCallback(() => {
     setShowPreviewCancelledToast(true);
     if (previewCancelToastTimerRef.current) {
@@ -1448,12 +1458,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         previewPages[0] || previewUrl || undefined
     )
 
-    if (item) {
-      triggerCartToast();
-    }
     shouldAnimateToCartRef.current = false;
     return item ?? null;
-    }, [fsm.canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, triggerCartToast, ensurePremiumVoiceSample]);
+    }, [fsm.canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample]);
 
 
   const performCheckout = useCallback(async () => {
@@ -1580,9 +1587,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   useEffect(() => {
     return () => {
-      if (toastTimerRef.current) {
-        window.clearTimeout(toastTimerRef.current);
-      }
       if (previewCancelToastTimerRef.current) {
         window.clearTimeout(previewCancelToastTimerRef.current);
       }
@@ -1722,6 +1726,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                   
                   <img
                     src={previewPages[0] || templateCoverUrl || book?.coverUrl || ''}
+                    alt={resolvedBook?.title || book?.title || t('personalize.preview')}
                     className="w-full h-full object-cover mix-blend-multiply opacity-95"
                     decoding="async"
                     loading="eager"
@@ -2244,7 +2249,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     <input type="file" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-30" accept="image/*" />
                                     {photoPreview ? (
                                         <div className="relative z-10 pointer-events-none">
-                                            <img src={photoPreview} className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
+                                            <img src={photoPreview} alt={t('personalize.uploadChildPhoto')} className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
                                             <p className="text-xs text-amber-600 mt-1.5 font-medium">{t('personalize.clickToChangePhoto')}</p>
                                         </div>
                                     ) : (

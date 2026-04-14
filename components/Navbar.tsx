@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -31,8 +31,6 @@ export const Navbar: React.FC = () => {
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isRewardsOpen, setRewardsOpen] = useState(false)
   const [rewardVoucherCount, setRewardVoucherCount] = useState(0)
-  const [urlHash, setUrlHash] = useState('')
-  const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number } | null>(null)
 
   const userRef = useRef<HTMLDivElement>(null)
   const navContainerRef = useRef<HTMLDivElement>(null)
@@ -46,8 +44,23 @@ export const Navbar: React.FC = () => {
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
-  const isBooksActive = isHomePage && urlHash === '#books'
-  const isHomeActive = isHomePage && urlHash !== '#books'
+  const currentHash = useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === 'undefined') return () => {}
+      const notify = () => onStoreChange()
+      window.addEventListener('hashchange', notify)
+      window.addEventListener('popstate', notify)
+      return () => {
+        window.removeEventListener('hashchange', notify)
+        window.removeEventListener('popstate', notify)
+      }
+    },
+    () => (typeof window === 'undefined' ? '' : window.location.hash),
+    () => ''
+  )
+  const effectiveRewardVoucherCount = user?.customerId ? rewardVoucherCount : 0
+  const isBooksActive = isHomePage && currentHash === '#books'
+  const isHomeActive = isHomePage && currentHash !== '#books'
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -60,10 +73,7 @@ export const Navbar: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (!user?.customerId) {
-      setRewardVoucherCount(0)
-      return
-    }
+    if (!user?.customerId) return
 
     let cancelled = false
 
@@ -86,50 +96,46 @@ export const Navbar: React.FC = () => {
     }
   }, [isRewardsOpen, pathname, user?.customerId])
 
-  // Re-read hash on every pathname change (e.g. router.push('/#books') from another page)
-  useEffect(() => {
-    setUrlHash(window.location.hash)
-  }, [pathname])
-
-  // Track in-page hash changes (e.g. scrolling, history.pushState)
-  useEffect(() => {
-    const updateHash = () => setUrlHash(window.location.hash)
-    window.addEventListener('hashchange', updateHash)
-    return () => window.removeEventListener('hashchange', updateHash)
-  }, [])
-
   // Scroll to #books section when landing on /#books from another page
   useEffect(() => {
-    if (pathname === '/' && urlHash === '#books') {
+    if (pathname === '/' && currentHash === '#books') {
       const timer = setTimeout(() => {
         document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' })
       }, 80)
       return () => clearTimeout(timer)
     }
-  }, [pathname, urlHash])
+  }, [currentHash, pathname])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     let activeRef: React.RefObject<HTMLButtonElement | null>
     if (pathname === '/favorites') activeRef = favoritesRef
     else if (pathname === '/collaboration') activeRef = collaborationRef
     else if (pathname === '/support') activeRef = supportRef
     else if (pathname === '/my-books') activeRef = myBooksRef
     else if (isHomePage) activeRef = isBooksActive ? booksRef : homeRef
-    else { setIndicatorStyle(null); return }
+    else {
+      navContainerRef.current?.style.setProperty('--nav-indicator-opacity', '0')
+      return
+    }
 
     const container = navContainerRef.current
     const btn = activeRef.current
-    if (!btn || !container) { setIndicatorStyle(null); return }
+    if (!btn || !container) {
+      container?.style.setProperty('--nav-indicator-opacity', '0')
+      return
+    }
     const containerRect = container.getBoundingClientRect()
     const btnRect = btn.getBoundingClientRect()
-    setIndicatorStyle({ left: btnRect.left - containerRect.left, width: btnRect.width })
+    container.style.setProperty('--nav-indicator-left', `${btnRect.left - containerRect.left}px`)
+    container.style.setProperty('--nav-indicator-width', `${btnRect.width}px`)
+    container.style.setProperty('--nav-indicator-opacity', '1')
   }, [isHomePage, isBooksActive, pathname])
 
   const handleHomeClick = () => {
     if (pathname === '/') {
       window.scrollTo({ top: 0, behavior: 'smooth' })
       window.history.pushState(null, '', '/')
-      setUrlHash('')
+      window.dispatchEvent(new Event('hashchange'))
     } else {
       router.push('/')
     }
@@ -139,7 +145,7 @@ export const Navbar: React.FC = () => {
     if (pathname === '/') {
       document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' })
       window.history.pushState(null, '', '/#books')
-      setUrlHash('#books')
+      window.dispatchEvent(new Event('hashchange'))
     } else {
       router.push('/#books')
     }
@@ -180,12 +186,14 @@ export const Navbar: React.FC = () => {
 
         <div className="hidden md:flex items-center gap-8 text-sm font-medium relative" ref={navContainerRef}>
           {/* Sliding amber indicator */}
-          {indicatorStyle && (
-            <div
-              className="absolute bottom-0 h-0.5 bg-amber-500 rounded-full pointer-events-none transition-all duration-300 ease-out"
-              style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
-            />
-          )}
+          <div
+            className="absolute bottom-0 h-0.5 bg-amber-500 rounded-full pointer-events-none transition-all duration-300 ease-out"
+            style={{
+              left: 'var(--nav-indicator-left, 0px)',
+              width: 'var(--nav-indicator-width, 0px)',
+              opacity: 'var(--nav-indicator-opacity, 0)',
+            }}
+          />
           <button
             ref={homeRef}
             onClick={handleHomeClick}
@@ -255,9 +263,9 @@ export const Navbar: React.FC = () => {
                     alt={user.name}
                     className="h-8 w-8 rounded-full border border-gray-200 object-cover shadow-sm"
                   />
-                  {rewardVoucherCount > 0 ? (
+                  {effectiveRewardVoucherCount > 0 ? (
                     <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
-                      {rewardVoucherCount > 9 ? '9+' : rewardVoucherCount}
+                      {effectiveRewardVoucherCount > 9 ? '9+' : effectiveRewardVoucherCount}
                     </span>
                   ) : null}
                 </button>
@@ -302,9 +310,9 @@ export const Navbar: React.FC = () => {
                         <Gift className="h-4 w-4" />
                         {t('navbar.myRewards')}
                       </span>
-                      {rewardVoucherCount > 0 ? (
+                      {effectiveRewardVoucherCount > 0 ? (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                          {rewardVoucherCount > 9 ? '9+' : rewardVoucherCount}
+                          {effectiveRewardVoucherCount > 9 ? '9+' : effectiveRewardVoucherCount}
                         </span>
                       ) : null}
                     </button>

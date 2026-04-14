@@ -785,11 +785,6 @@ function CheckoutPageContent() {
     openLoginModal('login', form.email.trim() || undefined);
   }, [form.email, openLoginModal, resetIdentityVerification, user?.email]);
 
-  const chooseSignupIdentity = useCallback(() => {
-    setPendingAuthIdentity(true);
-    openLoginModal('signup', form.email.trim() || undefined);
-  }, [form.email, openLoginModal]);
-
   const confirmIdentityModeSwitch = useCallback(async () => {
     if (!draftIdentityMode || draftIdentityMode === identityMode) {
       closeIdentityModal();
@@ -935,7 +930,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [checkoutEmail, form.email, orderId, t, user?.customerId]);
+  }, [orderId, t, user?.customerId]);
 
   const clearAppliedDiscount = useCallback(async () => {
     if (appliedDiscountKind === 'coupon' || selectedRewardVoucherId) {
