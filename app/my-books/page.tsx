@@ -294,10 +294,10 @@ export default function MyBooksPage() {
                   </div>
                 </BookCardCover>
 
-                <div className="glass-panel relative z-20 rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-11 md:pt-14 px-4 md:px-5 pb-4 md:pb-5">
+                <div className="glass-panel relative z-20 rounded-xl md:rounded-2xl flex flex-col flex-1 mt-3 md:mt-4 pt-4 md:pt-5 px-4 md:px-5 pb-4 md:pb-5">
                   <div className="flex flex-col flex-1">
                     <button type="button" onClick={() => goToPreview(item)} className="text-left">
-                      <h3 className="mt-1 md:mt-0 font-display text-base md:text-lg font-medium text-gray-900 leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">
+                      <h3 className="font-display text-base md:text-lg font-medium text-gray-900 leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">
                         {item.templates?.name || item.template_id}
                       </h3>
                     </button>
