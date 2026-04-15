@@ -355,7 +355,7 @@ const handlePersonalize = (bookID: string) => {
                     </BookCardCover>
 
                     {/* Content card — pulled up under the book, shadow falls on its surface */}
-                    <div className="glass-panel relative z-20 rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-3 md:-mt-6 pt-8 md:pt-14 px-3 md:px-5 pb-3 md:pb-5">
+                    <div className="glass-panel relative z-20 rounded-xl md:rounded-2xl flex flex-col flex-1 mt-2 md:-mt-4 pt-4 md:pt-12 px-3 md:px-5 pb-3 md:pb-5">
                         <div className="flex flex-col flex-1">
                             <h3 className="font-display text-sm md:text-lg font-medium text-gray-900 leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">{titleMap[book.bookID] || book.title}</h3>
                             <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wide mb-1 md:mb-3">{typeMap[book.bookID] || book.category}</p>

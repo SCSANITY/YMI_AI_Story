@@ -17,7 +17,7 @@ export const Hero: React.FC = () => {
   }
 
   return (
-    <div className="relative min-h-[90vh] w-full flex items-center justify-center pt-10 pb-28 overflow-hidden">
+    <div className="relative min-h-[90vh] w-full flex items-center justify-center pt-10 pb-28 overflow-hidden bg-[linear-gradient(180deg,#fffdfa_0%,#fff7eb_56%,#f8daa9_100%)]">
       <div className="container mx-auto px-4 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <motion.div
@@ -110,7 +110,10 @@ export const Hero: React.FC = () => {
         </div>
       </div>
 
-      <div aria-hidden="true" className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-b from-transparent to-[rgba(255,247,235,0.7)] pointer-events-none z-10" />
+      <div
+        aria-hidden="true"
+        className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-b from-transparent via-[rgba(248,218,169,0.62)] to-[rgb(248,218,169)] pointer-events-none z-10"
+      />
     </div>
   )
 }
