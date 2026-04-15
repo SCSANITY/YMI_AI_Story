@@ -1242,8 +1242,19 @@ function CheckoutPageContent() {
     return () => {};
   }, [checkoutStarted]);
 
+  const isPaymentStep = step === 'payment';
+  const shouldShowMobilePaymentBar = isPaymentStep;
+  const mobilePaymentActionLabel =
+    !identityVerified && !skipIdentityVerification
+      ? t('checkout.identityTitle')
+      : isPlacingOrder
+      ? t('common.loading')
+      : stripeCheckoutEnabled
+      ? t('checkout.payWithStripe')
+      : t('checkout.placeOrder');
+
   return (
-    <div className="mx-auto max-w-7xl px-3 py-6 sm:px-4 md:px-8 md:py-10">
+    <div className={`mx-auto max-w-7xl px-3 pt-6 ${shouldShowMobilePaymentBar ? 'pb-28' : 'pb-6'} sm:px-4 md:px-8 md:py-10`}>
       <div className="mb-6 flex items-center gap-3 md:mb-8">
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
           <Lock className="h-5 w-5 text-amber-600" />
@@ -1584,13 +1595,15 @@ function CheckoutPageContent() {
                         {t('checkout.impactLink')}
                       </Link>
                     </div>
-                    <Button
-                      size="lg"
-                      className="glass-action-btn glass-action-btn--brand mt-4 h-11 w-full rounded-full px-5 text-sm font-semibold md:h-12 md:text-base"
-                      onClick={openIdentityModal}
-                    >
-                      {t('checkout.identityTitle')}
-                    </Button>
+                    <div className="mt-4 hidden md:block">
+                      <Button
+                        size="lg"
+                        className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-5 text-sm font-semibold md:h-12 md:text-base"
+                        onClick={openIdentityModal}
+                      >
+                        {t('checkout.identityTitle')}
+                      </Button>
+                    </div>
                     {formError && <p className="mt-3 text-xs text-red-500">{formError}</p>}
                   </div>
                 ) : (
@@ -1630,18 +1643,20 @@ function CheckoutPageContent() {
                         {t('checkout.impactLink')}
                       </Link>
                     </div>
-                    <Button
-                      size="lg"
-                      className="glass-action-btn glass-action-btn--brand mt-4 h-11 w-full rounded-full px-6 text-sm font-semibold md:h-12 md:text-base"
-                      onClick={handlePlaceOrder}
-                      disabled={isPlacingOrder}
-                    >
-                      {isPlacingOrder
-                        ? t('common.loading')
-                        : stripeCheckoutEnabled
-                        ? t('checkout.payWithStripe')
-                        : t('checkout.placeOrder')}
-                    </Button>
+                    <div className="mt-4 hidden md:block">
+                      <Button
+                        size="lg"
+                        className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-6 text-sm font-semibold md:h-12 md:text-base"
+                        onClick={handlePlaceOrder}
+                        disabled={isPlacingOrder}
+                      >
+                        {isPlacingOrder
+                          ? t('common.loading')
+                          : stripeCheckoutEnabled
+                          ? t('checkout.payWithStripe')
+                          : t('checkout.placeOrder')}
+                      </Button>
+                    </div>
                     {formError && <p className="mt-3 text-xs text-red-500">{formError}</p>}
                   </div>
                 )}
@@ -1725,7 +1740,7 @@ function CheckoutPageContent() {
           </div>
         </div>
 
-        <div className="glass-panel h-fit overflow-hidden rounded-[28px] border border-white/70 p-4 sm:p-5 md:p-6 lg:sticky lg:top-24">
+        <div className={`glass-panel h-fit overflow-hidden rounded-[28px] border border-white/70 p-4 sm:p-5 md:p-6 lg:sticky lg:top-24 ${isPaymentStep ? 'hidden lg:block' : ''}`}>
           <h3 className="text-lg font-bold text-gray-900 mb-4">{t('checkout.summaryTitle')}</h3>
           <div className="space-y-2 text-sm text-gray-600">
             <div className="flex items-center justify-between">
@@ -1752,6 +1767,35 @@ function CheckoutPageContent() {
           </p>
         </div>
       </div>
+
+      {shouldShowMobilePaymentBar ? (
+        <div className="fixed inset-x-0 bottom-0 z-[90] px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 md:hidden">
+          <div className="mx-auto flex max-w-7xl items-center gap-3 rounded-[24px] border border-white/85 bg-white/88 px-4 py-3 shadow-[0_18px_40px_rgba(148,93,34,0.14)] backdrop-blur-xl">
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-500">
+                {t('common.total')}
+              </div>
+              <div className="mt-1 text-lg font-bold tracking-tight text-slate-900">
+                {formattedTotal}
+              </div>
+            </div>
+            <Button
+              size="lg"
+              className="glass-action-btn glass-action-btn--brand h-11 shrink-0 rounded-full px-5 text-sm font-semibold"
+              onClick={() => {
+                if (!identityVerified && !skipIdentityVerification) {
+                  openIdentityModal();
+                  return;
+                }
+                handlePlaceOrder();
+              }}
+              disabled={isPlacingOrder}
+            >
+              {mobilePaymentActionLabel}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {isIdentityModalOpen && !skipIdentityVerification && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4">

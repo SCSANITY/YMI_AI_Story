@@ -135,7 +135,7 @@ export default function FavoritesPage() {
               </button>
             </BookCardCover>
 
-            <div className="glass-panel rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-10 md:pt-14 px-3 md:px-5 pb-3 md:pb-5">
+            <div className="glass-panel relative z-20 rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-3 md:-mt-6 pt-8 md:pt-14 px-3 md:px-5 pb-3 md:pb-5">
               <div className="flex flex-col flex-1">
                 <h3 className="font-display text-sm md:text-lg font-medium text-gray-900 leading-tight mb-1 md:mb-2 group-hover:text-amber-600 transition-colors line-clamp-2 md:line-clamp-none">
                   {titleMap[book.bookID] || book.title}

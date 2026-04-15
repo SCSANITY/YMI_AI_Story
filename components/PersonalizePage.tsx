@@ -2080,10 +2080,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             {viewState.showForm && (
                 <motion.div 
                     key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                    className="mx-auto grid max-w-[1320px] lg:grid-cols-12 gap-6 lg:gap-7"
+                    className="mx-auto grid max-w-[1320px] gap-5 lg:grid-cols-12 lg:gap-7"
                 >
-                    <div className="order-2 space-y-4 md:space-y-5 lg:order-1 lg:col-span-6">
-                        <div className="bg-white/50 backdrop-blur-md border border-white/82 p-3.5 md:p-4 rounded-[1.1rem] shadow-[0_16px_30px_-28px_rgba(0,0,0,0.22)]">
+                    <div className="order-1 space-y-4 md:space-y-5 lg:order-1 lg:col-span-6">
+                        <div className="bg-white/50 backdrop-blur-md border border-white/82 p-3 sm:p-3.5 md:p-4 rounded-[1.1rem] shadow-[0_16px_30px_-28px_rgba(0,0,0,0.22)]">
                             <div className="mb-4 md:mb-5">
                                 <div
                                   ref={showcaseRowRef}
@@ -2094,7 +2094,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                         <div className="relative">
                                         <div
                                           ref={showcaseThumbViewportRef}
-                                          className="thumb-scroll-column flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-2 md:overflow-y-auto md:overflow-x-hidden md:pr-[6px] md:pb-0"
+                                          className="thumb-scroll-column -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-col md:gap-2 md:overflow-y-auto md:overflow-x-hidden md:px-0 md:pr-[6px] md:pb-0"
                                           style={
                                             isMobile
                                               ? undefined
@@ -2119,7 +2119,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                               }`}
                                               style={
                                                 isMobile
-                                                  ? { width: '4rem', height: '4rem' }
+                                                  ? { width: '3.75rem', height: '3.75rem' }
                                                   : { width: `${desktopShowcaseThumbSize}px`, height: `${desktopShowcaseThumbSize}px` }
                                               }
                                               aria-label={`Show preview image ${index + 1}`}
@@ -2153,7 +2153,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     <div className="order-1 md:order-2 min-w-0">
                                         <div
                                           ref={mainShowcaseRef}
-                                          className="relative aspect-square overflow-hidden rounded-[0.96rem] bg-[#f6efe7] shadow-[0_16px_24px_-22px_rgba(0,0,0,0.18)]"
+                                          className="relative mx-auto aspect-square w-full max-w-[430px] overflow-hidden rounded-[0.96rem] bg-[#f6efe7] shadow-[0_16px_24px_-22px_rgba(0,0,0,0.18)] md:mx-0 md:max-w-none"
                                           style={isMobile ? undefined : { width: `${desktopMainShowcaseSize}px`, maxWidth: '100%' }}
                                         >
                                             <AnimatePresence mode="wait">
@@ -2178,7 +2178,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     </div>
                                 </div>
                             </div>
-                            <h2 className="text-[1.58rem] md:text-[1.68rem] font-serif font-bold text-gray-900 mb-2">{templateTitle || book.title}</h2>
+                            <h2 className="text-[1.42rem] sm:text-[1.52rem] md:text-[1.68rem] font-serif font-bold text-gray-900 mb-2">{templateTitle || book.title}</h2>
                             <p className="text-gray-600 text-sm leading-relaxed mb-4 md:mb-5">{templateDescription || book.description}</p>
                             
                             <div className="space-y-3">
@@ -2194,7 +2194,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                             </div>
                         </div>
 
-                        <div className="bg-white/65 backdrop-blur-md border border-white/80 rounded-[0.96rem] shadow-[0_14px_24px_-24px_rgba(0,0,0,0.2)] p-4">
+                        <div className="bg-white/65 backdrop-blur-md border border-white/80 rounded-[0.96rem] shadow-[0_14px_24px_-24px_rgba(0,0,0,0.2)] p-3.5 md:p-4">
                             <div className="flex items-center gap-2 mb-4">
                                 <CircleHelp className="h-5 w-5 text-amber-500" />
                                 <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-amber-600">
@@ -2235,71 +2235,71 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         </div>
                     </div>
 
-                    <div className="order-1 lg:order-2 lg:col-span-6">
-                        <div className="bg-white/78 backdrop-blur-sm rounded-[1.14rem] p-4 md:p-5 shadow-[0_18px_28px_-26px_rgba(0,0,0,0.18)] border border-amber-50/80 h-full flex flex-col">
-                            <div className="flex justify-between items-center mb-5">
-                                <h3 className="text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
+                    <div className="order-2 lg:order-2 lg:col-span-6">
+                        <div className="bg-white/78 backdrop-blur-sm rounded-[1.14rem] p-3.5 sm:p-4 md:p-5 shadow-[0_18px_28px_-26px_rgba(0,0,0,0.18)] border border-amber-50/80 h-full flex flex-col">
+                            <div className="mb-4 flex items-start justify-between gap-3 sm:items-center sm:mb-5">
+                                <h3 className="text-[1.55rem] md:text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
                                     <Sparkles className="h-6 w-6 text-amber-500" /> {t('personalize.customize')}
                                 </h3>
                                 <div className="text-2xl font-bold text-amber-600">{formatLocaleCurrency(currentPrice, language)}</div>
                             </div>
 
-                            <div className="space-y-5 md:space-y-6 flex-grow">
-                                <div className="border-2 border-dashed border-amber-200 rounded-[1rem] p-4 md:p-[18px] text-center bg-amber-50/60 hover:bg-amber-50 transition-colors relative group cursor-pointer">
+                            <div className="space-y-4 md:space-y-6 flex-grow">
+                                <div className="border-2 border-dashed border-amber-200 rounded-[1rem] p-3 sm:p-4 md:p-[18px] text-center bg-amber-50/60 hover:bg-amber-50 transition-colors relative group cursor-pointer">
                                     <input type="file" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-30" accept="image/*" />
                                     {photoPreview ? (
                                         <div className="relative z-10 pointer-events-none">
-                                            <img src={photoPreview} alt={t('personalize.uploadChildPhoto')} className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
+                                            <img src={photoPreview} alt={t('personalize.uploadChildPhoto')} className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
                                             <p className="text-xs text-amber-600 mt-1.5 font-medium">{t('personalize.clickToChangePhoto')}</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-3 pointer-events-none">
+                                        <div className="space-y-2.5 pointer-events-none">
                                             <motion.div
-                                                className="relative w-16 h-16 mx-auto"
+                                                className="relative w-14 h-14 sm:w-16 sm:h-16 mx-auto"
                                                 animate={{ y: [0, -4, 0] }}
                                                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                                             >
                                                 <span className="absolute inset-0 rounded-full bg-amber-300/40 blur-xl animate-pulse-slow" />
                                                 <span className="absolute inset-2 rounded-full bg-amber-200/40 blur-lg animate-pulse" />
-                                                <div className="relative w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shadow-[0_8px_18px_rgba(234,179,8,0.22)] ring-4 ring-amber-100">
-                                                    <Camera className="h-8 w-8" />
+                                                <div className="relative w-14 h-14 sm:w-16 sm:h-16 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shadow-[0_8px_18px_rgba(234,179,8,0.22)] ring-4 ring-amber-100">
+                                                    <Camera className="h-7 w-7 sm:h-8 sm:w-8" />
                                                 </div>
                                             </motion.div>
-                                            <h4 className="font-bold text-gray-900">{t('personalize.uploadChildPhoto')}</h4>
-                                            <div className="mx-auto w-full max-w-[450px] rounded-[1.05rem] border border-amber-100/95 bg-white/82 p-3.5 shadow-[0_12px_28px_rgba(245,158,11,0.1)]">
-                                                <div className="grid grid-cols-3 gap-1.5">
+                                            <h4 className="font-bold text-gray-900 text-sm sm:text-base">{t('personalize.uploadChildPhoto')}</h4>
+                                            <div className="mx-auto w-full max-w-[360px] sm:max-w-[420px] md:max-w-[450px] rounded-[1rem] border border-amber-100/95 bg-white/82 p-2.5 sm:p-3 md:p-3.5 shadow-[0_12px_28px_rgba(245,158,11,0.1)]">
+                                                <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
                                                     {GOOD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
-                                                            <div className="aspect-[6/5] overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50 shadow-[0_6px_14px_rgba(16,185,129,0.1)]">
+                                                            <div className="aspect-[6/5] overflow-hidden rounded-lg sm:rounded-xl border border-emerald-100 bg-emerald-50 shadow-[0_6px_14px_rgba(16,185,129,0.1)]">
                                                                 <img
                                                                     src={item.src}
                                                                     alt={item.alt}
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                             </div>
-                                                            <div className="absolute -right-1 -bottom-1 h-[18px] w-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
-                                                                <Check className="h-2.5 w-2.5" />
+                                                            <div className="absolute -right-1 -bottom-1 h-4 w-4 sm:h-[18px] sm:w-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
+                                                                <Check className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                                                <div className="mt-1 grid grid-cols-3 gap-1 sm:gap-1.5">
                                                     {BAD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
-                                                            <div className="aspect-[6/5] overflow-hidden rounded-xl border border-rose-100 bg-rose-50 shadow-[0_6px_14px_rgba(244,63,94,0.1)]">
+                                                            <div className="aspect-[6/5] overflow-hidden rounded-lg sm:rounded-xl border border-rose-100 bg-rose-50 shadow-[0_6px_14px_rgba(244,63,94,0.1)]">
                                                                 <img
                                                                     src={item.src}
                                                                     alt={item.alt}
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                             </div>
-                                                            <div className="absolute -right-1 -bottom-1 h-[18px] w-[18px] rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
-                                                                <X className="h-2.5 w-2.5" />
+                                                            <div className="absolute -right-1 -bottom-1 h-4 w-4 sm:h-[18px] sm:w-[18px] rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
+                                                                <X className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-2.5 text-[11px] leading-5 text-gray-500 text-left">
+                                                <div className="mt-2 text-[10px] sm:text-[11px] leading-4 sm:leading-5 text-gray-500 text-left">
                                                     {t('personalize.photoTips')}
                                                 </div>
                                             </div>
@@ -2343,7 +2343,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                   </div>
                                 )}
 
-                                <div className="grid md:grid-cols-2 gap-6">
+                                <div className="grid gap-4 md:grid-cols-2 md:gap-6">
                                     <div ref={nameBoxRef} className="space-y-2 relative">
                                         <label className="text-sm font-bold text-gray-700">{t('personalize.nameLabel')}</label>
                                         <input 

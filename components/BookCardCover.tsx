@@ -42,7 +42,7 @@ export function BookCardCover({
   }
 
   return (
-    <div className="relative z-10 aspect-square overflow-hidden rounded-xl md:rounded-2xl transition-shadow duration-300 shadow-[8px_20px_44px_-2px_rgba(0,0,0,0.38),10px_10px_28px_-4px_rgba(0,0,0,0.22),4px_4px_10px_rgba(0,0,0,0.14)] group-hover:shadow-[10px_26px_54px_-2px_rgba(0,0,0,0.46),12px_12px_32px_-4px_rgba(0,0,0,0.28),6px_6px_14px_rgba(0,0,0,0.18)]">
+    <div className="relative z-10 aspect-square overflow-hidden rounded-xl md:rounded-2xl transition-shadow duration-300 shadow-[0_12px_22px_-10px_rgba(0,0,0,0.24),0_8px_14px_-10px_rgba(0,0,0,0.16)] md:shadow-[8px_20px_44px_-2px_rgba(0,0,0,0.38),10px_10px_28px_-4px_rgba(0,0,0,0.22),4px_4px_10px_rgba(0,0,0,0.14)] group-hover:shadow-[0_16px_28px_-10px_rgba(0,0,0,0.28),0_10px_18px_-10px_rgba(0,0,0,0.18)] md:group-hover:shadow-[10px_26px_54px_-2px_rgba(0,0,0,0.46),12px_12px_32px_-4px_rgba(0,0,0,0.28),6px_6px_14px_rgba(0,0,0,0.18)]">
       <img
         src={src}
         alt={alt}
