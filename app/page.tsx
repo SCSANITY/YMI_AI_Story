@@ -15,7 +15,7 @@ export default function HomePage() {
         height={2000}
         aspectClassName="aspect-[3/1]"
         hotspotClassName="left-[39.8%] top-[65.8%] h-[15.8%] w-[22.8%]"
-        className="-mt-1 md:-mt-2"
+        className="-mt-2 md:-mt-3"
       />
       <BookList />
       <HomePosterBanner
