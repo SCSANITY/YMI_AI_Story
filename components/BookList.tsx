@@ -93,6 +93,16 @@ export const BookList: React.FC = () => {
   const [gender, setGender] = useState('All');
   const [suppressCardHover, setSuppressCardHover] = useState(false);
   const hoverResumeTimerRef = useRef<number | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const filterSlotRef = useRef<HTMLDivElement | null>(null);
+  const filterBarRef = useRef<HTMLDivElement | null>(null);
+  const [isFilterDocked, setIsFilterDocked] = useState(false);
+  const [filterDockMetrics, setFilterDockMetrics] = useState({
+    height: 0,
+    left: 0,
+    top: 64,
+    width: 0,
+  });
   
 
   // Derive unique options from data
@@ -132,6 +142,72 @@ export const BookList: React.FC = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let frameId: number | null = null;
+
+    const scheduleMeasure = () => {
+      if (frameId !== null) return;
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+
+        const section = sectionRef.current;
+        const slot = filterSlotRef.current;
+        const bar = filterBarRef.current;
+
+        if (!section || !slot || !bar) return;
+
+        const topOffset = window.matchMedia('(min-width: 768px)').matches ? 80 : 64;
+        const sectionRect = section.getBoundingClientRect();
+        const slotRect = slot.getBoundingClientRect();
+        const barRect = bar.getBoundingClientRect();
+        const height = Math.ceil(barRect.height || filterDockMetrics.height);
+        const nextMetrics = {
+          height,
+          left: Math.round(slotRect.left),
+          top: topOffset,
+          width: Math.round(slotRect.width),
+        };
+        const shouldDock =
+          slotRect.top <= topOffset &&
+          sectionRect.bottom > topOffset + height + 12;
+
+        setFilterDockMetrics((current) => (
+          current.height === nextMetrics.height &&
+          current.left === nextMetrics.left &&
+          current.top === nextMetrics.top &&
+          current.width === nextMetrics.width
+            ? current
+            : nextMetrics
+        ));
+        setIsFilterDocked((current) => current === shouldDock ? current : shouldDock);
+      });
+    };
+
+    scheduleMeasure();
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(scheduleMeasure);
+
+    if (resizeObserver) {
+      if (sectionRef.current) resizeObserver.observe(sectionRef.current);
+      if (filterSlotRef.current) resizeObserver.observe(filterSlotRef.current);
+      if (filterBarRef.current) resizeObserver.observe(filterBarRef.current);
+    }
+
+    window.addEventListener('scroll', scheduleMeasure, { passive: true });
+    window.addEventListener('resize', scheduleMeasure);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener('scroll', scheduleMeasure);
+      window.removeEventListener('resize', scheduleMeasure);
+    };
+  }, [filterDockMetrics.height]);
 
   useEffect(() => {
     let isMounted = true;
@@ -237,8 +313,8 @@ const handlePersonalize = (bookID: string) => {
   const genderOptions = genders.map(g => ({ value: g, label: t(`gender.${g}`) }))
 
   return (
-    <section id="books" className="page-surface page-surface--flush-bottom pt-12 md:pt-24 pb-0 min-h-screen">
-      <div className="container mx-auto px-4 md:px-6 lg:px-12">
+    <section ref={sectionRef} id="books" className="page-surface page-surface--flush-bottom relative pt-12 md:pt-24 pb-0 min-h-screen">
+      <div className="container mx-auto min-w-0 px-4 md:px-6 lg:px-12">
         
         {/* Section Header */}
         <div className="mb-10 md:mb-16 text-center">
@@ -254,12 +330,31 @@ const handlePersonalize = (bookID: string) => {
         </div>
 
         {/* Filter Bar */}
-        <div className="sticky top-16 md:top-20 z-30 mb-8 md:mb-12">
-          <div className="bg-white/45 backdrop-blur-2xl backdrop-saturate-150 rounded-2xl border border-white/50 shadow-[0_4px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] px-4 md:px-6 py-3.5">
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div
+          ref={filterSlotRef}
+          className="relative z-30 mb-8 w-full min-w-0 max-w-full overflow-visible md:mb-12"
+          style={isFilterDocked ? { height: filterDockMetrics.height } : undefined}
+        >
+          <div
+            ref={filterBarRef}
+            className={`w-full min-w-0 max-w-full overflow-visible transition-shadow duration-200 ${
+              isFilterDocked
+                ? 'fixed z-30'
+                : 'sticky top-16 z-30 md:top-20'
+            }`}
+            style={isFilterDocked ? {
+              left: filterDockMetrics.left,
+              top: filterDockMetrics.top,
+              width: filterDockMetrics.width,
+            } : undefined}
+          >
+          <div className={`w-full min-w-0 max-w-full overflow-visible rounded-2xl border border-white/50 bg-white/70 px-4 py-3.5 shadow-[0_4px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl backdrop-saturate-150 md:px-6 ${
+            isFilterDocked ? 'shadow-[0_12px_34px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.9)]' : ''
+          }`}>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
 
               {/* Search */}
-              <div className="relative w-64 md:w-96 shrink-0">
+              <div className="relative w-full min-w-0 shrink-0 sm:w-64 md:w-96">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 <input
                   type="text"
@@ -276,7 +371,7 @@ const handlePersonalize = (bookID: string) => {
               <div className="hidden sm:block w-px h-6 bg-amber-100 shrink-0" />
 
               {/* Glass selects */}
-              <div className="flex items-center gap-2 flex-1 flex-wrap sm:flex-nowrap">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
                 <GlassSelect label={t('bookList.filterType')} value={category} options={categoryOptions} onChange={(value) => { pauseCardHover(); setCategory(value); }} />
                 <GlassSelect label={t('bookList.filterAge')} value={age} options={ageOptions} onChange={(value) => { pauseCardHover(); setAge(value); }} />
                 <GlassSelect label={t('bookList.filterFor')} value={gender} options={genderOptions} onChange={(value) => { pauseCardHover(); setGender(value); }} />
@@ -292,6 +387,7 @@ const handlePersonalize = (bookID: string) => {
               </div>
 
             </div>
+          </div>
           </div>
         </div>
 
