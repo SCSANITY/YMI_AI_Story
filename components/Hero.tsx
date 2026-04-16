@@ -44,6 +44,83 @@ const FEATURE_CHIPS = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const MobileHeroBookGallery: React.FC = () => (
+  <motion.div
+    initial={{ opacity: 0, y: 16 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.64, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+    className="block lg:hidden relative h-[190px] sm:h-[220px] w-full -mt-1"
+  >
+    <div
+      className="absolute rounded-full bg-amber-200/35 blur-[40px] pointer-events-none"
+      style={{ left: 'calc(50% - 60px)', top: '10%', width: 120, height: 120 }}
+    />
+
+    <motion.div
+      className="absolute"
+      style={{ left: 'calc(50% - 128px)', bottom: 0, zIndex: 2, rotate: -8 }}
+      animate={{ y: [0, -10, 0] }}
+      transition={{ duration: 5.0, repeat: Infinity, ease: 'easeInOut', delay: 0 }}
+    >
+      <div
+        className="w-24 sm:w-28 rounded-xl overflow-hidden border-[4px] border-white"
+        style={{ boxShadow: '0 12px 36px rgba(0,0,0,0.14)', aspectRatio: '3/4' }}
+      >
+        <img
+          src={BOOKS[0].coverUrl}
+          alt={BOOKS[0].title}
+          className="w-full h-full object-cover block"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    </motion.div>
+
+    <motion.div
+      className="absolute"
+      style={{ left: 'calc(50% - 52px)', bottom: 14, zIndex: 4 }}
+      animate={{ y: [0, -16, 0] }}
+      transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+    >
+      <div
+        className="w-28 sm:w-32 rounded-xl overflow-hidden border-[5px] border-white"
+        style={{
+          boxShadow: '0 20px 60px rgba(0,0,0,0.22), 0 6px 18px rgba(251,146,60,0.20)',
+          aspectRatio: '3/4',
+        }}
+      >
+        <img
+          src={BOOKS[1].coverUrl}
+          alt={BOOKS[1].title}
+          className="w-full h-full object-cover block"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    </motion.div>
+
+    <motion.div
+      className="absolute"
+      style={{ left: 'calc(50% + 24px)', bottom: 0, zIndex: 3, rotate: 8 }}
+      animate={{ y: [0, -9, 0] }}
+      transition={{ duration: 4.6, repeat: Infinity, ease: 'easeInOut', delay: 1.0 }}
+    >
+      <div
+        className="w-24 sm:w-28 rounded-xl overflow-hidden border-[4px] border-white"
+        style={{ boxShadow: '0 12px 36px rgba(0,0,0,0.14)', aspectRatio: '3/4' }}
+      >
+        <img
+          src={BOOKS[2].coverUrl}
+          alt={BOOKS[2].title}
+          className="w-full h-full object-cover block"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    </motion.div>
+  </motion.div>
+)
+
 export const Hero: React.FC = () => {
   const { t } = useI18n()
 
@@ -167,6 +244,8 @@ export const Hero: React.FC = () => {
                 ))}
               </motion.div>
 
+              <MobileHeroBookGallery />
+
               {/* CTA */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -217,91 +296,6 @@ export const Hero: React.FC = () => {
                     {t('hero.socialProof')}
                   </p>
                 </div>
-              </motion.div>
-
-              {/* ── Mobile three-book gallery ──────────────────────────────── */}
-              {/*
-                Shown below social proof on mobile; replaces the desktop gallery.
-                Three books: left (tilted −8°), centre (featured, on top), right (tilted +8°).
-                Each floats independently at a different speed and phase.
-              */}
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.9, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                className="block lg:hidden relative h-[200px] sm:h-[230px] w-full mt-1"
-              >
-                {/* Glow behind centre book */}
-                <div
-                  className="absolute rounded-full bg-amber-200/35 blur-[40px] pointer-events-none"
-                  style={{ left: 'calc(50% - 60px)', top: '10%', width: 120, height: 120 }}
-                />
-
-                {/* Left book */}
-                <motion.div
-                  className="absolute"
-                  style={{ left: 'calc(50% - 128px)', bottom: 0, zIndex: 2, rotate: -8 }}
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 5.0, repeat: Infinity, ease: 'easeInOut', delay: 0 }}
-                >
-                  <div
-                    className="w-24 sm:w-28 rounded-xl overflow-hidden border-[4px] border-white"
-                    style={{ boxShadow: '0 12px 36px rgba(0,0,0,0.14)', aspectRatio: '3/4' }}
-                  >
-                    <img
-                      src={BOOKS[0].coverUrl}
-                      alt={BOOKS[0].title}
-                      className="w-full h-full object-cover block"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                </motion.div>
-
-                {/* Centre book (featured) */}
-                <motion.div
-                  className="absolute"
-                  style={{ left: 'calc(50% - 52px)', bottom: 14, zIndex: 4 }}
-                  animate={{ y: [0, -16, 0] }}
-                  transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-                >
-                  <div
-                    className="w-28 sm:w-32 rounded-xl overflow-hidden border-[5px] border-white"
-                    style={{
-                      boxShadow: '0 20px 60px rgba(0,0,0,0.22), 0 6px 18px rgba(251,146,60,0.20)',
-                      aspectRatio: '3/4',
-                    }}
-                  >
-                    <img
-                      src={BOOKS[1].coverUrl}
-                      alt={BOOKS[1].title}
-                      className="w-full h-full object-cover block"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                </motion.div>
-
-                {/* Right book */}
-                <motion.div
-                  className="absolute"
-                  style={{ left: 'calc(50% + 24px)', bottom: 0, zIndex: 3, rotate: 8 }}
-                  animate={{ y: [0, -9, 0] }}
-                  transition={{ duration: 4.6, repeat: Infinity, ease: 'easeInOut', delay: 1.0 }}
-                >
-                  <div
-                    className="w-24 sm:w-28 rounded-xl overflow-hidden border-[4px] border-white"
-                    style={{ boxShadow: '0 12px 36px rgba(0,0,0,0.14)', aspectRatio: '3/4' }}
-                  >
-                    <img
-                      src={BOOKS[2].coverUrl}
-                      alt={BOOKS[2].title}
-                      className="w-full h-full object-cover block"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                </motion.div>
               </motion.div>
 
             </motion.div>
