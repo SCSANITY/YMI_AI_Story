@@ -135,6 +135,14 @@ export const BookList: React.FC = () => {
     }, 180);
   };
 
+  const scrollToBooksTop = () => {
+    const section = sectionRef.current;
+    if (!section) return;
+
+    const top = section.getBoundingClientRect().top + window.scrollY - 64;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  };
+
   useEffect(() => {
     return () => {
       if (hoverResumeTimerRef.current !== null) {
@@ -372,13 +380,13 @@ const handlePersonalize = (bookID: string) => {
 
               {/* Glass selects */}
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
-                <GlassSelect label={t('bookList.filterType')} value={category} options={categoryOptions} onChange={(value) => { pauseCardHover(); setCategory(value); }} />
-                <GlassSelect label={t('bookList.filterAge')} value={age} options={ageOptions} onChange={(value) => { pauseCardHover(); setAge(value); }} />
-                <GlassSelect label={t('bookList.filterFor')} value={gender} options={genderOptions} onChange={(value) => { pauseCardHover(); setGender(value); }} />
+                <GlassSelect label={t('bookList.filterType')} value={category} options={categoryOptions} onChange={(value) => { pauseCardHover(); setCategory(value); scrollToBooksTop(); }} />
+                <GlassSelect label={t('bookList.filterAge')} value={age} options={ageOptions} onChange={(value) => { pauseCardHover(); setAge(value); scrollToBooksTop(); }} />
+                <GlassSelect label={t('bookList.filterFor')} value={gender} options={genderOptions} onChange={(value) => { pauseCardHover(); setGender(value); scrollToBooksTop(); }} />
 
                 {activeFilterCount > 0 && (
                   <button
-                    onClick={() => { pauseCardHover(); setCategory('All'); setAge('All'); setGender('All'); }}
+                    onClick={() => { pauseCardHover(); setCategory('All'); setAge('All'); setGender('All'); scrollToBooksTop(); }}
                     className="flex items-center gap-1 h-9 px-3 rounded-full border border-red-200 bg-red-50 text-xs text-red-500 hover:bg-red-100 transition-colors shrink-0"
                   >
                     <X className="h-3 w-3" /> {t('bookList.clearFilters')}
@@ -406,6 +414,7 @@ const handlePersonalize = (bookID: string) => {
                     setCategory('All');
                     setAge('All');
                     setGender('All');
+                    scrollToBooksTop();
                 }}
             >
                 {t('bookList.clearAllFilters')}
