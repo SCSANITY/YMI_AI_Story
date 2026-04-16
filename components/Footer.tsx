@@ -10,7 +10,7 @@ import {
 } from '@/lib/footer-legal-content'
 import { useI18n } from '@/lib/useI18n'
 
-type LegalModalType = 'privacy' | 'terms' | 'faq' | null
+type LegalModalType = 'privacy' | 'terms' | 'faq' | 'ourStory' | null
 
 type FaqItem = {
   question: string
@@ -21,6 +21,13 @@ export const Footer: React.FC = () => {
   const { language, t } = useI18n()
   const [openLegalModal, setOpenLegalModal] = useState<LegalModalType>(null)
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null)
+
+  const handleLegalModalChange = (nextModal: LegalModalType) => {
+    if (nextModal !== 'faq') {
+      setOpenFaqIndex(null)
+    }
+    setOpenLegalModal(nextModal)
+  }
 
   const faqItems = useMemo<FaqItem[]>(
     () => [
@@ -49,18 +56,15 @@ export const Footer: React.FC = () => {
     }
   }, [openLegalModal])
 
-  useEffect(() => {
-    if (openLegalModal !== 'faq' && openFaqIndex !== null) {
-      setOpenFaqIndex(null)
-    }
-  }, [openFaqIndex, openLegalModal])
-
   const isPrivacy = openLegalModal === 'privacy'
   const isFaq = openLegalModal === 'faq'
+  const isOurStory = openLegalModal === 'ourStory'
   const modalTitle = isFaq
     ? t('footer.legalTitleFaq')
     : isPrivacy
       ? t('footer.legalTitlePrivacy')
+      : isOurStory
+        ? t('footer.legalTitleOurStory')
       : t('footer.legalTitleTerms')
 
   const renderTextItem = (item: LegalTextItem, key: string, className = '') => (
@@ -135,10 +139,19 @@ export const Footer: React.FC = () => {
                 <li>
                   <button
                     type="button"
-                    onClick={() => setOpenLegalModal('faq')}
+                    onClick={() => handleLegalModalChange('faq')}
                     className="hover:text-amber-600"
                   >
                     {t('footer.faq')}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => handleLegalModalChange('ourStory')}
+                    className="hover:text-amber-600"
+                  >
+                    {t('footer.ourStory')}
                   </button>
                 </li>
                 <li>
@@ -170,7 +183,7 @@ export const Footer: React.FC = () => {
                 <li>
                   <button
                     type="button"
-                    onClick={() => setOpenLegalModal('terms')}
+                    onClick={() => handleLegalModalChange('terms')}
                     className="hover:text-amber-600"
                   >
                     {t('footer.terms')}
@@ -179,7 +192,7 @@ export const Footer: React.FC = () => {
                 <li>
                   <button
                     type="button"
-                    onClick={() => setOpenLegalModal('privacy')}
+                    onClick={() => handleLegalModalChange('privacy')}
                     className="hover:text-amber-600"
                   >
                     {t('footer.privacy')}
@@ -235,7 +248,7 @@ export const Footer: React.FC = () => {
           <div
             aria-hidden="true"
             className="absolute inset-0 bg-black/35 backdrop-blur-[3px]"
-            onClick={() => setOpenLegalModal(null)}
+            onClick={() => handleLegalModalChange(null)}
           />
 
           <div
@@ -259,7 +272,7 @@ export const Footer: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setOpenLegalModal(null)}
+              onClick={() => handleLegalModalChange(null)}
               className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-black/8 text-gray-500 transition-all duration-150 hover:bg-black/12 hover:text-gray-800"
               aria-label={t('common.close')}
             >
@@ -268,9 +281,11 @@ export const Footer: React.FC = () => {
 
             <div className="relative z-10 border-b border-black/8 px-6 py-5 sm:px-8">
               <h2 className="text-2xl font-bold text-gray-900">{modalTitle}</h2>
-              <p className="mt-0.5 text-sm text-gray-500">
-                {t('footer.effectiveDate', { date: 'March 12, 2026' })}
-              </p>
+              {isOurStory ? null : (
+                <p className="mt-0.5 text-sm text-gray-500">
+                  {t('footer.effectiveDate', { date: 'March 12, 2026' })}
+                </p>
+              )}
             </div>
 
             <div className="relative z-10">
@@ -311,6 +326,8 @@ export const Footer: React.FC = () => {
                   </section>
                 ) : isPrivacy ? (
                   renderLegalSections(legalContent.privacy)
+                ) : isOurStory ? (
+                  renderLegalSections(legalContent.ourStory)
                 ) : (
                   renderLegalSections(legalContent.terms)
                 )}
@@ -325,7 +342,7 @@ export const Footer: React.FC = () => {
             <div className="relative z-10 flex justify-end border-t border-black/8 px-6 py-4 sm:px-8">
               <button
                 type="button"
-                onClick={() => setOpenLegalModal(null)}
+                onClick={() => handleLegalModalChange(null)}
                 className="h-9 rounded-full border border-black/10 bg-black/6 px-5 text-sm font-semibold text-gray-700 transition-all duration-150 hover:bg-black/10 hover:text-gray-900"
               >
                 {t('common.close')}

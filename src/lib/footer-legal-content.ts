@@ -15,6 +15,7 @@ export type LegalSection = {
 export type FooterLegalContent = {
   privacy: LegalSection[]
   terms: LegalSection[]
+  ourStory: LegalSection[]
 }
 
 const cnToTraditional = OpenCC.Converter({ from: 'cn', to: 'hk' })
@@ -393,6 +394,91 @@ const termsEn: LegalSection[] = [
   },
 ]
 
+const ourStoryEn: LegalSection[] = [
+  {
+    title: 'YMI Story',
+    paragraphs: [
+      { text: 'Where Love Is Heard, Growth Begins' },
+      { text: '“Why am I?” This is one of the most meaningful questions in every child’s journey of growing up.' },
+      {
+        text: 'At YMI Story, we believe the answer does not live in cold lessons or rigid definitions. It lives in the warmth of a parent’s voice — familiar, gentle, and full of love.',
+      },
+      {
+        text: 'Our brand is built around a simple but powerful philosophy: Your Voice. My Story. Inner Growth.',
+      },
+      {
+        text: 'When these three elements come together, they create something truly extraordinary — a deeply personal story experience that helps children feel loved, seen, and understood.',
+      },
+      {
+        text: 'We are reimagining the traditional storybook through a first-of-its-kind bespoke audio storybook experience. By combining modern aesthetics, meaningful storytelling, and innovative technology, we make it easy and joyful for parents to create a one-of-a-kind gift for their child.',
+      },
+      {
+        text: 'When a child hears the voice of someone they love guiding them through a story, that feeling of being surrounded by love becomes something much deeper: a lasting sense of security, identity, and inner strength.',
+      },
+      {
+        text: 'At YMI Story, we are not simply creating books. We are planting the seeds of truth, goodness, and beauty through stories that nurture the heart.',
+      },
+      {
+        text: 'Because we believe that when love is heard, growth begins.',
+      },
+    ],
+  },
+  {
+    title: 'Our Vision',
+    paragraphs: [
+      {
+        text: 'To become the world’s leading brand for passing down love, wisdom, and inner strength through family storytelling — inspiring every child to discover themselves and grow with warmth, kindness, and a deeply rooted sense of goodness.',
+      },
+    ],
+  },
+  {
+    title: 'Our Mission',
+    bullets: [
+      {
+        label: 'Empower Self-Discovery:',
+        text: 'We guide children to explore the question “Why am I?” through personalized story experiences that build confidence, self-awareness, and a positive sense of identity.',
+      },
+      {
+        label: 'Nurture Inner Growth:',
+        text: 'Through thoughtful storytelling, we plant the seeds of truth, goodness, and beauty, helping children grow from within and develop strong character with love at the center.',
+      },
+      {
+        label: 'Pioneer Modern Storytelling:',
+        text: 'We redefine the storybook experience through bespoke audio storytelling, blending emotional connection, modern design, and innovative technology in a way that feels fresh, meaningful, and deeply personal.',
+      },
+      {
+        label: 'Craft Elegant Simplicity:',
+        text: 'We are committed to a refined, modern, and seamless experience — making it easy, beautiful, and enjoyable for families to create something truly special together.',
+      },
+      {
+        label: 'Give Back with Purpose:',
+        text: 'We believe every story can carry love beyond the home. By integrating charitable giving into our brand, we turn each purchase into part of a larger cycle of kindness and impact.',
+      },
+    ],
+  },
+  {
+    title: 'Our Brand Meaning',
+    bullets: [
+      {
+        label: 'Y — Your Voice:',
+        text: 'The voice of love, comfort, and connection. A parent’s voice is often the first place a child feels safe.',
+      },
+      {
+        label: 'M — My Story:',
+        text: 'A child’s own journey of identity and imagination. Every child deserves to feel like the hero of their own story.',
+      },
+      {
+        label: 'I — Inner Growth:',
+        text: 'The quiet strength that grows through love, guidance, and positive values. This is where confidence, kindness, and self-understanding begin.',
+      },
+    ],
+  },
+  {
+    title: 'Brand Slogan',
+    paragraphs: [{ text: 'Your Voice. My Story. Inner Growth.' }],
+  },
+]
+
 const privacyCnS: LegalSection[] = [
   {
     paragraphs: [
@@ -754,18 +840,20 @@ const termsCnS: LegalSection[] = [
 
 export function getFooterLegalContent(language: Language): FooterLegalContent {
   if (language === 'cn_s') {
-    return { privacy: privacyCnS, terms: termsCnS }
+    return { privacy: privacyCnS, terms: termsCnS, ourStory: ourStoryEn }
   }
 
   if (language === 'cn_t') {
     return {
       privacy: privacyCnS.map(convertSection),
       terms: termsCnS.map(convertSection),
+      ourStory: ourStoryEn,
     }
   }
 
   return {
     privacy: privacyEn,
     terms: termsEn,
+    ourStory: ourStoryEn,
   }
 }

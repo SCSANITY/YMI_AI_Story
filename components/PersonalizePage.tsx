@@ -2067,7 +2067,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-grow container mx-auto px-4 py-6 md:py-7 relative">
+      <main className="relative mx-auto w-full max-w-full flex-grow overflow-hidden px-4 py-6 md:container md:py-7">
         
         {renderProgressSteps()}
 
@@ -2080,21 +2080,21 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             {viewState.showForm && (
                 <motion.div 
                     key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                    className="mx-auto grid max-w-[1320px] gap-5 lg:grid-cols-12 lg:gap-7"
+                    className="mx-auto grid w-full min-w-0 max-w-[1320px] overflow-hidden gap-5 lg:grid-cols-12 lg:gap-7"
                 >
-                    <div className="order-1 space-y-4 md:space-y-5 lg:order-1 lg:col-span-6">
-                        <div className="bg-white/50 backdrop-blur-md border border-white/82 p-3 sm:p-3.5 md:p-4 rounded-[1.1rem] shadow-[0_16px_30px_-28px_rgba(0,0,0,0.22)]">
+                    <div className="order-1 min-w-0 space-y-4 md:space-y-5 lg:order-1 lg:col-span-6">
+                        <div className="w-full min-w-0 overflow-hidden bg-white/50 backdrop-blur-md border border-white/82 p-3 sm:p-3.5 md:p-4 rounded-[1.1rem] shadow-[0_16px_30px_-28px_rgba(0,0,0,0.22)]">
                             <div className="mb-4 md:mb-5">
                                 <div
                                   ref={showcaseRowRef}
-                                  className="flex flex-col gap-2.5 md:grid md:items-start md:gap-3"
+                                  className="flex min-w-0 flex-col gap-2.5 md:grid md:items-start md:gap-3"
                                   style={isMobile ? undefined : { gridTemplateColumns: `${desktopThumbColumnWidth}px minmax(0, 1fr)` }}
                                 >
-                                    <div className="order-2 md:order-1 md:shrink-0">
-                                        <div className="relative">
+                                    <div className="order-2 min-w-0 md:order-1 md:shrink-0">
+                                        <div className="relative w-full max-w-full min-w-0 overflow-hidden md:overflow-visible">
                                         <div
                                           ref={showcaseThumbViewportRef}
-                                          className="thumb-scroll-column -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-col md:gap-2 md:overflow-y-auto md:overflow-x-hidden md:px-0 md:pr-[6px] md:pb-0"
+                                          className="thumb-scroll-column flex w-full max-w-full min-w-0 gap-2 overflow-x-auto px-0 pb-1 md:w-auto md:max-w-none md:flex-col md:gap-2 md:overflow-y-auto md:overflow-x-hidden md:pr-[6px] md:pb-0"
                                           style={
                                             isMobile
                                               ? undefined
@@ -2235,8 +2235,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         </div>
                     </div>
 
-                    <div className="order-2 lg:order-2 lg:col-span-6">
-                        <div className="bg-white/78 backdrop-blur-sm rounded-[1.14rem] p-3.5 sm:p-4 md:p-5 shadow-[0_18px_28px_-26px_rgba(0,0,0,0.18)] border border-amber-50/80 h-full flex flex-col">
+                    <div className="order-2 min-w-0 lg:order-2 lg:col-span-6">
+                        <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-white/78 backdrop-blur-sm rounded-[1.14rem] p-3.5 sm:p-4 md:p-5 shadow-[0_18px_28px_-26px_rgba(0,0,0,0.18)] border border-amber-50/80">
                             <div className="mb-4 flex items-start justify-between gap-3 sm:items-center sm:mb-5">
                                 <h3 className="text-[1.55rem] md:text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
                                     <Sparkles className="h-6 w-6 text-amber-500" /> {t('personalize.customize')}
@@ -2266,8 +2266,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                 </div>
                                             </motion.div>
                                             <h4 className="font-bold text-gray-900 text-sm sm:text-base">{t('personalize.uploadChildPhoto')}</h4>
-                                            <div className="mx-auto w-full max-w-[360px] sm:max-w-[420px] md:max-w-[450px] rounded-[1rem] border border-amber-100/95 bg-white/82 p-2.5 sm:p-3 md:p-3.5 shadow-[0_12px_28px_rgba(245,158,11,0.1)]">
-                                                <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
+                                            <div className="mx-auto w-full min-w-0 max-w-full sm:max-w-[420px] md:max-w-[450px] rounded-[1rem] border border-amber-100/95 bg-white/82 p-2.5 sm:p-3 md:p-3.5 shadow-[0_12px_28px_rgba(245,158,11,0.1)]">
+                                                <div className="grid min-w-0 grid-cols-3 gap-1 sm:gap-1.5">
                                                     {GOOD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
                                                             <div className="aspect-[6/5] overflow-hidden rounded-lg sm:rounded-xl border border-emerald-100 bg-emerald-50 shadow-[0_6px_14px_rgba(16,185,129,0.1)]">
@@ -2283,7 +2283,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-1 grid grid-cols-3 gap-1 sm:gap-1.5">
+                                                <div className="mt-1 grid min-w-0 grid-cols-3 gap-1 sm:gap-1.5">
                                                     {BAD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
                                                             <div className="aspect-[6/5] overflow-hidden rounded-lg sm:rounded-xl border border-rose-100 bg-rose-50 shadow-[0_6px_14px_rgba(244,63,94,0.1)]">
@@ -2307,7 +2307,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     )}
                                 </div>
                                 {recentFaces.length > 0 && (
-                                  <div className="flex flex-wrap gap-3">
+                                  <div className="flex max-w-full flex-wrap gap-3 overflow-hidden">
                                     {recentFaces.map((face) => (
                                       <div key={face.asset_id} className="relative w-12 h-12">
                                         <button
