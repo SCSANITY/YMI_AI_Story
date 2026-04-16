@@ -1,11 +1,18 @@
 import './globals.css';
 import { AppShell } from '@/components/AppShell';
-import { Cutive, Inter, Noto_Sans_TC, Noto_Serif_TC, Playfair_Display } from 'next/font/google';
+import { Cormorant_Garamond, Cutive, Inter, Noto_Sans_TC, Noto_Serif_TC, Playfair_Display } from 'next/font/google';
 
 const inter = Inter({
   subsets: ['latin'],
   weight: ['400', '600', '700'],
   variable: '--font-inter',
+});
+
+const cormorant = Cormorant_Garamond({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  style: ['normal', 'italic'],
+  variable: '--font-cormorant',
 });
 
 const cutive = Cutive({
@@ -38,7 +45,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${cutive.variable} ${playfair.variable} ${notoSansTC.variable} ${notoSerifTC.variable}`}
+      className={`${inter.variable} ${cutive.variable} ${playfair.variable} ${cormorant.variable} ${notoSansTC.variable} ${notoSerifTC.variable}`}
     >
       <body className="min-h-screen bg-white text-gray-900 font-sans">
         <AppShell>

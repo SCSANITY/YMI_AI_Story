@@ -137,6 +137,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [previewShareUrl, setPreviewShareUrl] = useState<string | null>(null);
   const [isPreparingShare, setIsPreparingShare] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [isCheckoutAcknowledged, setIsCheckoutAcknowledged] = useState(false);
+  const [checkoutAcknowledgementError, setCheckoutAcknowledgementError] = useState(false);
   const generationInFlightRef = useRef(false);
   const checkoutInFlightRef = useRef(false);
   const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(null);
@@ -1582,6 +1584,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   };
 
   const handleCheckoutClick = () => {
+    if (!isCheckoutAcknowledged) {
+      setCheckoutAcknowledgementError(true);
+      return;
+    }
     if (!ensurePremiumVoiceSample()) return;
     fsm.requestCheckout();
   };
@@ -1593,6 +1599,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!viewState.showPreview) {
+      setIsCheckoutAcknowledged(false);
+      setCheckoutAcknowledgementError(false);
+    }
+  }, [viewState.showPreview]);
 
   useEffect(() => {
     if (fsm.exitPhase !== 'REQUESTED') return
@@ -2762,6 +2775,30 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         </div>
                     </div>
 
+                    <div className="w-full max-w-3xl px-2">
+                      <label className="mx-auto mb-3 flex max-w-2xl cursor-pointer items-start gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-left shadow-sm backdrop-blur-sm">
+                        <input
+                          type="checkbox"
+                          checked={isCheckoutAcknowledged}
+                          onChange={(event) => {
+                            setIsCheckoutAcknowledged(event.target.checked);
+                            if (event.target.checked) {
+                              setCheckoutAcknowledgementError(false);
+                            }
+                          }}
+                          className="mt-1 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 accent-amber-500 focus:ring-2 focus:ring-amber-300"
+                        />
+                        <span className="text-xs font-medium leading-relaxed text-amber-950/80 sm:text-sm">
+                          {t('personalize.checkoutAcknowledgement')}
+                        </span>
+                      </label>
+                      {checkoutAcknowledgementError ? (
+                        <p className="mb-3 text-center text-xs font-semibold text-red-500">
+                          {t('personalize.checkoutAcknowledgementRequired')}
+                        </p>
+                      ) : null}
+                    </div>
+
                     <div className="flex w-full max-w-md flex-col justify-center gap-3 px-2 sm:max-w-none sm:flex-row sm:gap-4 md:gap-5">
                         <Button
                             onClick={handleOpenPreviewShare}
@@ -2786,6 +2823,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         <Button
                             onClick={handleCheckoutClick}
                             size="lg"
+                            disabled={!isCheckoutAcknowledged}
                             className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-6 text-sm font-semibold sm:w-auto sm:px-9 md:h-12 md:px-10 md:text-base"
                         >
                             {t('personalize.checkoutNow')}

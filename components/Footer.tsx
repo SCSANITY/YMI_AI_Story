@@ -114,7 +114,9 @@ export const Footer: React.FC = () => {
                 </div>
                 <div className="text-lg font-bold text-gray-900">YMI Books</div>
               </div>
-              <p className="text-sm leading-relaxed text-gray-600">{t('footer.aboutDescription')}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-gray-600">
+                {t('footer.aboutDescription')}
+              </p>
               <div className="flex items-center gap-3 text-amber-500">
                 <a className="rounded-full bg-amber-50 p-2 hover:bg-amber-100" href="#" aria-label="Facebook">
                   <Facebook className="h-4 w-4" />
