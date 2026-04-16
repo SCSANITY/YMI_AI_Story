@@ -36,7 +36,7 @@ export const Hero: React.FC = () => {
               </span>
             </motion.div>
 
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-title text-gray-900 tracking-tight leading-[1.05]">
+            <h1 className="text-[1.8rem] sm:text-4xl md:text-5xl lg:text-6xl font-title text-gray-900 tracking-tight leading-[1.12] md:leading-[1.08]">
               {t('hero.titleLine1')} <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600">
                 {t('hero.titleLine2')}
