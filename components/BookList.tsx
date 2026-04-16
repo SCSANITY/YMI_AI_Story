@@ -158,7 +158,7 @@ export const BookList: React.FC = () => {
 
         if (!section || !slot || !bar) return;
 
-        const topOffset = window.matchMedia('(min-width: 768px)').matches ? 80 : 64;
+        const topOffset = 64;
         const sectionRect = section.getBoundingClientRect();
         const slotRect = slot.getBoundingClientRect();
         const barRect = bar.getBoundingClientRect();
@@ -340,7 +340,7 @@ const handlePersonalize = (bookID: string) => {
             className={`w-full min-w-0 max-w-full overflow-visible transition-shadow duration-200 ${
               isFilterDocked
                 ? 'fixed z-30'
-                : 'sticky top-16 z-30 md:top-20'
+                : 'sticky top-16 z-30'
             }`}
             style={isFilterDocked ? {
               left: filterDockMetrics.left,
