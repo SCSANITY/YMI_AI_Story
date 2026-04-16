@@ -188,6 +188,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [showAgeHistory, setShowAgeHistory] = useState(false);
   const [showLanguageOptions, setShowLanguageOptions] = useState(false);
   const [expandedBookFaq, setExpandedBookFaq] = useState<number | null>(0);
+  const [isMobileStoryInfoOpen, setMobileStoryInfoOpen] = useState(false);
   const [activeShowcaseIndex, setActiveShowcaseIndex] = useState(0);
   const [desktopShowcaseThumbSize, setDesktopShowcaseThumbSize] = useState(72);
   const [desktopMainShowcaseSize, setDesktopMainShowcaseSize] = useState(520);
@@ -2195,14 +2196,26 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         </div>
 
                         <div className="bg-white/65 backdrop-blur-md border border-white/80 rounded-[0.96rem] shadow-[0_14px_24px_-24px_rgba(0,0,0,0.2)] p-3.5 md:p-4">
-                            <div className="flex items-center gap-2 mb-4">
+                            <button
+                              type="button"
+                              onClick={() => setMobileStoryInfoOpen((prev) => !prev)}
+                              className="mb-0 flex w-full items-center justify-between gap-3 text-left md:mb-4 md:cursor-default"
+                              aria-expanded={isMobileStoryInfoOpen}
+                            >
+                              <span className="flex items-center gap-2">
                                 <CircleHelp className="h-5 w-5 text-amber-500" />
-                                <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-amber-600">
-                                    About This Story
-                                </h3>
-                            </div>
+                                <span className="text-sm font-bold uppercase tracking-[0.18em] text-amber-600">
+                                  About This Story
+                                </span>
+                              </span>
+                              <ChevronDown
+                                className={`h-4 w-4 shrink-0 text-amber-500 transition-transform duration-200 md:hidden ${
+                                  isMobileStoryInfoOpen ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
 
-                            <div className="space-y-3">
+                            <div className={`${isMobileStoryInfoOpen ? 'mt-4 block' : 'hidden'} space-y-3 md:mt-0 md:block`}>
                                 {bookFaqItems.map((item, index) => {
                                   const isOpen = expandedBookFaq === index;
 
