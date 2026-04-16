@@ -511,8 +511,8 @@ const en: MessageDictionary = {
   'personalize.exitConfirmStay': 'Stay Here',
   'personalize.exitConfirmBack': 'Back to Customize',
   'personalize.previewCancelledToast': 'Preview cancelled.',
-  'personalize.bookFaq1Question': 'Can I personalize this book with my child?',
-  'personalize.bookFaq1Answer': 'Yes. {{title}} is designed to use your child\'s face, name, age, and story language so the book feels tailored to them.',
+  'personalize.bookFaq1Question': 'What is the book format and quality like?',
+  'personalize.bookFaq1Answer': 'Each book is made as a premium hardcover keepsake with beautifully illustrated pages, vibrant print quality, and a durable finish designed to last for years. For our audio-enabled edition, the book includes an added voice feature built on top of the classic hardcover experience, creating a more immersive and meaningful storytelling journey for children and families.',
   'personalize.bookFaq2Question': 'What do I need before generating the preview?',
   'personalize.bookFaq2Answer': 'A clear face photo works best. Once the details on the right are complete, you can generate a preview before deciding whether to continue to checkout.',
   'personalize.bookFaq3Question': 'Can I still change details after I see the preview?',
@@ -1004,8 +1004,8 @@ const cn_s: MessageDictionary = {
   'personalize.exitConfirmStay': '留在这里',
   'personalize.exitConfirmBack': '返回 Customize',
   'personalize.previewCancelledToast': '预览已取消。',
-  'personalize.bookFaq1Question': '我可以用孩子的信息来定制这本书吗？',
-  'personalize.bookFaq1Answer': '可以。{{title}} 会结合孩子的头像、姓名、年龄和故事语言，让整本书更贴近孩子本人。',
+  'personalize.bookFaq1Question': '这本书的形式和品质是什么样的？',
+  'personalize.bookFaq1Answer': '每本书都会制作成高品质的精装纪念书，配有精美插画页面、鲜明的印刷质感，以及经久耐用的装帧，适合珍藏多年。对于支持音频的版本，我们会在经典精装书体验之上加入语音功能，为孩子和家人带来更沉浸、更有意义的故事旅程。',
   'personalize.bookFaq2Question': '生成预览前我需要准备什么？',
   'personalize.bookFaq2Answer': '一张清晰的人脸照片效果最好。右侧信息填写完成后，你就可以先生成预览，再决定是否继续结账。',
   'personalize.bookFaq3Question': '看完预览后还能修改内容吗？',
@@ -1426,6 +1426,8 @@ const ja: MessageDictionary = {
   'personalize.exitConfirmBody': 'この本はいつでも My Books から見つけられます。今 Customize に戻りますか？',
   'personalize.exitConfirmStay': 'ここに残る',
   'personalize.exitConfirmBack': 'Customize に戻る',
+  'personalize.bookFaq1Question': '本の仕様と品質はどのようなものですか？',
+  'personalize.bookFaq1Answer': '各本は、美しく描かれたページ、鮮やかな印刷品質、そして長く残せる丈夫な仕上げを備えた、上質なハードカバーの記念本として制作されます。音声対応版では、クラシックなハードカバー体験に音声機能を加え、子どもと家族にとってより没入感があり、意味のある物語体験を生み出します。',
 }
 
 const es: MessageDictionary = {
@@ -1790,6 +1792,8 @@ const es: MessageDictionary = {
   'personalize.exitConfirmBody': 'Siempre podras encontrar este libro en My Books. Quieres volver a Customize ahora?',
   'personalize.exitConfirmStay': 'Quedarme aqui',
   'personalize.exitConfirmBack': 'Volver a Customize',
+  'personalize.bookFaq1Question': 'Como es el formato y la calidad del libro?',
+  'personalize.bookFaq1Answer': 'Cada libro se crea como un recuerdo premium de tapa dura, con paginas bellamente ilustradas, impresion vibrante y un acabado resistente pensado para durar anos. En nuestra edicion con audio, el libro incluye una funcion de voz anadida sobre la experiencia clasica de tapa dura, creando un viaje de lectura mas inmersivo y significativo para ninos y familias.',
 }
 
 const ko: MessageDictionary = {
@@ -2154,6 +2158,8 @@ const ko: MessageDictionary = {
   'personalize.exitConfirmBody': '이 책은 언제든지 My Books 에서 다시 찾을 수 있습니다. 지금 Customize 로 돌아가시겠습니까?',
   'personalize.exitConfirmStay': '여기에 머무르기',
   'personalize.exitConfirmBack': 'Customize 로 돌아가기',
+  'personalize.bookFaq1Question': '책의 형식과 품질은 어떤가요?',
+  'personalize.bookFaq1Answer': '각 책은 아름답게 그려진 페이지, 선명한 인쇄 품질, 오랫동안 보관할 수 있는 튼튼한 마감의 프리미엄 하드커버 기념 책으로 제작됩니다. 오디오 지원 에디션은 클래식 하드커버 경험에 음성 기능을 더해 아이와 가족에게 더 몰입감 있고 의미 있는 이야기 여정을 제공합니다.',
 }
 
 export const UI_MESSAGES: Record<Language, MessageDictionary> = {
