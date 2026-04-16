@@ -136,11 +136,15 @@ export const BookList: React.FC = () => {
   };
 
   const scrollToBooksTop = () => {
-    const section = sectionRef.current;
-    if (!section) return;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const section = sectionRef.current;
+        if (!section) return;
 
-    const top = section.getBoundingClientRect().top + window.scrollY - 64;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+        const top = section.getBoundingClientRect().top + window.scrollY + 2;
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      });
+    });
   };
 
   useEffect(() => {
