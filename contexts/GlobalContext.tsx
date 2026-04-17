@@ -1,5 +1,6 @@
 'use client'
-import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData } from '@/types';
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
@@ -31,13 +32,27 @@ const getFallbackUserName = (email: string, displayName?: string | null) => {
   return prefix || 'Customer';
 };
 
+const getAuthDisplayName = (authUser?: SupabaseUser | null) => {
+  const metadata = authUser?.user_metadata ?? {};
+  const displayName = String(
+    metadata.full_name || metadata.name || metadata.display_name || ''
+  ).trim();
+  return displayName || null;
+};
+
+const getAuthAvatarUrl = (authUser?: SupabaseUser | null) => {
+  const metadata = authUser?.user_metadata ?? {};
+  const avatarUrl = String(metadata.avatar_url || metadata.picture || '').trim();
+  return avatarUrl || null;
+};
+
 const applyAccountProfileToUser = (
   baseUser: User,
   profile?: AccountProfileResponse | null
 ): User => ({
   ...baseUser,
   name: getFallbackUserName(baseUser.email, profile?.displayName),
-  avatar: profile?.avatarSignedUrl || DEFAULT_AVATAR,
+  avatar: profile?.avatarSignedUrl || baseUser.avatar || DEFAULT_AVATAR,
   avatarAssetId: profile?.avatarAssetId ?? undefined,
   avatarStoragePath: profile?.avatarStoragePath ?? undefined,
 });
@@ -54,6 +69,8 @@ const normalizeStoryLanguage = (value: unknown) => {
 
 export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const userRef = useRef<User | null>(null);
+  const authSyncInFlightRef = useRef<string | null>(null);
   const [language, setLanguageState] = useState<Language>('en');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Book[]>([]);
@@ -66,6 +83,10 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
   const [resumeData, setResumeData] = useState<CartItem | null>(null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const fetchAccountProfile = useCallback(async () => {
     const response = await fetch('/api/user/account-profile', {
@@ -316,8 +337,13 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     document.documentElement.setAttribute('lang', htmlLang);
   }, [language]);
 
-  const finalizeAuth = useCallback(async (email: string, authUserId?: string | null) => {
+  const finalizeAuth = useCallback(async (
+    email: string,
+    authUserId?: string | null,
+    metadata?: { displayName?: string | null; avatarUrl?: string | null }
+  ) => {
     let customerId: string | undefined = undefined;
+    let resolvedDisplayName = metadata?.displayName ?? null;
 
     try {
       const response = await fetch('/api/customer/merge', {
@@ -327,6 +353,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         body: JSON.stringify({
           email,
           authUserId: authUserId ?? null,
+          displayName: metadata?.displayName ?? null,
           favorites,
           cart,
         }),
@@ -334,6 +361,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       const data = response.ok ? await response.json() : null;
       customerId = data?.customerId ?? undefined;
+      resolvedDisplayName = data?.displayName ?? resolvedDisplayName;
 
       if (response.ok) {
         setCart([]);
@@ -345,15 +373,61 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const baseUser: User = {
       id: authUserId ?? `customer_${Date.now().toString(36)}`,
-      name: getFallbackUserName(email),
+      name: getFallbackUserName(email, resolvedDisplayName),
       email,
-      avatar: DEFAULT_AVATAR,
+      avatar: metadata?.avatarUrl || DEFAULT_AVATAR,
       customerId,
     };
 
     const profile = customerId ? await fetchAccountProfile().catch(() => null) : null;
     setUser(applyAccountProfileToUser(baseUser, profile));
   }, [cart, favorites, fetchAccountProfile]);
+
+  const syncSupabaseUser = useCallback(async (authUser?: SupabaseUser | null) => {
+    if (!authUser?.id || !authUser.email) return;
+
+    const currentUser = userRef.current;
+    if (currentUser?.id === authUser.id && currentUser.customerId) return;
+    if (authSyncInFlightRef.current === authUser.id) return;
+
+    authSyncInFlightRef.current = authUser.id;
+    try {
+      const resolvedEmail = authUser.email.trim().toLowerCase();
+      setCheckoutEmail(resolvedEmail);
+      await finalizeAuth(resolvedEmail, authUser.id, {
+        displayName: getAuthDisplayName(authUser),
+        avatarUrl: getAuthAvatarUrl(authUser),
+      });
+    } finally {
+      authSyncInFlightRef.current = null;
+    }
+  }, [finalizeAuth]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!active) return;
+      void syncSupabaseUser(data.user);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        void syncSupabaseUser(session?.user ?? null);
+      }
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [syncSupabaseUser]);
 
   const refreshUserProfile = useCallback(async () => {
     if (!user?.customerId) return;
@@ -395,6 +469,31 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
     return {};
   }, [finalizeAuth]);
+
+  const loginWithGoogle = useCallback(async (nextPath?: string) => {
+    if (typeof window === 'undefined') {
+      return { error: 'Google login is only available in the browser.' };
+    }
+
+    const fallbackNext = `${window.location.pathname}${window.location.search}`;
+    const safeNext = nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')
+      ? nextPath
+      : fallbackNext;
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`;
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+      },
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return {};
+  }, []);
 
   const verifySignupOtp = useCallback(async (email: string, code: string, password: string) => {
     if (!email || !code || !password) {
@@ -788,6 +887,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     resumePersonalization,
 
     login,
+    loginWithGoogle,
     verifySignupOtp,
     logout,
     addToCart,

@@ -135,6 +135,7 @@ export interface GlobalContextType {
   resumePersonalization: (item: CartItem | null) => void;
 
   login: (email: string, password: string, mode?: 'login' | 'signup') => Promise<{ error?: string; otpRequired?: boolean } | void>;
+  loginWithGoogle: (nextPath?: string) => Promise<{ error?: string } | void>;
   verifySignupOtp: (email: string, code: string, password: string) => Promise<{ error?: string } | void>;
   logout: () => void;
   addToCart: (book: Book,personalization?: PersonalizationData,step?: number,finalPrice?: number,previewCoverUrl?: string) => Promise<CartItem | null>;

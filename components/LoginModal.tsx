@@ -14,6 +14,7 @@ export function LoginModal() {
     isLoginModalOpen,
     closeLoginModal,
     login,
+    loginWithGoogle,
     verifySignupOtp,
     checkoutEmail,
     loginModalMode,
@@ -27,6 +28,7 @@ export function LoginModal() {
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [isGooglePending, setIsGooglePending] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export function LoginModal() {
     setPassword('');
     setError(null);
     setInfo(null);
+    setIsGooglePending(false);
   }, [isLoginModalOpen, loginModalMode, loginModalEmail, checkoutEmail]);
 
   if (!isLoginModalOpen) return null;
@@ -93,6 +96,19 @@ export function LoginModal() {
 
       closeLoginModal();
     });
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setInfo(t('login.redirectingToGoogle'));
+    setIsGooglePending(true);
+
+    const result = await Promise.resolve(loginWithGoogle());
+    if (result?.error) {
+      setError(`${t('login.googleLoginFailed')} ${result.error}`);
+      setInfo(null);
+      setIsGooglePending(false);
+    }
   };
 
   const isSignupVerify = mode === 'signup' && signupStep === 'verify';
@@ -233,10 +249,14 @@ export function LoginModal() {
 
           <button
             type="button"
-            disabled
-            className="w-full rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-400"
+            onClick={handleGoogleLogin}
+            disabled={isPending || isGooglePending}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:border-amber-200 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {t('login.socialSoon')}
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-[11px] font-bold text-gray-700">
+              G
+            </span>
+            {isGooglePending ? t('login.redirectingToGoogle') : t('login.continueWithGoogle')}
           </button>
         </form>
       </div>

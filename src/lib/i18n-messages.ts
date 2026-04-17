@@ -52,8 +52,8 @@ const en: MessageDictionary = {
   'navbar.logOut': 'Log out',
 
   'hero.badge': '#1 Personalized Gift for Kids',
-  'hero.titleLine1': 'The Only Storybook in the World',
-  'hero.titleLine2': 'that Speaks Their Name.',
+  'hero.titleLine1': 'The Only Storybook in the World that',
+  'hero.titleLine2': 'Speaks Their Name.',
   'hero.description': 'Customize a magical, sound-enabled story where your voice and their dreams come to life, be the hero of their own growth journey!',
   'hero.note': 'Printed on premium paper, delivered with wonder.',
   'hero.cta': 'Create a Magic Story',
@@ -148,6 +148,9 @@ const en: MessageDictionary = {
   'login.resendCode': 'Resend code',
   'login.orContinue': 'Or continue with',
   'login.socialSoon': 'Social Login coming soon',
+  'login.continueWithGoogle': 'Continue with Google',
+  'login.redirectingToGoogle': 'Redirecting to Google...',
+  'login.googleLoginFailed': 'Google login failed.',
 
   'favorites.emptyTitle': 'No favorites yet',
   'favorites.emptyDescription': 'Browse the collection and tap the heart to save a book.',
@@ -709,6 +712,9 @@ const cn_s: MessageDictionary = {
   'login.resendCode': '重新发送',
   'login.orContinue': '或继续使用',
   'login.socialSoon': '社交登录即将上线',
+  'login.continueWithGoogle': '使用 Google 继续',
+  'login.redirectingToGoogle': '正在跳转到 Google...',
+  'login.googleLoginFailed': 'Google 登录失败。',
 
   'favorites.emptyTitle': '暂无收藏',
   'favorites.emptyDescription': '浏览书籍并点击爱心收藏。',
@@ -1221,6 +1227,9 @@ const ja: MessageDictionary = {
   'login.resendCode': 'コードを再送',
   'login.orContinue': 'または次の方法で続行',
   'login.socialSoon': 'ソーシャルログインは近日対応',
+  'login.continueWithGoogle': 'Googleで続行',
+  'login.redirectingToGoogle': 'Googleへ移動しています...',
+  'login.googleLoginFailed': 'Googleログインに失敗しました。',
 
   'favorites.emptyTitle': 'お気に入りはまだありません',
   'favorites.emptyDescription': 'コレクションを閲覧してハートを押すと保存できます。',
@@ -1534,8 +1543,8 @@ const es: MessageDictionary = {
   'navbar.logOut': 'Cerrar sesion',
 
   'hero.badge': '#1 regalo personalizado para ninos',
-  'hero.titleLine1': 'El unico libro del mundo',
-  'hero.titleLine2': 'que dice su nombre.',
+  'hero.titleLine1': 'El unico libro del mundo que',
+  'hero.titleLine2': 'dice su nombre.',
   'hero.description': 'Personaliza una historia magica con sonido donde tu voz y sus suenos cobran vida, y donde pueden ser heroes de su propio viaje de crecimiento.',
   'hero.note': 'Impreso en papel premium, entregado con asombro.',
   'hero.cta': 'Crea una historia magica',
@@ -1606,6 +1615,9 @@ const es: MessageDictionary = {
   'login.resendCode': 'Reenviar codigo',
   'login.orContinue': 'O continuar con',
   'login.socialSoon': 'Inicio social proximamente',
+  'login.continueWithGoogle': 'Continuar con Google',
+  'login.redirectingToGoogle': 'Redirigiendo a Google...',
+  'login.googleLoginFailed': 'Error al iniciar sesion con Google.',
 
   'favorites.emptyTitle': 'Aun no hay favoritos',
   'favorites.emptyDescription': 'Explora la coleccion y toca el corazon para guardar un libro.',
@@ -1991,6 +2003,9 @@ const ko: MessageDictionary = {
   'login.resendCode': '코드 재전송',
   'login.orContinue': '또는 다음으로 계속',
   'login.socialSoon': '소셜 로그인 준비 중',
+  'login.continueWithGoogle': 'Google로 계속하기',
+  'login.redirectingToGoogle': 'Google로 이동 중...',
+  'login.googleLoginFailed': 'Google 로그인에 실패했습니다.',
 
   'favorites.emptyTitle': '아직 즐겨찾기가 없습니다',
   'favorites.emptyDescription': '도서를 둘러보고 하트를 눌러 저장해 보세요.',

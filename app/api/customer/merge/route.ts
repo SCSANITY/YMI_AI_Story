@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createServerSupabase } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const COOKIE_NAME = 'ymi_anon_session'
@@ -18,31 +19,75 @@ function mapProductType(bookType?: string) {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json()
-  const email = body?.email as string | undefined
-  const authUserId = body?.authUserId as string | undefined
-  const favorites = Array.isArray(body?.favorites) ? body.favorites : []
-  const cart = Array.isArray(body?.cart) ? body.cart : []
+  const body = await request.json().catch(() => ({}))
+  const supabase = await createServerSupabase()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
 
-  if (!email) {
-    return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+  if (authError || !user?.id) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
-  const { data: customer, error } = await supabaseAdmin
-    .from('customers')
-    .upsert(
-      {
-        email,
-        auth_user_id: authUserId ?? undefined,
-        is_guest: false,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'email' }
-    )
-    .select('customer_id')
-    .single()
+  const email = String(user.email ?? '').trim().toLowerCase()
+  const favorites = Array.isArray(body?.favorites) ? body.favorites : []
+  const cart = Array.isArray(body?.cart) ? body.cart : []
+  const requestedDisplayName = typeof body?.displayName === 'string' ? body.displayName.trim() : ''
+  const metadata = user.user_metadata ?? {}
+  const metadataDisplayName = String(
+    metadata.full_name || metadata.name || metadata.display_name || ''
+  ).trim()
+  const displayName = requestedDisplayName || metadataDisplayName
 
-  if (error || !customer) {
+  if (!email) {
+    return NextResponse.json({ error: 'Authenticated user email is required' }, { status: 400 })
+  }
+
+  const { data: existingByAuth } = await supabaseAdmin
+    .from('customers')
+    .select('customer_id, display_name')
+    .eq('auth_user_id', user.id)
+    .maybeSingle()
+
+  const { data: existingByEmail } = existingByAuth
+    ? { data: null }
+    : await supabaseAdmin
+        .from('customers')
+        .select('customer_id, display_name')
+        .eq('email', email)
+        .maybeSingle()
+
+  const existingCustomer = existingByAuth ?? existingByEmail
+  const customerUpdates: Record<string, string | boolean | null> = {
+    email,
+    auth_user_id: user.id,
+    is_guest: false,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (displayName && !existingCustomer?.display_name) {
+    customerUpdates.display_name = displayName
+  }
+
+  const customerResult = existingCustomer?.customer_id
+    ? await supabaseAdmin
+        .from('customers')
+        .update(customerUpdates)
+        .eq('customer_id', existingCustomer.customer_id)
+        .select('customer_id, email, auth_user_id, display_name')
+        .single()
+    : await supabaseAdmin
+        .from('customers')
+        .insert({
+          ...customerUpdates,
+          display_name: displayName || null,
+        })
+        .select('customer_id, email, auth_user_id, display_name')
+        .single()
+
+  const customer = customerResult.data
+  if (customerResult.error || !customer) {
     return NextResponse.json({ error: 'Failed to resolve customer' }, { status: 500 })
   }
 
@@ -181,5 +226,10 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ customerId: customer.customer_id })
+  return NextResponse.json({
+    customerId: customer.customer_id,
+    email: customer.email,
+    authUserId: customer.auth_user_id,
+    displayName: customer.display_name,
+  })
 }
