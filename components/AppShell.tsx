@@ -9,12 +9,14 @@ import { LoginModal } from '@/components/LoginModal'
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isMaintenanceRoute = pathname?.startsWith('/maintenance') ?? false
+  const isPersonalizeRoute = pathname?.startsWith('/personalize/') ?? false
+  const showGlobalNav = !isMaintenanceRoute && !isPersonalizeRoute
 
   return (
     <GlobalProvider>
-      {!isMaintenanceRoute ? <Navbar /> : null}
+      {showGlobalNav ? <Navbar /> : null}
       {!isMaintenanceRoute ? <LoginModal /> : null}
-      {children}
+      <div className={showGlobalNav ? 'pt-16' : undefined}>{children}</div>
     </GlobalProvider>
   )
 }

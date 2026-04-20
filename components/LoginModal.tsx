@@ -7,6 +7,41 @@ import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useI18n } from '@/lib/useI18n';
 
 const SIGNUP_OTP_LENGTH = 8;
+type OAuthProvider = 'google' | 'facebook' | 'apple';
+
+const SOCIAL_LOGIN_OPTIONS: Array<{
+  provider: OAuthProvider;
+  enabled: boolean;
+  icon: string;
+  continueKey: string;
+  redirectingKey: string;
+  failedKey: string;
+}> = [
+  {
+    provider: 'google',
+    enabled: true,
+    icon: 'G',
+    continueKey: 'login.continueWithGoogle',
+    redirectingKey: 'login.redirectingToGoogle',
+    failedKey: 'login.googleLoginFailed',
+  },
+  {
+    provider: 'facebook',
+    enabled: process.env.NEXT_PUBLIC_AUTH_FACEBOOK_ENABLED === 'true',
+    icon: 'f',
+    continueKey: 'login.continueWithFacebook',
+    redirectingKey: 'login.redirectingToFacebook',
+    failedKey: 'login.facebookLoginFailed',
+  },
+  {
+    provider: 'apple',
+    enabled: process.env.NEXT_PUBLIC_AUTH_APPLE_ENABLED === 'true',
+    icon: 'A',
+    continueKey: 'login.continueWithApple',
+    redirectingKey: 'login.redirectingToApple',
+    failedKey: 'login.appleLoginFailed',
+  },
+];
 
 export function LoginModal() {
   const { t } = useI18n();
@@ -14,7 +49,7 @@ export function LoginModal() {
     isLoginModalOpen,
     closeLoginModal,
     login,
-    loginWithGoogle,
+    loginWithOAuth,
     verifySignupOtp,
     checkoutEmail,
     loginModalMode,
@@ -28,8 +63,9 @@ export function LoginModal() {
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [isGooglePending, setIsGooglePending] = useState(false);
+  const [pendingOAuthProvider, setPendingOAuthProvider] = useState<OAuthProvider | null>(null);
   const [isPending, startTransition] = useTransition();
+  const enabledSocialLogins = SOCIAL_LOGIN_OPTIONS.filter((option) => option.enabled);
 
   useEffect(() => {
     if (!isLoginModalOpen) return;
@@ -45,7 +81,7 @@ export function LoginModal() {
     setPassword('');
     setError(null);
     setInfo(null);
-    setIsGooglePending(false);
+    setPendingOAuthProvider(null);
   }, [isLoginModalOpen, loginModalMode, loginModalEmail, checkoutEmail]);
 
   if (!isLoginModalOpen) return null;
@@ -98,16 +134,16 @@ export function LoginModal() {
     });
   };
 
-  const handleGoogleLogin = async () => {
+  const handleOAuthLogin = async (option: (typeof SOCIAL_LOGIN_OPTIONS)[number]) => {
     setError(null);
-    setInfo(t('login.redirectingToGoogle'));
-    setIsGooglePending(true);
+    setInfo(t(option.redirectingKey));
+    setPendingOAuthProvider(option.provider);
 
-    const result = await Promise.resolve(loginWithGoogle());
+    const result = await Promise.resolve(loginWithOAuth(option.provider));
     if (result?.error) {
-      setError(`${t('login.googleLoginFailed')} ${result.error}`);
+      setError(`${t(option.failedKey)} ${result.error}`);
       setInfo(null);
-      setIsGooglePending(false);
+      setPendingOAuthProvider(null);
     }
   };
 
@@ -247,17 +283,23 @@ export function LoginModal() {
             <span className="h-px flex-1 bg-gray-200" />
           </div>
 
-          <button
-            type="button"
-            onClick={handleGoogleLogin}
-            disabled={isPending || isGooglePending}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:border-amber-200 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-[11px] font-bold text-gray-700">
-              G
-            </span>
-            {isGooglePending ? t('login.redirectingToGoogle') : t('login.continueWithGoogle')}
-          </button>
+          {enabledSocialLogins.map((option) => {
+            const isProviderPending = pendingOAuthProvider === option.provider;
+            return (
+              <button
+                key={option.provider}
+                type="button"
+                onClick={() => handleOAuthLogin(option)}
+                disabled={isPending || Boolean(pendingOAuthProvider)}
+                className="flex w-full items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:border-amber-200 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-[11px] font-bold text-gray-700">
+                  {option.icon}
+                </span>
+                {isProviderPending ? t(option.redirectingKey) : t(option.continueKey)}
+              </button>
+            );
+          })}
         </form>
       </div>
     </div>

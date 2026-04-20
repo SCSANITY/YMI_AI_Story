@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -44,23 +44,9 @@ export const Navbar: React.FC = () => {
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
-  const currentHash = useSyncExternalStore(
-    (onStoreChange) => {
-      if (typeof window === 'undefined') return () => {}
-      const notify = () => onStoreChange()
-      window.addEventListener('hashchange', notify)
-      window.addEventListener('popstate', notify)
-      return () => {
-        window.removeEventListener('hashchange', notify)
-        window.removeEventListener('popstate', notify)
-      }
-    },
-    () => (typeof window === 'undefined' ? '' : window.location.hash),
-    () => ''
-  )
   const effectiveRewardVoucherCount = user?.customerId ? rewardVoucherCount : 0
-  const isBooksActive = isHomePage && currentHash === '#books'
-  const isHomeActive = isHomePage && currentHash !== '#books'
+  const isBooksActive = pathname === '/books'
+  const isHomeActive = isHomePage
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -96,23 +82,14 @@ export const Navbar: React.FC = () => {
     }
   }, [isRewardsOpen, pathname, user?.customerId])
 
-  // Scroll to #books section when landing on /#books from another page
-  useEffect(() => {
-    if (pathname === '/' && currentHash === '#books') {
-      const timer = setTimeout(() => {
-        document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' })
-      }, 80)
-      return () => clearTimeout(timer)
-    }
-  }, [currentHash, pathname])
-
   useLayoutEffect(() => {
     let activeRef: React.RefObject<HTMLButtonElement | null>
     if (pathname === '/favorites') activeRef = favoritesRef
     else if (pathname === '/collaboration') activeRef = collaborationRef
     else if (pathname === '/support') activeRef = supportRef
     else if (pathname === '/my-books') activeRef = myBooksRef
-    else if (isHomePage) activeRef = isBooksActive ? booksRef : homeRef
+    else if (pathname === '/books') activeRef = booksRef
+    else if (isHomePage) activeRef = homeRef
     else {
       navContainerRef.current?.style.setProperty('--nav-indicator-opacity', '0')
       return
@@ -129,7 +106,7 @@ export const Navbar: React.FC = () => {
     container.style.setProperty('--nav-indicator-left', `${btnRect.left - containerRect.left}px`)
     container.style.setProperty('--nav-indicator-width', `${btnRect.width}px`)
     container.style.setProperty('--nav-indicator-opacity', '1')
-  }, [isHomePage, isBooksActive, pathname])
+  }, [isHomePage, pathname])
 
   const handleHomeClick = () => {
     if (pathname === '/') {
@@ -142,19 +119,13 @@ export const Navbar: React.FC = () => {
   }
 
   const handleBooksClick = () => {
-    if (pathname === '/') {
-      document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' })
-      window.history.pushState(null, '', '/#books')
-      window.dispatchEvent(new Event('hashchange'))
-    } else {
-      router.push('/#books')
-    }
+    router.push('/books')
   }
 
   if (isPersonalizeRoute) return null
 
   return (
-    <nav className="sticky top-0 z-40 w-full bg-white/55 backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40">
+    <nav className="fixed left-0 right-0 top-0 z-40 w-full bg-white/55 backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {pathname !== '/' && !isCheckoutRoute && (

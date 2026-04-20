@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 type HomePosterBannerProps = {
   src: string;
@@ -9,6 +10,7 @@ type HomePosterBannerProps = {
   height: number;
   aspectClassName: string;
   hotspotClassName: string;
+  href?: string;
   priority?: boolean;
   className?: string;
 };
@@ -20,12 +22,19 @@ export function HomePosterBanner({
   height,
   aspectClassName,
   hotspotClassName,
+  href = '/books',
   priority = false,
   className = '',
 }: HomePosterBannerProps) {
-  const handleJumpToBooks = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const router = useRouter();
+
+  const handleHotspotClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' });
+    if (href.startsWith('#')) {
+      document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    router.push(href);
   };
 
   return (
@@ -41,8 +50,8 @@ export function HomePosterBanner({
           priority={priority}
         />
         <a
-          href="#books"
-          onClick={handleJumpToBooks}
+          href={href}
+          onClick={handleHotspotClick}
           aria-label="Create their story and jump to our books collection"
           className={`absolute block -translate-y-1/2 rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${hotspotClassName}`.trim()}
         />

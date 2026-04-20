@@ -3,13 +3,13 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { BOOKS } from '@/data/books';
 import { Book } from '@/types';
-import { Heart, Search, Sparkles, Filter, X } from 'lucide-react';
+import { Search, Filter, X } from 'lucide-react';
 import { Button } from './Button';
-import { BookCardCover } from './BookCardCover';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { useI18n } from '@/lib/useI18n';
+import { BookCard } from '@/components/BookCard';
+import { useBookDisplayData } from '@/components/useBookDisplayData';
 
 const VALUE_OPTIONS = [
   'Self-Awareness',
@@ -25,6 +25,7 @@ const VALUE_OPTIONS = [
   'Spiritual/Inner Growth',
 ] as const
 
+const FILTER_BAR_TOP_OFFSET = 72;
 
 function GlassSelect({ label, value, options, onChange }: {
   label: string
@@ -80,11 +81,7 @@ function GlassSelect({ label, value, options, onChange }: {
 export const BookList: React.FC = () => {
   const { toggleFavorite, favorites } = useGlobalContext();
   const { t } = useI18n();
-  const [coverMap, setCoverMap] = useState<Record<string, string>>({});
-  const [titleMap, setTitleMap] = useState<Record<string, string>>({});
-  const [typeMap, setTypeMap] = useState<Record<string, string>>({});
-  const [descMap, setDescMap] = useState<Record<string, string>>({});
-  const [ratingMap, setRatingMap] = useState<Record<string, { average: number; count: number }>>({});
+  const { coverMap, titleMap, typeMap, descMap, ratingMap } = useBookDisplayData();
 
   // Filter States
   const [search, setSearch] = useState('');
@@ -100,7 +97,7 @@ export const BookList: React.FC = () => {
   const [filterDockMetrics, setFilterDockMetrics] = useState({
     height: 0,
     left: 0,
-    top: 64,
+    top: FILTER_BAR_TOP_OFFSET,
     width: 0,
   });
   
@@ -170,7 +167,7 @@ export const BookList: React.FC = () => {
 
         if (!section || !slot || !bar) return;
 
-        const topOffset = 64;
+        const topOffset = FILTER_BAR_TOP_OFFSET;
         const sectionRect = section.getBoundingClientRect();
         const slotRect = slot.getBoundingClientRect();
         const barRect = bar.getBoundingClientRect();
@@ -220,86 +217,6 @@ export const BookList: React.FC = () => {
       window.removeEventListener('resize', scheduleMeasure);
     };
   }, [filterDockMetrics.height]);
-
-  useEffect(() => {
-    let isMounted = true;
-    type TemplateRow = {
-      template_id?: string | null
-      name?: string | null
-      story_type?: string | null
-      description?: string | null
-      cover_image_path?: string | null
-    }
-
-    const loadCovers = async () => {
-      const { data, error } = await supabase
-        .from('templates')
-        .select('*')
-        .eq('is_active', true);
-
-      if (!isMounted) return;
-      if (error || !data) return;
-
-      const coverLookup: Record<string, string> = {};
-      const titleLookup: Record<string, string> = {};
-      const typeLookup: Record<string, string> = {};
-      const descLookup: Record<string, string> = {};
-
-      ;(data as TemplateRow[]).forEach((row) => {
-        if (row?.template_id && row?.name) {
-          titleLookup[row.template_id] = String(row.name);
-        }
-
-        if (row?.template_id && row?.story_type) {
-          typeLookup[row.template_id] = String(row.story_type);
-        }
-
-        if (row?.template_id && row?.description) {
-          descLookup[row.template_id] = String(row.description);
-        }
-
-        if (!row?.template_id) return;
-        const rawPath = String(row.cover_image_path || '').trim();
-        if (!rawPath) return;
-        if (rawPath.startsWith('http')) {
-          coverLookup[row.template_id] = rawPath;
-          return;
-        }
-        const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '');
-        const { data: publicUrl } = supabase.storage
-          .from('app-templates')
-          .getPublicUrl(cleaned);
-        if (publicUrl?.publicUrl) {
-          coverLookup[row.template_id] = publicUrl.publicUrl;
-        }
-      });
-
-      setCoverMap(coverLookup);
-      setTitleMap(titleLookup);
-      setTypeMap(typeLookup);
-      setDescMap(descLookup);
-    };
-
-    loadCovers();
-
-    fetch('/api/reviews/summary', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : { summary: {} }))
-      .then((data) => {
-        if (!isMounted) return;
-        const summary = data?.summary ?? {};
-        if (summary && typeof summary === 'object') {
-          setRatingMap(summary as Record<string, { average: number; count: number }>);
-        }
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setRatingMap({});
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const handleFavoriteClick = (e: React.MouseEvent, book: Book) => {
     e.stopPropagation();
@@ -352,13 +269,15 @@ const handlePersonalize = (bookID: string) => {
             className={`w-full min-w-0 max-w-full overflow-visible transition-shadow duration-200 ${
               isFilterDocked
                 ? 'fixed z-30'
-                : 'sticky top-16 z-30'
+                : 'sticky z-30'
             }`}
             style={isFilterDocked ? {
               left: filterDockMetrics.left,
               top: filterDockMetrics.top,
               width: filterDockMetrics.width,
-            } : undefined}
+            } : {
+              top: FILTER_BAR_TOP_OFFSET,
+            }}
           >
           <div className={`w-full min-w-0 max-w-full overflow-visible rounded-2xl border border-white/50 bg-white/70 px-4 py-3.5 shadow-[0_4px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl backdrop-saturate-150 md:px-6 ${
             isFilterDocked ? 'shadow-[0_12px_34px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.9)]' : ''
@@ -439,52 +358,19 @@ const handlePersonalize = (bookID: string) => {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}
-                    className={`group relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out ${
-                      suppressCardHover ? '' : 'md:hover:-translate-y-1 book-card-hoverable'
-                    }`}
-                    onClick={() => handlePersonalize(book.bookID)}
                     >
-                    {/* Book cover — z-10 so its shadow falls onto the card below */}
-                    <BookCardCover
-                        src={coverSrc}
-                        alt={titleMap[book.bookID] || book.title}
-                        loading="lazy"
-                        decoding="async"
-                        coverZoom={book.coverZoom}
-                    >
-                        {/* Favorite Button */}
-                        <button
-                            onClick={(e) => handleFavoriteClick(e, book)}
-                            className="absolute top-2 right-2 z-20 md:top-3 md:right-3 p-1.5 md:p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-all transform active:scale-90 opacity-100 md:opacity-0 group-hover:opacity-100 translate-y-0 md:translate-y-2 group-hover:translate-y-0"
-                        >
-                            <Heart
-                                className={`h-4 w-4 md:h-5 md:w-5 transition-colors ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400 hover:text-gray-600'}`}
-                            />
-                        </button>
-                    </BookCardCover>
-
-                    {/* Content card — pulled up under the book, shadow falls on its surface */}
-                    <div className="glass-panel rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-10 md:pt-14 px-3 md:px-5 pb-3 md:pb-5">
-                        <div className="flex flex-col flex-1">
-                            <h3 className="font-display pt-px md:pt-0 text-sm md:text-lg font-medium text-gray-900 leading-snug md:leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">{titleMap[book.bookID] || book.title}</h3>
-                            <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wide mb-1 md:mb-3">{typeMap[book.bookID] || book.category}</p>
-                            <p className="text-sm text-gray-600 leading-relaxed hidden md:block">{descMap[book.bookID] || book.description}</p>
-                        </div>
-                        
-                        <div className="mt-auto pt-2 md:pt-4 border-t border-gray-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
-                                <span className="text-[10px] md:text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 md:px-3 md:py-1 rounded-full whitespace-nowrap">{book.ageRange} {t('common.yearsSuffix')}</span>
-                            <div className="flex items-center gap-2">
-                                {ratingMap[book.bookID]?.count ? (
-                                  <div className="text-[10px] md:text-xs text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded-full">
-                                    {t('bookList.rating')} {ratingMap[book.bookID].average.toFixed(1)} ({ratingMap[book.bookID].count})
-                                  </div>
-                                ) : null}
-                                <div className="flex items-center gap-1 text-amber-600 text-[10px] md:text-sm font-bold">
-                                    <span className="md:inline">{t('bookList.create')}</span> <Sparkles className="h-3 w-3" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                      <BookCard
+                        book={book}
+                        isFavorite={isFavorite}
+                        coverSrc={coverSrc}
+                        title={titleMap[book.bookID] || book.title}
+                        storyType={typeMap[book.bookID] || book.category}
+                        description={descMap[book.bookID] || book.description}
+                        rating={ratingMap[book.bookID]}
+                        suppressHover={suppressCardHover}
+                        onClick={() => handlePersonalize(book.bookID)}
+                        onFavoriteClick={(event) => handleFavoriteClick(event, book)}
+                      />
                     </motion.div>
                 );
                 })}

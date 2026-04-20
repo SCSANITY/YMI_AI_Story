@@ -89,7 +89,7 @@ export default function FavoritesPage() {
           </div>
           <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('favorites.emptyTitle')}</h1>
           <p className="text-gray-600">{t('favorites.emptyDescription')}</p>
-          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/#books')}>{t('common.browseBooks')}</Button>
+          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/books')}>{t('common.browseBooks')}</Button>
         </div>
       </div>
     );

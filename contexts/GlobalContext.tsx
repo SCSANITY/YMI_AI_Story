@@ -1,6 +1,6 @@
 'use client'
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
-import type { User as SupabaseUser } from '@supabase/supabase-js';
+import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
 import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData } from '@/types';
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
@@ -470,9 +470,9 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return {};
   }, [finalizeAuth]);
 
-  const loginWithGoogle = useCallback(async (nextPath?: string) => {
+  const loginWithOAuth = useCallback(async (provider: 'google' | 'facebook' | 'apple', nextPath?: string) => {
     if (typeof window === 'undefined') {
-      return { error: 'Google login is only available in the browser.' };
+      return { error: 'Social login is only available in the browser.' };
     }
 
     const fallbackNext = `${window.location.pathname}${window.location.search}`;
@@ -482,7 +482,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`;
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: provider as Provider,
       options: {
         redirectTo,
       },
@@ -887,7 +887,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     resumePersonalization,
 
     login,
-    loginWithGoogle,
+    loginWithOAuth,
     verifySignupOtp,
     logout,
     addToCart,

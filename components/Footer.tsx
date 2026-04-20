@@ -157,9 +157,9 @@ export const Footer: React.FC = () => {
                   </button>
                 </li>
                 <li>
-                  <a href="#books" className="hover:text-amber-600">
+                  <Link href="/books" className="hover:text-amber-600">
                     {t('navbar.books')}
-                  </a>
+                  </Link>
                 </li>
                 <li>
                   <a href="#" className="hover:text-amber-600">

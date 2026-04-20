@@ -14,6 +14,15 @@ async function loadInviteData(code: string) {
   return data
 }
 
+function isInviteUnavailable(invite: Awaited<ReturnType<typeof loadInviteData>>) {
+  return (
+    !invite?.code ||
+    invite.status === 'cancelled' ||
+    invite.status === 'expired' ||
+    new Date(invite.expires_at).getTime() <= Date.now()
+  )
+}
+
 export async function generateMetadata(
   props: { params: Promise<{ code: string }> }
 ): Promise<Metadata> {
@@ -49,11 +58,7 @@ export default async function InvitePage(
   const params = await props.params
   const code = String(params.code || '').trim().toUpperCase()
   const invite = code ? await loadInviteData(code) : null
-  const isExpired =
-    !invite?.code ||
-    invite.status === 'cancelled' ||
-    invite.status === 'expired' ||
-    new Date(invite.expires_at).getTime() <= Date.now()
+  const isExpired = isInviteUnavailable(invite)
 
   return (
     <div className="min-h-[calc(100vh-84px)] bg-gradient-to-br from-amber-50 via-white to-orange-50 px-4 py-10 md:px-8 md:py-14">
@@ -100,7 +105,7 @@ export default async function InvitePage(
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href={invite?.code ? `/?ref=${encodeURIComponent(invite.code)}#books` : '/#books'}
+                href={invite?.code ? `/books?ref=${encodeURIComponent(invite.code)}` : '/books'}
                 className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-amber-200/70 transition-transform hover:scale-[1.02]"
               >
                 Browse Books

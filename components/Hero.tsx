@@ -6,6 +6,7 @@ import { Sparkles, Star, ArrowDown, Clock, Globe, BookOpen } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useI18n } from '@/lib/useI18n'
 import { BOOKS } from '@/data/books'
+import { useRouter } from 'next/navigation'
 
 // ── Gallery config (desktop) ──────────────────────────────────────────────────
 
@@ -123,9 +124,10 @@ const MobileHeroBookGallery: React.FC = () => (
 
 export const Hero: React.FC = () => {
   const { t } = useI18n()
+  const router = useRouter()
 
-  const scrollToBooks = () => {
-    document.getElementById('books')?.scrollIntoView({ behavior: 'smooth' })
+  const goToBooks = () => {
+    router.push('/books')
   }
 
   return (
@@ -254,7 +256,7 @@ export const Hero: React.FC = () => {
               >
                 <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} className="sm:inline-block">
                   <Button
-                    onClick={scrollToBooks}
+                    onClick={goToBooks}
                     size="lg"
                     className="relative h-13 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold shadow-[0_8px_36px_rgba(251,146,60,0.45)] border-0 overflow-hidden group w-full sm:w-auto"
                   >
@@ -444,7 +446,7 @@ export const Hero: React.FC = () => {
       {/* ── Scroll indicator ─────────────────────────────────────────────── */}
       <motion.button
         aria-label={t('hero.scrollToBooks')}
-        onClick={scrollToBooks}
+        onClick={goToBooks}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.8 }}
