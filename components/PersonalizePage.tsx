@@ -33,15 +33,15 @@ const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
 };
 
 const GOOD_PHOTO_EXAMPLES = [
-  { src: '/personalize-photo-samples/good-01.jpg', alt: 'Good photo example 1' },
-  { src: '/personalize-photo-samples/good-02.jpg', alt: 'Good photo example 2' },
-  { src: '/personalize-photo-samples/good-03.jpg', alt: 'Good photo example 3' },
+  { src: '/personalize-photo-samples/optimized/good-01.webp', alt: 'Good photo example 1' },
+  { src: '/personalize-photo-samples/optimized/good-02.webp', alt: 'Good photo example 2' },
+  { src: '/personalize-photo-samples/optimized/good-03.webp', alt: 'Good photo example 3' },
 ];
 
 const BAD_PHOTO_EXAMPLES = [
-  { src: '/personalize-photo-samples/bad-01.jpg', alt: 'Bad photo example 1' },
-  { src: '/personalize-photo-samples/bad-02.jpg', alt: 'Bad photo example 2' },
-  { src: '/personalize-photo-samples/bad-03.jpg', alt: 'Bad photo example 3' },
+  { src: '/personalize-photo-samples/optimized/bad-01.webp', alt: 'Bad photo example 1' },
+  { src: '/personalize-photo-samples/optimized/bad-02.webp', alt: 'Bad photo example 2' },
+  { src: '/personalize-photo-samples/optimized/bad-03.webp', alt: 'Bad photo example 3' },
 ];
 
 export default function PersonalizePage({ bookID }: { bookID: string }) {
@@ -2232,6 +2232,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                 <img
                                                   src={image}
                                                   alt={`${templateTitle || book.title} showcase ${index + 1}`}
+                                                  loading="lazy"
+                                                  decoding="async"
                                                   onError={(event) => {
                                                     const target = event.currentTarget;
                                                     if (resolvedBook?.coverUrl && target.src !== resolvedBook.coverUrl) {
@@ -2265,6 +2267,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                     key={activeShowcaseImage}
                                                     src={activeShowcaseImage}
                                                     alt={`${templateTitle || book.title} showcase main`}
+                                                    loading="eager"
+                                                    decoding="async"
                                                     onError={(event) => {
                                                       const target = event.currentTarget;
                                                       if (resolvedBook?.coverUrl && target.src !== resolvedBook.coverUrl) {
@@ -2394,6 +2398,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                                 <img
                                                                     src={item.src}
                                                                     alt={item.alt}
+                                                                    loading="lazy"
+                                                                    decoding="async"
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                             </div>
@@ -2410,6 +2416,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                                 <img
                                                                     src={item.src}
                                                                     alt={item.alt}
+                                                                    loading="lazy"
+                                                                    decoding="async"
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                             </div>

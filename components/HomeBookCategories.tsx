@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Book } from '@/types'
 import { BookCard } from '@/components/BookCard'
@@ -17,6 +16,7 @@ type HomeBookCategory = {
   fallbackBookIds: string[]
   afterBanner?: {
     src: string
+    mobileSrc?: string
     alt: string
     width: number
     height: number
@@ -31,7 +31,8 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     sectionId: 'brand_new',
     fallbackBookIds: ['Planet_story', 'Seed_story', 'Music_story', 'Adventure_story'],
     afterBanner: {
-      src: '/banners/Workflow.png',
+      src: '/banners/optimized/workflow-desktop.webp',
+      mobileSrc: '/banners/optimized/workflow-mobile.webp',
       alt: 'YMI Story workflow banner',
       width: 6000,
       height: 3000,
@@ -44,7 +45,8 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     sectionId: 'for_boys',
     fallbackBookIds: ['Planet_story', 'Noah_story', 'Space_story', 'Scientist_story'],
     afterBanner: {
-      src: '/banners/SwapFace.png',
+      src: '/banners/optimized/swapface-desktop.webp',
+      mobileSrc: '/banners/optimized/swapface-mobile.webp',
       alt: 'YMI Story face swap banner',
       width: 6000,
       height: 2700,
@@ -84,14 +86,18 @@ function CategoryBanner({ banner }: { banner: NonNullable<HomeBookCategory['afte
   return (
     <div className="relative left-1/2 my-10 w-screen -translate-x-1/2 overflow-hidden md:my-14">
       <div className={`relative w-full overflow-hidden shadow-[0_18px_50px_rgba(251,146,60,0.12)] ${banner.aspectClassName}`}>
-        <Image
-          src={banner.src}
-          alt={banner.alt}
-          width={banner.width}
-          height={banner.height}
-          sizes="(min-width: 1280px) 1152px, calc(100vw - 32px)"
-          className="h-full w-full object-cover"
-        />
+        <picture className="block h-full w-full">
+          {banner.mobileSrc ? <source media="(max-width: 767px)" srcSet={banner.mobileSrc} /> : null}
+          <img
+            src={banner.src}
+            alt={banner.alt}
+            width={banner.width}
+            height={banner.height}
+            loading="lazy"
+            decoding="async"
+            className="block h-full w-full object-cover"
+          />
+        </picture>
       </div>
     </div>
   )

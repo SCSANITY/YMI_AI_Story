@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 type HomePosterBannerProps = {
   src: string;
+  mobileSrc?: string;
   alt: string;
   width: number;
   height: number;
@@ -17,6 +17,7 @@ type HomePosterBannerProps = {
 
 export function HomePosterBanner({
   src,
+  mobileSrc,
   alt,
   width,
   height,
@@ -40,15 +41,18 @@ export function HomePosterBanner({
   return (
     <section className={`relative w-full overflow-hidden ${className}`.trim()}>
       <div className={`relative w-full ${aspectClassName}`.trim()}>
-        <Image
-          src={src}
-          alt={alt}
-          width={width}
-          height={height}
-          sizes="100vw"
-          className="h-full w-full object-cover"
-          priority={priority}
-        />
+        <picture className="block h-full w-full">
+          {mobileSrc ? <source media="(max-width: 767px)" srcSet={mobileSrc} /> : null}
+          <img
+            src={src}
+            alt={alt}
+            width={width}
+            height={height}
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            className="block h-full w-full object-cover"
+          />
+        </picture>
         <a
           href={href}
           onClick={handleHotspotClick}

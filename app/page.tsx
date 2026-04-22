@@ -11,7 +11,8 @@ export default function HomePage() {
       <HomeBooksHashRedirect />
       <Hero />
       <HomePosterBanner
-        src="/banners/banner-01.png"
+        src="/banners/optimized/banner-01-desktop.webp"
+        mobileSrc="/banners/optimized/banner-01-mobile.webp"
         alt="YMI promotional banner"
         width={7559}
         height={2268}
@@ -22,7 +23,8 @@ export default function HomePage() {
       />
       <HomeBookCategories />
       <HomePosterBanner
-        src="/banners/banner-02.png"
+        src="/banners/optimized/banner-02-desktop.webp"
+        mobileSrc="/banners/optimized/banner-02-mobile.webp"
         alt="YMI promotional banner"
         width={6000}
         height={2000}
