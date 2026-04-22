@@ -8,10 +8,11 @@ import { Button } from '@/components/Button';
 import { BookCardCover } from '@/components/BookCardCover';
 import { supabase } from '@/lib/supabase';
 import { useI18n } from '@/lib/useI18n';
+import { formatLocaleCurrency } from '@/lib/locale-pricing';
 
 export default function FavoritesPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { favorites, toggleFavorite, user, isHydrated } = useGlobalContext();
   const [coverMap, setCoverMap] = useState<Record<string, string>>({});
   const [titleMap, setTitleMap] = useState<Record<string, string>>({});
@@ -48,7 +49,7 @@ export default function FavoritesPage() {
           descLookup[row.template_id] = String(row.description);
         }
 
-        const rawPath = String(row.cover_image_path || '').trim();
+        const rawPath = String(row.normalized_cover_image_path || row.cover_image_path || '').trim();
         if (!rawPath) return;
         if (rawPath.startsWith('http')) {
           coverLookup[row.template_id] = rawPath;
@@ -116,6 +117,13 @@ export default function FavoritesPage() {
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8">
         {favorites.map((book) => {
           const coverSrc = coverMap[book.bookID] || book.coverUrl
+          const priceLabel = formatLocaleCurrency(book.price, language)
+          const compareAtPrice = book.compareAtPrice && book.compareAtPrice > book.price ? book.compareAtPrice : null
+          const compareAtLabel = compareAtPrice ? formatLocaleCurrency(compareAtPrice, language) : null
+          const discountPercent =
+            book.discountPercent ??
+            (compareAtPrice ? Math.round((1 - book.price / compareAtPrice) * 100) : null)
+          const isDiscounted = Boolean((book.isDiscount || compareAtPrice) && discountPercent && discountPercent > 0)
 
           return (
           <div
@@ -124,6 +132,11 @@ export default function FavoritesPage() {
             onClick={() => router.push(`/personalize/${book.bookID}`)}
           >
             <BookCardCover src={coverSrc} alt={titleMap[book.bookID] || book.title} coverZoom={book.coverZoom}>
+              {isDiscounted ? (
+                <div className="absolute left-2 top-2 z-20 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:left-auto md:right-12 md:top-3 md:px-3.5 md:py-1.5 md:text-sm">
+                  -{discountPercent}%
+                </div>
+              ) : null}
               <button
                 onClick={(event) => {
                   event.stopPropagation();
@@ -148,10 +161,30 @@ export default function FavoritesPage() {
                 </p>
               </div>
 
-              <div className="mt-auto pt-2 md:pt-4 border-t border-gray-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
-                <span className="text-[10px] md:text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 md:px-3 md:py-1 rounded-full whitespace-nowrap">
-                  {book.ageRange} {t('common.yearsSuffix')}
-                </span>
+              <div className="mt-auto flex items-center justify-between gap-3 border-t border-gray-50 pt-3 md:pt-4">
+                <div className="min-w-0">
+                  {isDiscounted ? (
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                        {priceLabel}
+                      </span>
+                      {compareAtLabel ? (
+                        <span className="whitespace-nowrap text-xs font-semibold text-gray-400 line-through md:text-sm">
+                          {compareAtLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-baseline gap-x-1.5">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 md:text-sm">
+                        {t('bookList.from')}
+                      </span>
+                      <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                        {priceLabel}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <Button
                   size="sm"
                   className="rounded-full px-4 py-1.5 text-[10px] md:text-xs font-semibold"

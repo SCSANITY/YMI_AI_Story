@@ -12,7 +12,7 @@ type BookCardCoverProps = {
   coverZoom?: number
 }
 
-const isCutoutPng = (src: string) => /\.png($|\?)/i.test(src)
+const isCutoutImage = (src: string) => /\.(png|webp)($|\?)/i.test(src)
 
 export function BookCardCover({
   src,
@@ -23,7 +23,7 @@ export function BookCardCover({
   showRipple = true,
   coverZoom,
 }: BookCardCoverProps) {
-  const cutout = isCutoutPng(src)
+  const cutout = isCutoutImage(src)
 
   if (cutout) {
     return (

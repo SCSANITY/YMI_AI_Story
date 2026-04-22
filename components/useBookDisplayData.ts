@@ -9,6 +9,7 @@ type TemplateRow = {
   story_type?: string | null
   description?: string | null
   cover_image_path?: string | null
+  normalized_cover_image_path?: string | null
 }
 
 export type BookRatingSummary = {
@@ -54,7 +55,7 @@ export function useBookDisplayData() {
         }
 
         if (!row?.template_id) return
-        const rawPath = String(row.cover_image_path || '').trim()
+        const rawPath = String(row.normalized_cover_image_path || row.cover_image_path || '').trim()
         if (!rawPath) return
         if (rawPath.startsWith('http')) {
           coverLookup[row.template_id] = rawPath

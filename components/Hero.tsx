@@ -5,17 +5,18 @@ import { Button } from '@/components/Button'
 import { Sparkles, Star, ArrowDown, Clock, Globe, BookOpen } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useI18n } from '@/lib/useI18n'
-import { BOOKS } from '@/data/books'
 import { useRouter } from 'next/navigation'
+import { useBookCatalog } from '@/components/useBookCatalog'
+import type { Book } from '@/types'
 
 // ── Gallery config (desktop) ──────────────────────────────────────────────────
 
-const SHOWCASE = [
-  { book: BOOKS[0], w: 148, left:   0, top:  55, rotate: -7, z: 2, floatAmp: 12, floatDur: 5.2, floatDelay: 0.0 },
-  { book: BOOKS[1], w: 192, left: 128, top:   0, rotate:  3, z: 5, floatAmp: 18, floatDur: 6.0, floatDelay: 0.4 },
-  { book: BOOKS[2], w: 138, left: 322, top:  68, rotate: -5, z: 3, floatAmp: 10, floatDur: 4.8, floatDelay: 0.8 },
-  { book: BOOKS[3], w: 120, left:  42, top: 275, rotate:  8, z: 4, floatAmp: 14, floatDur: 5.5, floatDelay: 0.2 },
-  { book: BOOKS[4], w: 126, left: 244, top: 288, rotate: -6, z: 3, floatAmp: 11, floatDur: 4.5, floatDelay: 1.0 },
+const SHOWCASE_LAYOUT = [
+  { w: 148, left:   0, top:  55, rotate: -7, z: 2, floatAmp: 12, floatDur: 5.2, floatDelay: 0.0 },
+  { w: 192, left: 128, top:   0, rotate:  3, z: 5, floatAmp: 18, floatDur: 6.0, floatDelay: 0.4 },
+  { w: 138, left: 322, top:  68, rotate: -5, z: 3, floatAmp: 10, floatDur: 4.8, floatDelay: 0.8 },
+  { w: 120, left:  42, top: 275, rotate:  8, z: 4, floatAmp: 14, floatDur: 5.5, floatDelay: 0.2 },
+  { w: 126, left: 244, top: 288, rotate: -6, z: 3, floatAmp: 11, floatDur: 4.5, floatDelay: 1.0 },
 ] as const
 
 const SPARKLES = [
@@ -45,7 +46,7 @@ const FEATURE_CHIPS = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const MobileHeroBookGallery: React.FC = () => (
+const MobileHeroBookGallery: React.FC<{ books: Book[] }> = ({ books }) => (
   <motion.div
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
@@ -68,8 +69,8 @@ const MobileHeroBookGallery: React.FC = () => (
         style={{ boxShadow: '0 12px 36px rgba(0,0,0,0.14)', aspectRatio: '3/4' }}
       >
         <img
-          src={BOOKS[0].coverUrl}
-          alt={BOOKS[0].title}
+          src={books[0]?.coverUrl || ''}
+          alt={books[0]?.title || 'YMI story book'}
           className="w-full h-full object-cover block"
           loading="lazy"
           decoding="async"
@@ -91,8 +92,8 @@ const MobileHeroBookGallery: React.FC = () => (
         }}
       >
         <img
-          src={BOOKS[1].coverUrl}
-          alt={BOOKS[1].title}
+          src={books[1]?.coverUrl || books[0]?.coverUrl || ''}
+          alt={books[1]?.title || books[0]?.title || 'YMI story book'}
           className="w-full h-full object-cover block"
           loading="lazy"
           decoding="async"
@@ -111,8 +112,8 @@ const MobileHeroBookGallery: React.FC = () => (
         style={{ boxShadow: '0 12px 36px rgba(0,0,0,0.14)', aspectRatio: '3/4' }}
       >
         <img
-          src={BOOKS[2].coverUrl}
-          alt={BOOKS[2].title}
+          src={books[2]?.coverUrl || books[0]?.coverUrl || ''}
+          alt={books[2]?.title || books[0]?.title || 'YMI story book'}
           className="w-full h-full object-cover block"
           loading="lazy"
           decoding="async"
@@ -125,6 +126,8 @@ const MobileHeroBookGallery: React.FC = () => (
 export const Hero: React.FC = () => {
   const { t } = useI18n()
   const router = useRouter()
+  const { books } = useBookCatalog()
+  const showcaseBooks = books.slice(0, SHOWCASE_LAYOUT.length)
 
   const goToBooks = () => {
     router.push('/books')
@@ -246,7 +249,7 @@ export const Hero: React.FC = () => {
                 ))}
               </motion.div>
 
-              <MobileHeroBookGallery />
+              <MobileHeroBookGallery books={showcaseBooks} />
 
               {/* CTA */}
               <motion.div
@@ -321,7 +324,11 @@ export const Hero: React.FC = () => {
               />
 
               {/* Books */}
-              {SHOWCASE.map(({ book, w, left, top, rotate, z, floatAmp, floatDur, floatDelay }, i) => (
+              {SHOWCASE_LAYOUT.map(({ w, left, top, rotate, z, floatAmp, floatDur, floatDelay }, i) => {
+                const book = showcaseBooks[i]
+                if (!book) return null
+
+                return (
                 <motion.div
                   key={book.bookID}
                   initial={{ opacity: 0, scale: 0.78, y: 30 }}
@@ -352,7 +359,8 @@ export const Hero: React.FC = () => {
                     </div>
                   </motion.div>
                 </motion.div>
-              ))}
+                )
+              })}
 
               {/* Badge — personalisation */}
               <motion.div

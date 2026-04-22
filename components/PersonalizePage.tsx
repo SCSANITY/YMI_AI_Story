@@ -1,7 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
-import { BOOKS } from '@/data/books';
 import { Button } from '@/components/Button';
 import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Check, Book, X, Share2, CircleHelp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,6 +18,7 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ShareDialog } from '@/components/ShareDialog';
 import { MiniGame } from '@/components/MiniGame';
 import { VoiceRecorderPanel } from '@/components/personalize/VoiceRecorderPanel';
+import { useBookCatalog } from '@/components/useBookCatalog';
 import type { StoryLanguage } from '@/types';
 
 const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
@@ -51,7 +51,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, language, cart} = useGlobalContext();
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-  const book = BOOKS.find(b => b.bookID === bookID);
+  const { books: catalogBooks, isLoading: isBookCatalogLoading } = useBookCatalog();
+  const book = catalogBooks.find(b => b.bookID === bookID);
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewMode = searchParams?.get('view') || 'edit';
@@ -775,6 +776,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       if (lastError) throw lastError;
       throw new Error('Preview is ready but images are still processing. Please refresh.');
     };
+    const loadPartialPreviewAssets = async (jobId: string) => {
+      try {
+        const urls = await getPreviewPages(jobId, undefined, { size: 'small' });
+        if (urls.length) {
+          return {
+            urls,
+            primaryUrl: urls[0] ?? null,
+          };
+        }
+      } catch {
+        // Partial preview is not ready yet.
+      }
+      return null;
+    };
 
     setPreviewError(null);
     setProgress(0);
@@ -898,6 +913,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         if (!isActive) return
 
         let fetchFailures = 0
+        let partialPreviewShown = false
         while (isActive) {
           let job
           try {
@@ -939,6 +955,22 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             return
           }
 
+          if (job.status === 'running' && !partialPreviewShown) {
+            const partialPreviewAssets = await loadPartialPreviewAssets(created.jobId)
+            if (partialPreviewAssets?.urls.length) {
+              partialPreviewShown = true
+              if (!isActive) return
+              setPreviewPages(partialPreviewAssets.urls)
+              if (partialPreviewAssets.primaryUrl) {
+                setPreviewUrl(partialPreviewAssets.primaryUrl)
+              }
+              replacePreviewUrl(created.creationId, created.jobId)
+              setProgress(100)
+              finishGenerating()
+              return
+            }
+          }
+
           if (job.status === 'failed') {
             throw new Error(job.error_message || 'Preview generation failed. Please try again.')
           }
@@ -974,6 +1006,53 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       if (progressInterval) window.clearInterval(progressInterval);
     };
   }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, photo, user, reset, replacePreviewUrl, t]);
+
+  useEffect(() => {
+    if (!viewState.showPreview) return;
+    if (!previewJobId) return;
+    if (previewPages.length >= 2) return;
+
+    let isActive = true;
+    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    const pollForRemainingPreviewPages = async () => {
+      while (isActive) {
+        try {
+          const urls = await getPreviewPages(previewJobId, undefined, { size: 'small' });
+          if (!isActive) return;
+          if (urls.length > previewPages.length) {
+            setPreviewPages(urls);
+            if (urls[0]) {
+              setPreviewUrl(urls[0]);
+            }
+          }
+
+          const job = await getJob(previewJobId);
+          if (!isActive) return;
+          if (job.status === 'done' && urls.length >= 2) {
+            return;
+          }
+          if (job.status === 'failed') {
+            setPreviewError(job.error_message || 'Preview generation failed. Please try again.');
+            return;
+          }
+          if (job.status === 'cancel_requested' || job.status === 'cancelled') {
+            return;
+          }
+        } catch {
+          // The second preview page may still be rendering; keep polling quietly.
+        }
+
+        await wait(2500);
+      }
+    };
+
+    void pollForRemainingPreviewPages();
+
+    return () => {
+      isActive = false;
+    };
+  }, [viewState.showPreview, previewJobId, previewPages.length]);
 
   useEffect(() => {
     if (!bookID) return;
@@ -1768,7 +1847,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           );
       }
       // Real preview spreads follow the configured preview page order after the cover.
-      if (spreadIndex > 0 && spreadIndex < previewPages.length && (side === 'left' || side === 'right')) {
+      if (
+        spreadIndex > 0 &&
+        (spreadIndex < previewPages.length || (spreadIndex === 1 && previewPages.length === 1)) &&
+        (side === 'left' || side === 'right')
+      ) {
           const spreadImage = previewPages[spreadIndex] || '';
           const isLeftSide = side === 'left';
           return (
@@ -1789,8 +1872,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     />
                   </div>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-50">
-                    <Camera className="h-10 w-10" />
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-amber-50/80 px-6 text-center text-amber-900">
+                    <Wand2 className="h-9 w-9 animate-pulse text-amber-500" />
+                    <p className="text-sm font-semibold">{t('personalize.previewPageStillCreating')}</p>
                   </div>
                 )}
                 <div className="absolute inset-0 pointer-events-none z-10" style={{ background: bindingShadow }} />
@@ -1848,7 +1932,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   };
 
   const isFormValid = name.length > 0 && age.length > 0 && (photo !== null || !!photoAssetId);
-  if (!book) return <div>{t('common.unknown')}</div>;
+  if (!book) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#fffaf3] px-4 text-center text-sm font-medium text-gray-500">
+        {isBookCatalogLoading ? t('common.loading') : t('common.unknown')}
+      </div>
+    );
+  }
 
   const staticLeftIndex = (isFlipping && flipDirection === 'prev') ? currentSpread - 1 : currentSpread;
   const isLeftPageVisible = staticLeftIndex > 0;
@@ -2279,53 +2369,57 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                             <p className="text-xs text-amber-600 mt-1.5 font-medium">{t('personalize.clickToChangePhoto')}</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-2.5 pointer-events-none">
+                                        <div className="space-y-2 pointer-events-none">
                                             <motion.div
-                                                className="relative w-14 h-14 sm:w-16 sm:h-16 mx-auto"
-                                                animate={{ y: [0, -4, 0] }}
-                                                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                                                className="relative w-18 h-18 sm:w-20 sm:h-20 mx-auto"
+                                                animate={{ y: [0, -7, 0] }}
+                                                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                                             >
-                                                <span className="absolute inset-0 rounded-full bg-amber-300/40 blur-xl animate-pulse-slow" />
-                                                <span className="absolute inset-2 rounded-full bg-amber-200/40 blur-lg animate-pulse" />
-                                                <div className="relative w-14 h-14 sm:w-16 sm:h-16 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform shadow-[0_8px_18px_rgba(234,179,8,0.22)] ring-4 ring-amber-100">
-                                                    <Camera className="h-7 w-7 sm:h-8 sm:w-8" />
+                                                <span className="absolute inset-0 rounded-full bg-amber-300/45 blur-2xl animate-pulse-slow" />
+                                                <span className="absolute inset-3 rounded-full bg-orange-200/50 blur-xl animate-pulse" />
+                                                <div className="absolute inset-2 rounded-full border border-amber-300/60" />
+                                                <div className="relative mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-white via-amber-50 to-amber-100 text-amber-600 shadow-[0_14px_34px_rgba(245,158,11,0.34)] ring-4 ring-white/80 sm:h-20 sm:w-20">
+                                                    <Camera className="h-8 w-8 sm:h-9 sm:w-9" />
                                                 </div>
                                             </motion.div>
-                                            <h4 className="font-bold text-gray-900 text-sm sm:text-base">{t('personalize.uploadChildPhoto')}</h4>
-                                            <div className="mx-auto w-full min-w-0 max-w-full sm:max-w-[420px] md:max-w-[450px] rounded-[1rem] border border-amber-100/95 bg-white/82 p-2.5 sm:p-3 md:p-3.5 shadow-[0_12px_28px_rgba(245,158,11,0.1)]">
-                                                <div className="grid min-w-0 grid-cols-3 gap-1 sm:gap-1.5">
+                                            <div>
+                                                <h4 className="font-bold text-gray-900 text-base sm:text-lg">{t('personalize.uploadChildPhoto')}</h4>
+                                                <p className="mt-0.5 text-xs font-medium text-amber-700">{t('personalize.uploadPhotoHint')}</p>
+                                            </div>
+                                            <div className="mx-auto w-full min-w-0 max-w-[320px] sm:max-w-[360px] md:max-w-[380px] rounded-[0.85rem] border border-amber-100/90 bg-white/74 p-2 sm:p-2.5 shadow-[0_10px_22px_rgba(245,158,11,0.08)]">
+                                                <div className="grid min-w-0 grid-cols-3 gap-1">
                                                     {GOOD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
-                                                            <div className="aspect-[6/5] overflow-hidden rounded-lg sm:rounded-xl border border-emerald-100 bg-emerald-50 shadow-[0_6px_14px_rgba(16,185,129,0.1)]">
+                                                            <div className="aspect-[7/5] overflow-hidden rounded-md sm:rounded-lg border border-emerald-100 bg-emerald-50 shadow-[0_5px_12px_rgba(16,185,129,0.08)]">
                                                                 <img
                                                                     src={item.src}
                                                                     alt={item.alt}
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                             </div>
-                                                            <div className="absolute -right-1 -bottom-1 h-4 w-4 sm:h-[18px] sm:w-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
-                                                                <Check className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
+                                                            <div className="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
+                                                                <Check className="h-2 w-2" />
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-1 grid min-w-0 grid-cols-3 gap-1 sm:gap-1.5">
+                                                <div className="mt-1 grid min-w-0 grid-cols-3 gap-1">
                                                     {BAD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
-                                                            <div className="aspect-[6/5] overflow-hidden rounded-lg sm:rounded-xl border border-rose-100 bg-rose-50 shadow-[0_6px_14px_rgba(244,63,94,0.1)]">
+                                                            <div className="aspect-[7/5] overflow-hidden rounded-md sm:rounded-lg border border-rose-100 bg-rose-50 shadow-[0_5px_12px_rgba(244,63,94,0.08)]">
                                                                 <img
                                                                     src={item.src}
                                                                     alt={item.alt}
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                             </div>
-                                                            <div className="absolute -right-1 -bottom-1 h-4 w-4 sm:h-[18px] sm:w-[18px] rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
-                                                                <X className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
+                                                            <div className="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
+                                                                <X className="h-2 w-2" />
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="mt-2 text-[10px] sm:text-[11px] leading-4 sm:leading-5 text-gray-500 text-left">
+                                                <div className="mt-1.5 text-[9px] sm:text-[10px] leading-4 text-gray-500 text-left">
                                                     {t('personalize.photoTips')}
                                                 </div>
                                             </div>

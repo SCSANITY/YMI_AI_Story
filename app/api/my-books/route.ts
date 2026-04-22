@@ -44,13 +44,7 @@ async function loadCreationsWithArchive(owner: Owner) {
     customize_snapshot,
     preview_job_id,
     created_at,
-    templates:templates (
-      template_id,
-      name,
-      description,
-      cover_image_path,
-      story_type
-    )
+    templates:templates (*)
   `
 
   const archiveSelect = `
@@ -61,13 +55,7 @@ async function loadCreationsWithArchive(owner: Owner) {
     created_at,
     is_archived,
     deleted_at,
-    templates:templates (
-      template_id,
-      name,
-      description,
-      cover_image_path,
-      story_type
-    )
+    templates:templates (*)
   `
 
   const primaryQuery = buildOwnerScopedQuery(

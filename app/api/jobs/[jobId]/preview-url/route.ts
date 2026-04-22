@@ -21,10 +21,6 @@ export async function GET(
     return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   }
 
-  if (job.status !== 'done') {
-    return NextResponse.json({ error: 'Job not completed' }, { status: 400 })
-  }
-
   const outputAssets = job.output_assets as
     | {
         storage_path?: string
@@ -35,6 +31,15 @@ export async function GET(
   const bucket = outputAssets?.bucket || 'raw-private'
 
   const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
+
+  if (job.status !== 'done' && job.status !== 'running') {
+    return NextResponse.json({ error: 'Job not completed' }, { status: 400 })
+  }
+
+  if (job.status === 'running' && !pages.length && !outputAssets?.storage_path) {
+    return NextResponse.json({ error: 'Preview not ready' }, { status: 400 })
+  }
+
   const sortedPages = [...pages].sort((a, b) => {
     const orderA = typeof a.preview_order === 'number' ? a.preview_order : Number.MAX_SAFE_INTEGER
     const orderB = typeof b.preview_order === 'number' ? b.preview_order : Number.MAX_SAFE_INTEGER

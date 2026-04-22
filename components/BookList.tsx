@@ -1,7 +1,6 @@
 ﻿'use client'
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useGlobalContext } from '../contexts/GlobalContext';
-import { BOOKS } from '@/data/books';
 import { Book } from '@/types';
 import { Search, Filter, X } from 'lucide-react';
 import { Button } from './Button';
@@ -10,20 +9,8 @@ import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/useI18n';
 import { BookCard } from '@/components/BookCard';
 import { useBookDisplayData } from '@/components/useBookDisplayData';
-
-const VALUE_OPTIONS = [
-  'Self-Awareness',
-  'Emotional Intelligence',
-  'Social Skills',
-  'Creativity',
-  'Problem-Solving',
-  'Adaptability',
-  'Resilience and Perseverance',
-  'Responsibility and Habits',
-  'Curiosity and Exploration',
-  'Play and Learning',
-  'Spiritual/Inner Growth',
-] as const
+import { useBookCatalog } from '@/components/useBookCatalog';
+import { AGE_GROUP_OPTIONS, parseStoryTypes } from '@/lib/book-catalog';
 
 const FILTER_BAR_TOP_OFFSET = 72;
 
@@ -81,7 +68,8 @@ function GlassSelect({ label, value, options, onChange }: {
 export const BookList: React.FC = () => {
   const { toggleFavorite, favorites } = useGlobalContext();
   const { t } = useI18n();
-  const { coverMap, titleMap, typeMap, descMap, ratingMap } = useBookDisplayData();
+  const { books } = useBookCatalog();
+  const { ratingMap } = useBookDisplayData();
 
   // Filter States
   const [search, setSearch] = useState('');
@@ -102,24 +90,34 @@ export const BookList: React.FC = () => {
   });
   
 
-  // Derive unique options from data
-  const categories = ['All', ...VALUE_OPTIONS];
-  const ageRanges = ['All', ...Array.from(new Set(BOOKS.map(b => b.ageRange))).sort()];
-  const genders = ['All', ...Array.from(new Set(BOOKS.map(b => b.gender)))];
+  // Derive unique options from active templates.
+  const categories = useMemo(() => {
+    const storyTypes = books.flatMap((book) => book.storyTypes?.length ? book.storyTypes : parseStoryTypes(book.category))
+    return ['All', ...Array.from(new Set(storyTypes)).sort()]
+  }, [books]);
+  const genders = useMemo(() => ['All', ...Array.from(new Set(books.map(b => b.gender).filter(Boolean))).sort()], [books]);
 
   // Filter Logic
   const filteredBooks = useMemo(() => {
-    return BOOKS.filter(book => {
-      const storyType = typeMap[book.bookID] ?? '';
+    return books.filter(book => {
+      const storyTypes = book.storyTypes?.length ? book.storyTypes : parseStoryTypes(book.category);
+      const searchable = [
+        book.title,
+        book.author,
+        book.description,
+        book.bookID,
+        ...storyTypes,
+      ].join(' ').toLowerCase();
       const matchesSearch = book.title.toLowerCase().includes(search.toLowerCase()) || 
-                            book.author.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = category === 'All' || storyType === category;
-      const matchesAge = age === 'All' || book.ageRange === age;
+                            book.author.toLowerCase().includes(search.toLowerCase()) ||
+                            searchable.includes(search.toLowerCase());
+      const matchesCategory = category === 'All' || storyTypes.includes(category);
+      const matchesAge = age === 'All' || book.ageGroup === age;
       const matchesGender = gender === 'All' || book.gender === gender;
 
       return matchesSearch && matchesCategory && matchesAge && matchesGender;
     });
-  }, [search, category, age, gender, typeMap]);
+  }, [books, search, category, age, gender]);
 
   const pauseCardHover = () => {
     setSuppressCardHover(true);
@@ -238,8 +236,8 @@ const handlePersonalize = (bookID: string) => {
   const activeFilterCount = [category, age, gender].filter(x => x !== 'All').length;
 
   const categoryOptions = categories.map(c => ({ value: c, label: c === 'All' ? t('category.All') : c }))
-  const ageOptions = ageRanges.map(a => ({ value: a, label: a === 'All' ? t('category.All') : `${a} ${t('common.yearsSuffix')}` }))
-  const genderOptions = genders.map(g => ({ value: g, label: t(`gender.${g}`) }))
+  const ageOptions = [{ value: 'All', label: t('category.All') }, ...AGE_GROUP_OPTIONS]
+  const genderOptions = genders.map(g => ({ value: g, label: g === 'All' ? t('gender.All') : t(`gender.${g}`) === `gender.${g}` ? g : t(`gender.${g}`) }))
 
   return (
     <section ref={sectionRef} id="books" className="page-surface page-surface--flush-bottom relative pt-12 md:pt-24 pb-0 min-h-screen">
@@ -348,7 +346,7 @@ const handlePersonalize = (bookID: string) => {
             <AnimatePresence>
                 {filteredBooks.map((book) => {
                 const isFavorite = favorites.some(f => f.bookID === book.bookID);
-                const coverSrc = coverMap[book.bookID] || book.coverUrl;
+                const coverSrc = book.coverUrl;
                 
                 return (
                     <motion.div
@@ -363,9 +361,9 @@ const handlePersonalize = (bookID: string) => {
                         book={book}
                         isFavorite={isFavorite}
                         coverSrc={coverSrc}
-                        title={titleMap[book.bookID] || book.title}
-                        storyType={typeMap[book.bookID] || book.category}
-                        description={descMap[book.bookID] || book.description}
+                        title={book.title}
+                        storyType={book.storyTypeLabel || book.category}
+                        description={book.description}
                         rating={ratingMap[book.bookID]}
                         suppressHover={suppressCardHover}
                         onClick={() => handlePersonalize(book.bookID)}

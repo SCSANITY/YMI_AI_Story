@@ -5,6 +5,7 @@ import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
 import { UI_LOCALES } from '@/lib/i18n-config';
+import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, templateStorageUrl } from '@/lib/book-catalog';
 import {
   login as loginAction,
   signup as signupAction,
@@ -65,6 +66,57 @@ const normalizeStoryLanguage = (value: unknown) => {
     return 'Spanish';
   }
   return 'English';
+};
+
+const templateRelationToBook = (templateId: string, template: any, fallbackBook?: Book, price = 0): Book => {
+  const storyTypes = parseStoryTypes(template?.story_type || fallbackBook?.category);
+  const ageGroup = normalizeAgeGroup(template?.age_group || fallbackBook?.ageGroup);
+  const coverUrl = templateStorageUrl(template?.normalized_cover_image_path || template?.cover_image_path) || fallbackBook?.coverUrl || '';
+  const showcaseImages = Array.isArray(template?.showcase_image_paths)
+    ? template.showcase_image_paths.map(templateStorageUrl).filter(Boolean)
+    : fallbackBook?.showcaseImages || (coverUrl ? [coverUrl] : []);
+  const templatePrice = Number(template?.price_cents ?? 0);
+  const resolvedPrice = Number.isFinite(templatePrice) && templatePrice > 0 ? templatePrice / 100 : fallbackBook?.price || price;
+  const compareAtCents = Number(template?.compare_at_price_cents ?? 0);
+  const compareAtPrice =
+    fallbackBook?.compareAtPrice ??
+    (Number.isFinite(compareAtCents) && compareAtCents > 0 ? compareAtCents / 100 : null);
+  const isDiscount = Boolean(template?.is_discount ?? fallbackBook?.isDiscount);
+  const discountPercentValue = Number(template?.discount_percent ?? 0);
+  const discountPercent =
+    fallbackBook?.discountPercent ??
+    (Number.isFinite(discountPercentValue) && discountPercentValue > 0
+      ? Math.round(discountPercentValue)
+      : compareAtPrice && compareAtPrice > resolvedPrice
+      ? Math.round((1 - resolvedPrice / compareAtPrice) * 100)
+      : isDiscount
+      ? 50
+      : null);
+
+  return {
+    bookID: templateId,
+    title: template?.name || fallbackBook?.title || templateId,
+    author: fallbackBook?.author || 'YMI',
+    price: resolvedPrice,
+    compareAtPrice: compareAtPrice ?? (isDiscount ? resolvedPrice * 2 : null),
+    discountPercent,
+    coverUrl,
+    showcaseImages,
+    description: template?.description || fallbackBook?.description || '',
+    category: storyTypes[0] || fallbackBook?.category || 'Story',
+    storyTypes,
+    storyTypeLabel: formatStoryTypeLabel(storyTypes, fallbackBook?.category || 'Story'),
+    ageGroup,
+    ageLabel: AGE_GROUP_LABELS[ageGroup],
+    ageRange: AGE_GROUP_LABELS[ageGroup],
+    gender: template?.target_gender || fallbackBook?.gender || 'Neutral',
+    homeSections: Array.isArray(template?.home_sections) ? template.home_sections : fallbackBook?.homeSections || [],
+    isBrandNew: Boolean(template?.is_brand_new ?? fallbackBook?.isBrandNew),
+    isForBoys: Boolean(template?.is_for_boys ?? fallbackBook?.isForBoys),
+    isForGirls: Boolean(template?.is_for_girls ?? fallbackBook?.isForGirls),
+    isDiscount,
+    displayOrder: typeof template?.display_order === 'number' ? template.display_order : fallbackBook?.displayOrder ?? null,
+  };
 };
 
 export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -152,30 +204,11 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const creation = row.creations ?? {};
       const templateId = creation.template_id || creation.templates?.template_id;
       const fallbackBook = BOOKS.find(b => b.bookID === templateId);
-      const coverPath =
-        row.preview_cover_url ||
-        creation.templates?.cover_image_path ||
-        fallbackBook?.coverUrl ||
-        '';
-      let coverUrl = coverPath;
-      if (coverPath && !String(coverPath).startsWith('http')) {
-        const cleaned = String(coverPath).replace(/^app-templates\//, '').replace(/^\/+/, '');
-        const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned);
-        coverUrl = publicUrl?.publicUrl ?? coverPath;
-      }
-
-      const book: Book = {
-        bookID: templateId,
-        title: creation.templates?.name || fallbackBook?.title || templateId,
-        author: fallbackBook?.author || 'YMI',
-        price: fallbackBook?.price || Number(row.price_at_purchase ?? 0) || 0,
-        coverUrl,
-        showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
-        description: creation.templates?.description || fallbackBook?.description || '',
-        category: fallbackBook?.category || 'Adventure',
-        ageRange: fallbackBook?.ageRange || '3-5',
-        gender: fallbackBook?.gender || 'Neutral',
+      const template = {
+        ...(creation.templates ?? {}),
+        cover_image_path: row.preview_cover_url || creation.templates?.normalized_cover_image_path || creation.templates?.cover_image_path,
       };
+      const book = templateRelationToBook(templateId, template, fallbackBook, Number(row.price_at_purchase ?? 0) || 0);
       const overrides = creation.customize_snapshot?.textOverrides ?? creation.customize_snapshot?.text_overrides ?? {};
       const childName = overrides.child_name ?? overrides.childName ?? '';
       const childAge = overrides.child_age ?? overrides.childAge ?? overrides.age ?? '';
@@ -224,31 +257,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (!templateId) return null;
 
         const fallbackBook = BOOKS.find((b) => b.bookID === templateId);
-        const rawCoverPath = String(template?.cover_image_path || '').trim();
-        let coverUrl = fallbackBook?.coverUrl ?? '';
-        if (rawCoverPath) {
-          if (rawCoverPath.startsWith('http')) {
-            coverUrl = rawCoverPath;
-          } else {
-            const cleaned = rawCoverPath.replace(/^app-templates\//, '').replace(/^\/+/, '');
-            const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned);
-            if (publicUrl?.publicUrl) {
-              coverUrl = publicUrl.publicUrl;
-            }
-          }
-        }
-
-        return {
-          bookID: templateId,
-          title: template?.name || fallbackBook?.title || templateId,
-          author: fallbackBook?.author || 'YMI',
-          price: fallbackBook?.price ?? 0,
-          coverUrl,
-          description: template?.description || fallbackBook?.description || '',
-          category: fallbackBook?.category || 'Adventure',
-          ageRange: fallbackBook?.ageRange || '3-5',
-          gender: fallbackBook?.gender || 'Neutral',
-        } as Book;
+        return templateRelationToBook(templateId, template, fallbackBook, fallbackBook?.price ?? 0);
       })
       .filter((book: Book | null): book is Book => Boolean(book));
   }, []);

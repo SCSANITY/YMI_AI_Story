@@ -10,6 +10,7 @@ import { BOOKS } from '@/data/books'
 import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
 import { useI18n } from '@/lib/useI18n'
+import { formatLocaleCurrency } from '@/lib/locale-pricing'
 
 type CreationItem = {
   creation_id: string
@@ -23,7 +24,12 @@ type CreationItem = {
     name?: string
     description?: string
     cover_image_path?: string
+    normalized_cover_image_path?: string
     story_type?: string
+    price_cents?: number | null
+    compare_at_price_cents?: number | null
+    discount_percent?: number | null
+    is_discount?: boolean | null
   }
 }
 
@@ -37,12 +43,33 @@ const normalizeLanguage = (value: unknown): PersonalizationData['language'] => {
 }
 
 const resolveCover = (row: CreationItem) => {
-  const raw = row.preview_cover_url || row.templates?.cover_image_path || ''
+  const raw = row.preview_cover_url || row.templates?.normalized_cover_image_path || row.templates?.cover_image_path || ''
   if (!raw) return ''
   if (raw.startsWith('http')) return raw
   const cleaned = raw.replace(/^app-templates\//, '').replace(/^\/+/, '')
   const { data } = supabase.storage.from('app-templates').getPublicUrl(cleaned)
   return data?.publicUrl ?? raw
+}
+
+const resolveTemplatePrice = (item: CreationItem, fallbackBook?: Book) => {
+  const priceFromTemplate = Number(item.templates?.price_cents ?? 0)
+  if (Number.isFinite(priceFromTemplate) && priceFromTemplate > 0) return priceFromTemplate / 100
+  return fallbackBook?.price || 0
+}
+
+const resolveTemplateCompareAtPrice = (item: CreationItem, fallbackBook?: Book, price = 0) => {
+  const compareFromTemplate = Number(item.templates?.compare_at_price_cents ?? 0)
+  if (Number.isFinite(compareFromTemplate) && compareFromTemplate > 0) return compareFromTemplate / 100
+  if (fallbackBook?.compareAtPrice) return fallbackBook.compareAtPrice
+  return item.templates?.is_discount ? price * 2 : null
+}
+
+const resolveTemplateDiscountPercent = (item: CreationItem, fallbackBook?: Book, price = 0, compareAtPrice: number | null = null) => {
+  const percentFromTemplate = Number(item.templates?.discount_percent ?? 0)
+  if (Number.isFinite(percentFromTemplate) && percentFromTemplate > 0) return Math.round(percentFromTemplate)
+  if (fallbackBook?.discountPercent) return fallbackBook.discountPercent
+  if (compareAtPrice && compareAtPrice > price) return Math.round((1 - price / compareAtPrice) * 100)
+  return item.templates?.is_discount ? 50 : null
 }
 
 const toPersonalization = (item: CreationItem): PersonalizationData => {
@@ -69,7 +96,7 @@ const toPersonalization = (item: CreationItem): PersonalizationData => {
 
 export default function MyBooksPage() {
   const router = useRouter()
-  const { t } = useI18n()
+  const { t, language } = useI18n()
   const { user, addToCart, hydrateCheckoutItems } = useGlobalContext()
   const [items, setItems] = useState<CreationItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,13 +133,16 @@ export default function MyBooksPage() {
       bookID: item.template_id,
       title: item.templates?.name || fallbackBook?.title || item.template_id,
       author: fallbackBook?.author || 'YMI',
-      price: fallbackBook?.price || 0,
+      price: resolveTemplatePrice(item, fallbackBook),
+      compareAtPrice: resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook)),
+      discountPercent: resolveTemplateDiscountPercent(item, fallbackBook, resolveTemplatePrice(item, fallbackBook), resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook))),
       coverUrl,
       showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
       description: item.templates?.description || fallbackBook?.description || '',
       category: fallbackBook?.category || 'Adventure',
       ageRange: fallbackBook?.ageRange || '3-5',
       gender: fallbackBook?.gender || 'Neutral',
+      isDiscount: Boolean(item.templates?.is_discount ?? fallbackBook?.isDiscount),
     }
     const personalization = toPersonalization(item)
     await addToCart(book, personalization, 3, undefined, coverUrl)
@@ -125,13 +155,16 @@ export default function MyBooksPage() {
       bookID: item.template_id,
       title: item.templates?.name || fallbackBook?.title || item.template_id,
       author: fallbackBook?.author || 'YMI',
-      price: fallbackBook?.price || 0,
+      price: resolveTemplatePrice(item, fallbackBook),
+      compareAtPrice: resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook)),
+      discountPercent: resolveTemplateDiscountPercent(item, fallbackBook, resolveTemplatePrice(item, fallbackBook), resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook))),
       coverUrl,
       showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
       description: item.templates?.description || fallbackBook?.description || '',
       category: fallbackBook?.category || 'Adventure',
       ageRange: fallbackBook?.ageRange || '3-5',
       gender: fallbackBook?.gender || 'Neutral',
+      isDiscount: Boolean(item.templates?.is_discount ?? fallbackBook?.isDiscount),
     }
     const personalization = toPersonalization(item)
     const mapProductType = (bookType?: PersonalizationData['bookType']) => {
@@ -259,6 +292,16 @@ export default function MyBooksPage() {
         ) : (
           <div className={gridClass}>
             {items.map((item) => (
+              (() => {
+                const fallbackBook = BOOKS.find((book) => book.bookID === item.template_id)
+                const price = resolveTemplatePrice(item, fallbackBook)
+                const priceLabel = formatLocaleCurrency(price, language)
+                const compareAtPrice = resolveTemplateCompareAtPrice(item, fallbackBook, price)
+                const compareAtLabel = compareAtPrice && compareAtPrice > price ? formatLocaleCurrency(compareAtPrice, language) : null
+                const discountPercent = resolveTemplateDiscountPercent(item, fallbackBook, price, compareAtPrice)
+                const isDiscounted = Boolean((item.templates?.is_discount || compareAtLabel) && discountPercent && discountPercent > 0)
+
+                return (
                 <div
                   key={item.creation_id}
                   className="group book-card-hoverable relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out md:hover:-translate-y-1"
@@ -269,6 +312,11 @@ export default function MyBooksPage() {
                   loading="lazy"
                   decoding="async"
                 >
+                  {isDiscounted ? (
+                    <div className="absolute left-2 top-2 z-20 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:left-3 md:top-3 md:px-3.5 md:py-1.5 md:text-sm">
+                      -{discountPercent}%
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => goToPreview(item)}
@@ -304,6 +352,29 @@ export default function MyBooksPage() {
                     <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
                       {item.templates?.description || t('common.personalizedStorybook')}
                     </p>
+                    <div className="mt-3">
+                      {isDiscounted ? (
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                            {priceLabel}
+                          </span>
+                          {compareAtLabel ? (
+                            <span className="whitespace-nowrap text-xs font-semibold text-gray-400 line-through md:text-sm">
+                              {compareAtLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-baseline gap-x-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 md:text-sm">
+                            {t('bookList.from')}
+                          </span>
+                          <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                            {priceLabel}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
@@ -327,6 +398,8 @@ export default function MyBooksPage() {
                   </div>
                 </div>
               </div>
+                )
+              })()
             ))}
           </div>
         )}

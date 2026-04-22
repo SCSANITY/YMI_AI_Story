@@ -24,13 +24,7 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
         customize_snapshot,
         preview_job_id,
         created_at,
-        templates:templates (
-          template_id,
-          name,
-          description,
-          cover_image_path,
-          story_type
-        )
+        templates:templates (*)
       `
     )
     .eq('creation_id', creationId)

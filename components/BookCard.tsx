@@ -6,6 +6,7 @@ import { Book } from '@/types'
 import { BookCardCover } from '@/components/BookCardCover'
 import { useI18n } from '@/lib/useI18n'
 import type { BookRatingSummary } from '@/components/useBookDisplayData'
+import { formatLocaleCurrency } from '@/lib/locale-pricing'
 
 type BookCardProps = {
   book: Book
@@ -32,7 +33,14 @@ export function BookCard({
   onClick,
   onFavoriteClick,
 }: BookCardProps) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
+  const priceLabel = formatLocaleCurrency(book.price, language)
+  const compareAtPrice = book.compareAtPrice && book.compareAtPrice > book.price ? book.compareAtPrice : null
+  const compareAtLabel = compareAtPrice ? formatLocaleCurrency(compareAtPrice, language) : null
+  const discountPercent =
+    book.discountPercent ??
+    (compareAtPrice ? Math.round((1 - book.price / compareAtPrice) * 100) : null)
+  const isDiscounted = Boolean((book.isDiscount || compareAtPrice) && discountPercent && discountPercent > 0)
 
   return (
     <div
@@ -48,6 +56,11 @@ export function BookCard({
         decoding="async"
         coverZoom={book.coverZoom}
       >
+        {isDiscounted ? (
+          <div className="absolute left-2 top-2 z-20 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:left-auto md:right-12 md:top-3 md:px-3.5 md:py-1.5 md:text-sm">
+            -{discountPercent}%
+          </div>
+        ) : null}
         <button
           onClick={onFavoriteClick}
           className="absolute right-2 top-2 z-20 rounded-full bg-white/90 p-1.5 shadow-sm backdrop-blur-sm transition-all hover:bg-white active:scale-90 md:right-3 md:top-3 md:p-2 md:opacity-0 md:translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
@@ -73,20 +86,38 @@ export function BookCard({
           </p>
         </div>
 
-        <div className="mt-auto flex flex-col items-start justify-between gap-2 border-t border-gray-50 pt-2 md:flex-row md:items-center md:pt-4">
-          <span className="whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 md:px-3 md:py-1 md:text-xs">
-            {book.ageRange} {t('common.yearsSuffix')}
-          </span>
-          <div className="flex items-center gap-2">
+        <div className="mt-auto flex items-center justify-between gap-3 border-t border-gray-50 pt-3 md:pt-4">
+          <div className="min-w-0">
+            {isDiscounted ? (
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                  {priceLabel}
+                </span>
+                {compareAtLabel ? (
+                  <span className="whitespace-nowrap text-xs font-semibold text-gray-400 line-through md:text-sm">
+                    {compareAtLabel}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-baseline gap-x-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 md:text-sm">
+                  {t('bookList.from')}
+                </span>
+                <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                  {priceLabel}
+                </span>
+              </div>
+            )}
             {rating?.count ? (
-              <div className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 md:text-xs">
+              <div className="mt-1 text-[10px] font-semibold text-amber-700 md:text-xs">
                 {t('bookList.rating')} {rating.average.toFixed(1)} ({rating.count})
               </div>
             ) : null}
-            <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 md:text-sm">
-              <span className="md:inline">{t('bookList.create')}</span>
-              <Sparkles className="h-3 w-3" />
-            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-amber-600 transition-all duration-200 hover:bg-amber-100/80 hover:text-amber-700 hover:shadow-sm group-hover:bg-amber-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 md:px-3 md:text-sm">
+            <span className="md:inline">{t('bookList.create')}</span>
+            <Sparkles className="h-3 w-3" />
           </div>
         </div>
       </div>

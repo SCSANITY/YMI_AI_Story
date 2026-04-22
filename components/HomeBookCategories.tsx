@@ -2,18 +2,19 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { BOOKS } from '@/data/books'
 import { Book } from '@/types'
 import { BookCard } from '@/components/BookCard'
 import { Button } from '@/components/Button'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { useBookDisplayData } from '@/components/useBookDisplayData'
+import { useBookCatalog } from '@/components/useBookCatalog'
 
 type HomeBookCategory = {
   titleKey: string
   descriptionKey: string
-  bookIds: string[]
+  sectionId: string
+  fallbackBookIds: string[]
   afterBanner?: {
     src: string
     alt: string
@@ -27,7 +28,8 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
   {
     titleKey: 'homeBooks.category.brandNew',
     descriptionKey: 'homeBooks.category.brandNewDescription',
-    bookIds: ['Planet_story', 'Seed_story', 'Music_story', 'Adventure_story'],
+    sectionId: 'brand_new',
+    fallbackBookIds: ['Planet_story', 'Seed_story', 'Music_story', 'Adventure_story'],
     afterBanner: {
       src: '/banners/Workflow.png',
       alt: 'YMI Story workflow banner',
@@ -39,7 +41,8 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
   {
     titleKey: 'homeBooks.category.forBoys',
     descriptionKey: 'homeBooks.category.forBoysDescription',
-    bookIds: ['Planet_story', 'Noah_story', 'Space_story', 'Scientist_story'],
+    sectionId: 'for_boys',
+    fallbackBookIds: ['Planet_story', 'Noah_story', 'Space_story', 'Scientist_story'],
     afterBanner: {
       src: '/banners/SwapFace.png',
       alt: 'YMI Story face swap banner',
@@ -51,21 +54,30 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
   {
     titleKey: 'homeBooks.category.forGirls',
     descriptionKey: 'homeBooks.category.forGirlsDescription',
-    bookIds: ['Adventure_story', 'Sister_story', 'Birthday_story', 'Seed_story'],
+    sectionId: 'for_girls',
+    fallbackBookIds: ['Adventure_story', 'Sister_story', 'Birthday_story', 'Seed_story'],
   },
   {
     titleKey: 'homeBooks.category.inDiscount',
     descriptionKey: 'homeBooks.category.inDiscountDescription',
-    bookIds: ['Music_story', 'Explorer_story', 'Planet_story', 'Seed_story'],
+    sectionId: 'in_discount',
+    fallbackBookIds: ['Music_story', 'Explorer_story', 'Planet_story', 'Seed_story'],
   },
 ]
 
-const bookById = new Map(BOOKS.map((book) => [book.bookID, book]))
-
-function getCategoryBooks(bookIds: string[]): Book[] {
-  return bookIds
-    .map((bookId) => bookById.get(bookId))
+function getCategoryBooks(allBooks: Book[], category: HomeBookCategory): Book[] {
+  const explicitBooks = allBooks.filter((book) => book.homeSections?.includes(category.sectionId))
+  const fallbackById = new Map(allBooks.map((book) => [book.bookID, book]))
+  const fallbackBooks = category.fallbackBookIds
+    .map((bookId) => fallbackById.get(bookId))
     .filter((book): book is Book => Boolean(book))
+  const combined = [...explicitBooks, ...fallbackBooks, ...allBooks]
+  const seen = new Set<string>()
+  return combined.filter((book) => {
+    if (seen.has(book.bookID)) return false
+    seen.add(book.bookID)
+    return true
+  }).slice(0, 4)
 }
 
 function CategoryBanner({ banner }: { banner: NonNullable<HomeBookCategory['afterBanner']> }) {
@@ -89,7 +101,8 @@ export function HomeBookCategories() {
   const router = useRouter()
   const { t } = useI18n()
   const { favorites, toggleFavorite } = useGlobalContext()
-  const { coverMap, titleMap, typeMap, descMap, ratingMap } = useBookDisplayData()
+  const { books: catalogBooks } = useBookCatalog()
+  const { ratingMap } = useBookDisplayData()
 
   const handlePersonalize = (bookID: string) => {
     router.push(`/personalize/${bookID}`)
@@ -112,7 +125,7 @@ export function HomeBookCategories() {
 
         <div className="space-y-14 md:space-y-20">
           {HOME_BOOK_CATEGORIES.map((category) => {
-            const books = getCategoryBooks(category.bookIds)
+            const books = getCategoryBooks(catalogBooks, category)
 
             return (
               <div key={category.titleKey}>
@@ -141,10 +154,10 @@ export function HomeBookCategories() {
                       key={`${category.titleKey}-${book.bookID}`}
                       book={book}
                       isFavorite={favorites.some((favorite) => favorite.bookID === book.bookID)}
-                      coverSrc={coverMap[book.bookID] || book.coverUrl}
-                      title={titleMap[book.bookID] || book.title}
-                      storyType={typeMap[book.bookID] || book.category}
-                      description={descMap[book.bookID] || book.description}
+                      coverSrc={book.coverUrl}
+                      title={book.title}
+                      storyType={book.storyTypeLabel || book.category}
+                      description={book.description}
                       rating={ratingMap[book.bookID]}
                       onClick={() => handlePersonalize(book.bookID)}
                       onFavoriteClick={(event) => {

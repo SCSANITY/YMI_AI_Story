@@ -57,13 +57,7 @@ export async function GET(request: Request) {
           template_id,
           customize_snapshot,
           preview_job_id,
-          templates:templates (
-            template_id,
-            name,
-            description,
-            cover_image_path,
-            story_type
-          )
+          templates:templates (*)
         )
       `
     )

@@ -3,9 +3,9 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { AtSign, ChevronRight, CircleUserRound, Instagram, MessageCircle, Phone, Send, Sparkles, Youtube } from 'lucide-react'
-import { BOOKS } from '@/data/books'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
+import { useBookCatalog } from '@/components/useBookCatalog'
 import type { CollaborationLeadForm, CollaborationLeadGender } from '@/types'
 
 const CONTACT_FIELDS: Array<keyof CollaborationLeadForm> = [
@@ -43,6 +43,7 @@ function buildDefaultForm(name?: string | null, email?: string | null): Collabor
 export default function CollaborationPage() {
   const { user } = useGlobalContext()
   const { t } = useI18n()
+  const { books } = useBookCatalog()
 
   const [form, setForm] = useState<CollaborationLeadForm>(() => buildDefaultForm())
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -57,7 +58,7 @@ export default function CollaborationPage() {
     }))
   }, [user?.email, user?.name])
 
-  const posterBooks = useMemo(() => [...BOOKS, ...BOOKS], [])
+  const posterBooks = useMemo(() => [...books, ...books], [books])
 
   const updateField = <K extends keyof CollaborationLeadForm>(field: K, value: CollaborationLeadForm[K]) => {
     setForm((current) => ({
@@ -163,7 +164,7 @@ export default function CollaborationPage() {
                     </div>
                     <div className="px-1 pb-1 pt-3">
                       <h3 className="line-clamp-2 font-title text-lg leading-tight text-slate-900">{book.title}</h3>
-                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">{book.category}</p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">{book.storyTypeLabel || book.category}</p>
                     </div>
                   </article>
                 ))}

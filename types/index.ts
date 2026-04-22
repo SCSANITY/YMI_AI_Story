@@ -13,13 +13,25 @@ export interface Book {
   title: string;
   author: string;
   price: number;
+  compareAtPrice?: number | null;
+  discountPercent?: number | null;
   coverUrl: string;
   showcaseImages: string[];
   description: string;
-  category: 'Adventure' | 'Fantasy' | 'Bedtime' | 'Learning' | 'Animals';
-  ageRange: '0-2' | '3-5' | '6-8' | '9-12';
-  gender: 'Boy' | 'Girl' | 'Neutral';
+  category: string;
+  ageRange: string;
+  gender: string;
   coverZoom?: number;
+  storyTypes?: string[];
+  storyTypeLabel?: string;
+  ageGroup?: string;
+  ageLabel?: string;
+  homeSections?: string[];
+  isBrandNew?: boolean;
+  isForBoys?: boolean;
+  isForGirls?: boolean;
+  isDiscount?: boolean;
+  displayOrder?: number | null;
 }
 
 export type StoryLanguage = 'English' | 'Traditional Chinese' | 'Spanish';
