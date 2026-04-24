@@ -342,7 +342,7 @@ const handlePersonalize = (bookID: string) => {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-10">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-10">
             <AnimatePresence>
                 {filteredBooks.map((book) => {
                 const isFavorite = favorites.some(f => f.bookID === book.bookID);

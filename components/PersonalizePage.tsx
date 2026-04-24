@@ -111,7 +111,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [showPreviewCancelledToast, setShowPreviewCancelledToast] = useState(false);
   const previewCancelToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
-  const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(40);
+  const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(65);
 
 
 
@@ -376,11 +376,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   useEffect(() => {
     if (!viewState.showLoading) {
-      setLoadingCountdownSeconds(40);
+      setLoadingCountdownSeconds(65);
       return;
     }
 
-    setLoadingCountdownSeconds(40);
+    setLoadingCountdownSeconds(65);
 
     const interval = window.setInterval(() => {
       setLoadingCountdownSeconds((prev) => (prev > 0 ? prev - 1 : 0));
