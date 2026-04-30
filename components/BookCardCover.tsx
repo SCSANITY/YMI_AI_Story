@@ -28,15 +28,17 @@ export function BookCardCover({
   if (cutout) {
     return (
       <div className="relative w-full z-10">
-        <img
-          src={src}
-          alt={alt}
-          loading={loading}
-          decoding={decoding}
-          className="w-full block select-none book-cover-img"
-        />
-        {showRipple && <div aria-hidden="true" className="card-ripple-ring" />}
-        {children}
+        <div className="book-cover-motion relative w-full">
+          <img
+            src={src}
+            alt={alt}
+            loading={loading}
+            decoding={decoding}
+            className="w-full block select-none book-cover-img"
+          />
+          {showRipple && <div aria-hidden="true" className="card-ripple-ring" />}
+          {children}
+        </div>
       </div>
     )
   }

@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+}
+
+const jsonNoStore = (body: unknown, status = 200) =>
+  NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ jobId: string }> | { jobId: string } }
@@ -18,7 +25,7 @@ export async function GET(
     .single()
 
   if (error || !job) {
-    return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+    return jsonNoStore({ error: 'Job not found' }, 404)
   }
 
   const outputAssets = job.output_assets as
@@ -33,11 +40,11 @@ export async function GET(
   const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
 
   if (job.status !== 'done' && job.status !== 'running') {
-    return NextResponse.json({ error: 'Job not completed' }, { status: 400 })
+    return jsonNoStore({ error: 'Job not completed' }, 400)
   }
 
   if (job.status === 'running' && !pages.length && !outputAssets?.storage_path) {
-    return NextResponse.json({ error: 'Preview not ready' }, { status: 400 })
+    return jsonNoStore({ error: 'Preview not ready' }, 400)
   }
 
   const sortedPages = [...pages].sort((a, b) => {
@@ -87,7 +94,7 @@ export async function GET(
       })
 
   if (!storagePaths.length) {
-    return NextResponse.json({ error: 'Preview asset missing' }, { status: 400 })
+    return jsonNoStore({ error: 'Preview asset missing' }, 400)
   }
 
   const signedResults = await Promise.all(
@@ -103,13 +110,13 @@ export async function GET(
   ).catch(() => null)
 
   if (!signedResults) {
-    return NextResponse.json({ error: 'Failed to sign URL' }, { status: 500 })
+    return jsonNoStore({ error: 'Failed to sign URL' }, 500)
   }
   const signedUrls = signedResults
 
   if (signedUrls.length === 1) {
-    return NextResponse.json({ url: signedUrls[0] })
+    return jsonNoStore({ url: signedUrls[0] })
   }
 
-  return NextResponse.json({ urls: signedUrls })
+  return jsonNoStore({ urls: signedUrls })
 }

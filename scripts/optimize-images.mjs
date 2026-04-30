@@ -154,19 +154,52 @@ function templateStorageUrl(rawPath) {
   if (!value || !SUPABASE_URL) return ''
   if (value.startsWith('http')) return value
   const cleaned = value.replace(/^app-templates\//, '').replace(/^\/+/, '')
-  return `${SUPABASE_URL}/storage/v1/object/public/app-templates/${cleaned}`
+  const encodedPath = cleaned
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/')
+  return `${SUPABASE_URL}/storage/v1/object/public/app-templates/${encodedPath}`
 }
 
 function normalizeStoragePath(rawPath) {
-  return String(rawPath || '').trim().replace(/^app-templates\//, '').replace(/^\/+/, '')
+  const value = String(rawPath || '').trim()
+  if (!value) return ''
+
+  if (value.startsWith('http')) {
+    try {
+      const url = new URL(value)
+      const match = url.pathname.match(/\/storage\/v1\/object\/(?:public|sign)\/app-templates\/(.+)$/)
+      if (match?.[1]) {
+        return decodeURIComponent(match[1]).replace(/^\/+/, '')
+      }
+    } catch {
+      return ''
+    }
+  }
+
+  return value.replace(/^app-templates\//, '').replace(/^\/+/, '')
 }
 
-async function downloadBuffer(url) {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to download ${url}: ${response.status}`)
+async function downloadStorageBuffer(supabase, rawPath) {
+  const storagePath = normalizeStoragePath(rawPath)
+  if (!storagePath) throw new Error(`Invalid storage path: ${rawPath}`)
+
+  let { data, error } = await supabase.storage.from('app-templates').download(storagePath)
+  if (!error && data) return Buffer.from(await data.arrayBuffer())
+
+  const dir = path.posix.dirname(storagePath)
+  const fileName = path.posix.basename(storagePath)
+  const { data: files, error: listError } = await supabase.storage.from('app-templates').list(dir, { limit: 1000 })
+  if (!listError) {
+    const match = (files || []).find((file) => file.name.toLowerCase() === fileName.toLowerCase())
+    if (match?.name) {
+      const fallbackPath = path.posix.join(dir, match.name)
+      ;({ data, error } = await supabase.storage.from('app-templates').download(fallbackPath))
+      if (!error && data) return Buffer.from(await data.arrayBuffer())
+    }
   }
-  return Buffer.from(await response.arrayBuffer())
+
+  throw error || listError || new Error(`Failed to download ${storagePath}`)
 }
 
 async function findAlphaBounds(buffer) {
@@ -301,7 +334,7 @@ async function optimizeCatalogAssets() {
       if (isDryRun) {
         updates.normalized_cover_image_path = normalizedPath
       } else {
-        const coverBuffer = await downloadBuffer(coverUrl)
+        const coverBuffer = await downloadStorageBuffer(supabase, row.cover_image_path)
         const normalizedBuffer = await normalizeCover(coverBuffer)
         await uploadStorageObject(supabase, `${templateId}/cover-normalized.webp`, normalizedBuffer)
         updates.normalized_cover_image_path = normalizedPath
@@ -322,14 +355,11 @@ async function optimizeCatalogAssets() {
         continue
       }
 
-      const sourceUrl = templateStorageUrl(sourcePath)
-      if (!sourceUrl) continue
-
       const targetPath = `app-templates/${templateId}/optimized/showcase-${String(index + 1).padStart(2, '0')}.webp`
       optimizedShowcasePaths.push(targetPath)
       logAction(`[showcase] ${templateId} ${sourcePath} -> ${targetPath}`)
       if (isDryRun) continue
-      const sourceBuffer = await downloadBuffer(sourceUrl)
+      const sourceBuffer = await downloadStorageBuffer(supabase, sourcePath)
       const optimizedBuffer = await optimizeShowcase(sourceBuffer)
       await uploadStorageObject(supabase, normalizeStoragePath(targetPath), optimizedBuffer)
     }

@@ -56,14 +56,9 @@ export function BookCard({
         decoding="async"
         coverZoom={book.coverZoom}
       >
-        {isDiscounted ? (
-          <div className="absolute left-2 top-2 z-20 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:left-auto md:right-12 md:top-3 md:px-3.5 md:py-1.5 md:text-sm">
-            -{discountPercent}%
-          </div>
-        ) : null}
         <button
           onClick={onFavoriteClick}
-          className="absolute right-2 top-2 z-20 rounded-full bg-white/90 p-1.5 shadow-sm backdrop-blur-sm transition-all hover:bg-white active:scale-90 md:right-3 md:top-3 md:p-2 md:opacity-0 md:translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
+          className="absolute right-3 top-7 z-20 rounded-full bg-white/90 p-1.5 shadow-sm backdrop-blur-sm transition-all hover:bg-white active:scale-90 md:right-8 md:top-10 md:p-2 md:opacity-0 md:translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
         >
           <Heart
             className={`h-4 w-4 transition-colors md:h-5 md:w-5 ${
@@ -71,6 +66,11 @@ export function BookCard({
             }`}
           />
         </button>
+        {isDiscounted ? (
+          <div className="pointer-events-none absolute -right-2 -top-3 z-30 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:-right-3 md:-top-5 md:px-5 md:py-2 md:text-lg">
+            -{discountPercent}%
+          </div>
+        ) : null}
       </BookCardCover>
 
       <div className="glass-panel -mt-4 flex flex-1 flex-col rounded-xl px-3 pb-3 pt-10 md:-mt-6 md:rounded-2xl md:px-5 md:pb-5 md:pt-14">
@@ -100,10 +100,7 @@ export function BookCard({
                 ) : null}
               </div>
             ) : (
-              <div className="flex flex-wrap items-baseline gap-x-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 md:text-sm">
-                  {t('bookList.from')}
-                </span>
+              <div className="flex flex-wrap items-baseline">
                 <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
                   {priceLabel}
                 </span>

@@ -1,4 +1,5 @@
 import { isUuid } from '@/lib/validators'
+import type { PendingUserAssetUpload } from '@/services/assets'
 
 export interface JobRecord {
   job_id: string
@@ -22,7 +23,7 @@ const fetchWithTimeout = async (
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    return await fetch(input, { ...init, signal: controller.signal })
+    return await fetch(input, { cache: 'no-store', ...init, signal: controller.signal })
   } finally {
     clearTimeout(timer)
   }
@@ -33,7 +34,8 @@ export async function createPreviewJob(
   faceAssetId: string,
   textOverrides?: Record<string, unknown>,
   params?: Record<string, unknown>,
-  customerId?: string
+  customerId?: string,
+  pendingFaceAsset?: PendingUserAssetUpload
 ): Promise<{ jobId: string; creationId: string }> {
   if (!templateId || !faceAssetId) throw new Error('Template ID and face asset ID are required')
 
@@ -46,6 +48,7 @@ export async function createPreviewJob(
       text_overrides: textOverrides ?? null,
       params: params ?? null,
       customerId: customerId ?? null,
+      pending_face_asset: pendingFaceAsset ?? null,
     }),
     credentials: 'include',
   })
@@ -115,7 +118,7 @@ export async function getJob(jobId: string): Promise<JobRecord> {
   }
   const response = await fetchWithTimeout(
     `/api/jobs/${jobId}`,
-    { credentials: 'include' },
+    { credentials: 'include', cache: 'no-store' },
     30000
   )
   if (!response.ok) {
@@ -182,7 +185,7 @@ export async function getPreviewUrl(jobId: string): Promise<string> {
   }
   const response = await fetchWithTimeout(
     `/api/jobs/${jobId}/preview-url`,
-    { credentials: 'include' },
+    { credentials: 'include', cache: 'no-store' },
     15000
   )
   if (!response.ok) {
@@ -214,7 +217,7 @@ export async function getPreviewPages(
   const query = params.toString()
   const response = await fetchWithTimeout(
     `/api/jobs/${jobId}/preview-url${query ? `?${query}` : ''}`,
-    { credentials: 'include' },
+    { credentials: 'include', cache: 'no-store' },
     15000
   )
   if (!response.ok) {

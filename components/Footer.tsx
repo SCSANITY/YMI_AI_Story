@@ -21,6 +21,9 @@ export const Footer: React.FC = () => {
   const { language, t } = useI18n()
   const [openLegalModal, setOpenLegalModal] = useState<LegalModalType>(null)
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null)
+  const [subscriberEmail, setSubscriberEmail] = useState('')
+  const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
+  const [subscribeMessage, setSubscribeMessage] = useState('')
 
   const handleLegalModalChange = (nextModal: LegalModalType) => {
     if (nextModal !== 'faq') {
@@ -102,6 +105,38 @@ export const Footer: React.FC = () => {
       </section>
     ))
 
+  const handleSubscribe = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const email = subscriberEmail.trim()
+    if (!email) {
+      setSubscribeStatus('error')
+      setSubscribeMessage(t('footer.subscribeInvalid'))
+      return
+    }
+
+    setSubscribeStatus('submitting')
+    setSubscribeMessage('')
+
+    try {
+      const response = await fetch('/api/newsletter-subscribers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email }),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(data?.error || t('footer.subscribeError'))
+      }
+      setSubscriberEmail('')
+      setSubscribeStatus('success')
+      setSubscribeMessage(t('footer.subscribeSuccess'))
+    } catch (error) {
+      setSubscribeStatus('error')
+      setSubscribeMessage(error instanceof Error ? error.message : t('footer.subscribeError'))
+    }
+  }
+
   return (
     <>
       <footer className="mt-0 border-t border-amber-100/60 bg-[rgba(255,250,244,1)]">
@@ -134,9 +169,9 @@ export const Footer: React.FC = () => {
               <h3 className="text-base font-semibold text-gray-900">{t('footer.aboutTitle')}</h3>
               <ul className="space-y-2 text-gray-600">
                 <li>
-                  <a href="#" className="hover:text-amber-600">
+                  <Link href="/support" className="hover:text-amber-600">
                     {t('footer.contactUs')}
-                  </a>
+                  </Link>
                 </li>
                 <li>
                   <button
@@ -162,9 +197,9 @@ export const Footer: React.FC = () => {
                   </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-amber-600">
+                  <Link href="/community" className="hover:text-amber-600">
                     {t('footer.blog')}
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -206,18 +241,42 @@ export const Footer: React.FC = () => {
             <div className="space-y-4 text-sm">
               <h3 className="text-base font-semibold text-gray-900">{t('footer.subscribeTitle')}</h3>
               <p className="text-gray-600">{t('footer.subscribeDescription')}</p>
-              <div className="flex flex-col gap-3">
+              <form onSubmit={handleSubscribe} className="flex flex-col gap-3">
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input
+                    type="email"
+                    value={subscriberEmail}
+                    onChange={(event) => {
+                      setSubscriberEmail(event.target.value)
+                      if (subscribeStatus !== 'submitting') {
+                        setSubscribeStatus('idle')
+                        setSubscribeMessage('')
+                      }
+                    }}
                     className="h-11 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-sm"
                     placeholder={t('footer.emailPlaceholder')}
                   />
                 </div>
-                <button className="h-11 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white">
-                  {t('footer.subscribe')}
+                <button
+                  type="submit"
+                  disabled={subscribeStatus === 'submitting'}
+                  className="h-11 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {subscribeStatus === 'submitting' ? t('footer.subscribing') : t('footer.subscribe')}
                 </button>
-              </div>
+                {subscribeMessage ? (
+                  <div
+                    className={`rounded-xl border px-3 py-2 text-xs font-semibold leading-5 ${
+                      subscribeStatus === 'success'
+                        ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                        : 'border-rose-100 bg-rose-50 text-rose-600'
+                    }`}
+                  >
+                    {subscribeMessage}
+                  </div>
+                ) : null}
+              </form>
               <div className="flex flex-wrap items-center gap-2 pt-2 text-gray-400">
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">AMEX</span>
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">Klarna</span>

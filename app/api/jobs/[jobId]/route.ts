@@ -8,6 +8,10 @@ type Owner = {
 
 type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancel_requested' | 'cancelled'
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+}
+
 function getCookieValue(cookies: string, name: string) {
   const entry = cookies
     .split(';')
@@ -63,11 +67,11 @@ export async function GET(
   if (error || !job) {
     return NextResponse.json(
       { error: error?.message || 'Job not found', jobId },
-      { status: 404 }
+      { status: 404, headers: NO_STORE_HEADERS }
     )
   }
 
-  return NextResponse.json(job)
+  return NextResponse.json(job, { headers: NO_STORE_HEADERS })
 }
 
 export async function DELETE(

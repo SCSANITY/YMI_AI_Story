@@ -312,11 +312,6 @@ export default function MyBooksPage() {
                   loading="lazy"
                   decoding="async"
                 >
-                  {isDiscounted ? (
-                    <div className="absolute left-2 top-2 z-20 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:left-3 md:top-3 md:px-3.5 md:py-1.5 md:text-sm">
-                      -{discountPercent}%
-                    </div>
-                  ) : null}
                   <button
                     type="button"
                     onClick={() => goToPreview(item)}
@@ -340,6 +335,11 @@ export default function MyBooksPage() {
                       {item.templates?.story_type || 'Story'}
                     </span>
                   </div>
+                  {isDiscounted ? (
+                    <div className="pointer-events-none absolute -right-2 -top-3 z-30 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:-right-3 md:-top-5 md:px-5 md:py-2 md:text-lg">
+                      -{discountPercent}%
+                    </div>
+                  ) : null}
                 </BookCardCover>
 
                 <div className="glass-panel rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-10 md:pt-14 px-4 md:px-5 pb-4 md:pb-5">

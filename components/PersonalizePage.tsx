@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
-import { uploadUserAsset } from '@/services/assets';
+import { faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type PendingUserAssetUpload } from '@/services/assets';
 import { cancelPreviewJob, createPreviewJob, getJob, getPreviewPages, getPreviewUrl } from '@/services/jobs';
 import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
@@ -20,6 +20,25 @@ import { MiniGame } from '@/components/MiniGame';
 import { VoiceRecorderPanel } from '@/components/personalize/VoiceRecorderPanel';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import type { StoryLanguage } from '@/types';
+
+type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
+
+const logPreviewDebug = (...args: unknown[]) => {
+  if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PREVIEW_DEBUG === 'true') {
+    console.info('[preview-job]', ...args);
+  }
+};
+
+const createGenerateTimer = () => {
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  return (label: string, details?: Record<string, unknown>) => {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    logPreviewDebug(label, {
+      elapsed_ms: Math.round(now - startedAt),
+      ...(details ?? {}),
+    });
+  };
+};
 
 const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
   const raw = String(value ?? '').trim().toLowerCase();
@@ -112,6 +131,23 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const previewCancelToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
   const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(65);
+  const [facePrepareStatus, setFacePrepareStatus] = useState<FacePrepareStatus>('idle');
+  const [preparedFaceFile, setPreparedFaceFile] = useState<File | null>(null);
+  const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
+  const facePrepareRunIdRef = useRef(0);
+  const photoRef = useRef<File | null>(photo);
+  const photoAssetIdRef = useRef<string | null>(photoAssetId);
+  const preparedFaceFileRef = useRef<File | null>(preparedFaceFile);
+  const facePrepareStatusRef = useRef<FacePrepareStatus>(facePrepareStatus);
+  const facePrepareErrorRef = useRef<string | null>(facePrepareError);
+
+  useEffect(() => {
+    photoRef.current = photo;
+    photoAssetIdRef.current = photoAssetId;
+    preparedFaceFileRef.current = preparedFaceFile;
+    facePrepareStatusRef.current = facePrepareStatus;
+    facePrepareErrorRef.current = facePrepareError;
+  }, [photo, photoAssetId, preparedFaceFile, facePrepareStatus, facePrepareError]);
 
 
 
@@ -694,6 +730,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setPhotoAssetId(null)
     setPhotoStoragePath(null)
     setFaceImageUrl(null)
+    setPreparedFaceFile(null)
+    setFacePrepareStatus('idle')
+    setFacePrepareError(null)
+    facePrepareRunIdRef.current += 1
     setTemplateCoverUrl(null)
     setTemplateTitle(null)
     setTemplateDescription(null)
@@ -750,6 +790,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       for (let attempt = 0; attempt < 6; attempt += 1) {
         try {
           const urls = await getPreviewPages(jobId, undefined, { size: 'small' });
+          logPreviewDebug('preview-url pages count', { jobId, count: urls.length, attempt, mode: 'ready' });
           if (urls.length) {
             return {
               urls,
@@ -779,6 +820,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const loadPartialPreviewAssets = async (jobId: string) => {
       try {
         const urls = await getPreviewPages(jobId, undefined, { size: 'small' });
+        logPreviewDebug('preview-url pages count', { jobId, count: urls.length, mode: 'partial' });
         if (urls.length) {
           return {
             urls,
@@ -832,20 +874,44 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     const run = async () => {
       try {
+        const markGenerateTiming = createGenerateTimer()
+        markGenerateTiming('generate_clicked')
+        const currentCustomerId = user?.customerId ?? null
+        const currentPhoto = photoRef.current
+        let faceAssetId = photoAssetIdRef.current
+        let pendingFaceAsset: PendingUserAssetUpload | undefined
+        const currentPreparedFaceFile = preparedFaceFileRef.current
+        const currentFacePrepareStatus = facePrepareStatusRef.current
+        const currentFacePrepareError = facePrepareErrorRef.current
+
         if (!book) throw new Error('Book not found')
-        if (!photo && !photoAssetId) throw new Error('Please upload a photo before generating the preview')
+        if (!currentPhoto && !faceAssetId) throw new Error('Please upload a photo before generating the preview')
 
         setPreviewUrl(null)
         setPreviewPages([])
 
-        let faceAssetId = photoAssetId
-
-        if (photo) {
-          const faceAsset = await uploadUserAsset(photo, 'face_image', 'face', user?.customerId)
+        if (!faceAssetId) {
+          if (currentFacePrepareStatus === 'checking' || currentFacePrepareStatus === 'preparing') {
+            throw new Error(t('personalize.photoPreparing'))
+          }
+          if (currentFacePrepareStatus === 'failed') {
+            throw new Error(currentFacePrepareError ?? t('personalize.photoPrepareFailed'))
+          }
+          const uploadFile = currentPreparedFaceFile ?? currentPhoto
+          if (!uploadFile) {
+            throw new Error('Missing face asset for preview')
+          }
+          const faceAsset = await uploadUserAsset(uploadFile, 'face_image', 'face', currentCustomerId ?? undefined, {
+            skipFacePreparation: Boolean(currentPreparedFaceFile),
+            originalName: currentPhoto?.name ?? uploadFile.name,
+            deferConfirm: true,
+            onTiming: markGenerateTiming,
+          })
           if (!isActive) return
-          setPhotoAssetId(faceAsset.asset_id)
-          setPhotoStoragePath(faceAsset.storage_path)
-          setFaceImageUrl(faceAsset.signed_url ?? null)
+          if (!('bucket' in faceAsset)) {
+            throw new Error('Pending face upload missing upload metadata')
+          }
+          pendingFaceAsset = faceAsset
           faceAssetId = faceAsset.asset_id
         }
 
@@ -858,7 +924,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           book_type: bookType,
         }
 
-        if (!user?.customerId && name && age) {
+        if (!currentCustomerId && name && age) {
           fetch('/api/user/profiles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -869,14 +935,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             }),
             credentials: 'include',
           }).catch(() => {})
-        } else if (user?.customerId && name && age) {
+        } else if (currentCustomerId && name && age) {
           fetch('/api/user/profiles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               child_name: name,
               child_age: Number.isNaN(parsedAge) ? age : parsedAge,
-              customerId: user.customerId,
+              customerId: currentCustomerId,
             }),
             credentials: 'include',
           }).catch(() => {})
@@ -891,16 +957,27 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           faceAssetId,
           textOverrides,
           undefined,
-          user?.customerId
+          currentCustomerId ?? undefined,
+          pendingFaceAsset
         )
+        markGenerateTiming(pendingFaceAsset ? 'asset_confirmed/job_created' : 'job_created', {
+          jobId: created?.jobId,
+          creationId: created?.creationId,
+          usedPendingAsset: Boolean(pendingFaceAsset),
+        })
         if (!created?.jobId) {
           throw new Error('Preview job missing jobId')
+        }
+        if (pendingFaceAsset) {
+          photoAssetIdRef.current = pendingFaceAsset.asset_id
+          setPhotoAssetId(pendingFaceAsset.asset_id)
+          setPhotoStoragePath(pendingFaceAsset.storage_path)
         }
         if (previewCancelRequestedRef.current) {
           try {
             await cancelPreviewJob(created.jobId, {
               creationId: created.creationId,
-              customerId: user?.customerId ?? null,
+              customerId: currentCustomerId,
             })
           } catch (error) {
             console.warn('Failed to cancel preview job after creation:', error)
@@ -914,11 +991,26 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
         let fetchFailures = 0
         let partialPreviewShown = false
+        let lastLoggedJobState = ''
         while (isActive) {
           let job
           try {
             job = await getJob(created.jobId)
             fetchFailures = 0
+            const loggedJobState = `${job.status}:${job.progress ?? ''}`
+            if (loggedJobState !== lastLoggedJobState) {
+              lastLoggedJobState = loggedJobState
+              logPreviewDebug('job status', {
+                jobId: created.jobId,
+                status: job.status,
+                progress: job.progress ?? null,
+              })
+              markGenerateTiming('first_job_status', {
+                jobId: created.jobId,
+                status: job.status,
+                progress: job.progress ?? null,
+              })
+            }
           } catch (err) {
             fetchFailures += 1
             if (fetchFailures >= 8) {
@@ -951,6 +1043,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             }
             replacePreviewUrl(created.creationId, created.jobId)
             setProgress(100)
+            logPreviewDebug('finishGenerating', { jobId: created.jobId, mode: 'done' })
             finishGenerating()
             return
           }
@@ -966,6 +1059,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               }
               replacePreviewUrl(created.creationId, created.jobId)
               setProgress(100)
+              markGenerateTiming('partial_preview_ready', {
+                jobId: created.jobId,
+                pages: partialPreviewAssets.urls.length,
+              })
               finishGenerating()
               return
             }
@@ -1005,7 +1102,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       if (textInterval) window.clearInterval(textInterval);
       if (progressInterval) window.clearInterval(progressInterval);
     };
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, photo, user, reset, replacePreviewUrl, t]);
+  // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, name, age, bookType]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -1194,6 +1293,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       setPhotoStoragePath(null);
       setFaceImageUrl(null);
       setPhotoPreview(null);
+      setPhoto(null);
+      setPreparedFaceFile(null);
+      setFacePrepareStatus('idle');
+      setFacePrepareError(null);
+      facePrepareRunIdRef.current += 1;
     }
 
     try {
@@ -1209,7 +1313,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     } catch (e) {
       // no-op
     }
-  }, [user?.customerId, photoAssetId, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setPhotoPreview]);
+  }, [user?.customerId, photoAssetId, setPhoto, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setPhotoPreview]);
 
   const handleDeleteProfile = useCallback(async (payload: { assetId?: string; field?: 'name' | 'age'; value?: string | number }) => {
     if (payload.assetId) {
@@ -1725,15 +1829,58 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
 
+    const startFacePreparation = useCallback(async (file: File, runId: number) => {
+      setFacePrepareStatus('checking');
+      setFacePrepareError(null);
+      setPreparedFaceFile(null);
+
+      const validation = await validateFaceImage(file);
+      if (facePrepareRunIdRef.current !== runId) return;
+
+      if (!validation.ok) {
+        setFacePrepareStatus('failed');
+        setFacePrepareError(validation.message ?? t('personalize.photoPrepareFailed'));
+        return;
+      }
+
+      const quality = await faceQualityCheck(file);
+      if (facePrepareRunIdRef.current !== runId) return;
+
+      if (!quality.ok) {
+        setFacePrepareStatus('failed');
+        setFacePrepareError(quality.message ?? t('personalize.photoPrepareFailed'));
+        return;
+      }
+
+      setFacePrepareStatus('preparing');
+      try {
+        const prepared = await prepareFaceImage(file);
+        if (facePrepareRunIdRef.current !== runId) return;
+        setPreparedFaceFile(prepared);
+        setFacePrepareStatus('ready');
+      } catch {
+        if (facePrepareRunIdRef.current !== runId) return;
+        setPreparedFaceFile(null);
+        setFacePrepareStatus('failed');
+        setFacePrepareError(t('personalize.photoPrepareFailed'));
+      }
+    }, [t]);
+
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
+          const nextRunId = facePrepareRunIdRef.current + 1;
+          facePrepareRunIdRef.current = nextRunId;
           setPhoto(file);
           setPhotoPreview(URL.createObjectURL(file));
           setPhotoAssetId(null);
           setPhotoStoragePath(null);
           setFaceImageUrl(null);
+          setPreparedFaceFile(null);
+          setFacePrepareError(null);
           setPreviewUrl(null);
+          void startFacePreparation(file, nextRunId);
+          e.target.value = '';
       }
   };
 
@@ -1829,14 +1976,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                   {/* Hardcover Ridge at binding */}
                   <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent z-30" />
 
-                  {/* Photo Edit Button on Cover */}
-                  <div className="absolute top-4 right-4 z-30">
-                     <label className="cursor-pointer bg-white/90 hover:bg-white text-gray-800 text-xs font-bold px-3 py-2 rounded-full shadow-lg flex items-center gap-2 transition-transform hover:scale-105">
-                         <Camera className="h-4 w-4 text-amber-500" />
-                         <span>{t('personalize.changePhoto')}</span>
-                         <input type="file" onChange={handlePhotoUpload} className="hidden" accept="image/*" />
-                     </label>
-                  </div>
                   {!isFlipping && (
                     <div className="absolute top-1/2 right-4 transform -translate-y-1/2 animate-pulse text-white drop-shadow-lg z-30 cursor-pointer p-3 bg-black/20 rounded-full hover:bg-black/40 transition-colors"
                         onClick={(e) => { e.stopPropagation(); turnPage('next'); }}>
@@ -1931,7 +2070,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       );
   };
 
-  const isFormValid = name.length > 0 && age.length > 0 && (photo !== null || !!photoAssetId);
+  const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing';
+  const hasUsablePhoto = Boolean(photoAssetId || (photo && preparedFaceFile && facePrepareStatus === 'ready'));
+  const isFormValid = name.length > 0 && age.length > 0 && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
+  const generateButtonLabel = isFacePreparing
+    ? t('personalize.photoPreparing')
+    : facePrepareStatus === 'failed'
+      ? t('personalize.photoNeedsFix')
+      : isFormValid
+        ? t('personalize.generateMagicPreview')
+        : t('personalize.completeDetails');
   if (!book) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#fffaf3] px-4 text-center text-sm font-medium text-gray-500">
@@ -2293,11 +2441,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">{t('personalize.magicAttributes')}</h4>
                                 <div className="flex items-center justify-between text-sm text-gray-700">
                                     <span className="flex items-center gap-2"><Heart className="h-4 w-4 text-pink-400" /> {t('personalize.kindness')}</span>
-                                    <div className="w-24 h-1.5 bg-gray-100 rounded-full"><div className="w-[90%] h-full bg-pink-400 rounded-full"></div></div>
+                                    <div className="w-24 h-1.5 bg-gray-300/80 rounded-full"><div className="w-[90%] h-full bg-pink-400 rounded-full"></div></div>
                                 </div>
                                 <div className="flex items-center justify-between text-sm text-gray-700">
                                     <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-blue-400" /> {t('personalize.courage')}</span>
-                                    <div className="w-24 h-1.5 bg-gray-100 rounded-full"><div className="w-[80%] h-full bg-blue-400 rounded-full"></div></div>
+                                    <div className="w-24 h-1.5 bg-gray-300/80 rounded-full"><div className="w-[80%] h-full bg-blue-400 rounded-full"></div></div>
                                 </div>
                             </div>
                         </div>
@@ -2369,7 +2517,33 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     <input type="file" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-30" accept="image/*" />
                                     {photoPreview ? (
                                         <div className="relative z-10 pointer-events-none">
-                                            <img src={photoPreview} alt={t('personalize.uploadChildPhoto')} className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
+                                            <div className="relative mx-auto w-20 sm:w-24 md:w-28">
+                                                <img src={photoPreview} alt={t('personalize.uploadChildPhoto')} className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
+                                                {isFacePreparing ? (
+                                                    <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-amber-100">
+                                                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+                                                    </span>
+                                                ) : facePrepareStatus === 'ready' ? (
+                                                    <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md ring-2 ring-white">
+                                                        <Check className="h-4 w-4" />
+                                                    </span>
+                                                ) : facePrepareStatus === 'failed' ? (
+                                                    <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-white shadow-md ring-2 ring-white">
+                                                        <X className="h-4 w-4" />
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            {isFacePreparing ? (
+                                                <p className="mt-2 text-xs font-semibold text-amber-700">
+                                                    {facePrepareStatus === 'checking' ? t('personalize.photoChecking') : t('personalize.photoPreparing')}
+                                                </p>
+                                            ) : facePrepareStatus === 'ready' ? (
+                                                <p className="mt-2 text-xs font-semibold text-emerald-600">{t('personalize.photoReady')}</p>
+                                            ) : facePrepareStatus === 'failed' ? (
+                                                <p className="mx-auto mt-2 max-w-xs text-xs font-semibold leading-5 text-rose-600">
+                                                    {facePrepareError ?? t('personalize.photoPrepareFailed')}
+                                                </p>
+                                            ) : null}
                                             <p className="text-xs text-amber-600 mt-1.5 font-medium">{t('personalize.clickToChangePhoto')}</p>
                                         </div>
                                     ) : (
@@ -2443,7 +2617,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                           className="w-12 h-12 rounded-full overflow-hidden border border-white shadow-sm hover:ring-2 hover:ring-amber-300 transition"
                                           onClick={() => {
                                             if (!face.signed_url) return;
+                                            facePrepareRunIdRef.current += 1;
                                             setPhoto(null);
+                                            setPreparedFaceFile(null);
+                                            setFacePrepareStatus('ready');
+                                            setFacePrepareError(null);
                                             setPhotoPreview(face.signed_url);
                                             setFaceImageUrl(face.signed_url);
                                             setPhotoAssetId(face.asset_id);
@@ -2713,7 +2891,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                     disabled={!isFormValid || isSupreme} 
                                     className={`w-full h-16 rounded-full font-bold text-lg flex items-center justify-center gap-3 transition-all duration-500 shadow-xl ${(!isFormValid || isSupreme) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:scale-[1.02] shadow-amber-200'}`}
                                 >
-                                    {isSupreme ? t('personalize.comingSoon') : <><Sparkles className="h-6 w-6" /> {isFormValid ? t('personalize.generateMagicPreview') : t('personalize.completeDetails')}</>}
+                                    {isSupreme ? t('personalize.comingSoon') : <><Sparkles className="h-6 w-6" /> {generateButtonLabel}</>}
                                 </button>
                                 {previewError && (
                                   <p className="text-xs text-red-500 mt-2">{previewError}</p>
@@ -2735,6 +2913,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <div className="text-center mb-6 md:mb-10 text-gray-800">
                         <h2 className="text-2xl md:text-3xl font-serif font-bold mb-2">{t('personalize.previewTitle', { name })}</h2>
                         <p className="text-gray-600 text-sm md:text-base">{t('personalize.previewSubtitle')}</p>
+                        <div className="mt-4 flex justify-center">
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-bold text-gray-800 shadow-lg ring-1 ring-amber-100 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-amber-200/60">
+                            <Camera className="h-4 w-4 text-amber-500" />
+                            <span>{t('personalize.changePhoto')}</span>
+                            <input type="file" onChange={handlePhotoUpload} className="hidden" accept="image/*" />
+                          </label>
+                        </div>
                     </div>
 
                     <div 
