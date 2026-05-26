@@ -1,6 +1,19 @@
 import './globals.css';
 import { AppShell } from '@/components/AppShell';
 import { Cormorant_Garamond, Cutive, Inter, Noto_Sans_TC, Noto_Serif_TC, Playfair_Display } from 'next/font/google';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [
+      { url: '/apple-icon.png', type: 'image/png', sizes: '180x180' },
+    ],
+  },
+};
 
 const inter = Inter({
   subsets: ['latin'],
