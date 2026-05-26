@@ -8,6 +8,7 @@ import { ShareDialog } from '@/components/ShareDialog'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing'
+import { getOrderStatusLabelKey, isPaidLikeOrderStatus, normalizeOrderStatus } from '@/lib/order-status'
 
 type OrderRow = {
   order_id: string
@@ -59,7 +60,15 @@ function CheckoutSuccessPageContent() {
     const maxConfirmAttempts = 6
 
     const shouldStopPolling = (status: string | null | undefined) => {
-      return status === 'paid' || status === 'processing' || status === 'shipped' || status === 'cancelled' || status === 'refunded'
+      const normalized = normalizeOrderStatus(status)
+      return (
+        normalized === 'paid' ||
+        normalized === 'production' ||
+        normalized === 'shipped' ||
+        normalized === 'delivered' ||
+        normalized === 'cancelled' ||
+        normalized === 'refunded'
+      )
     }
 
     const run = async () => {
@@ -116,7 +125,7 @@ function CheckoutSuccessPageContent() {
   useEffect(() => {
     if (!orderId) return
     if (!order?.order_status) return
-    if (!['paid', 'processing', 'shipped'].includes(String(order.order_status))) return
+    if (!isPaidLikeOrderStatus(order.order_status)) return
 
     let cancelled = false
     setIsInviteLoading(true)
@@ -165,7 +174,7 @@ function CheckoutSuccessPageContent() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-14">
-      <div className="rounded-3xl border border-amber-100 bg-white shadow-md p-8 md:p-10 text-center">
+      <div className="rounded-3xl glass-panel p-8 md:p-10 text-center">
         <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
           <CheckCircle2 className="h-8 w-8 text-emerald-600" />
         </div>
@@ -174,7 +183,7 @@ function CheckoutSuccessPageContent() {
           {t('checkout.successDescription')}
         </p>
 
-        <div className="mt-6 rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
+        <div className="mt-6 rounded-2xl border border-white/60 bg-white/60 backdrop-blur-sm px-4 py-3 text-sm text-amber-900 shadow-[0_4px_12px_rgba(148,93,34,0.06)]">
           {loading ? (
             <span className="inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -190,7 +199,9 @@ function CheckoutSuccessPageContent() {
               </div>
               <div className="mt-1">
                 {t('checkout.statusLabel')}:{' '}
-                <span className="font-semibold">{order?.order_status || 'processing'}</span>
+                <span className="font-semibold">
+                  {t(getOrderStatusLabelKey(order?.order_status || 'production'))}
+                </span>
               </div>
               {typeof order?.display_total === 'number' && (
                 <div className="mt-1">
@@ -239,7 +250,7 @@ function CheckoutSuccessPageContent() {
             {t('share.invitePreparing')}
           </div>
         ) : inviteData ? (
-          <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50/60 p-5 text-left">
+          <div className="mt-6 rounded-2xl border border-white/60 bg-white/60 backdrop-blur-sm p-5 text-left shadow-[0_4px_12px_rgba(148,93,34,0.06)]">
             <div className="flex items-center gap-2 text-sm font-semibold text-amber-700">
               <Gift className="h-4 w-4" />
               {t('share.inviteCardTitle')}

@@ -1,10 +1,10 @@
 import { Footer } from '@/components/Footer'
-import { CommunityPageClient } from '@/components/community/CommunityPageClient'
+import { BlogBoardClient } from '@/components/blog/BlogBoardClient'
 
 export default function CommunityPage() {
   return (
     <>
-      <CommunityPageClient />
+      <BlogBoardClient />
       <Footer />
     </>
   )

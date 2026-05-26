@@ -21,6 +21,7 @@ type AccountProfileResponse = {
   customerId: string;
   email: string;
   displayName: string | null;
+  role?: 'customer' | 'admin';
   avatarAssetId: string | null;
   avatarStoragePath: string | null;
   avatarSignedUrl: string | null;
@@ -54,6 +55,7 @@ const applyAccountProfileToUser = (
   ...baseUser,
   name: getFallbackUserName(baseUser.email, profile?.displayName),
   avatar: profile?.avatarSignedUrl || baseUser.avatar || DEFAULT_AVATAR,
+  role: profile?.role || baseUser.role || 'customer',
   avatarAssetId: profile?.avatarAssetId ?? undefined,
   avatarStoragePath: profile?.avatarStoragePath ?? undefined,
 });

@@ -11,6 +11,7 @@
     "images:optimize": "node scripts/optimize-images.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.35",
     "@react-email/components": "^1.0.7",
     "@react-email/render": "^2.0.4",
     "@stripe/stripe-js": "^8.9.0",
@@ -20,6 +21,7 @@
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "opencc-js": "^1.0.5",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "resend": "^6.9.1",

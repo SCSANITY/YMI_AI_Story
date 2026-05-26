@@ -37,6 +37,16 @@ const notoSerifTC = Noto_Serif_TC({
   variable: '--font-noto-serif-tc',
 });
 
+const supabaseOrigin = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
+      : null;
+  } catch {
+    return null;
+  }
+})();
+
 export default function RootLayout({
   children,
 }: {
@@ -47,6 +57,12 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${cutive.variable} ${playfair.variable} ${cormorant.variable} ${notoSansTC.variable} ${notoSerifTC.variable}`}
     >
+      {supabaseOrigin ? (
+        <head>
+          <link rel="preconnect" href={supabaseOrigin} crossOrigin="" />
+          <link rel="dns-prefetch" href={supabaseOrigin} />
+        </head>
+      ) : null}
       <body className="min-h-screen bg-white text-gray-900 font-sans">
         <AppShell>
           {children}

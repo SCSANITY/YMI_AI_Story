@@ -12,6 +12,56 @@ async function signAvatarUrl(storagePath: string | null) {
   return signed?.signedUrl ?? null
 }
 
+function isMissingRoleColumn(error: unknown) {
+  const message = String((error as { message?: string })?.message || error || '').toLowerCase()
+  return message.includes('role') && (message.includes('column') || message.includes('schema cache'))
+}
+
+async function fetchCustomerProfile(authUserId: string) {
+  const query = supabaseAdmin
+    .from('customers')
+    .select('customer_id, email, display_name, role, avatar_asset_id, avatar_storage_path')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+
+  const { data, error } = await query
+  if (!error || !isMissingRoleColumn(error)) return { data, error }
+
+  const fallback = await supabaseAdmin
+    .from('customers')
+    .select('customer_id, email, display_name, avatar_asset_id, avatar_storage_path')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+
+  return {
+    data: fallback.data ? { ...fallback.data, role: 'customer' } : fallback.data,
+    error: fallback.error,
+  }
+}
+
+async function updateCustomerProfile(customerId: string, updates: Record<string, string | null>) {
+  const { data, error } = await supabaseAdmin
+    .from('customers')
+    .update(updates)
+    .eq('customer_id', customerId)
+    .select('customer_id, email, display_name, role, avatar_asset_id, avatar_storage_path')
+    .single()
+
+  if (!error || !isMissingRoleColumn(error)) return { data, error }
+
+  const fallback = await supabaseAdmin
+    .from('customers')
+    .update(updates)
+    .eq('customer_id', customerId)
+    .select('customer_id, email, display_name, avatar_asset_id, avatar_storage_path')
+    .single()
+
+  return {
+    data: fallback.data ? { ...fallback.data, role: 'customer' } : fallback.data,
+    error: fallback.error,
+  }
+}
+
 export async function GET() {
   const supabase = await createServerSupabase()
   const {
@@ -23,11 +73,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
-  const { data: customer, error } = await supabaseAdmin
-    .from('customers')
-    .select('customer_id, email, display_name, avatar_asset_id, avatar_storage_path')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
+  const { data: customer, error } = await fetchCustomerProfile(user.id)
 
   if (error || !customer?.customer_id) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
@@ -37,6 +83,7 @@ export async function GET() {
     customerId: customer.customer_id,
     email: customer.email,
     displayName: customer.display_name,
+    role: customer.role ?? 'customer',
     avatarAssetId: customer.avatar_asset_id,
     avatarStoragePath: customer.avatar_storage_path,
     avatarSignedUrl: await signAvatarUrl(customer.avatar_storage_path),
@@ -76,11 +123,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Invalid avatar storage path' }, { status: 400 })
   }
 
-  const { data: customer, error: customerError } = await supabaseAdmin
-    .from('customers')
-    .select('customer_id, email, display_name, avatar_asset_id, avatar_storage_path')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
+  const { data: customer, error: customerError } = await fetchCustomerProfile(user.id)
 
   if (customerError || !customer?.customer_id) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
@@ -110,12 +153,7 @@ export async function PATCH(request: Request) {
     updates.avatar_storage_path = avatarStoragePath
   }
 
-  const { data: updated, error: updateError } = await supabaseAdmin
-    .from('customers')
-    .update(updates)
-    .eq('customer_id', customer.customer_id)
-    .select('customer_id, email, display_name, avatar_asset_id, avatar_storage_path')
-    .single()
+  const { data: updated, error: updateError } = await updateCustomerProfile(customer.customer_id, updates)
 
   if (updateError || !updated?.customer_id) {
     return NextResponse.json({ error: 'Failed to update customer profile' }, { status: 500 })
@@ -148,6 +186,7 @@ export async function PATCH(request: Request) {
     customerId: updated.customer_id,
     email: updated.email,
     displayName: updated.display_name,
+    role: updated.role ?? 'customer',
     avatarAssetId: updated.avatar_asset_id,
     avatarStoragePath: updated.avatar_storage_path,
     avatarSignedUrl: await signAvatarUrl(updated.avatar_storage_path),

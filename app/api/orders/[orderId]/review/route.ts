@@ -81,7 +81,12 @@ export async function POST(
   const resolvedCustomerId = customerIdFromBody || order.customer_id || null
   const resolvedEmail = emailFromBody || order.email || null
 
-  if (order.order_status !== 'shipped' && order.order_status !== 'refunded' && order.order_status !== 'cancelled') {
+  if (
+    order.order_status !== 'shipped' &&
+    order.order_status !== 'delivered' &&
+    order.order_status !== 'refunded' &&
+    order.order_status !== 'cancelled'
+  ) {
     return NextResponse.json({ error: 'Review is available after fulfillment.' }, { status: 400 })
   }
 
@@ -139,4 +144,3 @@ export async function POST(
 
   return NextResponse.json({ saved: true, review })
 }
-

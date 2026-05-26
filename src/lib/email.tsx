@@ -53,21 +53,16 @@ export async function sendEmail({ to, subject, react, text, html, from }: SendEm
     })
   }
 
-  const payload: any = {
-    from: resolvedFrom,
-    to,
-    subject,
-  }
-  if (react) {
-    payload.react = react
-  } else if (html) {
-    payload.html = html
-  }
-  if (text) {
-    payload.text = text
-  }
-
-  const response = await resend.emails.send(payload)
+  const response = await resend.emails.send(
+    {
+      from: resolvedFrom,
+      to,
+      subject,
+      ...(react ? { react } : {}),
+      ...(!react && html ? { html } : {}),
+      ...(text ? { text } : {}),
+    } as Parameters<typeof resend.emails.send>[0]
+  )
 
   const responseAny = response as
     | { data?: { id?: string | null } | null; error?: { message?: string } | null; id?: string | null }
@@ -140,9 +135,12 @@ type SendOrderDeliveryEmailParams = {
   displayId?: string | null
   downloadUrl: string
   previewImageUrl?: string
+  orderUrl?: string
 }
 
 export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParams) {
+  const orderUrl = params.orderUrl || buildAbsoluteUrl(`/orders/${params.orderId}`) || params.downloadUrl
+
   return sendEmail({
     to: params.to,
     from: deliveryFrom,
@@ -151,8 +149,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
       <DeliveryEmail
         orderId={params.orderId}
         displayId={params.displayId}
-        downloadUrl={params.downloadUrl}
-        previewImageUrl={params.previewImageUrl}
+        orderUrl={orderUrl}
       />
     ),
   })

@@ -3,8 +3,10 @@ export type CartItemStatus = 'draft' | 'cart' | 'ordered'
 export type TransactionStatus =
   | 'unpaid'
   | 'paid'
+  | 'production'
   | 'processing'
   | 'shipped'
+  | 'delivered'
   | 'cancelled'
   | 'refunded'
 

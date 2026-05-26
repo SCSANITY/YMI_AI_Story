@@ -1,23 +1,32 @@
-'use client';
+﻿'use client';
 
 import React, { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Lock, CheckCircle2, ChevronLeft, ChevronDown } from 'lucide-react';
+import Image from 'next/image';
+import { Lock, CheckCircle2, ChevronLeft, ChevronDown, X } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useI18n } from '@/lib/useI18n';
+import { useBookCatalog } from '@/components/useBookCatalog';
 import {
   CheckoutCurrency,
   formatCurrencyAmount,
   getDefaultCheckoutCurrency,
   normalizeCheckoutCurrency,
 } from '@/lib/locale-pricing';
+import {
+  getFooterLegalContent,
+  type LegalSection,
+  type LegalTextItem,
+} from '@/lib/footer-legal-content';
+import { canEnterCustomize } from '@/lib/customize-access-client';
 
 type CheckoutStep = 'address' | 'payment' | 'success';
 type CheckoutIdentityMode = 'guest' | 'auth';
-type AppliedDiscountKind = 'referral' | 'coupon' | null;
+type AppliedDiscountKind = 'referral' | 'coupon' | 'creator_promo' | null;
+type ShippingMethodCode = 'standard' | 'speedy';
+type CheckoutPolicyModal = 'shipping' | 'refund' | 'safety' | 'impact' | null;
 type RewardVoucher = {
   couponCodeId: string;
   code: string;
@@ -27,33 +36,225 @@ type RewardVoucher = {
   redeemedAt?: string | null;
 };
 
-const CHECKOUT_CURRENCY_OPTIONS_LEGACY: { code: CheckoutCurrency; label: string }[] = [
-  { code: 'USD', label: '?? USD 繚 US Dollar' },
-  { code: 'EUR', label: '?? EUR 繚 Euro' },
-  { code: 'GBP', label: '?? GBP 繚 British Pound' },
-  { code: 'JPY', label: '?? JPY 繚 Japanese Yen' },
-  { code: 'AUD', label: '?? AUD 繚 Australian Dollar' },
-  { code: 'CAD', label: '?? CAD 繚 Canadian Dollar' },
-  { code: 'SGD', label: '?? SGD 繚 Singapore Dollar' },
-  { code: 'HKD', label: '?? HKD 繚 Hong Kong Dollar' },
-  { code: 'KRW', label: '?? KRW 繚 South Korean Won' },
-  { code: 'CNY', label: '?? CNY 繚 Chinese Yuan' },
+type CheckoutAddressForm = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  country: string;
+  shippingRegionKey: string;
+  shippingDestinationLabel: string;
+  region: string;
+  city: string;
+  addressLine1: string;
+  addressLine2: string;
+  zip: string;
+  phone: string;
+  company: string;
+};
+
+type ShippingQuoteState = {
+  status: 'idle' | 'missing' | 'loading' | 'available' | 'unavailable' | 'error';
+  options: ShippingQuoteOption[];
+  selectedMethod: ShippingMethodCode | null;
+  message: string | null;
+};
+
+type ShippingQuoteOption = {
+  methodCode: ShippingMethodCode;
+  methodName: string;
+  methodDescription?: string | null;
+  speedLabel?: string | null;
+  amountUsd: number;
+  displayAmount?: string | null;
+  rateName?: string | null;
+  estimatedDelivery?: string | null;
+  message?: string | null;
+  snapshot: Record<string, unknown> | null;
+};
+
+type ShippingDestinationOption = {
+  id: string;
+  countryCode: string;
+  shippingRegionKey: string | null;
+  label: {
+    en: string;
+    cn_s?: string;
+    cn_t?: string;
+    ja?: string;
+    es?: string;
+    ko?: string;
+  };
+  flagUrl?: string | null;
+  flagEmoji?: string | null;
+  sortOrder?: number;
+};
+
+type AddressBookMetadata = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  country?: string;
+  shippingRegionKey?: string;
+  regionKey?: string;
+  shippingDestinationLabel?: string;
+  destinationLabel?: string;
+  region?: string;
+  addressLine1?: string;
+  address?: string;
+  addressLine2?: string;
+  city?: string;
+  zip?: string;
+  phone?: string;
+  company?: string;
+};
+
+type AddressBookEntry = {
+  asset_id?: string;
+  metadata?: AddressBookMetadata;
+};
+
+type ShippingQuoteApiOption = {
+  methodCode?: string;
+  methodName?: string;
+  methodDescription?: string | null;
+  speedLabel?: string | null;
+  amountUsd?: number | string;
+  displayAmount?: string | null;
+  rateName?: string | null;
+  estimatedDelivery?: string | null;
+  message?: string | null;
+  snapshot?: Record<string, unknown> | null;
+};
+
+const EMPTY_SHIPPING_QUOTE: ShippingQuoteState = {
+  status: 'missing',
+  options: [],
+  selectedMethod: null,
+  message: null,
+};
+
+const FALLBACK_SHIPPING_DESTINATIONS: ShippingDestinationOption[] = [
+  {
+    id: 'US:default',
+    countryCode: 'US',
+    shippingRegionKey: null,
+    label: { en: 'United States' },
+    flagUrl: 'https://flagcdn.com/w40/us.png',
+    sortOrder: 40,
+  },
+  {
+    id: 'GB:default',
+    countryCode: 'GB',
+    shippingRegionKey: null,
+    label: { en: 'United Kingdom' },
+    flagUrl: 'https://flagcdn.com/w40/gb.png',
+    sortOrder: 50,
+  },
+  {
+    id: 'AU:default',
+    countryCode: 'AU',
+    shippingRegionKey: null,
+    label: { en: 'Australia' },
+    flagUrl: 'https://flagcdn.com/w40/au.png',
+    sortOrder: 60,
+  },
+  {
+    id: 'CN:CN-South',
+    countryCode: 'CN',
+    shippingRegionKey: 'CN-South',
+    label: {
+      en: 'China - South China',
+      cn_s: '中国 - 华南地区',
+      cn_t: '中國 - 華南地區',
+      ja: '中国 - 華南地区',
+      es: 'China - Sur de China',
+      ko: '중국 - 화남 지역',
+    },
+    flagUrl: 'https://flagcdn.com/w40/cn.png',
+    sortOrder: 30,
+  },
+  {
+    id: 'CN:CN-Other',
+    countryCode: 'CN',
+    shippingRegionKey: 'CN-Other',
+    label: {
+      en: 'China - Other Regions',
+      cn_s: '中国 - 非华南地区',
+      cn_t: '中國 - 非華南地區',
+      ja: '中国 - その他の地域',
+      es: 'China - Otras regiones',
+      ko: '중국 - 기타 지역',
+    },
+    flagUrl: 'https://flagcdn.com/w40/cn.png',
+    sortOrder: 31,
+  },
 ];
 
-void CHECKOUT_CURRENCY_OPTIONS_LEGACY;
+const REQUIRED_ADDRESS_FIELDS: (keyof CheckoutAddressForm)[] = [
+  'firstName',
+  'lastName',
+  'email',
+  'country',
+  'city',
+  'addressLine1',
+  'zip',
+  'phone',
+];
+
+const EMAIL_FORMAT_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidCheckoutEmail(email: string) {
+  return EMAIL_FORMAT_PATTERN.test(email.trim());
+}
+
+function getDestinationLabel(destination: ShippingDestinationOption | null | undefined, language: string) {
+  if (!destination) return ''
+  if (language === 'cn_s') return destination.label.cn_s || destination.label.en
+  if (language === 'cn_t') return destination.label.cn_t || destination.label.cn_s || destination.label.en
+  if (language === 'ja') return destination.label.ja || destination.label.en
+  if (language === 'es') return destination.label.es || destination.label.en
+  if (language === 'ko') return destination.label.ko || destination.label.en
+  return destination.label.en
+}
 
 const CHECKOUT_CURRENCY_OPTIONS_CLEAN: { code: CheckoutCurrency; label: string }[] = [
-  { code: 'USD', label: 'US USD 繚 US Dollar' },
-  { code: 'EUR', label: 'EU EUR 繚 Euro' },
-  { code: 'GBP', label: 'UK GBP 繚 British Pound' },
-  { code: 'JPY', label: 'JP JPY 繚 Japanese Yen' },
-  { code: 'AUD', label: 'AU AUD 繚 Australian Dollar' },
-  { code: 'CAD', label: 'CA CAD 繚 Canadian Dollar' },
-  { code: 'SGD', label: 'SG SGD 繚 Singapore Dollar' },
-  { code: 'HKD', label: 'HK HKD 繚 Hong Kong Dollar' },
-  { code: 'KRW', label: 'KR KRW 繚 South Korean Won' },
-  { code: 'CNY', label: 'CN CNY 繚 Chinese Yuan' },
+  { code: 'USD', label: 'US - USD - US Dollar' },
+  { code: 'EUR', label: 'EU - EUR - Euro' },
+  { code: 'GBP', label: 'UK - GBP - British Pound' },
+  { code: 'JPY', label: 'JP - JPY - Japanese Yen' },
+  { code: 'AUD', label: 'AU - AUD - Australian Dollar' },
+  { code: 'CAD', label: 'CA - CAD - Canadian Dollar' },
+  { code: 'SGD', label: 'SG - SGD - Singapore Dollar' },
+  { code: 'HKD', label: 'HK - HKD - Hong Kong Dollar' },
+  { code: 'KRW', label: 'KR - KRW - South Korean Won' },
+  { code: 'CNY', label: 'CN - CNY - Chinese Yuan' },
 ];
+const CHECKOUT_CURRENCY_DISPLAY_META: Record<CheckoutCurrency, { flagUrl: string; region: string; currency: string }> = {
+  USD: { flagUrl: 'https://flagcdn.com/w40/us.png', region: 'US', currency: 'USD' },
+  EUR: { flagUrl: 'https://flagcdn.com/w40/eu.png', region: 'EU', currency: 'EUR' },
+  GBP: { flagUrl: 'https://flagcdn.com/w40/gb.png', region: 'UK', currency: 'GBP' },
+  JPY: { flagUrl: 'https://flagcdn.com/w40/jp.png', region: 'JP', currency: 'JPY' },
+  AUD: { flagUrl: 'https://flagcdn.com/w40/au.png', region: 'AU', currency: 'AUD' },
+  CAD: { flagUrl: 'https://flagcdn.com/w40/ca.png', region: 'CA', currency: 'CAD' },
+  SGD: { flagUrl: 'https://flagcdn.com/w40/sg.png', region: 'SG', currency: 'SGD' },
+  HKD: { flagUrl: 'https://flagcdn.com/w40/hk.png', region: 'HK', currency: 'HKD' },
+  KRW: { flagUrl: 'https://flagcdn.com/w40/kr.png', region: 'KR', currency: 'KRW' },
+  CNY: { flagUrl: 'https://flagcdn.com/w40/cn.png', region: 'CN', currency: 'CNY' },
+};
+
+function CurrencyOptionLabel({ currency }: { currency: CheckoutCurrency }) {
+  const meta = CHECKOUT_CURRENCY_DISPLAY_META[currency];
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <span
+        aria-hidden="true"
+        className="h-4 w-6 shrink-0 rounded-[3px] border border-black/10 bg-cover bg-center shadow-sm"
+        style={{ backgroundImage: `url(${meta.flagUrl})` }}
+      />
+      <span className="tabular-nums">{meta.region} 繚 {meta.currency}</span>
+    </span>
+  );
+}
 
 function CheckoutPageContent() {
   const router = useRouter();
@@ -73,6 +274,7 @@ function CheckoutPageContent() {
     setCheckoutEmail,
     updateCheckoutQuantity,
   } = useGlobalContext();
+  const { books: catalogBooks } = useBookCatalog();
 
   const items = checkoutItems;
   const remainingCartItems = cart.filter(item => !items.some(current => current.id === item.id));
@@ -86,6 +288,7 @@ function CheckoutPageContent() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<{ id: string; displayId?: string; total: number; email?: string } | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<CheckoutCurrency>(() => getDefaultCheckoutCurrency(language));
+  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
   const [discountCodeInput, setDiscountCodeInput] = useState('');
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
   const [appliedDiscountKind, setAppliedDiscountKind] = useState<AppliedDiscountKind>(null);
@@ -93,6 +296,7 @@ function CheckoutPageContent() {
   const [discountAmountUsd, setDiscountAmountUsd] = useState(0);
   const [discountError, setDiscountError] = useState('');
   const [isPaymentOffersOpen, setIsPaymentOffersOpen] = useState(false);
+  const [openPolicyModal, setOpenPolicyModal] = useState<CheckoutPolicyModal>(null);
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [rewardVouchers, setRewardVouchers] = useState<RewardVoucher[]>([]);
   const [isRewardVouchersLoading, setIsRewardVouchersLoading] = useState(false);
@@ -117,19 +321,36 @@ function CheckoutPageContent() {
   const autoRewardVoucherAttemptedOrderIdRef = useRef<string | null>(null);
   const didFinalizeRef = useRef(false);
   const hasManualCurrencySelectionRef = useRef(false);
-  const currencyAutoDefaultInitializedRef = useRef(false);
   const [isAddFromCartOpen, setIsAddFromCartOpen] = useState(false);
   const [addFromCartSelection, setAddFromCartSelection] = useState<string[]>([]);
-  const [addressBook, setAddressBook] = useState<any[]>([]);
+  const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
   const [isAddressBookOpen, setIsAddressBookOpen] = useState(false);
   const [saveAddress, setSaveAddress] = useState(false);
   const [isAddressBookLoading, setIsAddressBookLoading] = useState(false);
   const [emailHistory, setEmailHistory] = useState<string[]>([]);
   const [isEmailDropdownOpen, setIsEmailDropdownOpen] = useState(false);
+  const [shippingDestinations, setShippingDestinations] = useState<ShippingDestinationOption[]>([]);
+  const [isShippingDestinationOpen, setIsShippingDestinationOpen] = useState(false);
+  const [isShippingDestinationsLoading, setIsShippingDestinationsLoading] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const emailDropdownRef = useRef<HTMLDivElement | null>(null);
+  const currencyDropdownRef = useRef<HTMLDivElement | null>(null);
+  const shippingDestinationRef = useRef<HTMLDivElement | null>(null);
   const stripeCheckoutEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
   const skipIdentityVerification = Boolean(user?.email);
+  const catalogCoverUrlMap = useMemo(() => {
+    return new Map(
+      catalogBooks
+        .filter((book) => Boolean(book?.bookID))
+        .map((book) => [book.bookID, book.normalizedCoverUrl || book.coverUrl] as const)
+    );
+  }, [catalogBooks]);
+  const resolveCheckoutItemCoverUrl = useCallback((item: (typeof items)[number]) => {
+    const catalogCoverUrl = catalogCoverUrlMap.get(item.bookID)?.trim() || '';
+    const itemCoverUrl = String(item.book?.coverUrl || '').trim();
+    return catalogCoverUrl || itemCoverUrl || '/Display.png';
+  }, [catalogCoverUrlMap]);
+
   const discountTotalUsd = useMemo(() => Math.min(total, Math.max(0, discountAmountUsd)), [discountAmountUsd, total]);
   const discountedTotalUsd = useMemo(() => Math.max(0, total - discountTotalUsd), [discountTotalUsd, total]);
   const formattedSubtotal = useMemo(() => formatCurrencyAmount(total, selectedCurrency), [selectedCurrency, total]);
@@ -137,18 +358,60 @@ function CheckoutPageContent() {
     () => formatCurrencyAmount(discountTotalUsd, selectedCurrency),
     [discountTotalUsd, selectedCurrency]
   );
-  const formattedTotal = useMemo(
-    () => formatCurrencyAmount(discountedTotalUsd, selectedCurrency),
-    [discountedTotalUsd, selectedCurrency]
+  const [shippingQuote, setShippingQuote] = useState<ShippingQuoteState>(EMPTY_SHIPPING_QUOTE);
+  const selectedShippingMethodRef = useRef<ShippingMethodCode | null>(null);
+  const selectedShippingOption = useMemo(() => {
+    if (shippingQuote.status !== 'available') return null;
+    return (
+      shippingQuote.options.find((option) => option.methodCode === shippingQuote.selectedMethod) ??
+      shippingQuote.options[0] ??
+      null
+    );
+  }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
+  const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
+  const orderTotalUsd = useMemo(
+    () => discountedTotalUsd + shippingAmountUsd,
+    [discountedTotalUsd, shippingAmountUsd]
   );
-  const [form, setForm] = useState({
+  const formattedShipping = useMemo(
+    () => formatCurrencyAmount(shippingAmountUsd, selectedCurrency),
+    [selectedCurrency, shippingAmountUsd]
+  );
+  const formattedTotal = useMemo(
+    () => formatCurrencyAmount(orderTotalUsd, selectedCurrency),
+    [orderTotalUsd, selectedCurrency]
+  );
+  const [form, setForm] = useState<CheckoutAddressForm>({
     firstName: '',
     lastName: '',
     email: checkoutEmail || '',
-    address: '',
+    country: '',
+    shippingRegionKey: '',
+    shippingDestinationLabel: '',
+    region: '',
     city: '',
+    addressLine1: '',
+    addressLine2: '',
     zip: '',
+    phone: '',
+    company: '',
   });
+  const availableShippingDestinations = shippingDestinations.length > 0
+    ? shippingDestinations
+    : FALLBACK_SHIPPING_DESTINATIONS;
+  const selectedShippingDestination = useMemo(
+    () =>
+      availableShippingDestinations.find(
+        (destination) =>
+          destination.countryCode === form.country &&
+          String(destination.shippingRegionKey || '') === String(form.shippingRegionKey || '')
+      ) ?? null,
+    [availableShippingDestinations, form.country, form.shippingRegionKey]
+  );
+  const selectedShippingDestinationLabel =
+    getDestinationLabel(selectedShippingDestination, language) ||
+    form.shippingDestinationLabel ||
+    t('checkout.countryPlaceholder');
   const activeRewardVouchers = useMemo(
     () =>
       rewardVouchers
@@ -187,66 +450,65 @@ function CheckoutPageContent() {
     return raw && raw.trim().length > 0 ? raw.trim().toUpperCase() : '';
   }, [searchParams]);
   const [hasHydratedExistingOrder, setHasHydratedExistingOrder] = useState(() => !queryOrderId);
-  const impactLearnMoreHref = useMemo(() => {
-    const params = new URLSearchParams(searchParams?.toString() || '');
-    params.set('step', 'payment');
-    const effectiveIdentityMode: CheckoutIdentityMode | null = skipIdentityVerification
-      ? 'auth'
-      : identityVerified
-      ? identityMode
-      : null;
-    const effectiveIdentityEmail =
-      identityEmail.trim() ||
-      (skipIdentityVerification ? user?.email?.trim() || '' : form.email.trim());
+  const shippingAddressPayload = useMemo(() => ({
+    firstName: form.firstName.trim(),
+    lastName: form.lastName.trim(),
+    email: form.email.trim(),
+    country: form.country.trim().toUpperCase(),
+    shippingRegionKey: form.shippingRegionKey.trim(),
+    shippingDestinationLabel:
+      getDestinationLabel(selectedShippingDestination, language) ||
+      form.shippingDestinationLabel.trim(),
+    region: form.region.trim(),
+    city: form.city.trim(),
+    addressLine1: form.addressLine1.trim(),
+    addressLine2: form.addressLine2.trim(),
+    zip: form.zip.trim(),
+    phone: form.phone.trim(),
+    company: form.company.trim(),
+  }), [form, language, selectedShippingDestination]);
 
-    if (effectiveIdentityMode && (skipIdentityVerification || identityVerified)) {
-      params.set('verified', '1');
-      params.set('identityMode', effectiveIdentityMode);
-      if (effectiveIdentityEmail) {
-        params.set('identityEmail', effectiveIdentityEmail);
-      } else {
-        params.delete('identityEmail');
-      }
-    } else {
-      params.delete('verified');
-      params.delete('identityMode');
-      params.delete('identityEmail');
-    }
+  const isShippingAddressComplete = useMemo(
+    () => REQUIRED_ADDRESS_FIELDS.every((field) => String(form[field] ?? '').trim().length > 0),
+    [form]
+  );
 
-    const returnTo = `/checkout${params.toString() ? `?${params.toString()}` : ''}`;
-    return `/impact?returnTo=${encodeURIComponent(returnTo)}`;
-  }, [form.email, identityEmail, identityMode, identityVerified, searchParams, skipIdentityVerification, user?.email]);
+  const canUseShippingQuote = shippingQuote.status === 'available' && Boolean(selectedShippingOption);
 
   useEffect(() => {
-    if (queryOrderId || currencyAutoDefaultInitializedRef.current) return;
+    selectedShippingMethodRef.current = shippingQuote.selectedMethod;
+  }, [shippingQuote.selectedMethod]);
 
-    currencyAutoDefaultInitializedRef.current = true;
-    const fallbackCurrency = getDefaultCheckoutCurrency(language);
-    let cancelled = false;
-    const controller = new AbortController();
-
-    setSelectedCurrency(fallbackCurrency);
-
-    fetch(`/api/checkout/currency-default?language=${encodeURIComponent(language)}`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled || hasManualCurrencySelectionRef.current) return;
-        setSelectedCurrency(normalizeCheckoutCurrency(data?.currency ?? fallbackCurrency));
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [language, queryOrderId]);
+  useEffect(() => {
+    if (hasManualCurrencySelectionRef.current) return;
+    setSelectedCurrency(getDefaultCheckoutCurrency(language));
+  }, [language]);
 
   const handleCurrencyChange = useCallback((currency: CheckoutCurrency) => {
     hasManualCurrencySelectionRef.current = true;
     setSelectedCurrency(currency);
+    setIsCurrencyDropdownOpen(false);
+  }, []);
+
+  const handleShippingDestinationSelect = useCallback((destination: ShippingDestinationOption) => {
+    const label = getDestinationLabel(destination, language);
+    setFormError('');
+    setDiscountError('');
+    setForm((prev) => ({
+      ...prev,
+      country: destination.countryCode,
+      shippingRegionKey: destination.shippingRegionKey || '',
+      shippingDestinationLabel: label,
+    }));
+    setIsShippingDestinationOpen(false);
+  }, [language]);
+
+  const handleShippingMethodSelect = useCallback((methodCode: ShippingMethodCode) => {
+    selectedShippingMethodRef.current = methodCode;
+    setShippingQuote((prev) => ({
+      ...prev,
+      selectedMethod: methodCode,
+    }));
   }, []);
 
   const primaryCheckoutItem = useMemo(() => (items.length === 1 ? items[0] : null), [items]);
@@ -283,9 +545,9 @@ function CheckoutPageContent() {
       label: t('checkout.backToPreview'),
       creationId,
       previewJobId,
-      coverUrl: primaryCheckoutItem.book?.coverUrl ?? null,
+      coverUrl: resolveCheckoutItemCoverUrl(primaryCheckoutItem),
     };
-  }, [isMultiOrderCheckout, primaryCheckoutItem, t]);
+  }, [isMultiOrderCheckout, primaryCheckoutItem, resolveCheckoutItemCoverUrl, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,14 +618,71 @@ function CheckoutPageContent() {
   }, [isEmailDropdownOpen]);
 
   useEffect(() => {
+    if (!isCurrencyDropdownOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!currencyDropdownRef.current) return;
+      if (!currencyDropdownRef.current.contains(event.target as Node)) {
+        setIsCurrencyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isCurrencyDropdownOpen]);
+
+  useEffect(() => {
+    if (!isShippingDestinationOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!shippingDestinationRef.current) return;
+      if (!shippingDestinationRef.current.contains(event.target as Node)) {
+        setIsShippingDestinationOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isShippingDestinationOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsShippingDestinationsLoading(true);
+    fetch('/api/checkout/shipping-destinations', {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+      .then((res) => (res.ok ? res.json() : { destinations: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const destinations = Array.isArray(data?.destinations) ? data.destinations : [];
+        setShippingDestinations(destinations);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShippingDestinations([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsShippingDestinationsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isMultiOrderCheckout) return;
     setForm(prev => ({
       ...prev,
       firstName: '',
       lastName: '',
-      address: '',
+      country: '',
+      shippingRegionKey: '',
+      shippingDestinationLabel: '',
+      region: '',
+      addressLine1: '',
+      addressLine2: '',
       city: '',
       zip: '',
+      phone: '',
+      company: '',
     }));
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('ymi_checkout_form');
@@ -461,11 +780,41 @@ function CheckoutPageContent() {
           firstName: prev.firstName || address.firstName || '',
           lastName: prev.lastName || address.lastName || '',
           email: prev.email || current.email || '',
-          address: prev.address || address.address || '',
+          country: prev.country || address.country || '',
+          shippingRegionKey: prev.shippingRegionKey || address.shippingRegionKey || address.regionKey || '',
+          shippingDestinationLabel:
+            prev.shippingDestinationLabel || address.shippingDestinationLabel || address.destinationLabel || '',
+          region: prev.region || address.region || '',
+          addressLine1: prev.addressLine1 || address.addressLine1 || address.address || '',
+          addressLine2: prev.addressLine2 || address.addressLine2 || '',
           city: prev.city || address.city || '',
           zip: prev.zip || address.zip || '',
+          phone: prev.phone || address.phone || '',
+          company: prev.company || address.company || '',
         }));
-        setSelectedCurrency(normalizeCheckoutCurrency(current.checkout_currency));
+        if (current.shipping_amount_usd && Number(current.shipping_amount_usd) > 0) {
+          const snapshot = current.shipping_rate_snapshot ?? null;
+          const methodCode = (current.shipping_method ?? snapshot?.methodCode ?? 'standard') as ShippingMethodCode;
+          const methodName = String(snapshot?.methodName ?? snapshot?.rateName ?? current.shipping_method ?? 'Shipping');
+          setShippingQuote({
+            status: 'available',
+            options: [
+              {
+                methodCode,
+                methodName,
+                amountUsd: Number(current.shipping_amount_usd),
+                estimatedDelivery: snapshot?.estimatedDelivery ?? null,
+                rateName: snapshot?.rateName ?? methodName,
+                snapshot,
+              },
+            ],
+            selectedMethod: methodCode,
+            message: null,
+          });
+        }
+        if (hasManualCurrencySelectionRef.current) {
+          setSelectedCurrency(normalizeCheckoutCurrency(current.checkout_currency));
+        }
 
         if (!checkoutEmail && current.email) {
           setCheckoutEmail(current.email);
@@ -474,7 +823,10 @@ function CheckoutPageContent() {
         setAppliedDiscountKind((current.applied_discount_type as AppliedDiscountKind) ?? null);
         setSelectedRewardVoucherId(current.applied_coupon_code_id ?? null);
         setDiscountAmountUsd(Number(current.discount_amount_usd ?? 0));
-        if (current.applied_discount_code && current.applied_discount_type === 'referral') {
+        if (
+          current.applied_discount_code &&
+          (current.applied_discount_type === 'referral' || current.applied_discount_type === 'creator_promo')
+        ) {
           setDiscountCodeInput(String(current.applied_discount_code).toUpperCase());
         } else {
           setDiscountCodeInput('');
@@ -563,8 +915,9 @@ function CheckoutPageContent() {
       .catch(() => {});
   }, [checkoutItems.length, cart, prepareCheckout, selectedIdsFromQuery, user?.customerId, hydrateCheckoutItems]);
 
-  const updateField = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+  const updateField = (key: keyof CheckoutAddressForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const rawValue = e.target.value;
+    const value = key === 'zip' || key === 'phone' ? rawValue.replace(/\D/g, '') : rawValue;
     setFormError('');
     setDiscountError('');
     setForm(prev => ({ ...prev, [key]: value }));
@@ -580,6 +933,93 @@ function CheckoutPageContent() {
       }
     }
   };
+
+  useEffect(() => {
+    if (!form.country.trim() || !form.city.trim() || !form.zip.trim()) {
+      setShippingQuote(EMPTY_SHIPPING_QUOTE);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      setShippingQuote((prev) => ({ ...prev, status: 'loading', message: null }));
+      fetch('/api/checkout/shipping-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        cache: 'no-store',
+        body: JSON.stringify({ shippingAddress: shippingAddressPayload }),
+      })
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('quote_failed'))))
+        .then((data) => {
+          if (cancelled) return;
+          if (data?.available) {
+            const options = Array.isArray(data.options)
+              ? data.options
+                  .map((option: ShippingQuoteApiOption) => ({
+                    methodCode: option.methodCode === 'speedy' ? 'speedy' : 'standard',
+                    methodName: String(option.methodName || option.rateName || 'Shipping'),
+                    methodDescription: option.methodDescription ?? null,
+                    speedLabel: option.speedLabel ?? null,
+                    amountUsd: Number(option.amountUsd ?? 0),
+                    displayAmount: option.displayAmount ?? null,
+                    rateName: option.rateName ?? null,
+                    estimatedDelivery: option.estimatedDelivery ?? null,
+                    message: option.message ?? null,
+                    snapshot: option.snapshot ?? null,
+                  }))
+                  .filter((option: ShippingQuoteOption) => option.amountUsd >= 0)
+              : [];
+            const fallbackOption: ShippingQuoteOption | null = options[0] ?? (
+              data.shippingAmountUsd !== undefined
+                ? {
+                    methodCode: data.selectedMethod === 'speedy' ? 'speedy' : 'standard',
+                    methodName: data.rateName ?? 'Shipping',
+                    amountUsd: Number(data.shippingAmountUsd ?? 0),
+                    estimatedDelivery: data.estimatedDelivery ?? null,
+                    rateName: data.rateName ?? null,
+                    message: data.message ?? null,
+                    snapshot: data.rateSnapshot ?? null,
+                  }
+                : null
+            );
+            const nextOptions: ShippingQuoteOption[] = options.length > 0 ? options : fallbackOption ? [fallbackOption] : [];
+            const previousMethod = selectedShippingMethodRef.current;
+            const nextSelectedMethod =
+              nextOptions.find((option) => option.methodCode === previousMethod)?.methodCode ??
+              (data.selectedMethod === 'speedy' ? 'speedy' : data.selectedMethod === 'standard' ? 'standard' : null) ??
+              nextOptions.find((option) => option.methodCode === 'standard')?.methodCode ??
+              nextOptions[0]?.methodCode ??
+              null;
+            setShippingQuote({
+              status: 'available',
+              options: nextOptions,
+              selectedMethod: nextSelectedMethod,
+              message: data.message ?? null,
+            });
+            return;
+          }
+          setShippingQuote({
+            ...EMPTY_SHIPPING_QUOTE,
+            status: data?.reason === 'missing_address' ? 'missing' : 'unavailable',
+            message: data?.message ?? t('checkout.shippingUnavailable'),
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setShippingQuote({
+            ...EMPTY_SHIPPING_QUOTE,
+            status: 'error',
+            message: t('checkout.shippingQuoteError'),
+          });
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [form.city, form.country, form.region, form.shippingRegionKey, form.zip, shippingAddressPayload, t]);
 
   const resetIdentityVerification = useCallback(() => {
     setIdentityOtpRequested(false);
@@ -637,8 +1077,20 @@ function CheckoutPageContent() {
   }, [pendingAuthIdentity, resetIdentityVerification, user?.email]);
 
   const handleAddressNext = () => {
-    if (!form.email.trim()) {
-      setFormError(t('checkout.emailRequiredError'));
+    if (!isShippingAddressComplete) {
+      setFormError(t('checkout.addressRequiredError'));
+      return;
+    }
+    if (!isValidCheckoutEmail(form.email)) {
+      setFormError(t('checkout.emailInvalidError'));
+      return;
+    }
+    if (!canUseShippingQuote) {
+      setFormError(
+        shippingQuote.status === 'loading'
+          ? t('checkout.shippingCalculating')
+          : shippingQuote.message || t('checkout.shippingUnavailable')
+      );
       return;
     }
     const normalizedEmail = form.email.trim();
@@ -657,13 +1109,7 @@ function CheckoutPageContent() {
         credentials: 'include',
         body: JSON.stringify({
           customerId: user?.customerId ?? null,
-          address: {
-            firstName: form.firstName,
-            lastName: form.lastName,
-            address: form.address,
-            city: form.city,
-            zip: form.zip,
-          },
+          address: shippingAddressPayload,
         }),
       })
         .then((res) => (res.ok ? res.json() : null))
@@ -743,7 +1189,11 @@ function CheckoutPageContent() {
         // Ignore cache write failures and continue navigation.
       }
     }
-    router.push(checkoutSourceTarget.href);
+    void (async () => {
+      const allowed = await canEnterCustomize();
+      if (!allowed) return;
+      router.push(checkoutSourceTarget.href);
+    })();
   }, [checkoutSourceTarget, router]);
 
   const openIdentityModal = useCallback(() => {
@@ -996,13 +1446,11 @@ function CheckoutPageContent() {
         paymentMethod: 'card',
         isGuest: mode === 'guest',
         currency: selectedCurrency,
-        shippingAddress: {
-          firstName: form.firstName,
-          lastName: form.lastName,
-          address: form.address,
-          city: form.city,
-          zip: form.zip,
-        },
+        shippingAddress: shippingAddressPayload,
+        shippingAmountUsd,
+        shippingMethod: selectedShippingOption?.methodCode ?? null,
+        shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
+        shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
         items: items.map(item => ({
           id: item.id,
           bookID: item.bookID,
@@ -1027,7 +1475,7 @@ function CheckoutPageContent() {
       const displayId = data?.displayId ?? null;
 
       removeOrderedItems(items.map(item => item.id));
-      setCompletedOrder({ id: newOrderId, displayId: displayId ?? undefined, total, email: form.email.trim() });
+      setCompletedOrder({ id: newOrderId, displayId: displayId ?? undefined, total: orderTotalUsd, email: form.email.trim() });
       setOrderId(null);
       clearCheckout();
       didFinalizeRef.current = true;
@@ -1059,13 +1507,11 @@ function CheckoutPageContent() {
       customerId: user?.customerId ?? null,
       isGuest: mode === 'guest',
       currency: selectedCurrency,
-      shippingAddress: {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        address: form.address,
-        city: form.city,
-        zip: form.zip,
-      },
+      shippingAddress: shippingAddressPayload,
+      shippingAmountUsd,
+      shippingMethod: selectedShippingOption?.methodCode ?? null,
+      shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
+      shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
       billingAddress: null,
       items: items.map((item) => ({
         id: item.id,
@@ -1100,6 +1546,11 @@ function CheckoutPageContent() {
 
     if (!form.email.trim()) {
       setFormError(t('checkout.emailRequiredError'));
+      return;
+    }
+
+    if (!canUseShippingQuote) {
+      setFormError(shippingQuote.message || t('checkout.shippingUnavailable'));
       return;
     }
 
@@ -1252,6 +1703,100 @@ function CheckoutPageContent() {
       : stripeCheckoutEnabled
       ? t('checkout.payWithStripe')
       : t('checkout.placeOrder');
+  const checkoutLegalContent = useMemo(() => getFooterLegalContent(language), [language]);
+  const policyModalTitle =
+    openPolicyModal === 'shipping'
+      ? t('footer.legalTitleShipping')
+      : openPolicyModal === 'refund'
+      ? t('footer.legalTitleRefund')
+      : openPolicyModal === 'safety'
+      ? t('footer.legalTitleSafety')
+      : openPolicyModal === 'impact'
+      ? t('footer.legalTitleImpact')
+      : '';
+  const policyModalSections =
+    openPolicyModal === 'shipping'
+      ? checkoutLegalContent.shipping
+      : openPolicyModal === 'refund'
+      ? checkoutLegalContent.refund
+      : openPolicyModal === 'safety'
+      ? checkoutLegalContent.safety
+      : openPolicyModal === 'impact'
+      ? checkoutLegalContent.impact
+      : [];
+
+  useEffect(() => {
+    if (!openPolicyModal) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [openPolicyModal]);
+
+  const renderPolicyTextItem = (item: LegalTextItem, key: string, className = '') => (
+    <p key={key} className={className}>
+      {item.label ? <span className="font-semibold">{item.label}</span> : null}
+      {item.label ? ' ' : null}
+      {item.text}
+    </p>
+  );
+
+  const renderPolicySections = (sections: LegalSection[]) =>
+    sections.map((section, sectionIndex) => (
+      <section key={`${section.title || 'section'}-${sectionIndex}`}>
+        {section.title ? (
+          <h3 className="mb-2 text-base font-semibold text-gray-900">{section.title}</h3>
+        ) : null}
+        {section.paragraphs?.map((item, paragraphIndex) =>
+          renderPolicyTextItem(
+            item,
+            `p-${sectionIndex}-${paragraphIndex}`,
+            paragraphIndex < (section.paragraphs?.length ?? 0) - 1 ? 'mb-2' : ''
+          )
+        )}
+        {section.bullets ? (
+          <ul className="list-disc space-y-1 pl-5">
+            {section.bullets.map((item, bulletIndex) => (
+              <li key={`b-${sectionIndex}-${bulletIndex}`}>
+                {item.label ? <span className="font-semibold">{item.label}</span> : null}
+                {item.label ? ' ' : null}
+                {item.text}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+    ));
+  const policyAgreementNotice = (
+    <div className="mt-3 rounded-[18px] border border-slate-200/80 bg-white/70 px-4 py-3 text-xs leading-5 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+      {t('checkout.policyAgreementPrefix')}{' '}
+      <button
+        type="button"
+        onClick={() => setOpenPolicyModal('shipping')}
+        className="font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600"
+      >
+        {t('footer.shippingPolicy')}
+      </button>{' '}
+      {t('checkout.policyAgreementAnd')}{' '}
+      <button
+        type="button"
+        onClick={() => setOpenPolicyModal('refund')}
+        className="font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600"
+      >
+        {t('footer.refundPolicy')}
+      </button>
+      ,{' '}
+      <button
+        type="button"
+        onClick={() => setOpenPolicyModal('safety')}
+        className="font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600"
+      >
+        {t('footer.safetyNotice')}
+      </button>
+      {t('checkout.policyAgreementSuffix')}
+    </div>
+  );
 
   return (
     <div className={`mx-auto max-w-7xl px-3 pt-6 ${shouldShowMobilePaymentBar ? 'pb-28' : 'pb-6'} sm:px-4 md:px-8 md:py-10`}>
@@ -1292,10 +1837,13 @@ function CheckoutPageContent() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr] lg:gap-8">
-        <div className="glass-panel overflow-hidden rounded-[28px] border border-white/70 p-4 sm:p-5 md:p-6 space-y-5 md:space-y-6">
+        <div className="glass-panel !overflow-visible rounded-[28px] border border-white/70 p-4 sm:p-5 md:p-6 space-y-5 md:space-y-6">
           {step === 'address' && (
             <>
-              <h2 className="text-lg font-bold text-gray-900">{t('checkout.shippingDetails')}</h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 tracking-tight">{t('checkout.shippingDetails')}</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-400">{t('checkout.shippingDetailsHint')}</p>
+              </div>
               {formError && (
                 <p className="text-xs text-red-500">{formError}</p>
               )}
@@ -1316,65 +1864,280 @@ function CheckoutPageContent() {
                   </Button>
                 </div>
               )}
-              <div className="grid md:grid-cols-2 gap-4">
-                <input className="h-11 rounded-lg border border-gray-200 px-3 text-sm" placeholder={t('checkout.firstName')} value={form.firstName} onChange={updateField('firstName')} />
-                <input className="h-11 rounded-lg border border-gray-200 px-3 text-sm" placeholder={t('checkout.lastName')} value={form.lastName} onChange={updateField('lastName')} />
-                <div className="md:col-span-2 relative" ref={emailDropdownRef}>
-                  <input
-                    className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
-                    placeholder={t('checkout.emailRequired')}
-                    value={form.email}
-                    onChange={updateField('email')}
-                    onFocus={() => {
-                      if (emailHistory.length > 0) {
-                        setIsEmailDropdownOpen(true);
-                      }
-                    }}
-                  />
-                  {isEmailDropdownOpen && emailHistory.length > 0 && (
-                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
-                      {emailHistory.map((email) => (
-                        <div
-                          key={email}
-                          className="flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <button
-                            type="button"
-                            className="flex-1 text-left"
-                            onClick={() => {
-                              setForm((prev) => ({ ...prev, email }));
-                              setCheckoutEmail(email);
-                              setIsEmailDropdownOpen(false);
-                            }}
-                          >
-                            {email}
-                          </button>
-                          <button
-                            type="button"
-                            className="text-xs text-gray-400 hover:text-red-500"
-                            onClick={() => {
-                              setEmailHistory((prev) => {
-                                const next = prev.filter((item) => item !== email);
-                                if (typeof window !== 'undefined') {
-                                  window.localStorage.setItem('ymi_checkout_email_history', JSON.stringify(next));
-                                }
-                                if (next.length === 0) {
-                                  setIsEmailDropdownOpen(false);
-                                }
-                                return next;
-                              });
-                            }}
-                          >
-                            {t('common.remove')}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {/* ?? Contact ??????????????????????????????????????????????? */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-1 h-3.5 rounded-full bg-amber-400 shrink-0" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Contact</span>
+                  <div className="flex-1 h-px bg-gray-100" />
                 </div>
-                <input className="md:col-span-2 h-11 rounded-lg border border-gray-200 px-3 text-sm" placeholder={t('checkout.address')} value={form.address} onChange={updateField('address')} />
-                <input className="h-11 rounded-lg border border-gray-200 px-3 text-sm" placeholder={t('checkout.city')} value={form.city} onChange={updateField('city')} />
-                <input className="h-11 rounded-lg border border-gray-200 px-3 text-sm" placeholder={t('checkout.zip')} value={form.zip} onChange={updateField('zip')} />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.firstName')} <span className="text-amber-500">*</span></span>
+                    <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.firstName')} value={form.firstName} onChange={updateField('firstName')} />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.lastName')} <span className="text-amber-500">*</span></span>
+                    <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.lastName')} value={form.lastName} onChange={updateField('lastName')} />
+                  </label>
+                  <div className="relative space-y-1.5 md:col-span-2" ref={emailDropdownRef}>
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.emailRequired')} <span className="text-amber-500">*</span></span>
+                    <input
+                      className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300"
+                      placeholder={t('checkout.emailRequired')}
+                      value={form.email}
+                      onChange={updateField('email')}
+                      onBlur={() => {
+                        if (form.email.trim() && !isValidCheckoutEmail(form.email)) {
+                          setFormError(t('checkout.emailInvalidError'));
+                        }
+                      }}
+                      onFocus={() => {
+                        if (emailHistory.length > 0) {
+                          setIsEmailDropdownOpen(true);
+                        }
+                      }}
+                    />
+                    {isEmailDropdownOpen && emailHistory.length > 0 && (
+                      <div className="absolute z-20 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] overflow-hidden">
+                        {emailHistory.map((email) => (
+                          <div
+                            key={email}
+                            className="flex items-center justify-between px-3.5 py-2.5 text-sm text-gray-700 hover:bg-amber-50/60"
+                          >
+                            <button
+                              type="button"
+                              className="flex-1 text-left font-medium text-gray-800"
+                              onClick={() => {
+                                setForm((prev) => ({ ...prev, email }));
+                                setCheckoutEmail(email);
+                                setIsEmailDropdownOpen(false);
+                              }}
+                            >
+                              {email}
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                              onClick={() => {
+                                setEmailHistory((prev) => {
+                                  const next = prev.filter((item) => item !== email);
+                                  if (typeof window !== 'undefined') {
+                                    window.localStorage.setItem('ymi_checkout_email_history', JSON.stringify(next));
+                                  }
+                                  if (next.length === 0) {
+                                    setIsEmailDropdownOpen(false);
+                                  }
+                                  return next;
+                                });
+                              }}
+                            >
+                              {t('common.remove')}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ?? Delivery Address ??????????????????????????????????????? */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-1 h-3.5 rounded-full bg-amber-400 shrink-0" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Address</span>
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div
+                    ref={shippingDestinationRef}
+                    className="relative space-y-1.5 md:col-span-2"
+                  >
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.country')} <span className="text-amber-500">*</span></span>
+                    <button
+                      type="button"
+                      onClick={() => setIsShippingDestinationOpen((prev) => !prev)}
+                      className="flex h-11 w-full items-center justify-between gap-3 rounded-xl glass-input px-3.5 text-left text-sm font-medium text-gray-900 transition"
+                      aria-haspopup="listbox"
+                      aria-expanded={isShippingDestinationOpen}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {selectedShippingDestination?.flagUrl ? (
+                          <span
+                            className="h-4 w-6 shrink-0 rounded-[3px] bg-cover bg-center shadow-sm ring-1 ring-black/5"
+                            style={{ backgroundImage: `url(${selectedShippingDestination.flagUrl})` }}
+                            aria-hidden="true"
+                          />
+                        ) : selectedShippingDestination?.flagEmoji ? (
+                          <span className="text-base leading-none" aria-hidden="true">
+                            {selectedShippingDestination.flagEmoji}
+                          </span>
+                        ) : null}
+                        <span className={`truncate ${selectedShippingDestination ? 'text-gray-900' : 'text-slate-300'}`}>
+                          {selectedShippingDestinationLabel}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
+                        {selectedShippingDestination?.countryCode || (isShippingDestinationsLoading ? t('common.loading') : '')}
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${isShippingDestinationOpen ? 'rotate-180' : 'rotate-0'}`}
+                        />
+                      </span>
+                    </button>
+                    {isShippingDestinationOpen ? (
+                      <div
+                        role="listbox"
+                        className="absolute z-40 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-white/80 bg-white/95 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur-xl"
+                      >
+                        {availableShippingDestinations.map((destination) => {
+                          const label = getDestinationLabel(destination, language);
+                          const isSelected =
+                            destination.countryCode === form.country &&
+                            String(destination.shippingRegionKey || '') === String(form.shippingRegionKey || '');
+                          return (
+                            <button
+                              key={destination.id}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => handleShippingDestinationSelect(destination)}
+                              className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                                isSelected
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'text-slate-700 hover:bg-amber-50 hover:text-amber-700'
+                              }`}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                {destination.flagUrl ? (
+                                  <span
+                                    className="h-4 w-6 shrink-0 rounded-[3px] bg-cover bg-center shadow-sm ring-1 ring-black/5"
+                                    style={{ backgroundImage: `url(${destination.flagUrl})` }}
+                                    aria-hidden="true"
+                                  />
+                                ) : destination.flagEmoji ? (
+                                  <span className="text-base leading-none" aria-hidden="true">
+                                    {destination.flagEmoji}
+                                  </span>
+                                ) : null}
+                                <span className="truncate">{label}</span>
+                              </span>
+                              <span className="shrink-0 text-[11px] font-bold text-slate-400">
+                                {destination.countryCode}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                  <label className="space-y-1.5 md:col-span-2">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine1')} <span className="text-amber-500">*</span></span>
+                    <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.addressLine1Placeholder')} value={form.addressLine1} onChange={updateField('addressLine1')} />
+                  </label>
+                  <label className="space-y-1.5 md:col-span-2">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine2')}</span>
+                    <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.addressLine2Placeholder')} value={form.addressLine2} onChange={updateField('addressLine2')} />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.city')} <span className="text-amber-500">*</span></span>
+                    <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.city')} value={form.city} onChange={updateField('city')} />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.zip')} <span className="text-amber-500">*</span></span>
+                    <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.zip')} value={form.zip} onChange={updateField('zip')} />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.region')}</span>
+                    <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.regionPlaceholder')} value={form.region} onChange={updateField('region')} />
+                  </label>
+                </div>
+              </div>
+
+              {/* ?? Additional ????????????????????????????????????????????? */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-1 h-3.5 rounded-full bg-amber-400 shrink-0" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Additional</span>
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.phone')} <span className="text-amber-500">*</span></span>
+                    <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.phonePlaceholder')} value={form.phone} onChange={updateField('phone')} />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.company')}</span>
+                    <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.companyPlaceholder')} value={form.company} onChange={updateField('company')} />
+                  </label>
+                </div>
+              </div>
+              <div className={`rounded-2xl border px-4 py-3 text-sm ${
+                shippingQuote.status === 'available'
+                  ? 'border-emerald-100 bg-emerald-50/70 text-emerald-800'
+                  : shippingQuote.status === 'unavailable' || shippingQuote.status === 'error'
+                  ? 'border-red-100 bg-red-50/70 text-red-600'
+                  : 'border-amber-100 bg-amber-50/70 text-amber-700'
+              }`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">{t('checkout.shippingOptionsTitle')}</div>
+                    <div className="mt-0.5 text-xs opacity-80">{t('checkout.shippingOptionsHint')}</div>
+                  </div>
+                  <span className="text-right font-bold">
+                    {shippingQuote.status === 'loading'
+                      ? t('checkout.shippingCalculating')
+                      : shippingQuote.status === 'available'
+                      ? formattedShipping
+                      : shippingQuote.status === 'missing'
+                      ? t('checkout.shippingPending')
+                      : t('checkout.shippingUnavailable')}
+                  </span>
+                </div>
+                {shippingQuote.status === 'available' ? (
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {shippingQuote.options.map((option) => {
+                      const isSelected = selectedShippingOption?.methodCode === option.methodCode;
+                      return (
+                        <button
+                          key={option.methodCode}
+                          type="button"
+                          className={`rounded-2xl border px-3 py-3 text-left transition ${
+                            isSelected
+                              ? 'border-amber-300 bg-white/95 shadow-[0_10px_24px_rgba(217,119,6,0.12)]'
+                              : 'border-white/80 bg-white/65 hover:border-amber-200 hover:bg-white/90'
+                          }`}
+                          onClick={() => handleShippingMethodSelect(option.methodCode)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">
+                                {option.methodCode === 'speedy'
+                                  ? t('checkout.speedyShipping')
+                                  : t('checkout.standardShipping')}
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-slate-500">
+                                {option.methodCode === 'speedy'
+                                  ? t('checkout.speedyShippingDescription')
+                                  : t('checkout.standardShippingDescription')}
+                              </div>
+                            </div>
+                            <div className="whitespace-nowrap text-sm font-bold text-amber-700">
+                              {formatCurrencyAmount(option.amountUsd, selectedCurrency)}
+                            </div>
+                          </div>
+                          {option.estimatedDelivery ? (
+                            <div className="mt-2 text-xs font-medium text-slate-500">
+                              {t('checkout.estimatedDelivery')}: {option.estimatedDelivery}
+                            </div>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : shippingQuote.message ? (
+                  <p className="mt-2 text-xs">{shippingQuote.message}</p>
+                ) : null}
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-600">
                 <input
@@ -1399,7 +2162,7 @@ function CheckoutPageContent() {
             <>
               <h2 className="text-lg font-bold text-gray-900">{t('checkout.paymentTitle')}</h2>
               <div className="space-y-4">
-                <div className="rounded-[26px] border border-amber-100/80 bg-[linear-gradient(145deg,rgba(255,253,247,0.96),rgba(255,248,238,0.84))] p-4 shadow-[0_16px_36px_rgba(148,93,34,0.08)] backdrop-blur-xl md:p-5">
+                <div className="relative z-40 rounded-[26px] border border-amber-100/80 bg-[linear-gradient(145deg,rgba(255,253,247,0.96),rgba(255,248,238,0.84))] p-4 shadow-[0_16px_36px_rgba(148,93,34,0.08)] backdrop-blur-xl md:p-5">
                   <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div className="space-y-2">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-500">
@@ -1423,27 +2186,52 @@ function CheckoutPageContent() {
                       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">
                         {t('checkout.currencyLabel')}
                       </div>
-                      <div className="relative">
-                        <select
-                          value={selectedCurrency}
-                          onChange={(event) =>
-                            handleCurrencyChange(normalizeCheckoutCurrency(event.target.value))
-                          }
-                          className="h-12 w-full appearance-none rounded-2xl border border-white/85 bg-white/90 pl-4 pr-11 text-sm font-semibold text-gray-800 outline-none transition hover:border-amber-200 focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+                      <div className="relative" ref={currencyDropdownRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsCurrencyDropdownOpen((prev) => !prev)}
+                          className="flex h-12 w-full items-center justify-between rounded-2xl border border-white/85 bg-white/90 px-4 text-left text-sm font-semibold text-gray-800 outline-none transition hover:border-amber-200 focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+                          aria-haspopup="listbox"
+                          aria-expanded={isCurrencyDropdownOpen}
                         >
-                          {CHECKOUT_CURRENCY_OPTIONS_CLEAN.map((option) => (
-                            <option key={option.code} value={option.code}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <CurrencyOptionLabel currency={selectedCurrency} />
+                          <ChevronDown
+                            className={`h-4 w-4 text-gray-400 transition-transform ${isCurrencyDropdownOpen ? 'rotate-180' : 'rotate-0'}`}
+                          />
+                        </button>
+                        {isCurrencyDropdownOpen ? (
+                          <div
+                            role="listbox"
+                            className="absolute right-0 z-[300] mt-2 w-full min-w-[220px] overflow-hidden rounded-2xl border border-white/85 bg-white/98 p-1.5 shadow-[0_22px_54px_rgba(148,93,34,0.22)] backdrop-blur-xl"
+                          >
+                            {CHECKOUT_CURRENCY_OPTIONS_CLEAN.map((option) => {
+                              const isSelected = option.code === selectedCurrency;
+                              return (
+                                <button
+                                  key={option.code}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={isSelected}
+                                  onClick={() => handleCurrencyChange(option.code)}
+                                  className={`flex h-10 w-full items-center justify-between rounded-xl px-3 text-left text-sm font-semibold transition ${
+                                    isSelected
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'text-gray-700 hover:bg-amber-50 hover:text-amber-700'
+                                  }`}
+                                >
+                                  <CurrencyOptionLabel currency={option.code} />
+                                  {isSelected ? <span className="text-xs text-amber-600">{t('checkout.rewardVoucherSelected')}</span> : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-[24px] border border-white/80 bg-white/72 shadow-[0_10px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl">
+                <div className="relative z-10 rounded-[24px] border border-white/80 bg-white/72 shadow-[0_10px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl">
                   <button
                     type="button"
                     onClick={() => setIsPaymentOffersOpen((prev) => !prev)}
@@ -1564,6 +2352,8 @@ function CheckoutPageContent() {
                           {t(
                             appliedDiscountKind === 'coupon'
                               ? 'checkout.rewardVoucherApplied'
+                              : appliedDiscountKind === 'creator_promo'
+                                ? 'checkout.creatorPromoApplied'
                               : 'checkout.inviteCodeApplied',
                             {
                               code: appliedDiscountCode,
@@ -1591,10 +2381,15 @@ function CheckoutPageContent() {
                     <div className="mt-4 rounded-[20px] border border-amber-100/90 bg-[linear-gradient(135deg,rgba(255,250,235,0.92),rgba(255,255,255,0.78))] px-4 py-3 text-sm leading-6 text-slate-700">
                       <span className="font-semibold text-amber-700">{t('checkout.impactTitle')}</span>{' '}
                       {t('checkout.impactDescription')}{' '}
-                      <Link href={impactLearnMoreHref} className="font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600">
+                      <button
+                        type="button"
+                        onClick={() => setOpenPolicyModal('impact')}
+                        className="font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600"
+                      >
                         {t('checkout.impactLink')}
-                      </Link>
+                      </button>
                     </div>
+                    {policyAgreementNotice}
                     <div className="mt-4 hidden md:block">
                       <Button
                         size="lg"
@@ -1639,10 +2434,15 @@ function CheckoutPageContent() {
                     <div className="mt-4 rounded-[20px] border border-amber-100/90 bg-[linear-gradient(135deg,rgba(255,250,235,0.92),rgba(255,255,255,0.78))] px-4 py-3 text-sm leading-6 text-slate-700">
                       <span className="font-semibold text-amber-700">{t('checkout.impactTitle')}</span>{' '}
                       {t('checkout.impactDescription')}{' '}
-                      <Link href={impactLearnMoreHref} className="font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600">
+                      <button
+                        type="button"
+                        onClick={() => setOpenPolicyModal('impact')}
+                        className="font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600"
+                      >
                         {t('checkout.impactLink')}
-                      </Link>
+                      </button>
                     </div>
+                    {policyAgreementNotice}
                     <div className="mt-4 hidden md:block">
                       <Button
                         size="lg"
@@ -1675,7 +2475,14 @@ function CheckoutPageContent() {
                 {items.map(item => (
                   <div key={item.id} className="rounded-[24px] border border-white/80 bg-white/72 px-3 py-3 shadow-[0_8px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl sm:px-4">
                     <div className="flex items-start gap-3 sm:gap-4">
-                      <img src={item.book.coverUrl} alt={item.book.title} className="h-24 w-20 rounded-xl object-cover sm:h-20 sm:w-16" />
+                      <Image
+                        src={resolveCheckoutItemCoverUrl(item)}
+                        alt={item.book.title}
+                        width={80}
+                        height={96}
+                        unoptimized
+                        className="h-24 w-20 rounded-xl object-cover sm:h-20 sm:w-16"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{item.book.title}</div>
                         <div className="mt-1 text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
@@ -1748,9 +2555,27 @@ function CheckoutPageContent() {
               <span className="text-gray-900 font-semibold">{formattedSubtotal}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>{t('checkout.shippingDetails')}</span>
-              <span className="text-gray-900 font-semibold">{t('common.free')}</span>
+              <span>{t('checkout.shipping')}</span>
+              <span className={`text-right font-semibold ${
+                shippingQuote.status === 'unavailable' || shippingQuote.status === 'error'
+                  ? 'text-red-500'
+                  : 'text-gray-900'
+              }`}>
+                {shippingQuote.status === 'loading'
+                  ? t('checkout.shippingCalculating')
+                  : shippingQuote.status === 'available'
+                  ? formattedShipping
+                  : shippingQuote.status === 'missing'
+                  ? t('checkout.shippingPending')
+                  : t('checkout.shippingUnavailable')}
+              </span>
             </div>
+            {shippingQuote.status === 'available' && selectedShippingOption?.estimatedDelivery ? (
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>{t('checkout.estimatedDelivery')}</span>
+                <span>{selectedShippingOption.estimatedDelivery}</span>
+              </div>
+            ) : null}
             {discountTotalUsd > 0 ? (
               <div className="flex items-center justify-between">
                 <span>{t('checkout.discountLine')}</span>
@@ -1799,7 +2624,7 @@ function CheckoutPageContent() {
 
       {isIdentityModalOpen && !skipIdentityVerification && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white border border-gray-100 shadow-2xl p-6 space-y-5">
+          <div className="w-full max-w-xl rounded-3xl border border-white/60 bg-white/88 backdrop-blur-2xl p-6 space-y-5 shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">{t('checkout.identityTitle')}</h3>
@@ -1966,7 +2791,14 @@ function CheckoutPageContent() {
                       checked={addFromCartSelection.includes(item.id)}
                       onChange={() => toggleAddFromCart(item.id)}
                     />
-                    <img src={item.book.coverUrl} alt={item.book.title} className="h-24 w-20 rounded-xl object-cover sm:h-18 sm:w-14" />
+                    <Image
+                      src={resolveCheckoutItemCoverUrl(item)}
+                      alt={item.book.title}
+                      width={80}
+                      height={96}
+                      unoptimized
+                      className="h-24 w-20 rounded-xl object-cover sm:h-18 sm:w-14"
+                    />
                     <div className="flex-1">
                       <div className="text-sm font-semibold text-gray-900">{item.book.title}</div>
                       <div className="text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
@@ -2002,7 +2834,7 @@ function CheckoutPageContent() {
 
       {isAddressBookOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white border border-gray-100 shadow-2xl p-6 space-y-4">
+          <div className="w-full max-w-lg rounded-3xl border border-white/60 bg-white/88 backdrop-blur-2xl p-6 space-y-4 shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">{t('checkout.importAddress')}</h3>
               <button
@@ -2016,7 +2848,7 @@ function CheckoutPageContent() {
               <p className="text-sm text-gray-500">{t('common.savedAddress')}</p>
             ) : (
               <div className="max-h-[320px] overflow-y-auto space-y-3">
-                {addressBook.map((entry: any) => {
+                {addressBook.map((entry) => {
                   const metadata = entry?.metadata ?? {};
                   const title = `${metadata.firstName ?? ''} ${metadata.lastName ?? ''}`.trim() || t('common.savedAddress');
                   return (
@@ -2028,16 +2860,24 @@ function CheckoutPageContent() {
                           ...prev,
                           firstName: metadata.firstName ?? prev.firstName,
                           lastName: metadata.lastName ?? prev.lastName,
-                          address: metadata.address ?? prev.address,
+                          country: metadata.country ?? prev.country,
+                          shippingRegionKey: metadata.shippingRegionKey ?? metadata.regionKey ?? prev.shippingRegionKey,
+                          shippingDestinationLabel:
+                            metadata.shippingDestinationLabel ?? metadata.destinationLabel ?? prev.shippingDestinationLabel,
+                          region: metadata.region ?? prev.region,
+                          addressLine1: metadata.addressLine1 ?? metadata.address ?? prev.addressLine1,
+                          addressLine2: metadata.addressLine2 ?? prev.addressLine2,
                           city: metadata.city ?? prev.city,
                           zip: metadata.zip ?? prev.zip,
+                          phone: metadata.phone ?? prev.phone,
+                          company: metadata.company ?? prev.company,
                         }));
                         setIsAddressBookOpen(false);
                       }}
                     >
                       <div className="font-semibold text-gray-900 text-sm">{title}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {metadata.address}, {metadata.city} {metadata.zip}
+                        {metadata.addressLine1 ?? metadata.address}, {metadata.city} {metadata.zip}
                       </div>
                     </button>
                   );
@@ -2047,6 +2887,67 @@ function CheckoutPageContent() {
           </div>
         </div>
       )}
+
+      {openPolicyModal ? (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 sm:p-6">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/35 backdrop-blur-[3px]"
+            onClick={() => setOpenPolicyModal(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={policyModalTitle}
+            className="relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/40 bg-white/40 shadow-[0_40px_100px_rgba(0,0,0,0.18),0_12px_32px_rgba(0,0,0,0.10),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[200%]"
+          >
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent opacity-90"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-[32px] bg-gradient-to-b from-white/40 via-transparent to-white/10"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-12 left-1/3 h-36 w-64 rounded-full bg-amber-200/40 blur-3xl"
+            />
+            <button
+              type="button"
+              onClick={() => setOpenPolicyModal(null)}
+              className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-black/8 text-gray-500 transition-all duration-150 hover:bg-black/12 hover:text-gray-800"
+              aria-label={t('common.close')}
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="relative z-10 border-b border-black/8 px-6 py-5 sm:px-8">
+              <h2 className="text-2xl font-bold text-gray-900">{policyModalTitle}</h2>
+              <p className="mt-0.5 text-sm text-gray-500">
+                {t('footer.effectiveDate', { date: 'May 11, 2026' })}
+              </p>
+            </div>
+            <div className="relative z-10">
+              <div className="max-h-[62vh] space-y-6 overflow-y-auto px-6 py-6 text-sm leading-relaxed text-gray-700 [scrollbar-color:rgba(0,0,0,0.15)_transparent] [scrollbar-width:thin] sm:px-8">
+                {renderPolicySections(policyModalSections)}
+              </div>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-0 inset-x-0 h-10 bg-gradient-to-t from-white/60 to-transparent"
+              />
+            </div>
+            <div className="relative z-10 flex justify-end border-t border-black/8 px-6 py-4 sm:px-8">
+              <button
+                type="button"
+                onClick={() => setOpenPolicyModal(null)}
+                className="h-9 rounded-full border border-black/10 bg-black/6 px-5 text-sm font-semibold text-gray-700 transition-all duration-150 hover:bg-black/10 hover:text-gray-900"
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <AnimatePresence>
         {step === 'success' && completedOrder && (

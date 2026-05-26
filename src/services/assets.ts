@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import type { Detection, FaceDetector } from '@mediapipe/tasks-vision'
 
 export type AssetType = 'face_image' | 'text_profile' | 'voice_sample' | 'profile_avatar'
 
@@ -27,10 +28,75 @@ const FACE_UPLOAD_MAX_EDGE = 1400
 const FACE_UPLOAD_TARGET_BYTES = 2 * 1024 * 1024
 const FACE_UPLOAD_JPEG_QUALITY = 0.88
 const FACE_UPLOAD_MIN_EDGE = 320
+const FACE_UPLOAD_MIN_BYTES = 100 * 1024
+const FACE_DETECTOR_WASM_URL = '/mediapipe/tasks-vision/wasm'
+const FACE_DETECTOR_MODEL_URL = '/mediapipe/models/blaze_face_short_range.tflite'
+const FACE_DETECTION_MIN_CONFIDENCE = 0.55
+const FACE_QUALITY_SAMPLE_EDGE = 420
+const FACE_MIN_AREA_RATIO = 0.045
+const FACE_MAX_AREA_RATIO = 0.68
+const FACE_MIN_BOX_EDGE = 110
+const FACE_CENTER_MIN_X = 0.22
+const FACE_CENTER_MAX_X = 0.78
+const FACE_CENTER_MIN_Y = 0.18
+const FACE_CENTER_MAX_Y = 0.74
+const FACE_ROLL_MAX_DEGREES = 18
+const FACE_NOSE_CENTER_MIN = 0.18
+const FACE_NOSE_CENTER_MAX = 0.82
+const FACE_BLUR_MIN_SCORE = 30
+const FACE_BRIGHTNESS_MIN = 45
+const FACE_BRIGHTNESS_MAX = 218
+
+export type FaceImageValidationCode =
+  | 'missing'
+  | 'notImage'
+  | 'unreadable'
+  | 'tooSmall'
+  | 'checkUnavailable'
+  | 'noFace'
+  | 'multipleFaces'
+  | 'faceTooSmall'
+  | 'faceTooLarge'
+  | 'faceNotCentered'
+  | 'faceCropped'
+  | 'notFrontFacing'
+  | 'faceCovered'
+  | 'tooBlurry'
+  | 'tooDark'
+  | 'tooBright'
 
 export type FaceImageValidationResult = {
   ok: boolean
+  code?: FaceImageValidationCode
   message?: string
+}
+
+let faceDetectorPromise: Promise<FaceDetector> | null = null
+
+function isMediapipeNoiseLog(args: unknown[]): boolean {
+  return args.some((arg) => {
+    if (typeof arg !== 'string') return false
+    return (
+      arg.includes('Created TensorFlow Lite XNNPACK delegate for CPU') ||
+      arg.includes('INFO: Created TensorFlow Lite')
+    )
+  })
+}
+
+async function withMediapipeNoiseSuppressed<T>(run: () => T | Promise<T>): Promise<T> {
+  if (typeof window === 'undefined') return run()
+
+  const originalError = console.error
+  console.error = (...args: unknown[]) => {
+    if (isMediapipeNoiseLog(args)) return
+    originalError(...args)
+  }
+
+  try {
+    return await run()
+  } finally {
+    console.error = originalError
+  }
 }
 
 async function decodeImageFile(file: File): Promise<HTMLImageElement> {
@@ -47,10 +113,178 @@ async function decodeImageFile(file: File): Promise<HTMLImageElement> {
   }
 }
 
+async function getFaceDetector(): Promise<FaceDetector> {
+  faceDetectorPromise ??= (async () => {
+    const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
+    const vision = await FilesetResolver.forVisionTasks(FACE_DETECTOR_WASM_URL)
+    return withMediapipeNoiseSuppressed(() =>
+      FaceDetector.createFromOptions(vision, {
+        baseOptions: {
+          delegate: 'CPU',
+          modelAssetPath: FACE_DETECTOR_MODEL_URL,
+        },
+        minDetectionConfidence: FACE_DETECTION_MIN_CONFIDENCE,
+        minSuppressionThreshold: 0.3,
+        runningMode: 'IMAGE',
+      })
+    )
+  })().catch((error) => {
+    faceDetectorPromise = null
+    throw error
+  })
+  return faceDetectorPromise
+}
+
+function createAnalysisCanvas(image: HTMLImageElement): HTMLCanvasElement | null {
+  const originalWidth = image.naturalWidth || image.width
+  const originalHeight = image.naturalHeight || image.height
+  if (!originalWidth || !originalHeight) return null
+
+  const scale = FACE_QUALITY_SAMPLE_EDGE / Math.max(originalWidth, originalHeight)
+  const width = Math.max(1, Math.round(originalWidth * Math.min(scale, 1)))
+  const height = Math.max(1, Math.round(originalHeight * Math.min(scale, 1)))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+  ctx.drawImage(image, 0, 0, width, height)
+  return canvas
+}
+
+function measureImageQuality(canvas: HTMLCanvasElement): { brightness: number; blurScore: number } | null {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+
+  const { width, height } = canvas
+  const data = ctx.getImageData(0, 0, width, height).data
+  const grayscale = new Float32Array(width * height)
+
+  let brightnessSum = 0
+  for (let index = 0, pixel = 0; index < data.length; index += 4, pixel += 1) {
+    const value = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114
+    grayscale[pixel] = value
+    brightnessSum += value
+  }
+
+  let edgeEnergy = 0
+  let count = 0
+  for (let y = 1; y < height; y += 2) {
+    for (let x = 1; x < width; x += 2) {
+      const current = grayscale[y * width + x]
+      const gx = current - grayscale[y * width + x - 1]
+      const gy = current - grayscale[(y - 1) * width + x]
+      edgeEnergy += gx * gx + gy * gy
+      count += 1
+    }
+  }
+
+  return {
+    brightness: brightnessSum / grayscale.length,
+    blurScore: count ? edgeEnergy / count : 0,
+  }
+}
+
+function getDetectionScore(detection: Detection): number {
+  return detection.categories[0]?.score ?? 0
+}
+
+function hasSignificantSecondFace(detections: Detection[], imageArea: number): boolean {
+  return detections.slice(1).some((detection) => {
+    const box = detection.boundingBox
+    if (!box) return false
+    const areaRatio = (box.width * box.height) / imageArea
+    return getDetectionScore(detection) >= 0.45 && areaRatio >= 0.018
+  })
+}
+
+function getKeypointByLabel(detection: Detection, labels: string[], fallbackIndex: number) {
+  const normalizedLabels = labels.map((label) => label.toLowerCase())
+  const keypoint = detection.keypoints.find((item) => {
+    const label = item.label?.toLowerCase() ?? ''
+    return normalizedLabels.some((candidate) => label.includes(candidate))
+  })
+  return keypoint ?? detection.keypoints[fallbackIndex]
+}
+
+function validateDetectedFace(detection: Detection, width: number, height: number): FaceImageValidationResult {
+  const box = detection.boundingBox
+  if (!box) return { ok: false, code: 'noFace' }
+
+  const imageArea = width * height
+  const faceAreaRatio = (box.width * box.height) / imageArea
+  const centerX = (box.originX + box.width / 2) / width
+  const centerY = (box.originY + box.height / 2) / height
+  const edgeMarginX = Math.max(2, width * 0.01)
+  const edgeMarginY = Math.max(2, height * 0.01)
+
+  if (Math.min(box.width, box.height) < FACE_MIN_BOX_EDGE || faceAreaRatio < FACE_MIN_AREA_RATIO) {
+    return { ok: false, code: 'faceTooSmall' }
+  }
+  if (faceAreaRatio > FACE_MAX_AREA_RATIO) {
+    return { ok: false, code: 'faceTooLarge' }
+  }
+  if (
+    centerX < FACE_CENTER_MIN_X ||
+    centerX > FACE_CENTER_MAX_X ||
+    centerY < FACE_CENTER_MIN_Y ||
+    centerY > FACE_CENTER_MAX_Y
+  ) {
+    return { ok: false, code: 'faceNotCentered' }
+  }
+  if (
+    box.originX <= edgeMarginX ||
+    box.originY <= edgeMarginY ||
+    box.originX + box.width >= width - edgeMarginX ||
+    box.originY + box.height >= height - edgeMarginY
+  ) {
+    return { ok: false, code: 'faceCropped' }
+  }
+
+  const leftEye = getKeypointByLabel(detection, ['left eye', 'lefteye'], 0)
+  const rightEye = getKeypointByLabel(detection, ['right eye', 'righteye'], 1)
+  const nose = getKeypointByLabel(detection, ['nose'], 2)
+  const mouth = getKeypointByLabel(detection, ['mouth'], 3)
+
+  if (!leftEye || !rightEye || !nose || !mouth) {
+    return { ok: false, code: 'faceCovered' }
+  }
+
+  const eyeDx = rightEye.x - leftEye.x
+  const eyeDy = rightEye.y - leftEye.y
+  const roll = Math.abs((Math.atan2(eyeDy, eyeDx) * 180) / Math.PI)
+  if (roll > FACE_ROLL_MAX_DEGREES && roll < 180 - FACE_ROLL_MAX_DEGREES) {
+    return { ok: false, code: 'notFrontFacing' }
+  }
+
+  const minEyeX = Math.min(leftEye.x, rightEye.x)
+  const maxEyeX = Math.max(leftEye.x, rightEye.x)
+  const eyeDistance = Math.max(0.001, maxEyeX - minEyeX)
+  const nosePosition = (nose.x - minEyeX) / eyeDistance
+  const mouthPosition = (mouth.x - minEyeX) / eyeDistance
+  if (
+    nosePosition < FACE_NOSE_CENTER_MIN ||
+    nosePosition > FACE_NOSE_CENTER_MAX ||
+    mouthPosition < -0.1 ||
+    mouthPosition > 1.1
+  ) {
+    return { ok: false, code: 'notFrontFacing' }
+  }
+
+  return { ok: true }
+}
+
 export async function validateFaceImage(file: File): Promise<FaceImageValidationResult> {
-  if (!file) return { ok: false, message: 'Please upload a photo.' }
+  if (!file) return { ok: false, code: 'missing', message: 'Please upload a photo.' }
   if (!file.type.startsWith('image/')) {
-    return { ok: false, message: 'Please upload an image file.' }
+    return { ok: false, code: 'notImage', message: 'Please upload an image file.' }
+  }
+  if (file.size < FACE_UPLOAD_MIN_BYTES) {
+    return {
+      ok: false,
+      code: 'tooSmall',
+      message: 'This photo is too small. Please upload a clear face photo that is at least 100KB and 320px wide/tall.',
+    }
   }
   if (typeof window === 'undefined') return { ok: true }
 
@@ -59,24 +293,61 @@ export async function validateFaceImage(file: File): Promise<FaceImageValidation
     const width = image.naturalWidth || image.width
     const height = image.naturalHeight || image.height
     if (!width || !height) {
-      return { ok: false, message: 'We could not read this photo. Please try another image.' }
+      return { ok: false, code: 'unreadable', message: 'We could not read this photo. Please try another image.' }
     }
     if (Math.min(width, height) < FACE_UPLOAD_MIN_EDGE) {
       return {
         ok: false,
-        message: 'This photo is too small. Please upload a clearer, higher-resolution face photo.',
+        code: 'tooSmall',
+        message: 'This photo is too small. Please upload a clear face photo that is at least 100KB and 320px wide/tall.',
       }
     }
     return { ok: true }
   } catch {
-    return { ok: false, message: 'We could not read this photo. Please try another image.' }
+    return { ok: false, code: 'unreadable', message: 'We could not read this photo. Please try another image.' }
   }
 }
 
 export async function faceQualityCheck(file: File): Promise<FaceImageValidationResult> {
-  // Placeholder for the next layer of validation: face visibility, blur, occlusion, etc.
-  void file
-  return { ok: true }
+  if (typeof window === 'undefined') return { ok: true }
+
+  try {
+    const image = await decodeImageFile(file)
+    const width = image.naturalWidth || image.width
+    const height = image.naturalHeight || image.height
+    if (!width || !height) {
+      return { ok: false, code: 'unreadable', message: 'We could not read this photo. Please try another image.' }
+    }
+
+    const analysisCanvas = createAnalysisCanvas(image)
+    const imageQuality = analysisCanvas ? measureImageQuality(analysisCanvas) : null
+    if (imageQuality) {
+      if (imageQuality.brightness < FACE_BRIGHTNESS_MIN) {
+        return { ok: false, code: 'tooDark' }
+      }
+      if (imageQuality.brightness > FACE_BRIGHTNESS_MAX) {
+        return { ok: false, code: 'tooBright' }
+      }
+      if (imageQuality.blurScore < FACE_BLUR_MIN_SCORE) {
+        return { ok: false, code: 'tooBlurry' }
+      }
+    }
+
+    const detector = await getFaceDetector()
+    const result = await withMediapipeNoiseSuppressed(() => detector.detect(image))
+    const detections = [...result.detections].sort((a, b) => getDetectionScore(b) - getDetectionScore(a))
+    if (detections.length === 0) {
+      return { ok: false, code: 'noFace' }
+    }
+    if (hasSignificantSecondFace(detections, width * height)) {
+      return { ok: false, code: 'multipleFaces' }
+    }
+
+    return validateDetectedFace(detections[0], width, height)
+  } catch (error) {
+    console.warn('[face-quality] Photo check failed', error)
+    return { ok: false, code: 'checkUnavailable', message: 'We could not check this photo. Please try again.' }
+  }
 }
 
 export async function prepareFaceImage(file: File): Promise<File> {

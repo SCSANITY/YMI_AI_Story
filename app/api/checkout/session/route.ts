@@ -31,6 +31,10 @@ export async function POST(request: Request) {
     const orderId = String(body?.orderId || '').trim()
     const email = String(body?.email || '').trim().toLowerCase()
     const shippingAddress = body?.shippingAddress ?? {}
+    const shippingAmountUsd = Math.max(0, Number(body?.shippingAmountUsd ?? 0))
+    const shippingRateSnapshot = body?.shippingRateSnapshot ?? null
+    const shippingMethod = body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null
+    const shippingZoneCode = body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null
     const billingAddress = body?.billingAddress ?? null
     const customerId = body?.customerId ? String(body.customerId) : null
     const isGuest = Boolean(body?.isGuest)
@@ -63,6 +67,10 @@ export async function POST(request: Request) {
         email,
         customer_id: customerId ?? null,
         shipping_address: shippingAddress,
+        shipping_amount_usd: shippingAmountUsd,
+        shipping_rate_snapshot: shippingRateSnapshot,
+        shipping_method: shippingMethod,
+        shipping_zone_code: shippingZoneCode,
         billing_address: billingAddress,
         checkout_currency: currency,
       })
@@ -97,7 +105,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
     }
 
-    const lineItems = cartItems.map((item: any) => {
+    const lineItems: any[] = cartItems.map((item: any) => {
       const qty = Math.max(1, Number(item.quantity ?? 1))
       const unitPriceUsd = Math.max(0, Number(item.price_at_purchase ?? 0))
       const unitPrice = convertUsdToCurrency(unitPriceUsd, currency)
@@ -120,6 +128,29 @@ export async function POST(request: Request) {
       }
     })
 
+    if (shippingAmountUsd > 0) {
+      const shippingAmount = convertUsdToCurrency(shippingAmountUsd, currency)
+      const shippingAmountMinor = toMinorUnit(shippingAmount, currency)
+      if (shippingAmountMinor > 0) {
+        lineItems.push({
+          quantity: 1,
+          price_data: {
+            currency: currency.toLowerCase(),
+            unit_amount: shippingAmountMinor,
+            product_data: {
+              name: 'Shipping',
+              metadata: {
+                order_id: orderId,
+                shipping_rate: String(shippingRateSnapshot?.rateName || shippingRateSnapshot?.methodName || ''),
+                shipping_method: String(shippingMethod || ''),
+                shipping_zone_code: String(shippingZoneCode || ''),
+              },
+            },
+          },
+        })
+      }
+    }
+
     const baseUrl = getBaseUrl(request)
     const stripe = getStripeServer()
     const discountAmountUsd = Math.max(0, Number(order.discount_amount_usd ?? 0))
@@ -136,6 +167,8 @@ export async function POST(request: Request) {
           name:
             order.applied_discount_type === 'coupon'
               ? `YMI Reward Voucher ${order.applied_discount_code || ''}`.trim()
+              : order.applied_discount_type === 'creator_promo'
+                ? `YMI Creator Promo ${order.applied_discount_code || ''}`.trim()
               : `YMI Invite Code ${order.applied_discount_code || ''}`.trim(),
           metadata: {
             order_id: orderId,
@@ -164,6 +197,7 @@ export async function POST(request: Request) {
         applied_discount_code: String(order.applied_discount_code || ''),
         applied_discount_type: String(order.applied_discount_type || ''),
         discount_amount_usd: String(discountAmountUsd || 0),
+        shipping_amount_usd: String(shippingAmountUsd || 0),
       },
       payment_intent_data: {
         metadata: {
@@ -172,6 +206,7 @@ export async function POST(request: Request) {
           applied_discount_code: String(order.applied_discount_code || ''),
           applied_discount_type: String(order.applied_discount_type || ''),
           discount_amount_usd: String(discountAmountUsd || 0),
+          shipping_amount_usd: String(shippingAmountUsd || 0),
         },
       },
     })

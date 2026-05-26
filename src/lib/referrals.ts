@@ -2,16 +2,16 @@ import { randomBytes } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildAbsoluteUrl } from '@/lib/site-url'
 import { resolveCoverAssetFromOrder } from '@/lib/share-preview'
+import { isPaidLikeOrderStatus } from '@/lib/order-status'
 
 const DISCOUNT_AMOUNT_USD = 5
 const REWARD_AMOUNT_USD = 5
 const REFERRAL_EXPIRY_DAYS = 30
-const PAID_STATUSES = ['paid', 'processing', 'shipped']
 
 export type DiscountApplication = {
   applied: boolean
   code: string | null
-  kind: 'referral' | 'coupon' | null
+  kind: 'referral' | 'coupon' | 'creator_promo' | null
   amountUsd: number
   couponCodeId?: string | null
   message?: string
@@ -36,7 +36,7 @@ type OrderDiscountRow = {
   customer_id?: string | null
   email?: string | null
   applied_discount_code?: string | null
-  applied_discount_type?: 'referral' | 'coupon' | null
+  applied_discount_type?: 'referral' | 'coupon' | 'creator_promo' | null
   applied_referral_code_id?: string | null
   applied_coupon_code_id?: string | null
   discount_amount_usd?: number | null
@@ -65,11 +65,174 @@ type CouponCodeRow = {
   source_order_id?: string | null
 }
 
+type CreatorPromoConfig = {
+  enabled: boolean
+  suffix: string
+  discountAmountUsd: number
+  firstOrderOnly: boolean
+}
+
+type CreatorPromoCodeRow = {
+  creator_promo_code_id: string
+  owner_customer_id: string
+  owner_email: string | null
+  raw_input: string
+  code: string
+  suffix: string
+  discount_amount_usd: number
+  first_order_only: boolean
+  status: string
+}
+
+export type CreatorPromoCode = {
+  creatorPromoCodeId: string
+  code: string
+  rawInput: string
+  discountAmountUsd: number
+  status: string
+}
+
+const CREATOR_PROMO_SETTING_KEY = 'creator_promo_config'
+const DEFAULT_CREATOR_PROMO_CONFIG: CreatorPromoConfig = {
+  enabled: true,
+  suffix: '-YMI',
+  discountAmountUsd: 5,
+  firstOrderOnly: true,
+}
+
+const CREATOR_PROMO_BLOCKED_COMPACT_TERMS = [
+  'FUCK',
+  'SHIT',
+  'BITCH',
+  'CUNT',
+  'DICK',
+  'PUSSY',
+  'ASSHOLE',
+  'PORN',
+  'NUDE',
+  'XXX',
+  'ONLYFANS',
+  'NIGGER',
+  'NIGGA',
+  'FAGGOT',
+  'NAZI',
+  'HITLER',
+  'KKK',
+  'ISIS',
+  'RAPE',
+  'MURDER',
+  'SUICIDE',
+  'COCAINE',
+  'HEROIN',
+  'METH',
+]
+
+const CREATOR_PROMO_BLOCKED_TOKEN_TERMS = [
+  'FAG',
+  'RETARD',
+  'KILL',
+  'DRUG',
+  'WEED',
+  'SEX',
+]
+
+const CREATOR_PROMO_RESERVED_TERMS = [
+  'YMI',
+  'YMISTORY',
+  'ADMIN',
+  'SUPPORT',
+  'OFFICIAL',
+  'STAFF',
+  'SYSTEM',
+  'ROOT',
+  'STRIPE',
+  'SUPABASE',
+  'FREE',
+  'REFUND',
+  'DISCOUNT',
+]
+
 function normalizeCode(raw: unknown) {
   return String(raw ?? '')
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9-]/g, '')
+}
+
+function normalizeCreatorPromoInput(raw: unknown) {
+  return String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+}
+
+function normalizeCreatorPromoModerationText(raw: unknown) {
+  const substitutions: Record<string, string> = {
+    '0': 'O',
+    '1': 'I',
+    '3': 'E',
+    '4': 'A',
+    '@': 'A',
+    '5': 'S',
+    '$': 'S',
+    '7': 'T',
+    '8': 'B',
+    '!': 'I',
+  }
+
+  return String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[0134578@$!]/g, (char) => substitutions[char] || char)
+}
+
+function assertCreatorPromoInputAllowed(rawInput: unknown, normalizedInput: string) {
+  const moderationText = normalizeCreatorPromoModerationText(rawInput)
+  const compactCandidates = [
+    moderationText.replace(/[^A-Z0-9]/g, ''),
+    normalizedInput.replace(/-/g, ''),
+  ].filter(Boolean)
+  const tokens = new Set([
+    ...moderationText.split(/[^A-Z0-9]+/).filter(Boolean),
+    ...normalizedInput.split('-').filter(Boolean),
+  ])
+  const hasBlockedCompactTerm = CREATOR_PROMO_BLOCKED_COMPACT_TERMS.some((term) =>
+    compactCandidates.some((candidate) => candidate.includes(term))
+  )
+  const hasBlockedToken = CREATOR_PROMO_BLOCKED_TOKEN_TERMS.some((term) => tokens.has(term))
+  const hasReservedTerm = CREATOR_PROMO_RESERVED_TERMS.some((term) =>
+    tokens.has(term) || compactCandidates.some((candidate) => candidate.includes(term))
+  )
+
+  if (hasBlockedCompactTerm || hasBlockedToken || hasReservedTerm) {
+    throw new Error('This word cannot be used for a creator promo code. Please choose another word.')
+  }
+}
+
+function normalizeCreatorPromoConfig(value: unknown): CreatorPromoConfig {
+  const input = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const suffix = normalizeCode(input.suffix || DEFAULT_CREATOR_PROMO_CONFIG.suffix)
+  const normalizedSuffix = suffix.startsWith('-') ? suffix : `-${suffix || 'YMI'}`
+  const discountAmountUsd = Number(input.discount_amount_usd ?? input.discountAmountUsd ?? DEFAULT_CREATOR_PROMO_CONFIG.discountAmountUsd)
+
+  return {
+    enabled: input.enabled !== false,
+    suffix: normalizedSuffix,
+    discountAmountUsd: Number.isFinite(discountAmountUsd) && discountAmountUsd > 0 ? discountAmountUsd : DEFAULT_CREATOR_PROMO_CONFIG.discountAmountUsd,
+    firstOrderOnly: input.first_order_only !== false && input.firstOrderOnly !== false,
+  }
+}
+
+async function loadCreatorPromoConfig() {
+  const { data } = await supabaseAdmin
+    .from('admin_settings')
+    .select('setting_value')
+    .eq('setting_key', CREATOR_PROMO_SETTING_KEY)
+    .maybeSingle()
+
+  return normalizeCreatorPromoConfig(data?.setting_value)
 }
 
 function createReadableCode(prefix: string) {
@@ -150,7 +313,7 @@ async function hasPriorPaidOrder(orderId: string, customerId?: string | null, em
       .select('order_id', { count: 'exact', head: true })
       .eq('customer_id', customerId)
       .neq('order_id', orderId)
-      .in('order_status', PAID_STATUSES)
+      .in('order_status', ['paid', 'production', 'processing', 'shipped', 'delivered'])
     paidByCustomer = count ?? 0
   }
 
@@ -162,7 +325,7 @@ async function hasPriorPaidOrder(orderId: string, customerId?: string | null, em
       .select('order_id', { count: 'exact', head: true })
       .eq('email', normalizedEmail)
       .neq('order_id', orderId)
-      .in('order_status', PAID_STATUSES)
+      .in('order_status', ['paid', 'production', 'processing', 'shipped', 'delivered'])
     paidByEmail = count ?? 0
   }
 
@@ -189,6 +352,26 @@ async function loadCouponCodeById(couponCodeId: string): Promise<CouponCodeRow |
     .maybeSingle()
 
   return (data as CouponCodeRow | null) ?? null
+}
+
+async function loadCreatorPromoCode(code: string): Promise<CreatorPromoCodeRow | null> {
+  const { data } = await supabaseAdmin
+    .from('creator_promo_codes')
+    .select('creator_promo_code_id, owner_customer_id, owner_email, raw_input, code, suffix, discount_amount_usd, first_order_only, status')
+    .eq('code', code)
+    .maybeSingle()
+
+  return (data as CreatorPromoCodeRow | null) ?? null
+}
+
+function toCreatorPromoCode(row: CreatorPromoCodeRow): CreatorPromoCode {
+  return {
+    creatorPromoCodeId: row.creator_promo_code_id,
+    code: row.code,
+    rawInput: row.raw_input,
+    discountAmountUsd: Number(row.discount_amount_usd ?? 0),
+    status: row.status,
+  }
 }
 
 async function validateReferralCodeForOrder(params: {
@@ -228,6 +411,151 @@ async function validateReferralCodeForOrder(params: {
   }
 }
 
+async function validateCreatorPromoCodeForOrder(params: {
+  code: string
+  order: OrderDiscountRow
+  customerId?: string | null
+  email?: string | null
+}) {
+  const promo = await loadCreatorPromoCode(params.code)
+  if (!promo) return null
+
+  const config = await loadCreatorPromoConfig()
+  if (!config.enabled) {
+    throw new Error('Creator promo codes are currently unavailable.')
+  }
+
+  if (promo.status !== 'active') {
+    throw new Error('This creator promo code is no longer active.')
+  }
+
+  const checkoutEmail = String(params.email || params.order.email || '').trim().toLowerCase()
+  if (
+    (params.customerId && promo.owner_customer_id === params.customerId) ||
+    (checkoutEmail && promo.owner_email && promo.owner_email.trim().toLowerCase() === checkoutEmail)
+  ) {
+    throw new Error('You cannot use your own creator promo code.')
+  }
+
+  if (promo.first_order_only || config.firstOrderOnly) {
+    const priorPaid = await hasPriorPaidOrder(params.order.order_id, params.customerId, checkoutEmail)
+    if (priorPaid) {
+      throw new Error('Creator promo codes are only available for the first paid order.')
+    }
+  }
+
+  return {
+    kind: 'creator_promo' as const,
+    amountUsd: Number(promo.discount_amount_usd ?? config.discountAmountUsd),
+    promo,
+  }
+}
+
+export async function getCreatorPromoCodeForCustomer(customerId: string) {
+  const { data } = await supabaseAdmin
+    .from('creator_promo_codes')
+    .select('creator_promo_code_id, owner_customer_id, owner_email, raw_input, code, suffix, discount_amount_usd, first_order_only, status')
+    .eq('owner_customer_id', customerId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  return data ? toCreatorPromoCode(data as CreatorPromoCodeRow) : null
+}
+
+export async function deactivateCreatorPromoCodeForCustomer(customerId: string) {
+  const { error } = await supabaseAdmin
+    .from('creator_promo_codes')
+    .update({
+      status: 'disabled',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('owner_customer_id', customerId)
+    .eq('status', 'active')
+
+  if (error) {
+    throw new Error(`Failed to deactivate creator promo code: ${error.message}`)
+  }
+}
+
+export async function createCreatorPromoCodeForCustomer(params: {
+  customerId: string
+  email?: string | null
+  rawInput: string
+}) {
+  const config = await loadCreatorPromoConfig()
+  if (!config.enabled) {
+    throw new Error('Creator promo code generation is currently unavailable.')
+  }
+
+  const normalizedInput = normalizeCreatorPromoInput(params.rawInput)
+  const compactLength = normalizedInput.replace(/-/g, '').length
+  if (compactLength < 3 || compactLength > 18) {
+    throw new Error('Please enter 3-18 letters or numbers.')
+  }
+  assertCreatorPromoInputAllowed(params.rawInput, normalizedInput)
+
+  const code = normalizeCode(`${normalizedInput}${config.suffix}`)
+  const existing = await getCreatorPromoCodeForCustomer(params.customerId)
+  if (existing?.code === code) return existing
+
+  const { data: existingCode } = await supabaseAdmin
+    .from('creator_promo_codes')
+    .select('creator_promo_code_id, owner_customer_id')
+    .eq('code', code)
+    .maybeSingle()
+  if (
+    existingCode?.creator_promo_code_id &&
+    existingCode.creator_promo_code_id !== existing?.creatorPromoCodeId
+  ) {
+    throw new Error('This code is already taken. Please try another word.')
+  }
+
+  if (existing?.creatorPromoCodeId) {
+    const { data, error } = await supabaseAdmin
+      .from('creator_promo_codes')
+      .update({
+        owner_email: params.email ? params.email.trim().toLowerCase() : null,
+        raw_input: normalizedInput,
+        code,
+        suffix: config.suffix,
+        discount_amount_usd: config.discountAmountUsd,
+        first_order_only: config.firstOrderOnly,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('creator_promo_code_id', existing.creatorPromoCodeId)
+      .select('creator_promo_code_id, owner_customer_id, owner_email, raw_input, code, suffix, discount_amount_usd, first_order_only, status')
+      .single()
+
+    if (error || !data) {
+      throw new Error(`Failed to update creator promo code: ${error?.message || 'unknown error'}`)
+    }
+
+    return toCreatorPromoCode(data as CreatorPromoCodeRow)
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('creator_promo_codes')
+    .insert({
+      owner_customer_id: params.customerId,
+      owner_email: params.email ? params.email.trim().toLowerCase() : null,
+      raw_input: normalizedInput,
+      code,
+      suffix: config.suffix,
+      discount_amount_usd: config.discountAmountUsd,
+      first_order_only: config.firstOrderOnly,
+      status: 'active',
+    })
+    .select('creator_promo_code_id, owner_customer_id, owner_email, raw_input, code, suffix, discount_amount_usd, first_order_only, status')
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to create creator promo code: ${error?.message || 'unknown error'}`)
+  }
+
+  return toCreatorPromoCode(data as CreatorPromoCodeRow)
+}
+
 export async function releaseOrderDiscountCode(orderId: string) {
   const order = await loadOrder(orderId)
 
@@ -240,6 +568,17 @@ export async function releaseOrderDiscountCode(orderId: string) {
       })
       .eq('referred_order_id', orderId)
       .eq('referral_code_id', order.applied_referral_code_id)
+      .eq('status', 'applied')
+  }
+
+  if (order.applied_discount_type === 'creator_promo') {
+    await supabaseAdmin
+      .from('creator_promo_redemptions')
+      .update({
+        status: 'cancelled',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('order_id', orderId)
       .eq('status', 'applied')
   }
 
@@ -283,6 +622,14 @@ export async function validateDiscountCode(params: {
   })
   if (referral) return { ...referral, code: normalizedCode }
 
+  const creatorPromo = await validateCreatorPromoCodeForOrder({
+    code: normalizedCode,
+    order,
+    customerId: params.customerId,
+    email: params.email,
+  })
+  if (creatorPromo) return { ...creatorPromo, code: normalizedCode }
+
   throw new Error('This invite code is invalid.')
 }
 
@@ -316,6 +663,61 @@ export async function applyReferralCodeToOrder(params: {
     customerId: params.customerId,
     email: params.email,
   })
+
+  if (resolved.kind === 'creator_promo') {
+    const samePromo =
+      order.applied_discount_code === resolved.code &&
+      order.applied_discount_type === 'creator_promo'
+
+    if (!samePromo && order.applied_discount_code) {
+      await releaseOrderDiscountCode(params.orderId)
+    }
+
+    const checkoutEmail = String(params.email || order.email || '').trim().toLowerCase() || null
+    const { error: redemptionError } = await supabaseAdmin
+      .from('creator_promo_redemptions')
+      .upsert(
+        {
+          creator_promo_code_id: resolved.promo.creator_promo_code_id,
+          order_id: params.orderId,
+          referred_customer_id: params.customerId ?? order.customer_id ?? null,
+          referred_email: checkoutEmail,
+          discount_amount_usd: resolved.amountUsd,
+          status: 'applied',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'order_id' }
+      )
+
+    if (redemptionError) {
+      throw new Error(`Failed to reserve creator promo code: ${redemptionError.message}`)
+    }
+
+    const { error: orderUpdateError } = await supabaseAdmin
+      .from('orders')
+      .update({
+        customer_id: params.customerId ?? order.customer_id ?? null,
+        email: checkoutEmail ?? order.email ?? null,
+        applied_discount_code: resolved.code,
+        applied_discount_type: 'creator_promo',
+        applied_referral_code_id: null,
+        applied_coupon_code_id: null,
+        discount_amount_usd: resolved.amountUsd,
+      })
+      .eq('order_id', params.orderId)
+
+    if (orderUpdateError) {
+      throw new Error(`Failed to apply creator promo code: ${orderUpdateError.message}`)
+    }
+
+    return {
+      applied: true,
+      code: resolved.code,
+      kind: resolved.kind,
+      amountUsd: resolved.amountUsd,
+      couponCodeId: null,
+    } satisfies DiscountApplication
+  }
 
   const sameReferral =
     order.applied_referral_code_id === resolved.referral.referral_code_id &&
@@ -481,7 +883,7 @@ export async function ensureOrderReferralCode(params: {
   email?: string | null
 }) {
   const order = await loadOrder(params.orderId)
-  if (!PAID_STATUSES.includes(order.order_status) && order.order_status !== 'paid') {
+  if (!isPaidLikeOrderStatus(order.order_status)) {
     throw new Error('Invite codes are only available after payment.')
   }
 
@@ -548,8 +950,47 @@ export async function ensureOrderReferralCode(params: {
 export async function finalizeReferralRewardForPaidOrder(orderId: string) {
   const order = await loadOrder(orderId)
 
-  if (!PAID_STATUSES.includes(order.order_status) && order.order_status !== 'paid') {
+  if (!isPaidLikeOrderStatus(order.order_status)) {
     return { applied: false, rewarded: false, couponRedeemed: false }
+  }
+
+  if (order.applied_discount_type === 'creator_promo') {
+    const amount = Number(order.discount_amount_usd ?? 0)
+    const nowIso = new Date().toISOString()
+    const { data: redemption } = await supabaseAdmin
+      .from('creator_promo_redemptions')
+      .select('creator_promo_redemption_id, creator_promo_code_id, status')
+      .eq('order_id', orderId)
+      .maybeSingle()
+
+    if (redemption?.creator_promo_redemption_id && redemption.status !== 'paid') {
+      await supabaseAdmin
+        .from('creator_promo_redemptions')
+        .update({
+          status: 'paid',
+          paid_order_amount_usd: null,
+          paid_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('creator_promo_redemption_id', redemption.creator_promo_redemption_id)
+
+      const { data: promo } = await supabaseAdmin
+        .from('creator_promo_codes')
+        .select('usage_count, paid_usage_count, attributed_discount_amount_usd')
+        .eq('creator_promo_code_id', redemption.creator_promo_code_id)
+        .maybeSingle()
+      await supabaseAdmin
+        .from('creator_promo_codes')
+        .update({
+          usage_count: Number(promo?.usage_count ?? 0) + 1,
+          paid_usage_count: Number(promo?.paid_usage_count ?? 0) + 1,
+          attributed_discount_amount_usd: Number(promo?.attributed_discount_amount_usd ?? 0) + amount,
+          updated_at: nowIso,
+        })
+        .eq('creator_promo_code_id', redemption.creator_promo_code_id)
+    }
+
+    return { applied: true, rewarded: false, couponRedeemed: false }
   }
 
   let couponRedeemed = false

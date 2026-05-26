@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ShoppingCart, Trash2, Pencil, Sparkles, CheckSquare, Square } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
 import { formatLocaleCurrency } from '@/lib/locale-pricing';
+import { canEnterCustomize } from '@/lib/customize-access-client';
 
 export default function CartPage() {
   const { t, language } = useI18n();
@@ -19,20 +21,16 @@ export default function CartPage() {
     updateCartQuantity,
   } = useGlobalContext();
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIdsDraft, setSelectedIdsDraft] = useState<string[]>([]);
+  const selectedIds = useMemo(() => {
+    const cartIds = new Set(cart.map((item) => item.id));
+    return selectedIdsDraft.filter((id) => cartIds.has(id));
+  }, [cart, selectedIdsDraft]);
 
-  useEffect(() => {
-    if (cart.length === 0) {
-      setSelectedIds([]);
-      return;
-    }
-    setSelectedIds(prev => {
-      const existing = new Set(prev);
-      return cart.map(item => item.id).filter(id => existing.has(id));
-    });
-  }, [cart]);
-
-  const selectedItems = cart.filter(item => selectedIds.includes(item.id));
+  const selectedItems = useMemo(
+    () => cart.filter(item => selectedIds.includes(item.id)),
+    [cart, selectedIds],
+  );
   const selectedTotal = useMemo(
     () => selectedItems.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0),
     [selectedItems]
@@ -42,12 +40,12 @@ export default function CartPage() {
   const allSelected = cart.length > 0 && selectedIds.length === cart.length;
 
   const toggleSelectAll = () => {
-    if (allSelected) setSelectedIds([]);
-    else setSelectedIds(cart.map(item => item.id));
+    if (allSelected) setSelectedIdsDraft([]);
+    else setSelectedIdsDraft(cart.map(item => item.id));
   };
 
   const toggleSelection = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]);
+    setSelectedIdsDraft(prev => prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]);
   };
 
   const handleCheckout = () => {
@@ -59,7 +57,7 @@ export default function CartPage() {
     router.push(`/checkout${suffix}`);
   };
 
-  const goToPreview = (itemId: string, bookID: string) => {
+  const goToPreview = async (itemId: string, bookID: string) => {
     const target = cart.find(entry => entry.id === itemId);
     if (target) {
       resumePersonalization(target);
@@ -82,6 +80,8 @@ export default function CartPage() {
     const params = new URLSearchParams({ view: 'preview' });
     if (creationId) params.set('creationId', creationId);
     if (previewJobId) params.set('jobId', previewJobId);
+    const allowed = await canEnterCustomize();
+    if (!allowed) return;
     router.push(`/personalize/${bookID}?${params.toString()}`);
   };
 
@@ -102,7 +102,7 @@ export default function CartPage() {
 
   return (
     <div className="page-surface min-h-screen">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 pt-24 pb-16">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
           <ShoppingCart className="h-5 w-5 text-amber-600" />
@@ -135,24 +135,25 @@ export default function CartPage() {
 
               <button
                 type="button"
-                onClick={() => goToPreview(item.id, item.bookID)}
+                onClick={() => void goToPreview(item.id, item.bookID)}
                 className="block"
               >
-                <img
-                  src={item.book.coverUrl}
-                  alt={item.book.title}
-                  className="w-24 h-32 object-cover rounded-xl shadow-sm saturate-110 contrast-110 brightness-105"
-                  loading="lazy"
-                  decoding="async"
-                  fetchPriority="low"
-                />
+                <span className="relative block h-32 w-24 overflow-hidden rounded-xl bg-amber-50 shadow-sm">
+                  <Image
+                    src={item.book.coverUrl}
+                    alt={item.book.title}
+                    fill
+                    sizes="96px"
+                    className="object-cover saturate-110 contrast-110 brightness-105"
+                  />
+                </span>
               </button>
               <div className="flex-1">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <button
                       type="button"
-                      onClick={() => goToPreview(item.id, item.bookID)}
+                      onClick={() => void goToPreview(item.id, item.bookID)}
                       className="text-left"
                     >
                       <h2 className="font-display text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors">{item.book.title}</h2>
@@ -207,10 +208,14 @@ export default function CartPage() {
                     variant="outline"
                     size="sm"
                     className="rounded-full"
-                    onClick={() => {
-                      resumePersonalization(item);
-                      router.push(`/personalize/${item.bookID}`);
-                    }}
+                      onClick={() => {
+                        void (async () => {
+                          const allowed = await canEnterCustomize();
+                          if (!allowed) return;
+                          resumePersonalization(item);
+                          router.push(`/personalize/${item.bookID}`);
+                        })();
+                      }}
                   >
                     <Pencil className="h-4 w-4 mr-2" /> {t('cart.edit')}
                   </Button>

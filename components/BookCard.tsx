@@ -17,6 +17,7 @@ type BookCardProps = {
   description: string
   rating?: BookRatingSummary
   suppressHover?: boolean
+  priority?: boolean
   onClick: () => void
   onFavoriteClick: (event: React.MouseEvent) => void
 }
@@ -30,6 +31,7 @@ export function BookCard({
   description,
   rating,
   suppressHover = false,
+  priority = false,
   onClick,
   onFavoriteClick,
 }: BookCardProps) {
@@ -41,20 +43,26 @@ export function BookCard({
     book.discountPercent ??
     (compareAtPrice ? Math.round((1 - book.price / compareAtPrice) * 100) : null)
   const isDiscounted = Boolean((book.isDiscount || compareAtPrice) && discountPercent && discountPercent > 0)
+  const isComingSoon = Boolean(book.isComingSoon)
 
   return (
     <div
-      className={`group relative isolate flex h-full cursor-pointer flex-col overflow-visible transition-transform duration-300 ease-out ${
-        suppressHover ? '' : 'md:hover:-translate-y-1 book-card-hoverable'
+      className={`group relative isolate flex h-full flex-col overflow-visible transition-transform duration-300 ease-out ${
+        isComingSoon ? 'cursor-default' : 'cursor-pointer'
+      } ${
+        suppressHover || isComingSoon ? '' : 'md:hover:-translate-y-1 book-card-hoverable'
       }`}
-      onClick={onClick}
+      onClick={isComingSoon ? undefined : onClick}
+      aria-disabled={isComingSoon}
     >
       <BookCardCover
         src={coverSrc}
         alt={title}
-        loading="lazy"
+        loading={priority ? 'eager' : 'lazy'}
         decoding="async"
+        fetchPriority={priority ? 'high' : 'auto'}
         coverZoom={book.coverZoom}
+        isMuted={isComingSoon}
       >
         <button
           onClick={onFavoriteClick}
@@ -71,9 +79,14 @@ export function BookCard({
             -{discountPercent}%
           </div>
         ) : null}
+        {isComingSoon ? (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 -rotate-12 rounded-full border-2 border-amber-500/90 bg-white/70 px-4 py-2 text-center text-sm font-black uppercase tracking-[0.16em] text-amber-700 shadow-[0_12px_36px_rgba(180,83,9,0.20)] backdrop-blur-md md:px-6 md:py-3 md:text-lg">
+            {t('bookList.comingSoon')}
+          </div>
+        ) : null}
       </BookCardCover>
 
-      <div className="glass-panel -mt-4 flex flex-1 flex-col rounded-xl px-3 pb-3 pt-10 md:-mt-6 md:rounded-2xl md:px-5 md:pb-5 md:pt-14">
+      <div className={`glass-panel -mt-4 flex flex-1 flex-col rounded-xl px-3 pb-3 pt-10 md:-mt-6 md:rounded-2xl md:px-5 md:pb-5 md:pt-14 ${isComingSoon ? 'opacity-80' : ''}`}>
         <div className="flex flex-1 flex-col">
           <h3 className="font-display mb-1 line-clamp-2 pt-px text-sm font-medium leading-snug text-gray-900 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
             {title}
@@ -112,8 +125,12 @@ export function BookCard({
               </div>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-amber-600 transition-all duration-200 hover:bg-amber-100/80 hover:text-amber-700 hover:shadow-sm group-hover:bg-amber-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 md:px-3 md:text-sm">
-            <span className="md:inline">{t('bookList.create')}</span>
+          <div className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 md:px-3 md:text-sm ${
+            isComingSoon
+              ? 'bg-gray-100/70 text-gray-500'
+              : 'text-amber-600 hover:bg-amber-100/80 hover:text-amber-700 hover:shadow-sm group-hover:bg-amber-50/70'
+          }`}>
+            <span className="md:inline">{isComingSoon ? t('bookList.comingSoon') : t('bookList.create')}</span>
             <Sparkles className="h-3 w-3" />
           </div>
         </div>

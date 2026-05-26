@@ -11,6 +11,7 @@ import { BookCard } from '@/components/BookCard';
 import { useBookDisplayData } from '@/components/useBookDisplayData';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import { AGE_GROUP_OPTIONS, parseStoryTypes } from '@/lib/book-catalog';
+import { canEnterCustomize } from '@/lib/customize-access-client';
 
 const FILTER_BAR_TOP_OFFSET = 72;
 
@@ -224,11 +225,13 @@ export const BookList: React.FC = () => {
 const router = useRouter();
 
 
-const handlePersonalize = (bookID: string) => {
+const handlePersonalize = async (bookID: string) => {
     if (!bookID) {
     console.error('[Personalize] bookID missing', bookID);
     return;
   }
+  const allowed = await canEnterCustomize()
+  if (!allowed) return
   router.push(`/personalize/${bookID}`);
 };
 
@@ -344,7 +347,7 @@ const handlePersonalize = (bookID: string) => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-10">
             <AnimatePresence>
-                {filteredBooks.map((book) => {
+                {filteredBooks.map((book, index) => {
                 const isFavorite = favorites.some(f => f.bookID === book.bookID);
                 const coverSrc = book.coverUrl;
                 
@@ -365,6 +368,7 @@ const handlePersonalize = (bookID: string) => {
                         storyType={book.storyTypeLabel || book.category}
                         description={book.description}
                         rating={ratingMap[book.bookID]}
+                        priority={index < 8}
                         suppressHover={suppressCardHover}
                         onClick={() => handlePersonalize(book.bookID)}
                         onFavoriteClick={(event) => handleFavoriteClick(event, book)}

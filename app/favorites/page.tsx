@@ -9,6 +9,7 @@ import { BookCardCover } from '@/components/BookCardCover';
 import { supabase } from '@/lib/supabase';
 import { useI18n } from '@/lib/useI18n';
 import { formatLocaleCurrency } from '@/lib/locale-pricing';
+import { canEnterCustomize } from '@/lib/customize-access-client';
 
 export default function FavoritesPage() {
   const router = useRouter();
@@ -18,6 +19,12 @@ export default function FavoritesPage() {
   const [titleMap, setTitleMap] = useState<Record<string, string>>({});
   const [typeMap, setTypeMap] = useState<Record<string, string>>({});
   const [descMap, setDescMap] = useState<Record<string, string>>({});
+
+  const handlePersonalize = async (bookID: string) => {
+    const allowed = await canEnterCustomize();
+    if (!allowed) return;
+    router.push(`/personalize/${bookID}`);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -98,7 +105,7 @@ export default function FavoritesPage() {
 
   return (
     <div className="page-surface min-h-screen">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 pt-24 pb-16">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
           <Heart className="h-5 w-5 text-amber-600" />
@@ -129,7 +136,7 @@ export default function FavoritesPage() {
           <div
             key={book.bookID}
             className="group book-card-hoverable relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out md:hover:-translate-y-1"
-            onClick={() => router.push(`/personalize/${book.bookID}`)}
+            onClick={() => void handlePersonalize(book.bookID)}
           >
             <BookCardCover src={coverSrc} alt={titleMap[book.bookID] || book.title} coverZoom={book.coverZoom}>
               <button
@@ -187,7 +194,7 @@ export default function FavoritesPage() {
                   className="rounded-full px-4 py-1.5 text-[10px] md:text-xs font-semibold"
                   onClick={(event) => {
                     event.stopPropagation();
-                    router.push(`/personalize/${book.bookID}`);
+                    void handlePersonalize(book.bookID);
                   }}
                 >
                   <Sparkles className="h-3 w-3 mr-1" /> {t('favorites.personalize')}

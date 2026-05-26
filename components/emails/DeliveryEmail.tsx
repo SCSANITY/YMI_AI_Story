@@ -1,20 +1,19 @@
 ﻿import * as React from 'react'
-import { Img, Section, Text } from '@react-email/components'
+import { Section, Text } from '@react-email/components'
 import { EmailLayout } from './EmailLayout'
 
 type DeliveryEmailProps = {
-  downloadUrl: string
-  previewImageUrl?: string
+  orderUrl: string
   displayId?: string | null
   orderId?: string
 }
 
-export function DeliveryEmail({ downloadUrl, previewImageUrl, displayId, orderId }: DeliveryEmailProps) {
+export function DeliveryEmail({ orderUrl, displayId, orderId }: DeliveryEmailProps) {
   return (
-    <EmailLayout
-      previewText="Your personalized book is ready"
-      title="Your book is ready"
-      subtitle="Your full storybook export is ready for download."
+      <EmailLayout
+        previewText="Your personalized book is ready"
+        title="Your book is ready"
+        subtitle="Your personalized storybook is ready. Open your order page to download it securely."
     >
       {displayId || orderId ? (
         <Text style={styles.orderLine}>
@@ -22,19 +21,15 @@ export function DeliveryEmail({ downloadUrl, previewImageUrl, displayId, orderId
         </Text>
       ) : null}
 
-      {previewImageUrl ? (
-        <Section style={styles.imageWrap}>
-          <Img src={previewImageUrl} alt="Book preview" style={styles.image} />
-        </Section>
-      ) : null}
-
       <Section style={styles.ctaWrap}>
-        <a href={downloadUrl} style={styles.cta}>
-          Download PDF
+        <a href={orderUrl} style={styles.cta}>
+          Open order page
         </a>
       </Section>
 
-      <Text style={styles.note}>For security, this link is temporary. If it expires, open your order page to request a new one.</Text>
+      <Text style={styles.note}>
+        For security, we keep the download inside your order page instead of sending a direct file link.
+      </Text>
     </EmailLayout>
   )
 }
@@ -45,18 +40,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#1f2937',
     fontSize: '14px',
     textAlign: 'center',
-  },
-  imageWrap: {
-    borderRadius: '16px',
-    overflow: 'hidden',
-    margin: '0 0 14px',
-    border: '1px solid #f0f0f2',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9)',
-  },
-  image: {
-    width: '100%',
-    height: 'auto',
-    display: 'block',
   },
   ctaWrap: {
     marginBottom: '10px',

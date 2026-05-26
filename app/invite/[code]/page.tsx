@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildAbsoluteUrl } from '@/lib/site-url'
@@ -65,12 +66,14 @@ export default async function InvitePage(
       {!isExpired && invite?.code ? <InviteCodeClient code={invite.code} /> : null}
       <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-amber-100 bg-white shadow-xl shadow-amber-100/40">
         <div className="grid gap-8 p-6 md:grid-cols-[1.05fr_0.95fr] md:p-10">
-          <div className="overflow-hidden rounded-[28px] border border-amber-100 bg-amber-50/30">
+          <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-amber-100 bg-amber-50/30 md:min-h-[520px]">
             {!isExpired && invite?.code ? (
-              <img
+              <Image
                 src={buildAbsoluteUrl(`/invite/${invite.code}/image`)}
                 alt="YMI invite"
-                className="h-full w-full object-cover"
+                fill
+                sizes="(max-width: 767px) 92vw, 520px"
+                className="object-cover"
               />
             ) : (
               <div className="flex h-full min-h-[320px] items-center justify-center bg-gray-50 text-sm text-gray-400">

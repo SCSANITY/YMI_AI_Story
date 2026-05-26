@@ -22,14 +22,13 @@ export function HomePosterBanner({
   width,
   height,
   aspectClassName,
-  hotspotClassName,
   href = '/books',
   priority = false,
   className = '',
 }: HomePosterBannerProps) {
   const router = useRouter();
 
-  const handleHotspotClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const handleBannerClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     if (href.startsWith('#')) {
       document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' });
@@ -49,15 +48,16 @@ export function HomePosterBanner({
             width={width}
             height={height}
             loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
             decoding="async"
             className="block h-full w-full object-cover"
           />
         </picture>
         <a
           href={href}
-          onClick={handleHotspotClick}
+          onClick={handleBannerClick}
           aria-label="Create their story and jump to our books collection"
-          className={`absolute block -translate-y-1/2 rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${hotspotClassName}`.trim()}
+          className="absolute inset-0 block cursor-pointer rounded-[inherit] bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         />
       </div>
     </section>

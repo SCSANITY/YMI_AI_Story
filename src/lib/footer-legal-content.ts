@@ -1,4 +1,4 @@
-import * as OpenCC from 'opencc-js'
+﻿import * as OpenCC from 'opencc-js'
 import type { Language } from '@/types'
 
 export type LegalTextItem = {
@@ -16,6 +16,10 @@ export type FooterLegalContent = {
   privacy: LegalSection[]
   terms: LegalSection[]
   ourStory: LegalSection[]
+  shipping: LegalSection[]
+  refund: LegalSection[]
+  safety: LegalSection[]
+  impact: LegalSection[]
 }
 
 const cnToTraditional = OpenCC.Converter({ from: 'cn', to: 'hk' })
@@ -394,88 +398,244 @@ const termsEn: LegalSection[] = [
   },
 ]
 
+const shippingPolicyEn: LegalSection[] = [
+  {
+    paragraphs: [
+      { text: 'We ship worldwide.' },
+      {
+        text: 'Because each YMI story book is personalized, your order goes through a careful creation process before shipping.',
+      },
+    ],
+  },
+  {
+    title: 'Processing Time (Production)',
+    paragraphs: [
+      {
+        text: 'Orders are typically processed within 5-10 business days. This includes creating your personalized story, illustrations, and production.',
+      },
+    ],
+  },
+  {
+    title: 'Shipping Time (After Dispatch)',
+    paragraphs: [{ text: 'Estimated delivery times after shipment:' }],
+    bullets: [
+      { text: 'Hong Kong / Mainland China: 3-5 business days' },
+      { text: 'USA / Canada: 5-10 business days' },
+      { text: 'Australia / Singapore: 4-8 business days' },
+      { text: 'Europe: 5-12 business days' },
+      { text: 'Other Asian countries: 5-12 business days' },
+    ],
+  },
+  {
+    title: 'Total Delivery Time',
+    paragraphs: [
+      { text: 'Total delivery time = Processing time + Shipping time.' },
+      {
+        text: 'Please note that all delivery times are estimates and may vary depending on your location, customs clearance, and local courier services.',
+      },
+    ],
+  },
+  {
+    title: 'Shipping & Tracking',
+    paragraphs: [
+      {
+        text: 'Once your order is shipped, you will receive a confirmation email with tracking information.',
+      },
+    ],
+  },
+  {
+    title: 'Delays',
+    paragraphs: [
+      {
+        text: 'Delays may occur due to customs clearance, carrier issues, weather conditions, or other factors beyond our control. These delays are not eligible for refunds.',
+      },
+    ],
+  },
+  {
+    title: 'Duties & Taxes',
+    paragraphs: [
+      {
+        text: 'Import duties, taxes, and customs fees may apply depending on your country. These charges are the responsibility of the recipient.',
+      },
+    ],
+  },
+  {
+    title: 'Address Accuracy',
+    paragraphs: [
+      {
+        text: 'Please ensure your shipping details are correct at checkout. We are not responsible for delays or losses caused by incorrect or incomplete addresses.',
+      },
+      {
+        text: 'If you have any questions about your order, please contact us at admin@ymistory.com.',
+      },
+    ],
+  },
+]
+
+const refundPolicyEn: LegalSection[] = [
+  {
+    paragraphs: [
+      {
+        text: 'Due to the personalized nature of our products, all orders are considered final once they have entered production. Production typically begins shortly after order confirmation.',
+      },
+      {
+        text: 'We offer a 30-day replacement guarantee under the following conditions:',
+      },
+    ],
+    bullets: [
+      { text: 'Defective product' },
+      { text: 'Incorrect personalization caused by our error' },
+      { text: 'Damage during shipping' },
+    ],
+  },
+  {
+    title: 'Please note',
+    bullets: [
+      {
+        text: 'We are not responsible for errors resulting from incorrect or low-quality materials provided by the customer.',
+      },
+      {
+        text: 'Variations in AI-generated content, including likeness, tone, or artistic interpretation, are not considered defects.',
+      },
+      {
+        text: 'Delays caused by shipping carriers or customs are not eligible for refunds.',
+      },
+    ],
+  },
+  {
+    title: 'Claims',
+    paragraphs: [
+      {
+        text: 'Claims must be submitted within 7 days of delivery and include supporting evidence, such as photos of the issue.',
+      },
+      {
+        text: 'Where applicable, we will first offer a replacement. Refunds may be issued at our discretion if a replacement is not feasible.',
+      },
+      {
+        text: 'For assistance, please contact us at admin@ymistory.com.',
+      },
+    ],
+  },
+]
+
+const safetyNoticeEn: LegalSection[] = [
+  {
+    title: 'Safety Notice',
+    bullets: [
+      { text: 'This product is designed for children aged 3 and above.' },
+      { text: 'Adult supervision is recommended during use.' },
+      { text: 'Do not expose to water or fire.' },
+      { text: 'Use only the provided charging method.' },
+    ],
+  },
+]
+
+const impactProgramEn: LegalSection[] = [
+  {
+    title: 'Our Children\'s Impact Program',
+    paragraphs: [
+      { text: 'Every Story Can Carry Love Further' },
+      {
+        text: 'At YMI Story, every book is created with love — and we believe that love should extend beyond our own homes.',
+      },
+      {
+        text: 'That is why we dedicate 1% of revenue from every book to support initiatives that help children grow through care, education, emotional wellbeing, and meaningful opportunities.',
+      },
+      {
+        text: 'As a brand rooted in storytelling, inner growth, and childhood development, we hope each story can become part of something greater: a wider cycle of kindness, connection, and support for children who need it most.',
+      },
+    ],
+  },
+  {
+    title: 'How The Program Works',
+    paragraphs: [
+      {
+        text: 'For every paid YMI Story book order, we set aside 1% of the book revenue toward child-focused charitable initiatives.',
+      },
+      { text: 'Over time, these contributions may support programs related to:' },
+    ],
+    bullets: [
+      { text: 'Education and learning opportunities' },
+      { text: 'Emotional wellbeing and child development' },
+      { text: 'Family and community support' },
+      { text: 'Access to care and meaningful resources for children' },
+    ],
+  },
+  {
+    paragraphs: [
+      {
+        text: 'As our community grows, we also hope to share more updates about the organisations, projects, and impact this program supports.',
+      },
+    ],
+  },
+  {
+    title: 'Our Principle',
+    paragraphs: [
+      {
+        text: 'This giving commitment is built into every YMI Story creation and does not change the price of your book.',
+      },
+      {
+        text: 'It is simply part of who we are — a small way for every story to become part of something larger than itself.',
+      },
+      { text: 'Because we believe every child deserves to feel heard, valued, and loved.' },
+      { text: 'And when love is heard, growth begins.' },
+    ],
+  },
+]
+
 const ourStoryEn: LegalSection[] = [
   {
     title: 'YMI Story',
     paragraphs: [
       { text: 'Where Love Is Heard, Growth Begins' },
-      { text: '“Why am I?” This is one of the most meaningful questions in every child’s journey of growing up.' },
       {
-        text: 'At YMI Story, we believe the answer does not live in cold lessons or rigid definitions. It lives in the warmth of a parent’s voice — familiar, gentle, and full of love.',
+        text: "As children grow, they quietly begin asking one of life's most important questions:",
       },
+      { text: '"Why am I?"' },
       {
-        text: 'Our brand is built around a simple but powerful philosophy: Your Voice. My Story. Inner Growth.',
-      },
-      {
-        text: 'When these three elements come together, they create something truly extraordinary — a deeply personal story experience that helps children feel loved, seen, and understood.',
-      },
-      {
-        text: 'We are reimagining the traditional storybook through a first-of-its-kind bespoke audio storybook experience. By combining modern aesthetics, meaningful storytelling, and innovative technology, we make it easy and joyful for parents to create a one-of-a-kind gift for their child.',
-      },
-      {
-        text: 'When a child hears the voice of someone they love guiding them through a story, that feeling of being surrounded by love becomes something much deeper: a lasting sense of security, identity, and inner strength.',
-      },
-      {
-        text: 'At YMI Story, we are not simply creating books. We are planting the seeds of truth, goodness, and beauty through stories that nurture the heart.',
-      },
-      {
-        text: 'Because we believe that when love is heard, growth begins.',
+        text: 'At YMI Story, this question became the inspiration behind our name — and the heart of everything we create.',
       },
     ],
   },
   {
-    title: 'Our Vision',
+    paragraphs: [
+      { text: 'We believe stories can shape a child far beyond imagination alone.' },
+      {
+        text: 'They can nurture truth, beauty, and inner growth — helping children grow with kindness, confidence, wonder, and a strong sense of self.',
+      },
+    ],
+  },
+  {
+    title: 'What We Create',
     paragraphs: [
       {
-        text: 'To become the world’s leading brand for passing down love, wisdom, and inner strength through family storytelling — inspiring every child to discover themselves and grow with warmth, kindness, and a deeply rooted sense of goodness.',
+        text: 'In a world filled with screens and fast-moving digital experiences, we wanted to create something more personal and lasting.',
       },
+      { text: 'Not just another online audio story.' },
+      {
+        text: "But a physical storybook children can hold close, revisit, and grow up with — paired with the warmth of a loved one's voice.",
+      },
+      { text: 'Because some memories deserve to be felt, not simply played.' },
     ],
   },
   {
-    title: 'Our Mission',
+    paragraphs: [
+      {
+        text: 'Every YMI Story is designed to preserve connection, comfort, and meaningful moments through storytelling that feels timeless and deeply personal.',
+      },
+    ],
     bullets: [
-      {
-        label: 'Empower Self-Discovery:',
-        text: 'We guide children to explore the question “Why am I?” through personalized story experiences that build confidence, self-awareness, and a positive sense of identity.',
-      },
-      {
-        label: 'Nurture Inner Growth:',
-        text: 'Through thoughtful storytelling, we plant the seeds of truth, goodness, and beauty, helping children grow from within and develop strong character with love at the center.',
-      },
-      {
-        label: 'Pioneer Modern Storytelling:',
-        text: 'We redefine the storybook experience through bespoke audio storytelling, blending emotional connection, modern design, and innovative technology in a way that feels fresh, meaningful, and deeply personal.',
-      },
-      {
-        label: 'Craft Elegant Simplicity:',
-        text: 'We are committed to a refined, modern, and seamless experience — making it easy, beautiful, and enjoyable for families to create something truly special together.',
-      },
-      {
-        label: 'Give Back with Purpose:',
-        text: 'We believe every story can carry love beyond the home. By integrating charitable giving into our brand, we turn each purchase into part of a larger cycle of kindness and impact.',
-      },
+      { text: 'A bedtime voice.' },
+      { text: 'A familiar story.' },
+      { text: 'A reminder that says: "You are loved. You are heard. You matter."' },
     ],
   },
   {
-    title: 'Our Brand Meaning',
-    bullets: [
+    paragraphs: [
       {
-        label: 'Y — Your Voice:',
-        text: 'The voice of love, comfort, and connection. A parent’s voice is often the first place a child feels safe.',
-      },
-      {
-        label: 'M — My Story:',
-        text: 'A child’s own journey of identity and imagination. Every child deserves to feel like the hero of their own story.',
-      },
-      {
-        label: 'I — Inner Growth:',
-        text: 'The quiet strength that grows through love, guidance, and positive values. This is where confidence, kindness, and self-understanding begin.',
+        text: 'And perhaps, through stories, children will slowly begin to discover the answer to that quiet question within themselves…',
       },
     ],
-  },
-  {
-    title: 'Brand Slogan',
-    paragraphs: [{ text: 'Your Voice. My Story. Inner Growth.' }],
   },
 ]
 
@@ -840,7 +1000,7 @@ const termsCnS: LegalSection[] = [
 
 export function getFooterLegalContent(language: Language): FooterLegalContent {
   if (language === 'cn_s') {
-    return { privacy: privacyCnS, terms: termsCnS, ourStory: ourStoryEn }
+    return { privacy: privacyCnS, terms: termsCnS, ourStory: ourStoryEn, shipping: shippingPolicyEn, refund: refundPolicyEn, safety: safetyNoticeEn, impact: impactProgramEn }
   }
 
   if (language === 'cn_t') {
@@ -848,6 +1008,10 @@ export function getFooterLegalContent(language: Language): FooterLegalContent {
       privacy: privacyCnS.map(convertSection),
       terms: termsCnS.map(convertSection),
       ourStory: ourStoryEn,
+      shipping: shippingPolicyEn,
+      refund: refundPolicyEn,
+      safety: safetyNoticeEn,
+      impact: impactProgramEn,
     }
   }
 
@@ -855,5 +1019,9 @@ export function getFooterLegalContent(language: Language): FooterLegalContent {
     privacy: privacyEn,
     terms: termsEn,
     ourStory: ourStoryEn,
+    shipping: shippingPolicyEn,
+    refund: refundPolicyEn,
+    safety: safetyNoticeEn,
+    impact: impactProgramEn,
   }
 }

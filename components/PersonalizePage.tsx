@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import NextImage from 'next/image';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Check, Book, X, Share2, CircleHelp } from 'lucide-react';
@@ -7,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
-import { faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type PendingUserAssetUpload } from '@/services/assets';
+import { faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
 import { cancelPreviewJob, createPreviewJob, getJob, getPreviewPages, getPreviewUrl } from '@/services/jobs';
 import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
@@ -19,6 +20,7 @@ import { ShareDialog } from '@/components/ShareDialog';
 import { MiniGame } from '@/components/MiniGame';
 import { VoiceRecorderPanel } from '@/components/personalize/VoiceRecorderPanel';
 import { useBookCatalog } from '@/components/useBookCatalog';
+import type { CatalogBook } from '@/lib/book-catalog';
 import type { StoryLanguage } from '@/types';
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
@@ -51,6 +53,16 @@ const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
   return 'English';
 };
 
+type PersonalizeBookType = 'digital' | 'basic' | 'premium' | 'supreme';
+
+const normalizePersonalizeBookType = (value: unknown): PersonalizeBookType => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'digital' || raw === 'ebook') return 'digital';
+  if (raw === 'premium' || raw === 'audio') return 'premium';
+  if (raw === 'supreme') return 'supreme';
+  return 'basic';
+};
+
 const GOOD_PHOTO_EXAMPLES = [
   { src: '/personalize-photo-samples/optimized/good-01.webp', alt: 'Good photo example 1' },
   { src: '/personalize-photo-samples/optimized/good-02.webp', alt: 'Good photo example 2' },
@@ -71,7 +83,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, language, cart} = useGlobalContext();
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   const { books: catalogBooks, isLoading: isBookCatalogLoading } = useBookCatalog();
-  const book = catalogBooks.find(b => b.bookID === bookID);
+  const [templateDetailBook, setTemplateDetailBook] = useState<CatalogBook | null>(null);
+  const catalogBook = catalogBooks.find(b => b.bookID === bookID);
+  const book = templateDetailBook ?? catalogBook;
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewMode = searchParams?.get('view') || 'edit';
@@ -97,14 +111,28 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const {
     stage,
+    exitPhase,
     finishGenerating,
+    beginExitExecution,
+    exitIntent,
+    completeExit,
+    failExit,
     reset,
+    restore,
+    startForm,
     isExiting,
     viewState,
     uiProgress,
+    canAddToCart,
+    canCheckout,
+    canBack,
+    backIntent,
+    requestAddToCart,
+    requestCheckout,
+    primaryAction,
     } = fsm;
 
-  //?函蕃Steps
+  //??質?Steps
   const PROGRESS_MAP = {
     STORY: 0,
     CUSTOMIZE: 1,
@@ -149,12 +177,19 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     facePrepareErrorRef.current = facePrepareError;
   }, [photo, photoAssetId, preparedFaceFile, facePrepareStatus, facePrepareError]);
 
+  const resolveFaceValidationError = useCallback((result: FaceImageValidationResult) => {
+    return result.code
+      ? t(`personalize.faceValidation.${result.code}`)
+      : result.message ?? t('personalize.photoPrepareFailed');
+  }, [t]);
+
 
 
   // --- Flipbook Engine State ---
   const TOTAL_SPREADS = 15;
   const PAGE_WIDTH = 380; 
   const PAGE_HEIGHT = 380; // Square page for preview model
+  const PREVIEW_PAGE_HEIGHT = PAGE_HEIGHT;
   const PREVIEW_HEIGHT = PAGE_HEIGHT + 40;
   const ANIMATION_DURATION = 0.8; 
   
@@ -176,11 +211,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [shareError, setShareError] = useState<string | null>(null);
   const [isCheckoutAcknowledged, setIsCheckoutAcknowledged] = useState(false);
   const [checkoutAcknowledgementError, setCheckoutAcknowledgementError] = useState(false);
+  const [isDataGenerationConsentChecked, setIsDataGenerationConsentChecked] = useState(false);
+  const [isMarketingConsentChecked, setIsMarketingConsentChecked] = useState(false);
   const generationInFlightRef = useRef(false);
   const checkoutInFlightRef = useRef(false);
   const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(null);
   const [templateTitle, setTemplateTitle] = useState<string | null>(null);
   const [templateDescription, setTemplateDescription] = useState<string | null>(null);
+  const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(null);
   const [recentFaces, setRecentFaces] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string }>>([]);
   const [recentVoices, setRecentVoices] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string | null; metadata?: { duration_seconds?: number | null } }>>([]);
   const [voiceSignedUrl, setVoiceSignedUrl] = useState<string | null>(null);
@@ -229,6 +267,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [expandedBookFaq, setExpandedBookFaq] = useState<number | null>(0);
   const [isMobileStoryInfoOpen, setMobileStoryInfoOpen] = useState(false);
   const [activeShowcaseIndex, setActiveShowcaseIndex] = useState(0);
+  const [showcaseImageErrors, setShowcaseImageErrors] = useState<Set<string>>(() => new Set());
   const [desktopShowcaseThumbSize, setDesktopShowcaseThumbSize] = useState(72);
   const [desktopMainShowcaseSize, setDesktopMainShowcaseSize] = useState(520);
   const [desktopThumbColumnWidth, setDesktopThumbColumnWidth] = useState(78);
@@ -250,8 +289,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       title: templateTitle ?? book.title,
       coverUrl: templateCoverUrl ?? book.coverUrl,
       description: templateDescription ?? book.description,
+      innerDescription: templateInnerDescription ?? book.innerDescription,
     };
-  }, [book, templateTitle, templateCoverUrl, templateDescription]);
+  }, [book, templateTitle, templateCoverUrl, templateDescription, templateInnerDescription]);
 
   // --- Calculations ---
   const currentPrice = book
@@ -268,7 +308,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const previewScale = isMobile ? mobilePreviewScale : 1;
   const previewStageHeight = isMobile ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
   const previewShareImageUrl = previewPages[0] || previewUrl || resolvedBook?.coverUrl || null;
-  const maxSpreadIndex = Math.max(TOTAL_SPREADS, Math.max(0, previewPages.length - 1));
+  const finalPreviewImages = useMemo(
+    () => (Array.isArray(resolvedBook?.finalPreviewImages) ? resolvedBook.finalPreviewImages.filter(Boolean) : []),
+    [resolvedBook],
+  );
+  const maxSpreadIndex = Math.max(
+    finalPreviewImages.length || TOTAL_SPREADS,
+    Math.max(0, previewPages.length - 1),
+  );
   const currentVoiceSample = useMemo(() => {
     if (!voiceAssetId) return null;
     return recentVoices.find((voice) => voice.asset_id === voiceAssetId) ?? null;
@@ -279,12 +326,35 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     if (!resolvedBook) return [];
     const images = Array.isArray(resolvedBook.showcaseImages) ? resolvedBook.showcaseImages.filter(Boolean) : [];
     const normalized = images.length > 0 ? [...images] : [resolvedBook.coverUrl];
-    while (normalized.length < 9) {
-      normalized.push(resolvedBook.coverUrl);
-    }
-    return normalized.slice(0, 9);
+    return Array.from(new Set(normalized.filter(Boolean)));
   }, [resolvedBook]);
+  const getShowcaseImageSrc = useCallback(
+    (image: string) => {
+      if (showcaseImageErrors.has(image) && resolvedBook?.coverUrl) {
+        return resolvedBook.coverUrl;
+      }
+      return image;
+    },
+    [resolvedBook?.coverUrl, showcaseImageErrors],
+  );
+  const markShowcaseImageError = useCallback((image: string) => {
+    setShowcaseImageErrors((prev) => {
+      if (prev.has(image)) return prev;
+      const next = new Set(prev);
+      next.add(image);
+      return next;
+    });
+  }, []);
   const activeShowcaseImage = showcaseImages[activeShowcaseIndex] || showcaseImages[0] || resolvedBook?.coverUrl || '';
+  const activeShowcaseImageSrc = activeShowcaseImage ? getShowcaseImageSrc(activeShowcaseImage) : '';
+  const goToPreviousShowcaseImage = useCallback(() => {
+    if (showcaseImages.length <= 1) return;
+    setActiveShowcaseIndex((prev) => (prev - 1 + showcaseImages.length) % showcaseImages.length);
+  }, [showcaseImages.length]);
+  const goToNextShowcaseImage = useCallback(() => {
+    if (showcaseImages.length <= 1) return;
+    setActiveShowcaseIndex((prev) => (prev + 1) % showcaseImages.length);
+  }, [showcaseImages.length]);
   const bookFaqItems = useMemo(() => {
     const storyTitle = templateTitle || book?.title || 'this story';
     return [
@@ -305,6 +375,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   useEffect(() => {
     setActiveShowcaseIndex(0);
+    setShowcaseImageErrors(new Set());
   }, [bookID]);
 
   useEffect(() => {
@@ -425,18 +496,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return () => window.clearInterval(interval);
   }, [viewState.showLoading]);
 
-  // Determine Visual State for Animations
+  // Visual state used by the book animation shell.
   const isClosing = isFlipping && flipDirection === 'prev' && currentSpread === 1;
   const isVisualBookOpen = currentSpread > 0 || (isFlipping && flipDirection === 'next' && currentSpread === 0);
   const isBookClosed = !isVisualBookOpen;
-
-  //FSM??扯?銝甈～???
+  // Keep the flow initialized only once per mounted personalize session.
   const didInitFSM = useRef(false);
-
-  /*銝湔debug
-  useEffect(() => {
-  console.log('[FSM] stage =', stage, 'uiProgress =', uiProgress)
-    }, [stage, uiProgress])*/
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -449,21 +514,21 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     if (!bookID) return
 
     if (resumeData && resumeData.bookID === bookID) {
-        fsm.restore({
+        restore({
         hasDraft: !!resumeData.personalization,
         savedStage: viewMode === 'preview' ? 'PREVIEW' : 'FORM',
         })
     } else if (viewMode === 'preview' && (creationIdParam || previewJobIdParam)) {
-        fsm.restore({
+        restore({
         hasDraft: true,
         savedStage: 'PREVIEW',
         })
     } else {
-        fsm.startForm()
+        startForm()
     }
 
     didInitFSM.current = true
-  }, [bookID, resumeData, fsm, viewMode, creationIdParam, previewJobIdParam])
+  }, [bookID, resumeData, restore, startForm, viewMode, creationIdParam, previewJobIdParam])
 
 
 
@@ -618,13 +683,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                 if (nextName) setName(String(nextName))
                 if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
                 if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
-                if (nextType) setBookType(nextType as any)
+                if (nextType) setBookType(normalizePersonalizeBookType(nextType))
 
                 if (!templateTitle && creation.templates?.name) {
                   setTemplateTitle(creation.templates.name)
                 }
                 if (!templateDescription && creation.templates?.description) {
                   setTemplateDescription(creation.templates.description)
+                }
+                if (!templateInnerDescription && creation.templates?.inner_description) {
+                  setTemplateInnerDescription(creation.templates.inner_description)
                 }
                 if (!templateCoverUrl && creation.templates?.cover_image_path) {
                   const rawPath = String(creation.templates.cover_image_path || '').trim()
@@ -675,13 +743,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         if (nextName) setName(String(nextName))
         if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
         if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
-        if (nextType) setBookType(nextType as any)
+        if (nextType) setBookType(normalizePersonalizeBookType(nextType))
 
         if (!templateTitle && creation.templates?.name) {
           setTemplateTitle(creation.templates.name)
         }
         if (!templateDescription && creation.templates?.description) {
           setTemplateDescription(creation.templates.description)
+        }
+        if (!templateInnerDescription && creation.templates?.inner_description) {
+          setTemplateInnerDescription(creation.templates.inner_description)
         }
         if (!templateCoverUrl && creation.templates?.cover_image_path) {
           const rawPath = String(creation.templates.cover_image_path || '').trim()
@@ -707,7 +778,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return () => {
       isActive = false
     }
-  }, [viewMode, creationId, user?.customerId, previewJobId, name, age, selectedLang, bookType, templateTitle, templateDescription, templateCoverUrl, setName, setAge, setSelectedLang, setBookType, setTemplateTitle, setTemplateDescription, setTemplateCoverUrl])
+  }, [viewMode, creationId, user?.customerId, previewJobId, name, age, selectedLang, bookType, templateTitle, templateDescription, templateInnerDescription, templateCoverUrl, setName, setAge, setSelectedLang, setBookType, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription, setTemplateCoverUrl])
 
   useEffect(() => {
     if (resumeData && resumeData.bookID === bookID) return
@@ -737,6 +808,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setTemplateCoverUrl(null)
     setTemplateTitle(null)
     setTemplateDescription(null)
+    setTemplateInnerDescription(null)
+    setTemplateDetailBook(null)
     setRecentFaces([])
     setVoiceAssetId(null)
     setVoiceStoragePath(null)
@@ -746,7 +819,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setCreationId(null)
     setPreviewUrl(null)
     setPreviewPages([])
-  }, [bookID, resumeData, viewMode, creationIdParam, creationId, previewJobIdParam, previewJobId, stage, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, setPreviewUrl, setTemplateCoverUrl, setTemplateTitle, setTemplateDescription])
+  }, [bookID, resumeData, viewMode, creationIdParam, creationId, previewJobIdParam, previewJobId, stage, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, setPreviewUrl, setTemplateCoverUrl, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription])
 
   const replacePersonalizeUrl = useCallback((params?: URLSearchParams | null) => {
     if (typeof window === 'undefined') return;
@@ -886,6 +959,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
         if (!book) throw new Error('Book not found')
         if (!currentPhoto && !faceAssetId) throw new Error('Please upload a photo before generating the preview')
+        if (!isDataGenerationConsentChecked) throw new Error(t('personalize.dataConsentRequired'))
 
         setPreviewUrl(null)
         setPreviewPages([])
@@ -952,11 +1026,27 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           throw new Error('Missing face asset for preview')
         }
 
+        const consentRecordedAt = new Date().toISOString()
+        const generationConsentParams = {
+          consent: {
+            content_generation: {
+              accepted: true,
+              accepted_at: consentRecordedAt,
+              version: 'content-generation-consent-v1',
+            },
+            marketing: {
+              accepted: isMarketingConsentChecked,
+              accepted_at: isMarketingConsentChecked ? consentRecordedAt : null,
+              version: 'marketing-consent-v1',
+            },
+          },
+        }
+
         const created = await createPreviewJob(
           book.bookID,
           faceAssetId,
           textOverrides,
-          undefined,
+          generationConsentParams,
           currentCustomerId ?? undefined,
           pendingFaceAsset
         )
@@ -1082,12 +1172,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
           await wait(getPreviewPollDelayMs())
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!isActive) return
         if (previewCancelRequestedRef.current) {
           return
         }
-        setPreviewError(error?.message ?? 'Preview generation failed.')
+        const message = error instanceof Error ? error.message : 'Preview generation failed.'
+        setPreviewError(message)
         setProgress(0)
         reset()
       } finally {
@@ -1104,7 +1195,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, name, age, bookType]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, name, age, bookType, isDataGenerationConsentChecked, isMarketingConsentChecked]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -1159,30 +1250,19 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     let isActive = true;
 
     const loadTemplateInfo = async () => {
-      const { data, error } = await supabase
-        .from('templates')
-        .select('name, description, cover_image_path')
-        .eq('template_id', bookID)
-        .maybeSingle();
+      const response = await fetch(`/api/templates/${encodeURIComponent(bookID)}`, {
+        credentials: 'include',
+      });
+      const data = await response.json().catch(() => ({}));
 
-      if (!isActive) return;
-      if (error || !data) return;
+      if (!isActive || !response.ok || !data?.template) return;
 
-      const rawPath = String(data.cover_image_path || '').trim();
-      let coverUrl: string | null = null;
-      if (rawPath) {
-        if (rawPath.startsWith('http')) {
-          coverUrl = rawPath;
-        } else {
-          const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '');
-          const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned);
-          coverUrl = publicUrl?.publicUrl ?? null;
-        }
-      }
-
-      setTemplateCoverUrl(coverUrl);
-      setTemplateTitle(typeof data.name === 'string' ? data.name : null);
-      setTemplateDescription(typeof data.description === 'string' ? data.description : null);
+      const template = data.template as CatalogBook;
+      setTemplateDetailBook(template);
+      setTemplateCoverUrl(template.coverUrl || null);
+      setTemplateTitle(template.title || null);
+      setTemplateDescription(template.description || null);
+      setTemplateInnerDescription(template.innerDescription || null);
     };
 
     loadTemplateInfo();
@@ -1251,15 +1331,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [user?.customerId]);
 
   useEffect(() => {
-    if (!previewPages.length) return
+    if (!previewPages.length && (!viewState.showPreview || !finalPreviewImages.length)) return
 
-    previewPages.forEach((url) => {
+    const preloadUrls = [
+      ...previewPages,
+      ...(viewState.showPreview ? finalPreviewImages : []),
+    ]
+
+    Array.from(new Set(preloadUrls)).forEach((url) => {
       if (!url) return
       const img = new Image()
       img.decoding = 'async'
       img.src = url
     })
-  }, [previewPages])
+  }, [finalPreviewImages, previewPages, viewState.showPreview])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1310,7 +1395,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         }),
         credentials: 'include',
       });
-    } catch (e) {
+    } catch {
       // no-op
     }
   }, [user?.customerId, photoAssetId, setPhoto, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setPhotoPreview]);
@@ -1367,15 +1452,15 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         credentials: 'include',
       });
       if (!response.ok) return;
-    } catch (e) {
+    } catch {
       // no-op
     }
-  }, [user?.customerId, loadProfiles]);
+  }, [user?.customerId]);
 
   const handleBack = () => {
-    if (!fsm.canBack) return
+    if (!canBack) return
 
-    switch (fsm.backIntent) {
+    switch (backIntent) {
         case 'EXIT_FLOW':
         router.push('/')
         break
@@ -1491,7 +1576,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       setPreviewUrl(null);
       setPreviewPages([]);
       setProgress(0);
-      fsm.startForm();
+      startForm();
 
       if (options?.showToast !== false) {
         triggerPreviewCancelledToast();
@@ -1510,7 +1595,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     },
     [
       creationId,
-      fsm,
       persistDraftForCustomizeReturn,
       previewJobId,
       setCreationId,
@@ -1520,6 +1604,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       setProgress,
       triggerPreviewCancelledToast,
       user?.customerId,
+      startForm,
     ]
   );
 
@@ -1556,8 +1641,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     persistDraftForCustomizeReturn();
     setShowExitConfirm(false);
     router.replace(`/personalize/${bookID}`);
-    fsm.startForm();
-  }, [bookID, fsm, persistDraftForCustomizeReturn, router]);
+    startForm();
+  }, [bookID, persistDraftForCustomizeReturn, router, startForm]);
 
   const ensurePremiumVoiceSample = useCallback(() => {
     if (!requiresVoiceSample) {
@@ -1576,7 +1661,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       voicePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     return false;
-  }, [requiresVoiceSample, stage, voiceAssetId, returnToCustomizeFromPreview]);
+  }, [requiresVoiceSample, stage, voiceAssetId, returnToCustomizeFromPreview, t]);
 
   const handleVoiceUploadComplete = useCallback(
     ({ assetId, storagePath, signedUrl }: { assetId: string; storagePath: string; signedUrl?: string | null }) => {
@@ -1590,7 +1675,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
   const performAddToCart = useCallback(async () => {
-    if (!fsm.canAddToCart) return
+    if (!canAddToCart) return
     if (!resolvedBook) return
     if (!ensurePremiumVoiceSample()) return null
 
@@ -1646,11 +1731,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     shouldAnimateToCartRef.current = false;
     return item ?? null;
-    }, [fsm.canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample]);
+    }, [canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample]);
 
 
   const performCheckout = useCallback(async () => {
-        if (!fsm.canCheckout) return
+        if (!canCheckout) return
         if (checkoutInFlightRef.current) return
         if (!ensurePremiumVoiceSample()) return
         checkoutInFlightRef.current = true
@@ -1756,14 +1841,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [fsm.canCheckout, resolvedBook, name, age, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample]);
+    }, [canCheckout, resolvedBook, name, age, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample]);
 
   const handleAddToCartClick = () => {
-    if (!fsm.canAddToCart || isExiting) return;
+    if (!canAddToCart || isExiting) return;
     if (!ensurePremiumVoiceSample()) return;
     shouldAnimateToCartRef.current = true;
     triggerFlyToCart();
-    fsm.requestAddToCart();
+    requestAddToCart();
   };
 
   const handleCheckoutClick = () => {
@@ -1772,7 +1857,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       return;
     }
     if (!ensurePremiumVoiceSample()) return;
-    fsm.requestCheckout();
+    requestCheckout();
   };
 
   useEffect(() => {
@@ -1791,20 +1876,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [viewState.showPreview]);
 
   useEffect(() => {
-    if (fsm.exitPhase !== 'REQUESTED') return
+    if (exitPhase !== 'REQUESTED') return
 
-    fsm.beginExitExecution()
-    }, [fsm.exitPhase, fsm.beginExitExecution]);
+    beginExitExecution()
+    }, [exitPhase, beginExitExecution]);
 
   useEffect(() => {
-    if (fsm.exitPhase !== 'EXECUTING') return
+    if (exitPhase !== 'EXECUTING') return
     if (exitRunningRef.current) return
 
     exitRunningRef.current = true;
 
     const run = async () => {
         try {
-        switch (fsm.exitIntent) {
+        switch (exitIntent) {
             case 'ADD_TO_CART':
             await performAddToCart()
             break
@@ -1815,16 +1900,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             returnToCustomizeFromPreview()
             break
         }
-        fsm.completeExit()
-        } catch (e) {
-        fsm.failExit()
+        completeExit()
+        } catch {
+        failExit()
         } finally {
         exitRunningRef.current = false;
         }
     }
 
     run()
-    }, [fsm.exitPhase, fsm.exitIntent, fsm.completeExit, fsm.failExit, performAddToCart, performCheckout, returnToCustomizeFromPreview])
+    }, [exitPhase, exitIntent, completeExit, failExit, performAddToCart, performCheckout, returnToCustomizeFromPreview])
 
 
 
@@ -1839,7 +1924,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
       if (!validation.ok) {
         setFacePrepareStatus('failed');
-        setFacePrepareError(validation.message ?? t('personalize.photoPrepareFailed'));
+        setFacePrepareError(resolveFaceValidationError(validation));
         return;
       }
 
@@ -1848,7 +1933,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
       if (!quality.ok) {
         setFacePrepareStatus('failed');
-        setFacePrepareError(quality.message ?? t('personalize.photoPrepareFailed'));
+        setFacePrepareError(resolveFaceValidationError(quality));
         return;
       }
 
@@ -1864,7 +1949,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         setFacePrepareStatus('failed');
         setFacePrepareError(t('personalize.photoPrepareFailed'));
       }
-    }, [t]);
+    }, [resolveFaceValidationError, t]);
 
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
@@ -1885,17 +1970,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   };
 
 
-/*--------------
- *?瑟憿菟??隞????FORM / PREVIEW
- *---------------*/
+  // Persist the current form/preview stage for reload recovery.
 
   useEffect(() => {
     if (!bookID) return
-    localStorage.setItem(
-        `personalize:${bookID}:stage`,
-        stage
-    )
-        }, [stage, bookID])
+    localStorage.setItem(`personalize:${bookID}:stage`, stage)
+  }, [stage, bookID])
 
 
 
@@ -1912,6 +1992,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           setIsFlipping(false);
           setFlipDirection(null);
       }, ANIMATION_DURATION * 1000); 
+  };
+
+  const returnToPreviewCover = () => {
+    setIsFlipping(false);
+    setFlipDirection(null);
+    setCurrentSpread(0);
   };
 
 
@@ -1967,7 +2053,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                   <img
                     src={previewPages[0] || templateCoverUrl || book?.coverUrl || ''}
                     alt={resolvedBook?.title || book?.title || t('personalize.preview')}
-                    className="w-full h-full object-cover mix-blend-multiply opacity-95"
+                    className="h-full w-full object-contain mix-blend-multiply opacity-95"
                     decoding="async"
                     loading="eager"
                     fetchPriority="high"
@@ -1988,10 +2074,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       // Real preview spreads follow the configured preview page order after the cover.
       if (
         spreadIndex > 0 &&
-        (spreadIndex < previewPages.length || (spreadIndex === 1 && previewPages.length === 1)) &&
+        (spreadIndex < previewPages.length || finalPreviewImages[spreadIndex - 1] || (spreadIndex === 1 && previewPages.length === 1)) &&
         (side === 'left' || side === 'right')
       ) {
-          const spreadImage = previewPages[spreadIndex] || '';
+          const previewSpreadImage = previewPages[spreadIndex] || '';
+          const finalPreviewImage = finalPreviewImages[spreadIndex - 1] || '';
+          const spreadImage = previewSpreadImage || finalPreviewImage;
+          const isLockedFinalPreview = !previewSpreadImage && Boolean(finalPreviewImage);
           const isLeftSide = side === 'left';
           return (
             <div
@@ -2003,7 +2092,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <img
                       src={spreadImage}
                       alt="Preview spread"
-                      className="absolute top-0 h-full max-w-none object-cover"
+                      className={`absolute top-0 h-full max-w-none object-cover ${isLockedFinalPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}`}
                       style={{
                         width: '200%',
                         left: isLeftSide ? '0%' : '-100%',
@@ -2016,7 +2105,32 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <p className="text-sm font-semibold">{t('personalize.previewPageStillCreating')}</p>
                   </div>
                 )}
+                {isLockedFinalPreview ? (
+                  <>
+                    <div className="absolute inset-0 z-20 bg-white/68 backdrop-blur-[3px] pointer-events-none" />
+                    <div className="absolute inset-0 z-30 flex items-center justify-center px-6 text-center pointer-events-none">
+                      <div className="rounded-full border border-white/70 bg-white/74 px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+                        {t('personalize.previewPageLocked')}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
                 <div className="absolute inset-0 pointer-events-none z-10" style={{ background: bindingShadow }} />
+
+                {!isFlipping && !isLeftSide && (
+                    <button
+                      type="button"
+                      aria-label={t('personalize.backToCover')}
+                      title={t('personalize.backToCover')}
+                      className="absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/45 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur-xl transition hover:scale-105 hover:bg-white/70"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        returnToPreviewCover();
+                      }}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </button>
+                )}
 
                 {!isFlipping && isLeftSide && (
                     <div
@@ -2054,6 +2168,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <span className="text-xs font-bold text-gray-600">{t('personalize.locked')}</span>
                 </div>
             </div>
+            {!isFlipping && side === 'right' && (
+                <button
+                  type="button"
+                  aria-label={t('personalize.backToCover')}
+                  title={t('personalize.backToCover')}
+                  className="absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/45 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur-xl transition hover:scale-105 hover:bg-white/70"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    returnToPreviewCover();
+                  }}
+                >
+                  <BookOpen className="h-4 w-4" />
+                </button>
+            )}
             {!isFlipping && side === 'left' && (
                 <div className="absolute top-1/2 left-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full hover:bg-gray-200 transition-colors"
                      onClick={(e) => { e.stopPropagation(); turnPage('prev'); }}>
@@ -2072,11 +2200,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing';
   const hasUsablePhoto = Boolean(photoAssetId || (photo && preparedFaceFile && facePrepareStatus === 'ready'));
-  const isFormValid = name.length > 0 && age.length > 0 && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
+  const isFormReady = name.length > 0 && age.length > 0 && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
+  const isFormValid = isFormReady && isDataGenerationConsentChecked;
   const generateButtonLabel = isFacePreparing
     ? t('personalize.photoPreparing')
     : facePrepareStatus === 'failed'
       ? t('personalize.photoNeedsFix')
+      : isFormReady && !isDataGenerationConsentChecked
+        ? t('personalize.dataConsentRequiredShort')
       : isFormValid
         ? t('personalize.generateMagicPreview')
         : t('personalize.completeDetails');
@@ -2147,7 +2278,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                             ? 'bg-amber-500 border-amber-200 text-white scale-110' 
                                             : isCompleted 
                                                 ? 'bg-orange-500 border-orange-200 text-white' 
-                                                : 'bg-white border-gray-100 text-gray-300'
+                                                : 'bg-white/60 backdrop-blur-sm border-white/50 text-gray-300'
                                     }`}
                                >
                                    {isCompleted && !isActive ? <Check className="w-6 h-6" /> : <s.icon className="w-5 h-5" />}
@@ -2182,6 +2313,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               t('personalize.included.basic2'),
               t('personalize.included.basic3'),
               t('personalize.included.basic4'),
+              t('personalize.included.basic5'),
+              t('personalize.included.basic6'),
           ],
           premium: [
               t('personalize.included.premium1'),
@@ -2194,26 +2327,38 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               t('personalize.included.supreme2'),
               t('personalize.included.supreme3'),
               t('personalize.included.supreme4'),
+              t('personalize.included.supreme5'),
+              t('personalize.included.supreme6'),
+              t('personalize.included.supreme7'),
           ],
       } as const
 
       const items = includedItems[bookType] ?? includedItems.digital
 
       return (
-          <div className="mt-4 p-4 bg-amber-50/50 rounded-xl border border-amber-100">
-              <h5 className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-3 flex items-center gap-2">
+          <div className="mt-4 p-4 rounded-2xl border border-white/60 bg-white/55 backdrop-blur-sm shadow-[0_4px_16px_rgba(148,93,34,0.06)]">
+              <h5 className="text-[11px] font-semibold uppercase tracking-[0.10em] text-amber-700 mb-3 flex items-center gap-2">
                   <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
                   {t('personalize.whatIncluded')}
               </h5>
               <ul className="space-y-2">
-                  {items.map((item) => (
-                      <li key={item} className="flex items-start gap-2 text-sm text-gray-700">
-                          <div className="min-w-[16px] pt-0.5">
-                              <Check className="h-4 w-4 text-green-500" />
-                          </div>
-                          <span>{item}</span>
-                      </li>
-                  ))}
+                  {items.map((item) => {
+                      const separatorIndex = item.indexOf(': ')
+                      const label = separatorIndex > 0 ? item.slice(0, separatorIndex) : ''
+                      const description = separatorIndex > 0 ? item.slice(separatorIndex + 2) : item
+
+                      return (
+                        <li key={item} className="flex items-start gap-2 text-sm leading-6 text-gray-700">
+                            <div className="min-w-[16px] pt-1">
+                                <Check className="h-4 w-4 text-green-500" />
+                            </div>
+                            <span>
+                              {label ? <span className="font-semibold text-slate-900">{label}: </span> : null}
+                              {description}
+                            </span>
+                        </li>
+                      )
+                  })}
               </ul>
           </div>
       );
@@ -2272,7 +2417,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-amber-100 shadow-sm">
+      <header className="sticky top-0 z-50 bg-white/72 backdrop-blur-2xl border-b border-white/60 shadow-[0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(16,24,40,0.06)]">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
             <button onClick={handleBack} className="flex items-center gap-2 text-gray-600 hover:text-amber-600 transition-colors">
                 <ChevronLeft className="h-5 w-5" />
@@ -2376,18 +2521,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                               }
                                               aria-label={`Show preview image ${index + 1}`}
                                             >
-                                              <div className="aspect-square overflow-hidden rounded-[inherit]">
-                                                <img
-                                                  src={image}
+                                              <div className="relative aspect-square overflow-hidden rounded-[inherit]">
+                                                <NextImage
+                                                  src={getShowcaseImageSrc(image)}
                                                   alt={`${templateTitle || book.title} showcase ${index + 1}`}
+                                                  fill
+                                                  sizes={isMobile ? '60px' : `${desktopShowcaseThumbSize}px`}
                                                   loading="lazy"
-                                                  decoding="async"
-                                                  onError={(event) => {
-                                                    const target = event.currentTarget;
-                                                    if (resolvedBook?.coverUrl && target.src !== resolvedBook.coverUrl) {
-                                                      target.src = resolvedBook.coverUrl;
-                                                    }
-                                                  }}
+                                                  onError={() => markShowcaseImageError(image)}
                                                   className={`h-full w-full object-cover transition-transform duration-500 ${isActive ? 'scale-[1.04]' : 'scale-100 group-hover:scale-[1.03]'}`}
                                                 />
                                               </div>
@@ -2411,31 +2552,56 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                           style={isMobile ? undefined : { width: `${desktopMainShowcaseSize}px`, maxWidth: '100%' }}
                                         >
                                             <AnimatePresence mode="wait">
-                                                <motion.img
+                                                <motion.div
                                                     key={activeShowcaseImage}
-                                                    src={activeShowcaseImage}
-                                                    alt={`${templateTitle || book.title} showcase main`}
-                                                    loading="eager"
-                                                    decoding="async"
-                                                    onError={(event) => {
-                                                      const target = event.currentTarget;
-                                                      if (resolvedBook?.coverUrl && target.src !== resolvedBook.coverUrl) {
-                                                        target.src = resolvedBook.coverUrl;
-                                                      }
-                                                    }}
-                                                    className="absolute inset-0 h-full w-full object-cover"
+                                                    className="absolute inset-0"
                                                     initial={{ opacity: 0, x: 18, scale: 1.02 }}
                                                     animate={{ opacity: 1, x: 0, scale: 1 }}
                                                     exit={{ opacity: 0, x: -18, scale: 0.985 }}
                                                     transition={{ duration: 0.42, ease: 'easeOut' }}
-                                                />
+                                                >
+                                                    {activeShowcaseImageSrc ? (
+                                                      <NextImage
+                                                        src={activeShowcaseImageSrc}
+                                                        alt={`${templateTitle || book.title} showcase main`}
+                                                        fill
+                                                        sizes={isMobile ? 'min(100vw, 430px)' : `${desktopMainShowcaseSize}px`}
+                                                        priority={activeShowcaseIndex === 0}
+                                                        fetchPriority={activeShowcaseIndex === 0 ? 'high' : 'auto'}
+                                                        onError={() => markShowcaseImageError(activeShowcaseImage)}
+                                                        className="object-cover"
+                                                      />
+                                                    ) : null}
+                                                </motion.div>
                                             </AnimatePresence>
+                                            {showcaseImages.length > 1 ? (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  aria-label="Previous showcase image"
+                                                  onClick={goToPreviousShowcaseImage}
+                                                  className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/35 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.18)] backdrop-blur-xl transition duration-200 hover:scale-105 hover:bg-white/55 focus:outline-none focus:ring-2 focus:ring-amber-300/70 md:left-4 md:h-11 md:w-11"
+                                                >
+                                                  <ChevronLeft className="h-5 w-5 drop-shadow-sm" />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  aria-label="Next showcase image"
+                                                  onClick={goToNextShowcaseImage}
+                                                  className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/35 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.18)] backdrop-blur-xl transition duration-200 hover:scale-105 hover:bg-white/55 focus:outline-none focus:ring-2 focus:ring-amber-300/70 md:right-4 md:h-11 md:w-11"
+                                                >
+                                                  <ChevronRight className="h-5 w-5 drop-shadow-sm" />
+                                                </button>
+                                              </>
+                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <h2 className="text-[1.42rem] sm:text-[1.52rem] md:text-[1.68rem] font-serif font-bold text-gray-900 mb-2">{templateTitle || book.title}</h2>
-                            <p className="text-gray-600 text-sm leading-relaxed mb-4 md:mb-5">{templateDescription || book.description}</p>
+                            <p className="text-gray-600 text-sm leading-relaxed mb-4 md:mb-5">
+                              {templateInnerDescription || resolvedBook?.innerDescription || templateDescription || book.description}
+                            </p>
                             
                             <div className="space-y-3">
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">{t('personalize.magicAttributes')}</h4>
@@ -2568,13 +2734,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                 <div className="grid min-w-0 grid-cols-3 gap-1">
                                                     {GOOD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
-                                                            <div className="aspect-[7/5] overflow-hidden rounded-md sm:rounded-lg border border-emerald-100 bg-emerald-50 shadow-[0_5px_12px_rgba(16,185,129,0.08)]">
-                                                                <img
+                                                            <div className="relative aspect-[7/5] overflow-hidden rounded-md border border-emerald-100 bg-emerald-50 shadow-[0_5px_12px_rgba(16,185,129,0.08)] sm:rounded-lg">
+                                                                <NextImage
                                                                     src={item.src}
                                                                     alt={item.alt}
+                                                                    fill
+                                                                    sizes="(max-width: 767px) 28vw, 120px"
                                                                     loading="lazy"
-                                                                    decoding="async"
-                                                                    className="h-full w-full object-cover"
+                                                                    className="object-cover"
                                                                 />
                                                             </div>
                                                             <div className="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
@@ -2586,13 +2753,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                                 <div className="mt-1 grid min-w-0 grid-cols-3 gap-1">
                                                     {BAD_PHOTO_EXAMPLES.map((item) => (
                                                         <div key={item.src} className="relative">
-                                                            <div className="aspect-[7/5] overflow-hidden rounded-md sm:rounded-lg border border-rose-100 bg-rose-50 shadow-[0_5px_12px_rgba(244,63,94,0.08)]">
-                                                                <img
+                                                            <div className="relative aspect-[7/5] overflow-hidden rounded-md border border-rose-100 bg-rose-50 shadow-[0_5px_12px_rgba(244,63,94,0.08)] sm:rounded-lg">
+                                                                <NextImage
                                                                     src={item.src}
                                                                     alt={item.alt}
+                                                                    fill
+                                                                    sizes="(max-width: 767px) 28vw, 120px"
                                                                     loading="lazy"
-                                                                    decoding="async"
-                                                                    className="h-full w-full object-cover"
+                                                                    className="object-cover"
                                                                 />
                                                             </div>
                                                             <div className="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
@@ -2651,7 +2819,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
                                 <div className="grid gap-4 md:grid-cols-2 md:gap-6">
                                     <div ref={nameBoxRef} className="space-y-2 relative">
-                                        <label className="text-sm font-bold text-gray-700">{t('personalize.nameLabel')}</label>
+                                        <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.nameLabel')}</label>
                                         <input 
                                             type="text" 
                                             value={name} 
@@ -2663,11 +2831,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                               setShowLanguageOptions(false);
                                             }}
                                             placeholder={t('personalize.namePlaceholder')} 
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none transition-all placeholder:text-gray-400 text-gray-800 font-medium" 
+                                            className="w-full px-4 py-3 rounded-xl glass-input placeholder:text-gray-400/60 text-gray-900 font-medium" 
                                         />
                                         {showNameHistory && (
                                           <div
-                                            className="absolute z-30 mt-2 w-full rounded-xl border border-amber-100 bg-white shadow-lg p-2 max-h-44 overflow-auto"
+                                            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 max-h-44 overflow-auto"
                                             onMouseDown={(event) => {
                                               event.preventDefault();
                                               event.stopPropagation();
@@ -2724,7 +2892,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                         )}
                                     </div>
                                     <div ref={ageBoxRef} className="space-y-2 relative">
-                                        <label className="text-sm font-bold text-gray-700">{t('personalize.ageLabel')}</label>
+                                        <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.ageLabel')}</label>
                                         <input 
                                             type="number" 
                                             value={age} 
@@ -2736,11 +2904,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                               setShowLanguageOptions(false);
                                             }}
                                             placeholder={t('personalize.agePlaceholder')} 
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none transition-all placeholder:text-gray-400 text-gray-800 font-medium" 
+                                            className="w-full px-4 py-3 rounded-xl glass-input placeholder:text-gray-400/60 text-gray-900 font-medium" 
                                         />
                                         {showAgeHistory && (
                                           <div
-                                            className="absolute z-30 mt-2 w-full rounded-xl border border-amber-100 bg-white shadow-lg p-2 max-h-44 overflow-auto"
+                                            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 max-h-44 overflow-auto"
                                             onMouseDown={(event) => {
                                               event.preventDefault();
                                               event.stopPropagation();
@@ -2799,7 +2967,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 </div>
 
                                 <div className="space-y-3">
-                                    <label className="text-sm font-bold text-gray-700">{t('personalize.storyLanguage')}</label>
+                                    <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.storyLanguage')}</label>
                                     <div ref={languageBoxRef} className="relative">
                                         <button
                                           type="button"
@@ -2808,7 +2976,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                             setShowNameHistory(false);
                                             setShowAgeHistory(false);
                                           }}
-                                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-gray-800 font-medium outline-none transition-all focus:ring-2 focus:ring-amber-200 focus:border-amber-400"
+                                          className="w-full rounded-xl glass-input px-4 py-3 text-left text-gray-900 font-medium flex items-center justify-between"
                                         >
                                           {selectedLang === 'English'
                                             ? t('personalize.storyLanguageEnglish')
@@ -2819,7 +2987,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                         <ChevronDown className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 transition-transform ${showLanguageOptions ? 'rotate-180' : ''}`} />
                                         {showLanguageOptions && (
                                           <div
-                                            className="absolute z-30 mt-2 w-full rounded-xl border border-amber-100 bg-white shadow-lg p-2 overflow-auto"
+                                            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 overflow-auto"
                                             onMouseDown={(event) => {
                                               event.preventDefault();
                                               event.stopPropagation();
@@ -2853,21 +3021,22 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 </div>
 
                                 <div className="space-y-3">
-                                    <label className="text-sm font-bold text-gray-700">{t('personalize.bookType')}</label>
+                                    <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.bookType')}</label>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                        <button onClick={() => setBookType('digital')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'digital' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">{t('personalize.bookTypeDigitalTitle')}</div>
-                                            <div className="text-xs text-gray-500">{t('personalize.bookTypeDigitalSubtitle')}</div>
+                                        <button onClick={() => setBookType('digital')} className={`p-3 rounded-2xl text-left transition-all ${bookType === 'digital' ? 'border border-amber-400/60 bg-white/90 shadow-[0_4px_16px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border border-white/55 bg-white/50 backdrop-blur-sm hover:bg-white/75 hover:border-white/70'}`}>
+                                            <div className="text-sm font-semibold text-gray-900">{t('personalize.bookTypeDigitalTitle')}</div>
+                                            <div className="text-[11px] text-gray-400 mt-0.5">{t('personalize.bookTypeDigitalSubtitle')}</div>
                                         </button>
-                                        <button onClick={() => setBookType('basic')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'basic' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">{t('personalize.bookTypeBasicTitle')}</div>
-                                            <div className="text-xs text-gray-500">{t('personalize.bookTypeBasicSubtitle')}</div>
+                                        <button onClick={() => setBookType('basic')} className={`p-3 rounded-2xl text-left transition-all ${bookType === 'basic' ? 'border border-amber-400/60 bg-white/90 shadow-[0_4px_16px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border border-white/55 bg-white/50 backdrop-blur-sm hover:bg-white/75 hover:border-white/70'}`}>
+                                            <div className="text-sm font-semibold text-gray-900">{t('personalize.bookTypeBasicTitle')}</div>
+                                            <div className="text-[11px] text-gray-400 mt-0.5">{t('personalize.bookTypeBasicSubtitle')}</div>
                                         </button>
-                                        <button onClick={() => setBookType('supreme')} className={`p-3 rounded-lg border-2 text-left transition-all ${bookType === 'supreme' ? 'border-gray-900 bg-gray-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                                            <div className="text-sm font-bold text-gray-900">{t('personalize.bookTypeSupremeTitle')}</div>
-                                            <div className="text-xs text-gray-500">{t('personalize.bookTypeSupremeSubtitle')}</div>
+                                        <button onClick={() => setBookType('supreme')} className={`p-3 rounded-2xl text-left transition-all ${bookType === 'supreme' ? 'border border-amber-400/60 bg-white/90 shadow-[0_4px_16px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border border-white/55 bg-white/50 backdrop-blur-sm hover:bg-white/75 hover:border-white/70'}`}>
+                                            <div className="text-sm font-semibold text-gray-900">{t('personalize.bookTypeSupremeTitle')}</div>
+                                            <div className="text-[11px] text-gray-400 mt-0.5">{t('personalize.bookTypeSupremeSubtitle')}</div>
                                         </button>
                                     </div>
+                                    {renderProductShowcase()}
                                     {requiresVoiceSample ? (
                                       <div ref={voicePanelRef}>
                                         <VoiceRecorderPanel
@@ -2881,13 +3050,35 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                         />
                                       </div>
                                     ) : null}
-                                    {renderProductShowcase()}
                                 </div>
                             </div>
 
                             <div className="pt-8 mt-4 border-t border-gray-100">
+                                <div className="mb-4 space-y-3 rounded-2xl border border-amber-100/80 bg-white/65 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-sm">
+                                    <label className="flex cursor-pointer items-start gap-3 text-xs font-medium leading-5 text-gray-700 sm:text-sm">
+                                        <input
+                                          type="checkbox"
+                                          checked={isDataGenerationConsentChecked}
+                                          onChange={(event) => setIsDataGenerationConsentChecked(event.target.checked)}
+                                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                                        />
+                                        <span>
+                                          <span className="font-semibold text-gray-900">{t('personalize.dataConsentRequiredLabel')}</span>
+                                          <span className="ml-1 text-amber-600">*</span>
+                                        </span>
+                                    </label>
+                                    <label className="flex cursor-pointer items-start gap-3 text-xs font-medium leading-5 text-gray-700 sm:text-sm">
+                                        <input
+                                          type="checkbox"
+                                          checked={isMarketingConsentChecked}
+                                          onChange={(event) => setIsMarketingConsentChecked(event.target.checked)}
+                                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                                        />
+                                        <span>{t('personalize.marketingConsentOptionalLabel')}</span>
+                                    </label>
+                                </div>
                                 <button 
-                                    onClick={fsm.primaryAction} 
+                                    onClick={primaryAction} 
                                     disabled={!isFormValid || isSupreme} 
                                     className={`w-full h-16 rounded-full font-bold text-lg flex items-center justify-center gap-3 transition-all duration-500 shadow-xl ${(!isFormValid || isSupreme) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:scale-[1.02] shadow-amber-200'}`}
                                 >
@@ -2935,8 +3126,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 className="relative w-full flex justify-center" 
                                 animate={{ x: (currentSpread === 0 && !isFlipping) ? -190 : 0 }} 
                                 transition={{ duration: ANIMATION_DURATION, ease: "easeInOut" }} 
-                                style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: PREVIEW_HEIGHT, filter: previewBookShadow }}
+                                style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: PREVIEW_PAGE_HEIGHT, filter: previewBookShadow }}
                             >
+                                <div
+                                  aria-hidden="true"
+                                  className="pointer-events-none absolute left-1/2 bottom-[-14px] z-[-4] h-16 w-[540px] -translate-x-1/2 rounded-full blur-3xl opacity-60"
+                                  style={{
+                                    background:
+                                      'radial-gradient(circle at center, rgba(15,23,42,0.22) 0%, rgba(15,23,42,0.12) 30%, rgba(15,23,42,0.05) 50%, rgba(15,23,42,0) 72%)',
+                                  }}
+                                />
                                  
                                  {/* 3D Book Thickness (LEFT = Center Binding) */}
                                  {/* Center Spine position */}
@@ -3063,7 +3262,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     </div>
 
                     <div className="w-full max-w-3xl px-2">
-                      <label className="mx-auto mb-3 flex max-w-2xl cursor-pointer items-start gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-left shadow-sm backdrop-blur-sm">
+                      <label className="mx-auto mb-3 flex max-w-2xl cursor-pointer items-start gap-3 rounded-2xl border border-white/60 bg-white/65 backdrop-blur-sm px-4 py-3 text-left shadow-[0_4px_12px_rgba(148,93,34,0.06)]">
                         <input
                           type="checkbox"
                           checked={isCheckoutAcknowledged}
@@ -3086,17 +3285,31 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       ) : null}
                     </div>
 
-                    <div className="flex w-full max-w-md flex-col justify-center gap-3 px-2 sm:max-w-none sm:flex-row sm:gap-4 md:gap-5">
-                        <Button
-                            onClick={handleOpenPreviewShare}
-                            size="lg"
-                            variant="secondary"
-                            className="glass-action-btn glass-action-btn--neutral relative z-20 h-11 w-full rounded-full px-5 text-sm font-semibold sm:w-auto sm:px-7 md:h-12 md:px-8 md:text-base"
-                            disabled={isPreparingShare || !creationId}
-                        >
-                            <Share2 className="mr-2 h-4 w-4 md:h-5 md:w-5" />
+                    <div className="mb-3 w-full max-w-2xl px-2">
+                      <button
+                        type="button"
+                        onClick={handleOpenPreviewShare}
+                        disabled={isPreparingShare || !creationId}
+                        className="group relative z-20 flex w-full items-center gap-3 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/90 to-orange-50/85 px-4 py-3 text-left shadow-[0_10px_28px_rgba(251,146,60,0.12),inset_0_1px_0_rgba(255,255,255,0.82)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-amber-300/80 hover:shadow-[0_14px_34px_rgba(251,146,60,0.18),inset_0_1px_0_rgba(255,255,255,0.9)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/75 bg-white/72 text-amber-600 shadow-sm transition group-hover:bg-white/90">
+                          <Share2 className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-amber-900">
                             {isPreparingShare ? t('common.loading') : t('share.previewButton')}
-                        </Button>
+                          </span>
+                          <span className="mt-0.5 block text-xs font-medium leading-5 text-amber-700/75">
+                            {t('share.previewDescription')}
+                          </span>
+                        </span>
+                        <span className="hidden rounded-full border border-white/70 bg-white/55 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-600 shadow-sm sm:inline-flex">
+                          {t('share.copyLink')}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="flex w-full max-w-md flex-col justify-center gap-3 px-2 sm:max-w-none sm:flex-row sm:gap-4 md:gap-5">
                          <Button
                             ref={addToCartBtnRef}
                             onClick={handleAddToCartClick}
@@ -3182,7 +3395,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 />
                             </div>
 
-                            {/* Mini Game — play while waiting */}
+                            {/* Mini Game ??play while waiting */}
                             <div className="flex justify-center">
                               <MiniGame />
                             </div>
@@ -3203,7 +3416,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
         {showExitConfirm && (
           <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 text-center">
+              <div className="rounded-3xl border border-white/60 bg-white/88 backdrop-blur-2xl p-6 max-w-md w-full shadow-[0_20px_60px_rgba(15,23,42,0.18)] animate-in zoom-in-95 text-center">
                   <BookOpen className="h-12 w-12 text-amber-500 mx-auto mb-4" />
                   <h3 className="text-lg font-bold text-gray-900 mb-2">{t('personalize.exitConfirmTitle')}</h3>
                   <p className="text-gray-600 mb-6">{t('personalize.exitConfirmBody')}</p>

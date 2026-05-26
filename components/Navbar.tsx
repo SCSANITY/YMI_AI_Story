@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -12,6 +13,7 @@ import {
   Menu,
   Package,
   PencilLine,
+  Shield,
   ShoppingCart,
   X,
 } from 'lucide-react'
@@ -19,6 +21,7 @@ import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { MyRewardsModal } from '@/components/MyRewardsModal'
+import { runAfterIdle } from '@/lib/schedule-idle'
 
 export const Navbar: React.FC = () => {
   const router = useRouter()
@@ -31,6 +34,7 @@ export const Navbar: React.FC = () => {
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isRewardsOpen, setRewardsOpen] = useState(false)
   const [rewardVoucherCount, setRewardVoucherCount] = useState(0)
+  const [scrolled, setScrolled] = useState(false)
 
   const userRef = useRef<HTMLDivElement>(null)
   const navContainerRef = useRef<HTMLDivElement>(null)
@@ -47,6 +51,8 @@ export const Navbar: React.FC = () => {
   const effectiveRewardVoucherCount = user?.customerId ? rewardVoucherCount : 0
   const isBooksActive = pathname === '/books'
   const isHomeActive = isHomePage
+  // transparent on homepage hero, transitions to glass after scroll
+  const isTransparent = isHomePage && !scrolled
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -59,26 +65,36 @@ export const Navbar: React.FC = () => {
   }, [])
 
   useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 60)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
     if (!user?.customerId) return
 
     let cancelled = false
 
-    fetch('/api/account/reward-vouchers', {
-      credentials: 'include',
-      cache: 'no-store',
+    const cancelIdleTask = runAfterIdle(() => {
+      fetch('/api/account/reward-vouchers', {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+        .then((res) => (res.ok ? res.json() : { active: [] }))
+        .then((data) => {
+          if (cancelled) return
+          setRewardVoucherCount(Array.isArray(data?.active) ? data.active.length : 0)
+        })
+        .catch(() => {
+          if (cancelled) return
+          setRewardVoucherCount(0)
+        })
     })
-      .then((res) => (res.ok ? res.json() : { active: [] }))
-      .then((data) => {
-        if (cancelled) return
-        setRewardVoucherCount(Array.isArray(data?.active) ? data.active.length : 0)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setRewardVoucherCount(0)
-      })
 
     return () => {
       cancelled = true
+      cancelIdleTask()
     }
   }, [isRewardsOpen, pathname, user?.customerId])
 
@@ -125,7 +141,11 @@ export const Navbar: React.FC = () => {
   if (isPersonalizeRoute) return null
 
   return (
-    <nav className="fixed left-0 right-0 top-0 z-40 w-full bg-white/55 backdrop-blur-2xl backdrop-saturate-150 transition-all duration-300 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40">
+    <nav className={`fixed left-0 right-0 top-0 z-40 w-full transition-all duration-500 ${
+      isTransparent
+        ? 'bg-transparent backdrop-blur-none border-b border-transparent shadow-none'
+        : 'bg-white/60 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40'
+    }`}>
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {pathname !== '/' && !isCheckoutRoute && (
@@ -135,7 +155,7 @@ export const Navbar: React.FC = () => {
           )}
 
           <button
-            className="md:hidden p-2 -ml-2 text-gray-600"
+            className={`md:hidden p-2 -ml-2 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-600'}`}
             onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}
           >
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -147,18 +167,23 @@ export const Navbar: React.FC = () => {
               e.preventDefault()
               router.push('/')
             }}
-            className="flex items-center space-x-2"
+            className="flex items-center"
           >
-            <span className="font-title text-xl text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-600">
-              YMI
-            </span>
+            <Image
+              src="/logo.png"
+              alt="YMI Story"
+              width={1057}
+              height={900}
+              priority={isHomePage}
+              className="h-8 w-auto"
+            />
           </a>
         </div>
 
         <div className="hidden md:flex items-center gap-8 text-sm font-medium relative" ref={navContainerRef}>
-          {/* Sliding amber indicator */}
+          {/* Sliding active indicator */}
           <div
-            className="absolute bottom-0 h-0.5 bg-amber-500 rounded-full pointer-events-none transition-all duration-300 ease-out"
+            className={`absolute bottom-0 h-0.5 rounded-full pointer-events-none transition-all duration-300 ease-out ${isTransparent ? 'bg-white/80' : 'bg-amber-500'}`}
             style={{
               left: 'var(--nav-indicator-left, 0px)',
               width: 'var(--nav-indicator-width, 0px)',
@@ -168,21 +193,27 @@ export const Navbar: React.FC = () => {
           <button
             ref={homeRef}
             onClick={handleHomeClick}
-            className={`transition-colors duration-200 pb-0.5 ${isHomeActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`transition-colors duration-300 pb-0.5 ${isHomeActive
+              ? isTransparent ? 'text-white' : 'text-gray-900'
+              : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
             {t('navbar.home')}
           </button>
           <button
             ref={booksRef}
             onClick={handleBooksClick}
-            className={`transition-colors duration-200 pb-0.5 ${isBooksActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`transition-colors duration-300 pb-0.5 ${isBooksActive
+              ? isTransparent ? 'text-white' : 'text-gray-900'
+              : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
             {t('navbar.books')}
           </button>
           <button
             ref={favoritesRef}
             onClick={() => router.push('/favorites')}
-            className={`flex items-center gap-1.5 transition-colors duration-200 pb-0.5 ${pathname === '/favorites' ? 'text-gray-900' : 'text-gray-500 hover:text-red-500'}`}
+            className={`flex items-center gap-1.5 transition-colors duration-300 pb-0.5 ${pathname === '/favorites'
+              ? isTransparent ? 'text-white' : 'text-gray-900'
+              : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-red-500'}`}
           >
             <Heart className="h-4 w-4" />
             <span>{t('navbar.favorites')}</span>
@@ -190,21 +221,27 @@ export const Navbar: React.FC = () => {
           <button
             ref={myBooksRef}
             onClick={() => router.push('/my-books')}
-            className={`transition-colors duration-200 pb-0.5 ${pathname === '/my-books' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`transition-colors duration-300 pb-0.5 ${pathname === '/my-books'
+              ? isTransparent ? 'text-white' : 'text-gray-900'
+              : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
             {t('navbar.myBooks')}
           </button>
           <button
             ref={collaborationRef}
             onClick={() => router.push('/collaboration')}
-            className={`transition-colors duration-200 pb-0.5 ${pathname === '/collaboration' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`transition-colors duration-300 pb-0.5 ${pathname === '/collaboration'
+              ? isTransparent ? 'text-white' : 'text-gray-900'
+              : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
             {t('navbar.collaboration')}
           </button>
           <button
             ref={supportRef}
             onClick={() => router.push('/support')}
-            className={`transition-colors duration-200 pb-0.5 ${pathname === '/support' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`transition-colors duration-300 pb-0.5 ${pathname === '/support'
+              ? isTransparent ? 'text-white' : 'text-gray-900'
+              : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
             {t('navbar.support')}
           </button>
@@ -214,7 +251,7 @@ export const Navbar: React.FC = () => {
           <LanguageSwitcher menuClassName="w-40 animate-in fade-in zoom-in-95" />
 
           <Button variant="ghost" size="sm" onClick={() => router.push('/cart')} className="relative px-2">
-            <ShoppingCart className="h-5 w-5 text-gray-700" />
+            <ShoppingCart className={`h-5 w-5 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-700'}`} />
             {cartCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
                 {cartCount}
@@ -229,6 +266,8 @@ export const Navbar: React.FC = () => {
                   onClick={() => setUserMenuOpen(!isUserMenuOpen)}
                   className="relative flex items-center gap-2 focus:outline-none transition-transform hover:scale-105"
                 >
+                  {/* OAuth avatars can come from arbitrary domains; keep native img instead of expanding Next image remote allowlists. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={user.avatar}
                     alt={user.name}
@@ -310,6 +349,19 @@ export const Navbar: React.FC = () => {
                       {t('navbar.myBooks')}
                     </button>
 
+                    {user.role === 'admin' ? (
+                      <button
+                        onClick={() => {
+                          router.push('/admin')
+                          setUserMenuOpen(false)
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 transition-colors"
+                      >
+                        <Shield className="h-4 w-4" />
+                        Admin Dashboard
+                      </button>
+                    ) : null}
+
                     <button
                       onClick={() => {
                         logout()
@@ -324,7 +376,13 @@ export const Navbar: React.FC = () => {
                 )}
               </div>
             ) : (
-              <Button onClick={() => openLoginModal()} size="sm">
+              <Button
+                onClick={() => openLoginModal()}
+                size="sm"
+                className={isTransparent
+                  ? 'rounded-full border border-white/50 bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm'
+                  : ''}
+              >
                 {t('navbar.logIn')}
               </Button>
             )}
@@ -352,5 +410,3 @@ export const Navbar: React.FC = () => {
     </nav>
   )
 }
-
-

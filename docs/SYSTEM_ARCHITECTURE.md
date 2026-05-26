@@ -1,0 +1,233 @@
+# YMI Story System Architecture
+
+Last updated: 2026-05-26
+
+## Product Scope
+
+YMI Story is a personalized children's storybook product.
+
+Current production goal:
+- User uploads a child photo.
+- AI face swap places the child into a preset illustrated story.
+- User previews a low-resolution cover/Page 1 result.
+- User pays through Stripe.
+- The system generates all final story pages.
+- Admin reviews every page.
+- Approved pages are packaged into a PDF and delivered by email.
+
+Later product direction:
+- Physical book fulfillment.
+- Customer-recorded voice and generated audiobook delivery.
+
+## Repository Layout
+
+Root workspace:
+- `ymi-books-web-1.0/`
+  - Next.js web app, customer site, admin dashboard, API routes, email rendering, checkout, account/library pages.
+- `worker/`
+  - Node.js TypeScript worker run with `ts-node`.
+  - Polls Supabase jobs, prepares page inputs, calls RunPod, uploads outputs, and updates review records.
+- `Template_folder/`
+  - Local story-package backup and SQL/reference material.
+  - Story config/source files here are not the runtime source of truth once synced to Supabase.
+- `subtitle-template-editor-app/`
+  - Local helper app for editing subtitle/template overlays.
+- `subtitle-json-combiner-app/`
+  - Local helper app for story/subtitle JSON preparation.
+- `docs/`
+  - Current maintainable engineering documentation.
+
+## Runtime Architecture
+
+Main layers:
+
+1. Frontend and API layer
+- Next.js App Router.
+- Hosted on Vercel.
+- Customer pages, personalization upload flow, cart, checkout, account/library pages, and `/admin`.
+- API routes handle job creation, checkout, webhooks, signed URLs, admin review, email flows, and internal callbacks.
+
+2. Database, auth, and storage layer
+- Supabase cloud project `pgpaawqgtewowjratddm`.
+- PostgreSQL stores templates, users, orders, jobs, final review state, cart data, shipping configuration, OTP codes, and related business records.
+- Supabase Auth is used for account login/signup.
+- Supabase Storage stores templates, user uploads, generated pages, final PDFs, and runtime worker artifacts.
+
+3. Worker/orchestration layer
+- Local Windows worker today; intended to move to a cloud host later.
+- Runs `worker/index.ts` through `ts-node`.
+- Uses Supabase service role credentials.
+- Claims queued jobs through `supabase.rpc('claim_next_job')`.
+- Supports mock mode for UI testing and real RunPod mode for production generation.
+
+4. AI execution layer
+- Current real provider path is RunPod Serverless running Dockerized ComfyUI workflows.
+- Workflows originated in RunComfy/ComfyUI and are packaged for RunPod.
+- Worker submits workflow JSON plus template/face images to RunPod and polls until image output is ready.
+
+5. Payment and delivery layer
+- Stripe Checkout handles payment.
+- Stripe webhook is the primary finalization path.
+- Checkout success fallback exists to handle delayed webhook delivery.
+- Resend sends guest OTP, order confirmation, final delivery, and reminder emails.
+
+## Key Frontend/API Modules
+
+Important customer flows:
+- `app/personalize/[bookID]/page.tsx`
+- `components/PersonalizePage.tsx`
+- `app/cart/page.tsx`
+- `app/checkout/page.tsx`
+- `app/checkout/success/page.tsx`
+- `app/my-books/page.tsx`
+- `app/orders/[orderID]/page.tsx`
+
+Important API routes:
+- `app/api/templates/route.ts`
+- `app/api/templates/[templateId]/route.ts`
+- `app/api/upload-url/route.ts`
+- `app/api/jobs/route.ts`
+- `app/api/jobs/[jobId]/route.ts`
+- `app/api/jobs/[jobId]/preview-url/route.ts`
+- `app/api/cart/route.ts`
+- `app/api/orders/start/route.ts`
+- `app/api/checkout/session/route.ts`
+- `app/api/webhooks/stripe/route.ts`
+- `app/api/orders/stripe-confirm/route.ts`
+- `app/api/admin/final-jobs/**`
+
+Important shared libraries:
+- `src/lib/orderFulfillment.ts`
+- `src/lib/finalReview.ts`
+- `src/lib/email.tsx`
+- `src/lib/adminAuth.ts`
+- `src/services/assets.ts`
+- `types/schema.ts`
+
+## Key Worker Modules
+
+- `worker/index.ts`
+  - Main loop, job claim, config loading, page preparation, subtitle rendering handoff, provider execution, output upload, and DB updates.
+- `worker/providers/runpodAdapter.ts`
+  - RunPod payload construction, image encoding, `/run` submission, status polling, cancellation, and output parsing.
+- `worker/providers/runcomfyAdapter.ts`
+  - Legacy/fallback provider adapter. Currently not the active production path.
+- `worker/subtitleRenderer.ts`
+  - Local image/text rendering for dynamic child-name overlays.
+- `worker/processor.ts`
+  - Template/config typing and related shared structures.
+- `worker/pdf.ts`
+  - Legacy/direct final PDF packaging utilities. Current admin-review release path builds final PDF from approved pages in the web app.
+- `worker/ecosystem.config.js`
+  - PM2 process configuration.
+- `worker/scripts/use-env-localhost.ps1`
+- `worker/scripts/use-env-online.ps1`
+  - Environment profile switchers.
+
+## Supabase Model
+
+Confirmed runtime buckets:
+- `app-templates`
+  - Public bucket.
+  - Stores story config JSON, story images, workflow JSON, subtitle templates, fonts, and related story package assets.
+- `raw-private`
+  - Private bucket.
+  - Stores user uploads, worker runtime images, generated preview/final pages, approved pages, PDFs, and temporary artifacts.
+
+Core tables used by current flow:
+- `templates`
+- `creations`
+- `jobs`
+- `cart_items`
+- `orders`
+- `payments`
+- `final_jobs`
+- `final_job_pages`
+- `user_assets`
+- `verification_codes`
+- shipping-related tables used by checkout quote/destination APIs
+
+Critical RPC:
+- `claim_next_job`
+  - Worker depends on this RPC to atomically claim queued jobs.
+  - The RPC exists in cloud Supabase and responds.
+  - Its SQL definition is not yet stored in this repo. This is a reproducibility/disaster-recovery follow-up, not a current runtime blocker.
+
+Important enum/status note:
+- Cloud `jobs.status` now accepts `cancel_requested` and `cancelled` after rerunning `Template_folder/sql_jobs_cancel_statuses.sql`.
+
+## External Integrations
+
+Supabase:
+- Production project host: `pgpaawqgtewowjratddm.supabase.co`.
+- Web env uses public anon key plus server service role key.
+- Worker env uses service key.
+
+RunPod:
+- Real production AI provider path.
+- Current cloud template configs point preview/final stages to endpoint `39ygcoofm4ye40`.
+- Worker expects RunPod output as a base64 image in a shape accepted by `runpodAdapter`.
+
+RunComfy:
+- Still present in code as legacy/fallback adapter.
+- Current worker env profiles have empty `RUNCOMFY_API_TOKEN`.
+
+Stripe:
+- Checkout Sessions are used for payment.
+- Local/dev env should remain on test keys.
+- Vercel production should switch to live keys after Stripe live review.
+
+Resend:
+- Transactional email provider.
+- Production sending domain and `from` addresses are verified and have already sent successfully.
+
+Vercel:
+- Hosts the Next.js web/API app.
+- Production site URL should be `https://www.ymistory.com`.
+- Internal API secret must match the worker online environment.
+
+Mediapipe:
+- Browser-side face quality/detection assets live under `ymi-books-web-1.0/public/mediapipe`.
+- These are third-party generated static assets and are intentionally ignored by ESLint.
+
+## Environment Contract
+
+Do not store actual secret values in docs.
+
+Web/Vercel:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SITE_URL`
+- `SITE_URL`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+- `EMAIL_FROM_SECURITY`
+- optional order/delivery/support email sender overrides
+- `INTERNAL_API_SECRET`
+- `CRON_SECRET`
+
+Worker:
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `WORKER_MOCK_MODE`
+- `RUNPOD_API_KEY`
+- `RUNPOD_API_BASE_URL`
+- `WORKER_CALLBACK_URL`
+- `INTERNAL_API_SECRET`
+- `WORKER_HEALTH_HOST`
+- `WORKER_HEALTH_PORT`
+- `HEALTHCHECKS_URL`
+
+## Current Architectural Decisions
+
+- Supabase cloud project `pgpaawqgtewowjratddm` is the production project.
+- `Template_folder` is a local backup/source package area; runtime story data should be read from Supabase once synced.
+- RunPod is the production AI path.
+- Worker can remain local during internal testing but should eventually move to a cloud host.
+- Mock worker mode is intentional and useful for UI/UX testing without RunPod cost.
+- Admin review is required before customer final PDF delivery.
+- Worker stops final jobs at `review_pending`; admin release is responsible for PDF packaging and final delivery email.

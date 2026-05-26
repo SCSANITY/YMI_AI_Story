@@ -5,30 +5,55 @@ import { BOOKS } from '@/data/books'
 import { staticBookToCatalogBook, type CatalogBook } from '@/lib/book-catalog'
 
 const FALLBACK_BOOKS = BOOKS.map(staticBookToCatalogBook)
+const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000
+
+let cachedCatalog: { books: CatalogBook[]; loadedAt: number } | null = null
+let catalogRequest: Promise<CatalogBook[]> | null = null
+
+async function fetchCatalogBooks(): Promise<CatalogBook[]> {
+  if (cachedCatalog && Date.now() - cachedCatalog.loadedAt < CATALOG_CACHE_TTL_MS) {
+    return cachedCatalog.books
+  }
+
+  if (!catalogRequest) {
+    catalogRequest = fetch('/api/templates', { credentials: 'include' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}))
+
+        if (!response.ok || !Array.isArray(data?.templates)) {
+          throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to load templates')
+        }
+
+        const books = data.templates.length ? data.templates : FALLBACK_BOOKS
+        cachedCatalog = { books, loadedAt: Date.now() }
+        return books
+      })
+      .finally(() => {
+        catalogRequest = null
+      })
+  }
+
+  return catalogRequest
+}
 
 export function useBookCatalog() {
-  const [books, setBooks] = useState<CatalogBook[]>(FALLBACK_BOOKS)
-  const [isLoading, setIsLoading] = useState(true)
+  const [books, setBooks] = useState<CatalogBook[]>(cachedCatalog?.books ?? FALLBACK_BOOKS)
+  const [isLoading, setIsLoading] = useState(!cachedCatalog)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
 
     const loadBooks = async () => {
-      setIsLoading(true)
+      if (!cachedCatalog) setIsLoading(true)
       setError(null)
 
       try {
-        const response = await fetch('/api/templates', { credentials: 'include' })
-        const data = await response.json().catch(() => ({}))
+        const nextBooks = await fetchCatalogBooks()
 
         if (!isMounted) return
 
-        if (!response.ok || !Array.isArray(data?.templates)) {
-          throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to load templates')
-        }
-
-        setBooks(data.templates.length ? data.templates : FALLBACK_BOOKS)
+        setBooks(nextBooks)
       } catch (loadError) {
         if (!isMounted) return
         setError(loadError instanceof Error ? loadError.message : 'Failed to load templates')

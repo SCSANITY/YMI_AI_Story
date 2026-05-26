@@ -1,6 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ArrowRight } from 'lucide-react'
 import { Book } from '@/types'
 import { BookCard } from '@/components/BookCard'
 import { Button } from '@/components/Button'
@@ -8,6 +10,7 @@ import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { useBookDisplayData } from '@/components/useBookDisplayData'
 import { useBookCatalog } from '@/components/useBookCatalog'
+import { canEnterCustomize } from '@/lib/customize-access-client'
 
 type HomeBookCategory = {
   titleKey: string
@@ -98,6 +101,11 @@ function CategoryBanner({ banner }: { banner: NonNullable<HomeBookCategory['afte
             className="block h-full w-full object-cover"
           />
         </picture>
+        <Link
+          href="/books"
+          aria-label="Explore all YMI Story books"
+          className="absolute inset-0 block cursor-pointer bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        />
       </div>
     </div>
   )
@@ -110,7 +118,9 @@ export function HomeBookCategories() {
   const { books: catalogBooks } = useBookCatalog()
   const { ratingMap } = useBookDisplayData()
 
-  const handlePersonalize = (bookID: string) => {
+  const handlePersonalize = async (bookID: string) => {
+    const allowed = await canEnterCustomize()
+    if (!allowed) return
     router.push(`/personalize/${bookID}`)
   }
 
@@ -147,15 +157,18 @@ export function HomeBookCategories() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-fit rounded-full px-5"
+                    className="w-fit rounded-full px-5 uppercase tracking-[0.12em]"
                     onClick={() => router.push('/books')}
                   >
-                    {t('homeBooks.viewAll')}
+                    <span className="inline-flex items-center gap-2">
+                      {t('homeBooks.viewAll')}
+                      <ArrowRight className="h-4 w-4" aria-hidden />
+                    </span>
                   </Button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-8">
-                  {books.map((book) => (
+                  {books.map((book, bookIndex) => (
                     <BookCard
                       key={`${category.titleKey}-${book.bookID}`}
                       book={book}
@@ -165,6 +178,7 @@ export function HomeBookCategories() {
                       storyType={book.storyTypeLabel || book.category}
                       description={book.description}
                       rating={ratingMap[book.bookID]}
+                      priority={category.sectionId === 'brand_new' && bookIndex < 4}
                       onClick={() => handlePersonalize(book.bookID)}
                       onFavoriteClick={(event) => {
                         event.stopPropagation()

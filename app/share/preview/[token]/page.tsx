@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildAbsoluteUrl } from '@/lib/site-url'
+import { CustomizeAccessButton } from '@/components/CustomizeAccessButton'
 
 type TemplateRelation = { name?: string | null } | { name?: string | null }[] | null
 
@@ -85,11 +87,14 @@ export default async function PreviewSharePage(
     <div className="min-h-[calc(100vh-84px)] bg-gradient-to-br from-amber-50 via-white to-orange-50 px-4 py-10 md:px-8 md:py-14">
       <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-amber-100 bg-white shadow-xl shadow-amber-100/40">
         <div className="grid gap-8 p-6 md:grid-cols-[1.05fr_0.95fr] md:p-10">
-          <div className="overflow-hidden rounded-[28px] border border-amber-100 bg-amber-50/30">
-            <img
+          <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-amber-100 bg-amber-50/30 md:min-h-[520px]">
+            <Image
               src={buildAbsoluteUrl(`/share/preview/${share.share_token}/image`)}
               alt={templateName || 'YMI story preview'}
-              className="h-full w-full object-cover"
+              fill
+              sizes="(max-width: 767px) 92vw, 520px"
+              priority
+              className="object-cover"
             />
           </div>
 
@@ -105,12 +110,12 @@ export default async function PreviewSharePage(
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link
+              <CustomizeAccessButton
                 href={`/personalize/${share.template_id}`}
                 className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-amber-200/70 transition-transform hover:scale-[1.02]"
               >
                 Create Your Own
-              </Link>
+              </CustomizeAccessButton>
               <Link
                 href="/books"
                 className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-white px-8 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50"

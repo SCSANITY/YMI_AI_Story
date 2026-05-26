@@ -14,12 +14,13 @@ export default function HomePage() {
         src="/banners/optimized/banner-01-desktop.webp"
         mobileSrc="/banners/optimized/banner-01-mobile.webp"
         alt="YMI promotional banner"
-        width={7559}
-        height={2268}
-        aspectClassName="aspect-[7559/2268]"
+        width={3200}
+        height={1800}
+        aspectClassName="aspect-video"
         hotspotClassName="left-[39.8%] top-[65.8%] h-[15.8%] w-[22.8%]"
         href="/books"
-        className="-mt-2 md:-mt-3"
+        priority
+        className="-mt-2 bg-[var(--color-surface-warm)] md:-mt-3"
       />
       <HomeBookCategories />
       <HomePosterBanner

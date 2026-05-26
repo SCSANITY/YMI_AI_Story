@@ -6,7 +6,6 @@ import {
   Heading,
   Hr,
   Html,
-  Img,
   Preview,
   Section,
   Text,
@@ -19,12 +18,6 @@ type EmailLayoutProps = {
   children: React.ReactNode
 }
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || '#'
-const TOP_BANNER =
-  'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&h=240&q=80'
-const BOTTOM_BANNER =
-  'https://images.unsplash.com/photo-1472806426350-603610d85659?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&h=240&q=80'
-
 export function EmailLayout({ previewText, title, subtitle, children }: EmailLayoutProps) {
   return (
     <Html>
@@ -32,12 +25,6 @@ export function EmailLayout({ previewText, title, subtitle, children }: EmailLay
       <Preview>{previewText}</Preview>
       <Body style={styles.body}>
         <Section style={styles.outerWrap}>
-          <Container style={styles.bannerContainer}>
-            <a href={SITE_URL} style={styles.link} target="_blank" rel="noreferrer">
-              <Img src={TOP_BANNER} alt="Ymi Story Sunset" style={styles.bannerImage} />
-            </a>
-          </Container>
-
           <Container style={styles.container}>
             <Section style={styles.accentBar} />
 
@@ -55,12 +42,6 @@ export function EmailLayout({ previewText, title, subtitle, children }: EmailLay
               <Hr style={styles.hr} />
               <Text style={styles.footerText}>(c) 2026 Ymi Story Inc. All rights reserved.</Text>
             </Section>
-          </Container>
-
-          <Container style={styles.bannerContainer}>
-            <a href={SITE_URL} style={styles.link} target="_blank" rel="noreferrer">
-              <Img src={BOTTOM_BANNER} alt="Ymi Story Campaign" style={styles.bannerImage} />
-            </a>
           </Container>
         </Section>
       </Body>
@@ -80,21 +61,6 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '40px 16px',
     backgroundColor: '#ff6a5a',
     backgroundImage: 'linear-gradient(135deg, #1c2e4a 0%, #ff6a5a 55%, #ffb347 100%)',
-  },
-  bannerContainer: {
-    maxWidth: '600px',
-    margin: '0 auto 24px auto',
-  },
-  link: {
-    textDecoration: 'none',
-  },
-  bannerImage: {
-    width: '100%',
-    maxWidth: '600px',
-    height: '120px',
-    objectFit: 'cover',
-    borderRadius: '12px',
-    boxShadow: '0 8px 20px -4px rgba(0, 0, 0, 0.15)',
   },
   container: {
     maxWidth: '600px',
@@ -161,4 +127,3 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
   },
 }
-

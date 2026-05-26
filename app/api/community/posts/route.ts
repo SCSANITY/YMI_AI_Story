@@ -45,17 +45,6 @@ async function resolveOwner(customerId?: string | null): Promise<OwnerContext> {
   }
 }
 
-function normalizeText(value: unknown, maxLength: number) {
-  return String(value ?? '').trim().slice(0, maxLength)
-}
-
-function normalizeImagePaths(value: unknown) {
-  if (!Array.isArray(value)) return []
-  return value
-    .map((item) => normalizeText(item, 500))
-    .filter(Boolean)
-}
-
 async function signImages(storagePaths: string[]) {
   return Promise.all(
     storagePaths.slice(0, MAX_POST_IMAGES).map(async (storagePath) => {
@@ -108,43 +97,9 @@ export async function GET(request: Request) {
   })
 }
 
-export async function POST(request: Request) {
-  const body = await request.json()
-  const owner = await resolveOwner(typeof body?.customerId === 'string' ? body.customerId : null)
-  const authorName = normalizeText(body?.authorName, 80) || 'YMI friend'
-  const title = normalizeText(body?.title, 120) || null
-  const postBody = normalizeText(body?.body, 4000)
-  const imageStoragePaths = normalizeImagePaths(body?.imageStoragePaths)
-
-  if (imageStoragePaths.length > MAX_POST_IMAGES) {
-    return NextResponse.json({ error: `You can upload up to ${MAX_POST_IMAGES} images per post` }, { status: 400 })
-  }
-  if (!title && !postBody && imageStoragePaths.length === 0) {
-    return NextResponse.json({ error: 'Write something or add at least one image' }, { status: 400 })
-  }
-  if (imageStoragePaths.some((path) => !path.startsWith(`community-posts/${owner.ownerType}/${owner.ownerId}/`))) {
-    return NextResponse.json({ error: 'Invalid image storage path' }, { status: 400 })
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('community_posts')
-    .insert({
-      owner_type: owner.ownerType,
-      customer_id: owner.customerId,
-      anon_session_id: owner.anonSessionId,
-      author_name: authorName,
-      title,
-      body: postBody,
-      image_storage_paths: imageStoragePaths,
-      image_alt: title || 'Community image',
-    })
-    .select('post_id, author_name, title, body, image_storage_paths, image_alt, like_count, comment_count, created_at')
-    .single()
-
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message || 'Failed to create post' }, { status: 500 })
-  }
-
-  const [post] = await withSignedImages([data as CommunityPostRow], owner.actorKey)
-  return NextResponse.json({ post })
+export async function POST() {
+  return NextResponse.json(
+    { error: 'Community posting has moved to the admin announcement board.' },
+    { status: 410 }
+  )
 }

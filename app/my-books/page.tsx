@@ -11,6 +11,7 @@ import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
 import { useI18n } from '@/lib/useI18n'
 import { formatLocaleCurrency } from '@/lib/locale-pricing'
+import { canEnterCustomize } from '@/lib/customize-access-client'
 
 type CreationItem = {
   creation_id: string
@@ -256,7 +257,11 @@ export default function MyBooksPage() {
     const params = new URLSearchParams({ view: 'preview' })
     params.set('creationId', item.creation_id)
     if (item.preview_job_id) params.set('jobId', item.preview_job_id)
-    router.push(`/personalize/${item.template_id}?${params.toString()}`)
+    void (async () => {
+      const allowed = await canEnterCustomize()
+      if (!allowed) return
+      router.push(`/personalize/${item.template_id}?${params.toString()}`)
+    })()
   }
 
   const gridClass = useMemo(
@@ -266,7 +271,7 @@ export default function MyBooksPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
+      <div className="page-surface min-h-screen flex items-center justify-center">
         <div className="text-sm text-gray-500">{t('myBooks.loading')}</div>
       </div>
     )
@@ -274,7 +279,7 @@ export default function MyBooksPage() {
 
   return (
     <div className="page-surface min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 space-y-10">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 pt-24 pb-16 space-y-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
             <BookOpen className="h-5 w-5 text-amber-600" />

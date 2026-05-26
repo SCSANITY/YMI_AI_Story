@@ -10,6 +10,9 @@ import {
   getOrderCheckoutCurrency,
 } from '@/lib/order-display'
 
+const STORAGE_BUCKET = 'raw-private'
+const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
+
 export async function POST(request: Request) {
   const body = await request.json()
   const email = String(body?.email || '').trim().toLowerCase()
@@ -59,6 +62,10 @@ export async function POST(request: Request) {
   }
 
   const shippingAddress = body?.shippingAddress ?? {}
+  const shippingAmountUsd = Math.max(0, Number(body?.shippingAmountUsd ?? 0))
+  const shippingRateSnapshot = body?.shippingRateSnapshot ?? null
+  const shippingMethod = body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null
+  const shippingZoneCode = body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null
   let orderId = incomingOrderId as string | null
 
   if (!orderId) {
@@ -69,6 +76,10 @@ export async function POST(request: Request) {
         customer_id: customerId,
         email,
         shipping_address: shippingAddress,
+        shipping_amount_usd: shippingAmountUsd,
+        shipping_rate_snapshot: shippingRateSnapshot,
+        shipping_method: shippingMethod,
+        shipping_zone_code: shippingZoneCode,
         billing_address: body?.billingAddress ?? null,
         checkout_currency: checkoutCurrency,
         order_status: 'unpaid',
@@ -93,6 +104,10 @@ export async function POST(request: Request) {
       email,
       customer_id: customerId,
       shipping_address: shippingAddress,
+      shipping_amount_usd: shippingAmountUsd,
+      shipping_rate_snapshot: shippingRateSnapshot,
+      shipping_method: shippingMethod,
+      shipping_zone_code: shippingZoneCode,
       billing_address: body?.billingAddress ?? null,
     })
     .eq('order_id', orderId)
@@ -109,7 +124,7 @@ export async function POST(request: Request) {
     return sum + price * quantity
   }, 0)
   const discountAmountUsd = Math.max(0, Number(discountRow?.discount_amount_usd ?? 0))
-  const totalAmount = convertUsdToCurrency(Math.max(0, totalAmountUsd - discountAmountUsd), checkoutCurrency)
+  const totalAmount = convertUsdToCurrency(Math.max(0, totalAmountUsd - discountAmountUsd + shippingAmountUsd), checkoutCurrency)
 
   try {
     const result = await finalizeOrderPayment({
@@ -118,6 +133,10 @@ export async function POST(request: Request) {
       email,
       shippingAddress,
       billingAddress: body?.billingAddress ?? null,
+      shippingAmountUsd,
+      shippingRateSnapshot,
+      shippingMethod,
+      shippingZoneCode,
       provider: 'demo',
       amount: totalAmount,
       currency: checkoutCurrency,
@@ -165,6 +184,10 @@ export async function GET(request: Request) {
         applied_coupon_code_id,
         applied_referral_code_id,
         discount_amount_usd,
+        shipping_amount_usd,
+        shipping_rate_snapshot,
+        shipping_method,
+        shipping_zone_code,
         created_at,
         email,
         shipping_address,
@@ -261,6 +284,31 @@ export async function GET(request: Request) {
     }
   }
 
+  const orderIds = orderRows.map((order: any) => order.order_id).filter(Boolean) as string[]
+  const finalPdfUrlMap = new Map<string, string>()
+  if (orderIds.length > 0) {
+    const { data: finalJobs } = await supabaseAdmin
+      .from('final_jobs')
+      .select('order_id, pdf_path, review_status, released_at')
+      .in('order_id', orderIds)
+
+    for (const finalJob of finalJobs ?? []) {
+      const orderIdValue = String(finalJob.order_id || '')
+      const pdfPath = String(finalJob.pdf_path || '')
+      const isReleased = Boolean(finalJob.released_at || finalJob.review_status === 'released')
+      if (!orderIdValue || !pdfPath || !isReleased) continue
+
+      const { data: signed } = await supabaseAdmin.storage
+        .from(STORAGE_BUCKET)
+        .createSignedUrl(pdfPath, FINAL_PDF_SIGN_TTL_SECONDS, {
+          download: `final-${orderIdValue}.pdf`,
+        })
+      if (signed?.signedUrl) {
+        finalPdfUrlMap.set(orderIdValue, signed.signedUrl)
+      }
+    }
+  }
+
   const result = orderRows.map((order: any) => {
     const items = Array.isArray(order.cart_items) ? order.cart_items : []
     const baseUsdTotal = items.reduce((sum: number, item: any) => {
@@ -274,6 +322,7 @@ export async function GET(request: Request) {
     const displayTotal = getOrderDisplayTotal({
       baseUsdTotal,
       discountUsd: Number(order.discount_amount_usd ?? 0),
+      shippingUsd: Number(order.shipping_amount_usd ?? 0),
       checkoutCurrency,
       paymentAmount: payment?.amount ?? null,
       paymentCurrency: payment?.currency,
@@ -310,8 +359,13 @@ export async function GET(request: Request) {
       applied_coupon_code_id: order.applied_coupon_code_id ?? null,
       applied_referral_code_id: order.applied_referral_code_id ?? null,
       discount_amount_usd: Number(order.discount_amount_usd ?? 0),
+      shipping_amount_usd: Number(order.shipping_amount_usd ?? 0),
+      shipping_rate_snapshot: order.shipping_rate_snapshot ?? null,
+      shipping_method: order.shipping_method ?? null,
+      shipping_zone_code: order.shipping_zone_code ?? null,
       display_currency: displayCurrency,
       display_total: displayTotal,
+      final_pdf_url: finalPdfUrlMap.get(order.order_id) ?? null,
       item_count: items.length,
       cover_url: coverUrl,
       first_item_name: firstItem?.creations?.templates?.name ?? null,

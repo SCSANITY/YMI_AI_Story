@@ -62,6 +62,10 @@ export async function POST(request: Request) {
         customer_id: ownerType === 'customer' ? ownerId : null,
         email: orderEmail ?? null,
         shipping_address: {},
+        shipping_amount_usd: 0,
+        shipping_rate_snapshot: null,
+        shipping_method: null,
+        shipping_zone_code: null,
         billing_address: null,
         order_status: 'unpaid',
       })

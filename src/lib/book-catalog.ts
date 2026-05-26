@@ -16,6 +16,7 @@ export type TemplateCatalogRow = {
   template_id?: string | null
   name?: string | null
   description?: string | null
+  inner_description?: string | null
   story_type?: string | null
   cover_image_path?: string | null
   normalized_cover_image_path?: string | null
@@ -34,7 +35,9 @@ export type TemplateCatalogRow = {
   is_for_boys?: boolean | null
   is_for_girls?: boolean | null
   is_discount?: boolean | null
+  is_coming_soon?: boolean | null
   showcase_image_paths?: string[] | null
+  final_preview_paths?: string[] | null
 }
 
 export type CatalogBook = Book & {
@@ -48,9 +51,11 @@ export type CatalogBook = Book & {
   isForBoys: boolean
   isForGirls: boolean
   isDiscount: boolean
+  isComingSoon: boolean
   displayOrder: number | null
   createdAt: string
   normalizedCoverUrl?: string
+  finalPreviewImages: string[]
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
@@ -109,6 +114,9 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const showcaseImages = normalizeStringArray(row.showcase_image_paths)
     .map(templateStorageUrl)
     .filter(Boolean)
+  const finalPreviewImages = normalizeStringArray(row.final_preview_paths)
+    .map(templateStorageUrl)
+    .filter(Boolean)
 
   const fallbackShowcaseImages = coverUrl ? [coverUrl] : []
   const homeSections = new Set(normalizeStringArray(row.home_sections))
@@ -116,6 +124,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const isForBoys = Boolean(row.is_for_boys) || homeSections.has('for_boys')
   const isForGirls = Boolean(row.is_for_girls) || homeSections.has('for_girls')
   const isDiscount = Boolean(row.is_discount) || homeSections.has('in_discount')
+  const isComingSoon = Boolean(row.is_coming_soon)
   const price = centsToPrice(row.price_cents) ?? 24.99
   const compareAtPrice = centsToPrice(row.compare_at_price_cents) ?? (isDiscount ? price * 2 : null)
   const discountPercent = isDiscount
@@ -138,7 +147,9 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     coverUrl,
     normalizedCoverUrl: normalizedCoverUrl || undefined,
     showcaseImages: showcaseImages.length ? showcaseImages : fallbackShowcaseImages,
+    finalPreviewImages,
     description: String(row.description ?? '').trim(),
+    innerDescription: String(row.inner_description ?? '').trim() || undefined,
     category: storyTypes[0] || 'Story',
     storyTypes,
     storyTypeLabel,
@@ -151,6 +162,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     isForBoys,
     isForGirls,
     isDiscount,
+    isComingSoon,
     displayOrder: typeof row.display_order === 'number' ? row.display_order : null,
     createdAt: String(row.created_at ?? ''),
   }
@@ -185,7 +197,9 @@ export function staticBookToCatalogBook(book: Book, index = 0): CatalogBook {
     isForBoys: false,
     isForGirls: false,
     isDiscount: false,
+    isComingSoon: Boolean(book.isComingSoon),
     displayOrder: index,
     createdAt: '',
+    finalPreviewImages: book.finalPreviewImages ?? [],
   }
 }

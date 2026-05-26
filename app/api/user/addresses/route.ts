@@ -7,31 +7,49 @@ const MAX_ADDRESSES = 5
 type AddressMetadata = {
   firstName: string
   lastName: string
-  address: string
+  email?: string
+  country: string
+  region?: string
   city: string
+  addressLine1: string
+  addressLine2?: string
   zip: string
-  country?: string
-  phone?: string
+  phone: string
+  company?: string
 }
 
-function normalizeAddress(raw: any): AddressMetadata | null {
-  if (!raw) return null
-  const firstName = String(raw.firstName ?? '').trim()
-  const lastName = String(raw.lastName ?? '').trim()
-  const address = String(raw.address ?? '').trim()
-  const city = String(raw.city ?? '').trim()
-  const zip = String(raw.zip ?? '').trim()
-  if (!firstName || !lastName || !address || !city || !zip) return null
-  const country = raw.country ? String(raw.country).trim() : undefined
-  const phone = raw.phone ? String(raw.phone).trim() : undefined
+type AddressAssetRow = {
+  asset_id?: string
+  metadata?: AddressMetadata | null
+}
+
+function normalizeAddress(raw: unknown): AddressMetadata | null {
+  if (!raw || typeof raw !== 'object') return null
+  const data = raw as Record<string, unknown>
+  const firstName = String(data.firstName ?? '').trim()
+  const lastName = String(data.lastName ?? '').trim()
+  const email = String(data.email ?? '').trim()
+  const country = String(data.country ?? '').trim().toUpperCase()
+  const region = String(data.region ?? '').trim()
+  const city = String(data.city ?? '').trim()
+  const addressLine1 = String(data.addressLine1 ?? data.address ?? '').trim()
+  const addressLine2 = String(data.addressLine2 ?? '').trim()
+  const zip = String(data.zip ?? '').trim()
+  const phone = String(data.phone ?? '').trim()
+  const company = String(data.company ?? '').trim()
+  if (!firstName || !lastName || !country || !addressLine1 || !city || !zip || !phone) return null
   return {
     firstName,
     lastName,
-    address,
+    ...(email ? { email } : {}),
+    country,
+    ...(region ? { region } : {}),
     city,
+    addressLine1,
+    ...(addressLine2 ? { addressLine2 } : {}),
     zip,
-    ...(country ? { country } : {}),
-    ...(phone ? { phone } : {}),
+    phone,
+    ...(company ? { company } : {}),
   }
 }
 
@@ -79,7 +97,7 @@ export async function POST(request: Request) {
     .eq('asset_type', 'shipping_address')
     .order('created_at', { ascending: false })
 
-  const existing = existingAssets?.find((row: any) => {
+  const existing = (existingAssets as AddressAssetRow[] | null | undefined)?.find((row) => {
     try {
       return JSON.stringify(row.metadata ?? {}) === JSON.stringify(address)
     } catch {

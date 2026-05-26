@@ -3,8 +3,8 @@ import { sendOrderConfirmationEmail } from '@/lib/email'
 import { checkJobQueueGuard } from '@/lib/jobQueue'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
+import { normalizeOrderStatus, type OrderStatus } from '@/lib/order-status'
 
-type OrderStatus = 'unpaid' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'refunded'
 type StoryLanguage = 'English' | 'Traditional Chinese' | 'Spanish'
 
 const DEFAULT_STORY_LANGUAGE: StoryLanguage = 'English'
@@ -71,6 +71,10 @@ type FinalizeOrderInput = {
   email: string
   shippingAddress?: Record<string, unknown>
   billingAddress?: Record<string, unknown> | null
+  shippingAmountUsd?: number
+  shippingRateSnapshot?: Record<string, unknown> | null
+  shippingMethod?: string | null
+  shippingZoneCode?: string | null
   provider: 'demo' | 'stripe'
   providerRef?: string | null
   amount?: number | null
@@ -95,8 +99,57 @@ type CartItemForFinal = {
   quantity: number | null
   creations: {
     template_id: string | null
-    customize_snapshot: Record<string, any> | null
+    customize_snapshot: CustomizeSnapshot | null
   } | null
+}
+
+type CustomizeSnapshot = {
+  language?: unknown
+  bookType?: unknown
+  storagePath?: unknown
+  textOverrides?: {
+    language?: unknown
+    book_type?: unknown
+  } | null
+  text_overrides?: {
+    language?: unknown
+    book_type?: unknown
+  } | null
+  params?: Record<string, unknown> | null
+}
+
+type TemplateConfigPageRow = {
+  index?: number | string | null
+}
+
+type TemplateRow = {
+  template_id: string
+  default_config_path: string | null
+}
+
+async function loadFinalPageIndices(configUrl: string): Promise<number[]> {
+  const response = await fetch(configUrl, { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`Failed to load template config for final pages: ${response.status}`)
+  }
+  const config = await response.json()
+  const explicit = Array.isArray(config?.final?.page_indices)
+    ? config.final.page_indices
+    : []
+  const pageIndices = explicit.length
+    ? explicit
+    : Array.isArray(config?.pages)
+      ? (config.pages as TemplateConfigPageRow[]).map((page) => page?.index)
+      : []
+  const normalized = pageIndices
+    .map((value: unknown) => Number(value))
+    .filter((value: number) => Number.isInteger(value) && value >= 0)
+    .sort((a: number, b: number) => a - b)
+
+  if (!normalized.length) {
+    throw new Error('Template config has no final page indices')
+  }
+  return Array.from(new Set(normalized))
 }
 
 async function computeOrderTotal(orderId: string, cartItemIds?: string[]): Promise<number> {
@@ -156,6 +209,10 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     email,
     shippingAddress = {},
     billingAddress = null,
+    shippingAmountUsd = 0,
+    shippingRateSnapshot = null,
+    shippingMethod = null,
+    shippingZoneCode = null,
     provider,
     providerRef = null,
     amount = null,
@@ -171,7 +228,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
 
   const { data: lockRow } = await supabaseAdmin
     .from('orders')
-    .update({ order_status: 'processing' })
+    .update({ order_status: 'production' })
     .eq('order_id', orderId)
     .eq('order_status', 'unpaid')
     .select('order_id')
@@ -193,7 +250,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       displayId: existingOrder.display_id ?? null,
       paymentId: existingOrder.payment_id ?? null,
       cartItemIds: cartItemIds ?? [],
-      status: (existingOrder.order_status as OrderStatus) ?? 'processing',
+      status: normalizeOrderStatus(existingOrder.order_status),
     }
   }
 
@@ -256,6 +313,10 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       customer_id: customerId,
       email,
       shipping_address: shippingAddress,
+      shipping_amount_usd: Math.max(0, Number(shippingAmountUsd ?? 0)),
+      shipping_rate_snapshot: shippingRateSnapshot,
+      shipping_method: shippingMethod ?? (shippingRateSnapshot?.methodCode as string | undefined) ?? null,
+      shipping_zone_code: shippingZoneCode ?? (shippingRateSnapshot?.zoneCode as string | undefined) ?? null,
       billing_address: billingAddress,
       checkout_currency: normalizedCurrency,
       order_status: 'paid',
@@ -368,10 +429,13 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       incomingJobs: pendingItems.length,
     })
     if (!finalQueueGuard.allowed) {
-      const err = new Error(finalQueueGuard.message)
-      ;(err as any).code = 'final_queue_overloaded'
-      ;(err as any).guard = finalQueueGuard
-      throw err
+    const err = new Error(finalQueueGuard.message) as Error & {
+      code?: string
+      guard?: typeof finalQueueGuard
+    }
+    err.code = 'final_queue_overloaded'
+    err.guard = finalQueueGuard
+    throw err
     }
 
     const templateIds = Array.from(
@@ -391,8 +455,11 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       throw new Error(`Failed to load templates: ${templateError?.message || 'unknown error'}`)
     }
 
-    const configMap = new Map(templates.map((tpl: any) => [tpl.template_id, tpl.default_config_path]))
+    const configMap = new Map(
+      (templates as TemplateRow[]).map((tpl) => [tpl.template_id, tpl.default_config_path])
+    )
     const jobsToInsert: Record<string, unknown>[] = []
+    const finalPageIndicesByCartItem = new Map<string, number[]>()
 
     for (const item of pendingItems) {
       const creation = item.creations
@@ -416,6 +483,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       if (!configUrl) {
         throw new Error('Failed to resolve config URL')
       }
+      finalPageIndicesByCartItem.set(item.cart_item_id, await loadFinalPageIndices(configUrl))
 
       jobsToInsert.push({
         owner_type: 'customer',
@@ -459,6 +527,49 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         .from('cart_items')
         .update({ final_job_id: job.job_id, updated_at: new Date().toISOString() })
         .eq('cart_item_id', job.cart_item_id)
+
+      const item = pendingItems.find((row) => row.cart_item_id === job.cart_item_id)
+      const creation = item?.creations
+      const pageIndices = finalPageIndicesByCartItem.get(job.cart_item_id) ?? []
+      if (!item || !creation?.template_id || !pageIndices.length) continue
+
+      const { data: finalJob, error: finalJobError } = await supabaseAdmin
+        .from('final_jobs')
+        .upsert(
+          {
+            job_id: job.job_id,
+            order_id: orderId,
+            cart_item_id: job.cart_item_id,
+            creation_id: item.creation_id,
+            template_id: creation.template_id,
+            status: 'queued',
+            review_status: 'pending',
+            total_pages: pageIndices.length,
+            approved_pages: 0,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'job_id' }
+        )
+        .select('final_job_id')
+        .single()
+
+      if (finalJobError || !finalJob?.final_job_id) {
+        throw new Error(`Failed to create final review job: ${finalJobError?.message || 'unknown error'}`)
+      }
+
+      const pageRows = pageIndices.map((pageIndex) => ({
+        final_job_id: finalJob.final_job_id,
+        page_index: pageIndex,
+        status: 'queued',
+        updated_at: new Date().toISOString(),
+      }))
+      const { error: pagesError } = await supabaseAdmin
+        .from('final_job_pages')
+        .upsert(pageRows, { onConflict: 'final_job_id,page_index' })
+
+      if (pagesError) {
+        throw new Error(`Failed to create final review pages: ${pagesError.message}`)
+      }
     }
   }
 

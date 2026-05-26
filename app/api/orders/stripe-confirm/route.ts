@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     const { data: order } = await supabaseAdmin
       .from('orders')
-      .select('order_id, customer_id, email, shipping_address')
+      .select('order_id, customer_id, email, shipping_address, shipping_amount_usd, shipping_rate_snapshot, shipping_method, shipping_zone_code')
       .eq('order_id', orderId)
       .maybeSingle()
 
@@ -98,6 +98,10 @@ export async function POST(request: Request) {
       email: emailFromSession,
       shippingAddress,
       billingAddress: null,
+      shippingAmountUsd: Number(order.shipping_amount_usd ?? 0),
+      shippingRateSnapshot: order.shipping_rate_snapshot ?? null,
+      shippingMethod: order.shipping_method ?? null,
+      shippingZoneCode: order.shipping_zone_code ?? null,
       provider: 'stripe',
       providerRef,
       amount,

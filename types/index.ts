@@ -4,6 +4,7 @@ export interface User {
   email: string;
   avatar: string;
   customerId?: string;
+  role?: 'customer' | 'admin';
   avatarAssetId?: string;
   avatarStoragePath?: string;
 }
@@ -17,7 +18,9 @@ export interface Book {
   discountPercent?: number | null;
   coverUrl: string;
   showcaseImages: string[];
+  finalPreviewImages?: string[];
   description: string;
+  innerDescription?: string;
   category: string;
   ageRange: string;
   gender: string;
@@ -31,6 +34,7 @@ export interface Book {
   isForBoys?: boolean;
   isForGirls?: boolean;
   isDiscount?: boolean;
+  isComingSoon?: boolean;
   displayOrder?: number | null;
 }
 
@@ -88,7 +92,7 @@ export interface Order {
   date: string;
   items?: CartItem[];
   total: number;
-  status: 'unpaid' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'refunded';
+  status: 'unpaid' | 'paid' | 'production' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
   shippingAddress?: {
     firstName?: string;
     lastName?: string;

@@ -1,12 +1,19 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Package, ChevronRight, Truck, Hourglass, CircleCheck } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
 import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing';
+import {
+  getOrderStatusLabelKey,
+  isFinishedOrderStatus,
+  isShippingOrderStatus,
+  normalizeOrderStatus,
+} from '@/lib/order-status';
 
 type OrderSummary = {
   order_id: string;
@@ -22,12 +29,10 @@ type OrderSummary = {
 
 type OrderTab = 'shipping' | 'unpaid' | 'finished';
 
-const SHIPPING_STATUSES = new Set(['paid', 'processing']);
-const FINISHED_STATUSES = new Set(['shipped', 'cancelled', 'refunded']);
-
 const getOrderTab = (status?: string | null): OrderTab => {
-  if (status === 'unpaid') return 'unpaid';
-  if (FINISHED_STATUSES.has(String(status ?? ''))) return 'finished';
+  const normalized = normalizeOrderStatus(status)
+  if (normalized === 'unpaid') return 'unpaid';
+  if (isFinishedOrderStatus(normalized)) return 'finished';
   return 'shipping';
 };
 
@@ -78,14 +83,7 @@ export default function OrdersPage() {
   const visibleOrders = grouped[activeTab];
 
   const statusLabel = (status?: string | null) => {
-    const value = String(status ?? '').toLowerCase();
-    if (value === 'unpaid') return t('orders.status.unpaid');
-    if (value === 'paid') return t('orders.status.paid');
-    if (value === 'processing') return t('orders.status.processing');
-    if (value === 'shipped') return t('orders.status.shipped');
-    if (value === 'cancelled') return t('orders.status.cancelled');
-    if (value === 'refunded') return t('orders.status.refunded');
-    return t('orders.status.default');
+    return t(getOrderStatusLabelKey(status));
   };
 
   const handleDeletePending = async (orderId: string) => {
@@ -121,7 +119,7 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-8">
+      <div className="page-surface min-h-screen flex items-center justify-center p-8">
         <div className="text-sm text-gray-500">{t('common.loading')}</div>
       </div>
     );
@@ -129,14 +127,14 @@ export default function OrdersPage() {
 
   if (orders.length === 0) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-8">
+      <div className="page-surface min-h-screen flex items-center justify-center p-8">
         <div className="max-w-lg text-center space-y-6">
           <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
             <Package className="h-7 w-7 text-amber-600" />
           </div>
           <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orders.emptyTitle')}</h1>
           <p className="text-gray-600">{t('orders.emptyDescription')}</p>
-          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/')}>
+          <Button size="lg" className="px-8" onClick={() => router.push('/')}>
             {t('common.browseBooks')}
           </Button>
         </div>
@@ -145,7 +143,8 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10">
+    <div className="page-surface min-h-screen">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 pt-24 pb-16">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
           <Package className="h-5 w-5 text-amber-600" />
@@ -157,69 +156,50 @@ export default function OrdersPage() {
       </div>
 
       <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <button
-          type="button"
-          onClick={() => setActiveTab('shipping')}
-          className={`rounded-xl border px-4 py-3 text-left transition ${
-            activeTab === 'shipping'
-              ? 'border-amber-300 bg-amber-50 text-amber-800'
-              : 'border-gray-200 bg-white text-gray-700 hover:border-amber-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Truck className="h-4 w-4" />
-            {t('orders.inTransit')}
-          </div>
-          <div className="text-xs mt-1">{grouped.shipping.length} order(s)</div>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('unpaid')}
-          className={`rounded-xl border px-4 py-3 text-left transition ${
-            activeTab === 'unpaid'
-              ? 'border-amber-300 bg-amber-50 text-amber-800'
-              : 'border-gray-200 bg-white text-gray-700 hover:border-amber-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Hourglass className="h-4 w-4" />
-            {t('orders.pendingPayment')}
-          </div>
-          <div className="text-xs mt-1">{grouped.unpaid.length} order(s)</div>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('finished')}
-          className={`rounded-xl border px-4 py-3 text-left transition ${
-            activeTab === 'finished'
-              ? 'border-amber-300 bg-amber-50 text-amber-800'
-              : 'border-gray-200 bg-white text-gray-700 hover:border-amber-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <CircleCheck className="h-4 w-4" />
-            {t('orders.completed')}
-          </div>
-          <div className="text-xs mt-1">{grouped.finished.length} order(s)</div>
-        </button>
+        {(
+          [
+            { key: 'shipping', icon: Truck, label: t('orders.inTransit'), count: grouped.shipping.length },
+            { key: 'unpaid', icon: Hourglass, label: t('orders.pendingPayment'), count: grouped.unpaid.length },
+            { key: 'finished', icon: CircleCheck, label: t('orders.completed'), count: grouped.finished.length },
+          ] as const
+        ).map(({ key, icon: Icon, label, count }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setActiveTab(key)}
+            className={`rounded-2xl border px-5 py-4 text-left transition-all duration-200 ${
+              activeTab === key
+                ? 'border-amber-300/60 bg-gradient-to-br from-amber-50 to-orange-50/60 text-amber-800 shadow-md shadow-amber-100/50'
+                : 'border-white/60 bg-white/70 text-gray-600 hover:border-amber-200/60 hover:bg-white/90 backdrop-blur-sm'
+            }`}
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Icon className={`h-4 w-4 ${activeTab === key ? 'text-amber-600' : 'text-gray-400'}`} />
+              {label}
+            </div>
+            <div className={`text-xs mt-1 font-medium ${activeTab === key ? 'text-amber-600' : 'text-gray-400'}`}>
+              {count} order{count !== 1 ? 's' : ''}
+            </div>
+          </button>
+        ))}
       </div>
 
       {visibleOrders.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
+        <div className="rounded-2xl border border-dashed border-amber-100/80 bg-white/60 p-10 text-center text-sm text-gray-500">
           {t('orders.noCategoryOrders')}
         </div>
       ) : (
         <div className="space-y-4">
           {visibleOrders.map((order) => {
-            const currentStatus = String(order.order_status ?? '');
-            const isShippingCard = SHIPPING_STATUSES.has(currentStatus);
+            const currentStatus = normalizeOrderStatus(order.order_status);
+            const isShippingCard = isShippingOrderStatus(currentStatus);
             const isUnpaidCard = currentStatus === 'unpaid';
-            const isFinishedCard = FINISHED_STATUSES.has(currentStatus);
+            const isFinishedCard = isFinishedOrderStatus(currentStatus);
 
             return (
               <div
                 key={order.order_id}
-                className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                className="glass-panel w-full rounded-2xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
               >
                 <button
                   type="button"
@@ -230,11 +210,15 @@ export default function OrdersPage() {
                   }}
                   className="flex items-center gap-4 text-left flex-1"
                 >
-                  <img
-                    src={order.cover_url || '/Display.png'}
-                    alt={order.first_item_name || 'Order'}
-                    className="w-16 h-20 rounded-lg object-cover bg-gray-100"
-                  />
+                  <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                    <Image
+                      src={order.cover_url || '/Display.png'}
+                      alt={order.first_item_name || 'Order'}
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                    />
+                  </span>
                   <div>
                     <div className="text-xs text-gray-500 font-medium tabular-nums tracking-[0.14em]">
                       #{order.display_id ?? order.order_id}
@@ -298,6 +282,7 @@ export default function OrdersPage() {
           })}
         </div>
       )}
+    </div>
     </div>
   );
 }

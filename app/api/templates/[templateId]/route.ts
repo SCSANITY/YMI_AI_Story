@@ -1,6 +1,101 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { templateRowToBook } from '@/lib/book-catalog'
+import { templateRowToBook, type TemplateCatalogRow } from '@/lib/book-catalog'
+
+const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.png$/i
+const FINAL_PREVIEW_IMAGE_PATTERN = /^page_(\d+)\.png$/i
+
+type ProductImageEntry = {
+  name: string
+  order: number
+}
+
+function isProductImageEntry(value: ProductImageEntry | null): value is ProductImageEntry {
+  return value !== null
+}
+
+function isOrderedImageEntry(value: ProductImageEntry | null): value is ProductImageEntry {
+  return value !== null
+}
+
+function normalizeTemplatePath(path: unknown): string {
+  return String(path ?? '')
+    .trim()
+    .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/public\/app-templates\//, '')
+    .replace(/^app-templates\//, '')
+    .replace(/^\/+/, '')
+}
+
+async function withProductShowcaseImages(row: TemplateCatalogRow): Promise<TemplateCatalogRow> {
+  const templateId = String(row.template_id ?? '').trim()
+  if (!templateId) return row
+
+  const { data, error } = await supabaseAdmin.storage
+    .from('app-templates')
+    .list(`${templateId}/products`, {
+      limit: 1000,
+      sortBy: { column: 'name', order: 'asc' },
+    })
+
+  if (error || !data?.length) return row
+
+  const productPaths = data
+    .map((item) => {
+      const match = item.name.match(PRODUCT_IMAGE_PATTERN)
+      return match ? { name: item.name, order: Number(match[1]) } : null
+    })
+    .filter(isProductImageEntry)
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+    .map((item) => `${templateId}/products/${item.name}`)
+
+  if (!productPaths.length) return row
+
+  const primaryImagePath = normalizeTemplatePath(row.normalized_cover_image_path || row.cover_image_path)
+  const currentShowcasePaths = Array.isArray(row.showcase_image_paths)
+    ? row.showcase_image_paths.map(normalizeTemplatePath).filter(Boolean)
+    : []
+
+  const orderedPaths = [
+    primaryImagePath,
+    ...productPaths,
+    ...currentShowcasePaths.filter((path) => path !== primaryImagePath && !productPaths.includes(path)),
+  ].filter(Boolean)
+
+  return {
+    ...row,
+    showcase_image_paths: Array.from(new Set(orderedPaths)),
+  }
+}
+
+async function withFinalPreviewImages(row: TemplateCatalogRow): Promise<TemplateCatalogRow> {
+  const templateId = String(row.template_id ?? '').trim()
+  if (!templateId) return row
+
+  const { data, error } = await supabaseAdmin.storage
+    .from('app-templates')
+    .list(`${templateId}/final`, {
+      limit: 1000,
+      sortBy: { column: 'name', order: 'asc' },
+    })
+
+  if (error || !data?.length) return row
+
+  const finalPreviewPaths = data
+    .map((item) => {
+      const match = item.name.match(FINAL_PREVIEW_IMAGE_PATTERN)
+      return match ? { name: item.name, order: Number(match[1]) } : null
+    })
+    .filter(isOrderedImageEntry)
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+    .map((item) => `${templateId}/final/${item.name}`)
+
+  if (!finalPreviewPaths.length) return row
+
+  return {
+    ...row,
+    final_preview_paths: finalPreviewPaths,
+  }
+}
 
 export async function GET(_request: Request, context: { params: Promise<{ templateId: string }> }) {
   const { templateId } = await context.params
@@ -20,10 +115,13 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const template = templateRowToBook(data)
+  const row = data ? await withFinalPreviewImages(await withProductShowcaseImages(data)) : null
+  const template = row ? templateRowToBook(row) : null
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 })
   }
 
-  return NextResponse.json({ template })
+  const response = NextResponse.json({ template })
+  response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=1800')
+  return response
 }

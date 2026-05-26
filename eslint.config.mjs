@@ -19,6 +19,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "public/mediapipe/**",
     "next-env.d.ts",
   ]),
 ]);
