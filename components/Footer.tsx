@@ -625,9 +625,13 @@ export const Footer: React.FC = () => {
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">Mastercard</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500">
-                <span className="flex items-center gap-1">
+                <a
+                  href="mailto:admin@ymistory.com"
+                  className="flex items-center gap-1 transition hover:text-amber-600"
+                  aria-label="Email admin@ymistory.com"
+                >
                   <Mail className="h-3 w-3" /> admin@ymistory.com
-                </span>
+                </a>
               </div>
             </div>
           </div>
