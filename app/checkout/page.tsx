@@ -251,7 +251,7 @@ function CurrencyOptionLabel({ currency }: { currency: CheckoutCurrency }) {
         className="h-4 w-6 shrink-0 rounded-[3px] border border-black/10 bg-cover bg-center shadow-sm"
         style={{ backgroundImage: `url(${meta.flagUrl})` }}
       />
-      <span className="tabular-nums">{meta.region} 繚 {meta.currency}</span>
+      <span className="tabular-nums">{meta.region} - {meta.currency}</span>
     </span>
   );
 }

@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -103,18 +102,17 @@ export default async function PreviewSharePage(
     notFound()
   }
 
+  const imagePath = `/share/preview/${share.share_token}/image`
+
   return (
     <div className="min-h-[calc(100vh-84px)] bg-gradient-to-br from-amber-50 via-white to-orange-50 px-4 py-10 md:px-8 md:py-14">
       <div className="mx-auto max-w-5xl overflow-hidden rounded-[32px] border border-amber-100 bg-white shadow-xl shadow-amber-100/40">
         <div className="grid gap-8 p-6 md:grid-cols-[1.05fr_0.95fr] md:p-10">
           <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-amber-100 bg-amber-50/30 md:min-h-[520px]">
-            <Image
-              src={buildAbsoluteUrl(`/share/preview/${share.share_token}/image`)}
+            <img
+              src={imagePath}
               alt={templateName || 'YMI story preview'}
-              fill
-              sizes="(max-width: 767px) 92vw, 520px"
-              priority
-              className="object-contain"
+              className="h-full min-h-[320px] w-full object-contain md:min-h-[520px]"
             />
           </div>
 

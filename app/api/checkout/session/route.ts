@@ -187,7 +187,7 @@ export async function POST(request: Request) {
       line_items: lineItems,
       discounts: stripeDiscounts,
       success_url: `${baseUrl}/checkout/success?orderId=${encodeURIComponent(orderId)}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/checkout?orderId=${encodeURIComponent(orderId)}`,
+      cancel_url: `${baseUrl}/checkout?orderId=${encodeURIComponent(orderId)}&step=payment`,
       metadata: {
         order_id: orderId,
         customer_id: customerId ?? '',
