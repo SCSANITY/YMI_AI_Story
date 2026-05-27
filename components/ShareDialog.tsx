@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Copy, Share2, X } from 'lucide-react'
+import { Check, Copy, Download, Image as ImageIcon, Share2, X } from 'lucide-react'
 import { useI18n } from '@/lib/useI18n'
 
 type ShareDialogProps = {
@@ -33,6 +33,22 @@ function buildTextAwareShareUrl(shareUrl: string, shareText: string) {
   } catch {
     return shareUrl
   }
+}
+
+async function fetchShareImageFile(imageUrl: string) {
+  const response = await fetch(imageUrl, { cache: 'no-store' })
+  if (!response.ok) return null
+
+  const blob = await response.blob()
+  if (!blob.type.startsWith('image/')) return null
+
+  const extension = blob.type.includes('png')
+    ? 'png'
+    : blob.type.includes('webp')
+      ? 'webp'
+      : 'jpg'
+
+  return new File([blob], `ymi-story-preview.${extension}`, { type: blob.type || 'image/jpeg' })
 }
 
 function FacebookIcon({ className }: { className?: string }) {
@@ -84,6 +100,9 @@ export function ShareDialog({
   const [copyLinkState, setCopyLinkState] = useState<'idle' | 'copied'>('idle')
   const [copyTextState, setCopyTextState] = useState<'idle' | 'copied'>('idle')
   const [draftShareText, setDraftShareText] = useState(shareText)
+  const [isLinkExpanded, setIsLinkExpanded] = useState(false)
+  const [isImageSharing, setIsImageSharing] = useState(false)
+  const [imageShareState, setImageShareState] = useState<'idle' | 'unavailable'>('idle')
 
   const canNativeShare =
     typeof window !== 'undefined' &&
@@ -94,6 +113,8 @@ export function ShareDialog({
     setDraftShareText(shareText)
     setCopyLinkState('idle')
     setCopyTextState('idle')
+    setIsLinkExpanded(false)
+    setImageShareState('idle')
   }, [open, shareText])
 
   useEffect(() => {
@@ -136,6 +157,54 @@ export function ShareDialog({
     try { await navigator.share({ title, text: effectiveShareText, url: effectiveShareUrl }) } catch { /* user cancelled */ }
   }
 
+  const handleNativeShareWithImage = async () => {
+    if (!navigator.share || !previewImageUrl) return
+    setIsImageSharing(true)
+    setImageShareState('idle')
+
+    try {
+      const file = await fetchShareImageFile(previewImageUrl)
+      const nav = navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean
+      }
+
+      if (file && nav.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title,
+          text: fullShareText,
+          files: [file],
+        })
+        return
+      }
+
+      await navigator.share({ title, text: effectiveShareText, url: effectiveShareUrl })
+      setImageShareState('unavailable')
+    } catch {
+      // User cancellation or platform rejection should not close the dialog.
+    } finally {
+      setIsImageSharing(false)
+    }
+  }
+
+  const handleDownloadImage = async () => {
+    if (!previewImageUrl || typeof document === 'undefined') return
+
+    try {
+      const response = await fetch(previewImageUrl, { cache: 'no-store' })
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = 'ymi-story-preview.jpg'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    } catch {
+      openPopup(previewImageUrl)
+    }
+  }
+
   const platforms = [
     {
       id: 'facebook',
@@ -146,7 +215,7 @@ export function ShareDialog({
     },
     {
       id: 'x',
-      label: 'X',
+      label: 'Share link on X',
       colorCls: 'bg-black/80 hover:bg-black/90 border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
       icon: <XIcon className="h-5 w-5 shrink-0" />,
       action: () =>
@@ -163,7 +232,7 @@ export function ShareDialog({
     },
     {
       id: 'instagram',
-      label: 'Instagram',
+      label: 'Open Instagram',
       colorCls: 'border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]',
       style: { background: 'linear-gradient(135deg, #f09433cc 0%, #e6683ccc 25%, #dc2743cc 50%, #cc2366cc 75%, #bc1888cc 100%)' },
       icon: <InstagramIcon className="h-5 w-5 shrink-0" />,
@@ -176,12 +245,12 @@ export function ShareDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[150] flex items-center justify-center p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[150] flex items-center justify-center overflow-y-auto p-3 backdrop-blur-sm sm:p-4"
       style={{ background: 'rgba(15,23,42,0.38)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       {/* Glass card */}
-      <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/70 bg-white/78 shadow-[0_24px_64px_rgba(15,23,42,0.22),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      <div className="flex max-h-[calc(100vh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-white/78 shadow-[0_24px_64px_rgba(15,23,42,0.22),inset_0_1px_0_rgba(255,255,255,0.9)] sm:max-h-[calc(100vh-2rem)]"
         style={{ backdropFilter: 'blur(28px) saturate(160%)' }}
       >
 
@@ -201,7 +270,7 @@ export function ShareDialog({
           </button>
         </div>
 
-        <div className="space-y-3.5 px-6 py-5">
+        <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
 
           {/* Preview image */}
           {previewImageUrl ? (
@@ -213,6 +282,37 @@ export function ShareDialog({
                 alt={title}
                 className="h-full max-h-72 w-full object-contain"
               />
+            </div>
+          ) : null}
+
+          {(canNativeShare || previewImageUrl) ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {canNativeShare ? (
+                <button
+                  type="button"
+                  onClick={() => void handleNativeShareWithImage()}
+                  disabled={isImageSharing || !previewImageUrl}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200/70 bg-white/55 px-3 text-xs font-bold text-amber-700 backdrop-blur-sm transition hover:border-amber-300 hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  {isImageSharing ? t('common.loading') : 'Share image'}
+                </button>
+              ) : null}
+              {previewImageUrl ? (
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadImage()}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/65 bg-white/55 px-3 text-xs font-bold text-slate-600 backdrop-blur-sm transition hover:border-amber-300/60 hover:bg-white/80 hover:text-amber-700"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download image
+                </button>
+              ) : null}
+              {imageShareState === 'unavailable' ? (
+                <p className="text-[11px] leading-5 text-slate-400 sm:col-span-2">
+                  This device shared the link only. Download the image if your app needs a manual upload.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -256,7 +356,18 @@ export function ShareDialog({
             ) : (
               <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">{effectiveShareText}</p>
             )}
-            <p className="mt-1 break-all text-xs font-medium text-amber-600">{effectiveShareUrl}</p>
+            <div className="mt-1">
+              <button
+                type="button"
+                onClick={() => setIsLinkExpanded((current) => !current)}
+                className={`block w-full text-left text-xs font-medium text-amber-600 transition hover:text-amber-700 ${
+                  isLinkExpanded ? 'break-all' : 'truncate'
+                }`}
+                title={isLinkExpanded ? undefined : effectiveShareUrl}
+              >
+                {effectiveShareUrl}
+              </button>
+            </div>
           </div>
 
           {/* Platform buttons */}
@@ -270,16 +381,23 @@ export function ShareDialog({
                 style={'style' in p ? p.style : undefined}
               >
                 {p.icon}
-                {p.label}
+                <span className="truncate">{p.label}</span>
               </button>
             ))}
           </div>
 
           {/* Link row */}
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1 truncate rounded-xl border border-white/55 bg-white/40 px-3 py-2.5 text-xs text-slate-400 backdrop-blur-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsLinkExpanded((current) => !current)}
+              className={`min-w-0 flex-1 rounded-xl border border-white/55 bg-white/40 px-3 py-2.5 text-left text-xs text-slate-400 backdrop-blur-sm transition hover:border-amber-200 hover:bg-white/55 hover:text-amber-700 ${
+                isLinkExpanded ? 'basis-full break-all' : 'truncate'
+              }`}
+              title={isLinkExpanded ? undefined : effectiveShareUrl}
+            >
               {effectiveShareUrl}
-            </div>
+            </button>
             <button
               type="button"
               onClick={() => void handleCopyLink()}
