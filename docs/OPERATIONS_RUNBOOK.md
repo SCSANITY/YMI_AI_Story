@@ -1,6 +1,6 @@
 # YMI Story Operations Runbook
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 This runbook covers development and internal-test operation. Do not place secret values in this file.
 
@@ -59,9 +59,16 @@ cd "D:\IT_David\Program\Voice Imagination\Web\worker"
 ```
 
 Important:
-- PM2 reads the current `worker/.env`.
-- The profile switch scripts overwrite `worker/.env`.
-- Restart PM2 after switching profiles.
+- Worker runtime reads `worker/.env` only.
+- `worker/.env.localhost` and `worker/.env.online` are scenario profiles/reference files. They do not take effect by themselves.
+- The profile switch scripts simply copy one profile over `worker/.env`.
+- It is also valid to edit `worker/.env` directly for the current run, as long as the active callback target and mock mode are intentional.
+- Restart PM2 or the local worker process after changing `worker/.env`.
+
+Worker environment fields to verify before each run:
+- `WORKER_CALLBACK_URL` controls whether the worker calls back to local Next.js or Vercel.
+- `WORKER_MOCK_MODE=false` is the only value that enables the real provider path. Any other value is treated as mock mode.
+- `INTERNAL_API_SECRET` must match the target web app environment when callbacks are used.
 
 PM2 commands:
 

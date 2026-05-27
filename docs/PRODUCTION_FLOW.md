@@ -1,6 +1,6 @@
 # YMI Story Production Flow
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 This document describes the canonical production path from customer upload to final PDF delivery.
 
@@ -89,6 +89,7 @@ This document describes the canonical production path from customer upload to fi
 ## 8. Worker Final Processing
 
 - Worker claims final jobs through the same `claim_next_job` loop.
+- Current production final jobs are admin-review jobs. A linked `final_jobs` row is expected for every `jobs.job_type='final'` job.
 - Worker sets linked `final_jobs.status='processing'`.
 - For each final page, worker sets `final_job_pages.status='processing'`.
 - Worker runs RunPod per page.
@@ -102,12 +103,16 @@ This document describes the canonical production path from customer upload to fi
   - `final_jobs.review_status='pending'` or `in_review`
   - parent `jobs.output_assets`
 - In the current admin-review flow, worker does not send the customer PDF automatically.
+- The older non-review worker path, where the worker builds `final_book.pdf` and calls `/api/internal/worker-callback`, is legacy fallback code and is not the current production entry point.
 
 ## 9. Admin Review And Release
 
 - Admin dashboard loads jobs through `/api/admin/final-jobs`.
 - Admin detail page loads through `/api/admin/final-jobs/[finalJobId]`.
 - Page image URLs are signed from `raw-private`.
+- Review action race protection is stored on `final_job_pages` through `review_intent_id`, `review_intent_type`, and `review_intent_at`.
+- `final_job_review_intents` is not a separate active table in the current app; the SQL file with that name adds review intent columns to `final_job_pages`.
+- Admin thumbnail caching uses browser IndexedDB database `ymi-admin-final-thumbs`; it is client-side cache only and unrelated to database review intent state.
 - Admin can:
   - Approve a page.
   - Approve all pages.

@@ -172,8 +172,8 @@ export const Navbar: React.FC = () => {
             <Image
               src="/logo.png"
               alt="YMI Story"
-              width={1057}
-              height={900}
+              width={1017}
+              height={673}
               priority={isHomePage}
               className="h-8 w-auto"
             />
