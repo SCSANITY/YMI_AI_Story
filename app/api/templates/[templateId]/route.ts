@@ -122,6 +122,6 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
   }
 
   const response = NextResponse.json({ template })
-  response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=1800')
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
   return response
 }

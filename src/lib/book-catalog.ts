@@ -90,10 +90,13 @@ function normalizeStringArray(value: unknown): string[] {
     : []
 }
 
-function centsToPrice(value: unknown): number | null {
-  const cents = Number(value ?? 0)
-  if (!Number.isFinite(cents) || cents <= 0) return null
-  return cents / 100
+export function parseTemplateAmount(value: unknown): number | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const amount = Number(raw)
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  return amount
 }
 
 function resolveDiscountPercent(price: number, compareAtPrice: number | null, explicitPercent: unknown): number | null {
@@ -152,8 +155,8 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const isForGirls = Boolean(row.is_for_girls) || homeSections.has('for_girls')
   const isDiscount = Boolean(row.is_discount) || homeSections.has('in_discount')
   const isComingSoon = Boolean(row.is_coming_soon)
-  const price = centsToPrice(row.price_cents) ?? 24.99
-  const compareAtPrice = centsToPrice(row.compare_at_price_cents) ?? (isDiscount ? price * 2 : null)
+  const price = parseTemplateAmount(row.price_cents) ?? 24.99
+  const compareAtPrice = parseTemplateAmount(row.compare_at_price_cents) ?? (isDiscount ? price * 2 : null)
   const discountPercent = isDiscount
     ? resolveDiscountPercent(price, compareAtPrice, row.discount_percent) ?? 50
     : null

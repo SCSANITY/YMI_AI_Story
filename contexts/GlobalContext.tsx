@@ -5,7 +5,7 @@ import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
 import { UI_LOCALES } from '@/lib/i18n-config';
-import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, templateStorageUrl } from '@/lib/book-catalog';
+import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, parseTemplateAmount, templateStorageUrl } from '@/lib/book-catalog';
 import {
   login as loginAction,
   signup as signupAction,
@@ -77,12 +77,12 @@ const templateRelationToBook = (templateId: string, template: any, fallbackBook?
   const showcaseImages = Array.isArray(template?.showcase_image_paths)
     ? template.showcase_image_paths.map(templateStorageUrl).filter(Boolean)
     : fallbackBook?.showcaseImages || (coverUrl ? [coverUrl] : []);
-  const templatePrice = Number(template?.price_cents ?? 0);
-  const resolvedPrice = Number.isFinite(templatePrice) && templatePrice > 0 ? templatePrice / 100 : fallbackBook?.price || price;
-  const compareAtCents = Number(template?.compare_at_price_cents ?? 0);
+  const templatePrice = parseTemplateAmount(template?.price_cents);
+  const resolvedPrice = templatePrice ?? fallbackBook?.price ?? price;
+  const compareAtAmount = parseTemplateAmount(template?.compare_at_price_cents);
   const compareAtPrice =
     fallbackBook?.compareAtPrice ??
-    (Number.isFinite(compareAtCents) && compareAtCents > 0 ? compareAtCents / 100 : null);
+    compareAtAmount;
   const isDiscount = Boolean(template?.is_discount ?? fallbackBook?.isDiscount);
   const discountPercentValue = Number(template?.discount_percent ?? 0);
   const discountPercent =

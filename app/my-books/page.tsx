@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import { useI18n } from '@/lib/useI18n'
 import { formatLocaleCurrency } from '@/lib/locale-pricing'
 import { canEnterCustomize } from '@/lib/customize-access-client'
+import { parseTemplateAmount } from '@/lib/book-catalog'
 
 type CreationItem = {
   creation_id: string
@@ -53,14 +54,14 @@ const resolveCover = (row: CreationItem) => {
 }
 
 const resolveTemplatePrice = (item: CreationItem, fallbackBook?: Book) => {
-  const priceFromTemplate = Number(item.templates?.price_cents ?? 0)
-  if (Number.isFinite(priceFromTemplate) && priceFromTemplate > 0) return priceFromTemplate / 100
+  const priceFromTemplate = parseTemplateAmount(item.templates?.price_cents)
+  if (priceFromTemplate !== null) return priceFromTemplate
   return fallbackBook?.price || 0
 }
 
 const resolveTemplateCompareAtPrice = (item: CreationItem, fallbackBook?: Book, price = 0) => {
-  const compareFromTemplate = Number(item.templates?.compare_at_price_cents ?? 0)
-  if (Number.isFinite(compareFromTemplate) && compareFromTemplate > 0) return compareFromTemplate / 100
+  const compareFromTemplate = parseTemplateAmount(item.templates?.compare_at_price_cents)
+  if (compareFromTemplate !== null) return compareFromTemplate
   if (fallbackBook?.compareAtPrice) return fallbackBook.compareAtPrice
   return item.templates?.is_discount ? price * 2 : null
 }

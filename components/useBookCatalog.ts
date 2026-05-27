@@ -5,18 +5,13 @@ import { BOOKS } from '@/data/books'
 import { staticBookToCatalogBook, type CatalogBook } from '@/lib/book-catalog'
 
 const FALLBACK_BOOKS = BOOKS.map(staticBookToCatalogBook)
-const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000
 
 let cachedCatalog: { books: CatalogBook[]; loadedAt: number } | null = null
 let catalogRequest: Promise<CatalogBook[]> | null = null
 
 async function fetchCatalogBooks(): Promise<CatalogBook[]> {
-  if (cachedCatalog && Date.now() - cachedCatalog.loadedAt < CATALOG_CACHE_TTL_MS) {
-    return cachedCatalog.books
-  }
-
   if (!catalogRequest) {
-    catalogRequest = fetch('/api/templates', { credentials: 'include' })
+    catalogRequest = fetch('/api/templates', { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}))
 

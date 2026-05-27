@@ -41,6 +41,6 @@ export async function GET() {
 
   const rows = (data ?? []) as TemplateCatalogRow[]
   const response = NextResponse.json({ templates: templateRowsToBooks(rows) })
-  response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=1800')
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
   return response
 }
