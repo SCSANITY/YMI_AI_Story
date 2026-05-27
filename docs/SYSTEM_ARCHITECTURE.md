@@ -1,6 +1,6 @@
 # YMI Story System Architecture
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Product Scope
 
@@ -44,7 +44,8 @@ Main layers:
 1. Frontend and API layer
 - Next.js App Router.
 - Hosted on Vercel.
-- Customer pages, personalization upload flow, cart, checkout, account/library pages, and `/admin`.
+- Customer pages, personalization upload flow, cart, checkout, account/library pages.
+- Admin dashboard: multi-route layout under `/admin/*` (finals, announcements, service, and placeholder routes for analytics/banner/catalog).
 - API routes handle job creation, checkout, webhooks, signed URLs, admin review, email flows, and internal callbacks.
 
 2. Database, auth, and storage layer
@@ -150,8 +151,8 @@ Core tables used by current flow:
 Critical RPC:
 - `claim_next_job`
   - Worker depends on this RPC to atomically claim queued jobs.
-  - The RPC exists in cloud Supabase and responds.
-  - Its SQL definition is not yet stored in this repo. This is a reproducibility/disaster-recovery follow-up, not a current runtime blocker.
+  - Uses `FOR UPDATE SKIP LOCKED` — concurrent workers never claim the same job.
+  - SQL definition stored in `Template_folder/sql_claim_next_job.sql`.
 
 Important enum/status note:
 - Cloud `jobs.status` now accepts `cancel_requested` and `cancelled` after rerunning `Template_folder/sql_jobs_cancel_statuses.sql`.

@@ -1,4 +1,4 @@
-import type { Book } from '@/types'
+import type { Book, MagicAttribute } from '@/types'
 
 export type AgeGroup = 'ages_2_plus' | 'ages_6_plus'
 
@@ -38,6 +38,7 @@ export type TemplateCatalogRow = {
   is_coming_soon?: boolean | null
   showcase_image_paths?: string[] | null
   final_preview_paths?: string[] | null
+  magic_attributes?: unknown
 }
 
 export type CatalogBook = Book & {
@@ -102,6 +103,31 @@ function resolveDiscountPercent(price: number, compareAtPrice: number | null, ex
   return Math.round((1 - price / compareAtPrice) * 100)
 }
 
+function clampPercent(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 80
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value).replace('%', '').trim())
+  if (!Number.isFinite(parsed)) return 80
+  return Math.max(0, Math.min(100, Math.round(parsed)))
+}
+
+function normalizeMagicAttributes(value: unknown): MagicAttribute[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const record = item as Record<string, unknown>
+      const label = String(record.label ?? record.name ?? record.title ?? '').trim()
+      if (!label) return null
+      return {
+        label,
+        percent: clampPercent(record.percent ?? record.value ?? record.score),
+      }
+    })
+    .filter((item): item is MagicAttribute => Boolean(item))
+    .slice(0, 4)
+}
+
 export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const templateId = String(row.template_id ?? '').trim()
   if (!templateId) return null
@@ -117,6 +143,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const finalPreviewImages = normalizeStringArray(row.final_preview_paths)
     .map(templateStorageUrl)
     .filter(Boolean)
+  const magicAttributes = normalizeMagicAttributes(row.magic_attributes)
 
   const fallbackShowcaseImages = coverUrl ? [coverUrl] : []
   const homeSections = new Set(normalizeStringArray(row.home_sections))
@@ -165,6 +192,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     isComingSoon,
     displayOrder: typeof row.display_order === 'number' ? row.display_order : null,
     createdAt: String(row.created_at ?? ''),
+    magicAttributes,
   }
 }
 
@@ -201,5 +229,6 @@ export function staticBookToCatalogBook(book: Book, index = 0): CatalogBook {
     displayOrder: index,
     createdAt: '',
     finalPreviewImages: book.finalPreviewImages ?? [],
+    magicAttributes: book.magicAttributes ?? [],
   }
 }

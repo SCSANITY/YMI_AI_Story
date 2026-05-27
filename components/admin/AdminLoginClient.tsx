@@ -28,8 +28,8 @@ export function AdminLoginClient() {
         setError(result.error)
         return
       }
-      setInfo('Signed in. Checking admin access...')
-      router.refresh()
+      setInfo('Signed in. Redirecting to dashboard...')
+      router.push('/admin/finals')
     })
   }
 

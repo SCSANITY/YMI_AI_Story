@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import NextImage from 'next/image';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
-import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Check, Book, X, Share2, CircleHelp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Check, Book, X, Share2, CircleHelp, type LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
@@ -74,6 +74,62 @@ const BAD_PHOTO_EXAMPLES = [
   { src: '/personalize-photo-samples/optimized/bad-02.webp', alt: 'Bad photo example 2' },
   { src: '/personalize-photo-samples/optimized/bad-03.webp', alt: 'Bad photo example 3' },
 ];
+
+const normalizeMagicAttributeKey = (value: string) =>
+  value.trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
+
+const MAGIC_ATTRIBUTE_DISPLAY: Record<
+  string,
+  {
+    i18nKey: string
+    icon: LucideIcon
+    iconClassName: string
+    barClassName: string
+  }
+> = {
+  'grace and beauty': {
+    i18nKey: 'personalize.magicAttribute.graceAndBeauty',
+    icon: Sparkles,
+    iconClassName: 'text-rose-400',
+    barClassName: 'bg-rose-400',
+  },
+  'goodness and virtue': {
+    i18nKey: 'personalize.magicAttribute.goodnessAndVirtue',
+    icon: Heart,
+    iconClassName: 'text-pink-400',
+    barClassName: 'bg-pink-400',
+  },
+  'hope and resilience': {
+    i18nKey: 'personalize.magicAttribute.hopeAndResilience',
+    icon: Shield,
+    iconClassName: 'text-blue-400',
+    barClassName: 'bg-blue-400',
+  },
+  'love and connection': {
+    i18nKey: 'personalize.magicAttribute.loveAndConnection',
+    icon: Heart,
+    iconClassName: 'text-red-400',
+    barClassName: 'bg-red-400',
+  },
+  'truth and integrity': {
+    i18nKey: 'personalize.magicAttribute.truthAndIntegrity',
+    icon: Check,
+    iconClassName: 'text-emerald-400',
+    barClassName: 'bg-emerald-400',
+  },
+  'faith and trust': {
+    i18nKey: 'personalize.magicAttribute.faithAndTrust',
+    icon: Star,
+    iconClassName: 'text-amber-400',
+    barClassName: 'bg-amber-400',
+  },
+};
+
+const DEFAULT_MAGIC_ATTRIBUTE_DISPLAY = {
+  icon: Sparkles,
+  iconClassName: 'text-purple-400',
+  barClassName: 'bg-purple-400',
+};
 
 export default function PersonalizePage({ bookID }: { bookID: string }) {
 
@@ -310,6 +366,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const previewShareImageUrl = previewPages[0] || previewUrl || resolvedBook?.coverUrl || null;
   const finalPreviewImages = useMemo(
     () => (Array.isArray(resolvedBook?.finalPreviewImages) ? resolvedBook.finalPreviewImages.filter(Boolean) : []),
+    [resolvedBook],
+  );
+  const magicAttributes = useMemo(
+    () => (Array.isArray(resolvedBook?.magicAttributes) ? resolvedBook.magicAttributes.filter((attribute) => attribute.label.trim()) : []),
     [resolvedBook],
   );
   const maxSpreadIndex = Math.max(
@@ -2603,17 +2663,32 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                               {templateInnerDescription || resolvedBook?.innerDescription || templateDescription || book.description}
                             </p>
                             
+                            {magicAttributes.length ? (
                             <div className="space-y-3">
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">{t('personalize.magicAttributes')}</h4>
-                                <div className="flex items-center justify-between text-sm text-gray-700">
-                                    <span className="flex items-center gap-2"><Heart className="h-4 w-4 text-pink-400" /> {t('personalize.kindness')}</span>
-                                    <div className="w-24 h-1.5 bg-gray-300/80 rounded-full"><div className="w-[90%] h-full bg-pink-400 rounded-full"></div></div>
-                                </div>
-                                <div className="flex items-center justify-between text-sm text-gray-700">
-                                    <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-blue-400" /> {t('personalize.courage')}</span>
-                                    <div className="w-24 h-1.5 bg-gray-300/80 rounded-full"><div className="w-[80%] h-full bg-blue-400 rounded-full"></div></div>
-                                </div>
+                                {magicAttributes.map((attribute) => {
+                                  const standardDisplay = MAGIC_ATTRIBUTE_DISPLAY[normalizeMagicAttributeKey(attribute.label)]
+                                  const display = standardDisplay ?? DEFAULT_MAGIC_ATTRIBUTE_DISPLAY
+                                  const Icon = display.icon
+                                  const label = standardDisplay ? t(standardDisplay.i18nKey) : attribute.label
+
+                                  return (
+                                    <div key={`${attribute.label}-${attribute.percent}`} className="flex items-center justify-between gap-4 text-sm text-gray-700">
+                                      <span className="flex min-w-0 items-center gap-2">
+                                        <Icon className={`h-4 w-4 shrink-0 ${display.iconClassName}`} />
+                                        <span className="truncate">{label}</span>
+                                      </span>
+                                      <div className="h-1.5 w-24 shrink-0 rounded-full bg-gray-300/80">
+                                        <div
+                                          className={`h-full rounded-full ${display.barClassName}`}
+                                          style={{ width: `${attribute.percent}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )
+                                })}
                             </div>
+                            ) : null}
                         </div>
 
                         <div className="bg-white/65 backdrop-blur-md border border-white/80 rounded-[0.96rem] shadow-[0_14px_24px_-24px_rgba(0,0,0,0.2)] p-3.5 md:p-4">

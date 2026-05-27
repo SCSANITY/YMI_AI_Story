@@ -3,28 +3,21 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   Archive,
-  BarChart3,
-  BookMarked,
   Eye,
   EyeOff,
   ImagePlus,
-  FileText as FileTextIcon,
-  LayoutDashboard,
   Link as LinkIcon,
-  Megaphone,
   Pencil,
   Plus,
   Save,
-  ToggleLeft,
   UploadCloud,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { FinalReviewPanel } from '@/components/admin/FinalReviewPanel'
-import { DEFAULT_CUSTOMIZE_ACCESS_MESSAGE, type CustomizeAccessSettings } from '@/lib/customize-access'
+
+// ── Types ───────────────────────────────────────────────────────────────────
 
 type BlogPostStatus = 'draft' | 'published' | 'hidden' | 'archived'
 type AdminTab = 'list' | 'edit' | 'preview'
-type AdminSection = 'announcements' | 'finals' | 'service'
 
 type BlogPost = {
   post_id: string
@@ -50,12 +43,7 @@ type FormState = {
   links: Array<{ label: string; url: string }>
 }
 
-type CreatorPromoConfig = {
-  enabled: boolean
-  suffix: string
-  discount_amount_usd: number
-  first_order_only: boolean
-}
+// ── Constants ────────────────────────────────────────────────────────────────
 
 const emptyForm: FormState = {
   postId: null,
@@ -67,14 +55,7 @@ const emptyForm: FormState = {
   links: [],
 }
 
-const navItems = [
-  { label: 'Announcements', icon: Megaphone, section: 'announcements' as const, active: true },
-  { label: 'Final Review', icon: FileTextIcon, section: 'finals' as const, active: true },
-  { label: 'Service Control', icon: ToggleLeft, section: 'service' as const, active: true },
-  { label: 'Data Overview', icon: BarChart3, section: null, active: false },
-  { label: 'Banner Manager', icon: LayoutDashboard, section: null, active: false },
-  { label: 'Book Packages', icon: BookMarked, section: null, active: false },
-]
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function statusBadge(status: BlogPostStatus) {
   const classes = {
@@ -98,6 +79,8 @@ function normalizeLinks(links: Array<{ label: string; url: string }>) {
     .map((link) => ({ label: link.label.trim(), url: link.url.trim() }))
     .filter((link) => link.url)
 }
+
+// ── AnnouncementPreview ──────────────────────────────────────────────────────
 
 function AnnouncementPreview({ form }: { form: FormState }) {
   const images = form.imagePreviewUrls.filter(Boolean).slice(0, 9)
@@ -155,7 +138,9 @@ function AnnouncementPreview({ form }: { form: FormState }) {
   )
 }
 
-export function AdminDashboardClient({ adminName, adminEmail }: { adminName: string; adminEmail: string }) {
+// ── AnnouncementsSection ─────────────────────────────────────────────────────
+
+export function AnnouncementsSection() {
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [form, setForm] = useState<FormState>(emptyForm)
   const [loading, setLoading] = useState(true)
@@ -164,20 +149,6 @@ export function AdminDashboardClient({ adminName, adminEmail }: { adminName: str
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [mobileTab, setMobileTab] = useState<AdminTab>('edit')
-  const [section, setSection] = useState<AdminSection>('announcements')
-  const [customizeAccess, setCustomizeAccess] = useState<CustomizeAccessSettings>({
-    enabled: true,
-    message: DEFAULT_CUSTOMIZE_ACCESS_MESSAGE,
-  })
-  const [customizeAccessLoading, setCustomizeAccessLoading] = useState(false)
-  const [customizeAccessSaving, setCustomizeAccessSaving] = useState(false)
-  const [creatorPromoConfig, setCreatorPromoConfig] = useState<CreatorPromoConfig>({
-    enabled: true,
-    suffix: '-YMI',
-    discount_amount_usd: 5,
-    first_order_only: true,
-  })
-  const [creatorPromoSaving, setCreatorPromoSaving] = useState(false)
 
   const editingPost = useMemo(
     () => posts.find((post) => post.post_id === form.postId) ?? null,
@@ -204,52 +175,6 @@ export function AdminDashboardClient({ adminName, adminEmail }: { adminName: str
   useEffect(() => {
     void loadPosts()
   }, [])
-
-  useEffect(() => {
-    if (section !== 'service') return
-
-    let active = true
-    const loadCustomizeAccess = async () => {
-      setCustomizeAccessLoading(true)
-      try {
-        const [accessResponse, promoResponse] = await Promise.all([
-          fetch('/api/admin/customize-access', {
-            credentials: 'include',
-            cache: 'no-store',
-          }),
-          fetch('/api/admin/creator-promo-config', {
-            credentials: 'include',
-            cache: 'no-store',
-          }),
-        ])
-        const data = await accessResponse.json().catch(() => ({}))
-        const promoData = await promoResponse.json().catch(() => ({}))
-        if (!active) return
-        if (!accessResponse.ok) return
-        const next = data?.customizeAccess
-        setCustomizeAccess({
-          enabled: Boolean(next?.enabled ?? true),
-          message: String(next?.message ?? DEFAULT_CUSTOMIZE_ACCESS_MESSAGE),
-        })
-        if (promoResponse.ok && promoData?.config) {
-          setCreatorPromoConfig({
-            enabled: Boolean(promoData.config.enabled ?? true),
-            suffix: String(promoData.config.suffix ?? '-YMI'),
-            discount_amount_usd: Number(promoData.config.discount_amount_usd ?? 5),
-            first_order_only: promoData.config.first_order_only !== false,
-          })
-        }
-      } finally {
-        if (active) setCustomizeAccessLoading(false)
-      }
-    }
-
-    void loadCustomizeAccess()
-
-    return () => {
-      active = false
-    }
-  }, [section])
 
   const startEdit = (post: BlogPost) => {
     setForm({
@@ -365,58 +290,7 @@ export function AdminDashboardClient({ adminName, adminEmail }: { adminName: str
     if (response.ok) await loadPosts()
   }
 
-  const toggleCustomizeAccess = async () => {
-    setCustomizeAccessSaving(true)
-    try {
-      const response = await fetch('/api/admin/customize-access', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ enabled: !customizeAccess.enabled }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        setError(data?.error || 'Failed to update customize access')
-        return
-      }
-      const next = data?.customizeAccess
-      setCustomizeAccess({
-        enabled: Boolean(next?.enabled ?? !customizeAccess.enabled),
-        message: String(next?.message ?? customizeAccess.message ?? DEFAULT_CUSTOMIZE_ACCESS_MESSAGE),
-      })
-      setMessage(`Customize access ${next?.enabled ? 'opened' : 'closed'}.`)
-      setError('')
-    } finally {
-      setCustomizeAccessSaving(false)
-    }
-  }
-
-  const saveCreatorPromoConfig = async () => {
-    setCreatorPromoSaving(true)
-    try {
-      const response = await fetch('/api/admin/creator-promo-config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          enabled: creatorPromoConfig.enabled,
-          suffix: creatorPromoConfig.suffix,
-          discountAmountUsd: creatorPromoConfig.discount_amount_usd,
-          firstOrderOnly: creatorPromoConfig.first_order_only,
-        }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        setError(data?.error || 'Failed to update creator promo config')
-        return
-      }
-      if (data?.config) setCreatorPromoConfig(data.config)
-      setMessage('Creator promo config updated.')
-      setError('')
-    } finally {
-      setCreatorPromoSaving(false)
-    }
-  }
+  // ── JSX panels ──────────────────────────────────────────────────────────────
 
   const editorPanel = (
     <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
@@ -632,216 +506,31 @@ export function AdminDashboardClient({ adminName, adminEmail }: { adminName: str
     </aside>
   )
 
-  const servicePanel = (
-    <div className="space-y-4">
-      {error ? (
-        <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
-      ) : message ? (
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{message}</div>
-      ) : null}
-
-      {/* ── Customize Access ── */}
-      <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-300">Access Control</p>
-            <h2 className="mt-1 text-xl font-bold text-white">Customize access</h2>
-            <p className="mt-1.5 max-w-md text-sm leading-6 text-slate-400">
-              Block new Customize sessions during private beta windows.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-            <button
-              type="button"
-              onClick={() => void toggleCustomizeAccess()}
-              disabled={customizeAccessSaving || customizeAccessLoading}
-              className={`inline-flex h-10 items-center gap-2 rounded-full px-5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                customizeAccess.enabled
-                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-400'
-                  : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-              }`}
-            >
-              <span className={`h-2 w-2 rounded-full ${customizeAccess.enabled ? 'bg-white' : 'bg-slate-400'}`} />
-              {customizeAccessSaving ? 'Saving...' : customizeAccess.enabled ? 'Open — Close access' : 'Closed — Open access'}
-            </button>
-            <p className="text-[10px] text-slate-500">
-              {customizeAccess.enabled ? 'Users can enter Customize.' : 'Users see the private beta notice.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-white/[0.07] bg-black/15 px-4 py-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Blocked message preview</p>
-          <p className="mt-1.5 text-sm leading-7 text-slate-300">{customizeAccess.message}</p>
-        </div>
-      </section>
-
-      {/* ── Creator Promo ── */}
-      <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-300">Creator Promo</p>
-            <h2 className="mt-1 text-xl font-bold text-white">Signature code settings</h2>
-            <p className="mt-1.5 max-w-md text-sm leading-6 text-slate-400">
-              Controls Collaboration page promo code generation and default checkout discount.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setCreatorPromoConfig((prev) => ({ ...prev, enabled: !prev.enabled }))}
-            className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-bold transition ${
-              creatorPromoConfig.enabled
-                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-400'
-                : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-            }`}
-          >
-            <span className={`h-2 w-2 rounded-full ${creatorPromoConfig.enabled ? 'bg-white' : 'bg-slate-400'}`} />
-            {creatorPromoConfig.enabled ? 'Enabled' : 'Disabled'}
-          </button>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            Code suffix
-            <input
-              value={creatorPromoConfig.suffix}
-              onChange={(event) => setCreatorPromoConfig((prev) => ({ ...prev, suffix: event.target.value }))}
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70 normal-case"
-            />
-          </label>
-          <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            Discount (USD)
-            <input
-              type="number"
-              min="1"
-              step="0.5"
-              value={creatorPromoConfig.discount_amount_usd}
-              onChange={(event) => setCreatorPromoConfig((prev) => ({ ...prev, discount_amount_usd: Number(event.target.value) }))}
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
-            />
-          </label>
-          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06]">
-            <input
-              type="checkbox"
-              checked={creatorPromoConfig.first_order_only}
-              onChange={(event) => setCreatorPromoConfig((prev) => ({ ...prev, first_order_only: event.target.checked }))}
-              className="h-4 w-4 accent-amber-400"
-            />
-            First order only
-          </label>
-        </div>
-
-        <div className="mt-5 flex justify-end border-t border-white/[0.07] pt-5">
-          <button
-            type="button"
-            onClick={() => void saveCreatorPromoConfig()}
-            disabled={creatorPromoSaving}
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-amber-400 px-5 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Save className="h-4 w-4" />
-            {creatorPromoSaving ? 'Saving...' : 'Save settings'}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <main className="min-h-screen bg-[#0b1120] text-white">
-      <div className="grid min-h-screen lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="flex flex-col border-b border-white/10 bg-slate-950/80 p-4 backdrop-blur-2xl lg:min-h-screen lg:border-b-0 lg:border-r lg:p-5">
-          <div className="flex items-center gap-3 rounded-3xl bg-white/[0.06] p-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-lg font-black text-slate-950">
-              Y
-            </div>
-            <div>
-              <p className="text-sm font-bold">YMI Admin</p>
-              <p className="text-xs text-slate-500">Internal dashboard</p>
-            </div>
-          </div>
-
-          <nav className="mt-6 flex-1 space-y-1.5">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const isSelected = item.section ? section === item.section : false
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  disabled={!item.active || !item.section}
-                  onClick={() => {
-                    if (item.section) setSection(item.section)
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-semibold transition ${
-                    isSelected
-                      ? 'bg-amber-400 text-slate-950 shadow-lg shadow-amber-950/20'
-                      : item.active
-                        ? 'text-slate-200 hover:bg-white/[0.08]'
-                      : 'cursor-not-allowed text-slate-600'
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 shrink-0 ${isSelected ? '' : item.active ? 'text-slate-400' : 'text-slate-700'}`} />
-                  {item.label}
-                  {!item.active ? <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] uppercase tracking-wide text-slate-600">Soon</span> : null}
-                </button>
-              )
-            })}
-          </nav>
-
-          {/* Admin identity — pinned to sidebar bottom */}
-          <div className="mt-6 border-t border-white/[0.08] pt-4">
-            <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] px-3 py-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/50 to-orange-500/50 text-sm font-bold text-white">
-                {adminName[0]?.toUpperCase() ?? 'A'}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-white">{adminName}</p>
-                {adminEmail ? <p className="truncate text-[10px] text-slate-500">{adminEmail}</p> : null}
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        <section className="min-w-0 p-4 lg:p-6">
-          <header className="mb-6">
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">YMI Admin</p>
-            <h1 className="mt-0.5 text-2xl font-bold text-white">
-              {section === 'announcements' ? 'Announcements' : section === 'service' ? 'Service Control' : 'Final Review'}
-            </h1>
-          </header>
-
-          {section === 'announcements' ? (
-            <>
-              <div className="mb-4 grid grid-cols-3 gap-2 lg:hidden">
-                {(['list', 'edit', 'preview'] as AdminTab[]).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setMobileTab(tab)}
-                    className={`rounded-2xl px-3 py-2 text-sm font-semibold capitalize ${
-                      mobileTab === tab ? 'bg-amber-400 text-slate-950' : 'bg-white/[0.06] text-slate-300'
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(26rem,1fr)_minmax(22rem,0.9fr)]">
-                <div className={mobileTab === 'list' ? 'block' : 'hidden lg:block'}>{listPanel}</div>
-                <div className={mobileTab === 'edit' ? 'block' : 'hidden lg:block'}>{editorPanel}</div>
-                <div className={mobileTab === 'preview' ? 'block' : 'hidden lg:block'}>{previewPanel}</div>
-              </div>
-            </>
-          ) : section === 'service' ? (
-            <div className="max-w-2xl">
-              {servicePanel}
-            </div>
-          ) : (
-            <FinalReviewPanel />
-          )}
-        </section>
+    <>
+      {/* Mobile tab switcher */}
+      <div className="mb-4 grid grid-cols-3 gap-2 lg:hidden">
+        {(['list', 'edit', 'preview'] as AdminTab[]).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setMobileTab(tab)}
+            className={`rounded-2xl px-3 py-2 text-sm font-semibold capitalize ${
+              mobileTab === tab ? 'bg-amber-400 text-slate-950' : 'bg-white/[0.06] text-slate-300'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
-    </main>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(26rem,1fr)_minmax(22rem,0.9fr)]">
+        <div className={mobileTab === 'list' ? 'block' : 'hidden lg:block'}>{listPanel}</div>
+        <div className={mobileTab === 'edit' ? 'block' : 'hidden lg:block'}>{editorPanel}</div>
+        <div className={mobileTab === 'preview' ? 'block' : 'hidden lg:block'}>{previewPanel}</div>
+      </div>
+    </>
   )
 }

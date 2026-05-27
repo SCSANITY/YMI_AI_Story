@@ -9,6 +9,11 @@ export interface User {
   avatarStoragePath?: string;
 }
 
+export type MagicAttribute = {
+  label: string;
+  percent: number;
+}
+
 export interface Book {
   bookID: string;
   title: string;
@@ -36,6 +41,7 @@ export interface Book {
   isDiscount?: boolean;
   isComingSoon?: boolean;
   displayOrder?: number | null;
+  magicAttributes?: MagicAttribute[];
 }
 
 export type StoryLanguage = 'English' | 'Traditional Chinese' | 'Spanish';

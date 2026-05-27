@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Current State
 
@@ -51,6 +51,9 @@ Active short-term tracker:
 - Documented canonical end-to-end production flow.
 - Documented worker per-image preview/final processing.
 - Replaced temporary scan notes with maintainable docs.
+- Exported and saved `claim_next_job` SQL definition to `Template_folder/sql_claim_next_job.sql`.
+- Completed full Supabase DB/Storage architecture scan and call-chain mapping.
+- Admin dashboard restructured from single-page monolith to multi-route App Router architecture (see Admin Architecture section below).
 
 ## Current Owner-Managed Work
 
@@ -73,7 +76,6 @@ High priority before internal test:
 - Perform Admin approve/release and confirm final PDF delivery email.
 
 Medium priority:
-- Export and save the `claim_next_job` SQL definition from Supabase.
 - Confirm production Supabase Storage policies for `app-templates` and `raw-private`.
 - Configure `HEALTHCHECKS_URL` for the real worker host before internal testing.
 - Confirm `INTERNAL_API_SECRET` matches between Vercel production env and worker online env.
@@ -97,9 +99,9 @@ Code quality / maintainability:
 
 ## Known Risks And Current Judgment
 
-`claim_next_job` SQL not stored in repo:
-- Runtime risk is low because the RPC exists and responds in production Supabase.
-- Reproducibility/disaster-recovery risk remains until SQL is exported and versioned.
+`claim_next_job` SQL:
+- ✅ Now stored in `Template_folder/sql_claim_next_job.sql`.
+- Runtime risk: low. Reproducibility risk: resolved.
 
 Worker env profile switching:
 - Scripts mutate `worker/.env`.
@@ -137,6 +139,49 @@ Admin review:
 - Admin review page shows all generated pages.
 - Approve/release creates final PDF.
 - Delivery email arrives with usable signed PDF link.
+
+## Admin Architecture (Current State)
+
+Admin dashboard was restructured from a single-page monolith to a multi-route Next.js App Router layout.
+
+Current admin routes (all under `app/admin/`):
+- `/admin/login` — Login and access-denied handling (no auth required)
+- `/admin/finals` — Final Review: page-by-page approve/replace/release workflow
+- `/admin/announcements` — Blog post CRUD, image upload, live preview
+- `/admin/service` — Customize access toggle, creator promo code config
+- `/admin/analytics` — Placeholder (coming soon: sales data visualization)
+- `/admin/banner` — Placeholder (coming soon: promotional banner management)
+- `/admin/catalog` — Placeholder (coming soon: book/template management)
+
+Key architectural details:
+- Auth guard lives in `app/admin/(protected)/layout.tsx` — one check, inherited by all protected routes.
+- Sidebar navigation uses `usePathname()` for active-state highlighting.
+- All 15 existing API routes under `app/api/admin/` are unchanged.
+- `FinalReviewPanel.tsx` (1819 lines) is untouched — moved as a unit to `/admin/finals`.
+
+## Admin Upgrade Plan (Pending)
+
+The following admin features are planned but not yet implemented. Implementation order is flexible — each is independent.
+
+**Analytics / Data Overview (`/admin/analytics`)**
+- Connect to `orders`, `payments`, `jobs` tables.
+- Display revenue metrics, conversion rates, job throughput.
+- Planned as read-only visualization; no DB writes.
+
+**Catalog / Book Management (`/admin/catalog`)**
+- List all templates from the `templates` table.
+- Edit pricing (`price_usd`), toggle `is_active` / `is_coming_soon`.
+- Upload or update cover images and `default_config_path`.
+- Add new templates or archive existing ones.
+- All changes write directly to the `templates` table via new API routes under `/api/admin/catalog/`.
+- Must be designed carefully: pricing changes affect live checkout; config path changes affect running worker jobs.
+
+**Final Page Rerun with Random Seed**
+- Allows admin to rerun a single final page with a new random seed (instead of the fixed default seed).
+- Flow: Admin clicks Rerun on a specific page → frontend calls `/api/admin/final-jobs/[id]/pages/[index]/rerun` → API generates a random `noise_seed` → creates a new RunPod job → polls/processes result → writes new `ai_output_path` to `final_job_pages` → sets page status back to `pending_review`.
+- Requires careful state handling: the page transitions `pending_review → rerunning → pending_review` (or `failed`).
+- The existing Rerun button in FinalReviewPanel is already present in the UI but disabled, reserved for this feature.
+- Worker involvement: this may be done as a direct API-to-RunPod call (bypassing the worker job queue) or as a new lightweight job type — to be decided during implementation.
 
 ## Longer-Term Product/Engineering Direction
 

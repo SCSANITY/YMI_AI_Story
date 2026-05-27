@@ -26,6 +26,7 @@ const TEMPLATE_LIST_COLUMNS = [
   'is_for_girls',
   'is_discount',
   'is_coming_soon',
+  'magic_attributes',
 ].join(',')
 
 export async function GET() {
