@@ -422,8 +422,8 @@ export const Footer: React.FC = () => {
                 <Image
                   src="/logo.png"
                   alt="YMI Story"
-                  width={1017}
-                  height={673}
+                  width={1057}
+                  height={900}
                   className="h-10 w-auto"
                 />
               </div>
