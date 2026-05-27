@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import { Book } from '@/types'
 import { BookCard } from '@/components/BookCard'
-import { Button } from '@/components/Button'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { useBookDisplayData } from '@/components/useBookDisplayData'
@@ -127,14 +126,14 @@ export function HomeBookCategories() {
   return (
     <section className="page-surface page-surface--flush-bottom relative py-12 md:py-20">
       <div className="container mx-auto min-w-0 px-4 md:px-6 lg:px-12">
-        <div className="mx-auto mb-10 max-w-2xl text-center md:mb-14">
+        <div className="mx-auto mb-10 max-w-4xl text-center md:mb-14">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-500">
             {t('homeBooks.eyebrow')}
           </p>
           <h2 className="font-title text-3xl leading-tight text-gray-900 md:text-5xl">
             {t('homeBooks.heading')}
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-gray-500 md:text-base">
+          <p className="mx-auto mt-4 text-sm leading-relaxed text-gray-500 md:text-base">
             {t('homeBooks.subheading')}
           </p>
         </div>
@@ -154,17 +153,14 @@ export function HomeBookCategories() {
                       {t(category.descriptionKey)}
                     </p>
                   </div>
-                  <Button
+                  <button
                     type="button"
-                    variant="outline"
-                    className="w-fit rounded-full px-5 uppercase tracking-[0.12em]"
                     onClick={() => router.push('/books')}
+                    className="group inline-flex shrink-0 items-center gap-2 rounded-full border border-amber-200/70 bg-white/50 px-5 py-2 text-[11px] font-bold tracking-[0.22em] text-amber-600 shadow-[0_2px_10px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-sm transition-all duration-200 hover:border-amber-300/80 hover:bg-amber-50/60 hover:text-amber-700 hover:shadow-[0_4px_14px_rgba(251,191,36,0.15),inset_0_1px_0_rgba(255,255,255,0.9)]"
                   >
-                    <span className="inline-flex items-center gap-2">
-                      {t('homeBooks.viewAll')}
-                      <ArrowRight className="h-4 w-4" aria-hidden />
-                    </span>
-                  </Button>
+                    {t('homeBooks.viewAll')}
+                    <ArrowRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden />
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-8">

@@ -124,10 +124,10 @@ export default function CartPage() {
           </button>
 
           {cart.map((item) => (
-            <div key={item.id} className="glass-panel rounded-2xl p-4 md:p-6 flex gap-4">
+            <div key={item.id} className="glass-panel rounded-2xl p-4 md:p-6 flex gap-3 sm:gap-4">
               <button
                 onClick={() => toggleSelection(item.id)}
-                className="mt-2 text-amber-600"
+                className="mt-2 shrink-0 text-amber-600"
                 aria-label="Select item"
               >
                 {selectedIds.includes(item.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-gray-400" />}
@@ -136,35 +136,35 @@ export default function CartPage() {
               <button
                 type="button"
                 onClick={() => void goToPreview(item.id, item.bookID)}
-                className="block"
+                className="block shrink-0"
               >
-                <span className="relative block h-32 w-24 overflow-hidden rounded-xl bg-amber-50 shadow-sm">
+                <span className="relative block h-28 w-20 sm:h-32 sm:w-24 overflow-hidden rounded-xl bg-amber-50 shadow-sm">
                   <Image
                     src={item.book.coverUrl}
                     alt={item.book.title}
                     fill
-                    sizes="96px"
+                    sizes="(max-width: 640px) 80px, 96px"
                     className="object-cover saturate-110 contrast-110 brightness-105"
                   />
                 </span>
               </button>
-              <div className="flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div className="min-w-0">
                     <button
                       type="button"
                       onClick={() => void goToPreview(item.id, item.bookID)}
-                      className="text-left"
+                      className="text-left min-w-0 w-full"
                     >
-                      <h2 className="font-display text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors">{item.book.title}</h2>
+                      <h2 className="font-display text-base sm:text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors line-clamp-2">{item.book.title}</h2>
                     </button>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">{item.book.author}</p>
                   </div>
-                    <div className="text-right space-y-2">
+                    <div className="mt-2 sm:mt-0 sm:text-right shrink-0 space-y-2">
                     <div className="text-lg font-bold text-gray-900">
                       {formatLocaleCurrency((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), language)}
                     </div>
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center sm:justify-end">
                       <div className="inline-flex items-center rounded-full border border-gray-200 bg-white shadow-sm px-1 py-0.5">
                         <button
                           type="button"

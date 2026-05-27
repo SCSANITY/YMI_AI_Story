@@ -263,6 +263,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [previewShareUrl, setPreviewShareUrl] = useState<string | null>(null);
+  const [previewPublicShareImageUrl, setPreviewPublicShareImageUrl] = useState<string | null>(null);
   const [isPreparingShare, setIsPreparingShare] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [isCheckoutAcknowledged, setIsCheckoutAcknowledged] = useState(false);
@@ -309,6 +310,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         return;
       }
       setPreviewShareUrl(data.shareUrl);
+      setPreviewPublicShareImageUrl(data.imageUrl || null);
       setIsShareDialogOpen(true);
     } catch {
       setShareError(t('share.previewCreateFailed'));
@@ -363,7 +365,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const mobilePreviewScale = Math.min(0.58, Math.max(0.4, (windowWidth - 24) / (PAGE_WIDTH * 2)));
   const previewScale = isMobile ? mobilePreviewScale : 1;
   const previewStageHeight = isMobile ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
-  const previewShareImageUrl = previewPages[0] || previewUrl || resolvedBook?.coverUrl || null;
+  const previewShareImageUrl = previewPublicShareImageUrl || previewPages[0] || previewUrl || resolvedBook?.coverUrl || null;
   const finalPreviewImages = useMemo(
     () => (Array.isArray(resolvedBook?.finalPreviewImages) ? resolvedBook.finalPreviewImages.filter(Boolean) : []),
     [resolvedBook],
@@ -3417,6 +3419,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           description={t('share.previewDescription')}
           shareUrl={previewShareUrl || ''}
           shareText={t('share.previewTemplate')}
+          editableShareText
+          includeTextInShareUrl
           previewImageUrl={previewShareImageUrl}
           note={t('share.previewNote')}
         />

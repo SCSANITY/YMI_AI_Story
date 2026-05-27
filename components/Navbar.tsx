@@ -397,14 +397,14 @@ export const Navbar: React.FC = () => {
       />
 
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-4 space-y-4 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
-          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.home')}</button>
-          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.books')}</button>
-          <button onClick={() => { router.push('/favorites'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.favorites')}</button>
-          <button onClick={() => { router.push('/my-books'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.myBooks')}</button>
-          <button onClick={() => { router.push('/collaboration'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.collaboration')}</button>
-          <button onClick={() => { router.push('/support'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.support')}</button>
-          <button onClick={() => { router.push('/orders'); setMobileMenuOpen(false) }} className="block text-sm font-medium text-gray-600 hover:text-gray-900">{t('navbar.myOrders')}</button>
+        <div className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
+          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.home')}</button>
+          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.books')}</button>
+          <button onClick={() => { router.push('/favorites'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.favorites')}</button>
+          <button onClick={() => { router.push('/my-books'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.myBooks')}</button>
+          <button onClick={() => { router.push('/collaboration'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.collaboration')}</button>
+          <button onClick={() => { router.push('/support'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.support')}</button>
+          <button onClick={() => { router.push('/orders'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.myOrders')}</button>
         </div>
       )}
     </nav>

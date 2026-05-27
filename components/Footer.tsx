@@ -704,7 +704,7 @@ export const Footer: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-label={modalTitle}
-            className="relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/40 bg-white/40 shadow-[0_40px_100px_rgba(0,0,0,0.18),0_12px_32px_rgba(0,0,0,0.10),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[200%]"
+            className="relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-2xl sm:rounded-[32px] border border-white/40 bg-white/40 shadow-[0_40px_100px_rgba(0,0,0,0.18),0_12px_32px_rgba(0,0,0,0.10),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[200%]"
           >
             <div
               aria-hidden="true"

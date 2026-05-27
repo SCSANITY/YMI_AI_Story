@@ -7,6 +7,8 @@ import { buildAbsoluteUrl } from '@/lib/site-url'
 import { CustomizeAccessButton } from '@/components/CustomizeAccessButton'
 
 type TemplateRelation = { name?: string | null } | { name?: string | null }[] | null
+const DEFAULT_PREVIEW_CAPTION =
+  'A child becomes the hero of a magical YMI Story picture book. Take a peek at this personalized preview and imagine the adventure inside.'
 
 function getTemplateName(templates: TemplateRelation) {
   if (Array.isArray(templates)) {
@@ -33,17 +35,31 @@ async function loadPreviewShare(token: string) {
   return data
 }
 
+function normalizeCaption(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value
+  const caption = String(raw || '').trim()
+  return caption.length > 0 ? caption.slice(0, 480) : DEFAULT_PREVIEW_CAPTION
+}
+
+function buildPreviewShareUrl(token: string, caption: string) {
+  const path = `/share/preview/${token}`
+  if (!caption || caption === DEFAULT_PREVIEW_CAPTION) return buildAbsoluteUrl(path)
+  return buildAbsoluteUrl(`${path}?caption=${encodeURIComponent(caption)}`)
+}
+
 export async function generateMetadata(
-  props: { params: Promise<{ token: string }> }
+  props: { params: Promise<{ token: string }>; searchParams?: Promise<{ caption?: string | string[] }> }
 ): Promise<Metadata> {
   const params = await props.params
+  const searchParams = props.searchParams ? await props.searchParams : {}
   const token = String(params.token || '').trim()
   const share = token ? await loadPreviewShare(token) : null
+  const caption = normalizeCaption(searchParams?.caption)
 
   if (!share?.share_token) {
     return {
       title: 'YMI Story Preview',
-      description: 'See a personalized storybook cover from YMI.',
+      description: caption,
     }
   }
 
@@ -51,8 +67,9 @@ export async function generateMetadata(
   const title = templateName
     ? `${templateName} | YMI Preview`
     : 'YMI Story Preview'
-  const description = 'Take a look at this personalized YMI storybook cover.'
+  const description = caption
   const imageUrl = buildAbsoluteUrl(`/share/preview/${share.share_token}/image`)
+  const url = buildPreviewShareUrl(share.share_token, caption)
 
   return {
     title,
@@ -60,7 +77,8 @@ export async function generateMetadata(
     openGraph: {
       title,
       description,
-      images: [{ url: imageUrl }],
+      url,
+      images: [{ url: imageUrl, width: 1200, height: 1200, alt: title }],
     },
     twitter: {
       card: 'summary_large_image',
@@ -72,12 +90,14 @@ export async function generateMetadata(
 }
 
 export default async function PreviewSharePage(
-  props: { params: Promise<{ token: string }> }
+  props: { params: Promise<{ token: string }>; searchParams?: Promise<{ caption?: string | string[] }> }
 ) {
   const params = await props.params
+  const searchParams = props.searchParams ? await props.searchParams : {}
   const token = String(params.token || '').trim()
   const share = token ? await loadPreviewShare(token) : null
   const templateName = getTemplateName((share?.templates as TemplateRelation) ?? null)
+  const caption = normalizeCaption(searchParams?.caption)
 
   if (!share?.share_token) {
     notFound()
@@ -94,7 +114,7 @@ export default async function PreviewSharePage(
               fill
               sizes="(max-width: 767px) 92vw, 520px"
               priority
-              className="object-cover"
+              className="object-contain"
             />
           </div>
 
@@ -106,7 +126,7 @@ export default async function PreviewSharePage(
               A Personalized Storybook Worth Sharing
             </h1>
             <p className="mt-4 text-base leading-7 text-gray-600">
-              This shared preview only shows the cover. Create your own storybook and turn your child into the hero.
+              {caption}
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">

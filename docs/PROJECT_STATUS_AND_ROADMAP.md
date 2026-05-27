@@ -54,6 +54,7 @@ Active short-term tracker:
 - Exported and saved `claim_next_job` SQL definition to `Template_folder/sql_claim_next_job.sql`.
 - Completed full Supabase DB/Storage architecture scan and call-chain mapping.
 - Admin dashboard restructured from single-page monolith to multi-route App Router architecture (see Admin Architecture section below).
+- Magic Attributes feature shipped: `templates.magic_attributes` JSONB column added to DB; `normalizeMagicAttributes()` parser added to `book-catalog.ts`; `MagicAttribute` type added to `types/index.ts`; list API and detail API both return the field; Customize page replaces hardcoded Kindness/Courage with dynamic per-book attribute bars; six standard categories have i18n translations in EN/ZH/JA/ES/KO; custom free-text labels display as-is with a default icon.
 
 ## Current Owner-Managed Work
 
@@ -86,9 +87,11 @@ Medium priority:
 
 Stripe Live setup:
 - Company registration is complete.
-- Vercel production still needs live publishable key, live secret key, and live webhook secret.
-- Confirm live webhook endpoint and event subscriptions.
-- Keep local environment on Stripe test keys.
+- Vercel production needs: `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (pk_live_*), `STRIPE_SECRET_KEY` (sk_live_*), `STRIPE_WEBHOOK_SECRET` (whsec_* from the live endpoint).
+- Register live webhook endpoint in Stripe Dashboard → `https://www.ymistory.com/api/webhooks/stripe`.
+- Subscribe to exactly two events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
+- Keep local `.env.local` and `.env.localhost` on test keys — no local file changes needed.
+- No code changes required; existing code is key-agnostic.
 - Treat the first successful live payment as an internal-test readiness milestone.
 
 Code quality / maintainability:

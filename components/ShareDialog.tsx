@@ -12,6 +12,8 @@ type ShareDialogProps = {
   description: string
   shareUrl: string
   shareText: string
+  editableShareText?: boolean
+  includeTextInShareUrl?: boolean
   previewImageUrl?: string | null
   code?: string | null
   note?: string | null
@@ -20,6 +22,17 @@ type ShareDialogProps = {
 function openPopup(url: string) {
   if (typeof window === 'undefined') return
   window.open(url, '_blank', 'noopener,noreferrer,width=720,height=720')
+}
+
+function buildTextAwareShareUrl(shareUrl: string, shareText: string) {
+  if (!shareText.trim()) return shareUrl
+  try {
+    const url = new URL(shareUrl)
+    url.searchParams.set('caption', shareText.trim())
+    return url.toString()
+  } catch {
+    return shareUrl
+  }
 }
 
 function FacebookIcon({ className }: { className?: string }) {
@@ -61,6 +74,8 @@ export function ShareDialog({
   description,
   shareUrl,
   shareText,
+  editableShareText = false,
+  includeTextInShareUrl = false,
   previewImageUrl = null,
   code = null,
   note = null,
@@ -68,10 +83,18 @@ export function ShareDialog({
   const { t } = useI18n()
   const [copyLinkState, setCopyLinkState] = useState<'idle' | 'copied'>('idle')
   const [copyTextState, setCopyTextState] = useState<'idle' | 'copied'>('idle')
+  const [draftShareText, setDraftShareText] = useState(shareText)
 
   const canNativeShare =
     typeof window !== 'undefined' &&
     typeof (navigator as Navigator & { share?: Navigator['share'] }).share === 'function'
+
+  useEffect(() => {
+    if (!open) return
+    setDraftShareText(shareText)
+    setCopyLinkState('idle')
+    setCopyTextState('idle')
+  }, [open, shareText])
 
   useEffect(() => {
     if (!open) return
@@ -80,13 +103,21 @@ export function ShareDialog({
     return () => { document.body.style.overflow = previous }
   }, [open])
 
-  const fullShareText = useMemo(() => `${shareText}\n${shareUrl}`.trim(), [shareText, shareUrl])
+  const effectiveShareText = editableShareText ? draftShareText : shareText
+  const effectiveShareUrl = useMemo(
+    () => includeTextInShareUrl ? buildTextAwareShareUrl(shareUrl, effectiveShareText) : shareUrl,
+    [effectiveShareText, includeTextInShareUrl, shareUrl]
+  )
+  const fullShareText = useMemo(
+    () => `${effectiveShareText}\n${effectiveShareUrl}`.trim(),
+    [effectiveShareText, effectiveShareUrl]
+  )
 
   if (!open || typeof document === 'undefined') return null
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(shareUrl)
+      await navigator.clipboard.writeText(effectiveShareUrl)
       setCopyLinkState('copied')
       window.setTimeout(() => setCopyLinkState('idle'), 1800)
     } catch { /* no-op */ }
@@ -102,7 +133,7 @@ export function ShareDialog({
 
   const handleNativeShare = async () => {
     if (!navigator.share) return
-    try { await navigator.share({ title, text: shareText, url: shareUrl }) } catch { /* user cancelled */ }
+    try { await navigator.share({ title, text: effectiveShareText, url: effectiveShareUrl }) } catch { /* user cancelled */ }
   }
 
   const platforms = [
@@ -111,7 +142,7 @@ export function ShareDialog({
       label: 'Facebook',
       colorCls: 'bg-[#1877F2]/90 hover:bg-[#1877F2] border-[#1877F2]/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]',
       icon: <FacebookIcon className="h-5 w-5 shrink-0" />,
-      action: () => openPopup(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`),
+      action: () => openPopup(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(effectiveShareUrl)}`),
     },
     {
       id: 'x',
@@ -120,7 +151,7 @@ export function ShareDialog({
       icon: <XIcon className="h-5 w-5 shrink-0" />,
       action: () =>
         openPopup(
-          `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`
+          `https://twitter.com/intent/tweet?text=${encodeURIComponent(effectiveShareText)}&url=${encodeURIComponent(effectiveShareUrl)}`
         ),
     },
     {
@@ -174,13 +205,15 @@ export function ShareDialog({
 
           {/* Preview image */}
           {previewImageUrl ? (
-            /* Shared previews may be signed Supabase URLs or generated route images; keep native img to avoid Next image proxy caching expired URLs. */
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={previewImageUrl}
-              alt={title}
-              className="max-h-44 w-full rounded-2xl border border-white/60 bg-amber-50/40 object-cover shadow-sm"
-            />
+            <div className="flex max-h-72 min-h-48 w-full items-center justify-center overflow-hidden rounded-2xl border border-white/60 bg-amber-50/40 shadow-sm">
+              {/* Shared previews may be signed Supabase URLs or generated route images; keep native img to avoid Next image proxy caching expired URLs. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewImageUrl}
+                alt={title}
+                className="h-full max-h-72 w-full object-contain"
+              />
+            </div>
           ) : null}
 
           {/* Code badge */}
@@ -212,8 +245,18 @@ export function ShareDialog({
                 {copyTextState === 'copied' ? t('share.linkCopied') : t('share.copyAll')}
               </button>
             </div>
-            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">{shareText}</p>
-            <p className="mt-1 text-xs font-medium text-amber-600">{shareUrl}</p>
+            {editableShareText ? (
+              <textarea
+                value={draftShareText}
+                onChange={(event) => setDraftShareText(event.target.value)}
+                rows={5}
+                maxLength={480}
+                className="mt-2 w-full resize-none rounded-xl border border-white/70 bg-white/55 px-3 py-2 text-sm leading-6 text-gray-700 outline-none transition focus:border-amber-300 focus:bg-white/80 focus:ring-2 focus:ring-amber-200/60"
+              />
+            ) : (
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">{effectiveShareText}</p>
+            )}
+            <p className="mt-1 break-all text-xs font-medium text-amber-600">{effectiveShareUrl}</p>
           </div>
 
           {/* Platform buttons */}
@@ -235,7 +278,7 @@ export function ShareDialog({
           {/* Link row */}
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1 truncate rounded-xl border border-white/55 bg-white/40 px-3 py-2.5 text-xs text-slate-400 backdrop-blur-sm">
-              {shareUrl}
+              {effectiveShareUrl}
             </div>
             <button
               type="button"
