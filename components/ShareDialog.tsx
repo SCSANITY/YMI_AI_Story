@@ -279,21 +279,16 @@ export function ShareDialog({
 
           {/* Preview image */}
           {previewImageUrl ? (
-            <div className="flex justify-center px-3 pb-1 pt-2">
-              <div className="relative w-full max-w-[230px]">
-                <div className="absolute left-3 top-3 h-full w-full rounded-[1.45rem] bg-gradient-to-br from-amber-200/65 to-orange-300/35 blur-[2px]" />
-                <div className="absolute -right-2 top-5 h-[calc(100%-2.5rem)] w-3 rounded-r-xl bg-gradient-to-b from-orange-200 via-amber-100 to-orange-300 shadow-[inset_1px_0_0_rgba(255,255,255,0.65)]" />
-                <div className="relative aspect-[3/4] overflow-hidden rounded-[1.45rem] border border-white/75 bg-gradient-to-br from-amber-50 to-orange-50 p-2 shadow-[0_18px_42px_rgba(146,64,14,0.22),inset_0_1px_0_rgba(255,255,255,0.9)]">
-                  <div className="h-full w-full overflow-hidden rounded-[1.05rem] bg-white shadow-[inset_0_0_0_1px_rgba(251,191,36,0.18)]">
-                    {/* Shared previews may be signed Supabase URLs or generated route images; keep native img to avoid Next image proxy caching expired URLs. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={previewImageUrl}
-                      alt={title}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                </div>
+            <div className="flex justify-center px-2 pb-1 pt-2">
+              <div className="book-cover-motion relative w-full max-w-[250px]">
+                {/* Shared previews may be signed Supabase URLs or generated route images; keep native img to avoid Next image proxy caching expired URLs. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewImageUrl}
+                  alt={title}
+                  className="book-cover-img block w-full select-none drop-shadow-[8px_20px_34px_rgba(92,43,10,0.28)]"
+                />
+                <div aria-hidden="true" className="card-ripple-ring" />
               </div>
             </div>
           ) : null}
