@@ -1,6 +1,76 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import PersonalizePage from '@/components/PersonalizePage';
 import { getCustomizeAccessSettings } from '@/lib/customize-access-server'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { parseTemplateAmount, templateStorageUrl, type TemplateCatalogRow } from '@/lib/book-catalog'
+import { noIndexMetadata, publicPageMetadata } from '@/lib/seo'
+
+function clampDescription(value: string) {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= 155) return normalized
+  return `${normalized.slice(0, 152).trim()}...`
+}
+
+function formatUsdPrice(value: unknown) {
+  const amount = parseTemplateAmount(value)
+  if (amount === null) return null
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  }).format(amount)
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ bookID: string }>;
+}): Promise<Metadata> {
+  const { bookID } = await params
+  const templateId = String(bookID || '').trim()
+
+  if (!templateId) {
+    return {
+      title: 'Personalized Storybook',
+      ...noIndexMetadata,
+    }
+  }
+
+  const { data } = await supabaseAdmin
+    .from('templates')
+    .select('template_id, name, description, inner_description, cover_image_path, normalized_cover_image_path, price_cents, is_active, is_coming_soon')
+    .eq('template_id', templateId)
+    .maybeSingle()
+
+  const row = data as TemplateCatalogRow | null
+
+  if (!row?.template_id || row.is_active === false) {
+    return {
+      title: 'Personalized Storybook',
+      ...noIndexMetadata,
+    }
+  }
+
+  const title = String(row.name || templateId).trim()
+  const price = formatUsdPrice(row.price_cents)
+  const baseDescription =
+    String(row.description || row.inner_description || '').trim() ||
+    `Create a personalized YMI Story picture book where your child becomes the hero.`
+  const priceSuffix = price ? ` Starting at ${price}.` : ''
+  const description = clampDescription(`${baseDescription}${priceSuffix}`)
+  const image = templateStorageUrl(row.normalized_cover_image_path || row.cover_image_path)
+
+  return {
+    ...publicPageMetadata({
+      title: `${title} - Storybook`,
+      description,
+      path: `/personalize/${encodeURIComponent(templateId)}`,
+      image: image || undefined,
+    }),
+    robots: row.is_coming_soon ? noIndexMetadata.robots : undefined,
+  }
+}
 
 function CustomizeBlockedPage({ message }: { message: string }) {
   return (

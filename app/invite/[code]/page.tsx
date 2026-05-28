@@ -3,6 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildAbsoluteUrl } from '@/lib/site-url'
+import { noIndexMetadata } from '@/lib/seo'
 import { InviteCodeClient } from './InviteCodeClient'
 
 async function loadInviteData(code: string) {
@@ -35,6 +36,7 @@ export async function generateMetadata(
   return {
     title: invite?.code ? `Use ${invite.code} on your first YMI order` : 'YMI Invite',
     description: 'Unlock $5 off your first personalized YMI storybook.',
+    robots: noIndexMetadata.robots,
     openGraph: imageUrl
       ? {
           title: invite?.code ? `Use ${invite.code} on your first YMI order` : 'YMI Invite',

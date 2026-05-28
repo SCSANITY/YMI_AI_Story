@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildAbsoluteUrl } from '@/lib/site-url'
+import { noIndexMetadata } from '@/lib/seo'
 import { CustomizeAccessButton } from '@/components/CustomizeAccessButton'
 
 type TemplateRelation = { name?: string | null } | { name?: string | null }[] | null
@@ -59,6 +60,7 @@ export async function generateMetadata(
     return {
       title: 'YMI Story Preview',
       description: caption,
+      robots: noIndexMetadata.robots,
     }
   }
 
@@ -73,6 +75,7 @@ export async function generateMetadata(
   return {
     title,
     description,
+    robots: noIndexMetadata.robots,
     openGraph: {
       title,
       description,

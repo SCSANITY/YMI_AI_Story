@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 ## Current State
 
@@ -55,6 +55,7 @@ Active short-term tracker:
 - Completed full Supabase DB/Storage architecture scan and call-chain mapping.
 - Admin dashboard restructured from single-page monolith to multi-route App Router architecture (see Admin Architecture section below).
 - Magic Attributes feature shipped: `templates.magic_attributes` JSONB column added to DB; `normalizeMagicAttributes()` parser added to `book-catalog.ts`; `MagicAttribute` type added to `types/index.ts`; list API and detail API both return the field; Customize page replaces hardcoded Kindness/Courage with dynamic per-book attribute bars; six standard categories have i18n translations in EN/ZH/JA/ES/KO; custom free-text labels display as-is with a default icon.
+- SEO metadata foundation shipped for the public site: root App Router metadata now has a non-empty title, description, metadataBase, canonical www URL, OG/Twitter defaults, and favicon declarations; public pages have unique metadata; product pages generate metadata from Supabase templates; anonymous non-indexable pages use meta noindex; private/admin/API areas are excluded in `robots.txt`; `sitemap.xml` and `robots.txt` are generated from the canonical www domain.
 
 ## Current Owner-Managed Work
 
@@ -75,6 +76,7 @@ High priority before internal test:
 - Run one full real-mode preview with RunPod.
 - Run one full real-mode final job with all pages.
 - Perform Admin approve/release and confirm final PDF delivery email.
+- After production deploy, submit `https://www.ymistory.com/` and `https://www.ymistory.com/sitemap.xml` in Google Search Console to refresh the stale Untitled/favicon search result snapshot.
 
 Medium priority:
 - Confirm production Supabase Storage policies for `app-templates` and `raw-private`.
@@ -99,6 +101,7 @@ Code quality / maintainability:
 - There are still many lint warnings; not a current blocker, but should be cleaned in a focused pass.
 - Some product/content pages may still contain placeholder/demo wording.
 - Admin rerun UI is reserved/disabled for a future random-seed rerun flow.
+- SEO metadata should stay aligned with route ownership: public marketing/catalog pages may be indexed; private areas should be excluded with `robots.txt`; anonymous but non-indexable pages should remain crawlable with meta noindex so crawlers can actually see the directive. Do not rely on `robots.txt` for API security; API routes still require their own auth/secret checks.
 
 ## Known Risks And Current Judgment
 

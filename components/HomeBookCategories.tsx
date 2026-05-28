@@ -86,7 +86,7 @@ function getCategoryBooks(allBooks: Book[], category: HomeBookCategory): Book[] 
 
 function CategoryBanner({ banner }: { banner: NonNullable<HomeBookCategory['afterBanner']> }) {
   return (
-    <div className="relative left-1/2 my-10 w-screen -translate-x-1/2 overflow-hidden md:my-14">
+    <div className="relative left-1/2 mt-10 mb-0 w-screen -translate-x-1/2 overflow-hidden md:mt-14">
       <div className={`relative w-full overflow-hidden shadow-[0_18px_50px_rgba(251,146,60,0.12)] ${banner.aspectClassName}`}>
         <picture className="block h-full w-full">
           {banner.mobileSrc ? <source media="(max-width: 767px)" srcSet={banner.mobileSrc} /> : null}
@@ -124,7 +124,7 @@ export function HomeBookCategories() {
   }
 
   return (
-    <section className="page-surface page-surface--flush-bottom relative py-12 md:py-20">
+    <section className="page-surface page-surface--flush-bottom relative pt-12 pb-10 md:pt-20 md:pb-14">
       <div className="container mx-auto min-w-0 px-4 md:px-6 lg:px-12">
         <div className="mx-auto mb-10 max-w-4xl text-center md:mb-14">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-500">
@@ -144,7 +144,7 @@ export function HomeBookCategories() {
 
             return (
               <div key={category.titleKey}>
-                <div className="mb-5 flex flex-col gap-3 md:mb-7 md:flex-row md:items-end md:justify-between">
+                <div className="mb-5 flex flex-row items-end justify-between gap-3 md:mb-7">
                   <div>
                     <h3 className="font-title text-2xl text-gray-900 md:text-3xl">
                       {t(category.titleKey)}

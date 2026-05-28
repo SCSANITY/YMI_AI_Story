@@ -1,6 +1,6 @@
 # YMI Story System Architecture
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 ## Product Scope
 
@@ -82,6 +82,17 @@ Important customer flows:
 - `app/checkout/success/page.tsx`
 - `app/my-books/page.tsx`
 - `app/orders/[orderID]/page.tsx`
+
+SEO and indexability:
+- Root App Router metadata lives in `app/layout.tsx`.
+- Shared SEO constants/helpers live in `src/lib/seo.ts`; canonical production host is `https://www.ymistory.com`.
+- Public marketing/catalog routes have unique metadata and canonical URLs.
+- Product metadata for `/personalize/[bookID]` is generated from Supabase `templates` so title, description, price, and cover image follow the live catalog.
+- `app/sitemap.ts` emits public static routes plus active, non-coming-soon template pages.
+- `app/robots.ts` allows public crawling, references the sitemap, and disallows admin/API/account/order-library/private areas to avoid crawl-budget waste.
+- API route security does not depend on `robots.txt`; robots rules are a crawler hint only. Sensitive API routes must enforce their own auth, service-role, admin, webhook signature, or internal-secret checks.
+- Anonymous pages that should not be indexed, such as cart/checkout/success/maintenance/impact-placeholder/invite/share-preview/support-order, stay crawlable and use meta noindex so crawlers can read the directive.
+- A default 1200x630 brand OG image lives at `public/og/ymi-story-og.png`.
 
 Important API routes:
 - `app/api/templates/route.ts`
@@ -186,6 +197,7 @@ Vercel:
 - Hosts the Next.js web/API app.
 - Production site URL should be `https://www.ymistory.com`.
 - Internal API secret must match the worker online environment.
+- SEO metadata, sitemap, robots, and canonical URLs assume the www production host; non-www traffic should continue redirecting to www.
 
 Mediapipe:
 - Browser-side face quality/detection assets live under `ymi-books-web-1.0/public/mediapipe`.
