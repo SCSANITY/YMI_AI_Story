@@ -93,6 +93,7 @@ SEO and indexability:
 - API route security does not depend on `robots.txt`; robots rules are a crawler hint only. Sensitive API routes must enforce their own auth, service-role, admin, webhook signature, or internal-secret checks.
 - Anonymous pages that should not be indexed, such as cart/checkout/success/maintenance/impact-placeholder/invite/share-preview/support-order, stay crawlable and use meta noindex so crawlers can read the directive.
 - A default 1200x630 brand OG image lives at `public/og/ymi-story-og.png`.
+- Deployment/Search Console status as of 2026-05-28: SEO code is deployed on `https://www.ymistory.com`; live homepage has the expected title, canonical, and default OG image; live `sitemap.xml` exposes 19 URLs; live `robots.txt` references the sitemap. Search Console domain property is DNS-verified, sitemap submitted, and homepage plus `/books` have been manually requested for reindexing. Google may still show older crawl diagnostics until recrawl completes.
 
 Important API routes:
 - `app/api/templates/route.ts`

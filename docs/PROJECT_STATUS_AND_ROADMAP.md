@@ -56,6 +56,7 @@ Active short-term tracker:
 - Admin dashboard restructured from single-page monolith to multi-route App Router architecture (see Admin Architecture section below).
 - Magic Attributes feature shipped: `templates.magic_attributes` JSONB column added to DB; `normalizeMagicAttributes()` parser added to `book-catalog.ts`; `MagicAttribute` type added to `types/index.ts`; list API and detail API both return the field; Customize page replaces hardcoded Kindness/Courage with dynamic per-book attribute bars; six standard categories have i18n translations in EN/ZH/JA/ES/KO; custom free-text labels display as-is with a default icon.
 - SEO metadata foundation shipped for the public site: root App Router metadata now has a non-empty title, description, metadataBase, canonical www URL, OG/Twitter defaults, and favicon declarations; public pages have unique metadata; product pages generate metadata from Supabase templates; anonymous non-indexable pages use meta noindex; private/admin/API areas are excluded in `robots.txt`; `sitemap.xml` and `robots.txt` are generated from the canonical www domain.
+- SEO deployment/Search Console status: commit `b8460a1` has been pushed and deployed to `https://www.ymistory.com`; live homepage exposes the new title/canonical/default OG image; live `sitemap.xml` is reachable with 19 URLs; live `robots.txt` references the sitemap. Google Search Console domain property `ymistory.com` was verified by DNS TXT, `https://www.ymistory.com/sitemap.xml` was submitted, and homepage plus `/books` were manually requested for reindexing. Current state: waiting for Google recrawl/index refresh.
 
 ## Current Owner-Managed Work
 
@@ -76,7 +77,7 @@ High priority before internal test:
 - Run one full real-mode preview with RunPod.
 - Run one full real-mode final job with all pages.
 - Perform Admin approve/release and confirm final PDF delivery email.
-- After production deploy, submit `https://www.ymistory.com/` and `https://www.ymistory.com/sitemap.xml` in Google Search Console to refresh the stale Untitled/favicon search result snapshot.
+- Monitor Google Search Console until submitted sitemap processing changes to success and the stale pre-SEO `Untitled` / favicon snapshot is replaced by the recrawled homepage result.
 
 Medium priority:
 - Confirm production Supabase Storage policies for `app-templates` and `raw-private`.
