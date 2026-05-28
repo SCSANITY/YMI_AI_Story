@@ -3,7 +3,7 @@ import Stripe from 'stripe'
 import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orderFulfillment'
-import { finalizeReferralRewardForPaidOrder } from '@/lib/referrals'
+import { markOrderDiscountsPaid } from '@/lib/discounts'
 
 export const runtime = 'nodejs'
 
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       amount,
       currency,
     })
-    await finalizeReferralRewardForPaidOrder(orderId)
+    await markOrderDiscountsPaid(orderId)
 
     return NextResponse.json({ ok: true, finalized: true, order: result })
   } catch (error: any) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
-import { releaseOrderDiscountCode } from '@/lib/referrals'
+import { releaseOrderDiscount } from '@/lib/discounts'
 
 export async function POST(request: Request) {
   const body = await request.json()
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
   if (orderId) {
     try {
-      await releaseOrderDiscountCode(orderId)
+      await releaseOrderDiscount({ orderId })
     } catch (releaseError: any) {
       return NextResponse.json(
         { error: releaseError?.message || 'Failed to release order discount' },

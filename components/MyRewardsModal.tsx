@@ -13,6 +13,7 @@ type RewardVoucher = {
   status: 'active' | 'redeemed' | 'expired' | 'cancelled'
   expiresAt: string
   redeemedAt?: string | null
+  label?: string
 }
 
 type RewardVoucherGroups = {
@@ -61,7 +62,9 @@ function VoucherSection({
                     <Ticket className="h-4 w-4" />
                   </div>
                   <div>
-                    <div className="text-base font-semibold text-slate-900">$ {voucher.amountUsd.toFixed(2)}</div>
+                    <div className="text-base font-semibold text-slate-900">
+                      {voucher.label || `$ ${voucher.amountUsd.toFixed(2)}`}
+                    </div>
                     <div className="text-xs text-slate-500">
                       {status === 'redeemed' && voucher.redeemedAt
                         ? t('rewards.redeemedOn', {

@@ -8,6 +8,7 @@ type OrderDisplayInput = {
   baseUsdTotal: number
   discountUsd?: number | null
   shippingUsd?: number | null
+  shippingDiscountUsd?: number | null
   checkoutCurrency?: unknown
   paymentAmount?: number | null
   paymentCurrency?: unknown
@@ -31,6 +32,7 @@ export function getOrderDisplayTotal({
   baseUsdTotal,
   discountUsd,
   shippingUsd,
+  shippingDiscountUsd,
   checkoutCurrency,
   paymentAmount,
   paymentCurrency,
@@ -41,7 +43,11 @@ export function getOrderDisplayTotal({
 
   const discount = Math.max(0, Number(discountUsd ?? 0))
   const shipping = Math.max(0, Number(shippingUsd ?? 0))
-  return convertUsdToCurrency(Math.max(0, baseUsdTotal - discount + shipping), getOrderCheckoutCurrency(checkoutCurrency))
+  const shippingDiscount = Math.min(shipping, Math.max(0, Number(shippingDiscountUsd ?? 0)))
+  return convertUsdToCurrency(
+    Math.max(0, baseUsdTotal - discount + Math.max(0, shipping - shippingDiscount)),
+    getOrderCheckoutCurrency(checkoutCurrency)
+  )
 }
 
 export function getDisplayUnitPrice(

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendUnpaidReminderEmail } from '@/lib/email'
+import { releaseStaleDiscountRedemptions } from '@/lib/discounts'
 
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
 const CRON_SECRET = process.env.CRON_SECRET
@@ -139,6 +140,14 @@ async function runCron(request: Request) {
     let sent = 0
     let failed = 0
     let skipped = 0
+    let releasedDiscounts = 0
+
+    try {
+      const staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      releasedDiscounts = await releaseStaleDiscountRedemptions(staleBefore)
+    } catch (releaseError) {
+      console.error('[cron-unpaid] failed to release stale discounts', releaseError)
+    }
 
     for (const schedule of dueSchedules) {
       const order = orderMap.get(schedule.order_id)
@@ -213,6 +222,7 @@ async function runCron(request: Request) {
       sent,
       failed,
       skipped,
+      releasedDiscounts,
       repeatReminderDays: REPEAT_REMINDER_DAYS,
     })
   } catch (error: unknown) {

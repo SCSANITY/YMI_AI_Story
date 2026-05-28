@@ -8,12 +8,14 @@ import {
   FileText as FileTextIcon,
   LayoutDashboard,
   Megaphone,
+  TicketPercent,
   ToggleLeft,
 } from 'lucide-react'
 
 const navItems = [
   { label: 'Final Review',    icon: FileTextIcon,    href: '/admin/finals' },
   { label: 'Announcements',   icon: Megaphone,       href: '/admin/announcements' },
+  { label: 'Discounts',       icon: TicketPercent,   href: '/admin/discounts' },
   { label: 'Service Control', icon: ToggleLeft,      href: '/admin/service' },
   { label: 'Analytics',       icon: BarChart3,       href: '/admin/analytics',     soon: true },
   { label: 'Banner Manager',  icon: LayoutDashboard, href: '/admin/banner',         soon: true },
@@ -29,7 +31,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
   const pathname = usePathname()
 
   return (
-    <aside className="flex flex-col border-b border-white/10 bg-slate-950/80 p-4 backdrop-blur-2xl lg:min-h-screen lg:border-b-0 lg:border-r lg:p-5">
+    <aside className="flex flex-col border-b border-white/10 bg-slate-950/80 p-4 backdrop-blur-2xl lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r lg:p-5">
       {/* Logo / brand */}
       <div className="flex items-center gap-3 rounded-3xl bg-white/[0.06] p-4">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-lg font-black text-slate-950">
@@ -75,8 +77,8 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
         })}
       </nav>
 
-      {/* Admin identity — pinned to sidebar bottom */}
-      <div className="mt-6 border-t border-white/[0.08] pt-4">
+      {/* Admin identity - pinned to the shared sidebar bottom */}
+      <div className="mt-auto border-t border-white/[0.08] pt-4">
         <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] px-3 py-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/50 to-orange-500/50 text-sm font-bold text-white">
             {adminName[0]?.toUpperCase() ?? 'A'}

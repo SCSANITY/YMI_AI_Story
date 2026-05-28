@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { listRewardVouchersForCustomer } from '@/lib/referrals'
+import { getDiscountLabel, listCheckoutVouchersForCustomer } from '@/lib/discounts'
 
 export async function GET(request: Request) {
   try {
@@ -32,15 +32,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const vouchers = await listRewardVouchersForCustomer(customer.customer_id)
+    const vouchers = await listCheckoutVouchersForCustomer({
+      customerId: customer.customer_id,
+      email: user.email ?? null,
+    })
+    const active = vouchers.map((voucher) => ({
+      couponCodeId: voucher.instrumentId,
+      code: voucher.name,
+      amountUsd:
+        voucher.effectType === 'fixed_amount'
+          ? Number(voucher.effectConfig.amount_usd ?? 0)
+          : 0,
+      status: 'active',
+      expiresAt: voucher.expiresAt ?? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      label: getDiscountLabel(voucher),
+      effectType: voucher.effectType,
+      stackingGroup: voucher.stackingGroup,
+    }))
 
     return NextResponse.json({
       ok: true,
       customerId: customer.customer_id,
-      active: vouchers.filter((voucher) => voucher.status === 'active'),
-      redeemed: vouchers.filter((voucher) => voucher.status === 'redeemed'),
-      expired: vouchers.filter((voucher) => voucher.status === 'expired'),
-      cancelled: vouchers.filter((voucher) => voucher.status === 'cancelled'),
+      active,
+      redeemed: [],
+      expired: [],
+      cancelled: [],
     })
   } catch (error: any) {
     return NextResponse.json(

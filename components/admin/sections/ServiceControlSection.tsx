@@ -4,16 +4,12 @@ import React, { useEffect, useState } from 'react'
 import { Save } from 'lucide-react'
 import { DEFAULT_CUSTOMIZE_ACCESS_MESSAGE, type CustomizeAccessSettings } from '@/lib/customize-access'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 type CreatorPromoConfig = {
   enabled: boolean
   suffix: string
   discount_amount_usd: number
   first_order_only: boolean
 }
-
-// ── ServiceControlSection ─────────────────────────────────────────────────────
 
 export function ServiceControlSection() {
   const [customizeAccess, setCustomizeAccess] = useState<CustomizeAccessSettings>({
@@ -34,6 +30,7 @@ export function ServiceControlSection() {
 
   useEffect(() => {
     let active = true
+
     const loadSettings = async () => {
       setCustomizeAccessLoading(true)
       try {
@@ -50,12 +47,15 @@ export function ServiceControlSection() {
         const data = await accessResponse.json().catch(() => ({}))
         const promoData = await promoResponse.json().catch(() => ({}))
         if (!active) return
-        if (!accessResponse.ok) return
-        const next = data?.customizeAccess
-        setCustomizeAccess({
-          enabled: Boolean(next?.enabled ?? true),
-          message: String(next?.message ?? DEFAULT_CUSTOMIZE_ACCESS_MESSAGE),
-        })
+
+        if (accessResponse.ok) {
+          const next = data?.customizeAccess
+          setCustomizeAccess({
+            enabled: Boolean(next?.enabled ?? true),
+            message: String(next?.message ?? DEFAULT_CUSTOMIZE_ACCESS_MESSAGE),
+          })
+        }
+
         if (promoResponse.ok && promoData?.config) {
           setCreatorPromoConfig({
             enabled: Boolean(promoData.config.enabled ?? true),
@@ -137,7 +137,6 @@ export function ServiceControlSection() {
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{message}</div>
       ) : null}
 
-      {/* ── Customize Access ── */}
       <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -159,7 +158,7 @@ export function ServiceControlSection() {
               }`}
             >
               <span className={`h-2 w-2 rounded-full ${customizeAccess.enabled ? 'bg-white' : 'bg-slate-400'}`} />
-              {customizeAccessSaving ? 'Saving...' : customizeAccess.enabled ? 'Open — Close access' : 'Closed — Open access'}
+              {customizeAccessSaving ? 'Saving...' : customizeAccess.enabled ? 'Open - Close access' : 'Closed - Open access'}
             </button>
             <p className="text-[10px] text-slate-500">
               {customizeAccess.enabled ? 'Users can enter Customize.' : 'Users see the private beta notice.'}
@@ -173,7 +172,6 @@ export function ServiceControlSection() {
         </div>
       </section>
 
-      {/* ── Creator Promo ── */}
       <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>

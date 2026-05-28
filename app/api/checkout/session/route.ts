@@ -7,6 +7,11 @@ import {
   normalizeCheckoutCurrency,
   toMinorUnit,
 } from '@/lib/locale-pricing'
+import {
+  allocateProductDiscountToLineItems,
+  getOrderDiscountSummary,
+  refreshAppliedOrderDiscounts,
+} from '@/lib/discounts'
 
 type SessionItemInput = {
   id?: string
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('order_id, order_status, discount_amount_usd, applied_discount_code, applied_discount_type')
+      .select('order_id, order_status, discount_amount_usd, shipping_discount_amount_usd, applied_discount_code, applied_discount_type, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
       .eq('order_id', orderId)
       .maybeSingle()
     if (orderError || !order?.order_id) {
@@ -80,6 +85,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to update order profile' }, { status: 500 })
     }
 
+    if (order.applied_product_discount_instrument_id || order.applied_shipping_discount_instrument_id) {
+      await refreshAppliedOrderDiscounts({
+        orderId,
+        productInstrumentId: order.applied_product_discount_instrument_id ?? null,
+        shippingInstrumentId: order.applied_shipping_discount_instrument_id ?? null,
+        customerId,
+        email,
+      })
+    }
+
+    const discountSummary = await getOrderDiscountSummary(orderId)
+
     let cartItemsQuery = supabaseAdmin
       .from('cart_items')
       .select(
@@ -105,31 +122,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
     }
 
-    const lineItems: any[] = cartItems.map((item: any) => {
+    const discountedItems = allocateProductDiscountToLineItems(
+      cartItems.map((item: any) => {
+        const qty = Math.max(1, Number(item.quantity ?? 1))
+        const unitPriceUsd = Math.max(0, Number(item.price_at_purchase ?? 0))
+        const templateId = item?.creations?.template_id ?? 'custom-story-book'
+        const title = item?.creations?.templates?.name ?? `Story Book (${templateId})`
+        return {
+          id: item.cart_item_id,
+          name: qty > 1 ? `${title} x${qty}` : title,
+          quantity: qty,
+          unitPriceUsd,
+          metadata: {
+            template_id: String(templateId),
+            cart_item_id: String(item.cart_item_id),
+          },
+        }
+      }),
+      discountSummary.productDiscountAmountUsd
+    )
+
+    const lineItems: any[] = discountedItems
+      .filter((item) => item.discountedLineTotalUsd > 0)
+      .map((item) => {
       const qty = Math.max(1, Number(item.quantity ?? 1))
-      const unitPriceUsd = Math.max(0, Number(item.price_at_purchase ?? 0))
-      const unitPrice = convertUsdToCurrency(unitPriceUsd, currency)
-      const amountMinor = toMinorUnit(unitPrice, currency)
-      const templateId = item?.creations?.template_id ?? 'custom-story-book'
-      const title = item?.creations?.templates?.name ?? `Story Book (${templateId})`
+      const lineTotal = convertUsdToCurrency(item.discountedLineTotalUsd, currency)
+      const amountMinor = toMinorUnit(lineTotal, currency)
       return {
-        quantity: qty,
+        quantity: 1,
         price_data: {
           currency: currency.toLowerCase(),
           unit_amount: amountMinor,
           product_data: {
-            name: title,
-            metadata: {
-              template_id: templateId,
-              cart_item_id: item.cart_item_id,
-            },
+            name: qty > 1 && !item.name.endsWith(`x${qty}`) ? `${item.name} x${qty}` : item.name,
+            metadata: item.metadata ?? {},
           },
         },
       }
     })
 
-    if (shippingAmountUsd > 0) {
-      const shippingAmount = convertUsdToCurrency(shippingAmountUsd, currency)
+    const chargeableShippingUsd = Math.max(0, shippingAmountUsd - discountSummary.shippingDiscountAmountUsd)
+    if (chargeableShippingUsd > 0) {
+      const shippingAmount = convertUsdToCurrency(chargeableShippingUsd, currency)
       const shippingAmountMinor = toMinorUnit(shippingAmount, currency)
       if (shippingAmountMinor > 0) {
         lineItems.push({
@@ -151,41 +185,18 @@ export async function POST(request: Request) {
       }
     }
 
+    if (lineItems.length === 0) {
+      return NextResponse.json({ error: 'Zero-total checkout is not supported yet' }, { status: 400 })
+    }
+
     const baseUrl = getBaseUrl(request)
     const stripe = getStripeServer()
-    const discountAmountUsd = Math.max(0, Number(order.discount_amount_usd ?? 0))
-    let stripeDiscounts: { coupon: string }[] | undefined
-
-    if (discountAmountUsd > 0) {
-      const amountOffMajor = convertUsdToCurrency(discountAmountUsd, currency)
-      const amountOffMinor = toMinorUnit(amountOffMajor, currency)
-      if (amountOffMinor > 0) {
-        const coupon = await stripe.coupons.create({
-          amount_off: amountOffMinor,
-          currency: currency.toLowerCase(),
-          duration: 'once',
-          name:
-            order.applied_discount_type === 'coupon'
-              ? `YMI Reward Voucher ${order.applied_discount_code || ''}`.trim()
-              : order.applied_discount_type === 'creator_promo'
-                ? `YMI Creator Promo ${order.applied_discount_code || ''}`.trim()
-              : `YMI Invite Code ${order.applied_discount_code || ''}`.trim(),
-          metadata: {
-            order_id: orderId,
-            discount_code: String(order.applied_discount_code || ''),
-            discount_type: String(order.applied_discount_type || ''),
-          },
-        })
-        stripeDiscounts = [{ coupon: coupon.id }]
-      }
-    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       client_reference_id: orderId,
       customer_email: email,
       line_items: lineItems,
-      discounts: stripeDiscounts,
       success_url: `${baseUrl}/checkout/success?orderId=${encodeURIComponent(orderId)}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/checkout?orderId=${encodeURIComponent(orderId)}&step=payment`,
       metadata: {
@@ -196,7 +207,8 @@ export async function POST(request: Request) {
         checkout_currency: currency,
         applied_discount_code: String(order.applied_discount_code || ''),
         applied_discount_type: String(order.applied_discount_type || ''),
-        discount_amount_usd: String(discountAmountUsd || 0),
+        discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
+        shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
         shipping_amount_usd: String(shippingAmountUsd || 0),
       },
       payment_intent_data: {
@@ -205,7 +217,8 @@ export async function POST(request: Request) {
           checkout_currency: currency,
           applied_discount_code: String(order.applied_discount_code || ''),
           applied_discount_type: String(order.applied_discount_type || ''),
-          discount_amount_usd: String(discountAmountUsd || 0),
+          discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
+          shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
           shipping_amount_usd: String(shippingAmountUsd || 0),
         },
       },

@@ -431,13 +431,15 @@ export default function OrderDetailPage() {
               {items.map((item) => (
                 <div key={item.cart_item_id} className="flex items-center gap-4">
                   <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-100 shadow-md shadow-black/10">
-                    <Image
-                      src={item.cover_url || '/Display.png'}
-                      alt={item.template_name || 'Order item'}
-                      fill
-                      sizes="64px"
-                      className="object-cover"
-                    />
+                    {item.cover_url ? (
+                      <Image
+                        src={item.cover_url}
+                        alt={item.template_name || 'Order item'}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    ) : null}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-900 leading-snug">

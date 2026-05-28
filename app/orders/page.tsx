@@ -211,13 +211,15 @@ export default function OrdersPage() {
                   className="flex items-center gap-4 text-left flex-1"
                 >
                   <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                    <Image
-                      src={order.cover_url || '/Display.png'}
-                      alt={order.first_item_name || 'Order'}
-                      fill
-                      sizes="64px"
-                      className="object-cover"
-                    />
+                    {order.cover_url ? (
+                      <Image
+                        src={order.cover_url}
+                        alt={order.first_item_name || 'Order'}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    ) : null}
                   </span>
                   <div>
                     <div className="text-xs text-gray-500 font-medium tabular-nums tracking-[0.14em]">

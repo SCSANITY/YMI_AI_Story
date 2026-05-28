@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orderFulfillment'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
-import { finalizeReferralRewardForPaidOrder } from '@/lib/referrals'
+import { markOrderDiscountsPaid, refreshAppliedOrderDiscounts } from '@/lib/discounts'
+import { templateStorageUrl } from '@/lib/book-catalog'
 import {
   getDisplayUnitPrice,
   getOrderDisplayCurrency,
@@ -114,7 +115,23 @@ export async function POST(request: Request) {
 
   const { data: discountRow } = await supabaseAdmin
     .from('orders')
-    .select('discount_amount_usd')
+    .select('discount_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
+    .eq('order_id', orderId)
+    .maybeSingle()
+
+  if (discountRow?.applied_product_discount_instrument_id || discountRow?.applied_shipping_discount_instrument_id) {
+    await refreshAppliedOrderDiscounts({
+      orderId,
+      productInstrumentId: discountRow.applied_product_discount_instrument_id ?? null,
+      shippingInstrumentId: discountRow.applied_shipping_discount_instrument_id ?? null,
+      customerId,
+      email,
+    })
+  }
+
+  const { data: refreshedDiscountRow } = await supabaseAdmin
+    .from('orders')
+    .select('discount_amount_usd, shipping_discount_amount_usd')
     .eq('order_id', orderId)
     .maybeSingle()
 
@@ -123,8 +140,15 @@ export async function POST(request: Request) {
     const quantity = Number(item.quantity ?? 1)
     return sum + price * quantity
   }, 0)
-  const discountAmountUsd = Math.max(0, Number(discountRow?.discount_amount_usd ?? 0))
-  const totalAmount = convertUsdToCurrency(Math.max(0, totalAmountUsd - discountAmountUsd + shippingAmountUsd), checkoutCurrency)
+  const discountAmountUsd = Math.max(0, Number(refreshedDiscountRow?.discount_amount_usd ?? discountRow?.discount_amount_usd ?? 0))
+  const shippingDiscountAmountUsd = Math.min(
+    shippingAmountUsd,
+    Math.max(0, Number(refreshedDiscountRow?.shipping_discount_amount_usd ?? discountRow?.shipping_discount_amount_usd ?? 0))
+  )
+  const totalAmount = convertUsdToCurrency(
+    Math.max(0, totalAmountUsd - discountAmountUsd + Math.max(0, shippingAmountUsd - shippingDiscountAmountUsd)),
+    checkoutCurrency
+  )
 
   try {
     const result = await finalizeOrderPayment({
@@ -143,7 +167,7 @@ export async function POST(request: Request) {
       cartItemIds,
       receiptItems: items,
     })
-    await finalizeReferralRewardForPaidOrder(orderId)
+    await markOrderDiscountsPaid(orderId)
     return NextResponse.json(result)
   } catch (error: any) {
     if (error?.code === 'final_queue_overloaded') {
@@ -184,6 +208,9 @@ export async function GET(request: Request) {
         applied_coupon_code_id,
         applied_referral_code_id,
         discount_amount_usd,
+        shipping_discount_amount_usd,
+        applied_product_discount_instrument_id,
+        applied_shipping_discount_instrument_id,
         shipping_amount_usd,
         shipping_rate_snapshot,
         shipping_method,
@@ -323,16 +350,23 @@ export async function GET(request: Request) {
       baseUsdTotal,
       discountUsd: Number(order.discount_amount_usd ?? 0),
       shippingUsd: Number(order.shipping_amount_usd ?? 0),
+      shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
       checkoutCurrency,
       paymentAmount: payment?.amount ?? null,
       paymentCurrency: payment?.currency,
     })
     const firstItem = items[0] ?? null
     const previewJobId = firstItem?.creations?.preview_job_id ?? null
-    const coverUrl = previewJobId ? previewUrlMap.get(previewJobId) ?? null : null
+    const coverUrl =
+      (previewJobId ? previewUrlMap.get(previewJobId) ?? null : null) ||
+      templateStorageUrl(firstItem?.creations?.templates?.cover_image_path) ||
+      null
     const detailedItems = items.map((item: any) => {
       const itemPreviewJobId = item?.creations?.preview_job_id ?? null
-      const itemCoverUrl = itemPreviewJobId ? previewUrlMap.get(itemPreviewJobId) ?? null : null
+      const itemCoverUrl =
+        (itemPreviewJobId ? previewUrlMap.get(itemPreviewJobId) ?? null : null) ||
+        templateStorageUrl(item?.creations?.templates?.cover_image_path) ||
+        null
       return {
         cart_item_id: item.cart_item_id,
         creation_id: item.creation_id,
@@ -359,6 +393,9 @@ export async function GET(request: Request) {
       applied_coupon_code_id: order.applied_coupon_code_id ?? null,
       applied_referral_code_id: order.applied_referral_code_id ?? null,
       discount_amount_usd: Number(order.discount_amount_usd ?? 0),
+      shipping_discount_amount_usd: Number(order.shipping_discount_amount_usd ?? 0),
+      applied_product_discount_instrument_id: order.applied_product_discount_instrument_id ?? null,
+      applied_shipping_discount_instrument_id: order.applied_shipping_discount_instrument_id ?? null,
       shipping_amount_usd: Number(order.shipping_amount_usd ?? 0),
       shipping_rate_snapshot: order.shipping_rate_snapshot ?? null,
       shipping_method: order.shipping_method ?? null,

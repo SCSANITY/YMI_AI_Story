@@ -226,6 +226,16 @@ export async function POST(request: Request) {
     }
   }
 
+  await supabaseAdmin
+    .from('discount_instruments')
+    .update({
+      owner_customer_id: customer.customer_id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('instrument_type', 'voucher')
+    .is('owner_customer_id', null)
+    .eq('owner_email', email)
+
   return NextResponse.json({
     customerId: customer.customer_id,
     email: customer.email,

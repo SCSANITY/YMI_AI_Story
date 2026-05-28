@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const orderQuery = supabaseAdmin
     .from('orders')
-    .select('order_id, display_id, order_status, payment_id, checkout_currency, discount_amount_usd, created_at, email')
+    .select('order_id, display_id, order_status, payment_id, checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, created_at, email')
     .order('created_at', { ascending: false })
     .limit(10)
 
@@ -83,6 +83,8 @@ export async function GET(request: Request) {
     total: getOrderDisplayTotal({
       baseUsdTotal: baseTotalsByOrder.get(order.order_id) ?? 0,
       discountUsd: Number(order.discount_amount_usd ?? 0),
+      shippingUsd: Number(order.shipping_amount_usd ?? 0),
+      shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
       checkoutCurrency: order.checkout_currency,
       paymentAmount: paymentByOrder.get(order.order_id)?.amount ?? null,
       paymentCurrency: paymentByOrder.get(order.order_id)?.currency,
@@ -90,6 +92,8 @@ export async function GET(request: Request) {
     displayTotal: getOrderDisplayTotal({
       baseUsdTotal: baseTotalsByOrder.get(order.order_id) ?? 0,
       discountUsd: Number(order.discount_amount_usd ?? 0),
+      shippingUsd: Number(order.shipping_amount_usd ?? 0),
+      shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
       checkoutCurrency: order.checkout_currency,
       paymentAmount: paymentByOrder.get(order.order_id)?.amount ?? null,
       paymentCurrency: paymentByOrder.get(order.order_id)?.currency,

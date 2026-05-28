@@ -24,16 +24,16 @@ import { canEnterCustomize } from '@/lib/customize-access-client';
 
 type CheckoutStep = 'address' | 'payment' | 'success';
 type CheckoutIdentityMode = 'guest' | 'auth';
-type AppliedDiscountKind = 'referral' | 'coupon' | 'creator_promo' | null;
 type ShippingMethodCode = 'standard' | 'speedy';
 type CheckoutPolicyModal = 'shipping' | 'refund' | 'safety' | 'impact' | null;
 type RewardVoucher = {
-  couponCodeId: string;
-  code: string;
-  amountUsd: number;
-  status: 'active' | 'redeemed' | 'expired' | 'cancelled';
-  expiresAt: string;
-  redeemedAt?: string | null;
+  instrumentId: string;
+  name: string;
+  label: string;
+  effectType: 'free_shipping' | 'fixed_amount' | 'percentage';
+  stackingGroup: 'product_discount' | 'shipping_discount';
+  expiresAt?: string | null;
+  minimumOrderAmountUsd?: number | null;
 };
 
 type CheckoutAddressForm = {
@@ -291,9 +291,12 @@ function CheckoutPageContent() {
   const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
   const [discountCodeInput, setDiscountCodeInput] = useState('');
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
-  const [appliedDiscountKind, setAppliedDiscountKind] = useState<AppliedDiscountKind>(null);
   const [selectedRewardVoucherId, setSelectedRewardVoucherId] = useState<string | null>(null);
+  const [selectedRewardVoucherName, setSelectedRewardVoucherName] = useState<string | null>(null);
   const [discountAmountUsd, setDiscountAmountUsd] = useState(0);
+  const [shippingDiscountAmountUsd, setShippingDiscountAmountUsd] = useState(0);
+  const [appliedProductDiscountInstrumentId, setAppliedProductDiscountInstrumentId] = useState<string | null>(null);
+  const [appliedShippingDiscountInstrumentId, setAppliedShippingDiscountInstrumentId] = useState<string | null>(null);
   const [discountError, setDiscountError] = useState('');
   const [isPaymentOffersOpen, setIsPaymentOffersOpen] = useState(false);
   const [openPolicyModal, setOpenPolicyModal] = useState<CheckoutPolicyModal>(null);
@@ -318,9 +321,9 @@ function CheckoutPageContent() {
   const activeCartItemIdsRef = useRef<string[]>([]);
   const checkoutInitRef = useRef(false);
   const autoDiscountAttemptedRef = useRef(false);
-  const autoRewardVoucherAttemptedOrderIdRef = useRef<string | null>(null);
   const didFinalizeRef = useRef(false);
   const hasManualCurrencySelectionRef = useRef(false);
+  const shippingDiscountRefreshKeyRef = useRef('');
   const [isAddFromCartOpen, setIsAddFromCartOpen] = useState(false);
   const [addFromCartSelection, setAddFromCartSelection] = useState<string[]>([]);
   const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
@@ -369,18 +372,51 @@ function CheckoutPageContent() {
     );
   }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
   const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
+  const shippingDiscountTotalUsd = useMemo(
+    () => Math.min(shippingAmountUsd, Math.max(0, shippingDiscountAmountUsd)),
+    [shippingAmountUsd, shippingDiscountAmountUsd]
+  );
+  const netShippingAmountUsd = useMemo(
+    () => Math.max(0, shippingAmountUsd - shippingDiscountTotalUsd),
+    [shippingAmountUsd, shippingDiscountTotalUsd]
+  );
   const orderTotalUsd = useMemo(
-    () => discountedTotalUsd + shippingAmountUsd,
-    [discountedTotalUsd, shippingAmountUsd]
+    () => discountedTotalUsd + netShippingAmountUsd,
+    [discountedTotalUsd, netShippingAmountUsd]
   );
   const formattedShipping = useMemo(
     () => formatCurrencyAmount(shippingAmountUsd, selectedCurrency),
     [selectedCurrency, shippingAmountUsd]
   );
+  const formattedShippingDiscount = useMemo(
+    () => formatCurrencyAmount(shippingDiscountTotalUsd, selectedCurrency),
+    [selectedCurrency, shippingDiscountTotalUsd]
+  );
+  const formattedNetShipping = useMemo(
+    () => formatCurrencyAmount(netShippingAmountUsd, selectedCurrency),
+    [selectedCurrency, netShippingAmountUsd]
+  );
   const formattedTotal = useMemo(
     () => formatCurrencyAmount(orderTotalUsd, selectedCurrency),
     [orderTotalUsd, selectedCurrency]
   );
+  const discountSummaryLabel = useMemo(() => {
+    const lines: string[] = [];
+    if (discountTotalUsd > 0) {
+      lines.push(`${appliedDiscountCode || selectedRewardVoucherName || 'YMI'} · -${formattedDiscount}`);
+    }
+    if (shippingDiscountTotalUsd > 0) {
+      lines.push(`${selectedRewardVoucherName || appliedDiscountCode || 'Free shipping'} · -${formattedShippingDiscount}`);
+    }
+    return lines.join(' + ');
+  }, [
+    appliedDiscountCode,
+    discountTotalUsd,
+    formattedDiscount,
+    formattedShippingDiscount,
+    selectedRewardVoucherName,
+    shippingDiscountTotalUsd,
+  ]);
   const [form, setForm] = useState<CheckoutAddressForm>({
     firstName: '',
     lastName: '',
@@ -412,13 +448,6 @@ function CheckoutPageContent() {
     getDestinationLabel(selectedShippingDestination, language) ||
     form.shippingDestinationLabel ||
     t('checkout.countryPlaceholder');
-  const activeRewardVouchers = useMemo(
-    () =>
-      rewardVouchers
-        .filter((voucher) => voucher.status === 'active')
-        .sort((left, right) => new Date(left.expiresAt).getTime() - new Date(right.expiresAt).getTime()),
-    [rewardVouchers]
-  );
   const selectedIdsFromQuery = useMemo(() => {
     const raw = searchParams?.get('ids');
     if (!raw) return [];
@@ -820,9 +849,12 @@ function CheckoutPageContent() {
           setCheckoutEmail(current.email);
         }
         setAppliedDiscountCode(current.applied_discount_code ?? null);
-        setAppliedDiscountKind((current.applied_discount_type as AppliedDiscountKind) ?? null);
-        setSelectedRewardVoucherId(current.applied_coupon_code_id ?? null);
+        setSelectedRewardVoucherId(null);
+        setSelectedRewardVoucherName(null);
         setDiscountAmountUsd(Number(current.discount_amount_usd ?? 0));
+        setShippingDiscountAmountUsd(Number(current.shipping_discount_amount_usd ?? 0));
+        setAppliedProductDiscountInstrumentId(current.applied_product_discount_instrument_id ?? null);
+        setAppliedShippingDiscountInstrumentId(current.applied_shipping_discount_instrument_id ?? null);
         if (
           current.applied_discount_code &&
           (current.applied_discount_type === 'referral' || current.applied_discount_type === 'creator_promo')
@@ -853,7 +885,7 @@ function CheckoutPageContent() {
     let cancelled = false;
     setIsRewardVouchersLoading(true);
 
-    fetch('/api/account/reward-vouchers', {
+    fetch('/api/checkout/vouchers', {
       credentials: 'include',
       cache: 'no-store',
     })
@@ -1292,7 +1324,7 @@ function CheckoutPageContent() {
     setIsApplyingDiscount(true);
 
     try {
-      const response = await fetch('/api/checkout/apply-referral', {
+      const response = await fetch('/api/checkout/apply-promo-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1301,6 +1333,10 @@ function CheckoutPageContent() {
           code,
           customerId: user?.customerId ?? null,
           email: form.email.trim().toLowerCase() || checkoutEmail.trim().toLowerCase() || null,
+          shippingAmountUsd,
+          shippingMethod: selectedShippingOption?.methodCode ?? null,
+          shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
+          shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
         }),
       });
 
@@ -1310,17 +1346,18 @@ function CheckoutPageContent() {
         return false;
       }
 
-      setAppliedDiscountCode(data.code ?? null);
-      setAppliedDiscountKind((data.kind as AppliedDiscountKind) ?? null);
+      setAppliedDiscountCode(data.code ?? code ?? null);
       setSelectedRewardVoucherId(null);
-      setDiscountAmountUsd(Number(data.amountUsd ?? 0));
-      setDiscountCodeInput(data.code ?? '');
+      setSelectedRewardVoucherName(null);
+      setDiscountAmountUsd(Number(data.productDiscountAmountUsd ?? data.product_discount_amount_usd ?? 0));
+      setShippingDiscountAmountUsd(Number(data.shippingDiscountAmountUsd ?? data.shipping_discount_amount_usd ?? 0));
+      setAppliedProductDiscountInstrumentId(data.productDiscountInstrumentId ?? null);
+      setAppliedShippingDiscountInstrumentId(data.shippingDiscountInstrumentId ?? null);
+      setDiscountCodeInput(data.code ?? code ?? '');
 
       if (typeof window !== 'undefined') {
-        if (data.code && data.kind === 'referral') {
+        if (data.code) {
           window.localStorage.setItem('ymi_referral_code', data.code);
-        } else if (!data.code) {
-          window.localStorage.removeItem('ymi_referral_code');
         }
       }
 
@@ -1331,9 +1368,9 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [checkoutEmail, discountCodeInput, form.email, orderId, t, user?.customerId]);
+  }, [checkoutEmail, discountCodeInput, form.email, orderId, selectedShippingOption, shippingAmountUsd, t, user?.customerId]);
 
-  const applyRewardVoucher = useCallback(async (couponCodeId?: string) => {
+  const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
     if (!orderId) {
       setDiscountError(t('checkout.orderNotReadyError'));
       return false;
@@ -1343,17 +1380,22 @@ function CheckoutPageContent() {
       return false;
     }
 
+    const selectedVoucher = rewardVouchers.find((voucher) => voucher.instrumentId === instrumentId) ?? null;
     setDiscountError('');
     setIsApplyingDiscount(true);
 
     try {
-      const response = await fetch('/api/checkout/apply-reward-voucher', {
+      const response = await fetch('/api/checkout/apply-voucher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           orderId,
-          couponCodeId: couponCodeId ?? '',
+          instrumentId: instrumentId ?? '',
+          shippingAmountUsd,
+          shippingMethod: selectedShippingOption?.methodCode ?? null,
+          shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
+          shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
         }),
       });
 
@@ -1363,10 +1405,13 @@ function CheckoutPageContent() {
         return false;
       }
 
-      setAppliedDiscountCode(data.code ?? null);
-      setAppliedDiscountKind((data.kind as AppliedDiscountKind) ?? null);
-      setSelectedRewardVoucherId(data.couponCodeId ?? couponCodeId ?? null);
-      setDiscountAmountUsd(Number(data.amountUsd ?? 0));
+      setAppliedDiscountCode(null);
+      setSelectedRewardVoucherId(data.instrumentId ?? instrumentId ?? null);
+      setSelectedRewardVoucherName(selectedVoucher?.name || selectedVoucher?.label || null);
+      setDiscountAmountUsd(Number(data.productDiscountAmountUsd ?? data.product_discount_amount_usd ?? 0));
+      setShippingDiscountAmountUsd(Number(data.shippingDiscountAmountUsd ?? data.shipping_discount_amount_usd ?? 0));
+      setAppliedProductDiscountInstrumentId(data.productDiscountInstrumentId ?? null);
+      setAppliedShippingDiscountInstrumentId(data.shippingDiscountInstrumentId ?? null);
       setDiscountCodeInput('');
 
       if (typeof window !== 'undefined') {
@@ -1380,62 +1425,82 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [orderId, t, user?.customerId]);
+  }, [orderId, rewardVouchers, selectedShippingOption, shippingAmountUsd, t, user?.customerId]);
 
-  const clearAppliedDiscount = useCallback(async () => {
-    if (appliedDiscountKind === 'coupon' || selectedRewardVoucherId) {
-      return applyRewardVoucher('');
+  const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
+    if (!orderId) return false;
+    setDiscountError('');
+    setIsApplyingDiscount(true);
+    try {
+      const response = await fetch('/api/checkout/remove-discount', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ orderId, stackingGroup: stackingGroup ?? null }),
+      });
+      const data = response.ok ? await response.json() : await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        setDiscountError(data?.error || t('checkout.discountApplyError'));
+        return false;
+      }
+      setDiscountAmountUsd(Number(data.productDiscountAmountUsd ?? 0));
+      setShippingDiscountAmountUsd(Number(data.shippingDiscountAmountUsd ?? 0));
+      setAppliedProductDiscountInstrumentId(data.productDiscountInstrumentId ?? null);
+      setAppliedShippingDiscountInstrumentId(data.shippingDiscountInstrumentId ?? null);
+      if (!data.productDiscountInstrumentId && !data.shippingDiscountInstrumentId) {
+        setAppliedDiscountCode(null);
+        setSelectedRewardVoucherId(null);
+        setSelectedRewardVoucherName(null);
+        setDiscountCodeInput('');
+        if (typeof window !== 'undefined') window.localStorage.removeItem('ymi_referral_code');
+      }
+      return true;
+    } catch {
+      setDiscountError(t('checkout.discountApplyError'));
+      return false;
+    } finally {
+      setIsApplyingDiscount(false);
     }
-    return applyDiscountCode('');
-  }, [appliedDiscountKind, applyDiscountCode, applyRewardVoucher, selectedRewardVoucherId]);
-
-  useEffect(() => {
-    autoRewardVoucherAttemptedOrderIdRef.current = null;
-  }, [orderId]);
+  }, [orderId, t]);
 
   useEffect(() => {
     if (!orderId) return;
-    if (appliedDiscountCode) return;
+    if (appliedDiscountCode || appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId) return;
     if (autoDiscountAttemptedRef.current) return;
     if (!discountCodeInput.trim()) return;
 
     autoDiscountAttemptedRef.current = true;
     void applyDiscountCode(discountCodeInput);
-  }, [appliedDiscountCode, applyDiscountCode, discountCodeInput, orderId]);
+  }, [appliedDiscountCode, appliedProductDiscountInstrumentId, appliedShippingDiscountInstrumentId, applyDiscountCode, discountCodeInput, orderId]);
 
   useEffect(() => {
-    if (!orderId || !user?.customerId) return;
-    if (!hasHydratedExistingOrder) return;
-    if (isRewardVouchersLoading) return;
-    if (autoRewardVoucherAttemptedOrderIdRef.current === orderId) return;
-    if (appliedDiscountCode || appliedDiscountKind || selectedRewardVoucherId) return;
-    if (discountCodeInput.trim()) return;
-
-    autoRewardVoucherAttemptedOrderIdRef.current = orderId;
-
-    if (activeRewardVouchers.length === 0) {
-      return;
-    }
-
-    void applyRewardVoucher(activeRewardVouchers[0].couponCodeId);
-  }, [
-    activeRewardVouchers,
-    appliedDiscountCode,
-    appliedDiscountKind,
-    applyRewardVoucher,
-    discountCodeInput,
-    isRewardVouchersLoading,
-    hasHydratedExistingOrder,
-    orderId,
-    selectedRewardVoucherId,
-    user?.customerId,
-  ]);
-
-  useEffect(() => {
-    if (discountError || appliedDiscountCode || selectedRewardVoucherId || discountCodeInput.trim()) {
+    if (discountError || appliedDiscountCode || selectedRewardVoucherId || appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId || discountCodeInput.trim()) {
       setIsPaymentOffersOpen(true);
     }
-  }, [appliedDiscountCode, selectedRewardVoucherId, discountCodeInput, discountError]);
+  }, [appliedDiscountCode, appliedProductDiscountInstrumentId, appliedShippingDiscountInstrumentId, selectedRewardVoucherId, discountCodeInput, discountError]);
+
+  useEffect(() => {
+    if (!orderId || !appliedShippingDiscountInstrumentId) return;
+    const refreshKey = `${orderId}:${appliedShippingDiscountInstrumentId}:${shippingAmountUsd}:${selectedShippingOption?.methodCode ?? ''}`;
+    if (shippingDiscountRefreshKeyRef.current === refreshKey) return;
+    shippingDiscountRefreshKeyRef.current = refreshKey;
+    if (selectedRewardVoucherId === appliedShippingDiscountInstrumentId) {
+      void applyRewardVoucher(appliedShippingDiscountInstrumentId);
+      return;
+    }
+    if (appliedDiscountCode) {
+      void applyDiscountCode(appliedDiscountCode);
+    }
+  }, [
+    appliedDiscountCode,
+    appliedShippingDiscountInstrumentId,
+    applyDiscountCode,
+    applyRewardVoucher,
+    orderId,
+    selectedRewardVoucherId,
+    selectedShippingOption?.methodCode,
+    shippingAmountUsd,
+  ]);
 
   const finalizeOrder = async (mode: 'guest' | 'auth') => {
     setIsPlacingOrder(true);
@@ -1622,9 +1687,12 @@ function CheckoutPageContent() {
     }
     setActiveCartItemIds(prev => prev.filter(id => id !== itemId));
     setAppliedDiscountCode(null);
-    setAppliedDiscountKind(null);
     setSelectedRewardVoucherId(null);
+    setSelectedRewardVoucherName(null);
     setDiscountAmountUsd(0);
+    setShippingDiscountAmountUsd(0);
+    setAppliedProductDiscountInstrumentId(null);
+    setAppliedShippingDiscountInstrumentId(null);
     setDiscountError('');
     setDiscountCodeInput('');
     fetch('/api/orders/cancel', {
@@ -2240,9 +2308,9 @@ function CheckoutPageContent() {
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-gray-900">{t('checkout.discountCode')}</div>
                       <div className="mt-1 text-xs text-gray-500">
-                        {appliedDiscountCode
-                          ? t('checkout.appliedDiscountSummary', {
-                              code: appliedDiscountCode,
+                        {appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId || appliedDiscountCode
+                          ? discountSummaryLabel || t('checkout.appliedDiscountSummary', {
+                              code: appliedDiscountCode || selectedRewardVoucherName || 'YMI',
                               amount: formattedDiscount,
                             })
                           : user?.customerId
@@ -2276,7 +2344,7 @@ function CheckoutPageContent() {
                         >
                           {isApplyingDiscount ? t('common.loading') : t('checkout.applyCode')}
                         </Button>
-                        {appliedDiscountCode ? (
+                        {appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId ? (
                           <Button
                             type="button"
                             variant="ghost"
@@ -2293,7 +2361,7 @@ function CheckoutPageContent() {
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                {t('checkout.rewardVouchersTitle')}
+                              {t('checkout.rewardVouchersTitle')}
                               </div>
                               <p className="mt-1 text-xs text-gray-500">{t('checkout.rewardVouchersHint')}</p>
                             </div>
@@ -2301,15 +2369,15 @@ function CheckoutPageContent() {
                               <span className="text-xs text-gray-400">{t('common.loading')}</span>
                             ) : null}
                           </div>
-                          {activeRewardVouchers.length > 0 ? (
+                          {rewardVouchers.length > 0 ? (
                             <div className="space-y-2">
-                              {activeRewardVouchers.map((voucher) => {
-                                const isSelected = selectedRewardVoucherId === voucher.couponCodeId
+                              {rewardVouchers.map((voucher) => {
+                                const isSelected = selectedRewardVoucherId === voucher.instrumentId
                                 return (
                                   <button
-                                    key={voucher.couponCodeId}
+                                    key={voucher.instrumentId}
                                     type="button"
-                                    onClick={() => void applyRewardVoucher(voucher.couponCodeId)}
+                                    onClick={() => void applyRewardVoucher(voucher.instrumentId)}
                                     disabled={isApplyingDiscount || !orderId}
                                     className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                                       isSelected
@@ -2320,14 +2388,15 @@ function CheckoutPageContent() {
                                     <div className="flex items-center justify-between gap-3">
                                       <div>
                                         <div className="text-sm font-semibold text-gray-900">
-                                          {t('checkout.rewardVoucherAmount', {
-                                            amount: formatCurrencyAmount(voucher.amountUsd, selectedCurrency),
-                                          })}
+                                          {voucher.name}
                                         </div>
                                         <div className="mt-1 text-xs text-gray-500">
-                                          {t('checkout.rewardVoucherExpires', {
-                                            date: new Date(voucher.expiresAt).toLocaleDateString(),
-                                          })}
+                                          {voucher.label}
+                                          {voucher.expiresAt
+                                            ? ` · ${t('checkout.rewardVoucherExpires', {
+                                                date: new Date(voucher.expiresAt).toLocaleDateString(),
+                                              })}`
+                                            : ''}
                                         </div>
                                       </div>
                                       {isSelected ? (
@@ -2347,19 +2416,16 @@ function CheckoutPageContent() {
                           )}
                         </div>
                       ) : null}
-                      {appliedDiscountCode ? (
+                      {appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId ? (
                         <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
-                          {t(
-                            appliedDiscountKind === 'coupon'
-                              ? 'checkout.rewardVoucherApplied'
-                              : appliedDiscountKind === 'creator_promo'
-                                ? 'checkout.creatorPromoApplied'
-                              : 'checkout.inviteCodeApplied',
-                            {
-                              code: appliedDiscountCode,
-                              amount: formattedDiscount,
-                            }
-                          )}
+                          <div className="space-y-1">
+                            {appliedProductDiscountInstrumentId && discountTotalUsd > 0 ? (
+                              <div>{t('checkout.appliedDiscountSummary', { code: appliedDiscountCode || selectedRewardVoucherName || 'Voucher', amount: formattedDiscount })}</div>
+                            ) : null}
+                            {appliedShippingDiscountInstrumentId && shippingDiscountTotalUsd > 0 ? (
+                              <div>{t('checkout.appliedDiscountSummary', { code: selectedRewardVoucherName || appliedDiscountCode || 'Free shipping', amount: formattedShippingDiscount })}</div>
+                            ) : null}
+                          </div>
                         </div>
                       ) : null}
                       {discountError ? <p className="text-xs text-red-500">{discountError}</p> : null}
@@ -2564,7 +2630,9 @@ function CheckoutPageContent() {
                 {shippingQuote.status === 'loading'
                   ? t('checkout.shippingCalculating')
                   : shippingQuote.status === 'available'
-                  ? formattedShipping
+                  ? shippingDiscountTotalUsd > 0
+                    ? formattedNetShipping
+                    : formattedShipping
                   : shippingQuote.status === 'missing'
                   ? t('checkout.shippingPending')
                   : t('checkout.shippingUnavailable')}
@@ -2580,6 +2648,12 @@ function CheckoutPageContent() {
               <div className="flex items-center justify-between">
                 <span>{t('checkout.discountLine')}</span>
                 <span className="font-semibold text-emerald-700">-{formattedDiscount}</span>
+              </div>
+            ) : null}
+            {shippingDiscountTotalUsd > 0 ? (
+              <div className="flex items-center justify-between">
+                <span>{t('checkout.shipping')} {t('checkout.discountLine').toLowerCase()}</span>
+                <span className="font-semibold text-emerald-700">-{formattedShippingDiscount}</span>
               </div>
             ) : null}
             <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-base">

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
-import { releaseOrderDiscountCode } from '@/lib/referrals'
+import { releaseOrderDiscount } from '@/lib/discounts'
 import {
   getDisplayUnitPrice,
   getOrderCheckoutCurrency,
@@ -21,7 +21,7 @@ export async function GET(
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
     .select(
-      'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, applied_discount_code, applied_discount_type, discount_amount_usd, created_at'
+      'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, applied_discount_code, applied_discount_type, discount_amount_usd, shipping_discount_amount_usd, shipping_amount_usd, created_at'
     )
     .or(`order_id.eq.${rawOrderId},display_id.eq.${rawOrderId}`)
     .maybeSingle()
@@ -127,6 +127,8 @@ export async function GET(
   const total = getOrderDisplayTotal({
     baseUsdTotal,
     discountUsd: Number(order.discount_amount_usd ?? 0),
+    shippingUsd: Number(order.shipping_amount_usd ?? 0),
+    shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
     checkoutCurrency: order.checkout_currency,
     paymentAmount: payment.data?.amount ?? null,
     paymentCurrency: payment.data?.currency,
@@ -144,6 +146,7 @@ export async function GET(
       appliedDiscountCode: order.applied_discount_code ?? null,
       appliedDiscountType: order.applied_discount_type ?? null,
       discountAmountUsd: Number(order.discount_amount_usd ?? 0),
+      shippingDiscountAmountUsd: Number(order.shipping_discount_amount_usd ?? 0),
       displayCurrency,
       shippingAddress: order.shipping_address ?? {},
       billingAddress: order.billing_address ?? null,
@@ -229,7 +232,7 @@ export async function DELETE(
   const cartItemIds = linkedItems.map((item) => item.cart_item_id)
 
   try {
-    await releaseOrderDiscountCode(order.order_id)
+    await releaseOrderDiscount({ orderId: order.order_id })
   } catch (discountError: any) {
     return NextResponse.json(
       { error: discountError?.message || 'Failed to release order discount' },
