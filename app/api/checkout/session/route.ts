@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('order_id, order_status, discount_amount_usd, shipping_discount_amount_usd, applied_discount_code, applied_discount_type, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
+      .select('order_id, order_status, discount_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
       .eq('order_id', orderId)
       .maybeSingle()
     if (orderError || !order?.order_id) {
@@ -205,8 +205,8 @@ export async function POST(request: Request) {
         is_guest: String(isGuest),
         email,
         checkout_currency: currency,
-        applied_discount_code: String(order.applied_discount_code || ''),
-        applied_discount_type: String(order.applied_discount_type || ''),
+        applied_product_discount_instrument_id: String(discountSummary.productDiscountInstrumentId || ''),
+        applied_shipping_discount_instrument_id: String(discountSummary.shippingDiscountInstrumentId || ''),
         discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
         shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
         shipping_amount_usd: String(shippingAmountUsd || 0),
@@ -215,8 +215,8 @@ export async function POST(request: Request) {
         metadata: {
           order_id: orderId,
           checkout_currency: currency,
-          applied_discount_code: String(order.applied_discount_code || ''),
-          applied_discount_type: String(order.applied_discount_type || ''),
+          applied_product_discount_instrument_id: String(discountSummary.productDiscountInstrumentId || ''),
+          applied_shipping_discount_instrument_id: String(discountSummary.shippingDiscountInstrumentId || ''),
           discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
           shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
           shipping_amount_usd: String(shippingAmountUsd || 0),

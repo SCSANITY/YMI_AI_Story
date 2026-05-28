@@ -1,13 +1,11 @@
-'use client'
+﻿'use client'
 
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Download, Package, Truck, CircleCheck, Gift, Share2, BookOpen, MapPin, Sparkles } from 'lucide-react'
+import { ArrowLeft, Download, Package, Truck, CircleCheck, BookOpen, MapPin } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/Button'
-import { ShareDialog } from '@/components/ShareDialog'
-import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing'
 import {
@@ -48,15 +46,7 @@ type OrderDetail = {
   items?: OrderItem[]
 }
 
-type InviteData = {
-  code: string
-  inviteUrl: string
-  expiresAt: string
-  discountAmountUsd: number
-  rewardAmountUsd: number
-}
-
-// ── Logistics stage definitions ────────────────────────────────────────────
+// ?? Logistics stage definitions ????????????????????????????????????????????
 
 type StageKey = 'confirmed' | 'printing' | 'shipped' | 'delivered'
 
@@ -75,7 +65,7 @@ const STATUS_TO_STAGE_INDEX: Record<string, number> = {
   delivered:   3,
 }
 
-// ── LogisticsTracker ───────────────────────────────────────────────────────
+// ?? LogisticsTracker ???????????????????????????????????????????????????????
 
 function LogisticsTracker({ status, pdfUrl }: { status: string; pdfUrl?: string | null }) {
   const activeIdx = STATUS_TO_STAGE_INDEX[normalizeOrderStatus(status)] ?? 0
@@ -173,115 +163,13 @@ function LogisticsTracker({ status, pdfUrl }: { status: string; pdfUrl?: string 
   )
 }
 
-// ── InviteCard ─────────────────────────────────────────────────────────────
-
-function InviteCard({ inviteData, onShare }: { inviteData: InviteData; onShare: () => void }) {
-  const { t } = useI18n()
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(inviteData.code).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      className="relative overflow-hidden rounded-3xl"
-      style={{
-        background: 'linear-gradient(135deg, rgba(255,237,213,0.85) 0%, rgba(255,247,237,0.92) 40%, rgba(255,255,255,0.88) 100%)',
-        border: '1px solid rgba(255,220,150,0.40)',
-        backdropFilter: 'blur(20px) saturate(160%)',
-        boxShadow: '0 20px 52px rgba(217,119,6,0.10), inset 0 1px 0 rgba(255,255,255,0.9)',
-      }}
-    >
-      {/* Decorative glow */}
-      <div className="pointer-events-none absolute -top-12 -right-12 w-40 h-40 rounded-full bg-amber-300/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-orange-200/20 blur-2xl" />
-
-      <div className="relative p-5 md:p-6 space-y-5">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-amber-200/60">
-              <Gift className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-600/80">Referral</p>
-              <h3 className="text-base font-bold text-gray-900">{t('share.inviteCardTitle')}</h3>
-            </div>
-          </div>
-          <button
-            onClick={onShare}
-            className="glass-action-btn glass-action-btn--brand inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold"
-          >
-            <Share2 className="h-3.5 w-3.5" />
-            {t('share.shareNow')}
-          </button>
-        </div>
-
-        {/* Description */}
-        <p className="text-sm text-gray-600 leading-relaxed">{t('share.inviteCardDescription')}</p>
-
-        {/* Reward chips */}
-        <div className="flex flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 rounded-full bg-white/70 border border-amber-200/60 px-3 py-1.5 text-xs font-semibold text-amber-700 backdrop-blur-sm">
-            <Sparkles className="h-3 w-3 text-amber-500" />
-            Friend gets ${inviteData.discountAmountUsd} off
-          </div>
-          <div className="flex items-center gap-1.5 rounded-full bg-white/70 border border-emerald-200/60 px-3 py-1.5 text-xs font-semibold text-emerald-700 backdrop-blur-sm">
-            <CircleCheck className="h-3 w-3 text-emerald-500" />
-            You earn ${inviteData.rewardAmountUsd} credit
-          </div>
-        </div>
-
-        {/* Code block */}
-        <div
-          className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4 cursor-pointer select-none transition-all hover:scale-[1.01] active:scale-[0.99]"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.85), rgba(255,249,235,0.75))',
-            border: '1px solid rgba(245,158,11,0.25)',
-            boxShadow: '0 4px 16px rgba(217,119,6,0.08), inset 0 1px 0 rgba(255,255,255,0.9)',
-          }}
-          onClick={handleCopy}
-        >
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{t('share.yourCode')}</p>
-            <p className="mt-1 text-2xl font-bold tracking-[0.22em] tabular-nums text-gray-900">{inviteData.code}</p>
-          </div>
-          <div className={`rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-300 ${
-            copied
-              ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-              : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100'
-          }`}>
-            {copied ? '✓ Copied' : 'Tap to copy'}
-          </div>
-        </div>
-
-        <p className="text-[11px] text-slate-400 leading-relaxed">{t('share.inviteNote')}</p>
-      </div>
-    </motion.div>
-  )
-}
-
-// ── Main Page ──────────────────────────────────────────────────────────────
-
 export default function OrderDetailPage() {
   const { t } = useI18n()
-  const { user } = useGlobalContext()
   const params = useParams()
   const router = useRouter()
   const orderId = typeof params?.orderID === 'string' ? params.orderID : ''
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [inviteData, setInviteData] = useState<InviteData | null>(null)
-  const [inviteError, setInviteError] = useState('')
-  const [isInviteLoading, setIsInviteLoading] = useState(false)
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
 
   useEffect(() => {
     if (!orderId) return
@@ -298,40 +186,6 @@ export default function OrderDetailPage() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [orderId])
-
-  useEffect(() => {
-    if (!order?.order_id) return
-    if (!isPaidLikeOrderStatus(order.order_status)) return
-
-    let cancelled = false
-    setIsInviteLoading(true)
-    setInviteError('')
-
-    fetch('/api/referrals/code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        orderId: order.order_id,
-        customerId: user?.customerId ?? null,
-        email: order.email ?? null,
-      }),
-    })
-      .then((res) => (res.ok ? res.json() : res.json().then((data) => Promise.reject(data))))
-      .then((data) => {
-        if (cancelled) return
-        setInviteData({
-          code: data.code,
-          inviteUrl: data.inviteUrl,
-          expiresAt: data.expiresAt,
-          discountAmountUsd: Number(data.discountAmountUsd ?? 5),
-          rewardAmountUsd: Number(data.rewardAmountUsd ?? 5),
-        })
-      })
-      .catch((error) => { if (!cancelled) setInviteError(error?.error || t('share.inviteLoadFailed')) })
-      .finally(() => { if (!cancelled) setIsInviteLoading(false) })
-    return () => { cancelled = true }
-  }, [order?.email, order?.order_id, order?.order_status, t, user?.customerId])
 
   if (loading) {
     return (
@@ -362,7 +216,6 @@ export default function OrderDetailPage() {
   const items = order.items ?? []
   const orderStatus = normalizeOrderStatus(order.order_status)
   const showTrackingPanel = isPaidLikeOrderStatus(orderStatus)
-  const sharePreviewImageUrl = order.cover_url || items[0]?.cover_url || null
 
   return (
     <div className="page-surface min-h-screen">
@@ -404,21 +257,6 @@ export default function OrderDetailPage() {
         {/* Logistics Tracker */}
         {showTrackingPanel && (
           <LogisticsTracker status={orderStatus} pdfUrl={order.final_pdf_url} />
-        )}
-
-        {/* Invite Friends */}
-        {showTrackingPanel && (
-          isInviteLoading ? (
-            <div className="glass-panel rounded-3xl p-5 text-sm text-gray-400 animate-pulse">
-              {t('share.invitePreparing')}
-            </div>
-          ) : inviteData ? (
-            <InviteCard inviteData={inviteData} onShare={() => setIsShareDialogOpen(true)} />
-          ) : inviteError ? (
-            <div className="rounded-2xl border border-red-100 bg-red-50/70 px-4 py-3 text-sm text-red-600">
-              {inviteError}
-            </div>
-          ) : null
         )}
 
         {/* Items + Shipping grid */}
@@ -488,17 +326,6 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      <ShareDialog
-        open={isShareDialogOpen && Boolean(inviteData?.inviteUrl)}
-        onClose={() => setIsShareDialogOpen(false)}
-        title={t('share.inviteTitle')}
-        description={t('share.inviteDescription')}
-        shareUrl={inviteData?.inviteUrl || ''}
-        shareText={t('share.inviteTemplate', { code: inviteData?.code || '' })}
-        previewImageUrl={sharePreviewImageUrl}
-        code={inviteData?.code || null}
-        note={t('share.inviteNote')}
-      />
     </div>
   )
 }

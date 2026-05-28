@@ -848,21 +848,14 @@ function CheckoutPageContent() {
         if (!checkoutEmail && current.email) {
           setCheckoutEmail(current.email);
         }
-        setAppliedDiscountCode(current.applied_discount_code ?? null);
+        setAppliedDiscountCode(null);
         setSelectedRewardVoucherId(null);
         setSelectedRewardVoucherName(null);
         setDiscountAmountUsd(Number(current.discount_amount_usd ?? 0));
         setShippingDiscountAmountUsd(Number(current.shipping_discount_amount_usd ?? 0));
         setAppliedProductDiscountInstrumentId(current.applied_product_discount_instrument_id ?? null);
         setAppliedShippingDiscountInstrumentId(current.applied_shipping_discount_instrument_id ?? null);
-        if (
-          current.applied_discount_code &&
-          (current.applied_discount_type === 'referral' || current.applied_discount_type === 'creator_promo')
-        ) {
-          setDiscountCodeInput(String(current.applied_discount_code).toUpperCase());
-        } else {
-          setDiscountCodeInput('');
-        }
+        setDiscountCodeInput('');
       })
       .catch(() => {})
       .finally(() => {
@@ -912,13 +905,13 @@ function CheckoutPageContent() {
     if (incomingDiscountCode) {
       setDiscountCodeInput(incomingDiscountCode);
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem('ymi_referral_code', incomingDiscountCode);
+        window.localStorage.setItem('ymi_discount_code', incomingDiscountCode);
       }
       return;
     }
 
     if (typeof window === 'undefined') return;
-    const storedCode = window.localStorage.getItem('ymi_referral_code');
+    const storedCode = window.localStorage.getItem('ymi_discount_code');
     if (storedCode && !discountCodeInput) {
       setDiscountCodeInput(storedCode.toUpperCase());
     }
@@ -1357,7 +1350,7 @@ function CheckoutPageContent() {
 
       if (typeof window !== 'undefined') {
         if (data.code) {
-          window.localStorage.setItem('ymi_referral_code', data.code);
+          window.localStorage.setItem('ymi_discount_code', data.code);
         }
       }
 
@@ -1415,7 +1408,7 @@ function CheckoutPageContent() {
       setDiscountCodeInput('');
 
       if (typeof window !== 'undefined') {
-        window.localStorage.removeItem('ymi_referral_code');
+        window.localStorage.removeItem('ymi_discount_code');
       }
 
       return true;
@@ -1452,7 +1445,7 @@ function CheckoutPageContent() {
         setSelectedRewardVoucherId(null);
         setSelectedRewardVoucherName(null);
         setDiscountCodeInput('');
-        if (typeof window !== 'undefined') window.localStorage.removeItem('ymi_referral_code');
+        if (typeof window !== 'undefined') window.localStorage.removeItem('ymi_discount_code');
       }
       return true;
     } catch {
@@ -1549,7 +1542,7 @@ function CheckoutPageContent() {
       setActiveCartItemIds([]);
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem('ymi_checkout_form');
-        window.localStorage.removeItem('ymi_referral_code');
+        window.localStorage.removeItem('ymi_discount_code');
       }
       setStep('success');
     } catch {

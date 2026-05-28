@@ -21,7 +21,7 @@ export async function GET(
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
     .select(
-      'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, applied_discount_code, applied_discount_type, discount_amount_usd, shipping_discount_amount_usd, shipping_amount_usd, created_at'
+      'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, discount_amount_usd, shipping_discount_amount_usd, shipping_amount_usd, created_at'
     )
     .or(`order_id.eq.${rawOrderId},display_id.eq.${rawOrderId}`)
     .maybeSingle()
@@ -143,8 +143,6 @@ export async function GET(
       customerId: order.customer_id ?? null,
       email: order.email ?? null,
       checkoutCurrency: getOrderCheckoutCurrency(order.checkout_currency),
-      appliedDiscountCode: order.applied_discount_code ?? null,
-      appliedDiscountType: order.applied_discount_type ?? null,
       discountAmountUsd: Number(order.discount_amount_usd ?? 0),
       shippingDiscountAmountUsd: Number(order.shipping_discount_amount_usd ?? 0),
       displayCurrency,

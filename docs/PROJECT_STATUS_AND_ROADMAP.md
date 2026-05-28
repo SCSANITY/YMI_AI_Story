@@ -57,6 +57,7 @@ Active short-term tracker:
 - Magic Attributes feature shipped: `templates.magic_attributes` JSONB column added to DB; `normalizeMagicAttributes()` parser added to `book-catalog.ts`; `MagicAttribute` type added to `types/index.ts`; list API and detail API both return the field; Customize page replaces hardcoded Kindness/Courage with dynamic per-book attribute bars; six standard categories have i18n translations in EN/ZH/JA/ES/KO; custom free-text labels display as-is with a default icon.
 - SEO metadata foundation shipped for the public site: root App Router metadata now has a non-empty title, description, metadataBase, canonical www URL, OG/Twitter defaults, and favicon declarations; public pages have unique metadata; product pages generate metadata from Supabase templates; anonymous non-indexable pages use meta noindex; private/admin/API areas are excluded in `robots.txt`; `sitemap.xml` and `robots.txt` are generated from the canonical www domain.
 - SEO deployment/Search Console status: commit `b8460a1` has been pushed and deployed to `https://www.ymistory.com`; live homepage exposes the new title/canonical/default OG image; live `sitemap.xml` is reachable with 19 URLs; live `robots.txt` references the sitemap. Google Search Console domain property `ymistory.com` was verified by DNS TXT, `https://www.ymistory.com/sitemap.xml` was submitted, and homepage plus `/books` were manually requested for reindexing. Current state: waiting for Google recrawl/index refresh.
+- Unified Discount System shipped and Phase 4 code cleanup completed: checkout now uses `discount_offers`, `discount_instruments`, `discount_redemptions`; DB RPCs handle apply/release/paid transitions; admin discount creation lives at `/admin/discounts`; legacy referral/reward-coupon apply APIs and invite pages have been removed from the codebase. DB cleanup SQL is stored at `Template_folder/sql_unified_discount_phase4_cleanup.sql` and should be executed manually in Supabase after deployment confirmation.
 
 ## Current Owner-Managed Work
 
@@ -155,6 +156,7 @@ Current admin routes (all under `app/admin/`):
 - `/admin/login` — Login and access-denied handling (no auth required)
 - `/admin/finals` — Final Review: page-by-page approve/replace/release workflow
 - `/admin/announcements` — Blog post CRUD, image upload, live preview
+- `/admin/discounts` — Unified discount management: promo codes and account vouchers
 - `/admin/service` — Customize access toggle, creator promo code config
 - `/admin/analytics` — Placeholder (coming soon: sales data visualization)
 - `/admin/banner` — Placeholder (coming soon: promotional banner management)

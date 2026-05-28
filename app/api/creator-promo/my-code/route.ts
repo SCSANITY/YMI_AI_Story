@@ -4,6 +4,40 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const DEFAULT_CREATOR_DISCOUNT_USD = 5
 const CREATOR_SUFFIX = '-YMI'
+const CREATOR_PROMO_SETTING_KEY = 'creator_promo_config'
+
+type CreatorPromoConfig = {
+  enabled: boolean
+  suffix: string
+  discountAmountUsd: number
+  firstOrderOnly: boolean
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function normalizeCreatorPromoConfig(value: unknown): CreatorPromoConfig {
+  const input = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const discountAmountUsd = Number(input.discount_amount_usd ?? input.discountAmountUsd ?? DEFAULT_CREATOR_DISCOUNT_USD)
+  const suffix = String(input.suffix ?? CREATOR_SUFFIX).trim().toUpperCase() || CREATOR_SUFFIX
+  return {
+    enabled: input.enabled !== false,
+    suffix: suffix.startsWith('-') ? suffix : `-${suffix}`,
+    discountAmountUsd: Number.isFinite(discountAmountUsd) && discountAmountUsd > 0 ? discountAmountUsd : DEFAULT_CREATOR_DISCOUNT_USD,
+    firstOrderOnly: input.first_order_only !== false && input.firstOrderOnly !== false,
+  }
+}
+
+async function loadCreatorPromoConfig() {
+  const { data } = await supabaseAdmin
+    .from('admin_settings')
+    .select('setting_value')
+    .eq('setting_key', CREATOR_PROMO_SETTING_KEY)
+    .maybeSingle()
+
+  return normalizeCreatorPromoConfig(data?.setting_value)
+}
 
 function normalizeRawInput(input: string) {
   return input
@@ -15,11 +49,11 @@ function normalizeRawInput(input: string) {
     .slice(0, 18)
 }
 
-function toPromoCode(row: any) {
+function toPromoCode(row: any, suffix = CREATOR_SUFFIX) {
   const offer = Array.isArray(row.discount_offers) ? row.discount_offers[0] : row.discount_offers
   return {
     code: row.code,
-    rawInput: String(row.code || '').replace(new RegExp(`${CREATOR_SUFFIX}$`), ''),
+    rawInput: String(row.code || '').replace(new RegExp(`${escapeRegExp(suffix)}$`), ''),
     discountAmountUsd: Number(offer?.effect_config?.amount_usd ?? DEFAULT_CREATOR_DISCOUNT_USD),
     status: row.is_active ? 'active' : 'disabled',
   }
@@ -31,6 +65,7 @@ export async function GET() {
     if (!customer?.customer_id) {
       return NextResponse.json({ error: 'Login required' }, { status: 401 })
     }
+    const config = await loadCreatorPromoConfig()
 
     const { data, error } = await supabaseAdmin
       .from('discount_instruments')
@@ -54,7 +89,7 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, promoCode: data ? toPromoCode(data) : null })
+    return NextResponse.json({ ok: true, promoCode: data ? toPromoCode(data, config.suffix) : null })
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || 'Failed to load creator promo code' },
@@ -68,6 +103,10 @@ export async function POST(request: Request) {
     const customer = await getAuthenticatedCustomer()
     if (!customer?.customer_id) {
       return NextResponse.json({ error: 'Login required' }, { status: 401 })
+    }
+    const config = await loadCreatorPromoConfig()
+    if (!config.enabled) {
+      return NextResponse.json({ error: 'Creator promo codes are currently unavailable.' }, { status: 403 })
     }
 
     const body = await request.json().catch(() => ({}))
@@ -84,16 +123,16 @@ export async function POST(request: Request) {
       .eq('owner_customer_id', customer.customer_id)
       .eq('status', 'active')
 
-    const code = `${rawInput}${CREATOR_SUFFIX}`
+    const code = `${rawInput}${config.suffix}`
     const { data: offer, error: offerError } = await supabaseAdmin
       .from('discount_offers')
       .insert({
         name: `Creator promo ${code}`,
         description: 'Collaboration creator promo code',
         effect_type: 'fixed_amount',
-        effect_config: { amount_usd: DEFAULT_CREATOR_DISCOUNT_USD },
+        effect_config: { amount_usd: config.discountAmountUsd },
         stacking_group: 'product_discount',
-        first_order_only: true,
+        first_order_only: config.firstOrderOnly,
         created_by_admin_id: customer.customer_id,
       })
       .select('offer_id')
@@ -124,7 +163,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: instrumentError?.message || 'Failed to create creator code' }, { status: 400 })
     }
 
-    return NextResponse.json({ ok: true, promoCode: toPromoCode(instrument) })
+    return NextResponse.json({ ok: true, promoCode: toPromoCode(instrument, config.suffix) })
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || 'Failed to save creator promo code' },

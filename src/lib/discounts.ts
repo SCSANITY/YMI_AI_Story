@@ -99,7 +99,9 @@ export async function listCheckoutVouchersForCustomer(params: {
       `
         instrument_id,
         offer_id,
+        max_redemptions,
         max_redemptions_per_customer,
+        paid_count,
         discount_offers:discount_offers (
           offer_id,
           name,
@@ -123,12 +125,46 @@ export async function listCheckoutVouchersForCustomer(params: {
     throw new Error(`Failed to load vouchers: ${error.message}`)
   }
 
-  return ((data ?? []) as any[])
+  const rows = (data ?? []) as any[]
+  const instrumentIds = rows.map((row) => row.instrument_id).filter(Boolean)
+  const normalizedEmail = normalizeEmail(params.email)
+  const paidUsageByInstrument = new Map<string, number>()
+
+  if (instrumentIds.length > 0) {
+    const { data: redemptions, error: redemptionError } = await supabaseAdmin
+      .from('discount_redemptions')
+      .select('instrument_id, customer_id, email')
+      .in('instrument_id', instrumentIds)
+      .eq('status', 'paid')
+
+    if (redemptionError) {
+      throw new Error(`Failed to load voucher usage: ${redemptionError.message}`)
+    }
+
+    for (const redemption of redemptions ?? []) {
+      const belongsToCustomer =
+        redemption.customer_id === params.customerId ||
+        (normalizedEmail && normalizeEmail(redemption.email) === normalizedEmail)
+      if (!belongsToCustomer || !redemption.instrument_id) continue
+      paidUsageByInstrument.set(
+        redemption.instrument_id,
+        (paidUsageByInstrument.get(redemption.instrument_id) ?? 0) + 1
+      )
+    }
+  }
+
+  return rows
     .map((row) => {
       const offer = Array.isArray(row.discount_offers) ? row.discount_offers[0] : row.discount_offers
       if (!offer?.offer_id || offer.is_active === false) return null
       const expiresAt = offer.expires_at ? String(offer.expires_at) : null
       if (expiresAt && expiresAt <= nowIso) return null
+      const customerPaidUsage = paidUsageByInstrument.get(row.instrument_id) ?? 0
+      const maxRedemptions = row.max_redemptions == null ? null : Number(row.max_redemptions)
+      const maxRedemptionsPerCustomer =
+        row.max_redemptions_per_customer == null ? null : Number(row.max_redemptions_per_customer)
+      if (maxRedemptions !== null && Number(row.paid_count ?? 0) >= maxRedemptions) return null
+      if (maxRedemptionsPerCustomer !== null && customerPaidUsage >= maxRedemptionsPerCustomer) return null
       return {
         instrumentId: row.instrument_id,
         offerId: offer.offer_id,
@@ -139,8 +175,7 @@ export async function listCheckoutVouchersForCustomer(params: {
         stackingGroup: String(offer.stacking_group) as DiscountStackingGroup,
         expiresAt,
         minimumOrderAmountUsd: offer.minimum_order_amount_usd == null ? null : toMoney(offer.minimum_order_amount_usd),
-        maxRedemptionsPerCustomer:
-          row.max_redemptions_per_customer == null ? null : Number(row.max_redemptions_per_customer),
+        maxRedemptionsPerCustomer,
       } satisfies CheckoutVoucher
     })
     .filter(Boolean) as CheckoutVoucher[]

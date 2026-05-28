@@ -91,7 +91,7 @@ SEO and indexability:
 - `app/sitemap.ts` emits public static routes plus active, non-coming-soon template pages.
 - `app/robots.ts` allows public crawling, references the sitemap, and disallows admin/API/account/order-library/private areas to avoid crawl-budget waste.
 - API route security does not depend on `robots.txt`; robots rules are a crawler hint only. Sensitive API routes must enforce their own auth, service-role, admin, webhook signature, or internal-secret checks.
-- Anonymous pages that should not be indexed, such as cart/checkout/success/maintenance/impact-placeholder/invite/share-preview/support-order, stay crawlable and use meta noindex so crawlers can read the directive.
+- Anonymous pages that should not be indexed, such as cart/checkout/success/maintenance/impact-placeholder/share-preview/support-order, stay crawlable and use meta noindex so crawlers can read the directive.
 - A default 1200x630 brand OG image lives at `public/og/ymi-story-og.png`.
 - Deployment/Search Console status as of 2026-05-28: SEO code is deployed on `https://www.ymistory.com`; live homepage has the expected title, canonical, and default OG image; live `sitemap.xml` exposes 19 URLs; live `robots.txt` references the sitemap. Search Console domain property is DNS-verified, sitemap submitted, and homepage plus `/books` have been manually requested for reindexing. Google may still show older crawl diagnostics until recrawl completes.
 
@@ -105,6 +105,10 @@ Important API routes:
 - `app/api/cart/route.ts`
 - `app/api/orders/start/route.ts`
 - `app/api/checkout/session/route.ts`
+- `app/api/checkout/apply-promo-code/route.ts`
+- `app/api/checkout/apply-voucher/route.ts`
+- `app/api/checkout/remove-discount/route.ts`
+- `app/api/admin/discounts/route.ts`
 - `app/api/webhooks/stripe/route.ts`
 - `app/api/orders/stripe-confirm/route.ts`
 - `app/api/admin/final-jobs/**`
@@ -159,6 +163,16 @@ Core tables used by current flow:
 - `user_assets`
 - `verification_codes`
 - shipping-related tables used by checkout quote/destination APIs
+- `discount_offers`
+- `discount_instruments`
+- `discount_redemptions`
+
+Discount model:
+- `discount_offers` stores reusable rules such as free shipping, fixed amount, or percentage effects.
+- `discount_instruments` stores concrete promo codes or account vouchers, including ownership, public/private availability, active state, and usage limits.
+- `discount_redemptions` stores per-order reservations and paid/released transitions.
+- Checkout applies discounts through database RPCs so inventory limits and same-order idempotency are enforced in the database.
+- Legacy `referral_codes`, `customer_coupon_codes`, `creator_promo_codes`, and related redemption tables have been replaced by the unified discount model. Phase 4 cleanup SQL is stored at `Template_folder/sql_unified_discount_phase4_cleanup.sql`.
 
 Critical RPC:
 - `claim_next_job`

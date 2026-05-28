@@ -17,7 +17,9 @@ export async function GET(request: Request) {
 
   const orderQuery = supabaseAdmin
     .from('orders')
-    .select('order_id, display_id, order_status, payment_id, checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, created_at, email')
+    .select('order_id, display_id, order_status, payment_id, checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, created_at, email', {
+      count: 'exact',
+    })
     .order('created_at', { ascending: false })
     .limit(10)
 
@@ -27,7 +29,7 @@ export async function GET(request: Request) {
     orderQuery.eq('email', email)
   }
 
-  const { data: orders, error } = await orderQuery
+  const { data: orders, error, count } = await orderQuery
 
   if (error || !orders) {
     return NextResponse.json({ orders: [] })
@@ -100,5 +102,5 @@ export async function GET(request: Request) {
     }),
   }))
 
-  return NextResponse.json({ orders: result })
+  return NextResponse.json({ orders: result, count: count ?? result.length })
 }

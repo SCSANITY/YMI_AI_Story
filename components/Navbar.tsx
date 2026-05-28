@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { usePathname, useRouter } from 'next/navigation'
@@ -23,6 +23,53 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { MyRewardsModal } from '@/components/MyRewardsModal'
 import { runAfterIdle } from '@/lib/schedule-idle'
 
+type NavNoticeModule = 'favorites' | 'rewards' | 'orders' | 'books'
+type NavNoticeCounts = Record<NavNoticeModule, number>
+
+const EMPTY_NOTICE_COUNTS: NavNoticeCounts = {
+  favorites: 0,
+  rewards: 0,
+  orders: 0,
+  books: 0,
+}
+
+function clampCount(value: unknown): number {
+  const numeric = Number(value ?? 0)
+  return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0
+}
+
+function noticeStorageKey(customerId: string) {
+  return `ymi_nav_seen_counts:${customerId}`
+}
+
+function parseNoticeCounts(raw: string | null): NavNoticeCounts | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<NavNoticeCounts>
+    return {
+      favorites: clampCount(parsed.favorites),
+      rewards: clampCount(parsed.rewards),
+      orders: clampCount(parsed.orders),
+      books: clampCount(parsed.books),
+    }
+  } catch {
+    return null
+  }
+}
+
+function formatBadgeCount(count: number) {
+  return count > 9 ? '9+' : String(count)
+}
+
+function ModuleBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-[10px] font-bold leading-none text-slate-950 shadow-sm shadow-amber-200/70">
+      {formatBadgeCount(count)}
+    </span>
+  )
+}
+
 export const Navbar: React.FC = () => {
   const router = useRouter()
   const pathname = usePathname()
@@ -33,8 +80,10 @@ export const Navbar: React.FC = () => {
   const [isUserMenuOpen, setUserMenuOpen] = useState(false)
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isRewardsOpen, setRewardsOpen] = useState(false)
-  const [rewardVoucherCount, setRewardVoucherCount] = useState(0)
+  const [moduleCounts, setModuleCounts] = useState<NavNoticeCounts>(EMPTY_NOTICE_COUNTS)
+  const [seenCounts, setSeenCounts] = useState<NavNoticeCounts>(EMPTY_NOTICE_COUNTS)
   const [scrolled, setScrolled] = useState(false)
+  const seenCountsInitializedRef = useRef(false)
 
   const userRef = useRef<HTMLDivElement>(null)
   const navContainerRef = useRef<HTMLDivElement>(null)
@@ -48,7 +97,15 @@ export const Navbar: React.FC = () => {
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
-  const effectiveRewardVoucherCount = user?.customerId ? rewardVoucherCount : 0
+  const newCounts: NavNoticeCounts = user?.customerId
+    ? {
+        favorites: Math.max(0, moduleCounts.favorites - seenCounts.favorites),
+        rewards: Math.max(0, moduleCounts.rewards - seenCounts.rewards),
+        orders: Math.max(0, moduleCounts.orders - seenCounts.orders),
+        books: Math.max(0, moduleCounts.books - seenCounts.books),
+      }
+    : EMPTY_NOTICE_COUNTS
+  const totalNewCount = newCounts.favorites + newCounts.rewards + newCounts.orders + newCounts.books
   const isBooksActive = pathname === '/books'
   const isHomeActive = isHomePage
   // transparent on homepage hero, transitions to glass after scroll
@@ -72,23 +129,95 @@ export const Navbar: React.FC = () => {
   }, [])
 
   useEffect(() => {
+    if (!user?.customerId) {
+      setModuleCounts(EMPTY_NOTICE_COUNTS)
+      setSeenCounts(EMPTY_NOTICE_COUNTS)
+      seenCountsInitializedRef.current = false
+      return
+    }
+
+    const stored = typeof window !== 'undefined' ? parseNoticeCounts(window.localStorage.getItem(noticeStorageKey(user.customerId))) : null
+    setSeenCounts(stored ?? EMPTY_NOTICE_COUNTS)
+    seenCountsInitializedRef.current = Boolean(stored)
+  }, [user?.customerId])
+
+  const persistSeenCounts = useCallback((next: NavNoticeCounts) => {
+    if (!user?.customerId || typeof window === 'undefined') return
+    window.localStorage.setItem(noticeStorageKey(user.customerId), JSON.stringify(next))
+  }, [user?.customerId])
+
+  const markModuleSeen = useCallback((module: NavNoticeModule) => {
+    if (!user?.customerId) return
+    setSeenCounts((prev) => {
+      const next = {
+        ...prev,
+        [module]: moduleCounts[module],
+      }
+      persistSeenCounts(next)
+      return next
+    })
+  }, [moduleCounts, persistSeenCounts, user?.customerId])
+
+  useEffect(() => {
     if (!user?.customerId) return
 
     let cancelled = false
+    const rawCustomerId = user.customerId
 
     const cancelIdleTask = runAfterIdle(() => {
-      fetch('/api/account/reward-vouchers', {
-        credentials: 'include',
-        cache: 'no-store',
-      })
-        .then((res) => (res.ok ? res.json() : { active: [] }))
-        .then((data) => {
+      const customerId = encodeURIComponent(rawCustomerId)
+      Promise.all([
+        fetch(`/api/favourites?customerId=${customerId}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }).then((res) => (res.ok ? res.json() : { items: [] })),
+        fetch('/api/account/reward-vouchers', {
+          credentials: 'include',
+          cache: 'no-store',
+        }).then((res) => (res.ok ? res.json() : { active: [] })),
+        fetch(`/api/orders/list?customerId=${customerId}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }).then((res) => (res.ok ? res.json() : { orders: [], count: 0 })),
+        fetch(`/api/my-books?customerId=${customerId}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }).then((res) => (res.ok ? res.json() : { items: [] })),
+      ])
+        .then(([favoritesData, rewardsData, ordersData, booksData]) => {
           if (cancelled) return
-          setRewardVoucherCount(Array.isArray(data?.active) ? data.active.length : 0)
+          const nextCounts: NavNoticeCounts = {
+            favorites: Array.isArray(favoritesData?.items) ? favoritesData.items.length : 0,
+            rewards: Array.isArray(rewardsData?.active) ? rewardsData.active.length : 0,
+            orders: clampCount(ordersData?.count ?? (Array.isArray(ordersData?.orders) ? ordersData.orders.length : 0)),
+            books: Array.isArray(booksData?.items) ? booksData.items.length : 0,
+          }
+          setModuleCounts(nextCounts)
+          setSeenCounts((prev) => {
+            if (!seenCountsInitializedRef.current) {
+              seenCountsInitializedRef.current = true
+              persistSeenCounts(nextCounts)
+              return nextCounts
+            }
+
+            const normalized: NavNoticeCounts = {
+              favorites: Math.min(prev.favorites, nextCounts.favorites),
+              rewards: Math.min(prev.rewards, nextCounts.rewards),
+              orders: Math.min(prev.orders, nextCounts.orders),
+              books: Math.min(prev.books, nextCounts.books),
+            }
+            const changed =
+              normalized.favorites !== prev.favorites ||
+              normalized.rewards !== prev.rewards ||
+              normalized.orders !== prev.orders ||
+              normalized.books !== prev.books
+            if (changed) persistSeenCounts(normalized)
+            return changed ? normalized : prev
+          })
         })
         .catch(() => {
           if (cancelled) return
-          setRewardVoucherCount(0)
+          setModuleCounts(EMPTY_NOTICE_COUNTS)
         })
     })
 
@@ -96,7 +225,13 @@ export const Navbar: React.FC = () => {
       cancelled = true
       cancelIdleTask()
     }
-  }, [isRewardsOpen, pathname, user?.customerId])
+  }, [isRewardsOpen, pathname, persistSeenCounts, user?.customerId])
+
+  useEffect(() => {
+    if (pathname === '/favorites') markModuleSeen('favorites')
+    else if (pathname === '/orders' || pathname?.startsWith('/orders/')) markModuleSeen('orders')
+    else if (pathname === '/my-books') markModuleSeen('books')
+  }, [markModuleSeen, pathname])
 
   useLayoutEffect(() => {
     let activeRef: React.RefObject<HTMLButtonElement | null>
@@ -273,9 +408,9 @@ export const Navbar: React.FC = () => {
                     alt={user.name}
                     className="h-8 w-8 rounded-full border border-gray-200 object-cover shadow-sm"
                   />
-                  {effectiveRewardVoucherCount > 0 ? (
+                  {totalNewCount > 0 ? (
                     <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
-                      {effectiveRewardVoucherCount > 9 ? '9+' : effectiveRewardVoucherCount}
+                      {formatBadgeCount(totalNewCount)}
                     </span>
                   ) : null}
                 </button>
@@ -300,18 +435,21 @@ export const Navbar: React.FC = () => {
 
                     <button
                       onClick={() => {
+                        markModuleSeen('favorites')
                         router.push('/favorites')
                         setUserMenuOpen(false)
                       }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Heart className="h-4 w-4" />
-                      {t('navbar.favorites')}
+                      <span>{t('navbar.favorites')}</span>
+                      <ModuleBadge count={newCounts.favorites} />
                     </button>
 
                     <button
                       onClick={() => {
                         setUserMenuOpen(false)
+                        markModuleSeen('rewards')
                         setRewardsOpen(true)
                       }}
                       className="flex w-full items-center justify-between gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -320,33 +458,33 @@ export const Navbar: React.FC = () => {
                         <Gift className="h-4 w-4" />
                         {t('navbar.myRewards')}
                       </span>
-                      {effectiveRewardVoucherCount > 0 ? (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                          {effectiveRewardVoucherCount > 9 ? '9+' : effectiveRewardVoucherCount}
-                        </span>
-                      ) : null}
+                      <ModuleBadge count={newCounts.rewards} />
                     </button>
 
                     <button
                       onClick={() => {
+                        markModuleSeen('orders')
                         router.push('/orders')
                         setUserMenuOpen(false)
                       }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <Package className="h-4 w-4" />
-                      {t('navbar.myOrders')}
+                      <span>{t('navbar.myOrders')}</span>
+                      <ModuleBadge count={newCounts.orders} />
                     </button>
 
                     <button
                       onClick={() => {
+                        markModuleSeen('books')
                         router.push('/my-books')
                         setUserMenuOpen(false)
                       }}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <BookOpen className="h-4 w-4" />
-                      {t('navbar.myBooks')}
+                      <span>{t('navbar.myBooks')}</span>
+                      <ModuleBadge count={newCounts.books} />
                     </button>
 
                     {user.role === 'admin' ? (
