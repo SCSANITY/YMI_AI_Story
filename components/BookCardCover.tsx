@@ -17,6 +17,7 @@ type BookCardCoverProps = {
 
 const isCutoutImage = (src: string) => /\.(png|webp)($|\?)/i.test(src)
 const BOOK_CARD_IMAGE_SIZES = '(max-width: 767px) 46vw, (max-width: 1279px) 30vw, 22vw'
+const CUTOUT_COVER_SIZE = 1200
 
 export function BookCardCover({
   src,
@@ -36,16 +37,18 @@ export function BookCardCover({
     return (
       <div className="relative w-full z-10">
         <div className={`book-cover-motion relative w-full ${isMuted ? 'saturate-75' : ''}`}>
-          {/* Transparent cutout covers rely on their natural dimensions and CSS book-cover-img shaping. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={src}
             alt={alt}
-            loading={loading}
+            width={CUTOUT_COVER_SIZE}
+            height={CUTOUT_COVER_SIZE}
+            sizes={BOOK_CARD_IMAGE_SIZES}
+            priority={loading === 'eager'}
+            loading={loading === 'eager' ? undefined : loading}
             decoding={decoding}
             fetchPriority={fetchPriority}
             style={imageStyle}
-            className={`w-full block select-none book-cover-img ${isMuted ? 'blur-[1.5px] opacity-65' : ''}`}
+            className={`block h-auto w-full select-none book-cover-img ${isMuted ? 'blur-[1.5px] opacity-65' : ''}`}
           />
           {isMuted ? (
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-xl bg-white/35 backdrop-blur-[1px] md:rounded-2xl" />
@@ -58,7 +61,7 @@ export function BookCardCover({
   }
 
   return (
-    <div className="relative z-10 aspect-square overflow-hidden rounded-xl md:rounded-2xl transition-shadow duration-300 shadow-[8px_20px_44px_-2px_rgba(0,0,0,0.38),10px_10px_28px_-4px_rgba(0,0,0,0.22),4px_4px_10px_rgba(0,0,0,0.14)] group-hover:shadow-[10px_26px_54px_-2px_rgba(0,0,0,0.46),12px_12px_32px_-4px_rgba(0,0,0,0.28),6px_6px_14px_rgba(0,0,0,0.18)]">
+    <div className="relative z-10 aspect-square overflow-hidden rounded-xl shadow-[8px_20px_44px_-2px_rgba(0,0,0,0.38),10px_10px_28px_-4px_rgba(0,0,0,0.22),4px_4px_10px_rgba(0,0,0,0.14)] md:rounded-2xl">
       <Image
         src={src}
         alt={alt}

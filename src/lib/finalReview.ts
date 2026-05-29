@@ -419,24 +419,33 @@ export async function releaseFinalJob(params: {
   const previewPath = approvedPaths[0] || null
   const previewImageUrl = previewPath ? await signStorageUrl(previewPath) : null
 
-  await sendOrderDeliveryEmail({
-    to: orderEmail,
-    orderId: finalJob.order_id,
-    displayId: order.display_id ?? null,
-    downloadUrl: signedPdf.signedUrl,
-    previewImageUrl: previewImageUrl ?? undefined,
-  })
-
-  const { error: emailUpdateError } = await supabaseAdmin
-    .from('final_jobs')
-    .update({
-      email_sent_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+  try {
+    const emailResult = await sendOrderDeliveryEmail({
+      to: orderEmail,
+      orderId: finalJob.order_id,
+      displayId: order.display_id ?? null,
+      finalJobId,
+      downloadUrl: signedPdf.signedUrl,
+      previewImageUrl: previewImageUrl ?? undefined,
+      retryFailed: true,
     })
-    .eq('final_job_id', finalJobId)
 
-  if (emailUpdateError) {
-    throw new Error(emailUpdateError.message || 'Failed to update final job email state')
+    const eventStatus = emailResult.event?.status ?? null
+    if (!emailResult.skipped || eventStatus === 'sent') {
+      const { error: emailUpdateError } = await supabaseAdmin
+        .from('final_jobs')
+        .update({
+          email_sent_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('final_job_id', finalJobId)
+
+      if (emailUpdateError) {
+        throw new Error(emailUpdateError.message || 'Failed to update final job email state')
+      }
+    }
+  } catch (error) {
+    console.error('[email] final delivery failed', { finalJobId, orderId: finalJob.order_id, error })
   }
 
   return {

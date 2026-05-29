@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { templateRowToBook, type TemplateCatalogRow } from '@/lib/book-catalog'
 
-const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.png$/i
+const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.webp$/i
 const FINAL_PREVIEW_IMAGE_PATTERN = /^page_(\d+)\.png$/i
+const TEMPLATE_DETAIL_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400'
 
 type ProductImageEntry = {
+  name: string
+  order: number
+}
+
+type OrderedImageEntry = {
   name: string
   order: number
 }
@@ -14,7 +20,7 @@ function isProductImageEntry(value: ProductImageEntry | null): value is ProductI
   return value !== null
 }
 
-function isOrderedImageEntry(value: ProductImageEntry | null): value is ProductImageEntry {
+function isOrderedImageEntry(value: OrderedImageEntry | null): value is OrderedImageEntry {
   return value !== null
 }
 
@@ -40,11 +46,10 @@ async function withProductShowcaseImages(row: TemplateCatalogRow): Promise<Templ
   if (error || !data?.length) return row
 
   const productPaths = data
-    .map((item) => {
+    .flatMap((item): ProductImageEntry[] => {
       const match = item.name.match(PRODUCT_IMAGE_PATTERN)
-      return match ? { name: item.name, order: Number(match[1]) } : null
+      return match ? [{ name: item.name, order: Number(match[1]) }] : []
     })
-    .filter(isProductImageEntry)
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
     .map((item) => `${templateId}/products/${item.name}`)
 
@@ -122,6 +127,6 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
   }
 
   const response = NextResponse.json({ template })
-  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  response.headers.set('Cache-Control', TEMPLATE_DETAIL_CACHE_CONTROL)
   return response
 }

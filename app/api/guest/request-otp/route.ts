@@ -17,28 +17,31 @@ export async function POST(request: Request) {
   const code = generateCode()
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
 
-  const { error: insertError } = await supabaseAdmin.from('verification_codes').insert({
-    email: normalizedEmail,
-    code,
-    expires_at: expiresAt,
-  })
+  const { data: verification, error: insertError } = await supabaseAdmin
+    .from('verification_codes')
+    .insert({
+      email: normalizedEmail,
+      code,
+      expires_at: expiresAt,
+    })
+    .select('verification_id')
+    .single()
 
-  if (insertError) {
+  if (insertError || !verification?.verification_id) {
     return NextResponse.json(
-      { error: 'Failed to create verification code', details: insertError.message },
+      { error: 'Failed to create verification code', details: insertError?.message || 'missing verification id' },
       { status: 500 }
     )
   }
 
   try {
-    await sendOtpEmail(normalizedEmail, code)
+    await sendOtpEmail(normalizedEmail, code, verification.verification_id)
   } catch (error) {
     console.error('[otp] failed to send email', error)
     await supabaseAdmin
       .from('verification_codes')
       .delete()
-      .eq('email', normalizedEmail)
-      .eq('code', code)
+      .eq('verification_id', verification.verification_id)
     return NextResponse.json({ error: 'Unable to send verification code' }, { status: 500 })
   }
 

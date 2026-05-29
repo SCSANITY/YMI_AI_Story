@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Copy, Download, Image as ImageIcon, Share2, X } from 'lucide-react'
 import { useI18n } from '@/lib/useI18n'
@@ -36,7 +36,7 @@ function buildTextAwareShareUrl(shareUrl: string, shareText: string) {
 }
 
 async function fetchShareImageFile(imageUrl: string) {
-  const response = await fetch(imageUrl, { cache: 'no-store' })
+  const response = await fetch(imageUrl)
   if (!response.ok) return null
 
   const blob = await response.blob()
@@ -103,6 +103,7 @@ export function ShareDialog({
   const [isLinkExpanded, setIsLinkExpanded] = useState(false)
   const [isImageSharing, setIsImageSharing] = useState(false)
   const [imageShareState, setImageShareState] = useState<'idle' | 'unavailable'>('idle')
+  const imageFileCacheRef = useRef<{ url: string; file: File } | null>(null)
 
   const canNativeShare =
     typeof window !== 'undefined' &&
@@ -116,6 +117,38 @@ export function ShareDialog({
     setIsLinkExpanded(false)
     setImageShareState('idle')
   }, [open, shareText])
+
+  const getShareImageFile = useCallback(async () => {
+    if (!previewImageUrl) return null
+    if (imageFileCacheRef.current?.url === previewImageUrl) {
+      return imageFileCacheRef.current.file
+    }
+
+    const file = await fetchShareImageFile(previewImageUrl)
+    if (file) {
+      imageFileCacheRef.current = { url: previewImageUrl, file }
+    }
+    return file
+  }, [previewImageUrl])
+
+  useEffect(() => {
+    if (!open || !previewImageUrl) {
+      imageFileCacheRef.current = null
+      return
+    }
+
+    let isActive = true
+    const timer = window.setTimeout(() => {
+      void getShareImageFile().then((file) => {
+        if (!isActive || !file) return
+      })
+    }, 250)
+
+    return () => {
+      isActive = false
+      window.clearTimeout(timer)
+    }
+  }, [getShareImageFile, open, previewImageUrl])
 
   useEffect(() => {
     if (!open) return
@@ -163,7 +196,7 @@ export function ShareDialog({
     setImageShareState('idle')
 
     try {
-      const file = await fetchShareImageFile(previewImageUrl)
+      const file = await getShareImageFile()
       const nav = navigator as Navigator & {
         canShare?: (data: ShareData) => boolean
       }
@@ -190,12 +223,13 @@ export function ShareDialog({
     if (!previewImageUrl || typeof document === 'undefined') return
 
     try {
-      const response = await fetch(previewImageUrl, { cache: 'no-store' })
-      const blob = await response.blob()
+      const file = await getShareImageFile()
+      const blob = file ?? await fetch(previewImageUrl).then((response) => response.ok ? response.blob() : null)
+      if (!blob) throw new Error('Image download failed')
       const objectUrl = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = objectUrl
-      anchor.download = 'ymi-story-preview.jpg'
+      anchor.download = file?.name || 'ymi-story-preview.jpg'
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
@@ -228,12 +262,7 @@ export function ShareDialog({
       label: 'WhatsApp',
       colorCls: 'bg-[#25D366]/90 hover:bg-[#25D366] border-[#25D366]/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]',
       icon: <WhatsAppIcon className="h-5 w-5 shrink-0" />,
-      action: () => {
-        if (previewImageUrl && canNativeShare) {
-          return handleNativeShareWithImage()
-        }
-        openPopup(`https://wa.me/?text=${encodeURIComponent(fullShareText)}`)
-      },
+      action: () => openPopup(`https://wa.me/?text=${encodeURIComponent(fullShareText)}`),
     },
     {
       id: 'instagram',
@@ -286,6 +315,9 @@ export function ShareDialog({
                 <img
                   src={previewImageUrl}
                   alt={title}
+                  decoding="async"
+                  loading="eager"
+                  fetchPriority="high"
                   className="book-cover-img block w-full select-none drop-shadow-[8px_20px_34px_rgba(92,43,10,0.28)]"
                 />
                 <div aria-hidden="true" className="card-ripple-ring" />

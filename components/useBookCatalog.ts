@@ -11,7 +11,7 @@ let catalogRequest: Promise<CatalogBook[]> | null = null
 
 async function fetchCatalogBooks(): Promise<CatalogBook[]> {
   if (!catalogRequest) {
-    catalogRequest = fetch('/api/templates', { credentials: 'include', cache: 'no-store' })
+    catalogRequest = fetch('/api/templates', { credentials: 'omit' })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}))
 

@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabase } from '@/lib/supabaseServer'
+import { recordExternalEmailObserved } from '@/lib/emailEvents'
 
 type AuthResult = {
   error?: string
@@ -53,6 +54,23 @@ export async function signup(formData: FormData): Promise<AuthResult> {
 
   if (error) {
     return { error: error.message }
+  }
+
+  try {
+    const bucket = new Date().toISOString().slice(0, 13)
+    await recordExternalEmailObserved({
+      emailKey: 'supabase_signup_otp',
+      provider: 'supabase_auth',
+      idempotencyKey: `supabase_auth_external:${email.toLowerCase()}:signup:${bucket}`,
+      toEmail: email.toLowerCase(),
+      subject: 'Supabase signup verification email',
+      context: {
+        purpose: 'signup',
+        trigger: 'signup_action',
+      },
+    })
+  } catch (emailEventError) {
+    console.error('[email-events] failed to record supabase auth email observation', emailEventError)
   }
 
   return { otpRequired: true }

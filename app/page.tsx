@@ -28,7 +28,6 @@ export default function HomePage() {
         aspectClassName="aspect-video"
         hotspotClassName="left-[39.8%] top-[65.8%] h-[15.8%] w-[22.8%]"
         href="/books"
-        priority
         className="-mt-2 bg-[var(--color-surface-warm)] md:-mt-3"
       />
       <HomeBookCategories />

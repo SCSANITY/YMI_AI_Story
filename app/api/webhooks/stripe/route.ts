@@ -4,6 +4,7 @@ import { getStripeServer } from '@/lib/stripe'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orderFulfillment'
 import { markOrderDiscountsPaid } from '@/lib/discounts'
+import { recordExternalEmailObserved } from '@/lib/emailEvents'
 
 export const runtime = 'nodejs'
 
@@ -120,6 +121,23 @@ export async function POST(request: Request) {
       currency,
     })
     await markOrderDiscountsPaid(orderId)
+    try {
+      await recordExternalEmailObserved({
+        emailKey: 'stripe_receipt',
+        provider: 'stripe',
+        idempotencyKey: `stripe_external:${session.id}`,
+        toEmail: emailFromSession,
+        subject: 'Stripe payment receipt',
+        orderId,
+        customerId,
+        context: {
+          checkoutSessionId: session.id,
+          trigger: event.type,
+        },
+      })
+    } catch (emailEventError) {
+      console.error('[email-events] failed to record stripe external email observation', emailEventError)
+    }
     return NextResponse.json({ received: true, order: result })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Failed to finalize stripe order' }, { status: 500 })

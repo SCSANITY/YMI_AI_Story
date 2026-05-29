@@ -382,6 +382,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       total: resolvedAmount,
       currency: normalizedCurrency,
       items: emailItems,
+      customerId,
       address: {
         firstName: String(shippingAddress?.firstName ?? ''),
         lastName: String(shippingAddress?.lastName ?? ''),

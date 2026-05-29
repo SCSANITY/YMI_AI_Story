@@ -29,6 +29,8 @@ const TEMPLATE_LIST_COLUMNS = [
   'magic_attributes',
 ].join(',')
 
+const TEMPLATE_CATALOG_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400'
+
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('templates')
@@ -41,6 +43,6 @@ export async function GET() {
 
   const rows = (data ?? []) as TemplateCatalogRow[]
   const response = NextResponse.json({ templates: templateRowsToBooks(rows) })
-  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  response.headers.set('Cache-Control', TEMPLATE_CATALOG_CACHE_CONTROL)
   return response
 }

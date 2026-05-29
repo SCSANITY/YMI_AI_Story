@@ -190,6 +190,8 @@ Production checklist after live approval:
 Current state:
 - Production sending domain and from addresses are verified.
 - Successful email sending has already been observed.
+- YMI-managed emails write to `email_events` with `sent` or `failed` status.
+- Stripe and Supabase Auth emails are logged only as `external_observed`; their templates and delivery status are managed in the external dashboards.
 
 Used for:
 - Guest checkout OTP.
@@ -198,9 +200,17 @@ Used for:
 - Unpaid reminder emails.
 
 Check before internal test:
+- Run `Template_folder/sql_email_events.sql` in Supabase.
 - Confirm `RESEND_API_KEY` in Vercel.
 - Confirm `EMAIL_FROM` and security/order/delivery sender values.
 - Confirm bounce/complaint monitoring owner.
+- Review `/admin/emails` after test sends.
+
+Where to edit email content:
+- YMI-managed email layout and body: `components/emails/*`.
+- YMI-managed subject/from/send behavior: `src/lib/email.tsx`.
+- Stripe receipts: Stripe Dashboard.
+- Supabase Auth signup/OTP: Supabase Auth Email Templates.
 
 ## Vercel And Internal Callback
 

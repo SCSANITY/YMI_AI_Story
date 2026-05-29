@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 ## Current State
 
@@ -58,6 +58,23 @@ Active short-term tracker:
 - SEO metadata foundation shipped for the public site: root App Router metadata now has a non-empty title, description, metadataBase, canonical www URL, OG/Twitter defaults, and favicon declarations; public pages have unique metadata; product pages generate metadata from Supabase templates; anonymous non-indexable pages use meta noindex; private/admin/API areas are excluded in `robots.txt`; `sitemap.xml` and `robots.txt` are generated from the canonical www domain.
 - SEO deployment/Search Console status: commit `b8460a1` has been pushed and deployed to `https://www.ymistory.com`; live homepage exposes the new title/canonical/default OG image; live `sitemap.xml` is reachable with 19 URLs; live `robots.txt` references the sitemap. Google Search Console domain property `ymistory.com` was verified by DNS TXT, `https://www.ymistory.com/sitemap.xml` was submitted, and homepage plus `/books` were manually requested for reindexing. Current state: waiting for Google recrawl/index refresh.
 - Unified Discount System shipped and Phase 4 code cleanup completed: checkout now uses `discount_offers`, `discount_instruments`, `discount_redemptions`; DB RPCs handle apply/release/paid transitions; admin discount creation lives at `/admin/discounts`; legacy referral/reward-coupon apply APIs and invite pages have been removed from the codebase. DB cleanup SQL is stored at `Template_folder/sql_unified_discount_phase4_cleanup.sql` and should be executed manually in Supabase after deployment confirmation.
+- Frontend performance optimization pass completed for the public catalog -> Customize -> Preview/Share path:
+  - Book cards keep the 3D cover feel while repeated card panels use lighter `book-card-panel` styling instead of full `backdrop-filter` glass.
+  - Book cover hover no longer recalculates heavier shadow filters; hover motion is now transform-focused.
+  - Transparent `cover-normalized.webp` covers are loaded through Next Image with responsive sizing, and static fallback covers now prefer normalized WebP assets where available.
+  - `/api/templates` and `/api/templates/[templateId]` now use public short-cache headers; public catalog/detail fetches no longer force `no-store` or include user credentials.
+  - Books grid Framer Motion layout animation was removed while preserving lightweight entry animation.
+  - Customize preview/showcase image preloading is scoped to visible or adjacent images instead of broad eager loading.
+  - Share dialog preview image is eager-loaded and share/download actions reuse a cached image file instead of refetching.
+  - Home hero video uses `preload="metadata"` and the first poster banner no longer competes as a high-priority image.
+  - Product showcase photos were standardized to `products/productN.webp`: local script `scripts/optimize-template-products.mjs` generated 97 WebP files from `Template_folder/<Story_ID>/Product`; local source PNGs were removed after conversion; Supabase was updated with the WebP files and verified as 97 WebP / 0 PNG across active stories.
+- Email system Phase 1 reliability pass implemented:
+  - Added `email_events` as the unified log for YMI-managed Resend emails and external Stripe/Supabase Auth observations.
+  - Order confirmation emails now use an idempotency key so Stripe webhook retries do not create duplicate customer emails.
+  - Final delivery email failures no longer block PDF release; failures are logged and `final_jobs.email_sent_at` remains null.
+  - Guest checkout OTP remains synchronous and user-facing; failed sends delete the generated verification code.
+  - Unpaid reminders now write new delivery records to `email_events` instead of `order_reminder_logs`.
+  - Added read-only Admin email log page at `/admin/emails`.
 
 ## Current Owner-Managed Work
 
@@ -71,6 +88,7 @@ Active short-term tracker:
 ## Near-Term Technical Todos
 
 High priority before internal test:
+- Execute `Template_folder/sql_email_events.sql` in Supabase before relying on the new email logging path.
 - Finish and sync the selected first-launch story configs in Supabase.
 - Clean remaining demo/placeholder content from the public website and update UIUX to a formal production-site version.
 - Connect Stripe Live in Vercel production after live readiness; local/dev should remain on test keys.
@@ -86,6 +104,7 @@ Medium priority:
 - Confirm `INTERNAL_API_SECRET` matches between Vercel production env and worker online env.
 - Confirm worker online env points to production callback URL.
 - Decide alert owner for Healthchecks and Resend bounce/complaint monitoring.
+- Resend webhook for delivered/bounced/complained status is deferred until the public launch phase; current email observability is sent/failed/external_observed.
 - Confirm RunPod cancellation behavior is safe for `/cancel/{runId}`.
 - Confirm RunPod endpoint image/volume/workflow version is tracked outside code.
 
@@ -104,6 +123,7 @@ Code quality / maintainability:
 - Some product/content pages may still contain placeholder/demo wording.
 - Admin rerun UI is reserved/disabled for a future random-seed rerun flow.
 - SEO metadata should stay aligned with route ownership: public marketing/catalog pages may be indexed; private areas should be excluded with `robots.txt`; anonymous but non-indexable pages should remain crawlable with meta noindex so crawlers can actually see the directive. Do not rely on `robots.txt` for API security; API routes still require their own auth/secret checks.
+- Frontend performance is no longer a near-term blocker after the May 2026 optimization pass. Optional future work: run Lighthouse/Chrome Performance baselines on homepage, `/books`, Customize, and ShareDialog; add a hero video poster or mobile-specific lower-bitrate video; continue reducing repeated `backdrop-blur` usage in non-critical surfaces; archive unused large PNG assets in `public/banners` to prevent accidental future references.
 
 ## Known Risks And Current Judgment
 
@@ -184,6 +204,25 @@ The following admin features are planned but not yet implemented. Implementation
 - Add new templates or archive existing ones.
 - All changes write directly to the `templates` table via new API routes under `/api/admin/catalog/`.
 - Must be designed carefully: pricing changes affect live checkout; config path changes affect running worker jobs.
+
+**Discount Campaigns / Claimable Vouchers**
+- Extend the shipped unified discount system beyond manual admin-created promo codes and point-to-point vouchers.
+- Keep the current model as the base:
+  - `discount_offers` = what the discount is.
+  - `discount_instruments` = the concrete promo code or account voucher.
+  - `discount_redemptions` = checkout usage records.
+- Add a future claim-campaign layer for UI-driven or condition-driven voucher acquisition, such as homepage claim buttons, new-user vouchers, seasonal campaigns, survey rewards, invite-success rewards, and limited-quantity drops.
+- Proposed future tables: `discount_claim_campaigns` and `discount_claims`.
+- Admin should eventually manage:
+  - campaign name and status,
+  - linked discount offer,
+  - display placement,
+  - eligibility rules,
+  - per-user claim limit,
+  - global claim inventory,
+  - campaign start/end time,
+  - user-facing copy and CTA.
+- This is not required for current internal testing; current admin manual vouchers and shared promo codes are sufficient for the near-term rollout.
 
 **Final Page Rerun with Random Seed**
 - Allows admin to rerun a single final page with a new random seed (instead of the fixed default seed).

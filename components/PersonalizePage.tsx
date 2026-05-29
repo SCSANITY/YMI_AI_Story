@@ -1313,8 +1313,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     const loadTemplateInfo = async () => {
       const response = await fetch(`/api/templates/${encodeURIComponent(bookID)}`, {
-        credentials: 'include',
-        cache: 'no-store',
+        credentials: 'omit',
       });
       const data = await response.json().catch(() => ({}));
 
@@ -1396,10 +1395,19 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   useEffect(() => {
     if (!previewPages.length && (!viewState.showPreview || !finalPreviewImages.length)) return
 
-    const preloadUrls = [
-      ...previewPages,
-      ...(viewState.showPreview ? finalPreviewImages : []),
-    ]
+    const preloadIndexes = new Set([
+      0,
+      Math.max(0, currentSpread - 1),
+      currentSpread,
+      currentSpread + 1,
+    ])
+
+    const preloadUrls = Array.from(preloadIndexes)
+      .map((spreadIndex) => {
+        if (spreadIndex === 0) return previewPages[0]
+        return previewPages[spreadIndex] || (viewState.showPreview ? finalPreviewImages[spreadIndex - 1] : '')
+      })
+      .filter(Boolean)
 
     Array.from(new Set(preloadUrls)).forEach((url) => {
       if (!url) return
@@ -1407,7 +1415,24 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       img.decoding = 'async'
       img.src = url
     })
-  }, [finalPreviewImages, previewPages, viewState.showPreview])
+  }, [currentSpread, finalPreviewImages, previewPages, viewState.showPreview])
+
+  useEffect(() => {
+    if (!viewState.showForm || showcaseImages.length <= 1) return
+
+    const preloadIndexes = new Set([
+      (activeShowcaseIndex + 1) % showcaseImages.length,
+      (activeShowcaseIndex - 1 + showcaseImages.length) % showcaseImages.length,
+    ])
+
+    Array.from(preloadIndexes).forEach((index) => {
+      const url = getShowcaseImageSrc(showcaseImages[index] || '')
+      if (!url) return
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = url
+    })
+  }, [activeShowcaseIndex, getShowcaseImageSrc, showcaseImages, viewState.showForm])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -2145,6 +2170,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           const spreadImage = previewSpreadImage || finalPreviewImage;
           const isLockedFinalPreview = !previewSpreadImage && Boolean(finalPreviewImage);
           const isLeftSide = side === 'left';
+          const isNearbySpread = Math.abs(spreadIndex - currentSpread) <= 1;
           return (
             <div
               className={`w-full h-full relative overflow-hidden ${isLeftSide ? 'rounded-l-sm border-r border-gray-200' : 'rounded-r-sm'}`}
@@ -2156,6 +2182,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       src={spreadImage}
                       alt="Preview spread"
                       className={`absolute top-0 h-full max-w-none object-cover ${isLockedFinalPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}`}
+                      decoding="async"
+                      loading={isNearbySpread ? 'eager' : 'lazy'}
+                      fetchPriority={isNearbySpread ? 'high' : 'auto'}
                       style={{
                         width: '200%',
                         left: isLeftSide ? '0%' : '-100%',

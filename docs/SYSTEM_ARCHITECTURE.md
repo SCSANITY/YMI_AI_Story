@@ -162,6 +162,7 @@ Core tables used by current flow:
 - `final_job_pages`
 - `user_assets`
 - `verification_codes`
+- `email_events`
 - shipping-related tables used by checkout quote/destination APIs
 - `discount_offers`
 - `discount_instruments`
@@ -207,6 +208,13 @@ Stripe:
 Resend:
 - Transactional email provider.
 - Production sending domain and `from` addresses are verified and have already sent successfully.
+- YMI-managed emails are guest checkout OTP, order confirmation, final delivery, and unpaid reminders.
+- YMI-managed email templates live in `components/emails/*`; subject/from/send behavior lives in the email sender functions.
+- `email_events` records YMI-managed sent/failed status and external observations for Stripe/Supabase Auth.
+
+External email boundaries:
+- Stripe receipts are controlled in Stripe Dashboard. Local `external_observed` records mean YMI saw a Stripe checkout/payment event, not that YMI sent or verified delivery.
+- Supabase Auth OTP/signup emails are controlled in Supabase Auth Email Templates. Guest checkout OTP is not Supabase Auth; it is YMI-managed through Resend.
 
 Vercel:
 - Hosts the Next.js web/API app.

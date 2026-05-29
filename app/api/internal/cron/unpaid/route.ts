@@ -180,19 +180,14 @@ async function runCron(request: Request) {
           displayId: order.display_id ?? null,
           resumeUrl: buildResumeUrl(order.order_id),
           items: [],
+          customerId,
+          reminderDate: nowIso.slice(0, 10),
         })
 
         const repeatDays = Number.isFinite(Number(schedule.repeat_every_days))
           ? Number(schedule.repeat_every_days)
           : REPEAT_REMINDER_DAYS
         const nextSendAt = new Date(Date.now() + repeatDays * 24 * 60 * 60 * 1000).toISOString()
-
-        await supabaseAdmin.from('order_reminder_logs').insert({
-          order_id: order.order_id,
-          customer_id: customerId,
-          reminder_type: 'unpaid',
-          sent_to_email: toEmail,
-        })
 
         await supabaseAdmin
           .from('order_reminder_schedules')

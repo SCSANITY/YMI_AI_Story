@@ -4,7 +4,7 @@ import { useGlobalContext } from '../contexts/GlobalContext';
 import { Book } from '@/types';
 import { Search, Filter, X } from 'lucide-react';
 import { Button } from './Button';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/useI18n';
 import { BookCard } from '@/components/BookCard';
@@ -346,19 +346,16 @@ const handlePersonalize = async (bookID: string) => {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-10">
-            <AnimatePresence>
-                {filteredBooks.map((book, index) => {
+            {filteredBooks.map((book, index) => {
                 const isFavorite = favorites.some(f => f.bookID === book.bookID);
                 const coverSrc = book.coverUrl;
                 
                 return (
                     <motion.div
                     key={book.bookID}
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2 }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
                     >
                       <BookCard
                         book={book}
@@ -368,7 +365,7 @@ const handlePersonalize = async (bookID: string) => {
                         storyType={book.storyTypeLabel || book.category}
                         description={book.description}
                         rating={ratingMap[book.bookID]}
-                        priority={index < 8}
+                        priority={index < 4}
                         suppressHover={suppressCardHover}
                         onClick={() => handlePersonalize(book.bookID)}
                         onFavoriteClick={(event) => handleFavoriteClick(event, book)}
@@ -376,7 +373,6 @@ const handlePersonalize = async (bookID: string) => {
                     </motion.div>
                 );
                 })}
-            </AnimatePresence>
           </div>
         )}
       </div>

@@ -12,6 +12,7 @@ import {
   getOrderDiscountSummary,
   refreshAppliedOrderDiscounts,
 } from '@/lib/discounts'
+import { recordExternalEmailObserved } from '@/lib/emailEvents'
 
 type SessionItemInput = {
   id?: string
@@ -223,6 +224,24 @@ export async function POST(request: Request) {
         },
       },
     })
+
+    try {
+      await recordExternalEmailObserved({
+        emailKey: 'stripe_receipt',
+        provider: 'stripe',
+        idempotencyKey: `stripe_external:${session.id}`,
+        toEmail: email,
+        subject: 'Stripe payment receipt',
+        orderId,
+        customerId,
+        context: {
+          checkoutSessionId: session.id,
+          trigger: 'checkout_session_created',
+        },
+      })
+    } catch (emailEventError) {
+      console.error('[email-events] failed to record stripe external email observation', emailEventError)
+    }
 
     return NextResponse.json({
       ok: true,
