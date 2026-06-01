@@ -16,14 +16,10 @@ import {
 } from '@/lib/emailEvents'
 
 const resendApiKey = process.env.RESEND_API_KEY || ''
-const defaultFrom = process.env.EMAIL_FROM || 'Ymi Story <no-reply@localhost>'
-const securityFrom = process.env.EMAIL_FROM_SECURITY || defaultFrom
-const ordersFrom = process.env.EMAIL_FROM_ORDERS || defaultFrom
-const deliveryFrom = process.env.EMAIL_FROM_DELIVERY || defaultFrom
-const supportFrom = process.env.EMAIL_FROM_SUPPORT || defaultFrom
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || ''
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null
+const defaultSenderFallback = 'YMI Story <hello@ymistory.com>'
 
 type SendEmailParams = {
   to: string
@@ -37,6 +33,7 @@ type SendEmailParams = {
 type ManagedEmailParams = SendEmailParams & {
   emailKey: string
   idempotencyKey: string
+  fromEnvName?: string
   provider?: string
   orderId?: string | null
   finalJobId?: string | null
@@ -52,8 +49,38 @@ function buildAbsoluteUrl(path: string): string | undefined {
   return `${base}${suffix}`
 }
 
+function normalizeSenderValue(value: string): string {
+  let normalized = value.trim()
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1).trim()
+  }
+  return normalized
+}
+
+function isValidSender(value: string): boolean {
+  const email = '[^<>\\s@]+@[^<>\\s@]+\\.[^<>\\s@]+'
+  return new RegExp(`^${email}$`).test(value) || new RegExp(`^.+\\s<${email}>$`).test(value)
+}
+
+function getSender(envName: string): string {
+  const defaultFrom = process.env.EMAIL_FROM || defaultSenderFallback
+  const rawValue = process.env[envName] || defaultFrom
+  const normalized = normalizeSenderValue(rawValue)
+
+  if (!isValidSender(normalized)) {
+    throw new Error(
+      `[email] Invalid sender ${envName}: ${JSON.stringify(rawValue)}. Expected email@example.com or Name <email@example.com>.`
+    )
+  }
+
+  return normalized
+}
+
 async function sendEmail({ to, subject, react, text, html, from }: SendEmailParams) {
-  const resolvedFrom = from || defaultFrom
+  const resolvedFrom = from || getSender('EMAIL_FROM')
 
   if (!resend) {
     throw new Error('[email] RESEND_API_KEY is missing')
@@ -106,6 +133,13 @@ async function sendEmail({ to, subject, react, text, html, from }: SendEmailPara
 }
 
 async function sendManagedEmail(params: ManagedEmailParams) {
+  const resolvedFrom = params.from || (params.fromEnvName ? getSender(params.fromEnvName) : getSender('EMAIL_FROM'))
+  const context = {
+    ...(params.context ?? {}),
+    from: resolvedFrom,
+    fromEnvName: params.fromEnvName ?? null,
+  }
+
   const { event, shouldSend } = await prepareEmailEvent({
     emailKey: params.emailKey,
     provider: params.provider || 'resend',
@@ -115,7 +149,7 @@ async function sendManagedEmail(params: ManagedEmailParams) {
     orderId: params.orderId ?? null,
     finalJobId: params.finalJobId ?? null,
     customerId: params.customerId ?? null,
-    context: params.context,
+    context,
     retryFailed: params.retryFailed,
   })
 
@@ -124,7 +158,7 @@ async function sendManagedEmail(params: ManagedEmailParams) {
   }
 
   try {
-    const response = await sendEmail(params)
+    const response = await sendEmail({ ...params, from: resolvedFrom })
     const responseAny = response as
       | { data?: { id?: string | null } | null; id?: string | null }
       | null
@@ -144,7 +178,7 @@ export async function sendOtpEmail(to: string, code: string, verificationId: str
     emailKey: 'guest_otp',
     idempotencyKey: `guest_otp:${to}:${verificationId}`,
     to,
-    from: securityFrom,
+    fromEnvName: 'EMAIL_FROM_SECURITY',
     subject: 'Your checkout verification code',
     react: <OtpEmail code={code} />,
     text: `Your verification code is ${code}. It expires in 10 minutes.`,
@@ -167,7 +201,7 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
     emailKey: 'order_confirmation',
     idempotencyKey: `order_confirmation:${params.orderId}`,
     to: params.to,
-    from: ordersFrom,
+    fromEnvName: 'EMAIL_FROM_ORDERS',
     subject: `Order confirmed - ${params.displayId || params.orderId}`,
     orderId: params.orderId,
     customerId: params.customerId ?? null,
@@ -208,7 +242,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
     emailKey: 'final_delivery',
     idempotencyKey: `final_delivery:${params.finalJobId || params.orderId}`,
     to: params.to,
-    from: deliveryFrom,
+    fromEnvName: 'EMAIL_FROM_DELIVERY',
     subject: `Your book is ready - ${params.displayId || params.orderId}`,
     orderId: params.orderId,
     finalJobId: params.finalJobId ?? null,
@@ -246,7 +280,7 @@ export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailPar
     emailKey: 'unpaid_reminder',
     idempotencyKey: `unpaid_reminder:${params.orderId}:${reminderDate}`,
     to: params.to,
-    from: supportFrom,
+    fromEnvName: 'EMAIL_FROM_SUPPORT',
     subject: `Complete your checkout - ${params.displayId || params.orderId}`,
     orderId: params.orderId,
     customerId: params.customerId ?? null,
