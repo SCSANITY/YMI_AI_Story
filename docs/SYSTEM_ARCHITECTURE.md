@@ -206,24 +206,28 @@ Stripe:
 - Local/dev env should remain on test keys.
 - Vercel production should switch to live keys after Stripe live review.
 
-Resend:
-- Transactional email provider.
-- Production sending domain and `from` addresses are verified and have already sent successfully.
-- YMI-managed emails are guest checkout OTP, order confirmation, final delivery, and unpaid reminders.
-- Logistics update emails are also YMI-managed and sent through `EMAIL_FROM_DELIVERY`.
+Resend and email notifications:
+- Resend is the transactional email provider for YMI-managed emails.
+- Production sending domain and `from` addresses are verified and have sent successfully.
+- `email_events` is the operational log for YMI-managed `sent` / `failed` records and external `external_observed` markers.
+- YMI-managed email types are:
+  - guest checkout OTP
+  - order confirmation after payment finalization
+  - final PDF delivery after Admin release
+  - order status update for Printing, Shipped, and Delivered
+  - unpaid checkout reminder
+- Order confirmation uses `order_confirmation:{order_id}` idempotency. Stripe webhook retries must not duplicate the customer email.
+- Final PDF delivery email failure does not block PDF release. Failure is logged and `final_jobs.email_sent_at` remains null for follow-up.
+- Guest checkout OTP is synchronous and user-facing; failed sends remove the verification code.
+- Unpaid reminders write to `email_events`; legacy `order_reminder_logs` is not the active write path.
 - Customer-facing order progress uses `orders.order_status` as the single source of truth: `paid` maps to Order Confirmed, `production` maps to Printing, `shipped` maps to Shipped, and `delivered` maps to Delivered.
-- Admin status changes are recorded in `order_status_events`; direct Supabase edits to `orders.order_status` sync to the UI after refresh but do not automatically send email.
+- Admin status changes to `production`, `shipped`, or `delivered` send an email through `EMAIL_FROM_DELIVERY` and are recorded in `order_status_events`.
+- Direct Supabase edits to `orders.order_status` sync to the UI after refresh but do not automatically send email.
 - `/admin/orders` separates editable production-flow orders from read-only `unpaid`, `cancelled`, and `refunded` orders.
-- YMI-managed email templates live in `components/emails/*`; subject/from/send behavior lives in `src/lib/email.tsx`.
-- `email_events` records YMI-managed sent/failed status and external observations for Stripe/Supabase Auth.
-- Current app-owned templates:
-  - `OtpEmail`
-  - `OrderReceiptEmail`
-  - `DeliveryEmail`
-  - `AbandonmentEmail`
-  - `LogisticsUpdateEmail`
-  - shared `EmailLayout`
-- The app does not currently have a database-driven email template editor. Template updates should be made in code, validated, deployed, and then verified through `/admin/emails` plus the `email_events` table.
+- `/admin/emails` is read-only and is used to inspect email status.
+- YMI-managed email templates live in `components/emails/*`; subject/from/idempotency/trigger behavior lives in `src/lib/email.tsx`.
+- Current app-owned templates are `OtpEmail`, `OrderReceiptEmail`, `DeliveryEmail`, `AbandonmentEmail`, `LogisticsUpdateEmail`, and shared `EmailLayout`.
+- The app does not currently have a database-driven email template editor. Template updates are code changes, validated, deployed, then verified through `/admin/emails` and `email_events`.
 
 External email boundaries:
 - Stripe receipts are controlled in Stripe Dashboard. Local `external_observed` records mean YMI saw a Stripe checkout/payment event, not that YMI sent or verified delivery.

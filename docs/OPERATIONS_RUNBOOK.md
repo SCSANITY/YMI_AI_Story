@@ -192,13 +192,14 @@ Current state:
 - Successful email sending has already been observed.
 - YMI-managed emails write to `email_events` with `sent` or `failed` status.
 - Stripe and Supabase Auth emails are logged only as `external_observed`; their templates and delivery status are managed in the external dashboards.
+- `/admin/emails` is the read-only operational view for recent email events.
 
 Used for:
-- Guest checkout OTP.
-- Order confirmation.
-- Final delivery email.
-- Logistics update emails.
-- Unpaid reminder emails.
+- Guest checkout OTP: synchronous Resend email; failed send deletes the generated verification code.
+- Order confirmation: sent after payment finalization; idempotency key is `order_confirmation:{order_id}`.
+- Final PDF delivery: sent after Admin release; failure does not block release and leaves `final_jobs.email_sent_at` null.
+- Order status update: sent from `/admin/orders` when status changes to `production`, `shipped`, or `delivered`.
+- Unpaid checkout reminder: sent by the unpaid cron path with daily idempotency.
 
 Check before internal test:
 - Run `Template_folder/sql_email_events.sql` in Supabase.
@@ -208,12 +209,20 @@ Check before internal test:
 - Confirm bounce/complaint monitoring owner.
 - Review `/admin/emails` after test sends.
 
+Order status email rules:
+- `paid` means Order Confirmed. Its email is the payment/order confirmation email, not an Admin status update email.
+- `production` means Printing and sends a production/printing update from `EMAIL_FROM_DELIVERY`.
+- `shipped` sends a shipped update from `EMAIL_FROM_DELIVERY`, including tracking data if present.
+- `delivered` sends a delivered update from `EMAIL_FROM_DELIVERY`.
+- Updating only tracking or note without changing status does not send email.
+- Direct Supabase edits to `orders.order_status` are visible after Admin/customer page refresh but do not send email automatically.
+- `/admin/orders` Production Flow orders are editable; `unpaid`, `cancelled`, and `refunded` groups are read-only.
+
 Where to edit email content:
 - YMI-managed email layout and body: `components/emails/*`.
 - YMI-managed subject/from/send behavior: `src/lib/email.tsx`.
-- Logistics/status email body: `components/emails/LogisticsUpdateEmail.tsx`.
+- Order status update email body: `components/emails/LogisticsUpdateEmail.tsx`.
 - Admin order status updates: `/admin/orders`.
-- `/admin/orders` production-flow orders are editable; `unpaid`, `cancelled`, and `refunded` groups are read-only.
 - Stripe receipts: Stripe Dashboard.
 - Supabase Auth signup/OTP: Supabase Auth Email Templates.
 
@@ -222,11 +231,11 @@ Email sender env vars:
 - `EMAIL_FROM`: default/general sender.
 - `EMAIL_FROM_SECURITY`: guest OTP/security sender.
 - `EMAIL_FROM_ORDERS`: order confirmation sender.
-- `EMAIL_FROM_DELIVERY`: PDF delivery and logistics update sender.
+- `EMAIL_FROM_DELIVERY`: PDF delivery and order-status update sender.
 - `EMAIL_FROM_SUPPORT`: support/customer service sender.
 
 Email template change workflow:
-- Identify the email type and trigger first: OTP, order confirmation, final delivery, logistics update, or unpaid reminder.
+- Identify the email type and trigger first: OTP, order confirmation, final PDF delivery, order status update, or unpaid reminder.
 - Edit the body/layout in the matching `components/emails/*` template.
 - Edit subject, sender env selection, idempotency key, or failure behavior in `src/lib/email.tsx` only when the trigger behavior changes.
 - Run `npm run lint -- --quiet`, `npx tsc --noEmit`, and `npm run build`.

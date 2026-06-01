@@ -68,26 +68,20 @@ Active short-term tracker:
   - Share dialog preview image is eager-loaded and share/download actions reuse a cached image file instead of refetching.
   - Home hero video uses `preload="metadata"` and the first poster banner no longer competes as a high-priority image.
   - Product showcase photos were standardized to `products/productN.webp`: local script `scripts/optimize-template-products.mjs` generated 97 WebP files from `Template_folder/<Story_ID>/Product`; local source PNGs were removed after conversion; Supabase was updated with the WebP files and verified as 97 WebP / 0 PNG across active stories.
-- Email system Phase 1 reliability pass implemented:
-  - Added `email_events` as the unified log for YMI-managed Resend emails and external Stripe/Supabase Auth observations.
-  - Order confirmation emails now use an idempotency key so Stripe webhook retries do not create duplicate customer emails.
-  - Final delivery email failures no longer block PDF release; failures are logged and `final_jobs.email_sent_at` remains null.
+- Current email and order-status notification system shipped:
+  - `email_events` is the unified operational log for all YMI-managed Resend sends and external Stripe/Supabase Auth observations.
+  - YMI-managed emails currently include guest checkout OTP, order confirmation, final PDF delivery, production/printing update, shipped update, delivered update, and unpaid checkout reminder.
+  - Order confirmation email is triggered by payment finalization and uses `order_confirmation:{order_id}` idempotency, so Stripe webhook retries do not duplicate customer emails.
+  - Admin release builds the final PDF; final delivery email failures no longer block release and are logged as failed while `final_jobs.email_sent_at` remains null.
   - Guest checkout OTP remains synchronous and user-facing; failed sends delete the generated verification code.
-  - Unpaid reminders now write new delivery records to `email_events` instead of `order_reminder_logs`.
-  - Added read-only Admin email log page at `/admin/emails`.
-- Logistics notification flow added:
-  - Customer-facing order progress now uses `orders.order_status` as the single source of truth: `paid`, `production`, `shipped`, `delivered`.
-  - Order status update history is stored in `order_status_events`.
-  - Admin logistics management lives at `/admin/orders`.
-  - `/admin/orders` defaults to the editable Production Flow group and separately filters read-only `unpaid`, `cancelled`, and `refunded` orders.
-  - Changing order status to `production`, `shipped`, or `delivered` from Admin sends a `logistics_update` email through `EMAIL_FROM_DELIVERY`.
-  - Customer order detail pages read `order_status` and show tracking details when available.
-- Email template maintenance policy clarified:
-  - YMI-managed email templates remain code-managed for now, not editable in a database or Admin template editor.
-  - Email body/layout changes are made in `components/emails/*`.
-  - Email subject, sender selection, idempotency key, and trigger behavior are maintained in `src/lib/email.tsx`.
-  - External Stripe and Supabase Auth email templates remain managed in their respective dashboards.
-  - Future template/content requests should be handled as focused code changes, then verified through `/admin/emails` and `email_events`.
+  - Unpaid reminders write delivery records to `email_events`; old `order_reminder_logs` is no longer the active write path.
+  - `/admin/emails` is the read-only email log page for sent/failed/external_observed review.
+  - Customer-facing order progress uses `orders.order_status` as the single source of truth: `paid` = Order Confirmed, `production` = Printing, `shipped` = Shipped, `delivered` = Delivered.
+  - `/admin/orders` defaults to editable Production Flow orders and separately filters read-only `unpaid`, `cancelled`, and `refunded` orders.
+  - Admin changes to `production`, `shipped`, or `delivered` send an order-status update email through `EMAIL_FROM_DELIVERY`; changing or keeping `paid` does not send a duplicate confirmation email.
+  - Admin status update history is stored in `order_status_events`; direct Supabase edits to `orders.order_status` sync after page refresh but do not auto-send email.
+  - YMI-managed email templates remain code-managed: body/layout in `components/emails/*`, subject/from/idempotency/trigger behavior in `src/lib/email.tsx`.
+  - External Stripe and Supabase Auth email templates remain managed in their own dashboards.
 
 ## Current Owner-Managed Work
 
@@ -101,8 +95,8 @@ Active short-term tracker:
 ## Near-Term Technical Todos
 
 High priority before internal test:
-- Execute `Template_folder/sql_email_events.sql` in Supabase before relying on the new email logging path.
-- Execute `Template_folder/sql_order_logistics.sql` in Supabase before using `/admin/orders` order status updates.
+- `Template_folder/sql_email_events.sql` has to be present in Supabase for email logging.
+- `Template_folder/sql_order_logistics.sql` has to be present in Supabase for `order_status_events`, tracking fields, and removal of legacy `logistics_status`.
 - Configure Vercel email sender env vars as separate keys, not as one combined value:
   - `EMAIL_FROM`
   - `EMAIL_FROM_SECURITY`
