@@ -42,6 +42,13 @@ type ManagedEmailParams = SendEmailParams & {
   retryFailed?: boolean
 }
 
+type SenderResolution = {
+  envName: string
+  rawValue: string
+  normalizedValue: string
+  isValid: boolean
+}
+
 function buildAbsoluteUrl(path: string): string | undefined {
   if (!siteUrl) return undefined
   const base = siteUrl.replace(/\/+$/, '')
@@ -65,18 +72,27 @@ function isValidSender(value: string): boolean {
   return new RegExp(`^${email}$`).test(value) || new RegExp(`^.+\\s<${email}>$`).test(value)
 }
 
-function getSender(envName: string): string {
+function resolveSender(envName: string): SenderResolution {
   const defaultFrom = process.env.EMAIL_FROM || defaultSenderFallback
   const rawValue = process.env[envName] || defaultFrom
   const normalized = normalizeSenderValue(rawValue)
 
-  if (!isValidSender(normalized)) {
+  return {
+    envName,
+    rawValue,
+    normalizedValue: normalized,
+    isValid: isValidSender(normalized),
+  }
+}
+
+function getSender(envName: string): string {
+  const sender = resolveSender(envName)
+  if (!sender.isValid) {
     throw new Error(
-      `[email] Invalid sender ${envName}: ${JSON.stringify(rawValue)}. Expected email@example.com or Name <email@example.com>.`
+      `[email] Invalid sender ${envName}: ${JSON.stringify(sender.rawValue)}. Expected email@example.com or Name <email@example.com>.`
     )
   }
-
-  return normalized
+  return sender.normalizedValue
 }
 
 async function sendEmail({ to, subject, react, text, html, from }: SendEmailParams) {
@@ -133,11 +149,21 @@ async function sendEmail({ to, subject, react, text, html, from }: SendEmailPara
 }
 
 async function sendManagedEmail(params: ManagedEmailParams) {
-  const resolvedFrom = params.from || (params.fromEnvName ? getSender(params.fromEnvName) : getSender('EMAIL_FROM'))
+  const sender = params.from
+    ? {
+        envName: params.fromEnvName ?? 'explicit',
+        rawValue: params.from,
+        normalizedValue: normalizeSenderValue(params.from),
+        isValid: isValidSender(normalizeSenderValue(params.from)),
+      }
+    : resolveSender(params.fromEnvName ?? 'EMAIL_FROM')
+  const resolvedFrom = sender.normalizedValue
   const context = {
     ...(params.context ?? {}),
     from: resolvedFrom,
-    fromEnvName: params.fromEnvName ?? null,
+    fromEnvName: sender.envName,
+    fromRaw: sender.rawValue,
+    fromIsValid: sender.isValid,
   }
 
   const { event, shouldSend } = await prepareEmailEvent({
@@ -155,6 +181,12 @@ async function sendManagedEmail(params: ManagedEmailParams) {
 
   if (!shouldSend || !event) {
     return { skipped: true, event }
+  }
+
+  if (!sender.isValid) {
+    const message = `[email] Invalid sender ${sender.envName}: ${JSON.stringify(sender.rawValue)}. Expected email@example.com or Name <email@example.com>.`
+    await markEmailEventFailed(event.email_event_id, message)
+    throw new Error(message)
   }
 
   try {
