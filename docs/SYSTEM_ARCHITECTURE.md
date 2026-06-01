@@ -164,7 +164,7 @@ Core tables used by current flow:
 - `verification_codes`
 - `email_events`
 - shipping-related tables used by checkout quote/destination APIs
-- `order_logistics_events`
+- `order_status_events`
 - `discount_offers`
 - `discount_instruments`
 - `discount_redemptions`
@@ -211,6 +211,9 @@ Resend:
 - Production sending domain and `from` addresses are verified and have already sent successfully.
 - YMI-managed emails are guest checkout OTP, order confirmation, final delivery, and unpaid reminders.
 - Logistics update emails are also YMI-managed and sent through `EMAIL_FROM_DELIVERY`.
+- Customer-facing order progress uses `orders.order_status` as the single source of truth: `paid` maps to Order Confirmed, `production` maps to Printing, `shipped` maps to Shipped, and `delivered` maps to Delivered.
+- Admin status changes are recorded in `order_status_events`; direct Supabase edits to `orders.order_status` sync to the UI after refresh but do not automatically send email.
+- `/admin/orders` separates editable production-flow orders from read-only `unpaid`, `cancelled`, and `refunded` orders.
 - YMI-managed email templates live in `components/emails/*`; subject/from/send behavior lives in `src/lib/email.tsx`.
 - `email_events` records YMI-managed sent/failed status and external observations for Stripe/Supabase Auth.
 - Current app-owned templates:

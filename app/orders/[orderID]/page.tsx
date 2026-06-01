@@ -43,7 +43,6 @@ type OrderDetail = {
     city?: string
     zip?: string
   } | null
-  logistics_status?: string | null
   tracking_number?: string | null
   tracking_carrier?: string | null
   tracking_url?: string | null
@@ -52,45 +51,34 @@ type OrderDetail = {
   items?: OrderItem[]
 }
 
-// ?? Logistics stage definitions ????????????????????????????????????????????
+// Order stage definitions
 
 type StageKey = 'confirmed' | 'printing' | 'shipped' | 'delivered'
 
 const STAGES: { key: StageKey; icon: React.ElementType; label: string; desc: string }[] = [
-  { key: 'confirmed', icon: Package,      label: 'Ordered Confirmed', desc: 'Payment received & order locked in' },
-  { key: 'printing',  icon: BookOpen,     label: 'Production',       desc: 'Your personalised audiobook is being crafted' },
+  { key: 'confirmed', icon: Package,      label: 'Order Confirmed', desc: 'Payment received & order locked in' },
+  { key: 'printing',  icon: BookOpen,     label: 'Printing',        desc: 'Your personalized storybook is being crafted' },
   { key: 'shipped',   icon: Truck,        label: 'Shipped',          desc: 'On its way to you' },
   { key: 'delivered', icon: CircleCheck,  label: 'Delivered',        desc: 'Arrived at your door' },
 ]
 
 const STATUS_TO_STAGE_INDEX: Record<string, number> = {
-  ordered:          0,
   paid:             0,
   production:       1,
   processing:       1,
-  printing:         1,
-  ready_to_ship:    1,
   shipped:          2,
-  out_for_delivery: 2,
-  delayed:          2,
-  returned:         2,
-  cancelled:        0,
   delivered:        3,
 }
 
 const LOGISTICS_LABELS: Record<string, string> = {
-  ordered: 'Order confirmed',
-  printing: 'Printing',
-  ready_to_ship: 'Ready to ship',
+  paid: 'Order Confirmed',
+  production: 'Printing',
+  processing: 'Printing',
   shipped: 'Shipped',
-  out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
-  delayed: 'Delayed',
-  returned: 'Returned',
-  cancelled: 'Cancelled',
 }
 
-// ?? LogisticsTracker ???????????????????????????????????????????????????????
+// LogisticsTracker
 
 function LogisticsTracker({
   status,
@@ -118,7 +106,7 @@ function LogisticsTracker({
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-600/80">Logistics</p>
           <h3 className="text-base font-bold text-gray-900 mt-0.5">Order Progress</h3>
-          <p className="mt-1 text-xs text-slate-400">Current logistics status: {statusLabel}</p>
+          <p className="mt-1 text-xs text-slate-400">Current order status: {statusLabel}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           {trackingUrl ? (
@@ -282,7 +270,6 @@ export default function OrderDetailPage() {
   const address = order.shipping_address ?? {}
   const items = order.items ?? []
   const orderStatus = normalizeOrderStatus(order.order_status)
-  const logisticsStatus = order.logistics_status || (isPaidLikeOrderStatus(orderStatus) ? 'ordered' : orderStatus)
   const showTrackingPanel = isPaidLikeOrderStatus(orderStatus)
 
   return (
@@ -325,7 +312,7 @@ export default function OrderDetailPage() {
         {/* Logistics Tracker */}
         {showTrackingPanel && (
           <LogisticsTracker
-            status={logisticsStatus}
+            status={orderStatus}
             pdfUrl={order.final_pdf_url}
             trackingCarrier={order.tracking_carrier}
             trackingNumber={order.tracking_number}

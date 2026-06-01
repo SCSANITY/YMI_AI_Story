@@ -3,17 +3,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Save } from 'lucide-react'
 
-const LOGISTICS_OPTIONS = [
-  ['ordered', 'Order confirmed'],
-  ['printing', 'Printing'],
-  ['ready_to_ship', 'Ready to ship'],
+const ORDER_STATUS_OPTIONS = [
+  ['paid', 'Order Confirmed'],
+  ['production', 'Printing'],
   ['shipped', 'Shipped'],
-  ['out_for_delivery', 'Out for delivery'],
   ['delivered', 'Delivered'],
-  ['delayed', 'Delayed'],
-  ['returned', 'Returned'],
-  ['cancelled', 'Cancelled'],
 ] as const
+
+const ORDER_GROUP_OPTIONS = [
+  ['production', 'Production Flow'],
+  ['unpaid', 'Pending Payment'],
+  ['cancelled', 'Cancelled'],
+  ['refunded', 'Refunded'],
+] as const
+
+const READONLY_GROUPS = new Set(['unpaid', 'cancelled', 'refunded'])
 
 type OrderRow = {
   order_id: string
@@ -26,7 +30,6 @@ type OrderRow = {
   checkout_currency: string | null
   shipping_method: string | null
   shipping_zone_code: string | null
-  logistics_status: string | null
   tracking_number: string | null
   tracking_carrier: string | null
   tracking_url: string | null
@@ -35,7 +38,7 @@ type OrderRow = {
 }
 
 type Draft = {
-  logisticsStatus: string
+  orderStatus: string
   trackingNumber: string
   trackingCarrier: string
   trackingUrl: string
@@ -44,7 +47,7 @@ type Draft = {
 
 function createDraft(order: OrderRow): Draft {
   return {
-    logisticsStatus: order.logistics_status || 'ordered',
+    orderStatus: order.order_status || 'paid',
     trackingNumber: order.tracking_number || '',
     trackingCarrier: order.tracking_carrier || '',
     trackingUrl: order.tracking_url || '',
@@ -67,16 +70,14 @@ export function OrdersManagementSection() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [logisticsFilter, setLogisticsFilter] = useState('all')
+  const [orderGroup, setOrderGroup] = useState('production')
 
   const reloadOrders = async () => {
     setLoading(true)
     setError('')
     try {
       const params = new URLSearchParams()
-      if (statusFilter !== 'all') params.set('status', statusFilter)
-      if (logisticsFilter !== 'all') params.set('logistics_status', logisticsFilter)
+      params.set('group', orderGroup)
       const response = await fetch(`/api/admin/orders?${params.toString()}`, {
         credentials: 'include',
         cache: 'no-store',
@@ -97,14 +98,14 @@ export function OrdersManagementSection() {
   useEffect(() => {
     void reloadOrders()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [orderGroup])
 
   const updateDraft = (orderId: string, patch: Partial<Draft>) => {
     setDrafts((prev) => ({
       ...prev,
       [orderId]: {
         ...(prev[orderId] ?? {
-          logisticsStatus: 'ordered',
+          orderStatus: 'paid',
           trackingNumber: '',
           trackingCarrier: '',
           trackingUrl: '',
@@ -130,15 +131,15 @@ export function OrdersManagementSection() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setError(data?.error || 'Failed to update logistics')
+        setError(data?.error || 'Failed to update order status')
         return
       }
       setMessage(
         data.emailStatus === 'failed'
-          ? `Logistics updated, but email failed: ${data.emailError || 'unknown error'}`
+          ? `Order status updated, but email failed: ${data.emailError || 'unknown error'}`
           : data.emailStatus === 'sent'
-            ? 'Logistics updated and email sent.'
-            : 'Logistics updated.'
+            ? 'Order status updated and email sent.'
+            : 'Order status updated.'
       )
       await reloadOrders()
     } finally {
@@ -151,30 +152,15 @@ export function OrdersManagementSection() {
   return (
     <section className="space-y-5">
       <div className="rounded-3xl border border-white/[0.08] bg-white/[0.04] p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <label className="space-y-1.5 text-xs font-semibold text-slate-300">
-            Order status
+            Order category
             <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              value={orderGroup}
+              onChange={(event) => setOrderGroup(event.target.value)}
               className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
             >
-              <option value="all">all</option>
-              <option value="unpaid">unpaid</option>
-              <option value="paid">paid</option>
-              <option value="production">production</option>
-              <option value="completed">completed</option>
-            </select>
-          </label>
-          <label className="space-y-1.5 text-xs font-semibold text-slate-300">
-            Logistics status
-            <select
-              value={logisticsFilter}
-              onChange={(event) => setLogisticsFilter(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-            >
-              <option value="all">all</option>
-              {LOGISTICS_OPTIONS.map(([value, label]) => (
+              {ORDER_GROUP_OPTIONS.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -204,6 +190,7 @@ export function OrdersManagementSection() {
         <div className="space-y-4">
           {orders.map((order) => {
             const draft = drafts[order.order_id] ?? createDraft(order)
+            const isReadOnly = READONLY_GROUPS.has(orderGroup) || !ORDER_STATUS_OPTIONS.some(([value]) => value === order.order_status)
             return (
               <article key={order.order_id} className="rounded-3xl border border-white/[0.08] bg-white/[0.04] p-4">
                 <div className="grid gap-4 xl:grid-cols-[1.1fr_2fr_auto]">
@@ -215,78 +202,98 @@ export function OrdersManagementSection() {
                     <p className="text-xs text-slate-500">{formatDate(order.created_at)}</p>
                     <div className="flex flex-wrap gap-2 pt-2 text-xs">
                       <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-slate-300">
-                        Order {order.order_status || '-'}
-                      </span>
-                      <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-slate-300">
-                        Logistics {order.logistics_status || 'ordered'}
+                        {ORDER_STATUS_OPTIONS.find(([value]) => value === order.order_status)?.[1] || order.order_status || '-'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="space-y-1.5 text-xs font-semibold text-slate-300">
-                      Logistics status
-                      <select
-                        value={draft.logisticsStatus}
-                        onChange={(event) => updateDraft(order.order_id, { logisticsStatus: event.target.value })}
-                        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-                      >
-                        {LOGISTICS_OPTIONS.map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="space-y-1.5 text-xs font-semibold text-slate-300">
-                      Carrier
-                      <input
-                        value={draft.trackingCarrier}
-                        onChange={(event) => updateDraft(order.order_id, { trackingCarrier: event.target.value })}
-                        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-                        placeholder="DHL, FedEx, SF Express..."
-                      />
-                    </label>
-                    <label className="space-y-1.5 text-xs font-semibold text-slate-300">
-                      Tracking number
-                      <input
-                        value={draft.trackingNumber}
-                        onChange={(event) => updateDraft(order.order_id, { trackingNumber: event.target.value })}
-                        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-                        placeholder="Tracking number"
-                      />
-                    </label>
-                    <label className="space-y-1.5 text-xs font-semibold text-slate-300">
-                      Tracking URL
-                      <input
-                        value={draft.trackingUrl}
-                        onChange={(event) => updateDraft(order.order_id, { trackingUrl: event.target.value })}
-                        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-                        placeholder="https://..."
-                      />
-                    </label>
-                    <label className="space-y-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
-                      Note
-                      <textarea
-                        value={draft.logisticsNote}
-                        onChange={(event) => updateDraft(order.order_id, { logisticsNote: event.target.value })}
-                        className="min-h-20 w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-                        placeholder="Customer-facing logistics note"
-                      />
-                    </label>
-                  </div>
+                  {isReadOnly ? (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        Read-only order
+                      </p>
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        <p><span className="text-slate-500">Carrier:</span> {order.tracking_carrier || '-'}</p>
+                        <p><span className="text-slate-500">Tracking:</span> {order.tracking_number || '-'}</p>
+                        <p className="md:col-span-2">
+                          <span className="text-slate-500">Tracking URL:</span>{' '}
+                          {order.tracking_url ? (
+                            <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-amber-300 underline">
+                              {order.tracking_url}
+                            </a>
+                          ) : '-'}
+                        </p>
+                        <p className="md:col-span-2"><span className="text-slate-500">Note:</span> {order.logistics_note || '-'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+                        Order status
+                        <select
+                          value={draft.orderStatus}
+                          onChange={(event) => updateDraft(order.order_id, { orderStatus: event.target.value })}
+                          className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                        >
+                          {ORDER_STATUS_OPTIONS.map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+                        Carrier
+                        <input
+                          value={draft.trackingCarrier}
+                          onChange={(event) => updateDraft(order.order_id, { trackingCarrier: event.target.value })}
+                          className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                          placeholder="DHL, FedEx, SF Express..."
+                        />
+                      </label>
+                      <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+                        Tracking number
+                        <input
+                          value={draft.trackingNumber}
+                          onChange={(event) => updateDraft(order.order_id, { trackingNumber: event.target.value })}
+                          className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                          placeholder="Tracking number"
+                        />
+                      </label>
+                      <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+                        Tracking URL
+                        <input
+                          value={draft.trackingUrl}
+                          onChange={(event) => updateDraft(order.order_id, { trackingUrl: event.target.value })}
+                          className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                          placeholder="https://..."
+                        />
+                      </label>
+                      <label className="space-y-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
+                        Note
+                        <textarea
+                          value={draft.logisticsNote}
+                          onChange={(event) => updateDraft(order.order_id, { logisticsNote: event.target.value })}
+                          className="min-h-20 w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                          placeholder="Customer-facing logistics note"
+                        />
+                      </label>
+                    </div>
+                  )}
 
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={() => void saveLogistics(order)}
-                      disabled={savingId === order.order_id}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 xl:w-auto"
-                    >
-                      <Save className="h-4 w-4" />
-                      {savingId === order.order_id ? 'Saving...' : 'Save'}
-                    </button>
-                  </div>
+                  {isReadOnly ? null : (
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => void saveLogistics(order)}
+                        disabled={savingId === order.order_id}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 xl:w-auto"
+                      >
+                        <Save className="h-4 w-4" />
+                        {savingId === order.order_id ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </article>
             )

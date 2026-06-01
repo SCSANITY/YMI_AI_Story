@@ -3,28 +3,18 @@ import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendLogisticsUpdateEmail } from '@/lib/email'
 
-const LOGISTICS_STATUSES = new Set([
-  'ordered',
-  'printing',
-  'ready_to_ship',
+const MANAGED_ORDER_STATUSES = new Set([
+  'paid',
+  'production',
   'shipped',
-  'out_for_delivery',
   'delivered',
-  'delayed',
-  'returned',
-  'cancelled',
 ])
 
 const STATUS_LABELS: Record<string, string> = {
-  ordered: 'Order confirmed',
-  printing: 'Printing',
-  ready_to_ship: 'Ready to ship',
+  paid: 'Order Confirmed',
+  production: 'Printing',
   shipped: 'Shipped',
-  out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
-  delayed: 'Delayed',
-  returned: 'Returned',
-  cancelled: 'Cancelled',
 }
 
 function normalizeOptionalString(value: unknown) {
@@ -41,10 +31,10 @@ export async function PATCH(
 
   const { orderId } = await Promise.resolve(context.params)
   const body = await request.json().catch(() => ({}))
-  const nextStatus = String(body?.logisticsStatus || body?.logistics_status || '').trim()
+  const nextStatus = String(body?.orderStatus || body?.order_status || '').trim()
 
-  if (!LOGISTICS_STATUSES.has(nextStatus)) {
-    return NextResponse.json({ error: 'Invalid logistics status' }, { status: 400 })
+  if (!MANAGED_ORDER_STATUSES.has(nextStatus)) {
+    return NextResponse.json({ error: 'Invalid order status' }, { status: 400 })
   }
 
   const { data: order, error: orderError } = await supabaseAdmin
@@ -55,7 +45,7 @@ export async function PATCH(
         display_id,
         customer_id,
         email,
-        logistics_status,
+        order_status,
         tracking_number,
         tracking_carrier,
         tracking_url,
@@ -71,7 +61,14 @@ export async function PATCH(
     return NextResponse.json({ error: orderError?.message || 'Order not found' }, { status: 404 })
   }
 
-  const previousStatus = String(order.logistics_status || 'ordered')
+  const previousStatus = String(order.order_status || 'paid')
+  if (!MANAGED_ORDER_STATUSES.has(previousStatus)) {
+    return NextResponse.json(
+      { error: 'This order status is read-only in Admin Orders' },
+      { status: 409 }
+    )
+  }
+
   const statusChanged = previousStatus !== nextStatus
   const now = new Date().toISOString()
   const trackingNumber = normalizeOptionalString(body?.trackingNumber ?? body?.tracking_number)
@@ -84,7 +81,7 @@ export async function PATCH(
   const { error: updateError } = await supabaseAdmin
     .from('orders')
     .update({
-      logistics_status: nextStatus,
+      order_status: nextStatus,
       tracking_number: trackingNumber,
       tracking_carrier: trackingCarrier,
       tracking_url: trackingUrl,
@@ -96,11 +93,11 @@ export async function PATCH(
     .eq('order_id', orderId)
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message || 'Failed to update logistics' }, { status: 500 })
+    return NextResponse.json({ error: updateError.message || 'Failed to update order status' }, { status: 500 })
   }
 
   const { data: event, error: eventError } = await supabaseAdmin
-    .from('order_logistics_events')
+    .from('order_status_events')
     .insert({
       order_id: orderId,
       previous_status: previousStatus,
@@ -111,24 +108,24 @@ export async function PATCH(
       note,
       changed_by_admin_id: admin.customer_id,
     })
-    .select('logistics_event_id')
+    .select('status_event_id')
     .single()
 
-  if (eventError || !event?.logistics_event_id) {
-    return NextResponse.json({ error: eventError?.message || 'Failed to create logistics event' }, { status: 500 })
+  if (eventError || !event?.status_event_id) {
+    return NextResponse.json({ error: eventError?.message || 'Failed to create order status event' }, { status: 500 })
   }
 
   let emailStatus: 'not_sent' | 'sent' | 'failed' = 'not_sent'
   let emailError: string | null = null
   let emailEventId: string | null = null
 
-  if (statusChanged && order.email) {
-    const idempotencyKey = `logistics_update:${orderId}:${event.logistics_event_id}`
+  if (statusChanged && nextStatus !== 'paid' && order.email) {
+    const idempotencyKey = `logistics_update:${orderId}:${event.status_event_id}`
     try {
       const emailResult = await sendLogisticsUpdateEmail({
         to: order.email,
         orderId,
-        logisticsEventId: event.logistics_event_id,
+        logisticsEventId: event.status_event_id,
         status: nextStatus,
         statusLabel: STATUS_LABELS[nextStatus] || nextStatus,
         displayId: order.display_id ?? null,
@@ -153,18 +150,18 @@ export async function PATCH(
 
     if (emailEventId) {
       await supabaseAdmin
-        .from('order_logistics_events')
+        .from('order_status_events')
         .update({ email_event_id: emailEventId })
-        .eq('logistics_event_id', event.logistics_event_id)
+        .eq('status_event_id', event.status_event_id)
     }
   }
 
   return NextResponse.json({
     ok: true,
     orderId,
-    logisticsEventId: event.logistics_event_id,
+    statusEventId: event.status_event_id,
     previousStatus,
-    logisticsStatus: nextStatus,
+    orderStatus: nextStatus,
     statusChanged,
     emailStatus,
     emailError,

@@ -2,13 +2,21 @@ import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
+const MANAGED_ORDER_STATUSES = ['paid', 'production', 'shipped', 'delivered']
+const ORDER_GROUPS: Record<string, string[]> = {
+  production: MANAGED_ORDER_STATUSES,
+  unpaid: ['unpaid'],
+  cancelled: ['cancelled'],
+  refunded: ['refunded'],
+}
+
 export async function GET(request: Request) {
   const admin = await requireAdminCustomer()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const url = new URL(request.url)
-  const status = url.searchParams.get('status')
-  const logisticsStatus = url.searchParams.get('logistics_status')
+  const group = url.searchParams.get('group') || 'production'
+  const statuses = ORDER_GROUPS[group] || ORDER_GROUPS.production
 
   let query = supabaseAdmin
     .from('orders')
@@ -24,7 +32,6 @@ export async function GET(request: Request) {
         checkout_currency,
         shipping_method,
         shipping_zone_code,
-        logistics_status,
         tracking_number,
         tracking_carrier,
         tracking_url,
@@ -37,8 +44,7 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .limit(100)
 
-  if (status && status !== 'all') query = query.eq('order_status', status)
-  if (logisticsStatus && logisticsStatus !== 'all') query = query.eq('logistics_status', logisticsStatus)
+  query = query.in('order_status', statuses)
 
   const { data, error } = await query
 

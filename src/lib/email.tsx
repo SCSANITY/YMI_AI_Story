@@ -350,19 +350,25 @@ type SendLogisticsUpdateEmailParams = {
 
 export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailParams) {
   const orderUrl = params.orderUrl || buildAbsoluteUrl(`/orders/${params.orderId}`) || ''
+  const subject =
+    params.status === 'production'
+      ? `Your YMI Story book is being printed - ${params.displayId || params.orderId}`
+      : params.status === 'delivered'
+        ? `Your YMI Story order has been delivered - ${params.displayId || params.orderId}`
+        : `Your YMI Story order has shipped - ${params.displayId || params.orderId}`
 
   return sendManagedEmail({
     emailKey: 'logistics_update',
     idempotencyKey: `logistics_update:${params.orderId}:${params.logisticsEventId}`,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_DELIVERY',
-    subject: `Shipping update - ${params.displayId || params.orderId}`,
+    subject,
     orderId: params.orderId,
     customerId: params.customerId ?? null,
     context: {
       displayId: params.displayId ?? null,
       logisticsEventId: params.logisticsEventId,
-      logisticsStatus: params.status,
+      orderStatus: params.status,
       statusLabel: params.statusLabel,
       trackingCarrier: params.trackingCarrier ?? null,
       hasTrackingNumber: Boolean(params.trackingNumber),
@@ -372,6 +378,7 @@ export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailP
       <LogisticsUpdateEmail
         orderId={params.orderId}
         displayId={params.displayId}
+        status={params.status}
         statusLabel={params.statusLabel}
         trackingCarrier={params.trackingCarrier}
         trackingNumber={params.trackingNumber}

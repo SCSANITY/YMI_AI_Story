@@ -76,10 +76,12 @@ Active short-term tracker:
   - Unpaid reminders now write new delivery records to `email_events` instead of `order_reminder_logs`.
   - Added read-only Admin email log page at `/admin/emails`.
 - Logistics notification flow added:
-  - Orders now have independent logistics snapshot fields and `order_logistics_events` history.
+  - Customer-facing order progress now uses `orders.order_status` as the single source of truth: `paid`, `production`, `shipped`, `delivered`.
+  - Order status update history is stored in `order_status_events`.
   - Admin logistics management lives at `/admin/orders`.
-  - Changing logistics status sends a `logistics_update` email through `EMAIL_FROM_DELIVERY`.
-  - Customer order detail pages now read `logistics_status` and show tracking details when available.
+  - `/admin/orders` defaults to the editable Production Flow group and separately filters read-only `unpaid`, `cancelled`, and `refunded` orders.
+  - Changing order status to `production`, `shipped`, or `delivered` from Admin sends a `logistics_update` email through `EMAIL_FROM_DELIVERY`.
+  - Customer order detail pages read `order_status` and show tracking details when available.
 - Email template maintenance policy clarified:
   - YMI-managed email templates remain code-managed for now, not editable in a database or Admin template editor.
   - Email body/layout changes are made in `components/emails/*`.
@@ -100,7 +102,7 @@ Active short-term tracker:
 
 High priority before internal test:
 - Execute `Template_folder/sql_email_events.sql` in Supabase before relying on the new email logging path.
-- Execute `Template_folder/sql_order_logistics.sql` in Supabase before using `/admin/orders` logistics updates.
+- Execute `Template_folder/sql_order_logistics.sql` in Supabase before using `/admin/orders` order status updates.
 - Configure Vercel email sender env vars as separate keys, not as one combined value:
   - `EMAIL_FROM`
   - `EMAIL_FROM_SECURITY`

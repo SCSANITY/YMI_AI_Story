@@ -4,6 +4,7 @@ import { EmailLayout } from './EmailLayout'
 
 type LogisticsUpdateEmailProps = {
   orderUrl: string
+  status: string
   statusLabel: string
   displayId?: string | null
   orderId?: string
@@ -15,6 +16,7 @@ type LogisticsUpdateEmailProps = {
 
 export function LogisticsUpdateEmail({
   orderUrl,
+  status,
   statusLabel,
   displayId,
   orderId,
@@ -24,12 +26,30 @@ export function LogisticsUpdateEmail({
   note,
 }: LogisticsUpdateEmailProps) {
   const label = displayId || orderId
+  const copy =
+    status === 'production'
+      ? {
+          title: 'Your book is being printed',
+          subtitle: 'Your personalized YMI Story book has entered production.',
+          preview: 'Your YMI Story book is now being printed.',
+        }
+      : status === 'delivered'
+        ? {
+            title: 'Your book has been delivered',
+            subtitle: 'Your YMI Story order has arrived.',
+            preview: 'Your YMI Story order has been delivered.',
+          }
+        : {
+            title: 'Your book is on the way',
+            subtitle: 'Your YMI Story order has shipped.',
+            preview: 'Your YMI Story order has shipped.',
+          }
 
   return (
     <EmailLayout
-      previewText={`Your order is now ${statusLabel}`}
-      title="Shipping update"
-      subtitle="There is a new logistics update for your YMI Story order."
+      previewText={copy.preview}
+      title={copy.title}
+      subtitle={copy.subtitle}
     >
       {label ? (
         <Text style={styles.orderLine}>

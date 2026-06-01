@@ -211,8 +211,9 @@ Check before internal test:
 Where to edit email content:
 - YMI-managed email layout and body: `components/emails/*`.
 - YMI-managed subject/from/send behavior: `src/lib/email.tsx`.
-- Logistics email body: `components/emails/LogisticsUpdateEmail.tsx`.
-- Logistics updates: `/admin/orders`.
+- Logistics/status email body: `components/emails/LogisticsUpdateEmail.tsx`.
+- Admin order status updates: `/admin/orders`.
+- `/admin/orders` production-flow orders are editable; `unpaid`, `cancelled`, and `refunded` groups are read-only.
 - Stripe receipts: Stripe Dashboard.
 - Supabase Auth signup/OTP: Supabase Auth Email Templates.
 
