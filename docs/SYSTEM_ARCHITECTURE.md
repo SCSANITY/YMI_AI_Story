@@ -1,6 +1,6 @@
 # YMI Story System Architecture
 
-Last updated: 2026-05-28
+Last updated: 2026-06-01
 
 ## Product Scope
 
@@ -164,6 +164,7 @@ Core tables used by current flow:
 - `verification_codes`
 - `email_events`
 - shipping-related tables used by checkout quote/destination APIs
+- `order_logistics_events`
 - `discount_offers`
 - `discount_instruments`
 - `discount_redemptions`
@@ -209,8 +210,17 @@ Resend:
 - Transactional email provider.
 - Production sending domain and `from` addresses are verified and have already sent successfully.
 - YMI-managed emails are guest checkout OTP, order confirmation, final delivery, and unpaid reminders.
-- YMI-managed email templates live in `components/emails/*`; subject/from/send behavior lives in the email sender functions.
+- Logistics update emails are also YMI-managed and sent through `EMAIL_FROM_DELIVERY`.
+- YMI-managed email templates live in `components/emails/*`; subject/from/send behavior lives in `src/lib/email.tsx`.
 - `email_events` records YMI-managed sent/failed status and external observations for Stripe/Supabase Auth.
+- Current app-owned templates:
+  - `OtpEmail`
+  - `OrderReceiptEmail`
+  - `DeliveryEmail`
+  - `AbandonmentEmail`
+  - `LogisticsUpdateEmail`
+  - shared `EmailLayout`
+- The app does not currently have a database-driven email template editor. Template updates should be made in code, validated, deployed, and then verified through `/admin/emails` plus the `email_events` table.
 
 External email boundaries:
 - Stripe receipts are controlled in Stripe Dashboard. Local `external_observed` records mean YMI saw a Stripe checkout/payment event, not that YMI sent or verified delivery.
@@ -236,6 +246,12 @@ Web/Vercel:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_SITE_URL`
 - `SITE_URL`
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+- `EMAIL_FROM_SECURITY`
+- `EMAIL_FROM_ORDERS`
+- `EMAIL_FROM_DELIVERY`
+- `EMAIL_FROM_SUPPORT`
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`

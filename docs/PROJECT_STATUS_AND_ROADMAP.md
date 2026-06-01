@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-05-29
+Last updated: 2026-06-01
 
 ## Current State
 
@@ -75,6 +75,17 @@ Active short-term tracker:
   - Guest checkout OTP remains synchronous and user-facing; failed sends delete the generated verification code.
   - Unpaid reminders now write new delivery records to `email_events` instead of `order_reminder_logs`.
   - Added read-only Admin email log page at `/admin/emails`.
+- Logistics notification flow added:
+  - Orders now have independent logistics snapshot fields and `order_logistics_events` history.
+  - Admin logistics management lives at `/admin/orders`.
+  - Changing logistics status sends a `logistics_update` email through `EMAIL_FROM_DELIVERY`.
+  - Customer order detail pages now read `logistics_status` and show tracking details when available.
+- Email template maintenance policy clarified:
+  - YMI-managed email templates remain code-managed for now, not editable in a database or Admin template editor.
+  - Email body/layout changes are made in `components/emails/*`.
+  - Email subject, sender selection, idempotency key, and trigger behavior are maintained in `src/lib/email.tsx`.
+  - External Stripe and Supabase Auth email templates remain managed in their respective dashboards.
+  - Future template/content requests should be handled as focused code changes, then verified through `/admin/emails` and `email_events`.
 
 ## Current Owner-Managed Work
 
@@ -89,6 +100,13 @@ Active short-term tracker:
 
 High priority before internal test:
 - Execute `Template_folder/sql_email_events.sql` in Supabase before relying on the new email logging path.
+- Execute `Template_folder/sql_order_logistics.sql` in Supabase before using `/admin/orders` logistics updates.
+- Configure Vercel email sender env vars as separate keys, not as one combined value:
+  - `EMAIL_FROM`
+  - `EMAIL_FROM_SECURITY`
+  - `EMAIL_FROM_ORDERS`
+  - `EMAIL_FROM_DELIVERY`
+  - `EMAIL_FROM_SUPPORT`
 - Finish and sync the selected first-launch story configs in Supabase.
 - Clean remaining demo/placeholder content from the public website and update UIUX to a formal production-site version.
 - Connect Stripe Live in Vercel production after live readiness; local/dev should remain on test keys.
@@ -124,6 +142,7 @@ Code quality / maintainability:
 - Admin rerun UI is reserved/disabled for a future random-seed rerun flow.
 - SEO metadata should stay aligned with route ownership: public marketing/catalog pages may be indexed; private areas should be excluded with `robots.txt`; anonymous but non-indexable pages should remain crawlable with meta noindex so crawlers can actually see the directive. Do not rely on `robots.txt` for API security; API routes still require their own auth/secret checks.
 - Frontend performance is no longer a near-term blocker after the May 2026 optimization pass. Optional future work: run Lighthouse/Chrome Performance baselines on homepage, `/books`, Customize, and ShareDialog; add a hero video poster or mobile-specific lower-bitrate video; continue reducing repeated `backdrop-blur` usage in non-critical surfaces; archive unused large PNG assets in `public/banners` to prevent accidental future references.
+- Email template customization is intentionally code-first in the current phase. If the product needs marketer-editable templates later, design that as a separate feature with preview, approval, versioning, and test-send controls instead of mixing it into the current sender functions.
 
 ## Known Risks And Current Judgment
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Download, Package, Truck, CircleCheck, BookOpen, MapPin } from 'lucide-react'
+import { ArrowLeft, Download, ExternalLink, Package, Truck, CircleCheck, BookOpen, MapPin } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
@@ -43,6 +43,12 @@ type OrderDetail = {
     city?: string
     zip?: string
   } | null
+  logistics_status?: string | null
+  tracking_number?: string | null
+  tracking_carrier?: string | null
+  tracking_url?: string | null
+  logistics_note?: string | null
+  logistics_updated_at?: string | null
   items?: OrderItem[]
 }
 
@@ -58,17 +64,53 @@ const STAGES: { key: StageKey; icon: React.ElementType; label: string; desc: str
 ]
 
 const STATUS_TO_STAGE_INDEX: Record<string, number> = {
-  paid:        0,
-  production:  1,
-  processing:  1,
-  shipped:     2,
-  delivered:   3,
+  ordered:          0,
+  paid:             0,
+  production:       1,
+  processing:       1,
+  printing:         1,
+  ready_to_ship:    1,
+  shipped:          2,
+  out_for_delivery: 2,
+  delayed:          2,
+  returned:         2,
+  cancelled:        0,
+  delivered:        3,
+}
+
+const LOGISTICS_LABELS: Record<string, string> = {
+  ordered: 'Order confirmed',
+  printing: 'Printing',
+  ready_to_ship: 'Ready to ship',
+  shipped: 'Shipped',
+  out_for_delivery: 'Out for delivery',
+  delivered: 'Delivered',
+  delayed: 'Delayed',
+  returned: 'Returned',
+  cancelled: 'Cancelled',
 }
 
 // ?? LogisticsTracker ???????????????????????????????????????????????????????
 
-function LogisticsTracker({ status, pdfUrl }: { status: string; pdfUrl?: string | null }) {
+function LogisticsTracker({
+  status,
+  pdfUrl,
+  trackingCarrier,
+  trackingNumber,
+  trackingUrl,
+  note,
+  updatedAt,
+}: {
+  status: string
+  pdfUrl?: string | null
+  trackingCarrier?: string | null
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  note?: string | null
+  updatedAt?: string | null
+}) {
   const activeIdx = STATUS_TO_STAGE_INDEX[normalizeOrderStatus(status)] ?? 0
+  const statusLabel = LOGISTICS_LABELS[status] || LOGISTICS_LABELS[normalizeOrderStatus(status)] || status
 
   return (
     <div className="glass-panel rounded-3xl p-5 md:p-7 space-y-6">
@@ -76,16 +118,30 @@ function LogisticsTracker({ status, pdfUrl }: { status: string; pdfUrl?: string 
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-600/80">Logistics</p>
           <h3 className="text-base font-bold text-gray-900 mt-0.5">Order Progress</h3>
+          <p className="mt-1 text-xs text-slate-400">Current logistics status: {statusLabel}</p>
         </div>
-        {pdfUrl && (
-          <a
-            href={pdfUrl}
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-emerald-200/60 transition hover:-translate-y-px hover:shadow-emerald-300/60"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download PDF
-          </a>
-        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          {trackingUrl ? (
+            <a
+              href={trackingUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-sky-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-200/60 transition hover:-translate-y-px hover:shadow-blue-300/60"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Track shipment
+            </a>
+          ) : null}
+          {pdfUrl && (
+            <a
+              href={pdfUrl}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-emerald-200/60 transition hover:-translate-y-px hover:shadow-emerald-300/60"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download PDF
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Step track */}
@@ -159,6 +215,17 @@ function LogisticsTracker({ status, pdfUrl }: { status: string; pdfUrl?: string 
           })}
         </div>
       </div>
+
+      {(trackingCarrier || trackingNumber || note || updatedAt) && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm text-slate-600">
+          <div className="grid gap-2 md:grid-cols-2">
+            {trackingCarrier ? <div><span className="font-semibold text-slate-800">Carrier:</span> {trackingCarrier}</div> : null}
+            {trackingNumber ? <div><span className="font-semibold text-slate-800">Tracking:</span> {trackingNumber}</div> : null}
+            {updatedAt ? <div><span className="font-semibold text-slate-800">Updated:</span> {new Date(updatedAt).toLocaleString()}</div> : null}
+            {note ? <div className="md:col-span-2"><span className="font-semibold text-slate-800">Note:</span> {note}</div> : null}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -215,6 +282,7 @@ export default function OrderDetailPage() {
   const address = order.shipping_address ?? {}
   const items = order.items ?? []
   const orderStatus = normalizeOrderStatus(order.order_status)
+  const logisticsStatus = order.logistics_status || (isPaidLikeOrderStatus(orderStatus) ? 'ordered' : orderStatus)
   const showTrackingPanel = isPaidLikeOrderStatus(orderStatus)
 
   return (
@@ -256,7 +324,15 @@ export default function OrderDetailPage() {
 
         {/* Logistics Tracker */}
         {showTrackingPanel && (
-          <LogisticsTracker status={orderStatus} pdfUrl={order.final_pdf_url} />
+          <LogisticsTracker
+            status={logisticsStatus}
+            pdfUrl={order.final_pdf_url}
+            trackingCarrier={order.tracking_carrier}
+            trackingNumber={order.tracking_number}
+            trackingUrl={order.tracking_url}
+            note={order.logistics_note}
+            updatedAt={order.logistics_updated_at}
+          />
         )}
 
         {/* Items + Shipping grid */}

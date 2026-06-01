@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Mail,
   Megaphone,
+  PackageCheck,
   TicketPercent,
   ToggleLeft,
 } from 'lucide-react'
@@ -18,6 +19,7 @@ const navItems = [
   { label: 'Announcements',   icon: Megaphone,       href: '/admin/announcements' },
   { label: 'Discounts',       icon: TicketPercent,   href: '/admin/discounts' },
   { label: 'Emails',          icon: Mail,            href: '/admin/emails' },
+  { label: 'Orders',          icon: PackageCheck,    href: '/admin/orders' },
   { label: 'Service Control', icon: ToggleLeft,      href: '/admin/service' },
   { label: 'Analytics',       icon: BarChart3,       href: '/admin/analytics',     soon: true },
   { label: 'Banner Manager',  icon: LayoutDashboard, href: '/admin/banner',         soon: true },

@@ -197,10 +197,12 @@ Used for:
 - Guest checkout OTP.
 - Order confirmation.
 - Final delivery email.
+- Logistics update emails.
 - Unpaid reminder emails.
 
 Check before internal test:
 - Run `Template_folder/sql_email_events.sql` in Supabase.
+- Run `Template_folder/sql_order_logistics.sql` in Supabase.
 - Confirm `RESEND_API_KEY` in Vercel.
 - Confirm `EMAIL_FROM` and security/order/delivery sender values.
 - Confirm bounce/complaint monitoring owner.
@@ -209,8 +211,26 @@ Check before internal test:
 Where to edit email content:
 - YMI-managed email layout and body: `components/emails/*`.
 - YMI-managed subject/from/send behavior: `src/lib/email.tsx`.
+- Logistics email body: `components/emails/LogisticsUpdateEmail.tsx`.
+- Logistics updates: `/admin/orders`.
 - Stripe receipts: Stripe Dashboard.
 - Supabase Auth signup/OTP: Supabase Auth Email Templates.
+
+Email sender env vars:
+- Configure these as separate Vercel environment variables, not as one pasted multi-line value.
+- `EMAIL_FROM`: default/general sender.
+- `EMAIL_FROM_SECURITY`: guest OTP/security sender.
+- `EMAIL_FROM_ORDERS`: order confirmation sender.
+- `EMAIL_FROM_DELIVERY`: PDF delivery and logistics update sender.
+- `EMAIL_FROM_SUPPORT`: support/customer service sender.
+
+Email template change workflow:
+- Identify the email type and trigger first: OTP, order confirmation, final delivery, logistics update, or unpaid reminder.
+- Edit the body/layout in the matching `components/emails/*` template.
+- Edit subject, sender env selection, idempotency key, or failure behavior in `src/lib/email.tsx` only when the trigger behavior changes.
+- Run `npm run lint -- --quiet`, `npx tsc --noEmit`, and `npm run build`.
+- Deploy, trigger the relevant flow, then confirm the row in `/admin/emails` or Supabase `email_events`.
+- For external Stripe/Supabase Auth emails, change templates in their dashboards and use local `external_observed` records only as event markers.
 
 ## Vercel And Internal Callback
 

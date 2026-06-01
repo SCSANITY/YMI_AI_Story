@@ -8,6 +8,7 @@ import {
 } from '@/components/emails/OrderReceiptEmail'
 import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
 import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
+import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { CheckoutCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import {
   markEmailEventFailed,
@@ -327,6 +328,56 @@ export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailPar
         displayId={params.displayId}
         resumeUrl={resumeUrl}
         items={params.items || []}
+      />
+    ),
+  })
+}
+
+type SendLogisticsUpdateEmailParams = {
+  to: string
+  orderId: string
+  logisticsEventId: string
+  status: string
+  statusLabel: string
+  displayId?: string | null
+  trackingCarrier?: string | null
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  note?: string | null
+  orderUrl?: string
+  customerId?: string | null
+}
+
+export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailParams) {
+  const orderUrl = params.orderUrl || buildAbsoluteUrl(`/orders/${params.orderId}`) || ''
+
+  return sendManagedEmail({
+    emailKey: 'logistics_update',
+    idempotencyKey: `logistics_update:${params.orderId}:${params.logisticsEventId}`,
+    to: params.to,
+    fromEnvName: 'EMAIL_FROM_DELIVERY',
+    subject: `Shipping update - ${params.displayId || params.orderId}`,
+    orderId: params.orderId,
+    customerId: params.customerId ?? null,
+    context: {
+      displayId: params.displayId ?? null,
+      logisticsEventId: params.logisticsEventId,
+      logisticsStatus: params.status,
+      statusLabel: params.statusLabel,
+      trackingCarrier: params.trackingCarrier ?? null,
+      hasTrackingNumber: Boolean(params.trackingNumber),
+      hasTrackingUrl: Boolean(params.trackingUrl),
+    },
+    react: (
+      <LogisticsUpdateEmail
+        orderId={params.orderId}
+        displayId={params.displayId}
+        statusLabel={params.statusLabel}
+        trackingCarrier={params.trackingCarrier}
+        trackingNumber={params.trackingNumber}
+        trackingUrl={params.trackingUrl}
+        note={params.note}
+        orderUrl={orderUrl}
       />
     ),
   })

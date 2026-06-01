@@ -25,6 +25,7 @@ const EMAIL_KEY_OPTIONS = [
   'guest_otp',
   'order_confirmation',
   'final_delivery',
+  'logistics_update',
   'unpaid_reminder',
   'stripe_receipt',
   'supabase_signup_otp',
