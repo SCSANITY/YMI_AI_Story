@@ -86,7 +86,7 @@ export function BookCard({
         ) : null}
       </BookCardCover>
 
-      <div className={`book-card-panel -mt-4 flex flex-1 flex-col rounded-xl px-3 pb-3 pt-10 md:-mt-6 md:rounded-2xl md:px-5 md:pb-5 md:pt-14 ${isComingSoon ? 'opacity-80' : ''}`}>
+      <div className={`book-card-panel -mt-4 flex flex-1 flex-col rounded-xl px-3 pb-3 pt-5 md:-mt-6 md:rounded-2xl md:px-5 md:pb-5 md:pt-8 ${isComingSoon ? 'opacity-80' : ''}`}>
         <div className="flex flex-1 flex-col">
           <h3 className="font-display mb-1 line-clamp-2 pt-px text-sm font-medium leading-snug text-gray-900 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
             {title}

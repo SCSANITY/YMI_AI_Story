@@ -121,8 +121,8 @@ export const Hero: React.FC = () => {
                 initial={{ opacity: 0, y: 22 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.32, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
-                className="font-cormorant text-gray-900 leading-[1.07] block"
-                style={{ fontStyle: 'normal', fontSize: 'clamp(2.4rem, 5.2vw, 4.8rem)' }}
+                className="font-cormorant text-gray-900 leading-[1.04] block"
+                style={{ fontSize: 'clamp(3rem, 7vw, 6.5rem)' }}
               >
                 {t('hero.titleLine1')}
               </motion.h1>
@@ -130,8 +130,8 @@ export const Hero: React.FC = () => {
                 initial={{ opacity: 0, y: 22 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.44, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
-                className="font-cormorant leading-[1.07] bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 bg-clip-text text-transparent block"
-                style={{ fontSize: 'clamp(2.4rem, 5.2vw, 4.8rem)' }}
+                className="font-cormorant leading-[1.04] bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 bg-clip-text text-transparent block"
+                style={{ fontSize: 'clamp(3rem, 7vw, 6.5rem)' }}
               >
                 {t('hero.titleLine2')}
               </motion.h1>

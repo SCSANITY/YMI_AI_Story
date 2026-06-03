@@ -242,6 +242,12 @@ Email template change workflow:
 - Deploy, trigger the relevant flow, then confirm the row in `/admin/emails` or Supabase `email_events`.
 - For external Stripe/Supabase Auth emails, change templates in their dashboards and use local `external_observed` records only as event markers.
 
+Sender avatar / brand logo:
+- Do not rely on Gravatar for production sender avatars. Resend sending-domain aliases are not a reliable Gravatar identity path, and client support is inconsistent.
+- Public-launch task: configure BIMI for `ymistory.com` after SPF/DKIM/DMARC alignment is confirmed and DMARC is moved to enforcement.
+- Public-launch task: evaluate Apple Branded Mail separately for Apple Mail/iCloud Mail brand display.
+- Until BIMI is in place, rely on clear sender names, verified sender addresses, and the in-template YMI logo.
+
 ## Vercel And Internal Callback
 
 Production site:

@@ -1,6 +1,6 @@
 import './globals.css';
 import { AppShell } from '@/components/AppShell';
-import { Cormorant_Garamond, Cutive, Inter, Noto_Sans_TC, Noto_Serif_TC, Playfair_Display } from 'next/font/google';
+import { Cormorant_Garamond, Inter, Noto_Sans_TC, Noto_Serif_TC, Playfair_Display } from 'next/font/google';
 import type { Metadata } from 'next';
 import { DEFAULT_OG_IMAGE, DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE, SITE_NAME, SITE_URL, absoluteUrl } from '@/lib/seo';
 
@@ -57,12 +57,6 @@ const cormorant = Cormorant_Garamond({
   variable: '--font-cormorant',
 });
 
-const cutive = Cutive({
-  subsets: ['latin'],
-  weight: '400',
-  variable: '--font-cutive',
-});
-
 const playfair = Playfair_Display({
   subsets: ['latin'],
   weight: ['400', '600', '700'],
@@ -97,7 +91,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${cutive.variable} ${playfair.variable} ${cormorant.variable} ${notoSansTC.variable} ${notoSerifTC.variable}`}
+      className={`${inter.variable} ${playfair.variable} ${cormorant.variable} ${notoSansTC.variable} ${notoSerifTC.variable}`}
     >
       {supabaseOrigin ? (
         <head>

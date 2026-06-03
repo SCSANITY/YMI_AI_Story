@@ -119,6 +119,7 @@ Medium priority:
 - Confirm worker online env points to production callback URL.
 - Decide alert owner for Healthchecks and Resend bounce/complaint monitoring.
 - Resend webhook for delivered/bounced/complained status is deferred until the public launch phase; current email observability is sent/failed/external_observed.
+- Brand sender avatar work is deferred until the public launch phase. Gravatar is not reliable for Resend sending-domain aliases; the durable path is BIMI plus DMARC enforcement, with Apple Branded Mail considered separately for Apple Mail/iCloud Mail.
 - Confirm RunPod cancellation behavior is safe for `/cancel/{runId}`.
 - Confirm RunPod endpoint image/volume/workflow version is tracked outside code.
 

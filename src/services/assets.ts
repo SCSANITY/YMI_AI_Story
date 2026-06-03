@@ -46,6 +46,8 @@ const FACE_NOSE_CENTER_MAX = 0.82
 const FACE_BLUR_MIN_SCORE = 30
 const FACE_BRIGHTNESS_MIN = 45
 const FACE_BRIGHTNESS_MAX = 218
+const FACE_EYE_REGION_RATIO = 0.22
+const FACE_EYE_MIN_EDGE_SCORE = 8
 
 export type FaceImageValidationCode =
   | 'missing'
@@ -64,6 +66,7 @@ export type FaceImageValidationCode =
   | 'tooBlurry'
   | 'tooDark'
   | 'tooBright'
+  | 'eyesClosed'
 
 export type FaceImageValidationResult = {
   ok: boolean
@@ -183,6 +186,65 @@ function measureImageQuality(canvas: HTMLCanvasElement): { brightness: number; b
     brightness: brightnessSum / grayscale.length,
     blurScore: count ? edgeEnergy / count : 0,
   }
+}
+
+function measureRegionEdgeScore(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number
+): number {
+  const x = Math.max(0, Math.round(cx - size / 2))
+  const y = Math.max(0, Math.round(cy - size / 2))
+  const w = Math.min(ctx.canvas.width - x, Math.max(1, Math.round(size)))
+  const h = Math.min(ctx.canvas.height - y, Math.max(1, Math.round(size)))
+  if (w <= 2 || h <= 2) return 100
+  const data = ctx.getImageData(x, y, w, h).data
+  const gs = new Float32Array(w * h)
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    gs[p] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
+  }
+  let energy = 0
+  let count = 0
+  for (let row = 1; row < h; row++) {
+    for (let col = 1; col < w; col++) {
+      const idx = row * w + col
+      const gx = gs[idx] - gs[idx - 1]
+      const gy = gs[idx] - gs[idx - w]
+      energy += gx * gx + gy * gy
+      count++
+    }
+  }
+  return count ? energy / count : 0
+}
+
+function checkEyesOpen(
+  detection: Detection,
+  analysisCanvas: HTMLCanvasElement,
+  originalHeight: number
+): boolean {
+  const ctx = analysisCanvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return true
+  const box = detection.boundingBox
+  if (!box) return true
+  const leftEye = getKeypointByLabel(detection, ['left eye', 'lefteye'], 0)
+  const rightEye = getKeypointByLabel(detection, ['right eye', 'righteye'], 1)
+  if (!leftEye || !rightEye) return true
+  const canvasScale = analysisCanvas.height / originalHeight
+  const regionSize = box.height * canvasScale * FACE_EYE_REGION_RATIO
+  const leftScore = measureRegionEdgeScore(
+    ctx,
+    leftEye.x * analysisCanvas.width,
+    leftEye.y * analysisCanvas.height,
+    regionSize
+  )
+  const rightScore = measureRegionEdgeScore(
+    ctx,
+    rightEye.x * analysisCanvas.width,
+    rightEye.y * analysisCanvas.height,
+    regionSize
+  )
+  return leftScore >= FACE_EYE_MIN_EDGE_SCORE || rightScore >= FACE_EYE_MIN_EDGE_SCORE
 }
 
 function getDetectionScore(detection: Detection): number {
@@ -343,7 +405,14 @@ export async function faceQualityCheck(file: File): Promise<FaceImageValidationR
       return { ok: false, code: 'multipleFaces' }
     }
 
-    return validateDetectedFace(detections[0], width, height)
+    const faceValidation = validateDetectedFace(detections[0], width, height)
+    if (!faceValidation.ok) return faceValidation
+
+    if (analysisCanvas && !checkEyesOpen(detections[0], analysisCanvas, height)) {
+      return { ok: false, code: 'eyesClosed' }
+    }
+
+    return { ok: true }
   } catch (error) {
     console.warn('[face-quality] Photo check failed', error)
     return { ok: false, code: 'checkUnavailable', message: 'We could not check this photo. Please try again.' }
