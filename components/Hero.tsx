@@ -113,55 +113,55 @@ export const Hero: React.FC = () => {
           {/* ── Lower-third text zone ───────────────────────────────────── */}
           <div
             className="flex flex-col items-center text-center px-5 sm:px-8"
-            style={{ paddingBottom: 'clamp(48px, 7vh, 88px)' }}
+            style={{ paddingBottom: 'clamp(32px, 4.5vh, 60px)' }}
           >
+            {/* Eyebrow badge — above headline */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300/50 bg-amber-50/85 px-3.5 py-1 shadow-sm backdrop-blur-sm"
+            >
+              <Sparkles className="h-3 w-3 shrink-0 text-amber-500" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">
+                {t('hero.badge')}
+              </span>
+            </motion.div>
+
             {/* Headline */}
             <div className="mb-4 sm:mb-5">
               <motion.h1
-                initial={{ opacity: 0, y: 22 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.32, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ delay: 0.36, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
                 className="font-cormorant text-gray-900 leading-[1.04] block"
-                style={{ fontSize: 'clamp(3rem, 7vw, 6.5rem)' }}
+                style={{ fontSize: 'clamp(2.4rem, 5.5vw, 5rem)' }}
               >
                 {t('hero.titleLine1')}
               </motion.h1>
               <motion.h1
-                initial={{ opacity: 0, y: 22 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.44, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ delay: 0.46, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
                 className="font-cormorant leading-[1.04] bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 bg-clip-text text-transparent block"
-                style={{ fontSize: 'clamp(3rem, 7vw, 6.5rem)' }}
+                style={{ fontSize: 'clamp(2.4rem, 5.5vw, 5rem)' }}
               >
                 {t('hero.titleLine2')}
               </motion.h1>
             </div>
 
-            {/* Eyebrow badge */}
+            {/* CTA */}
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-300/45 bg-amber-50/80 px-4 py-1.5 shadow-sm backdrop-blur-sm sm:mb-6"
+              transition={{ delay: 0.54, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              className="mb-4"
             >
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">
-                {t('hero.badge')}
-              </span>
-            </motion.div>
-
-            {/* CTAs */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.54 }}
-              className="mb-5 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row"
-            >
-              <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} className="w-full sm:w-auto">
+              <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
                 <Button
                   onClick={goToBooks}
                   size="lg"
-                  className="relative w-full sm:w-auto px-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold shadow-[0_8px_40px_rgba(251,146,60,0.48)] border-0 overflow-hidden group"
+                  className="relative px-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold shadow-[0_8px_40px_rgba(251,146,60,0.48)] border-0 overflow-hidden group"
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2.5">
                     {t('hero.cta')}
@@ -175,45 +175,27 @@ export const Hero: React.FC = () => {
               </motion.div>
             </motion.div>
 
-            {/* Feature chips */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.62 }}
-              className="flex justify-center gap-2 flex-wrap mb-4"
-            >
-              {FEATURE_CHIPS.map(({ icon: Icon, labelKey, mobileHide }) => (
-                <div
-                  key={labelKey}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/60 border border-white/55 shadow-sm text-gray-600 text-xs font-medium whitespace-nowrap backdrop-blur-sm ${mobileHide ? 'hidden sm:flex' : 'flex'}`}
-                >
-                  <Icon className="h-3 w-3 text-amber-500 shrink-0" />
-                  {t(labelKey)}
-                </div>
-              ))}
-            </motion.div>
-
             {/* Social proof — cycling micro-testimonial */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.72 }}
-              className="flex items-center justify-center gap-3"
+              transition={{ delay: 0.62 }}
+              className="mb-3 flex items-center justify-center gap-3"
             >
-              <div className="flex -space-x-2.5 shrink-0">
+              <div className="flex -space-x-2 shrink-0">
                 {AVATAR_GRADIENTS.map((g, i) => (
-                  <div key={i} className={`w-7 h-7 rounded-full border-2 border-white/90 bg-gradient-to-br ${g}`} />
+                  <div key={i} className={`w-6 h-6 rounded-full border-2 border-white/90 bg-gradient-to-br ${g}`} />
                 ))}
               </div>
               <div
                 className="text-left"
                 style={{
                   opacity: quoteVisible ? 1 : 0,
-                  transform: quoteVisible ? 'translateY(0px)' : 'translateY(5px)',
+                  transform: quoteVisible ? 'translateY(0px)' : 'translateY(4px)',
                   transition: 'opacity 280ms ease, transform 280ms ease',
                 }}
               >
-                <p className="text-xs font-semibold text-gray-800 leading-snug italic">
+                <p className="text-[11px] font-semibold text-gray-800 leading-snug italic">
                   {TESTIMONIALS[quoteIdx].text}
                 </p>
                 <p className="text-[10px] text-amber-600 mt-0.5 leading-none font-medium tracking-wide">
@@ -221,6 +203,24 @@ export const Hero: React.FC = () => {
                   <span className="text-gray-400 font-normal not-italic">{TESTIMONIALS[quoteIdx].author}</span>
                 </p>
               </div>
+            </motion.div>
+
+            {/* Feature chips */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.72 }}
+              className="flex justify-center gap-1.5 flex-wrap"
+            >
+              {FEATURE_CHIPS.map(({ icon: Icon, labelKey, mobileHide }) => (
+                <div
+                  key={labelKey}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/55 border border-white/50 text-gray-500 text-[11px] font-medium whitespace-nowrap ${mobileHide ? 'hidden sm:flex' : 'flex'}`}
+                >
+                  <Icon className="h-2.5 w-2.5 text-amber-400 shrink-0" />
+                  {t(labelKey)}
+                </div>
+              ))}
             </motion.div>
 
           </div>
