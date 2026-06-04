@@ -50,7 +50,6 @@ export const Hero: React.FC = () => {
 
   const [quoteIdx, setQuoteIdx] = useState(0)
   const [quoteVisible, setQuoteVisible] = useState(true)
-  const [loadVideo, setLoadVideo] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
 
   useEffect(() => {
@@ -62,45 +61,6 @@ export const Hero: React.FC = () => {
       }, 280)
     }, 3800)
     return () => clearInterval(id)
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    let fallbackId: ReturnType<typeof setTimeout> | undefined
-    let idleId: number | undefined
-
-    const startVideoLoad = () => {
-      if (!cancelled) {
-        setLoadVideo(true)
-      }
-    }
-
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (
-        callback: IdleRequestCallback,
-        options?: IdleRequestOptions
-      ) => number
-      cancelIdleCallback?: (handle: number) => void
-    }
-
-    const delayId = setTimeout(() => {
-      if (idleWindow.requestIdleCallback) {
-        idleId = idleWindow.requestIdleCallback(startVideoLoad, { timeout: 700 })
-      } else {
-        fallbackId = setTimeout(startVideoLoad, 200)
-      }
-    }, 250)
-
-    return () => {
-      cancelled = true
-      if (idleId !== undefined && idleWindow.cancelIdleCallback) {
-        idleWindow.cancelIdleCallback(idleId)
-      }
-      clearTimeout(delayId)
-      if (fallbackId) {
-        clearTimeout(fallbackId)
-      }
-    }
   }, [])
 
   const goToBooks = () => router.push('/books')
@@ -122,22 +82,21 @@ export const Hero: React.FC = () => {
             aria-hidden="true"
             className="absolute inset-0 object-cover"
           />
-          {loadVideo ? (
-            <video
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              poster="/hero-poster.webp"
-              onLoadedData={() => setVideoReady(true)}
-              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-                videoReady ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              <source src="/hero-video.mp4" type="video/mp4" />
-            </video>
-          ) : null}
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            poster="/hero-poster.webp"
+            onLoadedData={() => setVideoReady(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+              videoReady ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <source src="/hero-video-optimized.webm" type="video/webm" />
+            <source src="/hero-video-optimized.mp4" type="video/mp4" />
+          </video>
         </div>
 
         {/* ── Gradient overlays ──────────────────────────────────────────── */}

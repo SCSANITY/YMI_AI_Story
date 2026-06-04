@@ -25,7 +25,7 @@ Available measurements:
 | Files with `use client` | 52 files under `app`, `components`, and `src`. |
 | Remaining raw `<img>` usages | 18 usages. |
 | Files using `next/image` | 13 files. |
-| Hero video | `public/hero-video.mp4`, about `7.7 MiB`, with `public/hero-poster.webp` at about `87 KB`. Poster is shown first; video starts loading shortly after first render and fades in as soon as first frame data is available. |
+| Hero video | Source `public/hero-video.mp4` is about `7.7 MiB`. Runtime sources are `public/hero-video-optimized.webm` at about `2.1 MiB` and `public/hero-video-optimized.mp4` at about `3.8 MiB`, with `public/hero-poster.webp` at about `87 KB` as the first visual fallback. |
 | Legacy unreferenced banner PNGs | Cleaned in this optimization pass; current code uses optimized WebP banners. |
 
 Local Lighthouse baseline:
@@ -38,7 +38,7 @@ Local Lighthouse baseline:
 
 Important limitation: Next 16 App Router with Turbopack does not expose the older per-page "First Load JS" table in the same way. This audit therefore records route rendering, source-level risks, chunk sizes, and local Lighthouse snapshots. Production data should still be captured through Vercel Speed Insights because local Lighthouse does not include real CDN, device, and geography conditions.
 
-Homepage transfer note: the current full-quality Hero MP4 is about `7.7 MiB`, and Lighthouse includes it in total transfer because the audit observes long enough for the delayed video to load. The optimization goal for this pass is not reducing video quality; it is moving the full MP4 out of the critical first-render path while the lightweight poster paints first.
+Homepage transfer note: the user-selected Hero video content is preserved, but the browser no longer downloads the 7.7 MiB source MP4 for runtime playback. Chrome/Android-class browsers can choose the 2.1 MiB WebM source, while Safari and other fallbacks use the 3.8 MiB optimized MP4. The poster remains the first visual fallback.
 
 ## Executive Summary
 
@@ -63,7 +63,7 @@ Completed high-impact cleanup:
 
 The main remaining risks are:
 
-1. Hero video remains the largest homepage transfer item, so delivery strategy matters even when visual quality is preserved.
+1. Hero video remains the largest homepage media item, so runtime encoding and source selection matter even when visual quality is preserved.
 2. Large client hydration surface from the global client shell and broad client components.
 3. Remaining Latin display font families/weights should be reviewed only after visual comparison.
 4. Customize product gallery is now much healthier; further work should be based on production metrics rather than assumption.
@@ -198,8 +198,8 @@ Current state:
 - `app/checkout/page.tsx` previously had two `Image` usages with `unoptimized`; this pass removed `unoptimized` and added thumbnail `sizes`.
 - `public/logo.png` is about `0.85 MB`; Navbar/Footer now use a generated `public/logo.webp` that is about `41 KB`.
 - `app/share/preview/[token]/page.tsx` still uses raw `<img>`.
-- Hero video is about `7.7 MiB`; it now has an explicit `public/hero-poster.webp` poster image at about `87 KB`.
-- Hero video no longer blocks the initial render. The poster is rendered through `next/image` with `priority`, then the video is mounted shortly after first render using `requestIdleCallback` or a timeout fallback, uses `preload="auto"`, and fades in after `loadeddata` so the first available video frame appears quickly.
+- Hero source video is about `7.7 MiB`; runtime sources are optimized to about `2.1 MiB` WebM and `3.8 MiB` MP4 while preserving the same 1080p content.
+- The runtime video is rendered immediately with `preload="auto"` and fades in after `loadeddata`; `public/hero-poster.webp` remains the first visual fallback.
 - Before the product gallery preloading fix, local Lighthouse for `/personalize/Music_story` showed direct Supabase product image transfers:
   - `product7.webp`: about `270 KB`
   - `product1.webp`: about `223 KB`
@@ -221,7 +221,7 @@ Recommendation:
 - Done: old PNG banners were confirmed unreferenced and removed from deployed `public/`.
 - Done: checkout images no longer use `unoptimized` and now include explicit `sizes`.
 - Done: a lightweight `public/hero-poster.webp` was generated from the provided poster source and connected to the hero video.
-- Done: Hero video loading was changed to a poster-first, quick-start strategy without reducing video quality.
+- Done: Hero runtime video sources were re-encoded from the selected content into WebM/MP4 web delivery variants without changing story content or resolution.
 - Done: Navbar/Footer logo references were switched from `logo.png` to a smaller `logo.webp`.
 - Done: product gallery adjacent-image preloading now uses the Next Image Optimizer instead of direct Supabase image URLs.
 - P1/P2: convert public share preview image to `next/image` if the image URL shape is compatible.
@@ -382,7 +382,7 @@ Expected impact:
 | Done | Capture local Lighthouse baseline for `/`, `/books`, `/personalize/Music_story` | Makes future improvements measurable | Low | Completed locally; still need production RUM |
 | Done | Remove `unoptimized` from checkout thumbnails where compatible and add `sizes` | Better thumbnail optimization | Low | Completed |
 | Done | Add hero video poster image | Faster visual first paint / better perceived loading | Low | Completed with `public/hero-poster.webp` |
-| Done | Mount Hero video shortly after first render | Keeps full-quality video while letting the poster paint first and avoiding the previous multi-second wait | Low | Completed with quick idle/timeout start and `loadeddata` fade-in |
+| Done | Add optimized Hero video delivery sources | Keeps the selected video content while reducing runtime video from 7.7 MiB to 2.1 MiB WebM / 3.8 MiB MP4 fallback | Low | Completed with WebM-first source order and MP4 fallback |
 | Done | Optimize `logo.png` or replace with smaller asset | Navbar/Footer now use `logo.webp` at about 41KB | Low | Completed |
 | Done | Convert `HomePosterBanner` to server component using `Link` | Slightly less client JS | Low | Completed |
 | Done | Remove root CJK Google font imports | Clean `.next/static` dropped from about `13.1 MiB` to about `3.1 MiB`; FCP now around `0.9s` in local Lighthouse | Low | Completed with system CJK fallbacks |
@@ -427,12 +427,12 @@ Expected impact:
 ### P1: User-Facing Load Improvements
 
 - Checkout thumbnails were updated to use Next image optimization with explicit `sizes`.
-- Hero video now uses `public/hero-poster.webp` as a lightweight poster image and mounts the full-quality MP4 shortly after first render.
+- Hero video now uses optimized runtime sources: WebM first, MP4 fallback, plus `public/hero-poster.webp` as the lightweight first visual.
 - Navbar/Footer logo references now use the optimized `public/logo.webp`.
 - Convert simple public client components to server components where possible.
 - Customize product gallery no longer preloads raw Supabase product images; further work should focus on sizing/quality only if production metrics require it.
 - Reduce Framer Motion and remaining Latin font payload after visual review.
-- Reassess homepage Hero LCP and perceived video start time after deployment with the poster-first quick-start video strategy.
+- Reassess homepage Hero LCP and perceived video start time after deployment with the optimized WebM/MP4 source strategy.
 - Add short cache to shipping destinations only if admin update latency is acceptable.
 - Begin splitting `PersonalizePage` into smaller workflow islands.
 
@@ -450,7 +450,7 @@ The highest-impact safe bundle issue found in this audit was client-side OpenCC 
 
 Current local Lighthouse after this round shows `/personalize/Music_story` at `CLS 0`, so layout stability is no longer the active Customize blocker. The next round should focus on:
 
-1. Homepage Hero LCP and perceived video start time with the new poster-first quick-start video strategy.
+1. Homepage Hero LCP and perceived video start time with the optimized WebM/MP4 source strategy.
 2. Remaining Latin font family/weight reduction after visual review.
 3. Framer Motion and PersonalizePage island splitting only after route-level measurement.
 4. Carefully splitting large client components once the bundle data proves where the cost is.
