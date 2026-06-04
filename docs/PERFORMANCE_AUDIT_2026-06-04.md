@@ -25,7 +25,7 @@ Available measurements:
 | Files with `use client` | 52 files under `app`, `components`, and `src`. |
 | Remaining raw `<img>` usages | 18 usages. |
 | Files using `next/image` | 13 files. |
-| Hero video | Source `public/hero-video.mp4` is about `7.7 MiB`. Runtime sources are `public/hero-video-optimized.webm` at about `2.1 MiB` and `public/hero-video-optimized.mp4` at about `3.8 MiB`, with `public/hero-poster.webp` at about `87 KB` as the first visual fallback. |
+| Hero video | Source `public/hero-video.mp4` is about `7.7 MiB`. Runtime sources are `public/hero-video-optimized.webm` at about `2.1 MiB` and `public/hero-video-optimized.mp4` at about `3.8 MiB`, with `public/hero-poster.webp` at about `122 KB` as the first visual fallback. |
 | Legacy unreferenced banner PNGs | Cleaned in this optimization pass; current code uses optimized WebP banners. |
 
 Local Lighthouse baseline:
