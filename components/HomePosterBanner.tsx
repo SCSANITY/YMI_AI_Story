@@ -1,6 +1,4 @@
-'use client';
-
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type HomePosterBannerProps = {
   src: string;
@@ -26,16 +24,8 @@ export function HomePosterBanner({
   priority = false,
   className = '',
 }: HomePosterBannerProps) {
-  const router = useRouter();
-
-  const handleBannerClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    if (href.startsWith('#')) {
-      document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' });
-      return;
-    }
-    router.push(href);
-  };
+  const overlayClassName =
+    'absolute inset-0 block cursor-pointer rounded-[inherit] bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent';
 
   return (
     <section className={`relative w-full overflow-hidden ${className}`.trim()}>
@@ -53,12 +43,19 @@ export function HomePosterBanner({
             className="block h-full w-full object-cover"
           />
         </picture>
-        <a
-          href={href}
-          onClick={handleBannerClick}
-          aria-label="Create their story and jump to our books collection"
-          className="absolute inset-0 block cursor-pointer rounded-[inherit] bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-        />
+        {href.startsWith('#') ? (
+          <a
+            href={href}
+            aria-label="Create their story and jump to our books collection"
+            className={overlayClassName}
+          />
+        ) : (
+          <Link
+            href={href}
+            aria-label="Create their story and jump to our books collection"
+            className={overlayClassName}
+          />
+        )}
       </div>
     </section>
   );

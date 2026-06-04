@@ -125,6 +125,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [user, setUser] = useState<User | null>(null);
   const userRef = useRef<User | null>(null);
   const authSyncInFlightRef = useRef<string | null>(null);
+  const favoriteTogglePendingRef = useRef(false);
   const [language, setLanguageState] = useState<Language>('en');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Book[]>([]);
@@ -265,12 +266,15 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, []);
 
   const refreshFavoritesFromDb = useCallback(async () => {
+    if (favoriteTogglePendingRef.current) return;
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
     const response = await fetch(`/api/favourites${params}`, { credentials: 'include' });
-    if (!response.ok) return;
+    if (!response.ok || favoriteTogglePendingRef.current) return;
     const data = await response.json();
     const items = Array.isArray(data?.items) ? data.items : [];
-    setFavorites(mapFavouriteItems(items));
+    if (!favoriteTogglePendingRef.current) {
+      setFavorites(mapFavouriteItems(items));
+    }
   }, [mapFavouriteItems, user?.customerId]);
 
   useEffect(() => {
@@ -826,6 +830,8 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const toggleFavorite = useCallback((book: Book): ToggleFavoriteResult => {
     const exists = favorites.some((fav) => fav.bookID === book.bookID);
+
+    favoriteTogglePendingRef.current = true;
     setFavorites((prev) =>
       exists ? prev.filter((fav) => fav.bookID !== book.bookID) : [...prev, book]
     );
@@ -846,20 +852,19 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setFavorites((prev) =>
             exists ? [...prev, book] : prev.filter((fav) => fav.bookID !== book.bookID)
           );
-          return;
         }
-
-        await refreshFavoritesFromDb();
       } catch (error) {
         console.error('Favourite toggle failed:', error);
         setFavorites((prev) =>
           exists ? [...prev, book] : prev.filter((fav) => fav.bookID !== book.bookID)
         );
+      } finally {
+        favoriteTogglePendingRef.current = false;
       }
     })();
 
     return { success: true };
-  }, [favorites, refreshFavoritesFromDb, user?.customerId]);
+  }, [favorites, user?.customerId]);
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);

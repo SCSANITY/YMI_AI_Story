@@ -2539,7 +2539,7 @@ function CheckoutPageContent() {
                         alt={item.book.title}
                         width={80}
                         height={96}
-                        unoptimized
+                        sizes="(max-width: 639px) 80px, 64px"
                         className="h-24 w-20 rounded-xl object-cover sm:h-20 sm:w-16"
                       />
                       <div className="min-w-0 flex-1">
@@ -2863,7 +2863,7 @@ function CheckoutPageContent() {
                       alt={item.book.title}
                       width={80}
                       height={96}
-                      unoptimized
+                      sizes="(max-width: 639px) 80px, 56px"
                       className="h-24 w-20 rounded-xl object-cover sm:h-18 sm:w-14"
                     />
                     <div className="flex-1">

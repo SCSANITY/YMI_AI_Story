@@ -66,7 +66,7 @@ Active short-term tracker:
   - Books grid Framer Motion layout animation was removed while preserving lightweight entry animation.
   - Customize preview/showcase image preloading is scoped to visible or adjacent images instead of broad eager loading.
   - Share dialog preview image is eager-loaded and share/download actions reuse a cached image file instead of refetching.
-  - Home hero video uses `preload="metadata"` and the first poster banner no longer competes as a high-priority image.
+  - Home hero now renders `hero-poster.webp` first through Next Image and mounts the full-quality `hero-video.mp4` only after a short delay plus browser idle, then fades the video in when playable. This preserves video quality while preventing the 7.7 MiB MP4 from competing with critical first render resources.
   - Product showcase photos were standardized to `products/productN.webp`: local script `scripts/optimize-template-products.mjs` generated 97 WebP files from `Template_folder/<Story_ID>/Product`; local source PNGs were removed after conversion; Supabase was updated with the WebP files and verified as 97 WebP / 0 PNG across active stories.
 - Current email and order-status notification system shipped:
   - `email_events` is the unified operational log for all YMI-managed Resend sends and external Stripe/Supabase Auth observations.
@@ -138,7 +138,7 @@ Code quality / maintainability:
 - Some product/content pages may still contain placeholder/demo wording.
 - Admin rerun UI is reserved/disabled for a future random-seed rerun flow.
 - SEO metadata should stay aligned with route ownership: public marketing/catalog pages may be indexed; private areas should be excluded with `robots.txt`; anonymous but non-indexable pages should remain crawlable with meta noindex so crawlers can actually see the directive. Do not rely on `robots.txt` for API security; API routes still require their own auth/secret checks.
-- Frontend performance is no longer a near-term blocker after the May 2026 optimization pass. Optional future work: run Lighthouse/Chrome Performance baselines on homepage, `/books`, Customize, and ShareDialog; add a hero video poster or mobile-specific lower-bitrate video; continue reducing repeated `backdrop-blur` usage in non-critical surfaces; archive unused large PNG assets in `public/banners` to prevent accidental future references.
+- Frontend performance is no longer a near-term blocker after the May/June 2026 optimization pass. Optional future work: run production Vercel Speed Insights/Core Web Vitals baselines on homepage, `/books`, Customize, and ShareDialog; reassess homepage Hero LCP after the poster-first delayed-idle video strategy; continue reducing repeated `backdrop-blur` usage in non-critical surfaces only where visual quality is not affected.
 - Email template customization is intentionally code-first in the current phase. If the product needs marketer-editable templates later, design that as a separate feature with preview, approval, versioning, and test-send controls instead of mixing it into the current sender functions.
 
 ## Known Risks And Current Judgment

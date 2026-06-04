@@ -305,10 +305,10 @@ export const Navbar: React.FC = () => {
             className="flex items-center"
           >
             <Image
-              src="/logo.png"
+              src="/logo.webp"
               alt="YMI Story"
-              width={1057}
-              height={900}
+              width={512}
+              height={436}
               priority={isHomePage}
               className="h-8 w-auto"
             />

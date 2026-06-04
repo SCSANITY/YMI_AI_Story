@@ -1,5 +1,5 @@
 ﻿import type { Language } from '@/types'
-import * as OpenCC from 'opencc-js'
+import { cn_t } from '@/lib/i18n-messages-traditional'
 
 type MessageDictionary = Record<string, string>
 
@@ -1432,25 +1432,6 @@ const cn_s: MessageDictionary = {
   'maintenance.description': '网站目前因维护和内部测试暂时不可用，请稍后再回来查看。',
   'maintenance.contactPrefix': '如果你现在需要帮助，请联系',
   'maintenance.contactSuffix': '。',
-}
-
-const cnToTraditional = OpenCC.Converter({ from: 'cn', to: 'hk' })
-const toTraditionalDict = (dict: MessageDictionary): MessageDictionary => {
-  return Object.fromEntries(
-    Object.entries(dict).map(([key, value]) => [key, cnToTraditional(value)])
-  )
-}
-
-const cn_t: MessageDictionary = {
-  ...toTraditionalDict(cn_s),
-  'language.cn_s': '簡體中文',
-  'language.cn_t': '繁體中文',
-  'navbar.favorites': '我的收藏',
-  'navbar.logOut': '登出',
-  'favorites.title': '我的收藏',
-  'checkout.title': '安全結帳',
-  'orders.title': '我的訂單',
-  'support.title': '支援中心',
 }
 
 const ja: MessageDictionary = {

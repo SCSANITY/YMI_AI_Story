@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
+const SHIPPING_DESTINATIONS_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600'
+
 type ZoneCountryRow = {
   country_code: string
   region_key: string | null
@@ -91,7 +93,9 @@ export async function GET() {
     const countryCodes = Array.from(new Set(normalizedZoneRows.map((row) => row.country_code)))
 
     if (countryCodes.length === 0) {
-      return NextResponse.json({ destinations: [] })
+      const response = NextResponse.json({ destinations: [] })
+      response.headers.set('Cache-Control', SHIPPING_DESTINATIONS_CACHE_CONTROL)
+      return response
     }
 
     const { data: countryRows, error: countryError } = await supabaseAdmin
@@ -145,7 +149,7 @@ export async function GET() {
       { destinations },
       {
         headers: {
-          'Cache-Control': 'no-store',
+          'Cache-Control': SHIPPING_DESTINATIONS_CACHE_CONTROL,
         },
       }
     )

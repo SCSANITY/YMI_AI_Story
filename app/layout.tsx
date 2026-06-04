@@ -1,6 +1,6 @@
 import './globals.css';
 import { AppShell } from '@/components/AppShell';
-import { Cormorant_Garamond, Inter, Noto_Sans_TC, Noto_Serif_TC, Playfair_Display } from 'next/font/google';
+import { Cormorant_Garamond, Inter, Playfair_Display } from 'next/font/google';
 import type { Metadata } from 'next';
 import { DEFAULT_OG_IMAGE, DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE, SITE_NAME, SITE_URL, absoluteUrl } from '@/lib/seo';
 
@@ -63,16 +63,6 @@ const playfair = Playfair_Display({
   variable: '--font-playfair',
 });
 
-const notoSansTC = Noto_Sans_TC({
-  weight: ['400', '500', '700'],
-  variable: '--font-noto-sans-tc',
-});
-
-const notoSerifTC = Noto_Serif_TC({
-  weight: ['400', '600', '700'],
-  variable: '--font-noto-serif-tc',
-});
-
 const supabaseOrigin = (() => {
   try {
     return process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -91,7 +81,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${playfair.variable} ${cormorant.variable} ${notoSansTC.variable} ${notoSerifTC.variable}`}
+      className={`${inter.variable} ${playfair.variable} ${cormorant.variable}`}
     >
       {supabaseOrigin ? (
         <head>

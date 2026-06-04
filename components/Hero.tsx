@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { Button } from '@/components/Button'
 import { Sparkles, Star, Clock, Globe, BookOpen } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -49,6 +50,8 @@ export const Hero: React.FC = () => {
 
   const [quoteIdx, setQuoteIdx] = useState(0)
   const [quoteVisible, setQuoteVisible] = useState(true)
+  const [loadVideo, setLoadVideo] = useState(false)
+  const [videoReady, setVideoReady] = useState(false)
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -61,6 +64,45 @@ export const Hero: React.FC = () => {
     return () => clearInterval(id)
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    let fallbackId: ReturnType<typeof setTimeout> | undefined
+    let idleId: number | undefined
+
+    const startVideoLoad = () => {
+      if (!cancelled) {
+        setLoadVideo(true)
+      }
+    }
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions
+      ) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+
+    const delayId = setTimeout(() => {
+      if (idleWindow.requestIdleCallback) {
+        idleId = idleWindow.requestIdleCallback(startVideoLoad, { timeout: 1600 })
+      } else {
+        fallbackId = setTimeout(startVideoLoad, 400)
+      }
+    }, 2400)
+
+    return () => {
+      cancelled = true
+      if (idleId !== undefined && idleWindow.cancelIdleCallback) {
+        idleWindow.cancelIdleCallback(idleId)
+      }
+      clearTimeout(delayId)
+      if (fallbackId) {
+        clearTimeout(fallbackId)
+      }
+    }
+  }, [])
+
   const goToBooks = () => router.push('/books')
 
   return (
@@ -71,16 +113,31 @@ export const Hero: React.FC = () => {
 
         {/* Video / fallback background — absolute, fills everything */}
         <div className="absolute inset-0 z-0 overflow-hidden">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            className="absolute inset-0 w-full h-full object-cover"
-          >
-            <source src="/hero-video.mp4" type="video/mp4" />
-          </video>
+          <Image
+            src="/hero-poster.webp"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            aria-hidden="true"
+            className="absolute inset-0 object-cover"
+          />
+          {loadVideo ? (
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="none"
+              poster="/hero-poster.webp"
+              onCanPlay={() => setVideoReady(true)}
+              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+                videoReady ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <source src="/hero-video.mp4" type="video/mp4" />
+            </video>
+          ) : null}
         </div>
 
         {/* ── Gradient overlays ──────────────────────────────────────────── */}

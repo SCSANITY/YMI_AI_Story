@@ -336,11 +336,6 @@ export default function MyBooksPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5 mx-auto" />
                   </button>
-                  <div className="absolute top-2 left-2 z-20 md:top-3 md:left-3 flex gap-2">
-                    <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur-sm text-[8px] md:text-[10px] font-bold uppercase tracking-wider rounded-md text-gray-800 shadow-sm">
-                      {item.templates?.story_type || 'Story'}
-                    </span>
-                  </div>
                   {isDiscounted ? (
                     <div className="pointer-events-none absolute -right-2 -top-3 z-30 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:-right-3 md:-top-5 md:px-5 md:py-2 md:text-lg">
                       -{discountPercent}%
@@ -355,6 +350,9 @@ export default function MyBooksPage() {
                         {item.templates?.name || item.template_id}
                       </h3>
                     </button>
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:mb-3 md:text-xs">
+                      {item.templates?.story_type || ''}
+                    </p>
                     <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
                       {item.templates?.description || t('common.personalizedStorybook')}
                     </p>

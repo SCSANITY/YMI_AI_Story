@@ -2,18 +2,17 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Heart, Sparkles } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
+import { BookCard } from '@/components/BookCard';
 import { Button } from '@/components/Button';
-import { BookCardCover } from '@/components/BookCardCover';
 import { supabase } from '@/lib/supabase';
 import { useI18n } from '@/lib/useI18n';
-import { formatLocaleCurrency } from '@/lib/locale-pricing';
 import { canEnterCustomize } from '@/lib/customize-access-client';
 
 export default function FavoritesPage() {
   const router = useRouter();
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const { favorites, toggleFavorite, user, isHydrated } = useGlobalContext();
   const [coverMap, setCoverMap] = useState<Record<string, string>>({});
   const [titleMap, setTitleMap] = useState<Record<string, string>>({});
@@ -29,59 +28,43 @@ export default function FavoritesPage() {
   useEffect(() => {
     let isMounted = true;
 
-    const loadCovers = async () => {
+    const loadTemplateData = async () => {
       const { data, error } = await supabase
         .from('templates')
         .select('*')
         .eq('is_active', true);
 
-      if (!isMounted) return;
-      if (error || !data) return;
+      if (!isMounted || error || !data) return;
 
-      const coverLookup: Record<string, string> = {};
-      const titleLookup: Record<string, string> = {};
-      const typeLookup: Record<string, string> = {};
-      const descLookup: Record<string, string> = {};
+      const covers: Record<string, string> = {};
+      const titles: Record<string, string> = {};
+      const types: Record<string, string> = {};
+      const descs: Record<string, string> = {};
 
       data.forEach((row: any) => {
-        if (row?.template_id && row?.name) {
-          titleLookup[row.template_id] = String(row.name);
-        }
-
-        if (row?.template_id && row?.story_type) {
-          typeLookup[row.template_id] = String(row.story_type);
-        }
-
-        if (row?.template_id && row?.description) {
-          descLookup[row.template_id] = String(row.description);
-        }
-
+        if (!row?.template_id) return;
+        if (row.name) titles[row.template_id] = String(row.name);
+        if (row.story_type) types[row.template_id] = String(row.story_type);
+        if (row.description) descs[row.template_id] = String(row.description);
         const rawPath = String(row.normalized_cover_image_path || row.cover_image_path || '').trim();
         if (!rawPath) return;
         if (rawPath.startsWith('http')) {
-          coverLookup[row.template_id] = rawPath;
+          covers[row.template_id] = rawPath;
           return;
         }
         const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '');
-        const { data: publicUrl } = supabase.storage
-          .from('app-templates')
-          .getPublicUrl(cleaned);
-        if (publicUrl?.publicUrl) {
-          coverLookup[row.template_id] = publicUrl.publicUrl;
-        }
+        const { data: pub } = supabase.storage.from('app-templates').getPublicUrl(cleaned);
+        if (pub?.publicUrl) covers[row.template_id] = pub.publicUrl;
       });
 
-      setCoverMap(coverLookup);
-      setTitleMap(titleLookup);
-      setTypeMap(typeLookup);
-      setDescMap(descLookup);
+      setCoverMap(covers);
+      setTitleMap(titles);
+      setTypeMap(types);
+      setDescMap(descs);
     };
 
-    loadCovers();
-
-    return () => {
-      isMounted = false;
-    };
+    loadTemplateData();
+    return () => { isMounted = false; };
   }, []);
 
   if (!isHydrated) {
@@ -97,7 +80,9 @@ export default function FavoritesPage() {
           </div>
           <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('favorites.emptyTitle')}</h1>
           <p className="text-gray-600">{t('favorites.emptyDescription')}</p>
-          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/books')}>{t('common.browseBooks')}</Button>
+          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/books')}>
+            {t('common.browseBooks')}
+          </Button>
         </div>
       </div>
     );
@@ -105,105 +90,36 @@ export default function FavoritesPage() {
 
   return (
     <div className="page-surface min-h-screen">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 pt-24 pb-16">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-          <Heart className="h-5 w-5 text-amber-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('favorites.title')}</h1>
-          <p className="text-gray-500 text-sm">{t('favorites.subtitle')}</p>
-        </div>
-      </div>
-      {!user && (
-        <div className="mb-6 text-xs text-gray-500">
-          {t('favorites.syncHint')}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8">
-        {favorites.map((book) => {
-          const coverSrc = coverMap[book.bookID] || book.coverUrl
-          const priceLabel = formatLocaleCurrency(book.price, language)
-          const compareAtPrice = book.compareAtPrice && book.compareAtPrice > book.price ? book.compareAtPrice : null
-          const compareAtLabel = compareAtPrice ? formatLocaleCurrency(compareAtPrice, language) : null
-          const discountPercent =
-            book.discountPercent ??
-            (compareAtPrice ? Math.round((1 - book.price / compareAtPrice) * 100) : null)
-          const isDiscounted = Boolean((book.isDiscount || compareAtPrice) && discountPercent && discountPercent > 0)
-
-          return (
-          <div
-            key={book.bookID}
-            className="group book-card-hoverable relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out md:hover:-translate-y-1"
-            onClick={() => void handlePersonalize(book.bookID)}
-          >
-            <BookCardCover src={coverSrc} alt={titleMap[book.bookID] || book.title} coverZoom={book.coverZoom}>
-              <button
-                onClick={(event) => {
-                  event.stopPropagation();
-                  toggleFavorite(book);
-                }}
-                className="absolute right-3 top-7 z-20 p-1.5 md:p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm hover:bg-white transition-all transform active:scale-90 opacity-100 md:opacity-0 group-hover:opacity-100 translate-y-0 md:translate-y-2 group-hover:translate-y-0 md:right-8 md:top-10"
-              >
-                <Heart className="h-4 w-4 md:h-5 md:w-5 fill-red-500 text-red-500" />
-              </button>
-              {isDiscounted ? (
-                <div className="pointer-events-none absolute -right-2 -top-3 z-30 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:-right-3 md:-top-5 md:px-5 md:py-2 md:text-lg">
-                  -{discountPercent}%
-                </div>
-              ) : null}
-            </BookCardCover>
-
-            <div className="glass-panel rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-10 md:pt-14 px-3 md:px-5 pb-3 md:pb-5">
-              <div className="flex flex-col flex-1">
-                <h3 className="font-display pt-px md:pt-0 text-sm md:text-lg font-medium text-gray-900 leading-snug md:leading-tight mb-1 md:mb-2 group-hover:text-amber-600 transition-colors line-clamp-2 md:line-clamp-none">
-                  {titleMap[book.bookID] || book.title}
-                </h3>
-                <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wide mb-1 md:mb-3">
-                  {typeMap[book.bookID] || book.category}
-                </p>
-                <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
-                  {descMap[book.bookID] || book.description}
-                </p>
-              </div>
-
-              <div className="mt-auto flex items-center justify-between gap-3 border-t border-gray-50 pt-3 md:pt-4">
-                <div className="min-w-0">
-                  {isDiscounted ? (
-                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
-                        {priceLabel}
-                      </span>
-                      {compareAtLabel ? (
-                        <span className="whitespace-nowrap text-xs font-semibold text-gray-400 line-through md:text-sm">
-                          {compareAtLabel}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-baseline">
-                      <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
-                        {priceLabel}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  className="rounded-full px-4 py-1.5 text-[10px] md:text-xs font-semibold"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void handlePersonalize(book.bookID);
-                  }}
-                >
-                  <Sparkles className="h-3 w-3 mr-1" /> {t('favorites.personalize')}
-                </Button>
-              </div>
-            </div>
+      <div className="max-w-7xl mx-auto px-4 md:px-8 pt-24 pb-16">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+            <Heart className="h-5 w-5 text-amber-600" />
           </div>
-        )})}
-      </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('favorites.title')}</h1>
+            <p className="text-gray-500 text-sm">{t('favorites.subtitle')}</p>
+          </div>
+        </div>
+
+        {!user && (
+          <div className="mb-6 text-xs text-gray-500">{t('favorites.syncHint')}</div>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-10">
+          {favorites.map((book) => (
+            <BookCard
+              key={book.bookID}
+              book={book}
+              isFavorite={true}
+              coverSrc={coverMap[book.bookID] || book.coverUrl}
+              title={titleMap[book.bookID] || book.title}
+              storyType={typeMap[book.bookID] || book.category}
+              description={descMap[book.bookID] || book.description}
+              onClick={() => void handlePersonalize(book.bookID)}
+              onFavoriteClick={(e) => { e.stopPropagation(); toggleFavorite(book); }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

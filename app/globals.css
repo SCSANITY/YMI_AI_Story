@@ -10,8 +10,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
-  --font-cjk-sans: var(--font-noto-sans-tc);
-  --font-cjk-serif: var(--font-noto-serif-tc);
   --color-brand: #f59e0b;
   --color-brand-deep: #ea580c;
   --color-surface-warm: rgba(255, 250, 244, 1);
@@ -62,11 +60,10 @@ html {
 html[lang='zh-HK'] body,
 html[lang='zh-TW'] body {
   font-family:
-    var(--font-cjk-sans),
-    "Noto Sans TC",
     "PingFang TC",
     "Microsoft JhengHei",
     "Heiti TC",
+    "Noto Sans TC",
     var(--font-inter),
     "Inter",
     "Segoe UI",
@@ -84,10 +81,9 @@ html[lang='zh-TW'] .font-display,
 html[lang='zh-TW'] .font-cormorant,
 html[lang='zh-TW'] .font-serif {
   font-family:
-    var(--font-cjk-serif),
-    "Noto Serif TC",
     "Songti TC",
     "PMingLiU",
+    "Noto Serif TC",
     serif;
 }
 

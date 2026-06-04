@@ -420,10 +420,10 @@ export const Footer: React.FC = () => {
             <div className="space-y-5">
               <div className="flex items-center">
                 <Image
-                  src="/logo.png"
+                  src="/logo.webp"
                   alt="YMI Story"
-                  width={1057}
-                  height={900}
+                  width={512}
+                  height={436}
                   className="h-10 w-auto"
                 />
               </div>

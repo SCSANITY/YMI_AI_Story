@@ -131,6 +131,14 @@ const DEFAULT_MAGIC_ATTRIBUTE_DISPLAY = {
   barClassName: 'bg-purple-400',
 };
 
+const toNextImagePreloadUrl = (src: string, width: 640 | 750) => {
+  if (!src || src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/_next/image')) {
+    return src;
+  }
+
+  return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=75`;
+};
+
 export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const fsm = usePersonalizeStage()
@@ -1420,19 +1428,19 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   useEffect(() => {
     if (!viewState.showForm || showcaseImages.length <= 1) return
 
-    const preloadIndexes = new Set([
-      (activeShowcaseIndex + 1) % showcaseImages.length,
-      (activeShowcaseIndex - 1 + showcaseImages.length) % showcaseImages.length,
-    ])
-
-    Array.from(preloadIndexes).forEach((index) => {
-      const url = getShowcaseImageSrc(showcaseImages[index] || '')
+    const timer = window.setTimeout(() => {
+      const nextIndex = (activeShowcaseIndex + 1) % showcaseImages.length
+      const url = getShowcaseImageSrc(showcaseImages[nextIndex] || '')
       if (!url) return
+
       const img = new Image()
       img.decoding = 'async'
-      img.src = url
-    })
-  }, [activeShowcaseIndex, getShowcaseImageSrc, showcaseImages, viewState.showForm])
+      img.fetchPriority = 'low'
+      img.src = toNextImagePreloadUrl(url, isMobile ? 640 : 750)
+    }, activeShowcaseIndex === 0 ? 1200 : 180)
+
+    return () => window.clearTimeout(timer)
+  }, [activeShowcaseIndex, getShowcaseImageSrc, isMobile, showcaseImages, viewState.showForm])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

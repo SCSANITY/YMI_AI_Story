@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
+const REVIEW_SUMMARY_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600'
+
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('order_reviews')
@@ -9,7 +11,9 @@ export async function GET() {
   if (error) {
     // If table is not created yet, fail gracefully for UI.
     if (error.code === 'PGRST205' || error.code === '42P01') {
-      return NextResponse.json({ summary: {} })
+      const response = NextResponse.json({ summary: {} })
+      response.headers.set('Cache-Control', REVIEW_SUMMARY_CACHE_CONTROL)
+      return response
     }
     return NextResponse.json({ error: 'Failed to load review summary' }, { status: 500 })
   }
@@ -33,6 +37,7 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ summary })
+  const response = NextResponse.json({ summary })
+  response.headers.set('Cache-Control', REVIEW_SUMMARY_CACHE_CONTROL)
+  return response
 }
-

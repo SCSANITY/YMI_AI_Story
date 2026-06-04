@@ -1,5 +1,5 @@
-﻿import * as OpenCC from 'opencc-js'
 import type { Language } from '@/types'
+import { footerLegalContentCnT } from '@/lib/footer-legal-content-traditional'
 
 export type LegalTextItem = {
   label?: string
@@ -22,22 +22,6 @@ export type FooterLegalContent = {
   impact: LegalSection[]
 }
 
-const cnToTraditional = OpenCC.Converter({ from: 'cn', to: 'hk' })
-
-function convertTextItem(item: LegalTextItem): LegalTextItem {
-  return {
-    label: item.label ? cnToTraditional(item.label) : undefined,
-    text: cnToTraditional(item.text),
-  }
-}
-
-function convertSection(section: LegalSection): LegalSection {
-  return {
-    title: section.title ? cnToTraditional(section.title) : undefined,
-    paragraphs: section.paragraphs?.map(convertTextItem),
-    bullets: section.bullets?.map(convertTextItem),
-  }
-}
 
 const privacyEn: LegalSection[] = [
   {
@@ -1004,15 +988,7 @@ export function getFooterLegalContent(language: Language): FooterLegalContent {
   }
 
   if (language === 'cn_t') {
-    return {
-      privacy: privacyCnS.map(convertSection),
-      terms: termsCnS.map(convertSection),
-      ourStory: ourStoryEn,
-      shipping: shippingPolicyEn,
-      refund: refundPolicyEn,
-      safety: safetyNoticeEn,
-      impact: impactProgramEn,
-    }
+    return footerLegalContentCnT
   }
 
   return {
