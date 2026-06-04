@@ -85,11 +85,11 @@ export const Hero: React.FC = () => {
 
     const delayId = setTimeout(() => {
       if (idleWindow.requestIdleCallback) {
-        idleId = idleWindow.requestIdleCallback(startVideoLoad, { timeout: 1600 })
+        idleId = idleWindow.requestIdleCallback(startVideoLoad, { timeout: 700 })
       } else {
-        fallbackId = setTimeout(startVideoLoad, 400)
+        fallbackId = setTimeout(startVideoLoad, 200)
       }
-    }, 2400)
+    }, 250)
 
     return () => {
       cancelled = true
@@ -128,9 +128,9 @@ export const Hero: React.FC = () => {
               muted
               loop
               playsInline
-              preload="none"
+              preload="auto"
               poster="/hero-poster.webp"
-              onCanPlay={() => setVideoReady(true)}
+              onLoadedData={() => setVideoReady(true)}
               className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
                 videoReady ? 'opacity-100' : 'opacity-0'
               }`}
