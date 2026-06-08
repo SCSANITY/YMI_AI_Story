@@ -1,6 +1,6 @@
 # YMI Story System Architecture
 
-Last updated: 2026-06-01
+Last updated: 2026-06-05
 
 ## Product Scope
 
@@ -131,6 +131,7 @@ Important shared libraries:
   - Legacy/fallback provider adapter. Currently not the active production path.
 - `worker/subtitleRenderer.ts`
   - Local image/text rendering for dynamic child-name overlays.
+  - The renderer is synchronized with `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`; the editor remains the visual authoring source of truth, while the worker is responsible for reproducing the exported JSON at runtime before RunPod receives the template image.
 - `worker/processor.ts`
   - Template/config typing and related shared structures.
 - `worker/pdf.ts`
@@ -140,6 +141,28 @@ Important shared libraries:
 - `worker/scripts/use-env-localhost.ps1`
 - `worker/scripts/use-env-online.ps1`
   - Environment profile switchers.
+
+### Worker Subtitle Rendering Contract
+
+- Subtitle authoring happens in `subtitle-template-editor-app/`.
+- The worker render contract is documented in `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`.
+- Runtime subtitle JSON is stored in Supabase Storage under `app-templates` with each story package.
+- When `subtitle_render.enabled=true` in a story config, the worker:
+  - downloads the subtitle JSON and configured font assets,
+  - renders the overlay with `@napi-rs/canvas`,
+  - uploads the rendered runtime template to `raw-private/jobs/{date}/{jobId}/runtime/subtitles/page_XX.png`,
+  - sends that rendered image into the provider workflow instead of the original static template page.
+- The current worker renderer supports the newer editor effects used by the story packages:
+  - solid and linear-gradient fills,
+  - texture fills where supported by the referenced image path,
+  - `{name}` mixed styling through `nameStyle`,
+  - stroke, shadow, glow, bevel, underline,
+  - per-side padding, vertical alignment, text transform, wrapping, and cloud/fade box styling.
+- Font assets can be `.ttf`, `.otf`, `.woff`, or `.woff2`. The worker attempts to register downloaded font buffers and falls back to system/default font behavior if a font cannot be registered by the canvas runtime.
+- Any future subtitle editor feature has to be added to both:
+  - the editor/export side,
+  - `worker/subtitleRenderer.ts`,
+  before story JSON that uses the feature is synced to Supabase for production jobs.
 
 ## Supabase Model
 

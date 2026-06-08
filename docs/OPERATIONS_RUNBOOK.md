@@ -1,6 +1,6 @@
 # YMI Story Operations Runbook
 
-Last updated: 2026-05-27
+Last updated: 2026-06-05
 
 This runbook covers development and internal-test operation. Do not place secret values in this file.
 
@@ -48,6 +48,22 @@ cd "D:\IT_David\Program\Voice Imagination\Web\worker"
 npm install
 npx tsc --noEmit
 ```
+
+Subtitle renderer check:
+- Subtitle editor render requirements live at:
+  - `D:\IT_David\Program\Voice Imagination\Web\subtitle-template-editor-app\WORKER_SUBTITLE_RENDER_SPEC.md`
+- Worker runtime implementation lives at:
+  - `D:\IT_David\Program\Voice Imagination\Web\worker\subtitleRenderer.ts`
+- After changing subtitle editor export behavior, update and verify the worker renderer before syncing affected story JSON to Supabase.
+- At minimum run:
+
+```powershell
+cd "D:\IT_David\Program\Voice Imagination\Web\worker"
+npx tsc --noEmit
+```
+
+- For higher-risk subtitle changes, run a local smoke render that exercises `{name}` mixed styling, gradient fill, stroke, shadow, glow, bevel, underline, and box fade. A successful smoke render should produce a non-empty PNG buffer without throwing.
+- Worker subtitle font folders may contain `.ttf`, `.otf`, `.woff`, or `.woff2` assets.
 
 Environment profile switch:
 
@@ -334,6 +350,13 @@ Emails not received:
 - Check Resend API key and sender env.
 - Check spam/quarantine.
 - Check app email function logs.
+
+Subtitle render mismatch:
+- Compare the exported JSON with `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`.
+- Confirm the story config `subtitle_render.template_path` and `fonts_path` match the Supabase `app-templates` object names exactly.
+- Confirm filenames use `subtitle`, not the old misspelling `subtittle`.
+- Check `jobs.render_runs` for page-level subtitle render status, timings, and error messages.
+- If the editor added a new visual effect, update `worker/subtitleRenderer.ts` before treating the story config as production-ready.
 
 Payment finalized but no final job:
 - Check Stripe webhook logs.

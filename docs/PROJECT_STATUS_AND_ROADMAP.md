@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-06-01
+Last updated: 2026-06-08
 
 ## Current State
 
@@ -66,8 +66,10 @@ Active short-term tracker:
   - Books grid Framer Motion layout animation was removed while preserving lightweight entry animation.
   - Customize preview/showcase image preloading is scoped to visible or adjacent images instead of broad eager loading.
   - Share dialog preview image is eager-loaded and share/download actions reuse a cached image file instead of refetching.
-  - Home hero preserves the selected video content but uses optimized runtime sources: `hero-video-optimized.webm` first and `hero-video-optimized.mp4` fallback, with `hero-poster.webp` as the first visual. Runtime video payload is reduced from the 7.7 MiB source MP4 to about 2.1 MiB WebM / 3.8 MiB MP4 fallback.
+  - Home hero uses the original-quality `public/hero-video.mp4` as the single runtime video source, with `hero-poster.webp` as the first visual. The MP4 is already faststart (`moov` offset `36`, before `mdat` offset `9036`), so no `ffmpeg -c copy` rewrite was required.
   - Product showcase photos were standardized to `products/productN.webp`: local script `scripts/optimize-template-products.mjs` generated 97 WebP files from `Template_folder/<Story_ID>/Product`; local source PNGs were removed after conversion; Supabase was updated with the WebP files and verified as 97 WebP / 0 PNG across active stories.
+  - Performance audit documentation was consolidated in `PERFORMANCE_AUDIT_2026-06-04.md`; current remaining performance work is measurement-led rather than a broad UI rewrite.
+  - Latest Hero media contract: selected video content and quality stay intact; use container-level delivery checks such as faststart plus poster fallback first. Do not reintroduce lower-quality multi-encoded variants without explicit visual approval.
 - Current email and order-status notification system shipped:
   - `email_events` is the unified operational log for all YMI-managed Resend sends and external Stripe/Supabase Auth observations.
   - YMI-managed emails currently include guest checkout OTP, order confirmation, final PDF delivery, production/printing update, shipped update, delivered update, and unpaid checkout reminder.
@@ -82,13 +84,27 @@ Active short-term tracker:
   - Admin status update history is stored in `order_status_events`; direct Supabase edits to `orders.order_status` sync after page refresh but do not auto-send email.
   - YMI-managed email templates remain code-managed: body/layout in `components/emails/*`, subject/from/idempotency/trigger behavior in `src/lib/email.tsx`.
   - External Stripe and Supabase Auth email templates remain managed in their own dashboards.
+- Worker subtitle rendering upgraded and aligned with the subtitle editor render spec:
+  - Source spec: `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`.
+  - Worker implementation: `worker/subtitleRenderer.ts`.
+  - Runtime now supports editor-exported effects including gradient/texture fill descriptors, `{name}` mixed styling, stroke, shadow, glow, bevel, underline, per-side padding, vertical alignment, cloud/fade boxes, and page-dimension-based coordinate rendering.
+  - Worker font loading now accepts `.ttf`, `.otf`, `.woff`, and `.woff2`.
+  - Verification completed locally with `worker` `npx tsc --noEmit` and a complex subtitle smoke render.
+- Story package filename hygiene updated:
+  - Supabase story package subtitle filenames have been corrected to use `subtitle` instead of `subtittle`.
+  - Local `Template_folder` subtitle-related filenames were checked and corrected where needed.
+  - Config paths should continue to reference `subtitle-template.json` exactly.
+- Story prompt/config quality pass progressed:
+  - All 8 initial stories have completed face-swap testing.
+  - Global prompt additions and page-level `prompt_override` updates have been added to local story configs for the pages processed so far and synced to Supabase as part of the story QA pass.
+  - Preview prompt override support has been opened in story configs so preview jobs can use page-specific prompt tuning where needed.
 
 ## Current Owner-Managed Work
 
 - First-launch story content preparation.
 - 8 stories are planned for the initial internal-test catalog.
-- Story face-swap testing and prompt/config tuning are in progress: `5/8`.
-- `Forest_story` and other story `config.json` updates are being handled as part of this broader story-quality pass.
+- Initial 8-story face-swap testing is complete.
+- Story config QA remains active: page-level prompt overrides, preview prompt overrides, and subtitle package verification are being finalized story by story.
 - Updated story configs/assets must be synced from local package backups to Supabase before runtime validation.
 - A further 7 stories are planned for rollout during the internal-test period, bringing the intended catalog to 15 stories.
 
@@ -104,6 +120,8 @@ High priority before internal test:
   - `EMAIL_FROM_DELIVERY`
   - `EMAIL_FROM_SUPPORT`
 - Finish and sync the selected first-launch story configs in Supabase.
+- For each story package, confirm `subtitle_render.template_path`, `fonts_path`, and Supabase object names match exactly before triggering real preview/final jobs.
+- Run a real Music/active-story preview after subtitle filename correction and worker subtitle renderer upgrade to validate the full Supabase -> worker -> RunPod path.
 - Clean remaining demo/placeholder content from the public website and update UIUX to a formal production-site version.
 - Connect Stripe Live in Vercel production after live readiness; local/dev should remain on test keys.
 - Run one complete real payment flow after Stripe Live is connected.
@@ -138,7 +156,7 @@ Code quality / maintainability:
 - Some product/content pages may still contain placeholder/demo wording.
 - Admin rerun UI is reserved/disabled for a future random-seed rerun flow.
 - SEO metadata should stay aligned with route ownership: public marketing/catalog pages may be indexed; private areas should be excluded with `robots.txt`; anonymous but non-indexable pages should remain crawlable with meta noindex so crawlers can actually see the directive. Do not rely on `robots.txt` for API security; API routes still require their own auth/secret checks.
-- Frontend performance is no longer a near-term blocker after the May/June 2026 optimization pass. Optional future work: run production Vercel Speed Insights/Core Web Vitals baselines on homepage, `/books`, Customize, and ShareDialog; reassess homepage Hero LCP and perceived video start time after the optimized WebM/MP4 source strategy; continue reducing repeated `backdrop-blur` usage in non-critical surfaces only where visual quality is not affected.
+- Frontend performance is no longer a near-term blocker after the May/June 2026 optimization pass. Optional future work: run production Vercel Speed Insights/Core Web Vitals baselines on homepage, `/books`, Customize, and ShareDialog; reassess homepage Hero LCP and perceived video start time with the original-quality faststart MP4; continue reducing repeated `backdrop-blur` usage in non-critical surfaces only where visual quality is not affected.
 - Email template customization is intentionally code-first in the current phase. If the product needs marketer-editable templates later, design that as a separate feature with preview, approval, versioning, and test-send controls instead of mixing it into the current sender functions.
 
 ## Known Risks And Current Judgment
@@ -163,6 +181,12 @@ Mock mode:
 Story config sync:
 - Local config files may be ahead of Supabase while story updates are in progress.
 - Runtime behavior follows Supabase, not unsynced local config backups.
+- Story package path typos are high-impact because worker storage downloads fail before RunPod starts. Keep local `Template_folder` and Supabase Storage object names aligned exactly, especially subtitle JSON and font folders.
+
+Worker subtitle renderer:
+- Current renderer is intentionally local and not part of the Next.js Git repo.
+- Source-of-truth visual behavior is the subtitle editor spec plus `worker/subtitleRenderer.ts`.
+- Any new subtitle editor effect must be supported by the worker before production story configs use it.
 
 Admin review:
 - Current final delivery depends on manual admin release.

@@ -1,6 +1,6 @@
 # YMI Story Production Flow
 
-Last updated: 2026-05-27
+Last updated: 2026-06-05
 
 This document describes the canonical production path from customer upload to final PDF delivery.
 
@@ -165,10 +165,19 @@ This document describes the canonical production path from customer upload to fi
 
 - If `subtitle_render.enabled=true`, worker starts from the base template image in `app-templates`.
 - Worker renders child-name text overlays locally with `@napi-rs/canvas`.
+- Worker uses the subtitle JSON page `width` / `height` as the render coordinate system, so editor-exported positions and sizes are preserved even when the base image dimensions differ.
+- Subtitle rendering follows `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`; current supported runtime effects include:
+  - solid, gradient, and texture fill descriptors,
+  - mixed `{name}` styling through `nameStyle`,
+  - per-side padding, vertical alignment, text wrapping, and text transform,
+  - stroke, shadow, glow, bevel, underline,
+  - cloud/fade box styling and box borders.
+- Runtime fonts are loaded from the configured `fonts_path`; supported file extensions are `.ttf`, `.otf`, `.woff`, and `.woff2`.
 - Rendered subtitle page is uploaded to:
   - `raw-private/jobs/{date}/{jobId}/runtime/subtitles/page_XX.png`
 - In real provider mode, this rendered page is signed and optionally optimized again before RunPod.
 - Render state and timings are persisted in `jobs.render_runs`.
+- If a story package uses a new subtitle editor effect that the worker does not support yet, the worker renderer has to be updated before that package is considered production-ready.
 
 ### RunPod Per-Page Call
 

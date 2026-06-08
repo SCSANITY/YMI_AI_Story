@@ -94,8 +94,7 @@ export const Hero: React.FC = () => {
               videoReady ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <source src="/hero-video-optimized.webm" type="video/webm" />
-            <source src="/hero-video-optimized.mp4" type="video/mp4" />
+            <source src="/hero-video.mp4" type="video/mp4" />
           </video>
         </div>
 

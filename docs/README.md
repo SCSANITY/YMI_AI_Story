@@ -1,6 +1,6 @@
 # YMI Story Project Documentation
 
-Last updated: 2026-05-26
+Last updated: 2026-06-05
 
 This `docs/` directory is the current source of truth for the YMI Story full-stack application. It replaces the temporary takeover scan document and the older scattered overview notes.
 
@@ -14,6 +14,8 @@ This `docs/` directory is the current source of truth for the YMI Story full-sta
   - Local development, worker operation, environment contracts, deployment checks, monitoring, and verification commands.
 - [PROJECT_STATUS_AND_ROADMAP.md](./PROJECT_STATUS_AND_ROADMAP.md)
   - Current development state, completed work, known risks, and next tasks.
+- [PERFORMANCE_AUDIT_2026-06-04.md](./PERFORMANCE_AUDIT_2026-06-04.md)
+  - Frontend performance audit, completed optimizations, remaining bottlenecks, and follow-up measurement plan.
 - [INTERNAL_TEST_PREP_PLAN.md](./INTERNAL_TEST_PREP_PLAN.md)
   - Short-term internal-test preparation tracker. This is a temporary phase document and can be archived or merged into the roadmap after internal-test preparation is complete.
 
