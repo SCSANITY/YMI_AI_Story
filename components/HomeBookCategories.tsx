@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight } from 'lucide-react'
 import { Book } from '@/types'
 import { BookCard } from '@/components/BookCard'
 import { useGlobalContext } from '@/contexts/GlobalContext'
@@ -144,7 +143,7 @@ export function HomeBookCategories() {
 
             return (
               <div key={category.titleKey}>
-                <div className="mb-5 flex flex-row items-end justify-between gap-3 md:mb-7">
+                <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mb-9">
                   <div>
                     <h3 className="font-title text-2xl text-gray-900 md:text-3xl">
                       {t(category.titleKey)}
@@ -156,10 +155,9 @@ export function HomeBookCategories() {
                   <button
                     type="button"
                     onClick={() => router.push('/books')}
-                    className="group inline-flex shrink-0 items-center gap-2 rounded-full border border-amber-200/70 bg-white/50 px-5 py-2 text-[11px] font-bold tracking-[0.22em] text-amber-600 shadow-[0_2px_10px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-sm transition-all duration-200 hover:border-amber-300/80 hover:bg-amber-50/60 hover:text-amber-700 hover:shadow-[0_4px_14px_rgba(251,191,36,0.15),inset_0_1px_0_rgba(255,255,255,0.9)]"
+                    className="inline-flex w-fit shrink-0 items-center justify-center self-start rounded-full border border-orange-200/70 bg-orange-200/32 px-5 py-2.5 text-xs font-semibold tracking-normal text-orange-800 shadow-[0_8px_24px_rgba(234,88,12,0.12),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl transition-all duration-200 hover:border-orange-200/90 hover:bg-orange-200/45 hover:text-orange-900 hover:shadow-[0_12px_30px_rgba(251,146,60,0.20),inset_0_1px_0_rgba(255,255,255,0.88)] sm:-translate-y-1 sm:translate-x-2 sm:self-auto sm:px-6 sm:text-sm"
                   >
-                    {t('homeBooks.viewAll')}
-                    <ArrowRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden />
+                    <span>{t('homeBooks.viewAll')}</span>
                   </button>
                 </div>
 

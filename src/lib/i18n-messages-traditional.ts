@@ -89,7 +89,7 @@ export const cn_t = {
   "homeBooks.eyebrow": "故事分類",
   "homeBooks.heading": "為每個孩子找到合適的故事",
   "homeBooks.subheading": "先瀏覽幾個精選書架，想完整比較所有標題時再進入完整書庫。",
-  "homeBooks.viewAll": "查看全部",
+  "homeBooks.viewAll": "探索",
   "homeBooks.bannerEyebrow": "預留橫幅",
   "homeBooks.bannerTitle": "活動 Banner 佔位",
   "homeBooks.bannerDescription": "這裏預留給分類宣傳圖，後續替換正式圖片時不需要改變頁面結構。",

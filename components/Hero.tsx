@@ -80,7 +80,7 @@ export const Hero: React.FC = () => {
             priority
             sizes="100vw"
             aria-hidden="true"
-            className="absolute inset-0 object-cover"
+            className="absolute inset-0 scale-105 object-cover blur-[2px] md:scale-100 md:blur-0"
           />
           <video
             autoPlay
@@ -90,7 +90,7 @@ export const Hero: React.FC = () => {
             preload="auto"
             poster="/hero-poster.webp"
             onLoadedData={() => setVideoReady(true)}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+            className={`absolute inset-0 hidden h-full w-full object-cover transition-opacity duration-700 md:block ${
               videoReady ? 'opacity-100' : 'opacity-0'
             }`}
           >
@@ -122,7 +122,36 @@ export const Hero: React.FC = () => {
         {/* ── Content — all pushed to the bottom third ─────────────────────── */}
         <div className="relative z-20 flex flex-col min-h-[100svh]">
 
-          {/* Flex spacer — video center is completely unobstructed */}
+          {/* Mobile: foreground 16:9 video frame keeps the full horizontal source visible. */}
+          <div className="flex min-h-[270px] items-end px-4 pb-4 pt-24 md:hidden">
+            <div className="relative mx-auto aspect-video w-full max-w-[560px] overflow-hidden rounded-[1.35rem] border border-white/65 bg-white/25 shadow-[0_22px_70px_rgba(120,53,15,0.22)]">
+              <Image
+                src="/hero-poster.webp"
+                alt=""
+                fill
+                priority
+                sizes="100vw"
+                aria-hidden="true"
+                className="object-cover"
+              />
+              <video
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                poster="/hero-poster.webp"
+                onLoadedData={() => setVideoReady(true)}
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-700 ${
+                  videoReady ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                <source src="/hero-video.mp4" type="video/mp4" />
+              </video>
+            </div>
+          </div>
+
+          {/* Flex spacer — desktop video center is completely unobstructed. */}
           <div className="flex-1" />
 
           {/* ── Lower-third text zone ───────────────────────────────────── */}
