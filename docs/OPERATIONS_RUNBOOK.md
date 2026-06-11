@@ -1,6 +1,6 @@
 # YMI Story Operations Runbook
 
-Last updated: 2026-06-05
+Last updated: 2026-06-10
 
 This runbook covers development and internal-test operation. Do not place secret values in this file.
 
@@ -63,6 +63,7 @@ npx tsc --noEmit
 ```
 
 - For higher-risk subtitle changes, run a local smoke render that exercises `{name}` mixed styling, gradient fill, stroke, shadow, glow, bevel, underline, and box fade. A successful smoke render should produce a non-empty PNG buffer without throwing.
+- After the 2026-06-10 JSON Creator sync, smoke tests should also cover numeric `fontWeight`, `spans` range styling, and mixed-run center/right alignment. These are worker-host runtime behaviors; updating Vercel does not update the worker renderer by itself.
 - Worker subtitle font folders may contain `.ttf`, `.otf`, `.woff`, or `.woff2` assets.
 
 Environment profile switch:
@@ -141,8 +142,14 @@ Buckets:
 
 Critical RPC:
 - `claim_next_job`
+- `renew_job_lease`
 
-RPC follow-up command to export definition from Supabase SQL Editor:
+Cloud worker SQL to run before Render polling:
+- `Template_folder/sql_worker_claim_lease.sql`
+
+This SQL adds queue ownership and lease columns to `jobs`, upgrades `claim_next_job(p_worker_id, p_job_types, p_lease_seconds)`, preserves a no-argument `claim_next_job()` wrapper for old local workers, and adds `renew_job_lease()`.
+
+RPC follow-up command to export definitions from Supabase SQL Editor:
 
 ```sql
 select
@@ -153,16 +160,50 @@ select
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
-  and p.proname = 'claim_next_job';
+  and p.proname in ('claim_next_job', 'renew_job_lease');
 ```
 
-Save the returned function definition into a versioned SQL file, for example:
-- `Template_folder/sql_claim_next_job.sql`
-- or a future `supabase/migrations/*_claim_next_job.sql` if a migration folder is introduced.
+Save the returned function definition into a versioned SQL file if production SQL is edited manually.
 
 Current known DB fix:
 - `Template_folder/sql_jobs_cancel_statuses.sql` has been run in cloud Supabase.
 - `jobs.status` accepts `cancel_requested` and `cancelled`.
+
+## Worker Cloud Operations
+
+Canonical Worker folder:
+- `ymi-books-web-1.0/worker`
+
+Old local copy:
+- `Web/worker`
+- Treat as migration-era backup only after Render cutover.
+
+Render target:
+- Service type: Background Worker.
+- Region: US East.
+- Root directory: `worker`.
+- Build: Dockerfile.
+
+Safety defaults:
+- Local `.env`: `WORKER_POLL_ENABLED=false`.
+- Render dry run: `WORKER_POLL_ENABLED=false`.
+- Render production after validation: `WORKER_POLL_ENABLED=true`, `WORKER_MOCK_MODE=false`.
+
+Before enabling Render polling:
+1. Run `Template_folder/sql_worker_claim_lease.sql`.
+2. Confirm `claim_next_job()` still works with no arguments.
+3. Confirm the new claim signature writes `claimed_by`, `claimed_at`, `lease_expires_at`.
+4. Confirm `renew_job_lease()` exists.
+5. Stop local production Worker or set local polling false.
+
+Cutover validation:
+- Run one preview job and confirm Render claims it.
+- Run one full final job and confirm:
+  - `final_job_pages.status='pending_review'` for generated pages.
+  - `final_job_pages.ai_output_path` is non-empty.
+  - `final_jobs.status='review_pending'`.
+  - Admin release creates the final PDF through Next.js.
+  - Delivery email is recorded in `email_events`.
 
 ## RunPod Operations
 

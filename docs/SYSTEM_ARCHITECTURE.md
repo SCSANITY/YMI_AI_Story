@@ -1,6 +1,6 @@
 # YMI Story System Architecture
 
-Last updated: 2026-06-05
+Last updated: 2026-06-10
 
 ## Product Scope
 
@@ -55,11 +55,13 @@ Main layers:
 - Supabase Storage stores templates, user uploads, generated pages, final PDFs, and runtime worker artifacts.
 
 3. Worker/orchestration layer
-- Local Windows worker today; intended to move to a cloud host later.
-- Runs `worker/index.ts` through `ts-node`.
+- Canonical Worker code now lives in `ymi-books-web-1.0/worker` for Git/Render deployment.
+- The older sibling folder `Web/worker` is a migration-era local copy and should not remain the long-term production source.
+- Runs locally through `npm run dev` / `ts-node` and in production as a Render Background Worker through Docker.
 - Uses Supabase service role credentials.
-- Claims queued jobs through `supabase.rpc('claim_next_job')`.
+- Claims queued jobs through `supabase.rpc('claim_next_job')` with worker identity, job type filters, and lease tracking after the cloud-worker SQL is applied.
 - Supports mock mode for UI testing and real RunPod mode for production generation.
+- `WORKER_POLL_ENABLED=false` is the local safety default; only environments that should process jobs set it to `true`.
 
 4. AI execution layer
 - Current real provider path is RunPod Serverless running Dockerized ComfyUI workflows.
@@ -123,23 +125,23 @@ Important shared libraries:
 
 ## Key Worker Modules
 
-- `worker/index.ts`
+- `ymi-books-web-1.0/worker/index.ts`
   - Main loop, job claim, config loading, page preparation, subtitle rendering handoff, provider execution, output upload, and DB updates.
-- `worker/providers/runpodAdapter.ts`
+- `ymi-books-web-1.0/worker/providers/runpodAdapter.ts`
   - RunPod payload construction, image encoding, `/run` submission, status polling, cancellation, and output parsing.
-- `worker/providers/runcomfyAdapter.ts`
+- `ymi-books-web-1.0/worker/providers/runcomfyAdapter.ts`
   - Legacy/fallback provider adapter. Currently not the active production path.
-- `worker/subtitleRenderer.ts`
+- `ymi-books-web-1.0/worker/subtitleRenderer.ts`
   - Local image/text rendering for dynamic child-name overlays.
   - The renderer is synchronized with `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`; the editor remains the visual authoring source of truth, while the worker is responsible for reproducing the exported JSON at runtime before RunPod receives the template image.
-- `worker/processor.ts`
+- `ymi-books-web-1.0/worker/processor.ts`
   - Template/config typing and related shared structures.
-- `worker/pdf.ts`
-  - Legacy/direct final PDF packaging utilities. Current admin-review release path builds final PDF from approved pages in the web app.
-- `worker/ecosystem.config.js`
+- `ymi-books-web-1.0/worker/Dockerfile`
+  - Render Background Worker container build.
+- `ymi-books-web-1.0/worker/ecosystem.config.js`
   - PM2 process configuration.
-- `worker/scripts/use-env-localhost.ps1`
-- `worker/scripts/use-env-online.ps1`
+- `ymi-books-web-1.0/worker/scripts/use-env-localhost.ps1`
+- `ymi-books-web-1.0/worker/scripts/use-env-online.ps1`
   - Environment profile switchers.
 
 ### Worker Subtitle Rendering Contract
@@ -156,9 +158,13 @@ Important shared libraries:
   - solid and linear-gradient fills,
   - texture fills where supported by the referenced image path,
   - `{name}` mixed styling through `nameStyle`,
+  - per-character / range styling through `spans`,
+  - numeric `fontWeight` values for variable-font exports,
   - stroke, shadow, glow, bevel, underline,
-  - per-side padding, vertical alignment, text transform, wrapping, and cloud/fade box styling.
+  - per-side padding, vertical alignment, text transform, wrapping, and cloud/fade box styling,
+  - mixed-run center/right alignment that excludes leading/trailing space width so wrapped lines remain visually centered.
 - Font assets can be `.ttf`, `.otf`, `.woff`, or `.woff2`. The worker attempts to register downloaded font buffers and falls back to system/default font behavior if a font cannot be registered by the canvas runtime.
+- 2026-06-10 sync note: `ymi-books-web-1.0/worker/subtitleRenderer.ts` was upgraded against the latest JSON Creator spec to handle `fontWeight`, `spans`, and the generalized mixed-run renderer. Verification was done locally with `npx tsc --noEmit` and an in-memory subtitle smoke render. The canonical worker folder is now inside the Git-managed Next.js repo, but it deploys separately from Vercel as a Render Background Worker.
 - Any future subtitle editor feature has to be added to both:
   - the editor/export side,
   - `worker/subtitleRenderer.ts`,
@@ -203,7 +209,10 @@ Critical RPC:
 - `claim_next_job`
   - Worker depends on this RPC to atomically claim queued jobs.
   - Uses `FOR UPDATE SKIP LOCKED` — concurrent workers never claim the same job.
-  - SQL definition stored in `Template_folder/sql_claim_next_job.sql`.
+  - Cloud-worker SQL is stored in `Template_folder/sql_worker_claim_lease.sql`.
+  - The upgraded signature accepts `worker_id`, `job_types`, and lease seconds while preserving a no-argument wrapper for old local workers.
+- `renew_job_lease`
+  - Worker heartbeat RPC used by long-running final jobs to prevent premature stale reclaim.
 
 Important enum/status note:
 - Cloud `jobs.status` now accepts `cancel_requested` and `cancelled` after rerunning `Template_folder/sql_jobs_cancel_statuses.sql`.

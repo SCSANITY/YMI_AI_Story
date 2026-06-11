@@ -1,6 +1,6 @@
 # YMI Story Production Flow
 
-Last updated: 2026-06-05
+Last updated: 2026-06-10
 
 This document describes the canonical production path from customer upload to final PDF delivery.
 
@@ -32,8 +32,10 @@ This document describes the canonical production path from customer upload to fi
 
 ## 4. Worker Preview Processing
 
-- Worker loops on `supabase.rpc('claim_next_job')`.
-- The RPC should atomically mark one queued job as running and return its row.
+- Canonical Worker code lives in `ymi-books-web-1.0/worker`.
+- Production Worker is intended to run as a Render Background Worker; local Worker defaults to `WORKER_POLL_ENABLED=false`.
+- Worker loops on `supabase.rpc('claim_next_job')` only when `WORKER_POLL_ENABLED=true`.
+- The upgraded RPC atomically marks one queued or stale-leased job as running, records `claimed_by`, `claimed_at`, and `lease_expires_at`, and returns its row.
 - Worker downloads/fetches template config, resolves provider and preview page indices.
 - Current production configs use RunPod.
 - Worker signs the face image from `raw-private`.
@@ -91,6 +93,8 @@ This document describes the canonical production path from customer upload to fi
 - Worker claims final jobs through the same `claim_next_job` loop.
 - Current production final jobs are admin-review jobs. A linked `final_jobs` row is expected for every `jobs.job_type='final'` job.
 - Worker sets linked `final_jobs.status='processing'`.
+- During long final jobs, Worker renews `jobs.lease_expires_at` through `renew_job_lease` so another worker does not reclaim an actively running job.
+- If a stale final job is reclaimed, Worker uses `final_job_pages.ai_output_path` as the resume anchor and skips pages already in `pending_review` or `approved`.
 - For each final page, worker sets `final_job_pages.status='processing'`.
 - Worker runs RunPod per page.
 - Worker uploads AI output to:
@@ -169,14 +173,18 @@ This document describes the canonical production path from customer upload to fi
 - Subtitle rendering follows `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`; current supported runtime effects include:
   - solid, gradient, and texture fill descriptors,
   - mixed `{name}` styling through `nameStyle`,
+  - per-character / range style runs through `spans`,
+  - numeric `fontWeight` for variable-font exports,
   - per-side padding, vertical alignment, text wrapping, and text transform,
   - stroke, shadow, glow, bevel, underline,
-  - cloud/fade box styling and box borders.
+  - cloud/fade box styling and box borders,
+  - mixed-run center/right alignment that ignores leading/trailing space width for alignment calculations.
 - Runtime fonts are loaded from the configured `fonts_path`; supported file extensions are `.ttf`, `.otf`, `.woff`, and `.woff2`.
 - Rendered subtitle page is uploaded to:
   - `raw-private/jobs/{date}/{jobId}/runtime/subtitles/page_XX.png`
 - In real provider mode, this rendered page is signed and optionally optimized again before RunPod.
 - Render state and timings are persisted in `jobs.render_runs`.
+- 2026-06-10 worker sync: local `worker/subtitleRenderer.ts` has been upgraded to the latest JSON Creator spec and validated with TypeScript plus a local smoke render. This is a worker-runtime update; Vercel deployment alone does not change the worker renderer running on the local/online worker host.
 - If a story package uses a new subtitle editor effect that the worker does not support yet, the worker renderer has to be updated before that package is considered production-ready.
 
 ### RunPod Per-Page Call

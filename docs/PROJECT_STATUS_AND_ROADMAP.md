@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-06-08
+Last updated: 2026-06-10
 
 ## Current State
 
@@ -31,7 +31,8 @@ Active short-term tracker:
 - Supabase cloud project `pgpaawqgtewowjratddm` is the intended production project.
 - RunPod is the current real AI provider path.
 - Current active cloud story configs mostly reference RunPod endpoint `39ygcoofm4ye40`.
-- Worker runs locally today and should later move to a cloud host.
+- Worker cloud migration is now in implementation: canonical Worker code lives under `ymi-books-web-1.0/worker` and is prepared for Render Background Worker deployment.
+- The old sibling `Web/worker` folder remains a migration-era local copy until Render cutover is fully verified.
 - Mock worker mode is intentional for UI/UX testing.
 - `Template_folder` is a local backup/source area; Supabase is runtime source for templates/configs after sync.
 - Resend production domain/from addresses are verified.
@@ -87,9 +88,12 @@ Active short-term tracker:
 - Worker subtitle rendering upgraded and aligned with the subtitle editor render spec:
   - Source spec: `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`.
   - Worker implementation: `worker/subtitleRenderer.ts`.
-  - Runtime now supports editor-exported effects including gradient/texture fill descriptors, `{name}` mixed styling, stroke, shadow, glow, bevel, underline, per-side padding, vertical alignment, cloud/fade boxes, and page-dimension-based coordinate rendering.
+  - Runtime now supports editor-exported effects including gradient/texture fill descriptors, `{name}` mixed styling, `spans` per-character/range styling, numeric `fontWeight`, stroke, shadow, glow, bevel, underline, per-side padding, vertical alignment, cloud/fade boxes, and page-dimension-based coordinate rendering.
+  - The mixed text renderer has been generalized into a run-based renderer so base text, `{name}`, and span-styled ranges can each carry independent font/fill/effect settings in one text box.
+  - Center/right alignment in mixed mode now excludes leading/trailing spaces from the alignment width, matching the JSON Creator spec and avoiding wrapped-line drift.
   - Worker font loading now accepts `.ttf`, `.otf`, `.woff`, and `.woff2`.
-  - Verification completed locally with `worker` `npx tsc --noEmit` and a complex subtitle smoke render.
+  - Latest verification completed locally on 2026-06-10 with `worker` `npx tsc --noEmit` and an in-memory subtitle smoke render covering `fontWeight`, `nameStyle`, `spans`, gradient, shadow, and glow.
+  - Worker runtime updates are local/worker-host changes. They are not automatically deployed by pushing the Next.js/Vercel app.
 - Story package filename hygiene updated:
   - Supabase story package subtitle filenames have been corrected to use `subtitle` instead of `subtittle`.
   - Local `Template_folder` subtitle-related filenames were checked and corrected where needed.
@@ -98,6 +102,14 @@ Active short-term tracker:
   - All 8 initial stories have completed face-swap testing.
   - Global prompt additions and page-level `prompt_override` updates have been added to local story configs for the pages processed so far and synced to Supabase as part of the story QA pass.
   - Preview prompt override support has been opened in story configs so preview jobs can use page-specific prompt tuning where needed.
+- Worker cloud migration groundwork completed:
+  - Canonical Worker code was copied into the Git-managed app repo at `ymi-books-web-1.0/worker`.
+  - Worker now has Docker/Render deployment scaffolding, production build/start scripts, and worker-specific ignore rules.
+  - `WORKER_POLL_ENABLED` defaults to safe standby, so local Worker processes do not claim jobs unless explicitly enabled.
+  - Worker startup logs now identify worker id, poll mode, mock mode, job types, Supabase host, lease settings, and Healthchecks configuration.
+  - Queue lease SQL is tracked at `Template_folder/sql_worker_claim_lease.sql`.
+  - Worker claim now supports worker identity, job type filters, lease expiry, and heartbeat renewal once the SQL is applied.
+  - Final job reclaim is designed to resume from `final_job_pages.ai_output_path` and skip already completed pages.
 
 ## Current Owner-Managed Work
 
@@ -110,6 +122,11 @@ Active short-term tracker:
 
 ## Near-Term Technical Todos
 
+- Execute `Template_folder/sql_worker_claim_lease.sql` in production Supabase before enabling Render polling.
+- Create Render Background Worker pointing at `ymi-books-web-1.0/worker` with `WORKER_POLL_ENABLED=false` for dry run.
+- After dry-run logs are correct, switch Render to `WORKER_POLL_ENABLED=true` and validate one preview job plus one full final job.
+- Retire the old local production Worker path after Render final-job validation passes.
+
 High priority before internal test:
 - `Template_folder/sql_email_events.sql` has to be present in Supabase for email logging.
 - `Template_folder/sql_order_logistics.sql` has to be present in Supabase for `order_status_events`, tracking fields, and removal of legacy `logistics_status`.
@@ -121,7 +138,7 @@ High priority before internal test:
   - `EMAIL_FROM_SUPPORT`
 - Finish and sync the selected first-launch story configs in Supabase.
 - For each story package, confirm `subtitle_render.template_path`, `fonts_path`, and Supabase object names match exactly before triggering real preview/final jobs.
-- Run a real Music/active-story preview after subtitle filename correction and worker subtitle renderer upgrade to validate the full Supabase -> worker -> RunPod path.
+- Run a real Music/active-story preview after subtitle filename correction and latest worker subtitle renderer upgrade to validate the full Supabase -> worker -> RunPod path.
 - Clean remaining demo/placeholder content from the public website and update UIUX to a formal production-site version.
 - Connect Stripe Live in Vercel production after live readiness; local/dev should remain on test keys.
 - Run one complete real payment flow after Stripe Live is connected.
