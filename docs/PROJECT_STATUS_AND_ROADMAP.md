@@ -31,8 +31,8 @@ Active short-term tracker:
 - Supabase cloud project `pgpaawqgtewowjratddm` is the intended production project.
 - RunPod is the current real AI provider path.
 - Current active cloud story configs mostly reference RunPod endpoint `39ygcoofm4ye40`.
-- Worker cloud migration is now in implementation: canonical Worker code lives under `ymi-books-web-1.0/worker` and is prepared for Render Background Worker deployment.
-- The old sibling `Web/worker` folder remains a migration-era local copy until Render cutover is fully verified.
+- Worker cloud migration is a high-priority deferred task: Render has been selected as the future cloud worker platform, canonical Worker code lives under `ymi-books-web-1.0/worker`, and deployment will resume after internal-test/product work.
+- The old sibling `Web/worker` folder remains the active local worker for internal-test work until Render cutover is fully verified.
 - Mock worker mode is intentional for UI/UX testing.
 - `Template_folder` is a local backup/source area; Supabase is runtime source for templates/configs after sync.
 - Resend production domain/from addresses are verified.
@@ -107,9 +107,39 @@ Active short-term tracker:
   - Worker now has Docker/Render deployment scaffolding, production build/start scripts, and worker-specific ignore rules.
   - `WORKER_POLL_ENABLED` defaults to safe standby, so local Worker processes do not claim jobs unless explicitly enabled.
   - Worker startup logs now identify worker id, poll mode, mock mode, job types, Supabase host, lease settings, and Healthchecks configuration.
-  - Queue lease SQL is tracked at `Template_folder/sql_worker_claim_lease.sql`.
-  - Worker claim now supports worker identity, job type filters, lease expiry, and heartbeat renewal once the SQL is applied.
+  - Queue lease SQL is tracked at `Template_folder/sql_worker_claim_lease.sql` and has been executed in production Supabase.
+  - Worker claim supports worker identity, job type filters, lease expiry, and heartbeat renewal after the SQL upgrade.
   - Final job reclaim is designed to resume from `final_job_pages.ai_output_path` and skip already completed pages.
+  - Commit `0cb8654` pushed the canonical worker scaffold to GitHub.
+
+## High-Priority Deferred Work: Render Worker Cutover
+
+Status:
+- Deferred intentionally during internal-test/product planning.
+- Current local worker at `D:\IT_David\Program\Voice Imagination\Web\worker` remains usable and remains the active worker path for now.
+- Render will become the production worker host when this task resumes.
+
+Locked decisions:
+- Platform: Render Background Worker.
+- Region: US East, currently Ohio is acceptable.
+- Same GitHub repo as the web app: `SCSANITY/YMI_AI_Story`.
+- Render Root Directory: `worker`.
+- Render Dockerfile Path: `./Dockerfile`.
+- First deploy must use `WORKER_POLL_ENABLED=false`.
+- Production deploy after validation uses `WORKER_POLL_ENABLED=true` and `WORKER_MOCK_MODE=false`.
+- Do not restructure the repo into `web/` + `worker/` before internal test; the current repo-root Next.js app plus `worker/` subdirectory is acceptable.
+- RunPod Docker assets remain in their existing separate GitHub repo and are not part of this Render worker cutover.
+
+Resume checklist:
+- Confirm Render account/payment approval is complete.
+- Create Render Background Worker using `main`, root directory `worker`, Dockerfile path `./Dockerfile`.
+- Copy production worker env vars from the current local worker profile into Render, with `WORKER_POLL_ENABLED=false`.
+- Confirm Render dry-run logs show correct worker id, poll disabled, mock mode, job types, Supabase host, and lease settings.
+- Stop the local production worker or ensure local polling is disabled before enabling Render polling.
+- Switch Render `WORKER_POLL_ENABLED=true`.
+- Validate one preview job.
+- Validate one full final job through `final_job_pages -> final_jobs.review_pending -> Admin release -> releaseFinalJob() -> final delivery email`.
+- Only after both validations pass, retire the old local worker as the production worker.
 
 ## Current Owner-Managed Work
 
@@ -122,10 +152,7 @@ Active short-term tracker:
 
 ## Near-Term Technical Todos
 
-- Execute `Template_folder/sql_worker_claim_lease.sql` in production Supabase before enabling Render polling.
-- Create Render Background Worker pointing at `ymi-books-web-1.0/worker` with `WORKER_POLL_ENABLED=false` for dry run.
-- After dry-run logs are correct, switch Render to `WORKER_POLL_ENABLED=true` and validate one preview job plus one full final job.
-- Retire the old local production Worker path after Render final-job validation passes.
+- Keep Render Worker cutover as a high-priority deferred task and resume from the checklist above after internal-test/product decisions.
 
 High priority before internal test:
 - `Template_folder/sql_email_events.sql` has to be present in Supabase for email logging.

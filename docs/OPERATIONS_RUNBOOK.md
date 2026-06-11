@@ -171,6 +171,12 @@ Current known DB fix:
 
 ## Worker Cloud Operations
 
+Current status:
+- Render has been selected as the future production Worker platform.
+- Cutover is intentionally deferred until after internal-test/product planning.
+- The old local Worker at `D:\IT_David\Program\Voice Imagination\Web\worker` remains the active worker path until Render validation passes.
+- Canonical cloud-ready Worker code is already in Git at `ymi-books-web-1.0/worker`.
+
 Canonical Worker folder:
 - `ymi-books-web-1.0/worker`
 
