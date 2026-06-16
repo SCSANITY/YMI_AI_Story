@@ -3,6 +3,10 @@ import { createServerSupabase } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const COOKIE_NAME = 'ymi_anon_session'
+const FIRST_REMINDER_MINUTES = Number(
+  process.env.UNPAID_REMINDER_FIRST_MINUTES ?? process.env.UNPAID_REMINDER_MINUTES ?? 1
+)
+const REPEAT_REMINDER_DAYS = Number(process.env.UNPAID_REMINDER_REPEAT_DAYS ?? 3)
 
 function getCookieValue(cookies: string, name: string) {
   const entry = cookies
@@ -94,6 +98,18 @@ export async function POST(request: Request) {
   const anonSessionId = getCookieValue(request.headers.get('cookie') || '', COOKIE_NAME)
 
   if (anonSessionId) {
+    const { data: anonOrderedItems } = await supabaseAdmin
+      .from('cart_items')
+      .select('order_id')
+      .eq('owner_type', 'anon')
+      .eq('anon_session_id', anonSessionId)
+      .eq('status', 'ordered')
+      .not('order_id', 'is', null)
+
+    const anonOrderIds = Array.from(
+      new Set((anonOrderedItems ?? []).map((row) => row.order_id).filter(Boolean))
+    )
+
     await supabaseAdmin
       .from('user_assets')
       .update({
@@ -134,6 +150,42 @@ export async function POST(request: Request) {
       })
       .eq('owner_type', 'anon')
       .eq('anon_session_id', anonSessionId)
+
+    if (anonOrderIds.length > 0) {
+      await supabaseAdmin
+        .from('orders')
+        .update({
+          customer_id: customer.customer_id,
+          email,
+          updated_at: new Date().toISOString(),
+        })
+        .in('order_id', anonOrderIds)
+        .eq('order_status', 'unpaid')
+        .is('customer_id', null)
+
+      const { data: customerBoundOrders } = await supabaseAdmin
+        .from('orders')
+        .select('order_id, customer_id, order_status')
+        .in('order_id', anonOrderIds)
+        .eq('order_status', 'unpaid')
+        .eq('customer_id', customer.customer_id)
+
+      const now = Date.now()
+      const reminderRows = (customerBoundOrders ?? []).map((order) => ({
+        order_id: order.order_id,
+        customer_id: order.customer_id,
+        next_send_at: new Date(now + FIRST_REMINDER_MINUTES * 60 * 1000).toISOString(),
+        repeat_every_days: REPEAT_REMINDER_DAYS,
+        active: true,
+        updated_at: new Date().toISOString(),
+      }))
+
+      if (reminderRows.length > 0) {
+        await supabaseAdmin
+          .from('order_reminder_schedules')
+          .upsert(reminderRows, { onConflict: 'order_id' })
+      }
+    }
 
     const { data: anonFavourites } = await supabaseAdmin
       .from('favourites')

@@ -138,6 +138,10 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
   const [resumeData, setResumeData] = useState<CartItem | null>(null);
+  const [accountSwitchNotice, setAccountSwitchNotice] = useState<{
+    previousEmail: string;
+    nextEmail: string;
+  } | null>(null);
 
   useEffect(() => {
     userRef.current = user;
@@ -401,13 +405,30 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const syncSupabaseUser = useCallback(async (authUser?: SupabaseUser | null) => {
     if (!authUser?.id || !authUser.email) return;
 
+    const resolvedEmail = authUser.email.trim().toLowerCase();
     const currentUser = userRef.current;
+    const currentEmail = currentUser?.email?.trim().toLowerCase();
+    if (currentUser && currentEmail && currentEmail !== resolvedEmail) {
+      setAccountSwitchNotice({
+        previousEmail: currentUser.email,
+        nextEmail: resolvedEmail,
+      });
+      setUser(null);
+      setCart([]);
+      setFavorites([]);
+      setCheckoutItems([]);
+      setResumeData(null);
+      localStorage.removeItem('ymi_user');
+      localStorage.removeItem('ymi_cart');
+      localStorage.removeItem('ymi_favorites');
+      return;
+    }
+
     if (currentUser?.id === authUser.id && currentUser.customerId) return;
     if (authSyncInFlightRef.current === authUser.id) return;
 
     authSyncInFlightRef.current = authUser.id;
     try {
-      const resolvedEmail = authUser.email.trim().toLowerCase();
       setCheckoutEmail(resolvedEmail);
       await finalizeAuth(resolvedEmail, authUser.id, {
         displayName: getAuthDisplayName(authUser),
@@ -926,7 +947,33 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     closeLoginModal,
   };
 
-  return <GlobalContext.Provider value={value}>{children}</GlobalContext.Provider>;
+  return (
+    <GlobalContext.Provider value={value}>
+      {children}
+      {accountSwitchNotice ? (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-white/45 bg-white/90 p-6 text-center shadow-[0_24px_80px_rgba(120,64,32,0.28)]">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-xl font-semibold text-amber-700">
+              !
+            </div>
+            <h2 className="text-xl font-semibold text-gray-950">Account changed in another tab</h2>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              This browser session changed from {accountSwitchNotice.previousEmail} to{' '}
+              {accountSwitchNotice.nextEmail}. Refresh this page before continuing so orders,
+              checkout, and account data stay aligned.
+            </p>
+            <button
+              type="button"
+              className="mt-6 w-full rounded-full bg-gray-950 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-gray-950/20 transition hover:bg-gray-800"
+              onClick={() => window.location.reload()}
+            >
+              Refresh page
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </GlobalContext.Provider>
+  );
 };
 
 export const useGlobalContext = (): GlobalContextType => {
