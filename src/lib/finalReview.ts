@@ -416,8 +416,10 @@ export async function releaseFinalJob(params: {
     throw new Error(signedPdfError?.message || 'Failed to create signed PDF url')
   }
 
+  // Cover thumbnail must outlive the 24h PDF link — the email may be opened weeks
+  // later, and a broken cover looks worse than a missing one. 1-year signed URL.
   const previewPath = approvedPaths[0] || null
-  const previewImageUrl = previewPath ? await signStorageUrl(previewPath) : null
+  const previewImageUrl = previewPath ? await signStorageUrl(previewPath, 60 * 60 * 24 * 365) : null
 
   try {
     const emailResult = await sendOrderDeliveryEmail({

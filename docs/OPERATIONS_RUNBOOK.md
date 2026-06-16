@@ -287,7 +287,10 @@ Where to edit email content:
 - Order status update email body: `components/emails/LogisticsUpdateEmail.tsx`.
 - Admin order status updates: `/admin/orders`.
 - Stripe receipts: Stripe Dashboard.
-- Supabase Auth signup/OTP: Supabase Auth Email Templates.
+- Supabase Auth signup/OTP/account-security templates: Supabase Auth Email Templates.
+- Supabase Auth templates currently branded in the dashboard: Confirm sign up, Magic link or OTP, Change email address, Reset password, and Reauthentication.
+- Supabase Invite user is not currently part of the customer flow; only brand it if invite-based onboarding becomes a real workflow.
+- Use `docs/EMAIL_DESIGN_SPEC.md` as the source of truth for Supabase Auth HTML shell, copy, variables, and hosted email assets.
 
 Email sender env vars:
 - Configure these as separate Vercel environment variables, not as one pasted multi-line value.
@@ -303,13 +306,22 @@ Email template change workflow:
 - Edit subject, sender env selection, idempotency key, or failure behavior in `src/lib/email.tsx` only when the trigger behavior changes.
 - Run `npm run lint -- --quiet`, `npx tsc --noEmit`, and `npm run build`.
 - Deploy, trigger the relevant flow, then confirm the row in `/admin/emails` or Supabase `email_events`.
-- For external Stripe/Supabase Auth emails, change templates in their dashboards and use local `external_observed` records only as event markers.
+- For external Stripe/Supabase Auth emails, change templates in their dashboards and use local `external_observed` records only as event markers. Supabase Auth template changes are dashboard changes and do not require a code deploy unless `docs/EMAIL_DESIGN_SPEC.md` or hosted `/email-assets` change.
 
 Sender avatar / brand logo:
 - Do not rely on Gravatar for production sender avatars. Resend sending-domain aliases are not a reliable Gravatar identity path, and client support is inconsistent.
 - Public-launch task: configure BIMI for `ymistory.com` after SPF/DKIM/DMARC alignment is confirmed and DMARC is moved to enforcement.
 - Public-launch task: evaluate Apple Branded Mail separately for Apple Mail/iCloud Mail brand display.
 - Until BIMI is in place, rely on clear sender names, verified sender addresses, and the in-template YMI logo.
+
+Email private media links:
+- Current internal-test behavior may use Supabase signed URLs directly in email for final PDF downloads and personalized cover previews.
+- The final PDF signed URL is intentionally short-lived; the email should also provide an order-page fallback so late openers can still access the download through the app.
+- Personalized cover images are child face-swap media. Treat them as privacy-sensitive, even if the URL is signed and unguessable.
+- Public-beta task: replace direct email media links with a YMI-owned proxy route such as `/api/email-media/[token]`.
+- The proxy token should be unguessable and bound to resource metadata: order id, final job id when applicable, resource type (`final_pdf` or `cover_image`), bucket, storage path, expiry, revocation timestamp, access count, and last accessed time.
+- The proxy route should validate the token, reject revoked/expired tokens, then create a fresh short-lived Supabase signed URL and redirect or stream the asset.
+- This proxy mitigates stale PDF links and long-lived child-cover exposure, but it is still a bearer-link model: anyone with the email/link can access the asset unless the route requires login. Requiring login would break inline email image rendering, so this is privacy-risk reduction rather than absolute access control.
 
 ## Vercel And Internal Callback
 

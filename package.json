@@ -9,7 +9,8 @@
     "lint": "eslint",
     "covers:normalize": "node scripts/normalize-template-covers.mjs",
     "images:optimize": "node scripts/optimize-images.mjs",
-    "products:optimize": "node scripts/optimize-template-products.mjs"
+    "products:optimize": "node scripts/optimize-template-products.mjs",
+    "emails:preview": "tsx scripts/render-email-previews.tsx"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
@@ -37,6 +38,7 @@
     "eslint-config-next": "16.1.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

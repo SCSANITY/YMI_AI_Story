@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendLogisticsUpdateEmail } from '@/lib/email'
+import { loadOrderCoverUrl } from '@/lib/orderFulfillment'
 
 const MANAGED_ORDER_STATUSES = new Set([
   'paid',
@@ -122,6 +123,7 @@ export async function PATCH(
   if (statusChanged && nextStatus !== 'paid' && order.email) {
     const idempotencyKey = `logistics_update:${orderId}:${event.status_event_id}`
     try {
+      const coverImageUrl = await loadOrderCoverUrl(orderId).catch(() => undefined)
       const emailResult = await sendLogisticsUpdateEmail({
         to: order.email,
         orderId,
@@ -134,6 +136,7 @@ export async function PATCH(
         trackingUrl,
         note,
         customerId: order.customer_id ?? null,
+        coverImageUrl,
       })
       emailEventId = emailResult.event?.email_event_id ?? null
       emailStatus = emailResult.skipped ? 'not_sent' : 'sent'

@@ -227,6 +227,8 @@ type SendOrderConfirmationEmailParams = {
   items: ReceiptItem[]
   address?: ReceiptAddress
   customerId?: string | null
+  /** Face-swapped cover (long-lived signed URL); falls back to placeholder if absent */
+  coverImageUrl?: string
 }
 
 export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEmailParams) {
@@ -235,13 +237,14 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
     idempotencyKey: `order_confirmation:${params.orderId}`,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_ORDERS',
-    subject: `Order confirmed - ${params.displayId || params.orderId}`,
+    subject: 'Order Confirmed: A Starlight Journey is Being Crafted with Love! ✦',
     orderId: params.orderId,
     customerId: params.customerId ?? null,
     context: {
       displayId: params.displayId ?? null,
       currency: normalizeCheckoutCurrency(params.currency),
       itemCount: params.items.length,
+      hasCoverImage: Boolean(params.coverImageUrl),
     },
     react: (
       <OrderReceiptEmail
@@ -251,6 +254,7 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
         currency={normalizeCheckoutCurrency(params.currency)}
         items={params.items}
         address={params.address}
+        coverImageUrl={params.coverImageUrl}
         trackUrl={buildAbsoluteUrl(`/orders/${params.orderId}`)}
       />
     ),
@@ -290,6 +294,8 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
         orderId={params.orderId}
         displayId={params.displayId}
         orderUrl={orderUrl}
+        downloadUrl={params.downloadUrl}
+        coverImageUrl={params.previewImageUrl}
       />
     ),
   })
@@ -300,7 +306,7 @@ type SendUnpaidReminderEmailParams = {
   orderId: string
   displayId?: string | null
   resumeUrl?: string
-  items?: { name: string; quantity: number }[]
+  items?: { name: string; quantity: number; coverImageUrl?: string }[]
   customerId?: string | null
   reminderDate?: string
 }
@@ -346,6 +352,8 @@ type SendLogisticsUpdateEmailParams = {
   note?: string | null
   orderUrl?: string
   customerId?: string | null
+  /** Face-swapped cover (long-lived signed URL); falls back to placeholder if absent */
+  coverImageUrl?: string
 }
 
 export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailParams) {
@@ -373,6 +381,7 @@ export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailP
       trackingCarrier: params.trackingCarrier ?? null,
       hasTrackingNumber: Boolean(params.trackingNumber),
       hasTrackingUrl: Boolean(params.trackingUrl),
+      hasCoverImage: Boolean(params.coverImageUrl),
     },
     react: (
       <LogisticsUpdateEmail
@@ -385,6 +394,7 @@ export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailP
         trackingUrl={params.trackingUrl}
         note={params.note}
         orderUrl={orderUrl}
+        coverImageUrl={params.coverImageUrl}
       />
     ),
   })

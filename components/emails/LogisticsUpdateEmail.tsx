@@ -1,6 +1,7 @@
 import * as React from 'react'
-import { Section, Text } from '@react-email/components'
-import { EmailLayout } from './EmailLayout'
+import { Link, Section, Text } from '@react-email/components'
+import { EmailLayout, emailAsset, emailTheme, emailButtons } from './EmailLayout'
+import { BookCoverCard } from './BookCoverCard'
 
 type LogisticsUpdateEmailProps = {
   orderUrl: string
@@ -12,6 +13,8 @@ type LogisticsUpdateEmailProps = {
   trackingNumber?: string | null
   trackingUrl?: string | null
   note?: string | null
+  /** Personalized (face-swapped) cover of the ordered book */
+  coverImageUrl?: string
 }
 
 export function LogisticsUpdateEmail({
@@ -24,128 +27,164 @@ export function LogisticsUpdateEmail({
   trackingNumber,
   trackingUrl,
   note,
+  coverImageUrl,
 }: LogisticsUpdateEmailProps) {
   const label = displayId || orderId
   const copy =
     status === 'production'
       ? {
-          title: 'Your book is being printed',
+          title: 'Your Book is Being Crafted ✦',
           subtitle: 'Your personalized YMI Story book has entered production.',
           preview: 'Your YMI Story book is now being printed.',
+          coverCaption: 'Every page is being printed\nwith love and care.',
         }
       : status === 'delivered'
         ? {
-            title: 'Your book has been delivered',
-            subtitle: 'Your YMI Story order has arrived.',
+            title: 'Your Book Has Arrived ✦',
+            subtitle: 'Your YMI Story order has been delivered.',
             preview: 'Your YMI Story order has been delivered.',
+            coverCaption: 'We hope this story becomes\na lifelong treasure.',
           }
         : {
-            title: 'Your book is on the way',
+            title: 'Your Book is On the Way ✦',
             subtitle: 'Your YMI Story order has shipped.',
             preview: 'Your YMI Story order has shipped.',
+            coverCaption: 'Your story is travelling\nto its new home.',
           }
 
   return (
-    <EmailLayout
-      previewText={copy.preview}
-      title={copy.title}
-      subtitle={copy.subtitle}
-    >
+    <EmailLayout previewText={copy.preview} title={copy.title} subtitle={copy.subtitle}>
       {label ? (
         <Text style={styles.orderLine}>
-          Order: <strong>{label}</strong>
+          Order&nbsp;&nbsp;
+          <Link href={orderUrl} style={styles.orderLink}>
+            {label}&nbsp;→
+          </Link>
         </Text>
       ) : null}
 
-      <Section style={styles.statusCard}>
-        <Text style={styles.statusEyebrow}>Current status</Text>
+      <BookCoverCard coverImageUrl={coverImageUrl} title="Your Storybook" caption={copy.coverCaption} />
+
+      {/* Status card with the team seal stamped on its right edge.
+          Outlook ignores background-image and shows the plain card. */}
+      <Section
+        style={{
+          ...styles.statusCard,
+          backgroundImage: `url(${emailAsset('seal.png')})`,
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: '108px',
+          backgroundPosition: 'right 14px center',
+        }}
+      >
+        <Text style={styles.statusEyebrow}>Current Status</Text>
         <Text style={styles.statusLabel}>{statusLabel}</Text>
-        {trackingCarrier ? <Text style={styles.detail}>Carrier: {trackingCarrier}</Text> : null}
-        {trackingNumber ? <Text style={styles.detail}>Tracking number: {trackingNumber}</Text> : null}
+        {trackingCarrier ? (
+          <Text style={styles.detail}>
+            <span style={styles.detailLabel}>Carrier:&nbsp;&nbsp;</span>
+            {trackingCarrier}
+          </Text>
+        ) : null}
+        {trackingNumber ? (
+          <Text style={styles.detail}>
+            <span style={styles.detailLabel}>Tracking number:&nbsp;&nbsp;</span>
+            <span style={styles.detailNum}>{trackingNumber}</span>
+          </Text>
+        ) : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
       </Section>
 
-      {trackingUrl ? (
+      {status === 'shipped' ? (
+        /* Track Shipment is the primary CTA for shipped orders. Until a logistics
+           carrier platform is integrated, it points to the order page (which shows
+           tracking info). Swap to `trackingUrl` once that integration exists. */
         <Section style={styles.ctaWrap}>
-          <a href={trackingUrl} style={styles.cta}>
-            Track shipment
-          </a>
+          <Link href={orderUrl} style={emailButtons.primary}>
+            Track Shipment
+          </Link>
         </Section>
-      ) : null}
-
-      <Section style={styles.secondaryCtaWrap}>
-        <a href={orderUrl} style={styles.secondaryCta}>
-          Open order page
-        </a>
-      </Section>
+      ) : (
+        <Section style={styles.ctaWrap}>
+          <Link href={orderUrl} style={emailButtons.primary}>
+            Open Order Page
+          </Link>
+        </Section>
+      )}
     </EmailLayout>
   )
 }
 
 const styles: Record<string, React.CSSProperties> = {
   orderLine: {
-    margin: '0 0 14px',
-    color: '#1f2937',
+    margin: '0 0 4px',
+    color: emailTheme.ink,
     fontSize: '14px',
     textAlign: 'center',
+    fontFamily: emailTheme.serif,
+    fontWeight: 600,
+  },
+  orderLink: {
+    color: emailTheme.goldDeep,
+    fontSize: '15px',
+    fontWeight: 700,
+    textDecoration: 'underline',
+    fontFamily: emailTheme.num,
+    letterSpacing: '0.02em',
   },
   statusCard: {
-    border: '1px solid #f0f0f2',
-    borderRadius: '16px',
-    padding: '18px 16px',
-    backgroundColor: '#fbfbfc',
-    marginBottom: '12px',
+    margin: '0 0 22px',
+    border: `1px solid ${emailTheme.frame}`,
+    borderRadius: '12px',
+    padding: '18px 18px 16px',
+    backgroundColor: emailTheme.parchmentShade,
     textAlign: 'center',
   },
   statusEyebrow: {
     margin: '0 0 8px',
-    color: '#8a8a8f',
+    color: emailTheme.inkSoft,
     fontSize: '12px',
     fontWeight: 700,
     textTransform: 'uppercase',
-    letterSpacing: '0.08em',
+    letterSpacing: '0.14em',
+    fontFamily: emailTheme.serif,
   },
   statusLabel: {
-    margin: '0 0 10px',
-    color: '#1d1d1f',
-    fontSize: '22px',
-    fontWeight: 700,
+    margin: '0 0 8px',
+    color: emailTheme.heading,
+    fontSize: '24px',
+    fontWeight: 600,
+    fontFamily: emailTheme.serif,
   },
   detail: {
     margin: '4px 0 0',
-    color: '#60646c',
+    color: emailTheme.ink,
+    fontSize: '13.5px',
+    lineHeight: 1.55,
+    fontFamily: emailTheme.serif,
+  },
+  detailLabel: {
+    fontWeight: 700,
+    color: '#7a5c33',
+  },
+  detailNum: {
+    fontFamily: emailTheme.num,
     fontSize: '13px',
-    lineHeight: 1.5,
+    fontWeight: 600,
+    color: emailTheme.inkDark,
   },
   note: {
     margin: '12px 0 0',
-    color: '#4b5563',
+    color: emailTheme.inkSoft,
     fontSize: '13px',
-    lineHeight: 1.55,
+    lineHeight: 1.6,
+    fontStyle: 'italic',
+    fontFamily: emailTheme.serif,
   },
   ctaWrap: {
-    marginTop: '12px',
+    margin: '0 0 12px',
     textAlign: 'center',
-  },
-  cta: {
-    display: 'inline-block',
-    padding: '12px 20px',
-    borderRadius: '999px',
-    backgroundColor: '#ff7a59',
-    color: '#ffffff',
-    fontSize: '14px',
-    fontWeight: 700,
-    textDecoration: 'none',
-    boxShadow: '0 8px 20px -8px rgba(255, 122, 89, 0.8)',
   },
   secondaryCtaWrap: {
-    marginTop: '10px',
+    margin: '0 0 8px',
     textAlign: 'center',
-  },
-  secondaryCta: {
-    color: '#6b7280',
-    fontSize: '13px',
-    fontWeight: 600,
-    textDecoration: 'underline',
   },
 }

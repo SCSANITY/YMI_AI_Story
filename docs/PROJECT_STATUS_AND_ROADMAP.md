@@ -85,6 +85,7 @@ Active short-term tracker:
   - Admin status update history is stored in `order_status_events`; direct Supabase edits to `orders.order_status` sync after page refresh but do not auto-send email.
   - YMI-managed email templates remain code-managed: body/layout in `components/emails/*`, subject/from/idempotency/trigger behavior in `src/lib/email.tsx`.
   - External Stripe and Supabase Auth email templates remain managed in their own dashboards.
+  - Supabase Auth template branding is complete for current customer-facing auth flows: Confirm sign up, Magic link or OTP, Change email address, Reset password, and Reauthentication. Invite user is not a current customer flow and can stay out of the critical path unless Supabase invite-based onboarding is introduced.
 - Worker subtitle rendering upgraded and aligned with the subtitle editor render spec:
   - Source spec: `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`.
   - Worker implementation: `worker/subtitleRenderer.ts`.
@@ -165,6 +166,7 @@ High priority before internal test:
   - `EMAIL_FROM_SUPPORT`
 - Finish and sync the selected first-launch story configs in Supabase.
 - For each story package, confirm `subtitle_render.template_path`, `fonts_path`, and Supabase object names match exactly before triggering real preview/final jobs.
+- Supabase Auth email template branding has been updated for the active auth templates; keep future edits aligned with `docs/EMAIL_DESIGN_SPEC.md`.
 - Run a real Music/active-story preview after subtitle filename correction and latest worker subtitle renderer upgrade to validate the full Supabase -> worker -> RunPod path.
 - Clean remaining demo/placeholder content from the public website and update UIUX to a formal production-site version.
 - Connect Stripe Live in Vercel production after live readiness; local/dev should remain on test keys.
@@ -180,6 +182,7 @@ Medium priority:
 - Confirm `INTERNAL_API_SECRET` matches between Vercel production env and worker online env.
 - Confirm worker online env points to production callback URL.
 - Decide alert owner for Healthchecks and Resend bounce/complaint monitoring.
+- Public-beta email media proxy: replace long-lived email Supabase signed URLs with a YMI-controlled token route such as `/api/email-media/[token]` before public beta. The route should cover final PDF downloads and personalized cover images, bind each token to the order/resource, allow revocation, record access metadata, and issue fresh short-lived Supabase signed URLs internally. This is a P1 privacy/experience task, not an internal-test blocker.
 - Resend webhook for delivered/bounced/complained status is deferred until the public launch phase; current email observability is sent/failed/external_observed.
 - Brand sender avatar work is deferred until the public launch phase. Gravatar is not reliable for Resend sending-domain aliases; the durable path is BIMI plus DMARC enforcement, with Apple Branded Mail considered separately for Apple Mail/iCloud Mail.
 - Confirm RunPod cancellation behavior is safe for `/cancel/{runId}`.
@@ -202,6 +205,7 @@ Code quality / maintainability:
 - SEO metadata should stay aligned with route ownership: public marketing/catalog pages may be indexed; private areas should be excluded with `robots.txt`; anonymous but non-indexable pages should remain crawlable with meta noindex so crawlers can actually see the directive. Do not rely on `robots.txt` for API security; API routes still require their own auth/secret checks.
 - Frontend performance is no longer a near-term blocker after the May/June 2026 optimization pass. Optional future work: run production Vercel Speed Insights/Core Web Vitals baselines on homepage, `/books`, Customize, and ShareDialog; reassess homepage Hero LCP and perceived video start time with the original-quality faststart MP4; continue reducing repeated `backdrop-blur` usage in non-critical surfaces only where visual quality is not affected.
 - Email template customization is intentionally code-first in the current phase. If the product needs marketer-editable templates later, design that as a separate feature with preview, approval, versioning, and test-send controls instead of mixing it into the current sender functions.
+- Current email media links are acceptable for internal testing, but should not be treated as the public-beta target state: final PDF email links use short-lived Supabase signed URLs, while personalized cover thumbnails may use longer-lived signed URLs for display stability. Before public beta, move private email media behind a YMI token proxy so links can be revoked and audited.
 
 ## Known Risks And Current Judgment
 

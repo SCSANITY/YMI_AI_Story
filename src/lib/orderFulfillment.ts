@@ -202,6 +202,110 @@ async function loadOrderItemsForFinal(orderId: string, cartItemIds?: string[]): 
   return data as unknown as CartItemForFinal[]
 }
 
+// Email is opened days/weeks after sending, so the cover needs a long-lived
+// signed URL (short ones would 404 by the time the parent reads the email).
+const EMAIL_COVER_URL_TTL_SECONDS = 60 * 60 * 24 * 365 // 1 year
+
+/**
+ * Derive the face-swapped cover image URL for an order's first item, reusing the
+ * order-detail cover logic: creation → preview_job → output page 0 → signed URL.
+ * Returns undefined if no cover is available (email falls back to placeholder).
+ * Shared by order-confirmation and logistics emails.
+ */
+export async function loadOrderCoverUrl(orderId: string): Promise<string | undefined> {
+  const { data: items } = await supabaseAdmin
+    .from('cart_items')
+    .select('creations:creations ( preview_job_id )')
+    .eq('order_id', orderId)
+
+  const previewJobId = (items ?? [])
+    .map((row: any) => row.creations?.preview_job_id)
+    .find((value: string | null) => Boolean(value)) as string | undefined
+  if (!previewJobId) return undefined
+
+  const { data: job } = await supabaseAdmin
+    .from('jobs')
+    .select('output_assets')
+    .eq('job_id', previewJobId)
+    .maybeSingle()
+
+  const outputAssets = job?.output_assets as
+    | { bucket?: string; pages?: { page_index: number; storage_path: string }[] }
+    | null
+  const bucket = outputAssets?.bucket || 'raw-private'
+  const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
+  const coverPage = pages.find((page) => page.page_index === 0) ?? pages[0]
+  if (!coverPage?.storage_path) return undefined
+
+  const { data: signed } = await supabaseAdmin.storage
+    .from(bucket)
+    .createSignedUrl(coverPage.storage_path, EMAIL_COVER_URL_TTL_SECONDS)
+  return signed?.signedUrl ?? undefined
+}
+
+export type OrderItemWithCover = {
+  name: string
+  quantity: number
+  coverImageUrl?: string
+}
+
+/**
+ * Load every item of an order with its display name, quantity, and face-swapped
+ * cover URL (long-lived signed). Used by the unpaid-reminder email's cover gallery.
+ */
+export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderItemWithCover[]> {
+  const { data: rows } = await supabaseAdmin
+    .from('cart_items')
+    .select(
+      `
+        quantity,
+        creations:creations (
+          template_id,
+          preview_job_id,
+          templates:templates ( name )
+        )
+      `
+    )
+    .eq('order_id', orderId)
+
+  const items = (rows ?? []) as any[]
+  if (items.length === 0) return []
+
+  // Batch-resolve cover URLs for all preview jobs in one pass.
+  const jobIds = Array.from(
+    new Set(items.map((r) => r.creations?.preview_job_id).filter((v): v is string => Boolean(v)))
+  )
+  const coverByJob = new Map<string, string>()
+  if (jobIds.length > 0) {
+    const { data: jobs } = await supabaseAdmin
+      .from('jobs')
+      .select('job_id, output_assets')
+      .in('job_id', jobIds)
+    for (const job of jobs ?? []) {
+      const assets = job.output_assets as
+        | { bucket?: string; pages?: { page_index: number; storage_path: string }[] }
+        | null
+      const bucket = assets?.bucket || 'raw-private'
+      const pages = Array.isArray(assets?.pages) ? assets?.pages ?? [] : []
+      const coverPage = pages.find((p) => p.page_index === 0) ?? pages[0]
+      if (!coverPage?.storage_path) continue
+      const { data: signed } = await supabaseAdmin.storage
+        .from(bucket)
+        .createSignedUrl(coverPage.storage_path, EMAIL_COVER_URL_TTL_SECONDS)
+      if (signed?.signedUrl) coverByJob.set(job.job_id, signed.signedUrl)
+    }
+  }
+
+  return items.map((r) => {
+    const previewJobId = r.creations?.preview_job_id as string | undefined
+    return {
+      name: String(r.creations?.templates?.name || r.creations?.template_id || 'Custom Story Book'),
+      quantity: Number(r.quantity ?? 1),
+      coverImageUrl: previewJobId ? coverByJob.get(previewJobId) : undefined,
+    }
+  })
+}
+
 export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<FinalizeOrderResult> {
   const {
     orderId,
@@ -375,6 +479,8 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
             unitPrice: convertUsdToCurrency(Number(item.price_at_purchase ?? 0), normalizedCurrency),
           }))
 
+    const coverImageUrl = await loadOrderCoverUrl(orderId).catch(() => undefined)
+
     await sendOrderConfirmationEmail({
       to: email,
       orderId,
@@ -383,6 +489,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       currency: normalizedCurrency,
       items: emailItems,
       customerId,
+      coverImageUrl,
       address: {
         firstName: String(shippingAddress?.firstName ?? ''),
         lastName: String(shippingAddress?.lastName ?? ''),

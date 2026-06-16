@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendUnpaidReminderEmail } from '@/lib/email'
+import { loadOrderItemsWithCovers } from '@/lib/orderFulfillment'
 import { releaseStaleDiscountRedemptions } from '@/lib/discounts'
 
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
@@ -174,12 +175,13 @@ async function runCron(request: Request) {
       }
 
       try {
+        const items = await loadOrderItemsWithCovers(order.order_id).catch(() => [])
         await sendUnpaidReminderEmail({
           to: toEmail,
           orderId: order.order_id,
           displayId: order.display_id ?? null,
           resumeUrl: buildResumeUrl(order.order_id),
-          items: [],
+          items,
           customerId,
           reminderDate: nowIso.slice(0, 10),
         })

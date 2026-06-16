@@ -260,10 +260,13 @@ Resend and email notifications:
 - YMI-managed email templates live in `components/emails/*`; subject/from/idempotency/trigger behavior lives in `src/lib/email.tsx`.
 - Current app-owned templates are `OtpEmail`, `OrderReceiptEmail`, `DeliveryEmail`, `AbandonmentEmail`, `LogisticsUpdateEmail`, and shared `EmailLayout`.
 - The app does not currently have a database-driven email template editor. Template updates are code changes, validated, deployed, then verified through `/admin/emails` and `email_events`.
+- Current internal-test email media delivery can include Supabase signed URLs for final PDFs and personalized cover images. This is acceptable for internal testing, but the public-beta target is a YMI-owned email media proxy route that validates an unguessable token, supports revocation/audit metadata, and signs short-lived Supabase URLs internally for `final_pdf` and `cover_image` resources.
 
 External email boundaries:
 - Stripe receipts are controlled in Stripe Dashboard. Local `external_observed` records mean YMI saw a Stripe checkout/payment event, not that YMI sent or verified delivery.
-- Supabase Auth OTP/signup emails are controlled in Supabase Auth Email Templates. Guest checkout OTP is not Supabase Auth; it is YMI-managed through Resend.
+- Supabase Auth OTP/signup/account-security emails are controlled in Supabase Auth Email Templates. Guest checkout OTP is not Supabase Auth; it is YMI-managed through Resend.
+- Supabase Auth templates currently branded in the Supabase Dashboard are Confirm sign up, Magic link or OTP, Change email address, Reset password, and Reauthentication. Invite user is not a current customer flow unless Supabase invite-based onboarding is introduced.
+- Supabase Auth dashboard HTML should stay aligned with `docs/EMAIL_DESIGN_SPEC.md` and the hosted `/email-assets` files.
 
 Vercel:
 - Hosts the Next.js web/API app.
