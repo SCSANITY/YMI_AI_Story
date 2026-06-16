@@ -2,12 +2,21 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
 import { releaseOrderDiscount } from '@/lib/discounts'
+import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import {
   getDisplayUnitPrice,
   getOrderCheckoutCurrency,
   getOrderDisplayCurrency,
   getOrderDisplayTotal,
 } from '@/lib/order-display'
+
+const ORDER_DETAIL_CACHE_CONTROL = 'private, max-age=30'
+
+function privateJson(body: unknown) {
+  const response = NextResponse.json(body)
+  response.headers.set('Cache-Control', ORDER_DETAIL_CACHE_CONTROL)
+  return response
+}
 
 export async function GET(
   request: Request,
@@ -30,43 +39,44 @@ export async function GET(
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
 
-  const { data: items, error: itemsError } = await supabaseAdmin
-    .from('cart_items')
-    .select(
-      `
-        cart_item_id,
-        creation_id,
-        quantity,
-        price_at_purchase,
-        creations:creations (
-          template_id,
-          customize_snapshot,
-          preview_job_id,
-          templates:templates (
+  const [itemsResult, payment] = await Promise.all([
+    supabaseAdmin
+      .from('cart_items')
+      .select(
+        `
+          cart_item_id,
+          creation_id,
+          quantity,
+          price_at_purchase,
+          creations:creations (
             template_id,
-            name,
-            description,
-            cover_image_path,
-            story_type
+            customize_snapshot,
+            preview_job_id,
+            templates:templates (
+              template_id,
+              name,
+              description,
+              cover_image_path,
+              story_type
+            )
           )
-        )
-      `
-    )
-    .eq('order_id', order.order_id)
-
-  if (itemsError) {
-    return NextResponse.json({ error: 'Failed to load order items' }, { status: 500 })
-  }
-
-  const cartItems = items ?? []
-  const payment =
+        `
+      )
+      .eq('order_id', order.order_id),
     order.payment_id
-      ? await supabaseAdmin
+      ? supabaseAdmin
           .from('payments')
           .select('payment_id, amount, currency')
           .eq('payment_id', order.payment_id)
           .maybeSingle()
-      : { data: null as any }
+      : Promise.resolve({ data: null as any }),
+  ])
+
+  if (itemsResult.error) {
+    return NextResponse.json({ error: 'Failed to load order items' }, { status: 500 })
+  }
+
+  const cartItems = itemsResult.data ?? []
   const jobIds = cartItems
     .map((row: any) => row.creations?.preview_job_id)
     .filter((value: string | null) => Boolean(value))
@@ -95,14 +105,15 @@ export async function GET(
       }
     }
 
-    for (const [jobId, info] of jobMap.entries()) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from(info.bucket)
-        .createSignedUrl(info.path, 60 * 10)
-      if (signed?.signedUrl) {
-        previewUrlMap.set(jobId, signed.signedUrl)
-      }
-    }
+    const signedUrls = await createSignedStorageUrlMap(
+      Array.from(jobMap.entries()).map(([jobId, info]) => ({
+        key: jobId,
+        bucket: info.bucket,
+        path: info.path,
+        expiresIn: 60 * 10,
+      }))
+    )
+    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
   }
 
   const displayCurrency = getOrderDisplayCurrency(
@@ -134,7 +145,7 @@ export async function GET(
     paymentCurrency: payment.data?.currency,
   })
 
-  return NextResponse.json({
+  return privateJson({
     order: {
       id: order.order_id,
       displayId: order.display_id ?? null,

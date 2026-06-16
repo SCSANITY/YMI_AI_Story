@@ -4,6 +4,7 @@ import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orde
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import { markOrderDiscountsPaid, refreshAppliedOrderDiscounts } from '@/lib/discounts'
 import { templateStorageUrl } from '@/lib/book-catalog'
+import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import {
   getDisplayUnitPrice,
   getOrderDisplayCurrency,
@@ -13,6 +14,13 @@ import {
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
+const ORDERS_CACHE_CONTROL = 'private, max-age=30'
+
+function privateJson(body: unknown) {
+  const response = NextResponse.json(body)
+  response.headers.set('Cache-Control', ORDERS_CACHE_CONTROL)
+  return response
+}
 
 export async function POST(request: Request) {
   const body = await request.json()
@@ -191,7 +199,7 @@ export async function GET(request: Request) {
   const email = url.searchParams.get('email')
 
   if (!orderId && !customerId && !email) {
-    return NextResponse.json({ orders: [] })
+    return privateJson({ orders: [] })
   }
 
   let query = supabaseAdmin
@@ -304,14 +312,15 @@ export async function GET(request: Request) {
       }
     }
 
-    for (const [jobId, info] of jobMap.entries()) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from(info.bucket)
-        .createSignedUrl(info.path, 60 * 10)
-      if (signed?.signedUrl) {
-        previewUrlMap.set(jobId, signed.signedUrl)
-      }
-    }
+    const signedUrls = await createSignedStorageUrlMap(
+      Array.from(jobMap.entries()).map(([jobId, info]) => ({
+        key: jobId,
+        bucket: info.bucket,
+        path: info.path,
+        expiresIn: 60 * 10,
+      }))
+    )
+    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
   }
 
   const orderIds = orderRows.map((order: any) => order.order_id).filter(Boolean) as string[]
@@ -322,21 +331,33 @@ export async function GET(request: Request) {
       .select('order_id, pdf_path, review_status, released_at')
       .in('order_id', orderIds)
 
+    const finalPdfRequests: Array<{
+      key: string
+      bucket: string
+      path: string
+      expiresIn: number
+      options: { download: string }
+    }> = []
+
     for (const finalJob of finalJobs ?? []) {
       const orderIdValue = String(finalJob.order_id || '')
       const pdfPath = String(finalJob.pdf_path || '')
       const isReleased = Boolean(finalJob.released_at || finalJob.review_status === 'released')
       if (!orderIdValue || !pdfPath || !isReleased) continue
 
-      const { data: signed } = await supabaseAdmin.storage
-        .from(STORAGE_BUCKET)
-        .createSignedUrl(pdfPath, FINAL_PDF_SIGN_TTL_SECONDS, {
+      finalPdfRequests.push({
+        key: orderIdValue,
+        bucket: STORAGE_BUCKET,
+        path: pdfPath,
+        expiresIn: FINAL_PDF_SIGN_TTL_SECONDS,
+        options: {
           download: `final-${orderIdValue}.pdf`,
-        })
-      if (signed?.signedUrl) {
-        finalPdfUrlMap.set(orderIdValue, signed.signedUrl)
-      }
+        },
+      })
     }
+
+    const signedFinalPdfUrls = await createSignedStorageUrlMap(finalPdfRequests)
+    signedFinalPdfUrls.forEach((signedUrl, orderIdValue) => finalPdfUrlMap.set(orderIdValue, signedUrl))
   }
 
   const result = orderRows.map((order: any) => {
@@ -417,5 +438,5 @@ export async function GET(request: Request) {
     }
   })
 
-  return NextResponse.json({ orders: result })
+  return privateJson({ orders: result })
 }

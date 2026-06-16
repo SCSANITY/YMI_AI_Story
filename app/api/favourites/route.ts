@@ -2,9 +2,17 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
 
+const FAVOURITES_CACHE_CONTROL = 'private, max-age=60'
+
 type OwnerContext =
   | { ownerType: 'customer'; customerId: string }
   | { ownerType: 'anon'; anonSessionId: string }
+
+function privateJson(body: unknown) {
+  const response = NextResponse.json(body)
+  response.headers.set('Cache-Control', FAVOURITES_CACHE_CONTROL)
+  return response
+}
 
 function getCookieValue(cookies: string, name: string) {
   const entry = cookies
@@ -40,7 +48,7 @@ export async function GET(request: Request) {
   const owner = await resolveOwner(request, customerId, false)
 
   if (!owner) {
-    return NextResponse.json({ items: [] })
+    return privateJson({ items: [] })
   }
 
   let query = supabaseAdmin
@@ -66,7 +74,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to load favourites' }, { status: 500 })
   }
 
-  return NextResponse.json({ items: data ?? [] })
+  return privateJson({ items: data ?? [] })
 }
 
 export async function POST(request: Request) {

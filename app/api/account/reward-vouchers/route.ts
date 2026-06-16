@@ -9,6 +9,8 @@ import {
   type DiscountStackingGroup,
 } from '@/lib/discounts'
 
+const REWARD_VOUCHERS_CACHE_CONTROL = 'private, max-age=30'
+
 function toNumber(value: unknown): number {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
@@ -60,6 +62,12 @@ function toApiVoucher(row: any, voucher: CheckoutVoucher, status: 'active' | 're
     effectType: voucher.effectType,
     stackingGroup: voucher.stackingGroup,
   }
+}
+
+function privateJson(body: unknown) {
+  const response = NextResponse.json(body)
+  response.headers.set('Cache-Control', REWARD_VOUCHERS_CACHE_CONTROL)
+  return response
 }
 
 export async function GET(request: Request) {
@@ -192,7 +200,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    return privateJson({
       ok: true,
       customerId: customer.customer_id,
       active,

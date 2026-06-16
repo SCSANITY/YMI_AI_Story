@@ -120,7 +120,14 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const row = data ? await withFinalPreviewImages(await withProductShowcaseImages(data)) : null
+  const row = data
+    ? await Promise.all([withProductShowcaseImages(data), withFinalPreviewImages(data)]).then(
+        ([productRow, finalRow]) => ({
+          ...productRow,
+          final_preview_paths: finalRow.final_preview_paths,
+        })
+      )
+    : null
   const template = row ? templateRowToBook(row) : null
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 })

@@ -6,13 +6,21 @@ import {
   getOrderDisplayTotal,
 } from '@/lib/order-display'
 
+const ORDERS_LIST_CACHE_CONTROL = 'private, max-age=30'
+
+function privateJson(body: unknown) {
+  const response = NextResponse.json(body)
+  response.headers.set('Cache-Control', ORDERS_LIST_CACHE_CONTROL)
+  return response
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const customerId = searchParams.get('customerId')
   const email = searchParams.get('email')
 
   if (!customerId && !email) {
-    return NextResponse.json({ orders: [] })
+    return privateJson({ orders: [] })
   }
 
   const orderQuery = supabaseAdmin
@@ -32,7 +40,7 @@ export async function GET(request: Request) {
   const { data: orders, error, count } = await orderQuery
 
   if (error || !orders) {
-    return NextResponse.json({ orders: [] })
+    return privateJson({ orders: [] })
   }
 
   const orderIds = orders.map((row) => row.order_id)
@@ -102,5 +110,5 @@ export async function GET(request: Request) {
     }),
   }))
 
-  return NextResponse.json({ orders: result, count: count ?? result.length })
+  return privateJson({ orders: result, count: count ?? result.length })
 }

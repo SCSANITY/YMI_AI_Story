@@ -4,6 +4,7 @@ import { getOrCreateAnonSession } from '@/lib/session'
 import { checkJobQueueGuard } from '@/lib/jobQueue'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { isValidUserAssetStoragePath } from '@/lib/userAssetsStorage'
+import { getCustomizeAccessSettings } from '@/lib/customize-access-server'
 
 const MAX_TEXT_PROFILES = 5
 const MAX_FACE_IMAGES = 8
@@ -195,6 +196,17 @@ export async function POST(request) {
 
   if (!templateId || (!faceAssetId && !pendingFaceAsset?.asset_id)) {
     return NextResponse.json({ error: 'Missing template_id or face_asset_id' }, { status: 400 })
+  }
+
+  const customizeAccess = await getCustomizeAccessSettings()
+  if (!customizeAccess.enabled) {
+    return NextResponse.json(
+      {
+        error: customizeAccess.message,
+        code: 'customize_access_closed',
+      },
+      { status: 403 }
+    )
   }
 
   const queueGuard = await checkJobQueueGuard({

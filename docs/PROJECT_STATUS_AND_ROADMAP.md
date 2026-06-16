@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-06-10
+Last updated: 2026-06-16
 
 ## Current State
 
@@ -71,6 +71,16 @@ Active short-term tracker:
   - Product showcase photos were standardized to `products/productN.webp`: local script `scripts/optimize-template-products.mjs` generated 97 WebP files from `Template_folder/<Story_ID>/Product`; local source PNGs were removed after conversion; Supabase was updated with the WebP files and verified as 97 WebP / 0 PNG across active stories.
   - Performance audit documentation was consolidated in `PERFORMANCE_AUDIT_2026-06-04.md`; current remaining performance work is measurement-led rather than a broad UI rewrite.
   - Latest Hero media contract: selected video content and quality stay intact; use container-level delivery checks such as faststart plus poster fallback first. Do not reintroduce lower-quality multi-encoded variants without explicit visual approval.
+- Backend latency P0/P1 pass completed for common user navigation:
+  - `/personalize/[bookID]` now uses `generateStaticParams()` for a static page shell while Customize availability is handled by a client gate and enforced again by `/api/jobs`.
+  - Homepage Hero renders only the current device's video element while keeping `preload="auto"` so the selected video remains a first-screen priority.
+  - `vercel.json` now adds long-lived public cache headers for hero video/poster, banner assets, email assets, and logo assets.
+  - Low-risk user read APIs now use short browser-only private cache headers: favourites, my-books, orders, order list, order detail, and account reward vouchers. Cart remains uncached.
+  - Navbar notification/badge fetches can use the new private cache; cart, checkout, admin, and final review fetches keep no-store behavior.
+  - Supabase Storage signed URL generation is now parallelized for cart preview covers, my-books preview covers, orders preview covers, released final PDF URLs, and order-detail preview covers.
+  - `/api/orders/[orderId]` now fetches items and payment metadata in parallel after resolving the order.
+  - `/api/templates/[templateId]` now lists product showcase and final preview storage paths in parallel on cold cache misses.
+  - Tracking doc: `PERF_BACKEND_PLAN.md`.
 - Current email and order-status notification system shipped:
   - `email_events` is the unified operational log for all YMI-managed Resend sends and external Stripe/Supabase Auth observations.
   - YMI-managed emails currently include guest checkout OTP, order confirmation, final PDF delivery, production/printing update, shipped update, delivered update, and unpaid checkout reminder.
@@ -203,7 +213,8 @@ Code quality / maintainability:
 - Some product/content pages may still contain placeholder/demo wording.
 - Admin rerun UI is reserved/disabled for a future random-seed rerun flow.
 - SEO metadata should stay aligned with route ownership: public marketing/catalog pages may be indexed; private areas should be excluded with `robots.txt`; anonymous but non-indexable pages should remain crawlable with meta noindex so crawlers can actually see the directive. Do not rely on `robots.txt` for API security; API routes still require their own auth/secret checks.
-- Frontend performance is no longer a near-term blocker after the May/June 2026 optimization pass. Optional future work: run production Vercel Speed Insights/Core Web Vitals baselines on homepage, `/books`, Customize, and ShareDialog; reassess homepage Hero LCP and perceived video start time with the original-quality faststart MP4; continue reducing repeated `backdrop-blur` usage in non-critical surfaces only where visual quality is not affected.
+- Frontend/backend latency is no longer a near-term blocker after the May/June 2026 optimization passes. Optional future work: run production Vercel Speed Insights/Core Web Vitals baselines on homepage, `/books`, Customize, ShareDialog, orders, and my-books; reassess homepage Hero LCP and perceived video start time with the original-quality faststart MP4; continue reducing repeated `backdrop-blur` usage in non-critical surfaces only where visual quality is not affected.
+- Deferred P2 performance work is tracked in `PERF_BACKEND_PLAN.md`: order detail RPC, signed URL server cache or unified media proxy, homepage/books catalog server-side or ISR rendering, and a future Supabase US East migration as the root cross-region latency fix.
 - Email template customization is intentionally code-first in the current phase. If the product needs marketer-editable templates later, design that as a separate feature with preview, approval, versioning, and test-send controls instead of mixing it into the current sender functions.
 - Current email media links are acceptable for internal testing, but should not be treated as the public-beta target state: final PDF email links use short-lived Supabase signed URLs, while personalized cover thumbnails may use longer-lived signed URLs for display stability. Before public beta, move private email media behind a YMI token proxy so links can be revoked and audited.
 

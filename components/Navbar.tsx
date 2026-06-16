@@ -169,19 +169,15 @@ export const Navbar: React.FC = () => {
       Promise.all([
         fetch(`/api/favourites?customerId=${customerId}`, {
           credentials: 'include',
-          cache: 'no-store',
         }).then((res) => (res.ok ? res.json() : { items: [] })),
         fetch('/api/account/reward-vouchers', {
           credentials: 'include',
-          cache: 'no-store',
         }).then((res) => (res.ok ? res.json() : { active: [] })),
         fetch(`/api/orders/list?customerId=${customerId}`, {
           credentials: 'include',
-          cache: 'no-store',
         }).then((res) => (res.ok ? res.json() : { orders: [], count: 0 })),
         fetch(`/api/my-books?customerId=${customerId}`, {
           credentials: 'include',
-          cache: 'no-store',
         }).then((res) => (res.ok ? res.json() : { items: [] })),
       ])
         .then(([favoritesData, rewardsData, ordersData, booksData]) => {

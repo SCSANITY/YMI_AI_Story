@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { createSignedStorageUrlMap } from '@/lib/storage-signing'
+
+const MY_BOOKS_CACHE_CONTROL = 'private, max-age=60'
 
 type Owner = {
   ownerType: 'customer' | 'anon'
@@ -35,6 +38,12 @@ function buildOwnerScopedQuery(query: any, owner: Owner) {
     return query.eq('owner_type', 'customer').eq('customer_id', owner.ownerId)
   }
   return query.eq('owner_type', 'anon').eq('anon_session_id', owner.ownerId)
+}
+
+function privateJson(body: unknown) {
+  const response = NextResponse.json(body)
+  response.headers.set('Cache-Control', MY_BOOKS_CACHE_CONTROL)
+  return response
 }
 
 async function loadCreationsWithArchive(owner: Owner) {
@@ -82,7 +91,7 @@ export async function GET(request: Request) {
   const owner = resolveOwner(request, customerId)
 
   if (!owner) {
-    return NextResponse.json({ items: [] })
+    return privateJson({ items: [] })
   }
 
   const { data: items, error } = await loadCreationsWithArchive(owner)
@@ -119,14 +128,15 @@ export async function GET(request: Request) {
       }
     }
 
-    for (const [jobId, info] of jobMap.entries()) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from(info.bucket)
-        .createSignedUrl(info.path, 60 * 10)
-      if (signed?.signedUrl) {
-        previewUrlMap.set(jobId, signed.signedUrl)
-      }
-    }
+    const signedUrls = await createSignedStorageUrlMap(
+      Array.from(jobMap.entries()).map(([jobId, info]) => ({
+        key: jobId,
+        bucket: info.bucket,
+        path: info.path,
+        expiresIn: 60 * 10,
+      }))
+    )
+    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
   }
 
   const enriched = visibleRows.map((row: { preview_job_id?: string | null }) => ({
@@ -134,7 +144,7 @@ export async function GET(request: Request) {
     preview_cover_url: row.preview_job_id ? previewUrlMap.get(row.preview_job_id) ?? null : null,
   }))
 
-  return NextResponse.json({ items: enriched })
+  return privateJson({ items: enriched })
 }
 
 export async function DELETE(request: Request) {

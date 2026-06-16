@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
+import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 
 function getCookieValue(cookies: string, name: string) {
   const entry = cookies
@@ -118,14 +119,15 @@ export async function GET(request: Request) {
       }
     }
 
-    for (const [jobId, info] of jobMap.entries()) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from(info.bucket)
-        .createSignedUrl(info.path, 60 * 10)
-      if (signed?.signedUrl) {
-        previewUrlMap.set(jobId, signed.signedUrl)
-      }
-    }
+    const signedUrls = await createSignedStorageUrlMap(
+      Array.from(jobMap.entries()).map(([jobId, info]) => ({
+        key: jobId,
+        bucket: info.bucket,
+        path: info.path,
+        expiresIn: 60 * 10,
+      }))
+    )
+    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
   }
 
   const enriched = cartItems.map((row) => ({

@@ -51,6 +51,7 @@ export const Hero: React.FC = () => {
   const [quoteIdx, setQuoteIdx] = useState(0)
   const [quoteVisible, setQuoteVisible] = useState(true)
   const [videoReady, setVideoReady] = useState(false)
+  const [videoTarget, setVideoTarget] = useState<'desktop' | 'mobile' | null>(null)
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -61,6 +62,22 @@ export const Hero: React.FC = () => {
       }, 280)
     }, 3800)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 768px)')
+
+    const syncTarget = () => {
+      setVideoReady(false)
+      setVideoTarget(mediaQuery.matches ? 'desktop' : 'mobile')
+    }
+
+    syncTarget()
+    mediaQuery.addEventListener('change', syncTarget)
+
+    return () => {
+      mediaQuery.removeEventListener('change', syncTarget)
+    }
   }, [])
 
   const goToBooks = () => router.push('/books')
@@ -82,20 +99,22 @@ export const Hero: React.FC = () => {
             aria-hidden="true"
             className="absolute inset-0 scale-105 object-cover blur-[2px] md:scale-100 md:blur-0"
           />
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            poster="/hero-poster.webp"
-            onLoadedData={() => setVideoReady(true)}
-            className={`absolute inset-0 hidden h-full w-full object-cover transition-opacity duration-700 md:block ${
-              videoReady ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            <source src="/hero-video.mp4" type="video/mp4" />
-          </video>
+          {videoTarget === 'desktop' ? (
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              poster="/hero-poster.webp"
+              onLoadedData={() => setVideoReady(true)}
+              className={`absolute inset-0 hidden h-full w-full object-cover transition-opacity duration-700 md:block ${
+                videoReady ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <source src="/hero-video.mp4" type="video/mp4" />
+            </video>
+          ) : null}
         </div>
 
         {/* ── Gradient overlays ──────────────────────────────────────────── */}
@@ -134,20 +153,22 @@ export const Hero: React.FC = () => {
                 aria-hidden="true"
                 className="object-cover"
               />
-              <video
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="auto"
-                poster="/hero-poster.webp"
-                onLoadedData={() => setVideoReady(true)}
-                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-700 ${
-                  videoReady ? 'opacity-100' : 'opacity-0'
-                }`}
-              >
-                <source src="/hero-video.mp4" type="video/mp4" />
-              </video>
+              {videoTarget === 'mobile' ? (
+                <video
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  poster="/hero-poster.webp"
+                  onLoadedData={() => setVideoReady(true)}
+                  className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-700 ${
+                    videoReady ? 'opacity-100' : 'opacity-0'
+                  }`}
+                >
+                  <source src="/hero-video.mp4" type="video/mp4" />
+                </video>
+              ) : null}
             </div>
           </div>
 
