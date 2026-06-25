@@ -1,6 +1,6 @@
 # YMI Story Production Flow
 
-Last updated: 2026-06-10
+Last updated: 2026-06-25
 
 This document describes the canonical production path from customer upload to final PDF delivery.
 
@@ -23,19 +23,18 @@ This document describes the canonical production path from customer upload to fi
 ## 3. Preview Job Creation
 
 - Browser calls `createPreviewJob()`, which posts to `/api/jobs`.
-- `/api/jobs` resolves the template config from `templates.default_config_path`.
-- `/api/jobs` creates:
-  - `creations` row with `customize_snapshot`.
-  - `jobs` row with `job_type='preview'`, `status='queued'`, `input_snapshot.face_source_path`, `input_snapshot.config_url`, text overrides, and consent params.
-- Browser polls `/api/jobs/[jobId]`.
-- Browser fetches signed preview image URLs from `/api/jobs/[jobId]/preview-url`.
+- `templates.default_config_path` must be the relative storage path `{template_id}/config.json`.
+- `/api/jobs` creates a public config URL from that storage path and calls `create_preview_job()`.
+- `create_preview_job()` writes the `creations` row, matching `jobs` row, and `creations.preview_job_id` in one transaction.
+- Browser polls `/api/jobs/[jobId]`; the route is owner-scoped by logged-in `customerId` or anonymous `ymi_anon_session`.
+- Browser fetches signed preview image URLs from `/api/jobs/[jobId]/preview-url`; this route is also owner-scoped.
 
 ## 4. Worker Preview Processing
 
-- Canonical Worker code lives in `ymi-books-web-1.0/worker`.
-- Production Worker is intended to run as a Render Background Worker; local Worker defaults to `WORKER_POLL_ENABLED=false`.
-- Worker loops on `supabase.rpc('claim_next_job')` only when `WORKER_POLL_ENABLED=true`.
-- The upgraded RPC atomically marks one queued or stale-leased job as running, records `claimed_by`, `claimed_at`, and `lease_expires_at`, and returns its row.
+- Active Worker code lives in root `worker/`.
+- Render Worker cutover is deferred; the previous duplicate `ymi-books-web-1.0/worker` copy was removed.
+- Worker loops on `supabase.rpc('claim_next_job')`.
+- Queue lease/identity hardening is tracked in `Template_folder/sql_worker_claim_lease.sql` for the future Render cutover.
 - Worker downloads/fetches template config, resolves provider and preview page indices.
 - Current production configs use RunPod.
 - Worker signs the face image from `raw-private`.
@@ -142,7 +141,7 @@ This document describes the canonical production path from customer upload to fi
 ## Primary State Transitions
 
 - Preview job: `queued -> running -> done|failed|cancel_requested|cancelled`
-- Creation: created before preview, then linked to preview job.
+- Creation: created atomically with its preview job through `create_preview_job()`.
 - Cart item: `cart -> ordered`, then linked to order/payment/final job.
 - Order: `unpaid -> paid` after payment finalization.
 - Final job: `queued -> processing -> review_pending -> completed/released|failed`

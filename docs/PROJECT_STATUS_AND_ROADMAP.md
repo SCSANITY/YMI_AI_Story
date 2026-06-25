@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-06-16
+Last updated: 2026-06-25
 
 ## Current State
 
@@ -31,8 +31,8 @@ Active short-term tracker:
 - Supabase cloud project `pgpaawqgtewowjratddm` is the intended production project.
 - RunPod is the current real AI provider path.
 - Current active cloud story configs mostly reference RunPod endpoint `39ygcoofm4ye40`.
-- Worker cloud migration is a high-priority deferred task: Render has been selected as the future cloud worker platform, canonical Worker code lives under `ymi-books-web-1.0/worker`, and deployment will resume after internal-test/product work.
-- The old sibling `Web/worker` folder remains the active local worker for internal-test work until Render cutover is fully verified.
+- Worker cloud migration is a high-priority deferred task: Render has been selected as the future cloud worker platform, but implementation is paused during internal-test/product work.
+- The root workspace `worker/` folder is the only active Worker source during internal-test work. The previous Git-managed `ymi-books-web-1.0/worker` copy was removed to avoid duplicate source-of-truth confusion.
 - Mock worker mode is intentional for UI/UX testing.
 - `Template_folder` is a local backup/source area; Supabase is runtime source for templates/configs after sync.
 - Resend production domain/from addresses are verified.
@@ -113,37 +113,33 @@ Active short-term tracker:
   - All 8 initial stories have completed face-swap testing.
   - Global prompt additions and page-level `prompt_override` updates have been added to local story configs for the pages processed so far and synced to Supabase as part of the story QA pass.
   - Preview prompt override support has been opened in story configs so preview jobs can use page-specific prompt tuning where needed.
-- Worker cloud migration groundwork completed:
-  - Canonical Worker code was copied into the Git-managed app repo at `ymi-books-web-1.0/worker`.
-  - Worker now has Docker/Render deployment scaffolding, production build/start scripts, and worker-specific ignore rules.
-  - `WORKER_POLL_ENABLED` defaults to safe standby, so local Worker processes do not claim jobs unless explicitly enabled.
-  - Worker startup logs now identify worker id, poll mode, mock mode, job types, Supabase host, lease settings, and Healthchecks configuration.
-  - Queue lease SQL is tracked at `Template_folder/sql_worker_claim_lease.sql` and has been executed in production Supabase.
-  - Worker claim supports worker identity, job type filters, lease expiry, and heartbeat renewal after the SQL upgrade.
-  - Final job reclaim is designed to resume from `final_job_pages.ai_output_path` and skip already completed pages.
-  - Commit `0cb8654` pushed the canonical worker scaffold to GitHub.
+- Preview job chain cleanup shipped:
+  - Active Supabase story packages were rechecked: all 15 active templates now have aligned `preview_1.png`, `preview_2.png`, subtitle-template entries, and font assets for preview generation.
+  - `/api/jobs/[jobId]` and `/api/jobs/[jobId]/preview-url` now require owner matching before returning job state or signing preview images.
+  - Preview job creation is moving to the database RPC `create_preview_job()` so `creations`, `jobs`, and `creations.preview_job_id` are written in one transaction.
+  - `templates.default_config_path` is standardized to `{template_id}/config.json`; full Supabase public URLs are no longer the intended DB value.
+  - SQL for the RPC and config-path cleanup is stored at `Template_folder/sql_preview_job_owner_and_config_cleanup.sql`. The SQL intentionally does not depend on `templates.updated_at` or `creations.updated_at`, because the live schema may not include those columns.
+  - The old Git-managed worker duplicate at `ymi-books-web-1.0/worker` was removed; root `worker/` remains the active worker source.
 
 ## High-Priority Deferred Work: Render Worker Cutover
 
 Status:
 - Deferred intentionally during internal-test/product planning.
 - Current local worker at `D:\IT_David\Program\Voice Imagination\Web\worker` remains usable and remains the active worker path for now.
-- Render will become the production worker host when this task resumes.
+- Render remains the likely future production worker host when this task resumes.
 
 Locked decisions:
 - Platform: Render Background Worker.
 - Region: US East, currently Ohio is acceptable.
 - Same GitHub repo as the web app: `SCSANITY/YMI_AI_Story`.
-- Render Root Directory: `worker`.
-- Render Dockerfile Path: `./Dockerfile`.
 - First deploy must use `WORKER_POLL_ENABLED=false`.
 - Production deploy after validation uses `WORKER_POLL_ENABLED=true` and `WORKER_MOCK_MODE=false`.
-- Do not restructure the repo into `web/` + `worker/` before internal test; the current repo-root Next.js app plus `worker/` subdirectory is acceptable.
+- Do not recreate a second worker source before internal test; root `worker/` is the current active worker location.
 - RunPod Docker assets remain in their existing separate GitHub repo and are not part of this Render worker cutover.
 
 Resume checklist:
 - Confirm Render account/payment approval is complete.
-- Create Render Background Worker using `main`, root directory `worker`, Dockerfile path `./Dockerfile`.
+- Re-decide the exact Git/Render source boundary before deployment, because `ymi-books-web-1.0/worker` was intentionally removed during preview-chain cleanup.
 - Copy production worker env vars from the current local worker profile into Render, with `WORKER_POLL_ENABLED=false`.
 - Confirm Render dry-run logs show correct worker id, poll disabled, mock mode, job types, Supabase host, and lease settings.
 - Stop the local production worker or ensure local polling is disabled before enabling Render polling.
@@ -164,6 +160,7 @@ Resume checklist:
 ## Near-Term Technical Todos
 
 - Keep Render Worker cutover as a high-priority deferred task and resume from the checklist above after internal-test/product decisions.
+- Run `Template_folder/sql_preview_job_owner_and_config_cleanup.sql` before deploying the matching preview job creation code. If Supabase reports a missing `updated_at` column, make sure the latest file is being used; the current version no longer writes `updated_at` on `templates` or `creations`.
 
 High priority before internal test:
 - `Template_folder/sql_email_events.sql` has to be present in Supabase for email logging.
@@ -193,6 +190,7 @@ Medium priority:
 - Confirm worker online env points to production callback URL.
 - Decide alert owner for Healthchecks and Resend bounce/complaint monitoring.
 - Public-beta email media proxy: replace long-lived email Supabase signed URLs with a YMI-controlled token route such as `/api/email-media/[token]` before public beta. The route should cover final PDF downloads and personalized cover images, bind each token to the order/resource, allow revocation, record access metadata, and issue fresh short-lived Supabase signed URLs internally. This is a P1 privacy/experience task, not an internal-test blocker.
+- Public-beta preview share media governance: `preview_share_links.expires_at` exists but is not currently enforced by the share page/image route. Before public beta, either enforce expiry/revocation there or fold preview share images into the same YMI-controlled media proxy/token system.
 - Resend webhook for delivered/bounced/complained status is deferred until the public launch phase; current email observability is sent/failed/external_observed.
 - Brand sender avatar work is deferred until the public launch phase. Gravatar is not reliable for Resend sending-domain aliases; the durable path is BIMI plus DMARC enforcement, with Apple Branded Mail considered separately for Apple Mail/iCloud Mail.
 - Confirm RunPod cancellation behavior is safe for `/cancel/{runId}`.

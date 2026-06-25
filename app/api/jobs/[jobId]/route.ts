@@ -31,6 +31,12 @@ function resolveOwner(request: Request, customerId: string | null): Owner | null
   return { ownerType: 'anon', ownerId: anonSessionId }
 }
 
+function resolveOwnerFromRequest(request: Request): Owner | null {
+  const url = new URL(request.url)
+  const customerId = url.searchParams.get('customerId')
+  return resolveOwner(request, customerId)
+}
+
 function buildOwnerScopedQuery(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query: any,
@@ -51,18 +57,25 @@ async function readJsonSafely(request: Request) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ jobId: string }> | { jobId: string } }
 ) {
   const { jobId } = await Promise.resolve(context.params)
+  const owner = resolveOwnerFromRequest(request)
 
-  const { data: job, error } = await supabaseAdmin
-    .from('jobs')
-    .select(
-      'job_id, job_type, story_language, selected_book_type, status, progress, error_message, input_snapshot, output_assets, created_at, updated_at'
-    )
-    .eq('job_id', jobId)
-    .single()
+  if (!owner) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE_HEADERS })
+  }
+
+  const { data: job, error } = await buildOwnerScopedQuery(
+    supabaseAdmin
+      .from('jobs')
+      .select(
+        'job_id, job_type, story_language, selected_book_type, status, progress, error_message, input_snapshot, output_assets, created_at, updated_at'
+      )
+      .eq('job_id', jobId),
+    owner
+  ).maybeSingle()
 
   if (error || !job) {
     return NextResponse.json(

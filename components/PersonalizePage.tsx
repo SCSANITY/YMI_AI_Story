@@ -705,7 +705,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     const loadPreview = async () => {
       try {
-        const urls = await getPreviewPages(previewJobId, undefined, { size: 'small' })
+        const urls = await getPreviewPages(previewJobId, undefined, { size: 'small', customerId: user?.customerId ?? null })
         if (!isActive) return
         setPreviewPages(urls)
         if (urls[0]) {
@@ -721,7 +721,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return () => {
       isActive = false
     }
-  }, [viewMode, previewJobId])
+  }, [viewMode, previewJobId, user?.customerId])
 
   useEffect(() => {
     if (viewMode !== 'preview') return
@@ -932,7 +932,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
       for (let attempt = 0; attempt < 6; attempt += 1) {
         try {
-          const urls = await getPreviewPages(jobId, undefined, { size: 'small' });
+          const urls = await getPreviewPages(jobId, undefined, {
+            size: 'small',
+            customerId: user?.customerId ?? null,
+          });
           logPreviewDebug('preview-url pages count', { jobId, count: urls.length, attempt, mode: 'ready' });
           if (urls.length) {
             return {
@@ -941,7 +944,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             };
           }
 
-          const url = await getPreviewUrl(jobId);
+          const url = await getPreviewUrl(jobId, user?.customerId ?? null);
           if (url) {
             return {
               urls: [url],
@@ -962,7 +965,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
     const loadPartialPreviewAssets = async (jobId: string) => {
       try {
-        const urls = await getPreviewPages(jobId, undefined, { size: 'small' });
+        const urls = await getPreviewPages(jobId, undefined, {
+          size: 'small',
+          customerId: user?.customerId ?? null,
+        });
         logPreviewDebug('preview-url pages count', { jobId, count: urls.length, mode: 'partial' });
         if (urls.length) {
           return {
@@ -1155,7 +1161,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         while (isActive) {
           let job
           try {
-            job = await getJob(created.jobId)
+            job = await getJob(created.jobId, currentCustomerId)
             fetchFailures = 0
             const loggedJobState = `${job.status}:${job.progress ?? ''}`
             if (loggedJobState !== lastLoggedJobState) {
@@ -1278,7 +1284,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const pollForRemainingPreviewPages = async () => {
       while (isActive) {
         try {
-          const urls = await getPreviewPages(previewJobId, undefined, { size: 'small' });
+          const urls = await getPreviewPages(previewJobId, undefined, {
+            size: 'small',
+            customerId: user?.customerId ?? null,
+          });
           if (!isActive) return;
           if (urls.length > previewPages.length) {
             setPreviewPages(urls);
@@ -1287,7 +1296,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             }
           }
 
-          const job = await getJob(previewJobId);
+          const job = await getJob(previewJobId, user?.customerId ?? null);
           if (!isActive) return;
           if (job.status === 'done' && urls.length >= 2) {
             return;
@@ -1312,7 +1321,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return () => {
       isActive = false;
     };
-  }, [viewState.showPreview, previewJobId, previewPages.length]);
+  }, [viewState.showPreview, previewJobId, previewPages.length, user?.customerId]);
 
   useEffect(() => {
     if (!bookID) return;
@@ -1342,29 +1351,39 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
   }, [bookID]);
 
-  useEffect(() => {
-    let isActive = true;
-
-    const loadUserAssets = async () => {
-      const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-      const response = await fetch(`/api/user-assets${params}`, { credentials: 'include' });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (!isActive) return;
-      const faces = Array.isArray(data?.faces) ? data.faces : [];
-      const voices = Array.isArray(data?.voices) ? data.voices : [];
-      setRecentFaces(faces);
-      setRecentVoices(voices);
-    };
-
-    loadUserAssets();
-
-    return () => {
-      isActive = false;
-    };
+  const loadUserAssets = useCallback(async (options?: { signal?: AbortSignal }) => {
+    const params = user?.customerId ? `?customerId=${user.customerId}` : '';
+    const response = await fetch(`/api/user-assets${params}`, {
+      credentials: 'include',
+      cache: 'no-store',
+      signal: options?.signal,
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    const faces = Array.isArray(data?.faces) ? data.faces : [];
+    const voices = Array.isArray(data?.voices) ? data.voices : [];
+    const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+    setRecentFaces(faces);
+    setRecentVoices(voices);
+    setRecentProfiles(profiles);
   }, [user?.customerId]);
 
   useEffect(() => {
+    if (!viewState.showForm) return;
+
+    const controller = new AbortController();
+    loadUserAssets({ signal: controller.signal }).catch((error) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.warn('Failed to load user assets:', error);
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [loadUserAssets, viewState.showForm]);
+
+  useEffect(() => {
+    setRecentFaces([]);
     setRecentProfiles([]);
     setRecentVoices([]);
   }, [user?.customerId]);

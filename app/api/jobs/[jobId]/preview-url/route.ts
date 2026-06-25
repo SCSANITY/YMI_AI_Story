@@ -8,6 +8,43 @@ const NO_STORE_HEADERS = {
 const jsonNoStore = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
 
+type Owner = {
+  ownerType: 'customer' | 'anon'
+  ownerId: string
+}
+
+function getCookieValue(cookies: string, name: string) {
+  const entry = cookies
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${name}=`))
+  return entry ? entry.split('=')[1] : null
+}
+
+function resolveOwner(request: Request): Owner | null {
+  const url = new URL(request.url)
+  const customerId = url.searchParams.get('customerId')
+  if (customerId) {
+    return { ownerType: 'customer', ownerId: customerId }
+  }
+
+  const cookies = request.headers.get('cookie') || ''
+  const anonSessionId = getCookieValue(cookies, 'ymi_anon_session')
+  if (!anonSessionId) return null
+  return { ownerType: 'anon', ownerId: anonSessionId }
+}
+
+function buildOwnerScopedQuery(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  owner: Owner
+) {
+  if (owner.ownerType === 'customer') {
+    return query.eq('owner_type', 'customer').eq('customer_id', owner.ownerId)
+  }
+  return query.eq('owner_type', 'anon').eq('anon_session_id', owner.ownerId)
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ jobId: string }> | { jobId: string } }
@@ -17,12 +54,19 @@ export async function GET(
   const pagesParam = url.searchParams.get('pages')
   const limitParam = url.searchParams.get('limit')
   const sizeParam = url.searchParams.get('size') || 'small'
+  const owner = resolveOwner(request)
 
-  const { data: job, error } = await supabaseAdmin
-    .from('jobs')
-    .select('status, output_assets')
-    .eq('job_id', jobId)
-    .single()
+  if (!owner) {
+    return jsonNoStore({ error: 'Unauthorized' }, 401)
+  }
+
+  const { data: job, error } = await buildOwnerScopedQuery(
+    supabaseAdmin
+      .from('jobs')
+      .select('status, output_assets')
+      .eq('job_id', jobId),
+    owner
+  ).maybeSingle()
 
   if (error || !job) {
     return jsonNoStore({ error: 'Job not found' }, 404)

@@ -174,21 +174,17 @@ Current known DB fix:
 Current status:
 - Render has been selected as the future production Worker platform.
 - Cutover is intentionally deferred until after internal-test/product planning.
-- The old local Worker at `D:\IT_David\Program\Voice Imagination\Web\worker` remains the active worker path until Render validation passes.
-- Canonical cloud-ready Worker code is already in Git at `ymi-books-web-1.0/worker`.
+- The local Worker at `D:\IT_David\Program\Voice Imagination\Web\worker` is the active worker path during internal test.
+- The previous Git-managed duplicate at `ymi-books-web-1.0/worker` was removed to avoid stale worker source confusion.
 
-Canonical Worker folder:
-- `ymi-books-web-1.0/worker`
-
-Old local copy:
-- `Web/worker`
-- Treat as migration-era backup only after Render cutover.
+Active Worker folder:
+- `D:\IT_David\Program\Voice Imagination\Web\worker`
 
 Render target:
 - Service type: Background Worker.
 - Region: US East.
-- Root directory: `worker`.
-- Build: Dockerfile.
+- Exact Git/Render source boundary must be re-decided before cutover resumes.
+- Do not recreate a second worker source until that decision is locked.
 
 Safety defaults:
 - Local `.env`: `WORKER_POLL_ENABLED=false`.
@@ -201,6 +197,12 @@ Before enabling Render polling:
 3. Confirm the new claim signature writes `claimed_by`, `claimed_at`, `lease_expires_at`.
 4. Confirm `renew_job_lease()` exists.
 5. Stop local production Worker or set local polling false.
+
+Preview job creation SQL:
+- `Template_folder/sql_preview_job_owner_and_config_cleanup.sql`
+- Run this before deploying the matching Next.js preview job creation code.
+- It standardizes `templates.default_config_path` to `{template_id}/config.json` and creates `create_preview_job()` for atomic preview creation.
+- The current SQL file does not write `updated_at` on `templates` or `creations`; if Supabase reports `column "updated_at" does not exist`, re-open the latest file from `Template_folder` and rerun it rather than adding columns as a workaround.
 
 Cutover validation:
 - Run one preview job and confirm Render claims it.

@@ -1,6 +1,6 @@
 # YMI Story System Architecture
 
-Last updated: 2026-06-10
+Last updated: 2026-06-25
 
 ## Product Scope
 
@@ -55,11 +55,11 @@ Main layers:
 - Supabase Storage stores templates, user uploads, generated pages, final PDFs, and runtime worker artifacts.
 
 3. Worker/orchestration layer
-- Canonical Worker code now lives in `ymi-books-web-1.0/worker` for Git/Render deployment.
-- The older sibling folder `Web/worker` is a migration-era local copy and should not remain the long-term production source.
-- Runs locally through `npm run dev` / `ts-node` and in production as a Render Background Worker through Docker.
+- The active Worker code lives in the root workspace `worker/` folder.
+- The previous duplicate copy at `ymi-books-web-1.0/worker` has been removed; do not edit or recreate a second worker source during internal-test work.
+- Runs locally through `npm run dev` / `ts-node`; Render deployment is deferred and will be redesigned before cutover.
 - Uses Supabase service role credentials.
-- Claims queued jobs through `supabase.rpc('claim_next_job')` with worker identity, job type filters, and lease tracking after the cloud-worker SQL is applied.
+- Claims queued jobs through `supabase.rpc('claim_next_job')`; cloud worker identity/lease hardening is tracked separately in `Template_folder/sql_worker_claim_lease.sql`.
 - Supports mock mode for UI testing and real RunPod mode for production generation.
 - `WORKER_POLL_ENABLED=false` is the local safety default; only environments that should process jobs set it to `true`.
 
@@ -125,23 +125,21 @@ Important shared libraries:
 
 ## Key Worker Modules
 
-- `ymi-books-web-1.0/worker/index.ts`
+- `worker/index.ts`
   - Main loop, job claim, config loading, page preparation, subtitle rendering handoff, provider execution, output upload, and DB updates.
-- `ymi-books-web-1.0/worker/providers/runpodAdapter.ts`
+- `worker/providers/runpodAdapter.ts`
   - RunPod payload construction, image encoding, `/run` submission, status polling, cancellation, and output parsing.
-- `ymi-books-web-1.0/worker/providers/runcomfyAdapter.ts`
+- `worker/providers/runcomfyAdapter.ts`
   - Legacy/fallback provider adapter. Currently not the active production path.
-- `ymi-books-web-1.0/worker/subtitleRenderer.ts`
+- `worker/subtitleRenderer.ts`
   - Local image/text rendering for dynamic child-name overlays.
   - The renderer is synchronized with `subtitle-template-editor-app/WORKER_SUBTITLE_RENDER_SPEC.md`; the editor remains the visual authoring source of truth, while the worker is responsible for reproducing the exported JSON at runtime before RunPod receives the template image.
-- `ymi-books-web-1.0/worker/processor.ts`
+- `worker/processor.ts`
   - Template/config typing and related shared structures.
-- `ymi-books-web-1.0/worker/Dockerfile`
-  - Render Background Worker container build.
-- `ymi-books-web-1.0/worker/ecosystem.config.js`
+- `worker/ecosystem.config.js`
   - PM2 process configuration.
-- `ymi-books-web-1.0/worker/scripts/use-env-localhost.ps1`
-- `ymi-books-web-1.0/worker/scripts/use-env-online.ps1`
+- `worker/scripts/use-env-localhost.ps1`
+- `worker/scripts/use-env-online.ps1`
   - Environment profile switchers.
 
 ### Worker Subtitle Rendering Contract
@@ -164,7 +162,7 @@ Important shared libraries:
   - per-side padding, vertical alignment, text transform, wrapping, and cloud/fade box styling,
   - mixed-run center/right alignment that excludes leading/trailing space width so wrapped lines remain visually centered.
 - Font assets can be `.ttf`, `.otf`, `.woff`, or `.woff2`. The worker attempts to register downloaded font buffers and falls back to system/default font behavior if a font cannot be registered by the canvas runtime.
-- 2026-06-10 sync note: `ymi-books-web-1.0/worker/subtitleRenderer.ts` was upgraded against the latest JSON Creator spec to handle `fontWeight`, `spans`, and the generalized mixed-run renderer. Verification was done locally with `npx tsc --noEmit` and an in-memory subtitle smoke render. The canonical worker folder is now inside the Git-managed Next.js repo, but it deploys separately from Vercel as a Render Background Worker.
+- 2026-06-25 sync note: `worker/subtitleRenderer.ts` is the active subtitle renderer. The temporary `ymi-books-web-1.0/worker` copy was removed to avoid stale duplicate worker code.
 - Any future subtitle editor feature has to be added to both:
   - the editor/export side,
   - `worker/subtitleRenderer.ts`,
@@ -198,6 +196,13 @@ Core tables used by current flow:
 - `discount_instruments`
 - `discount_redemptions`
 
+Preview job creation:
+- New preview jobs are intended to be created through `create_preview_job()`, which inserts `creations`, inserts the matching `jobs` row, and writes `creations.preview_job_id` in one database transaction.
+- The required SQL is tracked at `Template_folder/sql_preview_job_owner_and_config_cleanup.sql`.
+- `templates.default_config_path` is standardized to exactly `{template_id}/config.json`; full Supabase public URLs and `app-templates/` prefixes are not valid DB values after this cleanup.
+- The cleanup SQL is written against the current live schema and does not assume `templates.updated_at` or `creations.updated_at` exists. Do not add timestamp columns only to satisfy this migration unless a separate schema-design task requires them.
+- Preview job state and preview image signed URLs are owner-scoped by `jobs.owner_type` plus `customer_id` or `anon_session_id`. Public preview sharing remains token-based through `preview_share_links`.
+
 Discount model:
 - `discount_offers` stores reusable rules such as free shipping, fixed amount, or percentage effects.
 - `discount_instruments` stores concrete promo codes or account vouchers, including ownership, public/private availability, active state, and usage limits.
@@ -206,6 +211,9 @@ Discount model:
 - Legacy `referral_codes`, `customer_coupon_codes`, `creator_promo_codes`, and related redemption tables have been replaced by the unified discount model. Phase 4 cleanup SQL is stored at `Template_folder/sql_unified_discount_phase4_cleanup.sql`.
 
 Critical RPC:
+- `create_preview_job`
+  - Creates a preview `creations` row and matching `jobs` row in a single transaction.
+  - Prevents orphan preview creations or jobs during preview creation failures.
 - `claim_next_job`
   - Worker depends on this RPC to atomically claim queued jobs.
   - Uses `FOR UPDATE SKIP LOCKED` — concurrent workers never claim the same job.

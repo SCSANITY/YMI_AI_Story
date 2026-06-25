@@ -266,12 +266,18 @@ export async function POST(request) {
   }
 
   const rawConfigPath = String(template.default_config_path).trim()
-  const configUrl = rawConfigPath.startsWith('http')
-    ? rawConfigPath
-    : supabaseAdmin.storage
-        .from('app-templates')
-        .getPublicUrl(rawConfigPath.replace(/^app-templates\//, '').replace(/^\/+/, ''))
-        .data?.publicUrl
+  const expectedConfigPath = `${templateId}/config.json`
+  if (rawConfigPath !== expectedConfigPath) {
+    return NextResponse.json(
+      { error: `Template config path must be ${expectedConfigPath}` },
+      { status: 400 }
+    )
+  }
+
+  const configUrl = supabaseAdmin.storage
+    .from('app-templates')
+    .getPublicUrl(rawConfigPath)
+    .data?.publicUrl
 
   if (!configUrl) {
     return NextResponse.json({ error: 'Failed to resolve config URL' }, { status: 500 })
@@ -287,45 +293,21 @@ export async function POST(request) {
     previewJobId: null,
   }
 
-  const { data: creation, error: creationError } = await supabaseAdmin
-    .from('creations')
-    .insert({
-      owner_type: ownerType,
-      customer_id: ownerType === 'customer' ? body.customerId : null,
-      anon_session_id: ownerType === 'anon' ? anonSessionId : null,
-      template_id: templateId,
-      customize_snapshot: customizeSnapshot,
-      preview_job_id: null,
-    })
-    .select('creation_id')
-    .single()
-
-  if (creationError || !creation?.creation_id) {
-    return NextResponse.json({ error: 'Failed to create creation' }, { status: 500 })
-  }
-
-  const [jobResult, textProfileResult] = await Promise.all([
+  const [previewJobResult, textProfileResult] = await Promise.all([
     supabaseAdmin
-      .from('jobs')
-      .insert({
-        owner_type: ownerType,
-        anon_session_id: ownerType === 'anon' ? anonSessionId : null,
-        customer_id: ownerType === 'customer' ? body.customerId : null,
-        template_id: templateId,
-        creation_id: creation.creation_id,
-        job_type: 'preview',
-        story_language: storyLanguage,
-        selected_book_type: selectedBookType,
-        status: 'queued',
-        progress: 0,
-        input_snapshot: {
-          face_source_path: rawFacePath,
-          config_url: configUrl,
-          text_overrides: textOverrides,
-          params,
-        },
+      .rpc('create_preview_job', {
+        p_owner_type: ownerType,
+        p_anon_session_id: ownerType === 'anon' ? anonSessionId : null,
+        p_customer_id: ownerType === 'customer' ? body.customerId : null,
+        p_template_id: templateId,
+        p_customize_snapshot: customizeSnapshot,
+        p_face_source_path: rawFacePath,
+        p_config_url: configUrl,
+        p_text_overrides: textOverrides,
+        p_params: params,
+        p_story_language: storyLanguage,
+        p_selected_book_type: selectedBookType,
       })
-      .select('job_id')
       .single(),
     saveTextProfile({
       ownerType,
@@ -334,27 +316,23 @@ export async function POST(request) {
     }),
   ])
 
-  const { data: job, error } = jobResult
+  const { data: previewJob, error } = previewJobResult
 
-  if (error || !job) {
-    return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
+  if (error || !previewJob) {
+    return NextResponse.json(
+      { error: 'Failed to create preview job', details: error?.message ?? null },
+      { status: 500 }
+    )
   }
-  if (!job.job_id) {
+  if (!previewJob.job_id || !previewJob.creation_id) {
     return NextResponse.json({ error: 'Missing job_id after insert' }, { status: 500 })
   }
-  await supabaseAdmin
-    .from('creations')
-    .update({
-      preview_job_id: job.job_id,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('creation_id', creation.creation_id)
 
   return NextResponse.json({
-    jobId: job.job_id,
-    job_id: job.job_id,
-    creationId: creation.creation_id,
-    creation_id: creation.creation_id,
+    jobId: previewJob.job_id,
+    job_id: previewJob.job_id,
+    creationId: previewJob.creation_id,
+    creation_id: previewJob.creation_id,
     text_profile: textProfileResult ?? null,
   })
 }

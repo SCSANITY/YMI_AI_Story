@@ -15,6 +15,12 @@ export interface JobRecord {
   updated_at?: string
 }
 
+function appendCustomerId(url: string, customerId?: string | null) {
+  if (!customerId) return url
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}customerId=${encodeURIComponent(customerId)}`
+}
+
 const fetchWithTimeout = async (
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -111,13 +117,13 @@ export async function updatePreviewJobInput(
   }
 }
 
-export async function getJob(jobId: string): Promise<JobRecord> {
+export async function getJob(jobId: string, customerId?: string | null): Promise<JobRecord> {
   if (!jobId) throw new Error('Missing job ID')
   if (!isUuid(jobId)) {
     throw new Error(`Invalid job ID: ${jobId}`)
   }
   const response = await fetchWithTimeout(
-    `/api/jobs/${jobId}`,
+    appendCustomerId(`/api/jobs/${jobId}`, customerId),
     { credentials: 'include', cache: 'no-store' },
     30000
   )
@@ -176,7 +182,7 @@ export async function cancelPreviewJob(
   }
 }
 
-export async function getPreviewUrl(jobId: string): Promise<string> {
+export async function getPreviewUrl(jobId: string, customerId?: string | null): Promise<string> {
   if (!jobId) {
     throw new Error('Missing job ID')
   }
@@ -184,7 +190,7 @@ export async function getPreviewUrl(jobId: string): Promise<string> {
     throw new Error(`Invalid job ID: ${jobId}`)
   }
   const response = await fetchWithTimeout(
-    `/api/jobs/${jobId}/preview-url`,
+    appendCustomerId(`/api/jobs/${jobId}/preview-url`, customerId),
     { credentials: 'include', cache: 'no-store' },
     15000
   )
@@ -198,7 +204,7 @@ export async function getPreviewUrl(jobId: string): Promise<string> {
 export async function getPreviewPages(
   jobId: string,
   pageIndices?: number[],
-  options?: { size?: 'small' | 'full' }
+  options?: { size?: 'small' | 'full'; customerId?: string | null }
 ): Promise<string[]> {
   if (!jobId) {
     throw new Error('Missing job ID')
@@ -213,6 +219,9 @@ export async function getPreviewPages(
   }
   if (options?.size) {
     params.set('size', options.size)
+  }
+  if (options?.customerId) {
+    params.set('customerId', options.customerId)
   }
   const query = params.toString()
   const response = await fetchWithTimeout(
