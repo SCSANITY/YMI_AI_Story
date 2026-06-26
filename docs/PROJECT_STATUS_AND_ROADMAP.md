@@ -1,6 +1,6 @@
 # YMI Story Project Status And Roadmap
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 ## Current State
 
@@ -120,6 +120,12 @@ Active short-term tracker:
   - `templates.default_config_path` is standardized to `{template_id}/config.json`; full Supabase public URLs are no longer the intended DB value.
   - SQL for the RPC and config-path cleanup is stored at `Template_folder/sql_preview_job_owner_and_config_cleanup.sql`. The SQL intentionally does not depend on `templates.updated_at` or `creations.updated_at`, because the live schema may not include those columns.
   - The old Git-managed worker duplicate at `ymi-books-web-1.0/worker` was removed; root `worker/` remains the active worker source.
+- Preview physical-book display and image freshness tightened:
+  - Preview entry now depends on generated `preview_1`, not generic partial job output.
+  - The book cover no longer falls back to the static unpersonalized cover after preview generation; missing/failed generated cover states are shown as controlled "Still creating" UI.
+  - Page 2 uses the static Supabase `preview_2.png` only as a masked in-progress placeholder until generated `preview_2` is available.
+  - Generated preview image load failures now trigger a fresh signed URL fetch instead of leaving a broken image icon in the book.
+  - Preview signed URLs refresh on tab visibility restore, browser back/forward cache restore, focus, and generated image error. This keeps the internal-test UX stable without adding a server-side media proxy yet.
 
 ## High-Priority Deferred Work: Render Worker Cutover
 

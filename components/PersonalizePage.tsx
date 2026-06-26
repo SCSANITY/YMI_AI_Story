@@ -269,6 +269,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewPages, setPreviewPages] = useState<string[]>([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewImageErrors, setPreviewImageErrors] = useState<Set<string>>(() => new Set());
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [previewShareUrl, setPreviewShareUrl] = useState<string | null>(null);
   const [previewPublicShareImageUrl, setPreviewPublicShareImageUrl] = useState<string | null>(null);
@@ -280,6 +281,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [isMarketingConsentChecked, setIsMarketingConsentChecked] = useState(false);
   const generationInFlightRef = useRef(false);
   const checkoutInFlightRef = useRef(false);
+  const previewRefreshInFlightRef = useRef(false);
+  const lastPreviewRefreshAtRef = useRef(0);
   const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(null);
   const [templateTitle, setTemplateTitle] = useState<string | null>(null);
   const [templateDescription, setTemplateDescription] = useState<string | null>(null);
@@ -374,6 +377,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const previewScale = isMobile ? mobilePreviewScale : 1;
   const previewStageHeight = isMobile ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
   const previewShareImageUrl = previewPublicShareImageUrl || previewPages[0] || previewUrl || resolvedBook?.coverUrl || null;
+  const staticPreviewSecondPageUrl = useMemo(() => {
+    if (!bookID) return '';
+    const { data } = supabase.storage.from('app-templates').getPublicUrl(`${bookID}/preview_2.png`);
+    return data?.publicUrl || '';
+  }, [bookID]);
   const finalPreviewImages = useMemo(
     () => (Array.isArray(resolvedBook?.finalPreviewImages) ? resolvedBook.finalPreviewImages.filter(Boolean) : []),
     [resolvedBook],
@@ -415,6 +423,48 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       return next;
     });
   }, []);
+  const markPreviewImageError = useCallback((image: string) => {
+    if (!image) return;
+    setPreviewImageErrors((prev) => {
+      if (prev.has(image)) return prev;
+      const next = new Set(prev);
+      next.add(image);
+      return next;
+    });
+  }, []);
+  const refreshPreviewImages = useCallback(async (
+    reason: 'visibility' | 'pageshow' | 'focus' | 'image-error',
+    options?: { force?: boolean }
+  ) => {
+    if (!viewState.showPreview) return;
+    if (!previewJobId) return;
+    if (previewRefreshInFlightRef.current) return;
+
+    const now = Date.now();
+    const shouldThrottle = options?.force !== true;
+    if (shouldThrottle && now - lastPreviewRefreshAtRef.current < 30_000) {
+      return;
+    }
+
+    previewRefreshInFlightRef.current = true;
+    try {
+      const urls = await getPreviewPages(previewJobId, undefined, {
+        size: 'small',
+        customerId: user?.customerId ?? null,
+      });
+      if (!urls[0]) return;
+
+      setPreviewPages(urls);
+      setPreviewUrl(urls[0]);
+      setPreviewImageErrors(() => new Set());
+      lastPreviewRefreshAtRef.current = Date.now();
+      logPreviewDebug('preview images refreshed', { reason, jobId: previewJobId, count: urls.length });
+    } catch {
+      // Keep the controlled fallback UI. The next focus/visibility change or image error can retry.
+    } finally {
+      previewRefreshInFlightRef.current = false;
+    }
+  }, [previewJobId, user?.customerId, viewState.showPreview]);
   const activeShowcaseImage = showcaseImages[activeShowcaseIndex] || showcaseImages[0] || resolvedBook?.coverUrl || '';
   const activeShowcaseImageSrc = activeShowcaseImage ? getShowcaseImageSrc(activeShowcaseImage) : '';
   const goToPreviousShowcaseImage = useCallback(() => {
@@ -685,11 +735,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     if (!cached) return
     try {
       const parsed = JSON.parse(cached)
-      const coverUrl = parsed?.coverUrl
-      if (coverUrl) {
-        setPreviewPages([coverUrl])
-        setPreviewUrl(coverUrl)
-      }
       if (!previewJobId && parsed?.jobId) {
         setPreviewJobId(parsed.jobId)
       }
@@ -927,28 +972,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
     const getPreviewAssetRetryDelayMs = (attempt: number) =>
       Math.min(1400, 250 + attempt * 250) + Math.floor(Math.random() * 90);
-    const loadReadyPreviewAssets = async (jobId: string) => {
+    const loadPreviewCoverAsset = async (jobId: string) => {
       let lastError: unknown = null;
 
       for (let attempt = 0; attempt < 6; attempt += 1) {
         try {
-          const urls = await getPreviewPages(jobId, undefined, {
+          const urls = await getPreviewPages(jobId, [0], {
             size: 'small',
             customerId: user?.customerId ?? null,
           });
-          logPreviewDebug('preview-url pages count', { jobId, count: urls.length, attempt, mode: 'ready' });
-          if (urls.length) {
+          logPreviewDebug('preview cover url count', { jobId, count: urls.length, attempt });
+          if (urls[0]) {
             return {
-              urls,
-              primaryUrl: urls[0] ?? null,
-            };
-          }
-
-          const url = await getPreviewUrl(jobId, user?.customerId ?? null);
-          if (url) {
-            return {
-              urls: [url],
-              primaryUrl: url,
+              urls: [urls[0]],
+              primaryUrl: urls[0],
             };
           }
         } catch (error) {
@@ -961,23 +998,40 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       }
 
       if (lastError) throw lastError;
-      throw new Error('Preview is ready but images are still processing. Please refresh.');
+      throw new Error('Preview cover is still processing. Please refresh.');
     };
-    const loadPartialPreviewAssets = async (jobId: string) => {
+    const loadAllReadyPreviewAssets = async (jobId: string) => {
       try {
         const urls = await getPreviewPages(jobId, undefined, {
           size: 'small',
           customerId: user?.customerId ?? null,
         });
-        logPreviewDebug('preview-url pages count', { jobId, count: urls.length, mode: 'partial' });
-        if (urls.length) {
+        if (urls[0]) {
           return {
             urls,
-            primaryUrl: urls[0] ?? null,
+            primaryUrl: urls[0],
           };
         }
       } catch {
-        // Partial preview is not ready yet.
+        // Fall back to the required cover asset below.
+      }
+      return loadPreviewCoverAsset(jobId);
+    };
+    const loadPartialPreviewCoverAsset = async (jobId: string) => {
+      try {
+        const urls = await getPreviewPages(jobId, [0], {
+          size: 'small',
+          customerId: user?.customerId ?? null,
+        });
+        logPreviewDebug('preview cover url count', { jobId, count: urls.length, mode: 'partial' });
+        if (urls[0]) {
+          return {
+            urls: [urls[0]],
+            primaryUrl: urls[0],
+          };
+        }
+      } catch {
+        // Preview cover is not ready yet.
       }
       return null;
     };
@@ -1197,7 +1251,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             progressTarget = Math.max(progressTarget, 96)
             setProgress(prev => (prev < 96 ? 96 : prev))
             try {
-              const previewAssets = await loadReadyPreviewAssets(created.jobId)
+              const previewAssets = await loadAllReadyPreviewAssets(created.jobId)
               if (!isActive) return
               setPreviewPages(previewAssets.urls)
               if (previewAssets.primaryUrl) {
@@ -1215,7 +1269,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           }
 
           if (job.status === 'running' && !partialPreviewShown) {
-            const partialPreviewAssets = await loadPartialPreviewAssets(created.jobId)
+            const partialPreviewAssets = await loadPartialPreviewCoverAsset(created.jobId)
             if (partialPreviewAssets?.urls.length) {
               partialPreviewShown = true
               if (!isActive) return
@@ -1324,6 +1378,36 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [viewState.showPreview, previewJobId, previewPages.length, user?.customerId]);
 
   useEffect(() => {
+    if (!viewState.showPreview) return;
+    if (!previewJobId) return;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshPreviewImages('visibility');
+      }
+    };
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        void refreshPreviewImages('pageshow', { force: true });
+      }
+    };
+    const handleFocus = () => {
+      void refreshPreviewImages('focus');
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [previewJobId, refreshPreviewImages, viewState.showPreview]);
+
+  useEffect(() => {
     if (!bookID) return;
 
     let isActive = true;
@@ -1420,7 +1504,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [user?.customerId]);
 
   useEffect(() => {
-    if (!previewPages.length && (!viewState.showPreview || !finalPreviewImages.length)) return
+    if (!previewPages.length && !viewState.showPreview) return
 
     const preloadIndexes = new Set([
       0,
@@ -1432,6 +1516,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const preloadUrls = Array.from(preloadIndexes)
       .map((spreadIndex) => {
         if (spreadIndex === 0) return previewPages[0]
+        if (spreadIndex === 1) return previewPages[1] || staticPreviewSecondPageUrl
         return previewPages[spreadIndex] || (viewState.showPreview ? finalPreviewImages[spreadIndex - 1] : '')
       })
       .filter(Boolean)
@@ -1442,7 +1527,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       img.decoding = 'async'
       img.src = url
     })
-  }, [currentSpread, finalPreviewImages, previewPages, viewState.showPreview])
+  }, [currentSpread, finalPreviewImages, previewPages, staticPreviewSecondPageUrl, viewState.showPreview])
 
   useEffect(() => {
     if (!viewState.showForm || showcaseImages.length <= 1) return
@@ -2160,19 +2245,32 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
       // 1. Cover
       if (spreadIndex === 0 && side === 'right') {
+          const generatedCover = previewPages[0] || '';
+          const canShowGeneratedCover = Boolean(generatedCover) && !previewImageErrors.has(generatedCover);
           return (
               <div className="w-full h-full relative overflow-hidden shadow-inner rounded-r-sm border-l border-white/20" style={commonPageStyle}>
                   {/* Hardcover Shine Effect */}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/10 z-20 pointer-events-none" />
                   
-                  <img
-                    src={previewPages[0] || templateCoverUrl || book?.coverUrl || ''}
-                    alt={resolvedBook?.title || book?.title || t('personalize.preview')}
-                    className="h-full w-full object-contain mix-blend-multiply opacity-95"
-                    decoding="async"
-                    loading="eager"
-                    fetchPriority="high"
-                  />
+                  {canShowGeneratedCover ? (
+                    <img
+                      src={generatedCover}
+                      alt={resolvedBook?.title || book?.title || t('personalize.preview')}
+                      className="h-full w-full object-contain mix-blend-multiply opacity-95"
+                      decoding="async"
+                      loading="eager"
+                      fetchPriority="high"
+                      onError={() => {
+                        markPreviewImageError(generatedCover);
+                        void refreshPreviewImages('image-error', { force: true });
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-amber-50/80 px-6 text-center text-amber-900">
+                      <Wand2 className="h-9 w-9 animate-pulse text-amber-500" />
+                      <p className="text-sm font-semibold">{t('personalize.previewPageStillCreating')}</p>
+                    </div>
+                  )}
                   
                   {/* Hardcover Ridge at binding */}
                   <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent z-30" />
@@ -2189,13 +2287,18 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       // Real preview spreads follow the configured preview page order after the cover.
       if (
         spreadIndex > 0 &&
-        (spreadIndex < previewPages.length || finalPreviewImages[spreadIndex - 1] || (spreadIndex === 1 && previewPages.length === 1)) &&
+        (spreadIndex < previewPages.length || (spreadIndex === 1 && (previewPages.length === 1 || staticPreviewSecondPageUrl)) || finalPreviewImages[spreadIndex - 1]) &&
         (side === 'left' || side === 'right')
       ) {
           const previewSpreadImage = previewPages[spreadIndex] || '';
-          const finalPreviewImage = finalPreviewImages[spreadIndex - 1] || '';
-          const spreadImage = previewSpreadImage || finalPreviewImage;
-          const isLockedFinalPreview = !previewSpreadImage && Boolean(finalPreviewImage);
+          const generatedSpreadImage = previewSpreadImage && !previewImageErrors.has(previewSpreadImage) ? previewSpreadImage : '';
+          const staticSecondPageImage = spreadIndex === 1 && staticPreviewSecondPageUrl && !previewImageErrors.has(staticPreviewSecondPageUrl)
+            ? staticPreviewSecondPageUrl
+            : '';
+          const finalPreviewImage = spreadIndex > 1 ? finalPreviewImages[spreadIndex - 1] || '' : '';
+          const spreadImage = generatedSpreadImage || staticSecondPageImage || finalPreviewImage;
+          const isGeneratingSecondPreview = spreadIndex === 1 && !generatedSpreadImage;
+          const isLockedFinalPreview = !generatedSpreadImage && !staticSecondPageImage && Boolean(finalPreviewImage);
           const isLeftSide = side === 'left';
           const isNearbySpread = Math.abs(spreadIndex - currentSpread) <= 1;
           return (
@@ -2208,10 +2311,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <img
                       src={spreadImage}
                       alt="Preview spread"
-                      className={`absolute top-0 h-full max-w-none object-cover ${isLockedFinalPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}`}
+                      className={`absolute top-0 h-full max-w-none object-cover ${isLockedFinalPreview || isGeneratingSecondPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}`}
                       decoding="async"
                       loading={isNearbySpread ? 'eager' : 'lazy'}
                       fetchPriority={isNearbySpread ? 'high' : 'auto'}
+                      onError={() => {
+                        markPreviewImageError(spreadImage);
+                        if (generatedSpreadImage && spreadImage === generatedSpreadImage) {
+                          void refreshPreviewImages('image-error', { force: true });
+                        }
+                      }}
                       style={{
                         width: '200%',
                         left: isLeftSide ? '0%' : '-100%',
@@ -2224,7 +2333,17 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <p className="text-sm font-semibold">{t('personalize.previewPageStillCreating')}</p>
                   </div>
                 )}
-                {isLockedFinalPreview ? (
+                {isGeneratingSecondPreview ? (
+                  <>
+                    <div className="absolute inset-0 z-20 bg-white/64 backdrop-blur-[3px] pointer-events-none" />
+                    <div className="absolute inset-0 z-30 flex items-center justify-center px-6 text-center pointer-events-none">
+                      <div className="flex items-center gap-2 rounded-full border border-white/70 bg-white/78 px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+                        <Wand2 className="h-4 w-4 animate-pulse text-amber-500" />
+                        <span>{t('personalize.previewPageStillCreating')}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : isLockedFinalPreview ? (
                   <>
                     <div className="absolute inset-0 z-20 bg-white/68 backdrop-blur-[3px] pointer-events-none" />
                     <div className="absolute inset-0 z-30 flex items-center justify-center px-6 text-center pointer-events-none">

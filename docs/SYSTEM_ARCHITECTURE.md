@@ -1,6 +1,6 @@
 # YMI Story System Architecture
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 ## Product Scope
 
@@ -202,6 +202,13 @@ Preview job creation:
 - `templates.default_config_path` is standardized to exactly `{template_id}/config.json`; full Supabase public URLs and `app-templates/` prefixes are not valid DB values after this cleanup.
 - The cleanup SQL is written against the current live schema and does not assume `templates.updated_at` or `creations.updated_at` exists. Do not add timestamp columns only to satisfy this migration unless a separate schema-design task requires them.
 - Preview job state and preview image signed URLs are owner-scoped by `jobs.owner_type` plus `customer_id` or `anon_session_id`. Public preview sharing remains token-based through `preview_share_links`.
+- Preview page rendering intentionally uses a strict image contract:
+  - The Preview UI should not open until generated `preview_1` is available.
+  - The physical-book cover only displays the generated `preview_1` result; it does not fall back to the static catalog cover, because showing an unpersonalized cover after generation starts is worse than showing a controlled loading state.
+  - Page 2 may show the static story `preview_2.png` with a mask and "Still creating" treatment while generated `preview_2` is still pending.
+  - Once generated `preview_2` is available, it replaces the masked static page immediately.
+  - Native browser broken-image icons should be avoided in this surface; failed preview image loads are converted into controlled loading or retry states.
+- Generated preview URLs are short-lived Supabase signed URLs. `PersonalizePage` therefore refreshes preview image URLs when the tab becomes visible again, after browser back/forward cache restores, on window focus, and after generated preview image load errors. This is deliberately a light client-side self-heal with in-flight and time throttling, not a broader media proxy. The public-beta direction for revocable/private media is still the separate YMI media token proxy tracked in the roadmap.
 
 Discount model:
 - `discount_offers` stores reusable rules such as free shipping, fixed amount, or percentage effects.
