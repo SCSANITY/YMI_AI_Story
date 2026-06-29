@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  requireCheckoutOrderAccess,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const FIRST_REMINDER_MINUTES = Number(
   process.env.UNPAID_REMINDER_FIRST_MINUTES ?? process.env.UNPAID_REMINDER_MINUTES ?? 1
@@ -10,7 +15,6 @@ const REPEAT_REMINDER_DAYS = Number(process.env.UNPAID_REMINDER_REPEAT_DAYS ?? 3
 export async function POST(request: Request) {
   const body = await request.json()
   const items = Array.isArray(body?.items) ? body.items : []
-  const customerId = body?.customerId ?? null
   const incomingOrderId = body?.orderId ?? null
   const orderEmail = body?.email ?? null
 
@@ -18,9 +22,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No order items' }, { status: 400 })
   }
 
-  const ownerType = customerId ? 'customer' : 'anon'
-  const anonSessionId = ownerType === 'anon' ? await getOrCreateAnonSession() : null
-  const ownerId = ownerType === 'customer' ? String(customerId) : String(anonSessionId)
+  let owner
+  try {
+    owner = (await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: true,
+      expectedCustomerId: body?.customerId ?? null,
+    }))!
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+  const filter = ownerFilter(owner)
 
   const missingCreation = items.some((item: any) => {
     const cartItemId = item?.cartItemId || item?.cart_item_id || item?.id || null
@@ -36,6 +50,17 @@ export async function POST(request: Request) {
 
   let orderId = incomingOrderId as string | null
 
+  if (orderId) {
+    try {
+      const order = await requireCheckoutOrderAccess(orderId, owner, { requireUnpaid: true })
+      orderId = order.order_id
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+  }
+
   if (!orderId) {
     const existingIds = items
       .map((item: any) => item?.cartItemId || item?.cart_item_id || item?.id || null)
@@ -45,6 +70,8 @@ export async function POST(request: Request) {
         .from('cart_items')
         .select('cart_item_id, order_id')
         .in('cart_item_id', existingIds)
+        .eq('owner_type', filter.owner_type)
+        .eq(filter.column, filter.value)
         .not('order_id', 'is', null)
         .limit(1)
         .maybeSingle()
@@ -59,7 +86,7 @@ export async function POST(request: Request) {
       .from('orders')
       .insert({
         payment_id: null,
-        customer_id: ownerType === 'customer' ? ownerId : null,
+        customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
         email: orderEmail ?? null,
         shipping_address: {},
         shipping_amount_usd: 0,
@@ -130,9 +157,9 @@ export async function POST(request: Request) {
       const { data: updated, error: updateError } = await supabaseAdmin
         .from('cart_items')
         .update({
-          owner_type: ownerType,
-          anon_session_id: ownerType === 'anon' ? anonSessionId : null,
-          customer_id: ownerType === 'customer' ? ownerId : null,
+          owner_type: owner.ownerType,
+          anon_session_id: owner.ownerType === 'anon' ? owner.anonSessionId : null,
+          customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
           status: 'ordered',
           order_id: orderId,
           quantity: item?.quantity ?? 1,
@@ -140,6 +167,8 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq('cart_item_id', cartItemId)
+        .eq('owner_type', filter.owner_type)
+        .eq(filter.column, filter.value)
         .select('cart_item_id')
 
       if (updateError || !updated || updated.length === 0) {
@@ -156,9 +185,9 @@ export async function POST(request: Request) {
     const { data: cartItem, error: insertError } = await supabaseAdmin
       .from('cart_items')
       .insert({
-        owner_type: ownerType,
-        anon_session_id: ownerType === 'anon' ? anonSessionId : null,
-        customer_id: ownerType === 'customer' ? ownerId : null,
+        owner_type: owner.ownerType,
+        anon_session_id: owner.ownerType === 'anon' ? owner.anonSessionId : null,
+        customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
         creation_id: creationId,
         product_type: productType,
         status: 'ordered',

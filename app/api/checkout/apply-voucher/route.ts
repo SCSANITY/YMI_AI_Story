@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { applyVoucherToOrder, getOrderDiscountSummary } from '@/lib/discounts'
+import {
+  checkoutOwnerErrorResponse,
+  requireCheckoutOrderAccess,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 async function updateOrderShippingContext(orderId: string, body: any) {
   const updates: Record<string, unknown> = {}
@@ -23,16 +27,6 @@ async function updateOrderShippingContext(orderId: string, body: any) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerSupabase()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user?.id) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-
     const body = await request.json()
     const orderId = String(body?.orderId || '').trim()
     const instrumentId = String(body?.instrumentId || '').trim()
@@ -41,27 +35,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing orderId or voucher id' }, { status: 400 })
     }
 
-    const { data: customer, error: customerError } = await supabaseAdmin
-      .from('customers')
-      .select('customer_id, email')
-      .eq('auth_user_id', user.id)
-      .maybeSingle()
-
-    if (customerError || !customer?.customer_id) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+    const owner = await resolveCheckoutOwner(request, {
+      allowAnon: false,
+      requireCustomer: true,
+      expectedCustomerId: body?.customerId ?? null,
+    })
+    if (!owner || owner.ownerType !== 'customer') {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
+    await requireCheckoutOrderAccess(orderId, owner, { requireUnpaid: true })
 
     await updateOrderShippingContext(orderId, body)
     const applied = await applyVoucherToOrder({
       orderId,
       instrumentId,
-      customerId: customer.customer_id,
-      email: customer.email ?? user.email ?? null,
+      customerId: owner.customerId,
+      email: owner.email,
     })
     const summary = await getOrderDiscountSummary(orderId)
 
     return NextResponse.json({ ok: true, instrumentId, ...applied, ...summary })
   } catch (error: any) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
     return NextResponse.json(
       { error: error?.message || 'Failed to apply voucher' },
       { status: 400 }

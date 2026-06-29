@@ -71,6 +71,7 @@ export interface CartItem {
   bookID: string;
   quantity: number;
   book: Book;
+  coverStatus?: 'ready' | 'pending' | 'unavailable';
   personalization?: PersonalizationData;
   priceAtPurchase?: number; // Store the price (base + type modifier)
   savedStep?: number; // To resume progress

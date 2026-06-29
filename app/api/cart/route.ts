@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
-import { createSignedStorageUrlMap } from '@/lib/storage-signing'
-
-function getCookieValue(cookies: string, name: string) {
-  const entry = cookies
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-  return entry ? entry.split('=')[1] : null
-}
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  requireCheckoutOrderAccess,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
+import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -24,24 +21,25 @@ export async function GET(request: Request) {
         .filter((value) => value.length > 0)
     : []
 
-  let ownerType: 'customer' | 'anon' | null = null
-  let ownerId: string | null = null
-
-  if (customerId) {
-    ownerType = 'customer'
-    ownerId = customerId
-  } else {
-    const cookies = request.headers.get('cookie') || ''
-    const anonSessionId = getCookieValue(cookies, 'ymi_anon_session')
-    if (anonSessionId) {
-      ownerType = 'anon'
-      ownerId = anonSessionId
-    }
+  let owner
+  try {
+    owner = (await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: false,
+      expectedCustomerId: customerId,
+      optional: true,
+    }))!
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
   }
 
-  if (!ownerType || !ownerId) {
+  if (!owner) {
     return NextResponse.json({ items: [] })
   }
+
+  const filter = ownerFilter(owner)
 
   let query = supabaseAdmin
     .from('cart_items')
@@ -62,8 +60,8 @@ export async function GET(request: Request) {
         )
       `
     )
-    .eq('owner_type', ownerType)
-    .eq(ownerType === 'customer' ? 'customer_id' : 'anon_session_id', ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
 
   if (ids.length > 0) {
     query = query.in('cart_item_id', ids)
@@ -95,47 +93,16 @@ export async function GET(request: Request) {
     .map((row) => row.creations?.preview_job_id)
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
 
-  const previewUrlMap = new Map<string, string>()
+  const previewCoverMap = await createGeneratedPreviewCoverMap(jobIds)
 
-  if (jobIds.length > 0) {
-    const { data: jobs } = await supabaseAdmin
-      .from('jobs')
-      .select('job_id, output_assets')
-      .in('job_id', jobIds as string[])
-
-    const jobMap = new Map<string, { bucket: string; path: string }>()
-    for (const job of jobs ?? []) {
-      const outputAssets = job.output_assets as
-        | {
-            bucket?: string
-            pages?: { page_index: number; storage_path: string }[]
-          }
-        | null
-      const bucket = outputAssets?.bucket || 'raw-private'
-      const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
-      const coverPage = pages.find((page) => page.page_index === 0) ?? pages[0]
-      if (coverPage?.storage_path) {
-        jobMap.set(job.job_id, { bucket, path: coverPage.storage_path })
-      }
+  const enriched = cartItems.map((row) => {
+    const cover = getGeneratedPreviewCover(previewCoverMap, row.creations?.preview_job_id)
+    return {
+      ...row,
+      preview_cover_url: cover.url,
+      preview_cover_status: cover.status,
     }
-
-    const signedUrls = await createSignedStorageUrlMap(
-      Array.from(jobMap.entries()).map(([jobId, info]) => ({
-        key: jobId,
-        bucket: info.bucket,
-        path: info.path,
-        expiresIn: 60 * 10,
-      }))
-    )
-    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
-  }
-
-  const enriched = cartItems.map((row) => ({
-    ...row,
-    preview_cover_url: row.creations?.preview_job_id
-      ? previewUrlMap.get(row.creations.preview_job_id) ?? null
-      : null,
-  }))
+  })
 
   return NextResponse.json({ items: enriched })
 }
@@ -150,15 +117,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing creationId or productType' }, { status: 400 })
   }
 
-  const ownerType = body?.customerId ? 'customer' : 'anon'
-  const anonSessionId = ownerType === 'anon' ? await getOrCreateAnonSession() : null
+  let owner
+  try {
+    owner = (await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: true,
+      expectedCustomerId: body?.customerId ?? null,
+    }))!
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+
+  if (body?.orderId) {
+    try {
+      await requireCheckoutOrderAccess(String(body.orderId), owner, { requireUnpaid: true })
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+  }
 
   const { data: cartItem, error } = await supabaseAdmin
     .from('cart_items')
     .insert({
-      owner_type: ownerType,
-      anon_session_id: ownerType === 'anon' ? anonSessionId : null,
-      customer_id: ownerType === 'customer' ? body.customerId : null,
+      owner_type: owner.ownerType,
+      anon_session_id: owner.ownerType === 'anon' ? owner.anonSessionId : null,
+      customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
       creation_id: creationId,
       product_type: productType,
       status,
@@ -202,12 +189,32 @@ export async function PATCH(request: Request) {
   const body = await request.json()
   const cartItemId = body?.cartItemId ?? body?.cart_item_id
   const creationId = body?.creationId ?? body?.creation_id
-  const ownerType = body?.customerId ? 'customer' : 'anon'
-  const anonSessionId = ownerType === 'anon' ? await getOrCreateAnonSession() : null
-  const ownerId = ownerType === 'customer' ? body?.customerId : anonSessionId
+  let owner
+  try {
+    owner = (await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: true,
+      expectedCustomerId: body?.customerId ?? null,
+    }))!
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+  const filter = ownerFilter(owner)
 
   if (!cartItemId) {
     return NextResponse.json({ error: 'Missing cartItemId' }, { status: 400 })
+  }
+
+  if (body?.orderId) {
+    try {
+      await requireCheckoutOrderAccess(String(body.orderId), owner, { requireUnpaid: true })
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
   }
 
   const updatePayload = {
@@ -220,8 +227,8 @@ export async function PATCH(request: Request) {
   }
 
   const query = supabaseAdmin.from('cart_items').update(updatePayload)
-    .eq('owner_type', ownerType)
-    .eq(ownerType === 'customer' ? 'customer_id' : 'anon_session_id', ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .eq('cart_item_id', cartItemId)
 
   const { data: updated, error } = await query.select('cart_item_id').maybeSingle()
@@ -265,16 +272,26 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Missing cartItemId' }, { status: 400 })
   }
 
-  const ownerType = customerId ? 'customer' : 'anon'
-  const anonSessionId = ownerType === 'anon' ? await getOrCreateAnonSession() : null
-  const ownerId = ownerType === 'customer' ? customerId : anonSessionId
+  let owner
+  try {
+    owner = (await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: true,
+      expectedCustomerId: customerId,
+    }))!
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+  const filter = ownerFilter(owner)
 
   const { error } = await supabaseAdmin
     .from('cart_items')
     .delete()
     .eq('cart_item_id', cartItemId)
-    .eq('owner_type', ownerType)
-    .eq(ownerType === 'customer' ? 'customer_id' : 'anon_session_id', ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
 
   if (error) {
     return NextResponse.json({ error: 'Failed to cancel cart item' }, { status: 500 })

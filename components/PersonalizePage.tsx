@@ -2959,9 +2959,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                             ) : facePrepareStatus === 'ready' ? (
                                                 <p className="mt-2 text-xs font-semibold text-emerald-600">{t('personalize.photoReady')}</p>
                                             ) : facePrepareStatus === 'failed' ? (
-                                                <p className="mx-auto mt-2 max-w-xs text-xs font-semibold leading-5 text-rose-600">
-                                                    {facePrepareError ?? t('personalize.photoPrepareFailed')}
-                                                </p>
+                                                <div className="mx-auto mt-2 max-w-xs space-y-1">
+                                                    <p className="text-xs font-semibold leading-5 text-rose-600">
+                                                        {facePrepareError ?? t('personalize.photoPrepareFailed')}
+                                                    </p>
+                                                    <p className="text-[11px] font-medium leading-4 text-rose-500/90">
+                                                        {t('personalize.photoQualityReason')}
+                                                    </p>
+                                                </div>
                                             ) : null}
                                             <p className="text-xs text-amber-600 mt-1.5 font-medium">{t('personalize.clickToChangePhoto')}</p>
                                         </div>

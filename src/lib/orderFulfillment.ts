@@ -127,6 +127,72 @@ type TemplateRow = {
   default_config_path: string | null
 }
 
+function isUniqueViolation(error: { code?: string | null } | null | undefined) {
+  return error?.code === '23505'
+}
+
+function resolveTemplateConfigUrl(templateId: string, rawConfigPath: string | null) {
+  const configPath = String(rawConfigPath || '').trim()
+  if (!configPath) {
+    throw new Error(`Template config path missing for ${templateId}`)
+  }
+  if (/^https?:\/\//i.test(configPath) || configPath.startsWith('/') || configPath.startsWith('app-templates/')) {
+    throw new Error(`Template ${templateId} must use a relative default_config_path`)
+  }
+
+  const configUrl = supabaseAdmin.storage.from('app-templates').getPublicUrl(configPath).data?.publicUrl
+  if (!configUrl) {
+    throw new Error(`Failed to resolve config URL for ${templateId}`)
+  }
+  return configUrl
+}
+
+async function loadExistingPaymentId(orderId: string, provider?: string, providerRef?: string | null) {
+  if (provider && providerRef) {
+    const { data: existingPaymentByRef } = await supabaseAdmin
+      .from('payments')
+      .select('payment_id')
+      .eq('order_id', orderId)
+      .eq('provider', provider)
+      .eq('provider_ref', providerRef)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (existingPaymentByRef?.payment_id) {
+      return existingPaymentByRef.payment_id as string
+    }
+  }
+
+  const { data: existingPayment } = await supabaseAdmin
+    .from('payments')
+    .select('payment_id')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  return existingPayment?.payment_id ? (existingPayment.payment_id as string) : null
+}
+
+async function loadFinalJobIdsByCartItem(cartItemIds: string[]) {
+  const result = new Map<string, string>()
+  if (cartItemIds.length === 0) return result
+
+  const { data: jobs } = await supabaseAdmin
+    .from('jobs')
+    .select('job_id, cart_item_id')
+    .eq('job_type', 'final')
+    .in('cart_item_id', cartItemIds)
+
+  for (const job of jobs ?? []) {
+    if (job.cart_item_id && job.job_id) {
+      result.set(job.cart_item_id, job.job_id)
+    }
+  }
+
+  return result
+}
+
 async function loadFinalPageIndices(configUrl: string): Promise<number[]> {
   const response = await fetch(configUrl, { cache: 'no-store' })
   if (!response.ok) {
@@ -330,14 +396,6 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   if (!email) throw new Error('Missing email for payment')
   const normalizedCurrency = normalizeCheckoutCurrency(currency)
 
-  const { data: lockRow } = await supabaseAdmin
-    .from('orders')
-    .update({ order_status: 'production' })
-    .eq('order_id', orderId)
-    .eq('order_status', 'unpaid')
-    .select('order_id')
-    .maybeSingle()
-
   const { data: existingOrder, error: existingOrderError } = await supabaseAdmin
     .from('orders')
     .select('order_id, display_id, payment_id, order_status')
@@ -348,45 +406,26 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     throw new Error(`Order not found: ${existingOrderError?.message || 'unknown error'}`)
   }
 
-  if (!lockRow?.order_id) {
+  const currentStatus = normalizeOrderStatus(existingOrder.order_status)
+  if (currentStatus === 'shipped' || currentStatus === 'delivered' || currentStatus === 'cancelled' || currentStatus === 'refunded') {
     return {
       orderId,
       displayId: existingOrder.display_id ?? null,
       paymentId: existingOrder.payment_id ?? null,
       cartItemIds: cartItemIds ?? [],
-      status: normalizeOrderStatus(existingOrder.order_status),
+      status: currentStatus,
     }
+  }
+
+  if (currentStatus !== 'unpaid' && currentStatus !== 'paid' && currentStatus !== 'production') {
+    throw new Error(`Order status ${existingOrder.order_status} cannot be finalized`)
   }
 
   let paymentId = existingOrder.payment_id ?? null
   const resolvedAmount = amount ?? (await computeOrderTotal(orderId, cartItemIds))
 
-  if (!paymentId && providerRef) {
-    const { data: existingPaymentByRef } = await supabaseAdmin
-      .from('payments')
-      .select('payment_id')
-      .eq('order_id', orderId)
-      .eq('provider', provider)
-      .eq('provider_ref', providerRef)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (existingPaymentByRef?.payment_id) {
-      paymentId = existingPaymentByRef.payment_id
-    }
-  }
-
   if (!paymentId) {
-    const { data: existingPayment } = await supabaseAdmin
-      .from('payments')
-      .select('payment_id')
-      .eq('order_id', orderId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (existingPayment?.payment_id) {
-      paymentId = existingPayment.payment_id
-    }
+    paymentId = await loadExistingPaymentId(orderId, provider, providerRef)
   }
 
   if (!paymentId) {
@@ -405,9 +444,17 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       .single()
 
     if (paymentError || !payment) {
+      if (isUniqueViolation(paymentError)) {
+        paymentId = await loadExistingPaymentId(orderId, provider, providerRef)
+      }
+    }
+
+    if (!paymentId && (paymentError || !payment)) {
       throw new Error(`Failed to create payment: ${paymentError?.message || 'unknown error'}`)
     }
-    paymentId = payment.payment_id
+    if (!paymentId && payment?.payment_id) {
+      paymentId = payment.payment_id
+    }
   }
 
   const { error: orderUpdateError } = await supabaseAdmin
@@ -502,27 +549,26 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     console.error('[email] order confirmation failed', error)
   }
 
-  const existingJobsMap = new Map<string, string>()
-  if (effectiveCartItemIds.length > 0) {
-    const { data: existingJobs } = await supabaseAdmin
-      .from('jobs')
-      .select('job_id, cart_item_id')
-      .eq('job_type', 'final')
-      .in('cart_item_id', effectiveCartItemIds)
-
-    for (const job of existingJobs ?? []) {
-      if (job.cart_item_id) {
-        existingJobsMap.set(job.cart_item_id, job.job_id)
-      }
+  const jobIdByCartItem = new Map<string, string>()
+  for (const item of cartItems) {
+    if (item.final_job_id) {
+      jobIdByCartItem.set(item.cart_item_id, item.final_job_id)
     }
   }
 
-  const pendingItems = cartItems.filter(
-    (item) => !item.final_job_id && !existingJobsMap.has(item.cart_item_id)
+  if (effectiveCartItemIds.length > 0) {
+    const existingJobsByCartItem = await loadFinalJobIdsByCartItem(effectiveCartItemIds)
+    for (const [cartItemId, jobId] of existingJobsByCartItem.entries()) {
+      jobIdByCartItem.set(cartItemId, jobId)
+    }
+  }
+
+  const missingJobItems = cartItems.filter(
+    (item) => !jobIdByCartItem.has(item.cart_item_id)
   )
 
-  if (existingJobsMap.size > 0) {
-    for (const [cartItemId, jobId] of existingJobsMap.entries()) {
+  if (jobIdByCartItem.size > 0) {
+    for (const [cartItemId, jobId] of jobIdByCartItem.entries()) {
       await supabaseAdmin
         .from('cart_items')
         .update({ final_job_id: jobId, updated_at: new Date().toISOString() })
@@ -531,24 +577,10 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     }
   }
 
-  if (pendingItems.length > 0) {
-    const finalQueueGuard = await checkJobQueueGuard({
-      jobType: 'final',
-      incomingJobs: pendingItems.length,
-    })
-    if (!finalQueueGuard.allowed) {
-    const err = new Error(finalQueueGuard.message) as Error & {
-      code?: string
-      guard?: typeof finalQueueGuard
-    }
-    err.code = 'final_queue_overloaded'
-    err.guard = finalQueueGuard
-    throw err
-    }
-
+  if (cartItems.length > 0) {
     const templateIds = Array.from(
       new Set(
-        pendingItems
+        cartItems
           .map((item) => item.creations?.template_id)
           .filter((value): value is string => Boolean(value))
       )
@@ -566,32 +598,48 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     const configMap = new Map(
       (templates as TemplateRow[]).map((tpl) => [tpl.template_id, tpl.default_config_path])
     )
-    const jobsToInsert: Record<string, unknown>[] = []
+    const configUrlByTemplateId = new Map<string, string>()
     const finalPageIndicesByCartItem = new Map<string, number[]>()
 
-    for (const item of pendingItems) {
+    for (const item of cartItems) {
+      const templateId = item.creations?.template_id
+      if (!templateId) {
+        throw new Error('Missing creation template')
+      }
+      let configUrl = configUrlByTemplateId.get(templateId)
+      if (!configUrl) {
+        configUrl = resolveTemplateConfigUrl(templateId, configMap.get(templateId) ?? null)
+        configUrlByTemplateId.set(templateId, configUrl)
+      }
+      finalPageIndicesByCartItem.set(item.cart_item_id, await loadFinalPageIndices(configUrl))
+    }
+
+    if (missingJobItems.length > 0) {
+    const finalQueueGuard = await checkJobQueueGuard({
+      jobType: 'final',
+      incomingJobs: missingJobItems.length,
+    })
+    if (!finalQueueGuard.allowed) {
+      const err = new Error(finalQueueGuard.message) as Error & {
+        code?: string
+        guard?: typeof finalQueueGuard
+      }
+      err.code = 'final_queue_overloaded'
+      err.guard = finalQueueGuard
+      throw err
+    }
+
+    const jobsToInsert: Record<string, unknown>[] = []
+
+    for (const item of missingJobItems) {
       const creation = item.creations
       if (!creation?.template_id) {
         throw new Error('Missing creation template')
       }
 
       const storagePath = creation?.customize_snapshot?.storagePath ?? null
-      const rawConfigPath = configMap.get(creation.template_id)
-      if (!rawConfigPath) {
-        throw new Error('Template config path missing')
-      }
-
-      const configUrl = rawConfigPath.startsWith('http')
-        ? rawConfigPath
-        : supabaseAdmin.storage
-            .from('app-templates')
-            .getPublicUrl(rawConfigPath.replace(/^app-templates\//, '').replace(/^\/+/, ''))
-            .data?.publicUrl
-
-      if (!configUrl) {
-        throw new Error('Failed to resolve config URL')
-      }
-      finalPageIndicesByCartItem.set(item.cart_item_id, await loadFinalPageIndices(configUrl))
+      const configUrl = configUrlByTemplateId.get(creation.template_id)
+      if (!configUrl) throw new Error('Failed to resolve config URL')
 
       jobsToInsert.push({
         owner_type: 'customer',
@@ -626,28 +674,62 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       .select('job_id, cart_item_id')
 
     if (jobsError || !jobs) {
-      throw new Error(`Failed to create final jobs: ${jobsError?.message || 'unknown error'}`)
+      if (!isUniqueViolation(jobsError)) {
+        throw new Error(`Failed to create final jobs: ${jobsError?.message || 'unknown error'}`)
+      }
+      const conflictedCartItemIds = missingJobItems.map((item) => item.cart_item_id)
+      const existingJobsByCartItem = await loadFinalJobIdsByCartItem(conflictedCartItemIds)
+      for (const [cartItemId, jobId] of existingJobsByCartItem.entries()) {
+        jobIdByCartItem.set(cartItemId, jobId)
+      }
+    } else {
+      for (const job of jobs) {
+        if (!job?.cart_item_id) continue
+        jobIdByCartItem.set(job.cart_item_id, job.job_id)
+      }
     }
 
-    for (const job of jobs) {
-      if (!job?.cart_item_id) continue
+    for (const item of missingJobItems) {
+      const jobId = jobIdByCartItem.get(item.cart_item_id)
+      if (!jobId) {
+        throw new Error(`Failed to resolve final job for cart item ${item.cart_item_id}`)
+      }
       await supabaseAdmin
         .from('cart_items')
-        .update({ final_job_id: job.job_id, updated_at: new Date().toISOString() })
-        .eq('cart_item_id', job.cart_item_id)
+        .update({ final_job_id: jobId, updated_at: new Date().toISOString() })
+        .eq('cart_item_id', item.cart_item_id)
+    }
+  }
 
-      const item = pendingItems.find((row) => row.cart_item_id === job.cart_item_id)
-      const creation = item?.creations
-      const pageIndices = finalPageIndicesByCartItem.get(job.cart_item_id) ?? []
-      if (!item || !creation?.template_id || !pageIndices.length) continue
-
-      const { data: finalJob, error: finalJobError } = await supabaseAdmin
+    const allJobIds = Array.from(jobIdByCartItem.values()).filter(Boolean)
+    const existingFinalJobsByJobId = new Map<string, { final_job_id: string }>()
+    if (allJobIds.length > 0) {
+      const { data: existingFinalJobs } = await supabaseAdmin
         .from('final_jobs')
-        .upsert(
-          {
-            job_id: job.job_id,
+        .select('final_job_id, job_id')
+        .in('job_id', allJobIds)
+
+      for (const finalJob of existingFinalJobs ?? []) {
+        if (finalJob.job_id && finalJob.final_job_id) {
+          existingFinalJobsByJobId.set(finalJob.job_id, { final_job_id: finalJob.final_job_id })
+        }
+      }
+    }
+
+    for (const item of cartItems) {
+      const jobId = jobIdByCartItem.get(item.cart_item_id)
+      const creation = item.creations
+      const pageIndices = finalPageIndicesByCartItem.get(item.cart_item_id) ?? []
+      if (!jobId || !creation?.template_id || !pageIndices.length) continue
+
+      let finalJobId = existingFinalJobsByJobId.get(jobId)?.final_job_id ?? null
+      if (!finalJobId) {
+        const { data: finalJob, error: finalJobError } = await supabaseAdmin
+          .from('final_jobs')
+          .insert({
+            job_id: jobId,
             order_id: orderId,
-            cart_item_id: job.cart_item_id,
+            cart_item_id: item.cart_item_id,
             creation_id: item.creation_id,
             template_id: creation.template_id,
             status: 'queued',
@@ -655,28 +737,60 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
             total_pages: pageIndices.length,
             approved_pages: 0,
             updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'job_id' }
-        )
-        .select('final_job_id')
-        .single()
+          })
+          .select('final_job_id')
+          .single()
 
-      if (finalJobError || !finalJob?.final_job_id) {
-        throw new Error(`Failed to create final review job: ${finalJobError?.message || 'unknown error'}`)
+        if (finalJobError || !finalJob?.final_job_id) {
+          if (isUniqueViolation(finalJobError)) {
+            const { data: existingFinalJob } = await supabaseAdmin
+              .from('final_jobs')
+              .select('final_job_id')
+              .eq('cart_item_id', item.cart_item_id)
+              .maybeSingle()
+            finalJobId = existingFinalJob?.final_job_id ? String(existingFinalJob.final_job_id) : null
+          }
+        }
+
+        if (!finalJobId && (finalJobError || !finalJob?.final_job_id)) {
+          throw new Error(`Failed to create final review job: ${finalJobError?.message || 'unknown error'}`)
+        }
+        if (!finalJobId && finalJob?.final_job_id) {
+          finalJobId = String(finalJob.final_job_id)
+        }
+      }
+      if (!finalJobId) {
+        throw new Error('Failed to resolve final review job')
+      }
+      existingFinalJobsByJobId.set(jobId, { final_job_id: finalJobId })
+      const resolvedFinalJobId = finalJobId
+
+      const { data: existingPages, error: existingPagesError } = await supabaseAdmin
+        .from('final_job_pages')
+        .select('page_index')
+        .eq('final_job_id', resolvedFinalJobId)
+
+      if (existingPagesError) {
+        throw new Error(`Failed to load final review pages: ${existingPagesError.message}`)
       }
 
-      const pageRows = pageIndices.map((pageIndex) => ({
-        final_job_id: finalJob.final_job_id,
-        page_index: pageIndex,
-        status: 'queued',
-        updated_at: new Date().toISOString(),
-      }))
-      const { error: pagesError } = await supabaseAdmin
-        .from('final_job_pages')
-        .upsert(pageRows, { onConflict: 'final_job_id,page_index' })
+      const existingPageIndices = new Set((existingPages ?? []).map((page) => Number(page.page_index)))
+      const missingPageRows = pageIndices
+        .filter((pageIndex) => !existingPageIndices.has(pageIndex))
+        .map((pageIndex) => ({
+          final_job_id: resolvedFinalJobId,
+          page_index: pageIndex,
+          status: 'queued',
+          updated_at: new Date().toISOString(),
+        }))
 
-      if (pagesError) {
-        throw new Error(`Failed to create final review pages: ${pagesError.message}`)
+      if (missingPageRows.length > 0) {
+        const { error: pagesError } = await supabaseAdmin
+          .from('final_job_pages')
+          .upsert(missingPageRows, { onConflict: 'final_job_id,page_index', ignoreDuplicates: true })
+        if (pagesError) {
+          throw new Error(`Failed to create final review pages: ${pagesError.message}`)
+        }
       }
     }
   }

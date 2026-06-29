@@ -70,7 +70,10 @@ function CheckoutSuccessPageContent() {
       }
 
       try {
-        const res = await fetch(`/api/orders?orderId=${encodeURIComponent(orderId)}`, {
+        const orderUrl = sessionId
+          ? `/api/orders?orderId=${encodeURIComponent(orderId)}&session_id=${encodeURIComponent(sessionId)}`
+          : `/api/orders?orderId=${encodeURIComponent(orderId)}`
+        const res = await fetch(orderUrl, {
           credentials: 'include',
           cache: 'no-store',
         })
@@ -153,7 +156,11 @@ function CheckoutSuccessPageContent() {
           <Button
             size="lg"
             className="rounded-full px-8"
-            onClick={() => router.push(`/orders/${order?.order_id || orderId}`)}
+            onClick={() => {
+              const targetOrderId = order?.order_id || orderId
+              const suffix = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''
+              router.push(`/orders/${targetOrderId}${suffix}`)
+            }}
             disabled={!orderId && !order?.order_id}
           >
             {t('checkout.trackOrder')}

@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
 import { releaseOrderDiscount } from '@/lib/discounts'
-import { createSignedStorageUrlMap } from '@/lib/storage-signing'
+import {
+  checkoutOwnerErrorResponse,
+  requireCheckoutOrderAccess,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
+import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
+import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
 import {
   getDisplayUnitPrice,
   getOrderCheckoutCurrency,
@@ -11,6 +16,8 @@ import {
 } from '@/lib/order-display'
 
 const ORDER_DETAIL_CACHE_CONTROL = 'private, max-age=30'
+const STORAGE_BUCKET = 'raw-private'
+const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
 
 function privateJson(body: unknown) {
   const response = NextResponse.json(body)
@@ -27,10 +34,41 @@ export async function GET(
     return NextResponse.json({ error: 'Missing orderId' }, { status: 400 })
   }
 
+  const url = new URL(request.url)
+  const sessionId = url.searchParams.get('session_id') || url.searchParams.get('sessionId')
+  if (sessionId) {
+    if (!isStripeEnabled()) {
+      return NextResponse.json({ error: 'Stripe is not configured' }, { status: 400 })
+    }
+    const stripe = getStripeServer()
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    const sessionOrderId = String(session.metadata?.order_id || session.client_reference_id || '').trim()
+    if (!sessionOrderId || sessionOrderId !== rawOrderId) {
+      return NextResponse.json({ error: 'Order mismatch for this session' }, { status: 403 })
+    }
+  } else {
+    let owner
+    try {
+      owner = await resolveCheckoutOwner(request, {
+        allowAnon: true,
+        createAnonIfMissing: false,
+        optional: true,
+      })
+      if (!owner) {
+        return NextResponse.json({ error: 'Order access requires the current session' }, { status: 401 })
+      }
+      await requireCheckoutOrderAccess(rawOrderId, owner)
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+  }
+
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
     .select(
-      'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, discount_amount_usd, shipping_discount_amount_usd, shipping_amount_usd, created_at'
+      'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, discount_amount_usd, shipping_discount_amount_usd, shipping_amount_usd, tracking_number, tracking_carrier, tracking_url, logistics_note, shipped_at, delivered_at, logistics_updated_at, created_at'
     )
     .or(`order_id.eq.${rawOrderId},display_id.eq.${rawOrderId}`)
     .maybeSingle()
@@ -45,6 +83,10 @@ export async function GET(
       .select(
         `
           cart_item_id,
+          owner_type,
+          anon_session_id,
+          customer_id,
+          status,
           creation_id,
           quantity,
           price_at_purchase,
@@ -81,54 +123,23 @@ export async function GET(
     .map((row: any) => row.creations?.preview_job_id)
     .filter((value: string | null) => Boolean(value))
 
-  const previewUrlMap = new Map<string, string>()
-
-  if (jobIds.length > 0) {
-    const { data: jobs } = await supabaseAdmin
-      .from('jobs')
-      .select('job_id, output_assets')
-      .in('job_id', jobIds as string[])
-
-    const jobMap = new Map<string, { bucket: string; path: string }>()
-    for (const job of jobs ?? []) {
-      const outputAssets = job.output_assets as
-        | {
-            bucket?: string
-            pages?: { page_index: number; storage_path: string }[]
-          }
-        | null
-      const bucket = outputAssets?.bucket || 'raw-private'
-      const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
-      const coverPage = pages.find((page) => page.page_index === 0) ?? pages[0]
-      if (coverPage?.storage_path) {
-        jobMap.set(job.job_id, { bucket, path: coverPage.storage_path })
-      }
-    }
-
-    const signedUrls = await createSignedStorageUrlMap(
-      Array.from(jobMap.entries()).map(([jobId, info]) => ({
-        key: jobId,
-        bucket: info.bucket,
-        path: info.path,
-        expiresIn: 60 * 10,
-      }))
-    )
-    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
-  }
+  const previewCoverMap = await createGeneratedPreviewCoverMap(jobIds as string[])
 
   const displayCurrency = getOrderDisplayCurrency(
     order.checkout_currency,
     payment.data?.currency
   )
 
-  const enrichedItems = cartItems.map((row: any) => ({
-    ...row,
-    preview_cover_url: row.creations?.preview_job_id
-      ? previewUrlMap.get(row.creations.preview_job_id) ?? null
-      : null,
-    display_currency: displayCurrency,
-    display_unit_price: getDisplayUnitPrice(Number(row.price_at_purchase ?? 0), displayCurrency),
-  }))
+  const enrichedItems = cartItems.map((row: any) => {
+    const cover = getGeneratedPreviewCover(previewCoverMap, row.creations?.preview_job_id ?? null)
+    return {
+      ...row,
+      preview_cover_url: cover.url,
+      preview_cover_status: cover.status,
+      display_currency: displayCurrency,
+      display_unit_price: getDisplayUnitPrice(Number(row.price_at_purchase ?? 0), displayCurrency),
+    }
+  })
 
   const baseUsdTotal = enrichedItems.reduce((sum: number, item: any) => {
     const price = Number(item.price_at_purchase ?? 0)
@@ -145,6 +156,28 @@ export async function GET(
     paymentCurrency: payment.data?.currency,
   })
 
+  let finalPdfUrl: string | null = null
+  const { data: releasedFinalJob } = await supabaseAdmin
+    .from('final_jobs')
+    .select('pdf_path, review_status, released_at')
+    .eq('order_id', order.order_id)
+    .not('pdf_path', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (
+    releasedFinalJob?.pdf_path &&
+    (releasedFinalJob.released_at || releasedFinalJob.review_status === 'released')
+  ) {
+    const { data: signedPdf } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(releasedFinalJob.pdf_path, FINAL_PDF_SIGN_TTL_SECONDS, {
+        download: `final-${order.order_id}.pdf`,
+      })
+    finalPdfUrl = signedPdf?.signedUrl ?? null
+  }
+
   return privateJson({
     order: {
       id: order.order_id,
@@ -156,6 +189,14 @@ export async function GET(
       checkoutCurrency: getOrderCheckoutCurrency(order.checkout_currency),
       discountAmountUsd: Number(order.discount_amount_usd ?? 0),
       shippingDiscountAmountUsd: Number(order.shipping_discount_amount_usd ?? 0),
+      finalPdfUrl,
+      trackingNumber: order.tracking_number ?? null,
+      trackingCarrier: order.tracking_carrier ?? null,
+      trackingUrl: order.tracking_url ?? null,
+      logisticsNote: order.logistics_note ?? null,
+      shippedAt: order.shipped_at ?? null,
+      deliveredAt: order.delivered_at ?? null,
+      logisticsUpdatedAt: order.logistics_updated_at ?? null,
       displayCurrency,
       shippingAddress: order.shipping_address ?? {},
       billingAddress: order.billing_address ?? null,
@@ -184,8 +225,18 @@ export async function DELETE(
     body = {}
   }
 
-  const customerId = body.customerId ?? null
-  const anonSessionId = customerId ? null : await getOrCreateAnonSession()
+  let owner
+  try {
+    owner = (await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: false,
+      expectedCustomerId: body.customerId ?? null,
+    }))!
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
 
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
@@ -215,21 +266,21 @@ export async function DELETE(
     return NextResponse.json({ error: 'No ordered items found for this order' }, { status: 409 })
   }
 
-  const isOwnedByCustomer = customerId
-    ? order.customer_id === customerId &&
+  const isOwnedByCustomer = owner.ownerType === 'customer'
+    ? order.customer_id === owner.customerId &&
       linkedItems.every(
         (item) =>
           item.owner_type === 'customer' &&
-          item.customer_id === customerId &&
+          item.customer_id === owner.customerId &&
           item.status === 'ordered'
       )
     : false
 
-  const isOwnedByAnon = !customerId
+  const isOwnedByAnon = owner.ownerType === 'anon'
     ? linkedItems.every(
         (item) =>
           item.owner_type === 'anon' &&
-          item.anon_session_id === anonSessionId &&
+          item.anon_session_id === owner.anonSessionId &&
           item.status === 'ordered'
       )
     : false

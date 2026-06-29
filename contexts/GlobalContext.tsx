@@ -213,9 +213,15 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const fallbackBook = BOOKS.find(b => b.bookID === templateId);
       const template = {
         ...(creation.templates ?? {}),
-        cover_image_path: row.preview_cover_url || creation.templates?.normalized_cover_image_path || creation.templates?.cover_image_path,
+        cover_image_path: row.preview_cover_url || '',
+        normalized_cover_image_path: row.preview_cover_url || '',
       };
-      const book = templateRelationToBook(templateId, template, fallbackBook, Number(row.price_at_purchase ?? 0) || 0);
+      const baseBook = templateRelationToBook(templateId, template, fallbackBook, Number(row.price_at_purchase ?? 0) || 0);
+      const book = {
+        ...baseBook,
+        coverUrl: row.preview_cover_url || '',
+        showcaseImages: row.preview_cover_url ? [row.preview_cover_url] : [],
+      };
       const overrides = creation.customize_snapshot?.textOverrides ?? creation.customize_snapshot?.text_overrides ?? {};
       const childName = overrides.child_name ?? overrides.childName ?? '';
       const childAge = overrides.child_age ?? overrides.childAge ?? overrides.age ?? '';
@@ -228,6 +234,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         bookID: templateId,
         quantity: row.quantity ?? 1,
         book,
+        coverStatus: row.preview_cover_status ?? (row.preview_cover_url ? 'ready' : 'pending'),
         personalization: {
           ...(creation.customize_snapshot ?? {}),
           childName: String(childName),

@@ -1,11 +1,11 @@
 ﻿'use client'
 
 import React, { useEffect, useState } from 'react'
-import Image from 'next/image'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Download, ExternalLink, Package, Truck, CircleCheck, BookOpen, MapPin } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/Button'
+import OrderCoverImage from '@/components/OrderCoverImage'
 import { useI18n } from '@/lib/useI18n'
 import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing'
 import {
@@ -23,6 +23,9 @@ type OrderItem = {
   display_currency?: CheckoutCurrency
   template_name?: string | null
   cover_url?: string | null
+  preview_cover_url?: string | null
+  cover_status?: 'ready' | 'pending' | 'unavailable'
+  preview_cover_status?: 'ready' | 'pending' | 'unavailable'
 }
 
 type OrderDetail = {
@@ -222,7 +225,9 @@ export default function OrderDetailPage() {
   const { t } = useI18n()
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const orderId = typeof params?.orderID === 'string' ? params.orderID : ''
+  const sessionId = searchParams.get('session_id') || ''
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -230,17 +235,39 @@ export default function OrderDetailPage() {
     if (!orderId) return
     let cancelled = false
     setLoading(true)
-    fetch(`/api/orders?orderId=${orderId}`, { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : { orders: [] }))
+    const detailUrl = sessionId
+      ? `/api/orders/${encodeURIComponent(orderId)}?session_id=${encodeURIComponent(sessionId)}`
+      : `/api/orders/${encodeURIComponent(orderId)}`
+    fetch(detailUrl, { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : { order: null, items: [] }))
       .then((data) => {
         if (cancelled) return
-        const rows = Array.isArray(data?.orders) ? data.orders : []
-        setOrder(rows[0] ?? null)
+        if (!data?.order) {
+          setOrder(null)
+          return
+        }
+        setOrder({
+          order_id: data.order.id,
+          display_id: data.order.displayId,
+          order_status: data.order.status,
+          created_at: data.order.createdAt,
+          email: data.order.email,
+          total: data.total,
+          final_pdf_url: data.order.finalPdfUrl,
+          display_currency: data.displayCurrency,
+          shipping_address: data.order.shippingAddress,
+          tracking_number: data.order.trackingNumber,
+          tracking_carrier: data.order.trackingCarrier,
+          tracking_url: data.order.trackingUrl,
+          logistics_note: data.order.logisticsNote,
+          logistics_updated_at: data.order.logisticsUpdatedAt,
+          items: Array.isArray(data.items) ? data.items : [],
+        })
       })
       .catch(() => { if (!cancelled) setOrder(null) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [orderId])
+  }, [orderId, sessionId])
 
   if (loading) {
     return (
@@ -332,15 +359,15 @@ export default function OrderDetailPage() {
               {items.map((item) => (
                 <div key={item.cart_item_id} className="flex items-center gap-4">
                   <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-100 shadow-md shadow-black/10">
-                    {item.cover_url ? (
-                      <Image
-                        src={item.cover_url}
-                        alt={item.template_name || 'Order item'}
-                        fill
-                        sizes="64px"
-                        className="object-cover"
-                      />
-                    ) : null}
+                    <OrderCoverImage
+                      cartItemId={item.cart_item_id}
+                      src={item.preview_cover_url ?? item.cover_url ?? null}
+                      status={item.preview_cover_status ?? item.cover_status}
+                      alt={item.template_name || 'Order item'}
+                      sizes="64px"
+                      className="h-full w-full"
+                      imageClassName="object-cover"
+                    />
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-900 leading-snug">

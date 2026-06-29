@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Package, ChevronRight, Truck, Hourglass, CircleCheck } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
+import OrderCoverImage from '@/components/OrderCoverImage';
 import { useI18n } from '@/lib/useI18n';
 import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing';
 import {
@@ -24,6 +24,8 @@ type OrderSummary = {
   display_currency?: CheckoutCurrency;
   item_count?: number;
   cover_url?: string | null;
+  cover_status?: 'ready' | 'pending' | 'unavailable';
+  cover_cart_item_id?: string | null;
   first_item_name?: string | null;
 };
 
@@ -39,7 +41,7 @@ const getOrderTab = (status?: string | null): OrderTab => {
 export default function OrdersPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user, checkoutEmail, refreshCart } = useGlobalContext();
+  const { user, refreshCart } = useGlobalContext();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<OrderTab>('shipping');
@@ -47,11 +49,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const url = user?.customerId
-      ? `/api/orders?customerId=${user.customerId}`
-      : checkoutEmail
-      ? `/api/orders?email=${encodeURIComponent(checkoutEmail)}`
-      : '/api/orders';
+    const url = user?.customerId ? `/api/orders?customerId=${user.customerId}` : '/api/orders';
 
     fetch(url, { credentials: 'include' })
       .then((res) => (res.ok ? res.json() : { orders: [] }))
@@ -71,7 +69,7 @@ export default function OrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [user?.customerId, checkoutEmail]);
+  }, [user?.customerId]);
 
   const grouped = useMemo(() => {
     const shipping = orders.filter((order) => getOrderTab(order.order_status) === 'shipping');
@@ -211,15 +209,15 @@ export default function OrdersPage() {
                   className="flex items-center gap-4 text-left flex-1"
                 >
                   <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                    {order.cover_url ? (
-                      <Image
-                        src={order.cover_url}
-                        alt={order.first_item_name || 'Order'}
-                        fill
-                        sizes="64px"
-                        className="object-cover"
-                      />
-                    ) : null}
+                    <OrderCoverImage
+                      cartItemId={order.cover_cart_item_id}
+                      src={order.cover_url}
+                      status={order.cover_status}
+                      alt={order.first_item_name || 'Order'}
+                      sizes="64px"
+                      className="h-full w-full"
+                      imageClassName="object-cover"
+                    />
                   </span>
                   <div>
                     <div className="text-xs text-gray-500 font-medium tabular-nums tracking-[0.14em]">

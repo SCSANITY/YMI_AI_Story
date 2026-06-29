@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { checkoutOwnerErrorResponse, resolveCheckoutOwner } from '@/lib/checkout-owner'
 import {
   getOrderCheckoutCurrency,
   getOrderDisplayCurrency,
@@ -17,9 +18,22 @@ function privateJson(body: unknown) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const customerId = searchParams.get('customerId')
-  const email = searchParams.get('email')
 
-  if (!customerId && !email) {
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      allowAnon: false,
+      requireCustomer: true,
+      expectedCustomerId: customerId,
+      optional: true,
+    })
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+
+  if (!owner || owner.ownerType !== 'customer') {
     return privateJson({ orders: [] })
   }
 
@@ -31,11 +45,7 @@ export async function GET(request: Request) {
     .order('created_at', { ascending: false })
     .limit(10)
 
-  if (customerId) {
-    orderQuery.eq('customer_id', customerId)
-  } else if (email) {
-    orderQuery.eq('email', email)
-  }
+  orderQuery.eq('customer_id', owner.customerId)
 
   const { data: orders, error, count } = await orderQuery
 

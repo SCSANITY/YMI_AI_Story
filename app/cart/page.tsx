@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ShoppingCart, Trash2, Pencil, Sparkles, CheckSquare, Square } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
+import OrderCoverImage from '@/components/OrderCoverImage';
 import { useI18n } from '@/lib/useI18n';
 import { formatLocaleCurrency } from '@/lib/locale-pricing';
 import { canEnterCustomize } from '@/lib/customize-access-client';
@@ -139,12 +139,14 @@ export default function CartPage() {
                 className="block shrink-0"
               >
                 <span className="relative block h-28 w-20 sm:h-32 sm:w-24 overflow-hidden rounded-xl bg-amber-50 shadow-sm">
-                  <Image
+                  <OrderCoverImage
+                    cartItemId={item.id}
                     src={item.book.coverUrl}
+                    status={item.coverStatus}
                     alt={item.book.title}
-                    fill
                     sizes="(max-width: 640px) 80px, 96px"
-                    className="object-cover saturate-110 contrast-110 brightness-105"
+                    className="h-full w-full"
+                    imageClassName="object-cover saturate-110 contrast-110 brightness-105"
                   />
                 </span>
               </button>

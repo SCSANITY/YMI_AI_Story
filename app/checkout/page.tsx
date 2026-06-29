@@ -2,13 +2,12 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import { Lock, CheckCircle2, ChevronLeft, ChevronDown, X } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
+import OrderCoverImage from '@/components/OrderCoverImage';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useI18n } from '@/lib/useI18n';
-import { useBookCatalog } from '@/components/useBookCatalog';
 import {
   CheckoutCurrency,
   formatCurrencyAmount,
@@ -274,7 +273,6 @@ function CheckoutPageContent() {
     setCheckoutEmail,
     updateCheckoutQuantity,
   } = useGlobalContext();
-  const { books: catalogBooks } = useBookCatalog();
 
   const items = checkoutItems;
   const remainingCartItems = cart.filter(item => !items.some(current => current.id === item.id));
@@ -336,23 +334,19 @@ function CheckoutPageContent() {
   const [isShippingDestinationOpen, setIsShippingDestinationOpen] = useState(false);
   const [isShippingDestinationsLoading, setIsShippingDestinationsLoading] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [removingCheckoutItemId, setRemovingCheckoutItemId] = useState<string | null>(null);
   const emailDropdownRef = useRef<HTMLDivElement | null>(null);
   const currencyDropdownRef = useRef<HTMLDivElement | null>(null);
   const shippingDestinationRef = useRef<HTMLDivElement | null>(null);
   const stripeCheckoutEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
   const skipIdentityVerification = Boolean(user?.email);
-  const catalogCoverUrlMap = useMemo(() => {
-    return new Map(
-      catalogBooks
-        .filter((book) => Boolean(book?.bookID))
-        .map((book) => [book.bookID, book.normalizedCoverUrl || book.coverUrl] as const)
-    );
-  }, [catalogBooks]);
   const resolveCheckoutItemCoverUrl = useCallback((item: (typeof items)[number]) => {
-    const catalogCoverUrl = catalogCoverUrlMap.get(item.bookID)?.trim() || '';
     const itemCoverUrl = String(item.book?.coverUrl || '').trim();
-    return catalogCoverUrl || itemCoverUrl || '/Display.png';
-  }, [catalogCoverUrlMap]);
+    return itemCoverUrl || null;
+  }, []);
+  const resolveCheckoutItemCoverStatus = useCallback((item: (typeof items)[number]) => {
+    return item.coverStatus ?? (resolveCheckoutItemCoverUrl(item) ? 'ready' : 'pending');
+  }, [resolveCheckoutItemCoverUrl]);
 
   const discountTotalUsd = useMemo(() => Math.min(total, Math.max(0, discountAmountUsd)), [discountAmountUsd, total]);
   const discountedTotalUsd = useMemo(() => Math.max(0, total - discountTotalUsd), [discountTotalUsd, total]);
@@ -1670,25 +1664,12 @@ function CheckoutPageContent() {
     return true;
   }, [user?.customerId, orderId, form.email]);
 
-  const handleRemoveCheckoutItem = (itemId: string) => {
-    removeFromCheckout(itemId);
-    if (items.length === 1) {
-      setCheckoutStarted(false);
-      setActiveCartItemIds([]);
-      checkoutSnapshotRef.current = [];
-      setOrderId(null);
-    }
-    setActiveCartItemIds(prev => prev.filter(id => id !== itemId));
-    setAppliedDiscountCode(null);
-    setSelectedRewardVoucherId(null);
-    setSelectedRewardVoucherName(null);
-    setDiscountAmountUsd(0);
-    setShippingDiscountAmountUsd(0);
-    setAppliedProductDiscountInstrumentId(null);
-    setAppliedShippingDiscountInstrumentId(null);
-    setDiscountError('');
-    setDiscountCodeInput('');
-    fetch('/api/orders/cancel', {
+  const handleRemoveCheckoutItem = async (itemId: string) => {
+    if (removingCheckoutItemId) return;
+    setRemovingCheckoutItemId(itemId);
+    setFormError('');
+    try {
+      const response = await fetch('/api/orders/cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1697,7 +1678,33 @@ function CheckoutPageContent() {
         customerId: user?.customerId ?? null,
         orderId,
       }),
-    }).catch(() => {});
+      });
+      const data = response.ok ? null : await response.json().catch(() => null);
+      if (!response.ok) {
+        setFormError(data?.error || t('checkout.removeItemError'));
+        return;
+      }
+
+      removeFromCheckout(itemId);
+      if (items.length === 1) {
+        setCheckoutStarted(false);
+        setActiveCartItemIds([]);
+        checkoutSnapshotRef.current = [];
+        setOrderId(null);
+      }
+      setActiveCartItemIds(prev => prev.filter(id => id !== itemId));
+      setAppliedDiscountCode(null);
+      setSelectedRewardVoucherId(null);
+      setSelectedRewardVoucherName(null);
+      setDiscountAmountUsd(0);
+      setShippingDiscountAmountUsd(0);
+      setAppliedProductDiscountInstrumentId(null);
+      setAppliedShippingDiscountInstrumentId(null);
+      setDiscountError('');
+      setDiscountCodeInput('');
+    } finally {
+      setRemovingCheckoutItemId(null);
+    }
   };
 
   const toggleAddFromCart = (itemId: string) => {
@@ -2534,13 +2541,14 @@ function CheckoutPageContent() {
                 {items.map(item => (
                   <div key={item.id} className="rounded-[24px] border border-white/80 bg-white/72 px-3 py-3 shadow-[0_8px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl sm:px-4">
                     <div className="flex items-start gap-3 sm:gap-4">
-                      <Image
+                      <OrderCoverImage
+                        cartItemId={item.id}
                         src={resolveCheckoutItemCoverUrl(item)}
+                        status={resolveCheckoutItemCoverStatus(item)}
                         alt={item.book.title}
-                        width={80}
-                        height={96}
                         sizes="(max-width: 639px) 80px, 64px"
-                        className="h-24 w-20 rounded-xl object-cover sm:h-20 sm:w-16"
+                        className="h-24 w-20 rounded-xl sm:h-20 sm:w-16"
+                        imageClassName="object-cover"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{item.book.title}</div>
@@ -2585,8 +2593,9 @@ function CheckoutPageContent() {
                       <button
                         className="w-fit text-xs font-semibold text-red-500 transition hover:text-red-600"
                         onClick={() => handleRemoveCheckoutItem(item.id)}
+                        disabled={removingCheckoutItemId === item.id}
                       >
-                        {t('common.remove')}
+                        {removingCheckoutItemId === item.id ? t('checkout.removingItem') : t('common.remove')}
                       </button>
                     </div>
                   </div>
@@ -2858,13 +2867,14 @@ function CheckoutPageContent() {
                       checked={addFromCartSelection.includes(item.id)}
                       onChange={() => toggleAddFromCart(item.id)}
                     />
-                    <Image
+                    <OrderCoverImage
+                      cartItemId={item.id}
                       src={resolveCheckoutItemCoverUrl(item)}
+                      status={resolveCheckoutItemCoverStatus(item)}
                       alt={item.book.title}
-                      width={80}
-                      height={96}
                       sizes="(max-width: 639px) 80px, 56px"
-                      className="h-24 w-20 rounded-xl object-cover sm:h-18 sm:w-14"
+                      className="h-24 w-20 rounded-xl sm:h-18 sm:w-14"
+                      imageClassName="object-cover"
                     />
                     <div className="flex-1">
                       <div className="text-sm font-semibold text-gray-900">{item.book.title}</div>

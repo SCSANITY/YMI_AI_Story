@@ -3,8 +3,16 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orderFulfillment'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import { markOrderDiscountsPaid, refreshAppliedOrderDiscounts } from '@/lib/discounts'
-import { templateStorageUrl } from '@/lib/book-catalog'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  requireCheckoutOrderAccess,
+  resolveCheckoutOwner,
+  type CheckoutOwner,
+} from '@/lib/checkout-owner'
+import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
+import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
 import {
   getDisplayUnitPrice,
   getOrderDisplayCurrency,
@@ -42,10 +50,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing cart item IDs' }, { status: 400 })
   }
 
+  let owner: CheckoutOwner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: true,
+      expectedCustomerId: body?.customerId ?? null,
+    }) as CheckoutOwner
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+
+  if (incomingOrderId) {
+    try {
+      await requireCheckoutOrderAccess(String(incomingOrderId), owner, { requireUnpaid: true })
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+  }
+
   let customerId: string
   try {
-    const customer = await resolveOrCreateCustomerByEmail(email, isGuest)
-    customerId = customer.customer_id
+    if (owner.ownerType === 'customer') {
+      customerId = owner.customerId
+    } else {
+      const customer = await resolveOrCreateCustomerByEmail(email, isGuest)
+      customerId = customer.customer_id
+    }
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Failed to resolve customer' }, { status: 500 })
   }
@@ -196,10 +231,42 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const orderId = url.searchParams.get('orderId')
   const customerId = url.searchParams.get('customerId')
-  const email = url.searchParams.get('email')
+  const sessionId = url.searchParams.get('session_id') || url.searchParams.get('sessionId')
 
-  if (!orderId && !customerId && !email) {
+  if (!orderId && !customerId) {
     return privateJson({ orders: [] })
+  }
+
+  let owner: CheckoutOwner | null = null
+  let stripeSessionOrderAccess = false
+
+  if (orderId && sessionId) {
+    if (!isStripeEnabled()) {
+      return NextResponse.json({ error: 'Stripe is not configured' }, { status: 400 })
+    }
+    const stripe = getStripeServer()
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    const sessionOrderId = String(session.metadata?.order_id || session.client_reference_id || '').trim()
+    if (!sessionOrderId || sessionOrderId !== orderId) {
+      return NextResponse.json({ error: 'Order mismatch for this session' }, { status: 403 })
+    }
+    stripeSessionOrderAccess = true
+  } else {
+    try {
+      owner = await resolveCheckoutOwner(request, {
+        allowAnon: true,
+        createAnonIfMissing: false,
+        expectedCustomerId: customerId,
+        optional: true,
+      })
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+    if (!owner) {
+      return privateJson({ orders: [] })
+    }
   }
 
   let query = supabaseAdmin
@@ -227,11 +294,16 @@ export async function GET(request: Request) {
         delivered_at,
         logistics_updated_at,
         created_at,
+        customer_id,
         email,
         shipping_address,
         billing_address,
         cart_items:cart_items (
           cart_item_id,
+          owner_type,
+          anon_session_id,
+          customer_id,
+          status,
           creation_id,
           quantity,
           price_at_purchase,
@@ -254,10 +326,10 @@ export async function GET(request: Request) {
 
   if (orderId) {
     query = query.eq('order_id', orderId)
-  } else if (customerId) {
-    query = query.eq('customer_id', customerId)
-  } else if (email) {
-    query = query.eq('email', email)
+  } else if (owner?.ownerType === 'customer') {
+    query = query.eq('customer_id', owner.customerId)
+  } else {
+    return privateJson({ orders: [] })
   }
 
   const { data: orders, error } = await query
@@ -266,7 +338,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to load orders' }, { status: 500 })
   }
 
-  const orderRows = orders ?? []
+  let orderRows = orders ?? []
+  if (orderId && !stripeSessionOrderAccess) {
+    if (owner?.ownerType === 'customer') {
+      orderRows = orderRows.filter((order: any) => order.customer_id === owner.customerId)
+    } else if (owner?.ownerType === 'anon') {
+      orderRows = orderRows.filter((order: any) => {
+        const items = Array.isArray(order.cart_items) ? order.cart_items : []
+        return (
+          order.order_status === 'unpaid' &&
+          items.length > 0 &&
+          items.every((item: any) => item.owner_type === 'anon' && item.anon_session_id === owner.anonSessionId)
+        )
+      })
+    }
+  }
   const paymentIds = orderRows
     .map((order: any) => order.payment_id)
     .filter((value: string | null) => Boolean(value)) as string[]
@@ -292,36 +378,7 @@ export async function GET(request: Request) {
     .map((item: any) => item.creations?.preview_job_id)
     .filter((value: string | null) => Boolean(value)) as string[]
 
-  const previewUrlMap = new Map<string, string>()
-  if (jobIds.length > 0) {
-    const { data: jobs } = await supabaseAdmin
-      .from('jobs')
-      .select('job_id, output_assets')
-      .in('job_id', jobIds)
-
-    const jobMap = new Map<string, { bucket: string; path: string }>()
-    for (const job of jobs ?? []) {
-      const outputAssets = job.output_assets as
-        | { bucket?: string; pages?: { page_index: number; storage_path: string }[] }
-        | null
-      const bucket = outputAssets?.bucket || 'raw-private'
-      const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
-      const coverPage = pages.find((page) => page.page_index === 0) ?? pages[0]
-      if (coverPage?.storage_path) {
-        jobMap.set(job.job_id, { bucket, path: coverPage.storage_path })
-      }
-    }
-
-    const signedUrls = await createSignedStorageUrlMap(
-      Array.from(jobMap.entries()).map(([jobId, info]) => ({
-        key: jobId,
-        bucket: info.bucket,
-        path: info.path,
-        expiresIn: 60 * 10,
-      }))
-    )
-    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
-  }
+  const previewCoverMap = await createGeneratedPreviewCoverMap(jobIds)
 
   const orderIds = orderRows.map((order: any) => order.order_id).filter(Boolean) as string[]
   const finalPdfUrlMap = new Map<string, string>()
@@ -381,16 +438,10 @@ export async function GET(request: Request) {
     })
     const firstItem = items[0] ?? null
     const previewJobId = firstItem?.creations?.preview_job_id ?? null
-    const coverUrl =
-      (previewJobId ? previewUrlMap.get(previewJobId) ?? null : null) ||
-      templateStorageUrl(firstItem?.creations?.templates?.cover_image_path) ||
-      null
+    const cover = getGeneratedPreviewCover(previewCoverMap, previewJobId)
     const detailedItems = items.map((item: any) => {
       const itemPreviewJobId = item?.creations?.preview_job_id ?? null
-      const itemCoverUrl =
-        (itemPreviewJobId ? previewUrlMap.get(itemPreviewJobId) ?? null : null) ||
-        templateStorageUrl(item?.creations?.templates?.cover_image_path) ||
-        null
+      const itemCover = getGeneratedPreviewCover(previewCoverMap, itemPreviewJobId)
       return {
         cart_item_id: item.cart_item_id,
         creation_id: item.creation_id,
@@ -400,7 +451,8 @@ export async function GET(request: Request) {
         display_line_total: getDisplayUnitPrice(Number(item.price_at_purchase ?? 0), displayCurrency) * Number(item.quantity ?? 1),
         display_currency: displayCurrency,
         template_name: item?.creations?.templates?.name ?? null,
-        cover_url: itemCoverUrl,
+        cover_url: itemCover.url,
+        cover_status: itemCover.status,
       }
     })
 
@@ -431,7 +483,9 @@ export async function GET(request: Request) {
       display_total: displayTotal,
       final_pdf_url: finalPdfUrlMap.get(order.order_id) ?? null,
       item_count: items.length,
-      cover_url: coverUrl,
+      cover_url: cover.url,
+      cover_status: cover.status,
+      cover_cart_item_id: firstItem?.cart_item_id ?? null,
       first_item_name: firstItem?.creations?.templates?.name ?? null,
       shipping_address: order.shipping_address ?? null,
       items: detailedItems,

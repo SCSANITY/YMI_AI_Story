@@ -13,6 +13,12 @@ import {
   refreshAppliedOrderDiscounts,
 } from '@/lib/discounts'
 import { recordExternalEmailObserved } from '@/lib/emailEvents'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  requireCheckoutOrderAccess,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 type SessionItemInput = {
   id?: string
@@ -42,7 +48,6 @@ export async function POST(request: Request) {
     const shippingMethod = body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null
     const shippingZoneCode = body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null
     const billingAddress = body?.billingAddress ?? null
-    const customerId = body?.customerId ? String(body.customerId) : null
     const isGuest = Boolean(body?.isGuest)
     const currency = normalizeCheckoutCurrency(body?.currency) as CheckoutCurrency
     const rawItems = Array.isArray(body?.items) ? (body.items as SessionItemInput[]) : []
@@ -54,6 +59,15 @@ export async function POST(request: Request) {
     if (!orderId || !email) {
       return NextResponse.json({ error: 'Missing orderId or email' }, { status: 400 })
     }
+
+    const owner = (await resolveCheckoutOwner(request, {
+      allowAnon: true,
+      createAnonIfMissing: false,
+      expectedCustomerId: body?.customerId ?? null,
+    }))!
+    const filter = ownerFilter(owner)
+    await requireCheckoutOrderAccess(orderId, owner, { requireUnpaid: true })
+    const customerId = owner.ownerType === 'customer' ? owner.customerId : null
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -71,7 +85,7 @@ export async function POST(request: Request) {
       .from('orders')
       .update({
         email,
-        customer_id: customerId ?? null,
+        customer_id: customerId,
         shipping_address: shippingAddress,
         shipping_amount_usd: shippingAmountUsd,
         shipping_rate_snapshot: shippingRateSnapshot,
@@ -113,6 +127,8 @@ export async function POST(request: Request) {
       )
       .eq('order_id', orderId)
       .eq('status', 'ordered')
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
 
     if (selectedCartItemIds.length > 0) {
       cartItemsQuery = cartItemsQuery.in('cart_item_id', selectedCartItemIds)
@@ -250,6 +266,8 @@ export async function POST(request: Request) {
       url: session.url,
     })
   } catch (error: any) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
     return NextResponse.json(
       { error: error?.message || 'Failed to create Stripe checkout session' },
       { status: 500 }
