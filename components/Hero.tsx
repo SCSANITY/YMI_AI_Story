@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import Image from 'next/image'
 import { Button } from '@/components/Button'
 import { Sparkles, Star, Clock, Globe, BookOpen } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -50,8 +49,6 @@ export const Hero: React.FC = () => {
 
   const [quoteIdx, setQuoteIdx] = useState(0)
   const [quoteVisible, setQuoteVisible] = useState(true)
-  const [videoReady, setVideoReady] = useState(false)
-  const [videoTarget, setVideoTarget] = useState<'desktop' | 'mobile' | null>(null)
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -64,22 +61,6 @@ export const Hero: React.FC = () => {
     return () => clearInterval(id)
   }, [])
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(min-width: 768px)')
-
-    const syncTarget = () => {
-      setVideoReady(false)
-      setVideoTarget(mediaQuery.matches ? 'desktop' : 'mobile')
-    }
-
-    syncTarget()
-    mediaQuery.addEventListener('change', syncTarget)
-
-    return () => {
-      mediaQuery.removeEventListener('change', syncTarget)
-    }
-  }, [])
-
   const goToBooks = () => router.push('/books')
 
   return (
@@ -88,33 +69,18 @@ export const Hero: React.FC = () => {
       {/* ── Full-viewport section ─────────────────────────────────────────── */}
       <div className="relative w-full" style={{ minHeight: '100svh' }}>
 
-        {/* Video / fallback background — absolute, fills everything */}
-        <div className="absolute inset-0 z-0 overflow-hidden">
-          <Image
-            src="/hero-poster.webp"
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            aria-hidden="true"
-            className="absolute inset-0 scale-105 object-cover blur-[2px] md:scale-100 md:blur-0"
-          />
-          {videoTarget === 'desktop' ? (
-            <video
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              poster="/hero-poster.webp"
-              onLoadedData={() => setVideoReady(true)}
-              className={`absolute inset-0 hidden h-full w-full object-cover transition-opacity duration-700 md:block ${
-                videoReady ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              <source src="/hero-video.mp4" type="video/mp4" />
-            </video>
-          ) : null}
+        {/* Instant-play video background: no poster gate, no hydration-delayed mount. */}
+        <div className="absolute inset-0 z-0 overflow-hidden bg-[#f4d5bd] md:bg-[#f7e2d0]">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            className="absolute left-1/2 top-24 aspect-video w-[calc(100%-2rem)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-[1.35rem] border border-white/65 bg-[#f4d5bd] object-contain shadow-[0_22px_70px_rgba(120,53,15,0.22)] md:inset-0 md:left-0 md:top-0 md:h-full md:w-full md:max-w-none md:translate-x-0 md:rounded-none md:border-0 md:bg-[#f7e2d0] md:object-cover md:shadow-none"
+          >
+            <source src="/hero-video.mp4" type="video/mp4" />
+          </video>
         </div>
 
         {/* ── Gradient overlays ──────────────────────────────────────────── */}
@@ -141,36 +107,8 @@ export const Hero: React.FC = () => {
         {/* ── Content — all pushed to the bottom third ─────────────────────── */}
         <div className="relative z-20 flex flex-col min-h-[100svh]">
 
-          {/* Mobile: foreground 16:9 video frame keeps the full horizontal source visible. */}
-          <div className="flex min-h-[270px] items-end px-4 pb-4 pt-24 md:hidden">
-            <div className="relative mx-auto aspect-video w-full max-w-[560px] overflow-hidden rounded-[1.35rem] border border-white/65 bg-white/25 shadow-[0_22px_70px_rgba(120,53,15,0.22)]">
-              <Image
-                src="/hero-poster.webp"
-                alt=""
-                fill
-                priority
-                sizes="100vw"
-                aria-hidden="true"
-                className="object-cover"
-              />
-              {videoTarget === 'mobile' ? (
-                <video
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="auto"
-                  poster="/hero-poster.webp"
-                  onLoadedData={() => setVideoReady(true)}
-                  className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-700 ${
-                    videoReady ? 'opacity-100' : 'opacity-0'
-                  }`}
-                >
-                  <source src="/hero-video.mp4" type="video/mp4" />
-                </video>
-              ) : null}
-            </div>
-          </div>
+          {/* Mobile reserves the same space as the absolute 16:9 video frame. */}
+          <div className="min-h-[330px] md:hidden" aria-hidden="true" />
 
           {/* Flex spacer — desktop video center is completely unobstructed. */}
           <div className="flex-1" />

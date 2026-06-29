@@ -162,7 +162,7 @@ export function HomeBookCategories() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-8">
-                  {books.map((book, bookIndex) => (
+                  {books.map((book) => (
                     <BookCard
                       key={`${category.titleKey}-${book.bookID}`}
                       book={book}
@@ -172,7 +172,6 @@ export function HomeBookCategories() {
                       storyType={book.storyTypeLabel || book.category}
                       description={book.description}
                       rating={ratingMap[book.bookID]}
-                      priority={category.sectionId === 'brand_new' && bookIndex < 4}
                       onClick={() => handlePersonalize(book.bookID)}
                       onFavoriteClick={(event) => {
                         event.stopPropagation()
