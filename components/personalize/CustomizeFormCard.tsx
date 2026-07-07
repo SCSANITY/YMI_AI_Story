@@ -21,7 +21,7 @@ function CustomizeFormCardComponent({ title, priceLabel, children, footer }: Cus
         <div className="text-2xl font-bold text-amber-600">{priceLabel}</div>
       </div>
 
-      <div className="flex-grow space-y-4 md:space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {children}
       </div>
 

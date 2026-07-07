@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { usePathname, useRouter } from 'next/navigation'
@@ -18,6 +18,17 @@ import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { MyRewardsModal } from '@/components/MyRewardsModal'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
 import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
+
+const NAV_PREFETCH_ROUTES = [
+  '/',
+  '/books',
+  '/favorites',
+  '/my-books',
+  '/collaboration',
+  '/support',
+  '/cart',
+  '/orders',
+] as const
 
 export const Navbar: React.FC = () => {
   const router = useRouter()
@@ -68,6 +79,34 @@ export const Navbar: React.FC = () => {
     router.push(path)
   }
 
+  const prefetchRoute = useCallback((path: string) => {
+    if (!path || path === pathname) return
+    try {
+      router.prefetch(path)
+    } catch {
+      // Prefetch is a best-effort navigation warmup.
+    }
+  }, [pathname, router])
+
+  useEffect(() => {
+    const warmNavigation = () => {
+      NAV_PREFETCH_ROUTES.forEach((route) => prefetchRoute(route))
+    }
+
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(warmNavigation, { timeout: 2500 })
+      return () => window.cancelIdleCallback(idleId)
+    }
+
+    const timeoutId = setTimeout(warmNavigation, 900)
+    return () => clearTimeout(timeoutId)
+  }, [prefetchRoute])
+
+  const getPrefetchHandlers = useCallback((path: string) => ({
+    onFocus: () => prefetchRoute(path),
+    onMouseEnter: () => prefetchRoute(path),
+  }), [prefetchRoute])
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userRef.current && !userRef.current.contains(event.target as Node)) {
@@ -85,21 +124,19 @@ export const Navbar: React.FC = () => {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useLayoutEffect(() => {
-    let activeRef: React.RefObject<HTMLButtonElement | null>
-    if (pathname === '/favorites') activeRef = favoritesRef
-    else if (pathname === '/collaboration') activeRef = collaborationRef
-    else if (pathname === '/support') activeRef = supportRef
-    else if (pathname === '/my-books') activeRef = myBooksRef
-    else if (pathname === '/books') activeRef = booksRef
-    else if (isHomePage) activeRef = homeRef
-    else {
-      navContainerRef.current?.style.setProperty('--nav-indicator-opacity', '0')
-      return
-    }
+  const getActiveNavButton = useCallback(() => {
+    if (pathname === '/favorites') return favoritesRef.current
+    if (pathname === '/collaboration') return collaborationRef.current
+    if (pathname === '/support') return supportRef.current
+    if (pathname === '/my-books') return myBooksRef.current
+    if (pathname === '/books') return booksRef.current
+    if (isHomePage) return homeRef.current
+    return null
+  }, [isHomePage, pathname])
 
+  const updateNavIndicator = useCallback(() => {
     const container = navContainerRef.current
-    const btn = activeRef.current
+    const btn = getActiveNavButton()
     if (!btn || !container) {
       container?.style.setProperty('--nav-indicator-opacity', '0')
       return
@@ -109,7 +146,38 @@ export const Navbar: React.FC = () => {
     container.style.setProperty('--nav-indicator-left', `${btnRect.left - containerRect.left}px`)
     container.style.setProperty('--nav-indicator-width', `${btnRect.width}px`)
     container.style.setProperty('--nav-indicator-opacity', '1')
-  }, [isHomePage, pathname])
+  }, [getActiveNavButton])
+
+  useLayoutEffect(() => {
+    updateNavIndicator()
+  }, [isTransparent, pendingRoute, updateNavIndicator])
+
+  useEffect(() => {
+    const container = navContainerRef.current
+    if (!container) return
+
+    let frame = 0
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(updateNavIndicator)
+    }
+
+    const observer = new ResizeObserver(scheduleUpdate)
+    observer.observe(container)
+    ;[homeRef, booksRef, favoritesRef, myBooksRef, collaborationRef, supportRef].forEach((ref) => {
+      if (ref.current) observer.observe(ref.current)
+    })
+
+    window.addEventListener('resize', scheduleUpdate)
+    document.fonts?.ready.then(scheduleUpdate).catch(() => {})
+    scheduleUpdate()
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', scheduleUpdate)
+      observer.disconnect()
+    }
+  }, [updateNavIndicator])
 
   const handleHomeClick = () => {
     if (pendingRoute) return
@@ -182,6 +250,7 @@ export const Navbar: React.FC = () => {
             ref={homeRef}
             onClick={handleHomeClick}
             disabled={Boolean(pendingRoute)}
+            {...getPrefetchHandlers('/')}
             className={`transition-colors duration-300 pb-0.5 ${isHomeActive
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -195,6 +264,7 @@ export const Navbar: React.FC = () => {
             ref={booksRef}
             onClick={handleBooksClick}
             disabled={Boolean(pendingRoute)}
+            {...getPrefetchHandlers('/books')}
             className={`transition-colors duration-300 pb-0.5 ${isBooksActive
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -208,6 +278,7 @@ export const Navbar: React.FC = () => {
             ref={favoritesRef}
             onClick={() => navigateToRoute('/favorites')}
             disabled={Boolean(pendingRoute)}
+            {...getPrefetchHandlers('/favorites')}
             className={`flex items-center gap-1.5 transition-colors duration-300 pb-0.5 ${pathname === '/favorites'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-red-500'}`}
@@ -220,6 +291,7 @@ export const Navbar: React.FC = () => {
             ref={myBooksRef}
             onClick={() => navigateToRoute('/my-books')}
             disabled={Boolean(pendingRoute)}
+            {...getPrefetchHandlers('/my-books')}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/my-books'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -233,6 +305,7 @@ export const Navbar: React.FC = () => {
             ref={collaborationRef}
             onClick={() => navigateToRoute('/collaboration')}
             disabled={Boolean(pendingRoute)}
+            {...getPrefetchHandlers('/collaboration')}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/collaboration'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -246,6 +319,7 @@ export const Navbar: React.FC = () => {
             ref={supportRef}
             onClick={() => navigateToRoute('/support')}
             disabled={Boolean(pendingRoute)}
+            {...getPrefetchHandlers('/support')}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/support'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -260,7 +334,7 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center gap-2 sm:gap-4">
           <CurrencySwitcher menuClassName="animate-in fade-in zoom-in-95" />
 
-          <Button variant="ghost" size="sm" onClick={() => navigateToRoute('/cart')} disabled={Boolean(pendingRoute)} className="relative px-2">
+          <Button variant="ghost" size="sm" onClick={() => navigateToRoute('/cart')} disabled={Boolean(pendingRoute)} className="relative px-2" {...getPrefetchHandlers('/cart')}>
             {pendingRoute === '/cart' ? (
               <Loader2 className={`h-5 w-5 animate-spin transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-amber-600'}`} />
             ) : (
@@ -311,13 +385,13 @@ export const Navbar: React.FC = () => {
 
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
-          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.home')}</button>
-          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.books')}</button>
-          <button onClick={() => { navigateToRoute('/favorites'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/favorites' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.favorites')}</button>
-          <button onClick={() => { navigateToRoute('/my-books'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/my-books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myBooks')}</button>
-          <button onClick={() => { navigateToRoute('/collaboration'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/collaboration' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.collaboration')}</button>
-          <button onClick={() => { navigateToRoute('/support'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/support' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.support')}</button>
-          <button onClick={() => { navigateToRoute('/orders'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/orders' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myOrders')}</button>
+          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/')}>{pendingRoute === '/' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.home')}</button>
+          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/books')}>{pendingRoute === '/books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.books')}</button>
+          <button onClick={() => { navigateToRoute('/favorites'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/favorites')}>{pendingRoute === '/favorites' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.favorites')}</button>
+          <button onClick={() => { navigateToRoute('/my-books'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/my-books')}>{pendingRoute === '/my-books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myBooks')}</button>
+          <button onClick={() => { navigateToRoute('/collaboration'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/collaboration')}>{pendingRoute === '/collaboration' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.collaboration')}</button>
+          <button onClick={() => { navigateToRoute('/support'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/support')}>{pendingRoute === '/support' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.support')}</button>
+          <button onClick={() => { navigateToRoute('/orders'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/orders')}>{pendingRoute === '/orders' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myOrders')}</button>
         </div>
       )}
     </nav>
