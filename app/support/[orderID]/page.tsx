@@ -2,27 +2,20 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
-import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing';
+import type { CheckoutCurrency } from '@/lib/locale-pricing';
+import { SupportOrderMessageSection } from './SupportOrderMessageSection';
+import { SupportOrderSummaryCard, type SupportOrderSummary } from './SupportOrderSummaryCard';
 
 export default function SupportOrderPage() {
   const { t } = useI18n();
   const router = useRouter();
   const params = useParams();
   const orderId = params?.orderID as string | undefined;
-  const [order, setOrder] = useState<{
-    id: string;
-    displayId?: string | null;
-    status?: string | null;
-    total?: number | null;
-    displayCurrency?: CheckoutCurrency;
-    createdAt?: string | null;
-  } | null>(null);
+  const [order, setOrder] = useState<SupportOrderSummary | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const [message, setMessage] = useState('');
 
   useEffect(() => {
     if (!orderId) return;
@@ -76,37 +69,8 @@ export default function SupportOrderPage() {
       </div>
 
       <div className="grid lg:grid-cols-[1.2fr_1fr] gap-8">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-          <h2 className="text-lg font-bold text-gray-900">{t('supportDetail.tellUs')}</h2>
-          <textarea
-            className="w-full min-h-[140px] rounded-xl border border-gray-200 p-3 text-sm"
-            placeholder={t('supportDetail.placeholder')}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-          <Button size="sm" className="rounded-full px-6">
-            <Send className="h-4 w-4 mr-2" /> {t('supportDetail.submitDemo')}
-          </Button>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">{t('supportDetail.summary')}</h2>
-          {loading ? (
-            <p className="text-sm text-gray-500">{t('supportDetail.loadingOrder')}</p>
-          ) : order ? (
-            <div className="text-sm text-gray-600 space-y-2">
-              <div><span className="font-semibold">{t('supportDetail.status')}:</span> {order.status ?? t('common.unknown')}</div>
-              <div><span className="font-semibold">{t('supportDetail.total')}:</span> {formatMajorCurrencyValue(order.total ?? 0, order.displayCurrency ?? 'USD')}</div>
-              <div>
-                <span className="font-semibold">{t('supportDetail.placed')}:</span>{' '}
-                {order.createdAt ? new Date(order.createdAt).toLocaleString() : t('common.unknown')}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">{t('supportDetail.notFound')}</p>
-          )}
-          <div className="mt-4 text-xs text-gray-500">{t('supportDetail.replyHint')}</div>
-        </div>
+        <SupportOrderMessageSection t={t} />
+        <SupportOrderSummaryCard loading={loading} order={order} t={t} />
       </div>
     </div>
   );

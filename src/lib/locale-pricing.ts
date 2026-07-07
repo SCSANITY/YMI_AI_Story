@@ -1,5 +1,5 @@
-import type { Language } from '@/types'
-import { DEFAULT_EXCHANGE_RATES, UI_LOCALES } from '@/lib/i18n-config'
+import type { DisplayCurrency } from '@/types'
+import { DEFAULT_EXCHANGE_RATES } from '@/lib/i18n-config'
 
 export type CheckoutCurrency =
   | 'USD'
@@ -60,18 +60,17 @@ export const normalizeCheckoutCurrency = (value: unknown): CheckoutCurrency => {
   return 'USD'
 }
 
-export const getDefaultCheckoutCurrency = (language: Language): CheckoutCurrency => {
-  return normalizeCheckoutCurrency(UI_LOCALES[language]?.currency ?? 'USD')
+export const normalizeDisplayCurrency = (value: unknown): DisplayCurrency => {
+  return normalizeCheckoutCurrency(value) as DisplayCurrency
+}
+
+export const toChargeCurrency = (currency: DisplayCurrency): CheckoutCurrency => {
+  return normalizeCheckoutCurrency(currency)
 }
 
 export const convertUsdToCurrency = (usdAmount: number, currency: CheckoutCurrency) => {
   const rate = DEFAULT_EXCHANGE_RATES[currency] ?? 1
   return usdAmount * rate
-}
-
-export const convertUsdToLocale = (usdAmount: number, language: Language) => {
-  const locale = UI_LOCALES[language]
-  return convertUsdToCurrency(usdAmount, normalizeCheckoutCurrency(locale.currency))
 }
 
 export const formatCurrencyAmount = (
@@ -88,10 +87,7 @@ export const formatMajorCurrencyValue = (
   currency: CheckoutCurrency,
   intlLocale?: string
 ) => {
-  const locale =
-    intlLocale ||
-    Object.values(UI_LOCALES).find((entry) => entry.currency === currency)?.intlLocale ||
-    CURRENCY_INTL_LOCALES[currency]
+  const locale = intlLocale || CURRENCY_INTL_LOCALES[currency]
 
   try {
     return new Intl.NumberFormat(locale, {
@@ -105,6 +101,10 @@ export const formatMajorCurrencyValue = (
   }
 }
 
+export const formatDisplayCurrency = (usdAmount: number, currency: DisplayCurrency) => {
+  return formatCurrencyAmount(usdAmount, normalizeCheckoutCurrency(currency))
+}
+
 export const toMinorUnit = (majorAmount: number, currency: CheckoutCurrency) => {
   const decimals = MINOR_UNIT_DECIMALS[currency]
   if (decimals === 0) return Math.round(majorAmount)
@@ -115,13 +115,4 @@ export const fromMinorUnit = (minorAmount: number, currency: CheckoutCurrency) =
   const decimals = MINOR_UNIT_DECIMALS[currency]
   if (decimals === 0) return minorAmount
   return minorAmount / 10 ** decimals
-}
-
-export const formatLocaleCurrency = (usdAmount: number, language: Language) => {
-  const locale = UI_LOCALES[language]
-  return formatCurrencyAmount(
-    usdAmount,
-    normalizeCheckoutCurrency(locale.currency),
-    locale.intlLocale
-  )
 }

@@ -19,6 +19,11 @@ const normalizeLanguage = (value: string | undefined): StoryLanguage => {
   switch (value) {
     case 'English':
       return 'English';
+    case 'Simplified Chinese':
+    case 'cn_s':
+    case 'zh-cn':
+    case 'simplified':
+      return 'Simplified Chinese';
     case 'Traditional Chinese':
     case 'Chinese':
     case 'cn_t':

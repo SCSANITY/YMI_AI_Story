@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Mic, Square, Play, Pause, RotateCcw, Upload, CheckCircle2, AlertCircle, Volume2 } from 'lucide-react'
+import { Mic, Square, Play, Pause, RotateCcw, Upload, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { uploadUserAsset } from '@/services/assets'
 import { useI18n } from '@/lib/useI18n'
@@ -26,10 +26,10 @@ type VoiceRecorderPanelProps = {
 }
 
 const PROMPT_TEXT =
-  'Tonight, we begin a magical story, and every page is filled with love, wonder, and gentle dreams.'
+  'Tonight, we begin a magical story made just for you. Every page is filled with love, wonder, courage, and gentle dreams, and my voice will always be here to guide you through each adventure.'
 
 const MIN_SECONDS = 10
-const MAX_SECONDS = 15
+const MAX_SECONDS = 20
 
 function getPreferredMimeType() {
   if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') return ''
@@ -101,7 +101,9 @@ export function VoiceRecorderPanel({
         : !existingAssetId && phase === 'uploaded'
           ? 'idle'
           : phase
-  const canUpload = effectivePhase === 'recorded' && seconds >= MIN_SECONDS && Boolean(recordedBlob)
+  const canSaveRecording = effectivePhase === 'recorded' && seconds >= MIN_SECONDS && Boolean(recordedBlob)
+  const showPlayback = Boolean(playbackUrl)
+  const showReset = Boolean(recordedBlob || existingAssetId || seconds > 0)
 
   const statusText = useMemo(() => {
     switch (effectivePhase) {
@@ -303,110 +305,140 @@ export function VoiceRecorderPanel({
   }, [clearTimer, recordedUrl, stopTracks])
 
   return (
-    <div className="mt-4 rounded-3xl border border-white/70 bg-white/78 p-4 shadow-[0_14px_34px_rgba(148,93,34,0.1),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-xl sm:p-5">
-      <div className="mb-2 flex items-center gap-2">
-        <Volume2 className="h-5 w-5 text-amber-500" />
-        <h5 className="text-sm font-bold text-gray-900">{t('voiceRecorder.title')}</h5>
+    <div className="mt-4 overflow-hidden rounded-3xl border border-orange-100/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.92),rgba(255,246,235,0.78))] shadow-[0_18px_42px_rgba(154,95,38,0.12),inset_0_1px_0_rgba(255,255,255,0.95)]">
+      <div className="border-b border-orange-100/70 px-4 py-4 sm:px-5">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-orange-200/80 bg-orange-50/80 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-orange-700">
+            <Sparkles className="h-3.5 w-3.5" />
+            {t('voiceRecorder.badge')}
+          </div>
+        </div>
+        <h5 className="text-base font-bold text-slate-950">{t('voiceRecorder.title')}</h5>
       </div>
 
-      <p className="mb-3 text-sm text-gray-600">{t('voiceRecorder.promptIntro')}</p>
-      <div className="mb-4 rounded-3xl border border-amber-100/90 bg-gradient-to-br from-amber-50/90 via-white/85 to-orange-50/70 px-4 py-4 text-sm font-medium leading-7 text-gray-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]">
-        {PROMPT_TEXT}
-      </div>
-
-      <div className="mb-4 flex flex-col gap-3 rounded-3xl border border-white/80 bg-white/88 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.92)] sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-wide text-amber-600 mb-1">{t('voiceRecorder.statusLabel')}</div>
-          <div className={`text-sm ${combinedError ? 'text-red-600' : 'text-gray-700'}`}>{statusText}</div>
-        </div>
-        <div className={`self-start text-sm font-mono rounded-full px-3 py-1.5 shadow-sm ${phase === 'recording' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-white text-gray-500 border border-gray-200'}`}>
-          {formatTimer(seconds)}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {effectivePhase === 'recording' ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            onClick={stopRecording}
-            className="glass-action-btn glass-action-btn--amber h-11 w-full rounded-2xl border-red-200/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.84),rgba(255,245,245,0.68))] text-red-700 shadow-[0_14px_30px_rgba(239,68,68,0.12),inset_0_1px_0_rgba(255,255,255,0.92)] hover:text-red-800 sm:h-12"
-          >
-            <Square className="mr-2 h-4 w-4" />
-            {t('voiceRecorder.stop')}
-          </Button>
-        ) : null}
-
-        {effectivePhase !== 'recording' ? (
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={handleStartRecording}
-            className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-2xl text-sm font-semibold sm:h-12"
-          >
-            <Mic className="mr-2 h-4 w-4" />
-            {recordedBlob || existingAssetId ? t('voiceRecorder.recordAgain') : t('voiceRecorder.startRecording')}
-          </Button>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={handleTogglePlayback}
-            disabled={!playbackUrl || effectivePhase === 'recording' || effectivePhase === 'uploading'}
-            className="glass-action-btn glass-action-btn--neutral h-11 rounded-2xl text-sm font-semibold text-gray-700 sm:h-12"
-          >
-            {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-            {isPlaying ? t('voiceRecorder.pause') : t('voiceRecorder.play')}
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            onClick={() => {
-              onClearValidation?.()
-              setLocalError(null)
-              audioRef.current?.pause()
-              setIsPlaying(false)
-              resetLocalRecording()
-              if (!existingAssetId) {
-                setPhase('idle')
-              } else {
-                setPhase('uploaded')
-              }
-            }}
-            disabled={effectivePhase === 'recording' || effectivePhase === 'uploading'}
-            className="glass-action-btn glass-action-btn--neutral h-11 rounded-2xl text-sm font-semibold text-slate-700 sm:h-12"
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            {t('voiceRecorder.reset')}
-          </Button>
+      <div className="space-y-4 px-4 py-4 sm:px-5">
+        <div className="grid gap-2 sm:grid-cols-3">
+          {[
+            t('voiceRecorder.stepRecord'),
+            t('voiceRecorder.stepSave'),
+            t('voiceRecorder.stepNarration'),
+          ].map((item, index) => (
+            <div key={item} className="flex items-start gap-2 rounded-2xl border border-white/80 bg-white/72 px-3 py-3 text-xs font-semibold leading-5 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[11px] font-bold text-orange-700">
+                {index + 1}
+              </span>
+              <span>{item}</span>
+            </div>
+          ))}
         </div>
 
-        <Button
-          type="button"
-          variant="primary"
-          size="md"
-          onClick={handleUpload}
-          disabled={phase === 'uploading' || !canUpload}
-          className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-2xl text-sm font-semibold sm:h-12"
-        >
-          {effectivePhase === 'uploaded' ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Upload className="mr-2 h-4 w-4" />}
-          {effectivePhase === 'uploaded'
-            ? t('voiceRecorder.uploaded')
-            : effectivePhase === 'uploading'
-              ? t('voiceRecorder.uploading')
-              : t('voiceRecorder.useThisRecording')}
-        </Button>
+        <div className="rounded-3xl border border-amber-100/90 bg-gradient-to-br from-amber-50/95 via-white/90 to-orange-50/80 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.94)]">
+          <div className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">{t('voiceRecorder.promptIntro')}</div>
+          <p className="text-sm font-semibold leading-7 text-slate-800">{PROMPT_TEXT}</p>
+        </div>
+
+        <div className="rounded-3xl border border-white/80 bg-white/86 p-4 shadow-[0_12px_26px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.94)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className={`text-sm font-semibold ${combinedError ? 'text-red-600' : 'text-slate-800'}`}>{statusText}</div>
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                {t('voiceRecorder.secureNote')}
+              </div>
+            </div>
+            <div className={`self-start rounded-2xl border px-4 py-2 font-mono text-lg font-bold shadow-sm ${
+              effectivePhase === 'recording'
+                ? 'border-red-200 bg-red-50 text-red-600'
+                : 'border-orange-100 bg-orange-50/80 text-orange-700'
+            }`}>
+              {formatTimer(seconds)}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            {effectivePhase === 'recording' ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={stopRecording}
+                className="glass-action-btn glass-action-btn--amber h-11 flex-1 rounded-2xl border-red-200/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(255,245,245,0.74))] text-sm font-semibold text-red-700 shadow-[0_14px_30px_rgba(239,68,68,0.12),inset_0_1px_0_rgba(255,255,255,0.92)] hover:text-red-800 sm:h-12"
+              >
+                <Square className="mr-2 h-4 w-4" />
+                {t('voiceRecorder.stop')}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={handleStartRecording}
+                disabled={effectivePhase === 'uploading'}
+                className="glass-action-btn glass-action-btn--brand h-11 flex-1 rounded-2xl text-sm font-semibold sm:h-12"
+              >
+                <Mic className="mr-2 h-4 w-4" />
+                {recordedBlob || existingAssetId ? t('voiceRecorder.recordAgain') : t('voiceRecorder.startRecording')}
+              </Button>
+            )}
+
+            {showPlayback ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleTogglePlayback}
+                disabled={effectivePhase === 'recording' || effectivePhase === 'uploading'}
+                className="glass-action-btn glass-action-btn--neutral h-11 rounded-2xl text-sm font-semibold text-slate-700 sm:h-12 sm:min-w-28"
+              >
+                {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                {isPlaying ? t('voiceRecorder.pause') : t('voiceRecorder.play')}
+              </Button>
+            ) : null}
+
+            {showReset ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => {
+                  onClearValidation?.()
+                  setLocalError(null)
+                  audioRef.current?.pause()
+                  setIsPlaying(false)
+                  resetLocalRecording()
+                  if (!existingAssetId) {
+                    setPhase('idle')
+                  } else {
+                    setPhase('uploaded')
+                  }
+                }}
+                disabled={effectivePhase === 'recording' || effectivePhase === 'uploading'}
+                className="glass-action-btn glass-action-btn--neutral h-11 rounded-2xl text-sm font-semibold text-slate-700 sm:h-12 sm:min-w-28"
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                {t('voiceRecorder.reset')}
+              </Button>
+            ) : null}
+          </div>
+
+          {effectivePhase === 'recorded' || effectivePhase === 'uploading' ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={handleUpload}
+              disabled={phase === 'uploading' || !canSaveRecording}
+              className="glass-action-btn glass-action-btn--brand mt-3 h-11 w-full rounded-2xl text-sm font-semibold sm:h-12"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {effectivePhase === 'uploading' ? t('voiceRecorder.uploading') : t('voiceRecorder.useThisRecording')}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {combinedError ? (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mx-4 mb-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-5">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{combinedError}</span>
         </div>

@@ -1,10 +1,7 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import NextImage from 'next/image';
 import { useGlobalContext } from '@/contexts/GlobalContext';
-import { Button } from '@/components/Button';
-import { ChevronLeft, ChevronRight, ChevronDown, Camera, Lock, Sparkles, Heart, Shield, Wand2, ShoppingCart, LogOut, Package, BookOpen, Star, Info, Check, Book, X, Share2, CircleHelp, type LucideIcon } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
@@ -14,11 +11,26 @@ import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
 import { isUuid } from '@/lib/validators';
 import { useI18n } from '@/lib/useI18n';
-import { formatLocaleCurrency } from '@/lib/locale-pricing';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { ShareDialog } from '@/components/ShareDialog';
-import { MiniGame } from '@/components/MiniGame';
-import { VoiceRecorderPanel } from '@/components/personalize/VoiceRecorderPanel';
+import { formatDisplayCurrency } from '@/lib/locale-pricing';
+import { PreviewActionBar } from '@/components/personalize/PreviewActionBar';
+import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction';
+import { ProductShowcaseCarousel } from '@/components/personalize/ProductShowcaseCarousel';
+import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector';
+import { StoryInfoPanel } from '@/components/personalize/StoryInfoPanel';
+import type { RecentFaceItem } from '@/components/personalize/RecentFacesStrip';
+import { ProgressSteps } from '@/components/personalize/ProgressSteps';
+import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
+import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
+import { LoadingPreviewOverlay } from '@/components/personalize/LoadingPreviewOverlay';
+import { PreviewIntroHeader } from '@/components/personalize/PreviewIntroHeader';
+import { PreviewShareDialog } from '@/components/personalize/PreviewShareDialog';
+import { PreviewBookStage } from '@/components/personalize/PreviewBookStage';
+import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent';
+import { CustomizeFormCard } from '@/components/personalize/CustomizeFormCard';
+import { StoryShowcaseCard } from '@/components/personalize/StoryShowcaseCard';
+import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayout';
+import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
+import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import type { CatalogBook } from '@/lib/book-catalog';
 import type { StoryLanguage } from '@/types';
@@ -44,6 +56,9 @@ const createGenerateTimer = () => {
 
 const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
   const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'simplified chinese' || raw === 'chinese simplified' || raw === 'cn_s' || raw === 'zh-cn' || raw === 'simplified') {
+    return 'Simplified Chinese';
+  }
   if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
     return 'Traditional Chinese';
   }
@@ -53,8 +68,6 @@ const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
   return 'English';
 };
 
-type PersonalizeBookType = 'digital' | 'basic' | 'premium' | 'supreme';
-
 const normalizePersonalizeBookType = (value: unknown): PersonalizeBookType => {
   const raw = String(value ?? '').trim().toLowerCase();
   if (raw === 'digital' || raw === 'ebook') return 'digital';
@@ -63,88 +76,12 @@ const normalizePersonalizeBookType = (value: unknown): PersonalizeBookType => {
   return 'basic';
 };
 
-const GOOD_PHOTO_EXAMPLES = [
-  { src: '/personalize-photo-samples/optimized/good-01.webp', alt: 'Good photo example 1' },
-  { src: '/personalize-photo-samples/optimized/good-02.webp', alt: 'Good photo example 2' },
-  { src: '/personalize-photo-samples/optimized/good-03.webp', alt: 'Good photo example 3' },
-];
-
-const BAD_PHOTO_EXAMPLES = [
-  { src: '/personalize-photo-samples/optimized/bad-01.webp', alt: 'Bad photo example 1' },
-  { src: '/personalize-photo-samples/optimized/bad-02.webp', alt: 'Bad photo example 2' },
-  { src: '/personalize-photo-samples/optimized/bad-03.webp', alt: 'Bad photo example 3' },
-];
-
-const normalizeMagicAttributeKey = (value: string) =>
-  value.trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
-
-const MAGIC_ATTRIBUTE_DISPLAY: Record<
-  string,
-  {
-    i18nKey: string
-    icon: LucideIcon
-    iconClassName: string
-    barClassName: string
-  }
-> = {
-  'grace and beauty': {
-    i18nKey: 'personalize.magicAttribute.graceAndBeauty',
-    icon: Sparkles,
-    iconClassName: 'text-rose-400',
-    barClassName: 'bg-rose-400',
-  },
-  'goodness and virtue': {
-    i18nKey: 'personalize.magicAttribute.goodnessAndVirtue',
-    icon: Heart,
-    iconClassName: 'text-pink-400',
-    barClassName: 'bg-pink-400',
-  },
-  'hope and resilience': {
-    i18nKey: 'personalize.magicAttribute.hopeAndResilience',
-    icon: Shield,
-    iconClassName: 'text-blue-400',
-    barClassName: 'bg-blue-400',
-  },
-  'love and connection': {
-    i18nKey: 'personalize.magicAttribute.loveAndConnection',
-    icon: Heart,
-    iconClassName: 'text-red-400',
-    barClassName: 'bg-red-400',
-  },
-  'truth and integrity': {
-    i18nKey: 'personalize.magicAttribute.truthAndIntegrity',
-    icon: Check,
-    iconClassName: 'text-emerald-400',
-    barClassName: 'bg-emerald-400',
-  },
-  'faith and trust': {
-    i18nKey: 'personalize.magicAttribute.faithAndTrust',
-    icon: Star,
-    iconClassName: 'text-amber-400',
-    barClassName: 'bg-amber-400',
-  },
-};
-
-const DEFAULT_MAGIC_ATTRIBUTE_DISPLAY = {
-  icon: Sparkles,
-  iconClassName: 'text-purple-400',
-  barClassName: 'bg-purple-400',
-};
-
-const toNextImagePreloadUrl = (src: string, width: 640 | 750) => {
-  if (!src || src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/_next/image')) {
-    return src;
-  }
-
-  return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=75`;
-};
-
 export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const fsm = usePersonalizeStage()
   const { t } = useI18n()
 
-  const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, language, cart} = useGlobalContext();
+  const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, displayCurrency, cart} = useGlobalContext();
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   const { books: catalogBooks, isLoading: isBookCatalogLoading } = useBookCatalog();
   const [templateDetailBook, setTemplateDetailBook] = useState<CatalogBook | null>(null);
@@ -196,7 +133,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     primaryAction,
     } = fsm;
 
-  //??質?Steps
+  //??鞈?Steps
   const PROGRESS_MAP = {
     STORY: 0,
     CUSTOMIZE: 1,
@@ -204,12 +141,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   } as const
 
   const currentProgressIndex = PROGRESS_MAP[uiProgress]
-
-
-  // --- Header Menu States ---
-  const [isUserMenuOpen, setUserMenuOpen] = useState(false);
-  
- 
 
   // --- Animation States ---
   const [showFlyAnimation, setShowFlyAnimation] = useState(false);
@@ -232,6 +163,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const preparedFaceFileRef = useRef<File | null>(preparedFaceFile);
   const facePrepareStatusRef = useRef<FacePrepareStatus>(facePrepareStatus);
   const facePrepareErrorRef = useRef<string | null>(facePrepareError);
+  const dataGenerationConsentRef = useRef(false);
+  const marketingConsentRef = useRef(false);
 
   useEffect(() => {
     photoRef.current = photo;
@@ -275,11 +208,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [previewPublicShareImageUrl, setPreviewPublicShareImageUrl] = useState<string | null>(null);
   const [isPreparingShare, setIsPreparingShare] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
-  const [isCheckoutAcknowledged, setIsCheckoutAcknowledged] = useState(false);
-  const [checkoutAcknowledgementError, setCheckoutAcknowledgementError] = useState(false);
-  const [isDataGenerationConsentChecked, setIsDataGenerationConsentChecked] = useState(false);
-  const [isMarketingConsentChecked, setIsMarketingConsentChecked] = useState(false);
   const generationInFlightRef = useRef(false);
+  const previewActionInFlightRef = useRef<'ADD_TO_CART' | 'CHECKOUT' | null>(null);
+  const [previewActionPending, setPreviewActionPending] = useState<'ADD_TO_CART' | 'CHECKOUT' | null>(null);
   const checkoutInFlightRef = useRef(false);
   const previewRefreshInFlightRef = useRef(false);
   const lastPreviewRefreshAtRef = useRef(0);
@@ -287,7 +218,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [templateTitle, setTemplateTitle] = useState<string | null>(null);
   const [templateDescription, setTemplateDescription] = useState<string | null>(null);
   const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(null);
-  const [recentFaces, setRecentFaces] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string }>>([]);
+  const [recentFaces, setRecentFaces] = useState<RecentFaceItem[]>([]);
   const [recentVoices, setRecentVoices] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string | null; metadata?: { duration_seconds?: number | null } }>>([]);
   const [voiceSignedUrl, setVoiceSignedUrl] = useState<string | null>(null);
   const [voiceValidationError, setVoiceValidationError] = useState<string | null>(null);
@@ -330,25 +261,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     }
   }, [creationId, t, user?.customerId]);
   const [recentProfiles, setRecentProfiles] = useState<RecentProfileItem[]>([]);
-  const [showNameHistory, setShowNameHistory] = useState(false);
-  const [showAgeHistory, setShowAgeHistory] = useState(false);
-  const [showLanguageOptions, setShowLanguageOptions] = useState(false);
-  const [expandedBookFaq, setExpandedBookFaq] = useState<number | null>(0);
-  const [isMobileStoryInfoOpen, setMobileStoryInfoOpen] = useState(false);
-  const [activeShowcaseIndex, setActiveShowcaseIndex] = useState(0);
-  const [showcaseImageErrors, setShowcaseImageErrors] = useState<Set<string>>(() => new Set());
-  const [desktopShowcaseThumbSize, setDesktopShowcaseThumbSize] = useState(72);
-  const [desktopMainShowcaseSize, setDesktopMainShowcaseSize] = useState(520);
-  const [desktopThumbColumnWidth, setDesktopThumbColumnWidth] = useState(78);
-  const nameBoxRef = useRef<HTMLDivElement | null>(null);
-  const ageBoxRef = useRef<HTMLDivElement | null>(null);
-  const languageBoxRef = useRef<HTMLDivElement | null>(null);
   const voicePanelRef = useRef<HTMLDivElement | null>(null);
-  const mainShowcaseRef = useRef<HTMLDivElement | null>(null);
-  const showcaseThumbRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const showcaseRowRef = useRef<HTMLDivElement | null>(null);
-  const showcaseThumbViewportRef = useRef<HTMLDivElement | null>(null);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
+  const nameRef = useRef(name);
+  const ageRef = useRef(age);
+  const [areChildDetailsReady, setAreChildDetailsReady] = useState(false);
+  const [childDetailsSeedVersion, setChildDetailsSeedVersion] = useState(0);
   // --- Mobile Responsive State ---
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const resolvedBook = useMemo(() => {
@@ -361,6 +279,25 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       innerDescription: templateInnerDescription ?? book.innerDescription,
     };
   }, [book, templateTitle, templateCoverUrl, templateDescription, templateInnerDescription]);
+
+  useEffect(() => {
+    nameRef.current = name;
+    ageRef.current = age;
+    setAreChildDetailsReady((prev) => {
+      const next = name.trim().length > 0 && age.trim().length > 0;
+      return prev === next ? prev : next;
+    });
+    setChildDetailsSeedVersion((prev) => prev + 1);
+  }, [name, age]);
+
+  const handleChildDetailsChange = useCallback((details: { name: string; age: string }) => {
+    nameRef.current = details.name;
+    ageRef.current = details.age;
+    setAreChildDetailsReady((prev) => {
+      const next = details.name.trim().length > 0 && details.age.trim().length > 0;
+      return prev === next ? prev : next;
+    });
+  }, []);
 
   // --- Calculations ---
   const currentPrice = book
@@ -400,29 +337,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [recentVoices, voiceAssetId]);
 
   const resolvedVoiceSignedUrl = voiceSignedUrl || currentVoiceSample?.signed_url || null;
-  const showcaseImages = useMemo(() => {
-    if (!resolvedBook) return [];
-    const images = Array.isArray(resolvedBook.showcaseImages) ? resolvedBook.showcaseImages.filter(Boolean) : [];
-    const normalized = images.length > 0 ? [...images] : [resolvedBook.coverUrl];
-    return Array.from(new Set(normalized.filter(Boolean)));
-  }, [resolvedBook]);
-  const getShowcaseImageSrc = useCallback(
-    (image: string) => {
-      if (showcaseImageErrors.has(image) && resolvedBook?.coverUrl) {
-        return resolvedBook.coverUrl;
-      }
-      return image;
-    },
-    [resolvedBook?.coverUrl, showcaseImageErrors],
-  );
-  const markShowcaseImageError = useCallback((image: string) => {
-    setShowcaseImageErrors((prev) => {
-      if (prev.has(image)) return prev;
-      const next = new Set(prev);
-      next.add(image);
-      return next;
-    });
-  }, []);
   const markPreviewImageError = useCallback((image: string) => {
     if (!image) return;
     setPreviewImageErrors((prev) => {
@@ -465,16 +379,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       previewRefreshInFlightRef.current = false;
     }
   }, [previewJobId, user?.customerId, viewState.showPreview]);
-  const activeShowcaseImage = showcaseImages[activeShowcaseIndex] || showcaseImages[0] || resolvedBook?.coverUrl || '';
-  const activeShowcaseImageSrc = activeShowcaseImage ? getShowcaseImageSrc(activeShowcaseImage) : '';
-  const goToPreviousShowcaseImage = useCallback(() => {
-    if (showcaseImages.length <= 1) return;
-    setActiveShowcaseIndex((prev) => (prev - 1 + showcaseImages.length) % showcaseImages.length);
-  }, [showcaseImages.length]);
-  const goToNextShowcaseImage = useCallback(() => {
-    if (showcaseImages.length <= 1) return;
-    setActiveShowcaseIndex((prev) => (prev + 1) % showcaseImages.length);
-  }, [showcaseImages.length]);
   const bookFaqItems = useMemo(() => {
     const storyTitle = templateTitle || book?.title || 'this story';
     return [
@@ -492,114 +396,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       },
     ];
   }, [book?.title, t, templateTitle]);
-
-  useEffect(() => {
-    setActiveShowcaseIndex(0);
-    setShowcaseImageErrors(new Set());
-  }, [bookID]);
-
-  useEffect(() => {
-    if (!viewState.showForm) return;
-    if (showcaseImages.length <= 1) return;
-
-    const interval = window.setInterval(() => {
-      setActiveShowcaseIndex((prev) => (prev + 1) % showcaseImages.length);
-    }, 4000);
-
-    return () => window.clearInterval(interval);
-  }, [showcaseImages.length, viewState.showForm]);
-
-  useEffect(() => {
-    if (showcaseImages.length === 0) return;
-    setActiveShowcaseIndex((prev) => (prev >= showcaseImages.length ? 0 : prev));
-  }, [showcaseImages.length]);
-
-  useEffect(() => {
-    if (isMobile) return;
-    const rowNode = showcaseRowRef.current;
-    const node = mainShowcaseRef.current;
-    const uploadNode = uploadPanelRef.current;
-    if (!node || !rowNode || !uploadNode) return;
-
-    const GAP = 8;
-    const MIN_THUMB_SIZE = 68;
-    const MAX_THUMB_SIZE = 76;
-    const COLUMN_GAP = 12;
-    const SCROLL_SLOT = 8;
-    const MIN_MAIN_SIZE = 420;
-
-    const recompute = () => {
-      const rowRect = rowNode.getBoundingClientRect();
-      const uploadRect = uploadNode.getBoundingClientRect();
-      const rowWidth = rowNode.getBoundingClientRect().width;
-      const desiredMainSize = Math.floor(uploadRect.bottom - rowRect.top);
-      if (!desiredMainSize || !rowWidth) return;
-
-      const solveForVisibleCount = (count: number) => {
-        const maxSizeByWidth = Math.floor(
-          (
-            rowWidth
-            - COLUMN_GAP
-            - SCROLL_SLOT
-            + (GAP * (count - 1)) / count
-          ) / (1 + 1 / count)
-        );
-        const nextMainSize = Math.max(MIN_MAIN_SIZE, Math.min(desiredMainSize, maxSizeByWidth));
-        const nextThumbSize = Math.floor((nextMainSize - GAP * (count - 1)) / count);
-        return { mainSize: nextMainSize, thumbSize: nextThumbSize };
-      };
-
-      const optionSix = solveForVisibleCount(6);
-      const optionFive = solveForVisibleCount(5);
-      const preferred = optionSix.thumbSize >= MIN_THUMB_SIZE ? optionSix : optionFive;
-      const clampedThumbSize = Math.min(MAX_THUMB_SIZE, Math.max(preferred.thumbSize, MIN_THUMB_SIZE));
-
-      setDesktopMainShowcaseSize(preferred.mainSize);
-      setDesktopShowcaseThumbSize(clampedThumbSize);
-      setDesktopThumbColumnWidth(clampedThumbSize + SCROLL_SLOT);
-    };
-
-    recompute();
-
-    const observer = new ResizeObserver(recompute);
-    observer.observe(rowNode);
-    observer.observe(uploadNode);
-    observer.observe(node);
-
-    return () => observer.disconnect();
-  }, [isMobile, resolvedBook?.coverUrl, showcaseImages.length, windowWidth]);
-
-  useEffect(() => {
-    const viewport = showcaseThumbViewportRef.current;
-    const target = showcaseThumbRefs.current[activeShowcaseIndex];
-    if (!viewport || !target) return;
-
-    if (isMobile) {
-      const targetCenter = target.offsetLeft + target.offsetWidth / 2;
-      const nextLeft = Math.max(0, targetCenter - viewport.clientWidth / 2);
-      viewport.scrollTo({ left: nextLeft, behavior: 'smooth' });
-      return;
-    }
-
-    const buffer = 8;
-    const currentTop = viewport.scrollTop;
-    const targetTop = target.offsetTop;
-    const targetBottom = targetTop + target.offsetHeight;
-    const viewportTop = currentTop;
-    const viewportBottom = currentTop + viewport.clientHeight;
-
-    let nextTop = currentTop;
-
-    if (targetTop < viewportTop + buffer) {
-      nextTop = Math.max(0, targetTop - buffer);
-    } else if (targetBottom > viewportBottom - buffer) {
-      nextTop = targetBottom - viewport.clientHeight + buffer;
-    }
-
-    if (nextTop !== currentTop) {
-      viewport.scrollTo({ top: nextTop, behavior: 'smooth' });
-    }
-  }, [activeShowcaseIndex, isMobile]);
 
   useEffect(() => {
     if (!viewState.showLoading) {
@@ -1042,7 +838,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const messages = [
       t('personalize.printingMagic'),
       t('personalize.creatingStorybook'),
-      `${t('common.loading')} ${selectedLang}...`,
       t('personalize.didYouKnow'),
       t('personalize.printingMagic'),
       t('common.loading')
@@ -1086,10 +881,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         const currentPreparedFaceFile = preparedFaceFileRef.current
         const currentFacePrepareStatus = facePrepareStatusRef.current
         const currentFacePrepareError = facePrepareErrorRef.current
+        const hasDataGenerationConsent = dataGenerationConsentRef.current
+        const hasMarketingConsent = marketingConsentRef.current
+        const currentName = nameRef.current
+        const currentAge = ageRef.current
 
         if (!book) throw new Error('Book not found')
         if (!currentPhoto && !faceAssetId) throw new Error('Please upload a photo before generating the preview')
-        if (!isDataGenerationConsentChecked) throw new Error(t('personalize.dataConsentRequired'))
+        if (!hasDataGenerationConsent) throw new Error(t('personalize.dataConsentRequired'))
 
         setPreviewUrl(null)
         setPreviewPages([])
@@ -1119,33 +918,33 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           faceAssetId = faceAsset.asset_id
         }
 
-        const parsedAge = Number.parseInt(age, 10)
+        const parsedAge = Number.parseInt(currentAge, 10)
         const textOverrides = {
-          child_name: name,
-          child_age: Number.isNaN(parsedAge) ? age : parsedAge,
+          child_name: currentName,
+          child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
           dedication: '',
           language: selectedLang,
           book_type: bookType,
         }
 
-        if (!currentCustomerId && name && age) {
+        if (!currentCustomerId && currentName && currentAge) {
           fetch('/api/user/profiles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              child_name: name,
-              child_age: Number.isNaN(parsedAge) ? age : parsedAge,
+              child_name: currentName,
+              child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
               customerId: null,
             }),
             credentials: 'include',
           }).catch(() => {})
-        } else if (currentCustomerId && name && age) {
+        } else if (currentCustomerId && currentName && currentAge) {
           fetch('/api/user/profiles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              child_name: name,
-              child_age: Number.isNaN(parsedAge) ? age : parsedAge,
+              child_name: currentName,
+              child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
               customerId: currentCustomerId,
             }),
             credentials: 'include',
@@ -1165,8 +964,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               version: 'content-generation-consent-v1',
             },
             marketing: {
-              accepted: isMarketingConsentChecked,
-              accepted_at: isMarketingConsentChecked ? consentRecordedAt : null,
+              accepted: hasMarketingConsent,
+              accepted_at: hasMarketingConsent ? consentRecordedAt : null,
               version: 'marketing-consent-v1',
             },
           },
@@ -1325,7 +1124,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, name, age, bookType, isDataGenerationConsentChecked, isMarketingConsentChecked]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -1529,47 +1328,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     })
   }, [currentSpread, finalPreviewImages, previewPages, staticPreviewSecondPageUrl, viewState.showPreview])
 
-  useEffect(() => {
-    if (!viewState.showForm || showcaseImages.length <= 1) return
-
-    const timer = window.setTimeout(() => {
-      const nextIndex = (activeShowcaseIndex + 1) % showcaseImages.length
-      const url = getShowcaseImageSrc(showcaseImages[nextIndex] || '')
-      if (!url) return
-
-      const img = new Image()
-      img.decoding = 'async'
-      img.fetchPriority = 'low'
-      img.src = toNextImagePreloadUrl(url, isMobile ? 640 : 750)
-    }, activeShowcaseIndex === 0 ? 1200 : 180)
-
-    return () => window.clearTimeout(timer)
-  }, [activeShowcaseIndex, getShowcaseImageSrc, isMobile, showcaseImages, viewState.showForm])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (nameBoxRef.current && nameBoxRef.current.contains(target)) {
-        return;
-      }
-      if (ageBoxRef.current && ageBoxRef.current.contains(target)) {
-        return;
-      }
-      if (languageBoxRef.current && languageBoxRef.current.contains(target)) {
-        return;
-      }
-      setShowNameHistory(false);
-      setShowAgeHistory(false);
-      setShowLanguageOptions(false);
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-
-
-
   // --- Handlers ---
   const handleDeleteFace = useCallback(async (assetId: string) => {
     setRecentFaces((prev) => prev.filter((face) => face.asset_id !== assetId));
@@ -1599,6 +1357,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       // no-op
     }
   }, [user?.customerId, photoAssetId, setPhoto, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setPhotoPreview]);
+
+  const handleSelectRecentFace = useCallback((face: RecentFaceItem) => {
+    if (!face.signed_url) return;
+
+    facePrepareRunIdRef.current += 1;
+    setPhoto(null);
+    setPreparedFaceFile(null);
+    setFacePrepareStatus('ready');
+    setFacePrepareError(null);
+    setPhotoPreview(face.signed_url);
+    setFaceImageUrl(face.signed_url);
+    setPhotoAssetId(face.asset_id);
+    setPhotoStoragePath(face.storage_path ?? null);
+  }, [setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath]);
 
   const handleDeleteProfile = useCallback(async (payload: { assetId?: string; field?: 'name' | 'age'; value?: string | number }) => {
     if (payload.assetId) {
@@ -1878,6 +1650,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     if (!canAddToCart) return
     if (!resolvedBook) return
     if (!ensurePremiumVoiceSample()) return null
+    const currentName = nameRef.current
+    const currentAge = ageRef.current
+    const parsedAge = Number.parseInt(currentAge, 10)
 
     const ensuredCreationId =
       (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null) ||
@@ -1903,8 +1678,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const item = await addToCart(
         resolvedBook!,
         {
-        childName: name,
-        childAge: age,
+        childName: currentName,
+        childAge: currentAge,
         language: selectedLang,
         dedication: '',
         bookType,
@@ -1913,8 +1688,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         storagePath: photoStoragePath ?? undefined,
         faceImageUrl: faceImageUrl ?? undefined,
         textOverrides: {
-          child_name: name,
-          child_age: Number.isNaN(Number.parseInt(age, 10)) ? age : Number.parseInt(age, 10),
+          child_name: currentName,
+          child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
           dedication: '',
           language: selectedLang,
           book_type: bookType,
@@ -1931,7 +1706,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     shouldAnimateToCartRef.current = false;
     return item ?? null;
-    }, [canAddToCart, resolvedBook, addToCart, name, age, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample]);
+    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample]);
 
 
   const performCheckout = useCallback(async () => {
@@ -1942,6 +1717,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
         try {
         if (resolvedBook) {
+    const currentName = nameRef.current
+    const currentAge = ageRef.current
+    const parsedAge = Number.parseInt(currentAge, 10)
     const ensuredCreationId =
       (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null) ||
       (creationId && isUuid(creationId) ? creationId : null) ||
@@ -1957,8 +1735,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               return
             }
             const personalization = {
-              childName: name,
-              childAge: age,
+              childName: currentName,
+              childAge: currentAge,
               language: selectedLang,
               dedication: '',
               bookType,
@@ -1967,8 +1745,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               storagePath: photoStoragePath ?? undefined,
               faceImageUrl: faceImageUrl ?? undefined,
               textOverrides: {
-                child_name: name,
-                child_age: Number.isNaN(Number.parseInt(age, 10)) ? age : Number.parseInt(age, 10),
+                child_name: currentName,
+                child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
                 dedication: '',
                 language: selectedLang,
                 book_type: bookType,
@@ -2041,24 +1819,33 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [canCheckout, resolvedBook, name, age, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample]);
+    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample]);
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;
+    if (previewActionInFlightRef.current) return;
     if (!ensurePremiumVoiceSample()) return;
+    previewActionInFlightRef.current = 'ADD_TO_CART';
+    setPreviewActionPending('ADD_TO_CART');
     shouldAnimateToCartRef.current = true;
     triggerFlyToCart();
     requestAddToCart();
   };
 
   const handleCheckoutClick = () => {
-    if (!isCheckoutAcknowledged) {
-      setCheckoutAcknowledgementError(true);
-      return;
-    }
+    if (isExiting) return;
+    if (previewActionInFlightRef.current) return;
     if (!ensurePremiumVoiceSample()) return;
+    previewActionInFlightRef.current = 'CHECKOUT';
+    setPreviewActionPending('CHECKOUT');
     requestCheckout();
   };
+
+  useEffect(() => {
+    if (exitPhase !== 'IDLE') return;
+    previewActionInFlightRef.current = null;
+    setPreviewActionPending(null);
+  }, [exitPhase]);
 
   useEffect(() => {
     return () => {
@@ -2067,13 +1854,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!viewState.showPreview) {
-      setIsCheckoutAcknowledged(false);
-      setCheckoutAcknowledgementError(false);
-    }
-  }, [viewState.showPreview]);
 
   useEffect(() => {
     if (exitPhase !== 'REQUESTED') return
@@ -2222,233 +2002,48 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     transition: (isBookClosed || isClosing) ? 'none' : 'opacity 0.2s ease-in-out 0.2s'
   };
 
-  const renderPageContent = (side: 'left' | 'right', spreadIndex: number) => {
-      // Texture Logic
-      const pageTexture = bookType === 'premium' 
-        ? 'linear-gradient(to right, #f8f9fa, #e9ecef)' // Glossier/Cooler for premium
-        : 'linear-gradient(to right, #fffdf5, #fefae0)'; // Warmer for basic
-      
-      const paperNoise = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E")`;
+  const handlePreviewBookImageError = useCallback((imageUrl: string, options?: { refreshGenerated?: boolean }) => {
+    markPreviewImageError(imageUrl);
+    if (options?.refreshGenerated) {
+      void refreshPreviewImages('image-error', { force: true });
+    }
+  }, [markPreviewImageError, refreshPreviewImages]);
 
-      // Deep inner shadow to simulate the binding crease/curvature
-      const bindingShadow = side === 'left' 
-        ? 'linear-gradient(to left, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.1) 4%, transparent 12%)'
-        : 'linear-gradient(to right, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.1) 4%, transparent 12%)';
-
-      const commonPageStyle = {
-          background: `${pageTexture}, ${paperNoise}`,
-          // Subtle highlight on the outer edge to show curvature
-          boxShadow: side === 'left' 
-            ? 'inset -1px 0 2px rgba(0,0,0,0.1), inset 5px 0 10px rgba(255,255,255,0.4)' 
-            : 'inset 1px 0 2px rgba(0,0,0,0.1), inset -5px 0 10px rgba(255,255,255,0.4)'
-      }
-
-      // 1. Cover
-      if (spreadIndex === 0 && side === 'right') {
-          const generatedCover = previewPages[0] || '';
-          const canShowGeneratedCover = Boolean(generatedCover) && !previewImageErrors.has(generatedCover);
-          return (
-              <div className="w-full h-full relative overflow-hidden shadow-inner rounded-r-sm border-l border-white/20" style={commonPageStyle}>
-                  {/* Hardcover Shine Effect */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/10 z-20 pointer-events-none" />
-                  
-                  {canShowGeneratedCover ? (
-                    <img
-                      src={generatedCover}
-                      alt={resolvedBook?.title || book?.title || t('personalize.preview')}
-                      className="h-full w-full object-contain mix-blend-multiply opacity-95"
-                      decoding="async"
-                      loading="eager"
-                      fetchPriority="high"
-                      onError={() => {
-                        markPreviewImageError(generatedCover);
-                        void refreshPreviewImages('image-error', { force: true });
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-amber-50/80 px-6 text-center text-amber-900">
-                      <Wand2 className="h-9 w-9 animate-pulse text-amber-500" />
-                      <p className="text-sm font-semibold">{t('personalize.previewPageStillCreating')}</p>
-                    </div>
-                  )}
-                  
-                  {/* Hardcover Ridge at binding */}
-                  <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent z-30" />
-
-                  {!isFlipping && (
-                    <div className="absolute top-1/2 right-4 transform -translate-y-1/2 animate-pulse text-white drop-shadow-lg z-30 cursor-pointer p-3 bg-black/20 rounded-full hover:bg-black/40 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); turnPage('next'); }}>
-                        <ChevronRight className="h-8 w-8" />
-                    </div>
-                  )}
-              </div>
-          );
-      }
-      // Real preview spreads follow the configured preview page order after the cover.
-      if (
-        spreadIndex > 0 &&
-        (spreadIndex < previewPages.length || (spreadIndex === 1 && (previewPages.length === 1 || staticPreviewSecondPageUrl)) || finalPreviewImages[spreadIndex - 1]) &&
-        (side === 'left' || side === 'right')
-      ) {
-          const previewSpreadImage = previewPages[spreadIndex] || '';
-          const generatedSpreadImage = previewSpreadImage && !previewImageErrors.has(previewSpreadImage) ? previewSpreadImage : '';
-          const staticSecondPageImage = spreadIndex === 1 && staticPreviewSecondPageUrl && !previewImageErrors.has(staticPreviewSecondPageUrl)
-            ? staticPreviewSecondPageUrl
-            : '';
-          const finalPreviewImage = spreadIndex > 1 ? finalPreviewImages[spreadIndex - 1] || '' : '';
-          const spreadImage = generatedSpreadImage || staticSecondPageImage || finalPreviewImage;
-          const isGeneratingSecondPreview = spreadIndex === 1 && !generatedSpreadImage;
-          const isLockedFinalPreview = !generatedSpreadImage && !staticSecondPageImage && Boolean(finalPreviewImage);
-          const isLeftSide = side === 'left';
-          const isNearbySpread = Math.abs(spreadIndex - currentSpread) <= 1;
-          return (
-            <div
-              className={`w-full h-full relative overflow-hidden ${isLeftSide ? 'rounded-l-sm border-r border-gray-200' : 'rounded-r-sm'}`}
-              style={commonPageStyle}
-            >
-                {spreadImage ? (
-                  <div className="absolute inset-0 overflow-hidden">
-                    <img
-                      src={spreadImage}
-                      alt="Preview spread"
-                      className={`absolute top-0 h-full max-w-none object-cover ${isLockedFinalPreview || isGeneratingSecondPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}`}
-                      decoding="async"
-                      loading={isNearbySpread ? 'eager' : 'lazy'}
-                      fetchPriority={isNearbySpread ? 'high' : 'auto'}
-                      onError={() => {
-                        markPreviewImageError(spreadImage);
-                        if (generatedSpreadImage && spreadImage === generatedSpreadImage) {
-                          void refreshPreviewImages('image-error', { force: true });
-                        }
-                      }}
-                      style={{
-                        width: '200%',
-                        left: isLeftSide ? '0%' : '-100%',
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-amber-50/80 px-6 text-center text-amber-900">
-                    <Wand2 className="h-9 w-9 animate-pulse text-amber-500" />
-                    <p className="text-sm font-semibold">{t('personalize.previewPageStillCreating')}</p>
-                  </div>
-                )}
-                {isGeneratingSecondPreview ? (
-                  <>
-                    <div className="absolute inset-0 z-20 bg-white/64 backdrop-blur-[3px] pointer-events-none" />
-                    <div className="absolute inset-0 z-30 flex items-center justify-center px-6 text-center pointer-events-none">
-                      <div className="flex items-center gap-2 rounded-full border border-white/70 bg-white/78 px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-                        <Wand2 className="h-4 w-4 animate-pulse text-amber-500" />
-                        <span>{t('personalize.previewPageStillCreating')}</span>
-                      </div>
-                    </div>
-                  </>
-                ) : isLockedFinalPreview ? (
-                  <>
-                    <div className="absolute inset-0 z-20 bg-white/68 backdrop-blur-[3px] pointer-events-none" />
-                    <div className="absolute inset-0 z-30 flex items-center justify-center px-6 text-center pointer-events-none">
-                      <div className="rounded-full border border-white/70 bg-white/74 px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-                        {t('personalize.previewPageLocked')}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-                <div className="absolute inset-0 pointer-events-none z-10" style={{ background: bindingShadow }} />
-
-                {!isFlipping && !isLeftSide && (
-                    <button
-                      type="button"
-                      aria-label={t('personalize.backToCover')}
-                      title={t('personalize.backToCover')}
-                      className="absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/45 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur-xl transition hover:scale-105 hover:bg-white/70"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        returnToPreviewCover();
-                      }}
-                    >
-                      <BookOpen className="h-4 w-4" />
-                    </button>
-                )}
-
-                {!isFlipping && isLeftSide && (
-                    <div
-                      className="absolute top-1/2 left-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full bg-white/65 hover:bg-white/90 transition-colors"
-                      onClick={(e) => { e.stopPropagation(); turnPage('prev'); }}
-                    >
-                        <ChevronLeft className="h-8 w-8 text-gray-500" />
-                    </div>
-                )}
-                {!isFlipping && !isLeftSide && (
-                    <div
-                      className="absolute top-1/2 right-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full bg-white/65 hover:bg-white/90 transition-colors"
-                      onClick={(e) => { e.stopPropagation(); turnPage('next'); }}
-                    >
-                        <ChevronRight className="h-8 w-8 text-gray-500" />
-                    </div>
-                )}
-            </div>
-          );
-      }
-      // 4. Locked
-      if (spreadIndex === 0 && side === 'left') return null;
-      const pageNum = spreadIndex * 2 + (side === 'left' ? 0 : 1);
-      return (
-        <div className={`w-full h-full relative overflow-hidden ${side === 'left' ? 'rounded-l-sm border-r' : 'rounded-r-sm'}`} style={commonPageStyle}>
-            <div className="absolute inset-0 pointer-events-none z-10" style={{ background: bindingShadow }} />
-            <div className="absolute inset-0 p-8 filter blur-[2px] opacity-60 flex flex-col">
-                <span className="absolute top-4 right-4 text-gray-400 font-serif text-xs">{pageNum}</span>
-                <h3 className="font-serif text-xl font-bold text-gray-800 mb-4">{t('personalize.pageLabel', { num: pageNum })}</h3>
-                <div className="mt-4 h-32 bg-gray-200/50 rounded-md"></div>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center z-20">
-                <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-gray-100 flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs font-bold text-gray-600">{t('personalize.locked')}</span>
-                </div>
-            </div>
-            {!isFlipping && side === 'right' && (
-                <button
-                  type="button"
-                  aria-label={t('personalize.backToCover')}
-                  title={t('personalize.backToCover')}
-                  className="absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/45 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur-xl transition hover:scale-105 hover:bg-white/70"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    returnToPreviewCover();
-                  }}
-                >
-                  <BookOpen className="h-4 w-4" />
-                </button>
-            )}
-            {!isFlipping && side === 'left' && (
-                <div className="absolute top-1/2 left-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full hover:bg-gray-200 transition-colors"
-                     onClick={(e) => { e.stopPropagation(); turnPage('prev'); }}>
-                    <ChevronLeft className="h-8 w-8 text-gray-400" />
-                </div>
-            )}
-            {!isFlipping && side === 'right' && (
-                <div className="absolute top-1/2 right-4 transform -translate-y-1/2 z-30 cursor-pointer p-2 rounded-full hover:bg-gray-200 transition-colors"
-                     onClick={(e) => { e.stopPropagation(); turnPage('next'); }}>
-                    <ChevronRight className="h-8 w-8 text-gray-400" />
-                </div>
-            )}
-        </div>
-      );
-  };
-
+  const renderPageContent = (side: 'left' | 'right', spreadIndex: number) => (
+    <PreviewBookPageContent
+      side={side}
+      spreadIndex={spreadIndex}
+      bookType={bookType}
+      previewPages={previewPages}
+      previewImageErrors={previewImageErrors}
+      staticPreviewSecondPageUrl={staticPreviewSecondPageUrl}
+      finalPreviewImages={finalPreviewImages}
+      currentSpread={currentSpread}
+      isFlipping={isFlipping}
+      resolvedTitle={resolvedBook?.title || book?.title || t('personalize.preview')}
+      labels={{
+        previewAlt: t('personalize.preview'),
+        previewPageStillCreating: t('personalize.previewPageStillCreating'),
+        previewPageLocked: t('personalize.previewPageLocked'),
+        backToCover: t('personalize.backToCover'),
+        locked: t('personalize.locked'),
+        pageLabel: (pageNumber) => t('personalize.pageLabel', { num: pageNumber }),
+      }}
+      onImageError={handlePreviewBookImageError}
+      onTurnPage={turnPage}
+      onReturnToCover={returnToPreviewCover}
+    />
+  );
   const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing';
   const hasUsablePhoto = Boolean(photoAssetId || (photo && preparedFaceFile && facePrepareStatus === 'ready'));
-  const isFormReady = name.length > 0 && age.length > 0 && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
-  const isFormValid = isFormReady && isDataGenerationConsentChecked;
-  const generateButtonLabel = isFacePreparing
-    ? t('personalize.photoPreparing')
-    : facePrepareStatus === 'failed'
-      ? t('personalize.photoNeedsFix')
-      : isFormReady && !isDataGenerationConsentChecked
-        ? t('personalize.dataConsentRequiredShort')
-      : isFormValid
-        ? t('personalize.generateMagicPreview')
-        : t('personalize.completeDetails');
+  const isFormReady = areChildDetailsReady && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
+  const handleGeneratePreviewAction = useCallback((consent: { dataGeneration: boolean; marketing: boolean }) => {
+    dataGenerationConsentRef.current = consent.dataGeneration;
+    marketingConsentRef.current = consent.marketing;
+    setName(nameRef.current);
+    setAge(ageRef.current);
+    primaryAction();
+  }, [primaryAction, setAge, setName]);
   if (!book) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#fffaf3] px-4 text-center text-sm font-medium text-gray-500">
@@ -2470,241 +2065,56 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   };
   const previewBookShadow = 'drop-shadow(10px 22px 36px rgba(0,0,0,0.16)) drop-shadow(4px 8px 14px rgba(0,0,0,0.08))';
   
-
-  const renderProgressSteps = () => {
-    // Premium Progress Bar
-    const steps = [
-        { num: 1, label: t('personalize.stepStory'), icon: Book },
-        { num: 2, label: t('personalize.stepCustomize'), icon: Sparkles },
-        { num: 3, label: t('personalize.stepPreview'), icon: Wand2 },
-        { num: 4, label: t('personalize.stepOrder'), icon: Package },
-    ];
-    const fillPercent = Math.max(0, Math.min(100, (currentProgressIndex / (steps.length - 1)) * 100))
-
-    return (
-      <div className="max-w-2xl mx-auto mb-10 relative hidden md:block px-4">
-          {/* Track Background - Adjusted left-9 right-9 to be fully covered by circles */}
-          <div className="absolute top-1/2 left-9 right-9 h-1.5 bg-gray-100 -translate-y-1/2 rounded-full z-0 overflow-hidden shadow-inner">
-             {/* Active Track Fill */}
-             <motion.div 
-                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full"
-                initial={false}
-                animate={{ width: `${fillPercent}%` }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-             />
-          </div>
-
-          <div className="relative flex justify-between z-10 w-full">
-               {steps.map((s) => {
-                   // Logic: Step is considered "active" or "completed" based on current step
-                        const stepIndex = s.num - 1
-                        const isCompleted = currentProgressIndex > stepIndex
-                        const isActive = currentProgressIndex === stepIndex
-
-
-                   return (
-                       <div key={s.num} className="flex flex-col items-center gap-3 cursor-default group">
-                           <div className="relative">
-                               {/* Pulse Effect for Active Step */}
-                               {isActive && (
-                                   <span className="absolute inset-0 rounded-full bg-amber-400/30 animate-ping"></span>
-                               )}
-                               
-                               <div 
-                                    className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all duration-500 shadow-md ${
-                                        isActive 
-                                            ? 'bg-amber-500 border-amber-200 text-white scale-110' 
-                                            : isCompleted 
-                                                ? 'bg-orange-500 border-orange-200 text-white' 
-                                                : 'bg-white/60 backdrop-blur-sm border-white/50 text-gray-300'
-                                    }`}
-                               >
-                                   {isCompleted && !isActive ? <Check className="w-6 h-6" /> : <s.icon className="w-5 h-5" />}
-                               </div>
-                           </div>
-                           
-                           <span 
-                                className={`text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${
-                                    isActive || isCompleted ? 'text-gray-800' : 'text-gray-400'
-                                }`}
-                           >
-                               {s.label}
-                           </span>
-                       </div>
-                   );
-               })}
-          </div>
-      </div>
-    );
-  };
-
-  const renderProductShowcase = () => {
-      const includedItems = {
-          digital: [
-              t('personalize.included.digital1'),
-              t('personalize.included.digital2'),
-              t('personalize.included.digital3'),
-              t('personalize.included.digital4'),
-          ],
-          basic: [
-              t('personalize.included.basic1'),
-              t('personalize.included.basic2'),
-              t('personalize.included.basic3'),
-              t('personalize.included.basic4'),
-              t('personalize.included.basic5'),
-              t('personalize.included.basic6'),
-          ],
-          premium: [
-              t('personalize.included.premium1'),
-              t('personalize.included.premium2'),
-              t('personalize.included.premium3'),
-              t('personalize.included.premium4'),
-          ],
-          supreme: [
-              t('personalize.included.supreme1'),
-              t('personalize.included.supreme2'),
-              t('personalize.included.supreme3'),
-              t('personalize.included.supreme4'),
-              t('personalize.included.supreme5'),
-              t('personalize.included.supreme6'),
-              t('personalize.included.supreme7'),
-          ],
-      } as const
-
-      const items = includedItems[bookType] ?? includedItems.digital
-
-      return (
-          <div className="mt-4 p-4 rounded-2xl border border-white/60 bg-white/55 backdrop-blur-sm shadow-[0_4px_16px_rgba(148,93,34,0.06)]">
-              <h5 className="text-[11px] font-semibold uppercase tracking-[0.10em] text-amber-700 mb-3 flex items-center gap-2">
-                  <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                  {t('personalize.whatIncluded')}
-              </h5>
-              <ul className="space-y-2">
-                  {items.map((item) => {
-                      const separatorIndex = item.indexOf(': ')
-                      const label = separatorIndex > 0 ? item.slice(0, separatorIndex) : ''
-                      const description = separatorIndex > 0 ? item.slice(separatorIndex + 2) : item
-
-                      return (
-                        <li key={item} className="flex items-start gap-2 text-sm leading-6 text-gray-700">
-                            <div className="min-w-[16px] pt-1">
-                                <Check className="h-4 w-4 text-green-500" />
-                            </div>
-                            <span>
-                              {label ? <span className="font-semibold text-slate-900">{label}: </span> : null}
-                              {description}
-                            </span>
-                        </li>
-                      )
-                  })}
-              </ul>
-          </div>
-      );
-  };
-
   return (
     <div className="page-surface min-h-screen flex flex-col font-sans relative z-20">
-      
-      {/* Fly Animation Portal Effect */}
-      <AnimatePresence>
-          {showFlyAnimation && (
-              <motion.div
-                  initial={{ 
-                      position: 'fixed', 
-                      top: flyOrigin.y, 
-                      left: flyOrigin.x, 
-                      width: 50, 
-                      height: 70, 
-                      opacity: 1, 
-                      zIndex: 100 
-                  }}
-                  animate={{ 
-                      top: flyTarget.y,
-                      left: flyTarget.x,
-                      width: 20, 
-                      height: 30, 
-                      opacity: 0,
-                      rotate: 360,
-                      scale: 0.5
-                  }}
-                  transition={{ duration: 0.8, ease: "easeInOut" }}
-                  className="rounded-md overflow-hidden shadow-2xl pointer-events-none border-2 border-white"
-              >
-                  <img src={book.coverUrl} className="w-full h-full object-cover" alt="" />
-              </motion.div>
-          )}
-      </AnimatePresence>
+      <PersonalizeOverlays
+        showFlyAnimation={showFlyAnimation}
+        flyOrigin={flyOrigin}
+        flyTarget={flyTarget}
+        flyCoverUrl={book.coverUrl}
+        showPreviewCancelledToast={showPreviewCancelledToast}
+        previewCancelledLabel={t('personalize.previewCancelledToast')}
+        showExitConfirm={showExitConfirm}
+        exitLabels={{
+          title: t('personalize.exitConfirmTitle'),
+          body: t('personalize.exitConfirmBody'),
+          stay: t('personalize.exitConfirmStay'),
+          back: t('personalize.exitConfirmBack'),
+        }}
+        onStay={dismissExitConfirm}
+        onBackToCustomize={returnToCustomizeFromPreview}
+      />
 
-      <AnimatePresence>
-        {showPreviewCancelledToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="fixed bottom-5 left-1/2 z-[120] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-white/80 bg-white/92 px-4 py-3 shadow-[0_18px_50px_rgba(218,119,31,0.18)] backdrop-blur-xl"
-          >
-            <div className="flex items-center gap-3 text-sm font-semibold text-gray-800">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                <X className="h-4 w-4" />
-              </div>
-              <span>{t('personalize.previewCancelledToast')}</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/72 backdrop-blur-2xl border-b border-white/60 shadow-[0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(16,24,40,0.06)]">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-            <button onClick={handleBack} className="flex items-center gap-2 text-gray-600 hover:text-amber-600 transition-colors">
-                <ChevronLeft className="h-5 w-5" />
-                <span className="text-sm font-medium">{t('common.back')}</span>
-            </button>
-            <div className="text-gray-900 font-serif font-bold text-lg hidden sm:block">
-                {book.title}
-            </div>
-            
-            <div className="flex items-center gap-2 sm:gap-4">
-                <LanguageSwitcher menuClassName="w-44 rounded-md border border-gray-100 bg-white shadow-lg py-1" />
-
-                <Button ref={cartIconRef} variant="ghost" size="sm" onClick={() => router.push('/cart')} className="relative px-2">
-                    <ShoppingCart className="h-5 w-5 text-gray-700" />
-                    {cartCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">
-                            {cartCount}
-                        </span>
-                    )}
-                </Button>
-
-                <div className="relative">
-                    {user ? (
-                    <div className="flex items-center">
-                        <button onClick={() => setUserMenuOpen(!isUserMenuOpen)} className="flex items-center gap-2 focus:outline-none">
-                            <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full border border-gray-200 object-cover" />
-                        </button>
-                        {isUserMenuOpen && (
-                            <div className="absolute right-0 top-full mt-2 w-56 rounded-md border border-gray-100 bg-white shadow-lg py-1 z-50">
-                                <div className="px-4 py-2 border-b border-gray-50">
-                                    <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                                </div>
-                                <button onClick={() => { router.push('/orders'); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"><Package className="h-4 w-4" />{t('navbar.myOrders')}</button>
-                                <button onClick={() => { logout(); setUserMenuOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" />{t('navbar.logOut')}</button>
-                            </div>
-                        )}
-                    </div>
-                    ) : (
-                        <Button onClick={() => openLoginModal()} size="sm">{t('navbar.logIn')}</Button>
-                    )}
-                </div>
-            </div>
-        </div>
-      </header>
+      <PersonalizeHeader
+        title={book.title}
+        user={user}
+        cartCount={cartCount}
+        cartButtonRef={cartIconRef}
+        labels={{
+          back: t('common.back'),
+          myOrders: t('navbar.myOrders'),
+          logOut: t('navbar.logOut'),
+          logIn: t('navbar.logIn'),
+        }}
+        onBack={handleBack}
+        onCartClick={() => router.push('/cart')}
+        onOrdersClick={() => router.push('/orders')}
+        onLoginClick={() => openLoginModal()}
+        onLogoutClick={logout}
+      />
 
       {/* Main Content */}
       <main className="relative mx-auto w-full max-w-full flex-grow overflow-hidden px-4 py-6 md:container md:py-7">
         
-        {renderProgressSteps()}
+        <ProgressSteps
+          currentIndex={currentProgressIndex}
+          labels={{
+            story: t('personalize.stepStory'),
+            customize: t('personalize.stepCustomize'),
+            preview: t('personalize.stepPreview'),
+            order: t('personalize.stepOrder'),
+          }}
+        />
 
         <AnimatePresence mode="wait">
             
@@ -2713,983 +2123,234 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
             {/* Step 2: The Rich Form */}
             {viewState.showForm && (
-                <motion.div 
-                    key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                    className="mx-auto grid w-full min-w-0 max-w-[1320px] overflow-hidden gap-5 lg:grid-cols-12 lg:gap-7"
-                >
-                    <div className="order-1 min-w-0 space-y-4 md:space-y-5 lg:order-1 lg:col-span-6">
-                        <div className="w-full min-w-0 overflow-hidden bg-white/50 backdrop-blur-md border border-white/82 p-3 sm:p-3.5 md:p-4 rounded-[1.1rem] shadow-[0_16px_30px_-28px_rgba(0,0,0,0.22)]">
-                            <div className="mb-4 md:mb-5">
-                                <div
-                                  ref={showcaseRowRef}
-                                  className="flex min-w-0 flex-col gap-2.5 md:grid md:items-start md:gap-3"
-                                  style={isMobile ? undefined : { gridTemplateColumns: `${desktopThumbColumnWidth}px minmax(0, 1fr)` }}
-                                >
-                                    <div className="order-2 min-w-0 md:order-1 md:shrink-0">
-                                        <div className="relative w-full max-w-full min-w-0 overflow-hidden md:overflow-visible">
-                                        <div
-                                          ref={showcaseThumbViewportRef}
-                                          className="thumb-scroll-column flex w-full max-w-full min-w-0 gap-2 overflow-x-auto px-0 pb-1 md:w-auto md:max-w-none md:flex-col md:gap-2 md:overflow-y-auto md:overflow-x-hidden md:pr-[6px] md:pb-0"
-                                          style={
-                                            isMobile
-                                              ? undefined
-                                              : { width: `${desktopThumbColumnWidth}px`, height: `${desktopMainShowcaseSize}px` }
-                                          }
-                                        >
-                                        {showcaseImages.map((image, index) => {
-                                          const isActive = index === activeShowcaseIndex;
-
-                                          return (
-                                            <button
-                                              key={`${image}-${index}`}
-                                              ref={(node) => {
-                                                showcaseThumbRefs.current[index] = node;
-                                              }}
-                                              type="button"
-                                              onClick={() => setActiveShowcaseIndex(index)}
-                                              className={`group relative aspect-square overflow-hidden rounded-[0.82rem] border transition-all duration-300 shrink-0 ${
-                                                isActive
-                                                  ? 'border-amber-300/95 bg-white/85 ring-2 ring-amber-200/55 shadow-[0_8px_18px_-18px_rgba(217,119,6,0.24)]'
-                                                  : 'border-gray-200/60 bg-white/30 hover:border-amber-200/80'
-                                              }`}
-                                              style={
-                                                isMobile
-                                                  ? { width: '3.75rem', height: '3.75rem' }
-                                                  : { width: `${desktopShowcaseThumbSize}px`, height: `${desktopShowcaseThumbSize}px` }
-                                              }
-                                              aria-label={`Show preview image ${index + 1}`}
-                                            >
-                                              <div className="relative aspect-square overflow-hidden rounded-[inherit]">
-                                                <NextImage
-                                                  src={getShowcaseImageSrc(image)}
-                                                  alt={`${templateTitle || book.title} showcase ${index + 1}`}
-                                                  fill
-                                                  sizes={isMobile ? '60px' : `${desktopShowcaseThumbSize}px`}
-                                                  loading="lazy"
-                                                  onError={() => markShowcaseImageError(image)}
-                                                  className={`h-full w-full object-cover transition-transform duration-500 ${isActive ? 'scale-[1.04]' : 'scale-100 group-hover:scale-[1.03]'}`}
-                                                />
-                                              </div>
-                                            </button>
-                                          );
-                                        })}
-                                        </div>
-                                        {!isMobile ? (
-                                          <>
-                                            <div className="pointer-events-none absolute inset-x-0 top-0 h-5 rounded-t-[0.82rem] bg-gradient-to-b from-white/96 via-white/72 to-transparent" />
-                                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 rounded-b-[0.82rem] bg-gradient-to-t from-white/96 via-white/72 to-transparent" />
-                                          </>
-                                        ) : null}
-                                        </div>
-                                    </div>
-
-                                    <div className="order-1 md:order-2 min-w-0">
-                                        <div
-                                          ref={mainShowcaseRef}
-                                          className="relative mx-auto aspect-square w-full max-w-[430px] overflow-hidden rounded-[0.96rem] bg-[#f6efe7] shadow-[0_16px_24px_-22px_rgba(0,0,0,0.18)] md:mx-0 md:max-w-none"
-                                          style={isMobile ? undefined : { width: `${desktopMainShowcaseSize}px`, maxWidth: '100%' }}
-                                        >
-                                            <AnimatePresence mode="wait">
-                                                <motion.div
-                                                    key={activeShowcaseImage}
-                                                    className="absolute inset-0"
-                                                    initial={{ opacity: 0, x: 18, scale: 1.02 }}
-                                                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                                                    exit={{ opacity: 0, x: -18, scale: 0.985 }}
-                                                    transition={{ duration: 0.42, ease: 'easeOut' }}
-                                                >
-                                                    {activeShowcaseImageSrc ? (
-                                                      <NextImage
-                                                        src={activeShowcaseImageSrc}
-                                                        alt={`${templateTitle || book.title} showcase main`}
-                                                        fill
-                                                        sizes={isMobile ? 'min(100vw, 430px)' : `${desktopMainShowcaseSize}px`}
-                                                        priority={activeShowcaseIndex === 0}
-                                                        fetchPriority={activeShowcaseIndex === 0 ? 'high' : 'auto'}
-                                                        onError={() => markShowcaseImageError(activeShowcaseImage)}
-                                                        className="object-cover"
-                                                      />
-                                                    ) : null}
-                                                </motion.div>
-                                            </AnimatePresence>
-                                            {showcaseImages.length > 1 ? (
-                                              <>
-                                                <button
-                                                  type="button"
-                                                  aria-label="Previous showcase image"
-                                                  onClick={goToPreviousShowcaseImage}
-                                                  className="absolute left-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/35 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.18)] backdrop-blur-xl transition duration-200 hover:scale-105 hover:bg-white/55 focus:outline-none focus:ring-2 focus:ring-amber-300/70 md:left-4 md:h-11 md:w-11"
-                                                >
-                                                  <ChevronLeft className="h-5 w-5 drop-shadow-sm" />
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  aria-label="Next showcase image"
-                                                  onClick={goToNextShowcaseImage}
-                                                  className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/35 text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.18)] backdrop-blur-xl transition duration-200 hover:scale-105 hover:bg-white/55 focus:outline-none focus:ring-2 focus:ring-amber-300/70 md:right-4 md:h-11 md:w-11"
-                                                >
-                                                  <ChevronRight className="h-5 w-5 drop-shadow-sm" />
-                                                </button>
-                                              </>
-                                            ) : null}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <h2 className="text-[1.42rem] sm:text-[1.52rem] md:text-[1.68rem] font-serif font-bold text-gray-900 mb-2">{templateTitle || book.title}</h2>
-                            <p className="text-gray-600 text-sm leading-relaxed mb-4 md:mb-5">
-                              {templateInnerDescription || resolvedBook?.innerDescription || templateDescription || book.description}
-                            </p>
-                            
-                            {magicAttributes.length ? (
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">{t('personalize.magicAttributes')}</h4>
-                                {magicAttributes.map((attribute) => {
-                                  const standardDisplay = MAGIC_ATTRIBUTE_DISPLAY[normalizeMagicAttributeKey(attribute.label)]
-                                  const display = standardDisplay ?? DEFAULT_MAGIC_ATTRIBUTE_DISPLAY
-                                  const Icon = display.icon
-                                  const label = standardDisplay ? t(standardDisplay.i18nKey) : attribute.label
-
-                                  return (
-                                    <div key={`${attribute.label}-${attribute.percent}`} className="flex items-center justify-between gap-4 text-sm text-gray-700">
-                                      <span className="flex min-w-0 items-center gap-2">
-                                        <Icon className={`h-4 w-4 shrink-0 ${display.iconClassName}`} />
-                                        <span className="truncate">{label}</span>
-                                      </span>
-                                      <div className="h-1.5 w-24 shrink-0 rounded-full bg-gray-300/80">
-                                        <div
-                                          className={`h-full rounded-full ${display.barClassName}`}
-                                          style={{ width: `${attribute.percent}%` }}
-                                        />
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                            </div>
-                            ) : null}
-                        </div>
-
-                        <div className="bg-white/65 backdrop-blur-md border border-white/80 rounded-[0.96rem] shadow-[0_14px_24px_-24px_rgba(0,0,0,0.2)] p-3.5 md:p-4">
-                            <button
-                              type="button"
-                              onClick={() => setMobileStoryInfoOpen((prev) => !prev)}
-                              className="mb-0 flex w-full items-center justify-between gap-3 text-left md:mb-4 md:cursor-default"
-                              aria-expanded={isMobileStoryInfoOpen}
-                            >
-                              <span className="flex items-center gap-2">
-                                <CircleHelp className="h-5 w-5 text-amber-500" />
-                                <span className="text-sm font-bold uppercase tracking-[0.18em] text-amber-600">
-                                  About This Story
-                                </span>
-                              </span>
-                              <ChevronDown
-                                className={`h-4 w-4 shrink-0 text-amber-500 transition-transform duration-200 md:hidden ${
-                                  isMobileStoryInfoOpen ? 'rotate-180' : ''
-                                }`}
-                              />
-                            </button>
-
-                            <div className={`${isMobileStoryInfoOpen ? 'mt-4 block' : 'hidden'} space-y-3 md:mt-0 md:block`}>
-                                {bookFaqItems.map((item, index) => {
-                                  const isOpen = expandedBookFaq === index;
-
-                                  return (
-                                    <div
-                                      key={item.question}
-                                      className="rounded-2xl border border-amber-100/80 bg-white/80 overflow-hidden"
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => setExpandedBookFaq((prev) => (prev === index ? null : index))}
-                                        className="w-full flex items-start justify-between gap-3 px-4 py-4 text-left hover:bg-amber-50/60 transition-colors"
-                                      >
-                                        <span className="text-sm font-semibold text-gray-800 leading-6">{item.question}</span>
-                                        <span className="mt-0.5 text-amber-500 shrink-0">
-                                          <ChevronDown
-                                            className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
-                                          />
-                                        </span>
-                                      </button>
-                                      {isOpen ? (
-                                        <div className="px-4 pb-4 text-sm leading-6 text-gray-600">
-                                          {item.answer}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="order-2 min-w-0 lg:order-2 lg:col-span-6">
-                        <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-white/78 backdrop-blur-sm rounded-[1.14rem] p-3.5 sm:p-4 md:p-5 shadow-[0_18px_28px_-26px_rgba(0,0,0,0.18)] border border-amber-50/80">
-                            <div className="mb-4 flex items-start justify-between gap-3 sm:items-center sm:mb-5">
-                                <h3 className="text-[1.55rem] md:text-2xl font-serif font-bold text-gray-900 flex items-center gap-2">
-                                    <Sparkles className="h-6 w-6 text-amber-500" /> {t('personalize.customize')}
-                                </h3>
-                                <div className="text-2xl font-bold text-amber-600">{formatLocaleCurrency(currentPrice, language)}</div>
-                            </div>
-
-                            <div className="space-y-4 md:space-y-6 flex-grow">
-                                <div className="border-2 border-dashed border-amber-200 rounded-[1rem] p-3 sm:p-4 md:p-[18px] text-center bg-amber-50/60 hover:bg-amber-50 transition-colors relative group cursor-pointer">
-                                    <input type="file" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-30" accept="image/*" />
-                                    {photoPreview ? (
-                                        <div className="relative z-10 pointer-events-none">
-                                            <div className="relative mx-auto w-20 sm:w-24 md:w-28">
-                                                <img src={photoPreview} alt={t('personalize.uploadChildPhoto')} className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover mx-auto border-4 border-white shadow-lg" />
-                                                {isFacePreparing ? (
-                                                    <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-amber-100">
-                                                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-                                                    </span>
-                                                ) : facePrepareStatus === 'ready' ? (
-                                                    <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md ring-2 ring-white">
-                                                        <Check className="h-4 w-4" />
-                                                    </span>
-                                                ) : facePrepareStatus === 'failed' ? (
-                                                    <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-white shadow-md ring-2 ring-white">
-                                                        <X className="h-4 w-4" />
-                                                    </span>
-                                                ) : null}
-                                            </div>
-                                            {isFacePreparing ? (
-                                                <p className="mt-2 text-xs font-semibold text-amber-700">
-                                                    {facePrepareStatus === 'checking' ? t('personalize.photoChecking') : t('personalize.photoPreparing')}
-                                                </p>
-                                            ) : facePrepareStatus === 'ready' ? (
-                                                <p className="mt-2 text-xs font-semibold text-emerald-600">{t('personalize.photoReady')}</p>
-                                            ) : facePrepareStatus === 'failed' ? (
-                                                <div className="mx-auto mt-2 max-w-xs space-y-1">
-                                                    <p className="text-xs font-semibold leading-5 text-rose-600">
-                                                        {facePrepareError ?? t('personalize.photoPrepareFailed')}
-                                                    </p>
-                                                    <p className="text-[11px] font-medium leading-4 text-rose-500/90">
-                                                        {t('personalize.photoQualityReason')}
-                                                    </p>
-                                                </div>
-                                            ) : null}
-                                            <p className="text-xs text-amber-600 mt-1.5 font-medium">{t('personalize.clickToChangePhoto')}</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2 pointer-events-none">
-                                            <motion.div
-                                                className="relative w-18 h-18 sm:w-20 sm:h-20 mx-auto"
-                                                animate={{ y: [0, -7, 0] }}
-                                                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-                                            >
-                                                <span className="absolute inset-0 rounded-full bg-amber-300/45 blur-2xl animate-pulse-slow" />
-                                                <span className="absolute inset-3 rounded-full bg-orange-200/50 blur-xl animate-pulse" />
-                                                <div className="absolute inset-2 rounded-full border border-amber-300/60" />
-                                                <div className="relative mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-white via-amber-50 to-amber-100 text-amber-600 shadow-[0_14px_34px_rgba(245,158,11,0.34)] ring-4 ring-white/80 sm:h-20 sm:w-20">
-                                                    <Camera className="h-8 w-8 sm:h-9 sm:w-9" />
-                                                </div>
-                                            </motion.div>
-                                            <div>
-                                                <h4 className="font-bold text-gray-900 text-base sm:text-lg">{t('personalize.uploadChildPhoto')}</h4>
-                                                <p className="mt-0.5 text-xs font-medium text-amber-700">{t('personalize.uploadPhotoHint')}</p>
-                                            </div>
-                                            <div className="mx-auto w-full min-w-0 max-w-[320px] sm:max-w-[360px] md:max-w-[380px] rounded-[0.85rem] border border-amber-100/90 bg-white/74 p-2 sm:p-2.5 shadow-[0_10px_22px_rgba(245,158,11,0.08)]">
-                                                <div className="grid min-w-0 grid-cols-3 gap-1">
-                                                    {GOOD_PHOTO_EXAMPLES.map((item) => (
-                                                        <div key={item.src} className="relative">
-                                                            <div className="relative aspect-[7/5] overflow-hidden rounded-md border border-emerald-100 bg-emerald-50 shadow-[0_5px_12px_rgba(16,185,129,0.08)] sm:rounded-lg">
-                                                                <NextImage
-                                                                    src={item.src}
-                                                                    alt={item.alt}
-                                                                    fill
-                                                                    sizes="(max-width: 767px) 28vw, 120px"
-                                                                    loading="lazy"
-                                                                    className="object-cover"
-                                                                />
-                                                            </div>
-                                                            <div className="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
-                                                                <Check className="h-2 w-2" />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="mt-1 grid min-w-0 grid-cols-3 gap-1">
-                                                    {BAD_PHOTO_EXAMPLES.map((item) => (
-                                                        <div key={item.src} className="relative">
-                                                            <div className="relative aspect-[7/5] overflow-hidden rounded-md border border-rose-100 bg-rose-50 shadow-[0_5px_12px_rgba(244,63,94,0.08)] sm:rounded-lg">
-                                                                <NextImage
-                                                                    src={item.src}
-                                                                    alt={item.alt}
-                                                                    fill
-                                                                    sizes="(max-width: 767px) 28vw, 120px"
-                                                                    loading="lazy"
-                                                                    className="object-cover"
-                                                                />
-                                                            </div>
-                                                            <div className="absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
-                                                                <X className="h-2 w-2" />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="mt-1.5 text-[9px] sm:text-[10px] leading-4 text-gray-500 text-left">
-                                                    {t('personalize.photoTips')}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                {recentFaces.length > 0 && (
-                                  <div className="flex max-w-full flex-wrap gap-3 overflow-hidden">
-                                    {recentFaces.map((face) => (
-                                      <div key={face.asset_id} className="relative w-12 h-12">
-                                        <button
-                                          type="button"
-                                          className="w-12 h-12 rounded-full overflow-hidden border border-white shadow-sm hover:ring-2 hover:ring-amber-300 transition"
-                                          onClick={() => {
-                                            if (!face.signed_url) return;
-                                            facePrepareRunIdRef.current += 1;
-                                            setPhoto(null);
-                                            setPreparedFaceFile(null);
-                                            setFacePrepareStatus('ready');
-                                            setFacePrepareError(null);
-                                            setPhotoPreview(face.signed_url);
-                                            setFaceImageUrl(face.signed_url);
-                                            setPhotoAssetId(face.asset_id);
-                                            setPhotoStoragePath(face.storage_path ?? null);
-                                          }}
-                                        >
-                                          <img
-                                            src={face.signed_url ?? ''}
-                                            alt="Recent face"
-                                            className="w-full h-full object-cover"
-                                          />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white text-gray-500 border border-gray-200 shadow hover:text-red-500 hover:border-red-200 transition flex items-center justify-center"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            handleDeleteFace(face.asset_id);
-                                          }}
-                                        >
-                                          <X className="h-2.5 w-2.5" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                <div className="grid gap-4 md:grid-cols-2 md:gap-6">
-                                    <div ref={nameBoxRef} className="space-y-2 relative">
-                                        <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.nameLabel')}</label>
-                                        <input 
-                                            type="text" 
-                                            value={name} 
-                                            onChange={(e) => setName(e.target.value)} 
-                                            onFocus={() => {
-                                              loadProfiles();
-                                              setShowNameHistory(true);
-                                              setShowAgeHistory(false);
-                                              setShowLanguageOptions(false);
-                                            }}
-                                            placeholder={t('personalize.namePlaceholder')} 
-                                            className="w-full px-4 py-3 rounded-xl glass-input placeholder:text-gray-400/60 text-gray-900 font-medium" 
-                                        />
-                                        {showNameHistory && (
-                                          <div
-                                            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 max-h-44 overflow-auto"
-                                            onMouseDown={(event) => {
-                                              event.preventDefault();
-                                              event.stopPropagation();
-                                            }}
-                                          >
-                                            {Array.from(
-                                              new Set(
-                                                recentProfiles
-                                                  .map((profile) => profile.metadata?.name ?? profile.metadata?.child_name)
-                                                  .filter((value): value is string => Boolean(value))
-                                                  .map((value) => String(value))
-                                              )
-                                            ).length === 0 ? (
-                                              <div className="px-3 py-2 text-xs text-gray-400">{t('personalize.noHistory')}</div>
-                                            ) : (
-                                              Array.from(
-                                                new Set(
-                                                  recentProfiles
-                                                    .map((profile) => profile.metadata?.name ?? profile.metadata?.child_name)
-                                                    .filter((value): value is string => Boolean(value))
-                                                    .map((value) => String(value))
-                                                )
-                                              ).map((value) => (
-                                                  <div
-                                                    key={value}
-                                                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-amber-50 transition"
-                                                  >
-                                                    <button
-                                                      type="button"
-                                                      className="flex-1 text-left text-sm text-gray-700"
-                                                      onMouseDown={(event) => {
-                                                        event.preventDefault();
-                                                        setName(value);
-                                                        setShowNameHistory(false);
-                                                      }}
-                                                    >
-                                                      {value}
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      className="text-gray-400 hover:text-red-500 transition"
-                                                      onMouseDown={(event) => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        handleDeleteProfile({ field: 'name', value });
-                                                      }}
-                                                    >
-                                                      <X className="h-3 w-3" />
-                                                    </button>
-                                                  </div>
-                                                ))
-                                            )}
-                                          </div>
-                                        )}
-                                    </div>
-                                    <div ref={ageBoxRef} className="space-y-2 relative">
-                                        <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.ageLabel')}</label>
-                                        <input 
-                                            type="number" 
-                                            value={age} 
-                                            onChange={(e) => setAge(e.target.value)} 
-                                            onFocus={() => {
-                                              loadProfiles();
-                                              setShowAgeHistory(true);
-                                              setShowNameHistory(false);
-                                              setShowLanguageOptions(false);
-                                            }}
-                                            placeholder={t('personalize.agePlaceholder')} 
-                                            className="w-full px-4 py-3 rounded-xl glass-input placeholder:text-gray-400/60 text-gray-900 font-medium" 
-                                        />
-                                        {showAgeHistory && (
-                                          <div
-                                            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 max-h-44 overflow-auto"
-                                            onMouseDown={(event) => {
-                                              event.preventDefault();
-                                              event.stopPropagation();
-                                            }}
-                                          >
-                                            {Array.from(
-                                              new Set(
-                                                recentProfiles
-                                                  .map((profile) => profile.metadata?.age ?? profile.metadata?.child_age)
-                                                  .filter((value): value is number => value !== undefined && value !== null)
-                                                  .map((value) => String(value))
-                                              )
-                                            ).length === 0 ? (
-                                              <div className="px-3 py-2 text-xs text-gray-400">{t('personalize.noHistory')}</div>
-                                            ) : (
-                                              Array.from(
-                                                new Set(
-                                                  recentProfiles
-                                                    .map((profile) => profile.metadata?.age ?? profile.metadata?.child_age)
-                                                    .filter((value): value is number => value !== undefined && value !== null)
-                                                    .map((value) => String(value))
-                                                )
-                                              ).map((value) => (
-                                                  <div
-                                                    key={value}
-                                                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-amber-50 transition"
-                                                  >
-                                                    <button
-                                                      type="button"
-                                                      className="flex-1 text-left text-sm text-gray-700"
-                                                      onMouseDown={(event) => {
-                                                        event.preventDefault();
-                                                        setAge(value);
-                                                        setShowAgeHistory(false);
-                                                      }}
-                                                    >
-                                                      {value}
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      className="text-gray-400 hover:text-red-500 transition"
-                                                      onMouseDown={(event) => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        handleDeleteProfile({ field: 'age', value });
-                                                      }}
-                                                    >
-                                                      <X className="h-3 w-3" />
-                                                    </button>
-                                                  </div>
-                                                ))
-                                            )}
-                                          </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.storyLanguage')}</label>
-                                    <div ref={languageBoxRef} className="relative">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setShowLanguageOptions((prev) => !prev);
-                                            setShowNameHistory(false);
-                                            setShowAgeHistory(false);
-                                          }}
-                                          className="w-full rounded-xl glass-input px-4 py-3 text-left text-gray-900 font-medium flex items-center justify-between"
-                                        >
-                                          {selectedLang === 'English'
-                                            ? t('personalize.storyLanguageEnglish')
-                                            : selectedLang === 'Traditional Chinese'
-                                            ? t('personalize.storyLanguageTraditionalChinese')
-                                            : t('personalize.storyLanguageSpanish')}
-                                        </button>
-                                        <ChevronDown className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 transition-transform ${showLanguageOptions ? 'rotate-180' : ''}`} />
-                                        {showLanguageOptions && (
-                                          <div
-                                            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 overflow-auto"
-                                            onMouseDown={(event) => {
-                                              event.preventDefault();
-                                              event.stopPropagation();
-                                            }}
-                                          >
-                                            {[
-                                              { value: 'English' as StoryLanguage, label: t('personalize.storyLanguageEnglish') },
-                                              { value: 'Traditional Chinese' as StoryLanguage, label: t('personalize.storyLanguageTraditionalChinese') },
-                                              { value: 'Spanish' as StoryLanguage, label: t('personalize.storyLanguageSpanish') },
-                                            ].map((lang) => (
-                                              <button
-                                                key={lang.value}
-                                                type="button"
-                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
-                                                  selectedLang === lang.value
-                                                    ? 'bg-amber-50 text-amber-700 font-semibold'
-                                                    : 'text-gray-700 hover:bg-amber-50'
-                                                }`}
-                                                onMouseDown={(event) => {
-                                                  event.preventDefault();
-                                                  setSelectedLang(lang.value);
-                                                  setShowLanguageOptions(false);
-                                                }}
-                                              >
-                                                {lang.label}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{t('personalize.bookType')}</label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                        <button onClick={() => setBookType('digital')} className={`p-3 rounded-2xl text-left transition-all ${bookType === 'digital' ? 'border border-amber-400/60 bg-white/90 shadow-[0_4px_16px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border border-white/55 bg-white/50 backdrop-blur-sm hover:bg-white/75 hover:border-white/70'}`}>
-                                            <div className="text-sm font-semibold text-gray-900">{t('personalize.bookTypeDigitalTitle')}</div>
-                                            <div className="text-[11px] text-gray-400 mt-0.5">{t('personalize.bookTypeDigitalSubtitle')}</div>
-                                        </button>
-                                        <button onClick={() => setBookType('basic')} className={`p-3 rounded-2xl text-left transition-all ${bookType === 'basic' ? 'border border-amber-400/60 bg-white/90 shadow-[0_4px_16px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border border-white/55 bg-white/50 backdrop-blur-sm hover:bg-white/75 hover:border-white/70'}`}>
-                                            <div className="text-sm font-semibold text-gray-900">{t('personalize.bookTypeBasicTitle')}</div>
-                                            <div className="text-[11px] text-gray-400 mt-0.5">{t('personalize.bookTypeBasicSubtitle')}</div>
-                                        </button>
-                                        <button onClick={() => setBookType('supreme')} className={`p-3 rounded-2xl text-left transition-all ${bookType === 'supreme' ? 'border border-amber-400/60 bg-white/90 shadow-[0_4px_16px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border border-white/55 bg-white/50 backdrop-blur-sm hover:bg-white/75 hover:border-white/70'}`}>
-                                            <div className="text-sm font-semibold text-gray-900">{t('personalize.bookTypeSupremeTitle')}</div>
-                                            <div className="text-[11px] text-gray-400 mt-0.5">{t('personalize.bookTypeSupremeSubtitle')}</div>
-                                        </button>
-                                    </div>
-                                    {renderProductShowcase()}
-                                    {requiresVoiceSample ? (
-                                      <div ref={voicePanelRef}>
-                                        <VoiceRecorderPanel
-                                          customerId={user?.customerId}
-                                          existingAssetId={voiceAssetId}
-                                          existingStoragePath={voiceStoragePath}
-                                          existingSignedUrl={resolvedVoiceSignedUrl}
-                                          validationError={voiceValidationError}
-                                          onUploadComplete={handleVoiceUploadComplete}
-                                          onClearValidation={() => setVoiceValidationError(null)}
-                                        />
-                                      </div>
-                                    ) : null}
-                                </div>
-                            </div>
-
-                            <div className="pt-8 mt-4 border-t border-gray-100">
-                                <div className="mb-4 space-y-3 rounded-2xl border border-amber-100/80 bg-white/65 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-sm">
-                                    <label className="flex cursor-pointer items-start gap-3 text-xs font-medium leading-5 text-gray-700 sm:text-sm">
-                                        <input
-                                          type="checkbox"
-                                          checked={isDataGenerationConsentChecked}
-                                          onChange={(event) => setIsDataGenerationConsentChecked(event.target.checked)}
-                                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
-                                        />
-                                        <span>
-                                          <span className="font-semibold text-gray-900">{t('personalize.dataConsentRequiredLabel')}</span>
-                                          <span className="ml-1 text-amber-600">*</span>
-                                        </span>
-                                    </label>
-                                    <label className="flex cursor-pointer items-start gap-3 text-xs font-medium leading-5 text-gray-700 sm:text-sm">
-                                        <input
-                                          type="checkbox"
-                                          checked={isMarketingConsentChecked}
-                                          onChange={(event) => setIsMarketingConsentChecked(event.target.checked)}
-                                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
-                                        />
-                                        <span>{t('personalize.marketingConsentOptionalLabel')}</span>
-                                    </label>
-                                </div>
-                                <button 
-                                    onClick={primaryAction} 
-                                    disabled={!isFormValid || isSupreme} 
-                                    className={`w-full h-16 rounded-full font-bold text-lg flex items-center justify-center gap-3 transition-all duration-500 shadow-xl ${(!isFormValid || isSupreme) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:scale-[1.02] shadow-amber-200'}`}
-                                >
-                                    {isSupreme ? t('personalize.comingSoon') : <><Sparkles className="h-6 w-6" /> {generateButtonLabel}</>}
-                                </button>
-                                {previewError && (
-                                  <p className="text-xs text-red-500 mt-2">{previewError}</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
+                <CustomizeFormLayout
+                  showcase={
+                    <StoryShowcaseCard
+                      carousel={
+                        <ProductShowcaseCarousel
+                          bookId={bookID}
+                          title={templateTitle || book.title}
+                          coverUrl={resolvedBook?.coverUrl}
+                          images={resolvedBook?.showcaseImages}
+                          isMobile={isMobile}
+                          windowWidth={windowWidth}
+                          uploadPanelRef={uploadPanelRef}
+                        />
+                      }
+                      storyInfo={
+                        <StoryInfoPanel
+                          title={templateTitle || book.title}
+                          description={templateInnerDescription || resolvedBook?.innerDescription || templateDescription || book.description}
+                          magicAttributes={magicAttributes}
+                          faqItems={bookFaqItems}
+                          labels={{
+                            magicAttributes: t('personalize.magicAttributes'),
+                            aboutThisStory: 'About This Story',
+                          }}
+                          translateMagicAttribute={t}
+                        />
+                      }
+                    />
+                  }
+                  form={
+                    <CustomizeFormCard
+                          title={t('personalize.customize')}
+                          priceLabel={formatDisplayCurrency(currentPrice, displayCurrency)}
+                          footer={
+                            <GeneratePreviewAction
+                              isFormReady={isFormReady}
+                              isFacePreparing={isFacePreparing}
+                              isPhotoFailed={facePrepareStatus === 'failed'}
+                              isSupreme={isSupreme}
+                              previewError={previewError}
+                              labels={{
+                                dataConsentRequired: t('personalize.dataConsentRequiredLabel'),
+                                marketingConsentOptional: t('personalize.marketingConsentOptionalLabel'),
+                                photoPreparing: t('personalize.photoPreparing'),
+                                photoNeedsFix: t('personalize.photoNeedsFix'),
+                                dataConsentRequiredShort: t('personalize.dataConsentRequiredShort'),
+                                generateMagicPreview: t('personalize.generateMagicPreview'),
+                                completeDetails: t('personalize.completeDetails'),
+                                comingSoon: t('personalize.comingSoon'),
+                              }}
+                              onGenerate={handleGeneratePreviewAction}
+                            />
+                          }
+                        >
+                    <CustomizeFormFields
+                      photoPreview={photoPreview}
+                      facePrepareStatus={facePrepareStatus}
+                      facePrepareError={facePrepareError}
+                      photoLabels={{
+                        uploadChildPhoto: t('personalize.uploadChildPhoto'),
+                        photoChecking: t('personalize.photoChecking'),
+                        photoPreparing: t('personalize.photoPreparing'),
+                        photoReady: t('personalize.photoReady'),
+                        photoPrepareFailed: t('personalize.photoPrepareFailed'),
+                        photoQualityReason: t('personalize.photoQualityReason'),
+                        clickToChangePhoto: t('personalize.clickToChangePhoto'),
+                        uploadPhotoHint: t('personalize.uploadPhotoHint'),
+                        photoTips: t('personalize.photoTips'),
+                      }}
+                      onPhotoUpload={handlePhotoUpload}
+                      recentFaces={recentFaces}
+                      onSelectFace={handleSelectRecentFace}
+                      onDeleteFace={handleDeleteFace}
+                      initialName={name}
+                      initialAge={age}
+                      childDetailsSeedVersion={childDetailsSeedVersion}
+                      recentProfiles={recentProfiles}
+                      childLabels={{
+                        nameLabel: t('personalize.nameLabel'),
+                        namePlaceholder: t('personalize.namePlaceholder'),
+                        ageLabel: t('personalize.ageLabel'),
+                        agePlaceholder: t('personalize.agePlaceholder'),
+                        noHistory: t('personalize.noHistory'),
+                      }}
+                      onLoadProfiles={loadProfiles}
+                      onChildDetailsChange={handleChildDetailsChange}
+                      onDeleteProfileValue={handleDeleteProfile}
+                      selectedLang={selectedLang}
+                      languageLabels={{
+                        field: t('personalize.storyLanguage'),
+                        english: t('personalize.storyLanguageEnglish'),
+                        simplifiedChinese: t('personalize.storyLanguageSimplifiedChinese'),
+                        traditionalChinese: t('personalize.storyLanguageTraditionalChinese'),
+                        comingSoon: t('common.comingSoon'),
+                      }}
+                      onLanguageChange={setSelectedLang}
+                      bookType={bookType}
+                      packageLabels={{
+                        field: t('personalize.bookType'),
+                        digitalTitle: t('personalize.bookTypeDigitalTitle'),
+                        digitalSubtitle: t('personalize.bookTypeDigitalSubtitle'),
+                        basicTitle: t('personalize.bookTypeBasicTitle'),
+                        basicSubtitle: t('personalize.bookTypeBasicSubtitle'),
+                        supremeTitle: t('personalize.bookTypeSupremeTitle'),
+                        supremeSubtitle: t('personalize.bookTypeSupremeSubtitle'),
+                        whatIncluded: t('personalize.whatIncluded'),
+                      }}
+                      includedItems={{
+                        digital: [
+                          t('personalize.included.digital1'),
+                          t('personalize.included.digital2'),
+                          t('personalize.included.digital3'),
+                          t('personalize.included.digital4'),
+                        ],
+                        basic: [
+                          t('personalize.included.basic1'),
+                          t('personalize.included.basic2'),
+                          t('personalize.included.basic3'),
+                          t('personalize.included.basic4'),
+                          t('personalize.included.basic5'),
+                          t('personalize.included.basic6'),
+                        ],
+                        supreme: [
+                          t('personalize.included.supreme1'),
+                          t('personalize.included.supreme2'),
+                          t('personalize.included.supreme3'),
+                          t('personalize.included.supreme4'),
+                          t('personalize.included.supreme5'),
+                          t('personalize.included.supreme6'),
+                          t('personalize.included.supreme7'),
+                        ],
+                      }}
+                      onBookTypeChange={setBookType}
+                      requiresVoiceSample={requiresVoiceSample}
+                      voicePanelRef={voicePanelRef}
+                      voiceCustomerId={user?.customerId}
+                      voiceAssetId={voiceAssetId}
+                      voiceStoragePath={voiceStoragePath}
+                      voiceSignedUrl={resolvedVoiceSignedUrl}
+                      voiceValidationError={voiceValidationError}
+                      onVoiceUploadComplete={handleVoiceUploadComplete}
+                      onClearVoiceValidation={() => setVoiceValidationError(null)}
+                    />
+                    </CustomizeFormCard>
+                  }
+                />
             )}
 
             {/* Step 3: Preview */}
             {viewState.showPreview && (
-                <motion.div 
-                    key="step3"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[600px] py-6 md:py-10"
-                >
-                    <div className="text-center mb-6 md:mb-10 text-gray-800">
-                        <h2 className="text-2xl md:text-3xl font-serif font-bold mb-2">{t('personalize.previewTitle', { name })}</h2>
-                        <p className="text-gray-600 text-sm md:text-base">{t('personalize.previewSubtitle')}</p>
-                        <div className="mt-4 flex justify-center">
-                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-bold text-gray-800 shadow-lg ring-1 ring-amber-100 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-amber-200/60">
-                            <Camera className="h-4 w-4 text-amber-500" />
-                            <span>{t('personalize.changePhoto')}</span>
-                            <input type="file" onChange={handlePhotoUpload} className="hidden" accept="image/*" />
-                          </label>
-                        </div>
-                    </div>
-
-                    <div 
-                        className="relative mb-7 md:mb-12 flex select-none justify-center perspective-2000" 
-                        style={{ height: previewStageHeight }}
-                    >
-                         {/* Responsive Scaler Wrapper */}
-                         <div
-                            className="shrink-0"
-                            style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center', width: PAGE_WIDTH * 2 }}
-                         >
-                            <motion.div 
-                                className="relative w-full flex justify-center" 
-                                animate={{ x: (currentSpread === 0 && !isFlipping) ? -190 : 0 }} 
-                                transition={{ duration: ANIMATION_DURATION, ease: "easeInOut" }} 
-                                style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: PREVIEW_PAGE_HEIGHT, filter: previewBookShadow }}
-                            >
-                                <div
-                                  aria-hidden="true"
-                                  className="pointer-events-none absolute left-1/2 bottom-[-14px] z-[-4] h-16 w-[540px] -translate-x-1/2 rounded-full blur-3xl opacity-60"
-                                  style={{
-                                    background:
-                                      'radial-gradient(circle at center, rgba(15,23,42,0.22) 0%, rgba(15,23,42,0.12) 30%, rgba(15,23,42,0.05) 50%, rgba(15,23,42,0) 72%)',
-                                  }}
-                                />
-                                 
-                                 {/* 3D Book Thickness (LEFT = Center Binding) */}
-                                 {/* Center Spine position */}
-                                 <div 
-                                    className="absolute top-0 bottom-0 left-[calc(50%-25px)] w-[50px] z-[-1]"
-                                    style={centerBindingPattern}
-                                 />
-
-                                 {/* 3D Book Thickness (LEFT = Cover Edge - Thin) */}
-                                 <div 
-                                    className="absolute top-0 bottom-0 left-[calc(50%-380px)] w-[12px] z-[-1]"
-                                    style={{
-                                        background: '#f1f1f1', 
-                                        boxShadow: 'inset -2px 0 5px rgba(0,0,0,0.1)',
-                                        transform: `translateZ(-5px) translateX(-6px)`,
-                                        borderRadius: '4px 0 0 4px',
-                                        opacity: isLeftPageVisible ? 1 : 0
-                                    }}
-                                 />
-                                 
-                                 {/* Right Stack (Pages) */}
-                                 <div 
-                                    className="absolute top-2 bottom-2 w-[12px] z-[-1]"
-                                    style={{
-                                        ...pageStackPattern,
-                                        left: 'calc(50% + 375px)', // Attached to right edge
-                                        transform: 'translateZ(-2px)',
-                                        borderRadius: '0 2px 2px 0'
-                                    }}
-                                 />
-                                 
-                                 {/* Hardcover Back Edge */}
-                                 <div 
-                                    className="absolute top-0 bottom-0 w-[4px] z-[-2]"
-                                    style={{
-                                        background: '#9ca3af',
-                                        boxShadow: 'inset 1px 0 2px rgba(255,255,255,0.3), 1px 0 2px rgba(0,0,0,0.2)',
-                                        left: 'calc(50% + 382px)',
-                                        transform: 'translateZ(-4px)',
-                                        borderRadius: '0 4px 4px 0'
-                                    }}
-                                 />
-
-                                 {/* Static Pages Layer */}
-                                 <div className="absolute top-0 w-full h-full flex justify-center">
-                                    <div className={`relative h-full ${isLeftPageVisible ? 'opacity-100' : 'opacity-0'}`} style={{ width: PAGE_WIDTH }}>
-                                        {renderPageContent('left', staticLeftIndex)}
-                                    </div>
-                                    <div className="relative h-full" style={{ width: PAGE_WIDTH }}>
-                                        {(isFlipping && flipDirection === 'next') ? renderPageContent('right', currentSpread + 1) : renderPageContent('right', currentSpread)}
-                                    </div>
-                                </div>
-
-                                {/* Active Flipping Layer */}
-                                <AnimatePresence>
-                                    {isFlipping && flipDirection === 'next' && (
-                                        <motion.div 
-                                            initial={{ rotateY: 0 }} 
-                                            animate={{ rotateY: -180 }} 
-                                            transition={{ duration: ANIMATION_DURATION, ease: "easeInOut" }} 
-                                            style={{ width: PAGE_WIDTH, height: '100%', position: 'absolute', top: 0, left: '50%', transformOrigin: 'left center', transformStyle: 'preserve-3d', zIndex: 50 }}
-                                        >
-                                            {/* Front of the flipping page (Right Side content moving Left) */}
-                                            <div className="backface-hidden" style={faceStyle}>
-                                                {renderPageContent('right', currentSpread)}
-                                                {/* Soft Light Overlay: Darkens heavily as it stands up (90deg), then lightens */}
-                                                <motion.div 
-                                                    className="absolute inset-0 z-50 pointer-events-none"
-                                                    initial={{ opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                                                    animate={{ opacity: [0, 0.6, 0] }}
-                                                    transition={{ duration: ANIMATION_DURATION, times: [0, 0.5, 1] }}
-                                                />
-                                            </div>
-                                            
-                                            {/* Back of the flipping page (Next Left Side content) */}
-                                            <div className="backface-hidden" style={{ ...faceStyle, transform: 'rotateY(180deg)' }}>
-                                                {renderPageContent('left', currentSpread + 1)}
-                                                {/* Soft Light Overlay for the back side */}
-                                                <motion.div 
-                                                    className="absolute inset-0 z-50 pointer-events-none"
-                                                    initial={{ opacity: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                                                    animate={{ opacity: [0, 0.6, 0] }}
-                                                    transition={{ duration: ANIMATION_DURATION, times: [0, 0.5, 1] }}
-                                                />
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                    
-                                    {isFlipping && flipDirection === 'prev' && (
-                                        <motion.div 
-                                            initial={{ rotateY: -180 }} 
-                                            animate={{ rotateY: 0 }} 
-                                            transition={{ duration: ANIMATION_DURATION, ease: "easeInOut" }} 
-                                            style={{ width: PAGE_WIDTH, height: '100%', position: 'absolute', top: 0, left: '50%', transformOrigin: 'left center', transformStyle: 'preserve-3d', zIndex: 50 }}
-                                        >
-                                            {/* Front of flipping page (Left Side content moving Right) */}
-                                            <div className="backface-hidden" style={{ ...faceStyle, transform: 'rotateY(180deg)' }}>
-                                                {renderPageContent('left', currentSpread)}
-                                                 {/* Soft Light Overlay */}
-                                                 <motion.div 
-                                                    className="absolute inset-0 z-50 pointer-events-none"
-                                                    initial={{ opacity: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                                                    animate={{ opacity: [0, 0.6, 0] }}
-                                                    transition={{ duration: ANIMATION_DURATION }}
-                                                />
-                                            </div>
-
-                                            {/* Back of flipping page (Prev Right Side content) */}
-                                            <div className="backface-hidden" style={faceStyle}>
-                                                {renderPageContent('right', currentSpread - 1)}
-                                                {/* Soft Light Overlay */}
-                                                <motion.div 
-                                                    className="absolute inset-0 z-50 pointer-events-none"
-                                                    initial={{ opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                                                    animate={{ opacity: [0, 0.6, 0] }}
-                                                    transition={{ duration: ANIMATION_DURATION }}
-                                                />
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </motion.div>
-                        </div>
-                    </div>
-
-                    <div className="w-full max-w-3xl px-2">
-                      <label className="mx-auto mb-3 flex max-w-2xl cursor-pointer items-start gap-3 rounded-2xl border border-white/60 bg-white/65 backdrop-blur-sm px-4 py-3 text-left shadow-[0_4px_12px_rgba(148,93,34,0.06)]">
-                        <input
-                          type="checkbox"
-                          checked={isCheckoutAcknowledged}
-                          onChange={(event) => {
-                            setIsCheckoutAcknowledged(event.target.checked);
-                            if (event.target.checked) {
-                              setCheckoutAcknowledgementError(false);
-                            }
-                          }}
-                          className="mt-1 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 accent-amber-500 focus:ring-2 focus:ring-amber-300"
-                        />
-                        <span className="text-xs font-medium leading-relaxed text-amber-950/80 sm:text-sm">
-                          {t('personalize.checkoutAcknowledgement')}
-                        </span>
-                      </label>
-                      {checkoutAcknowledgementError ? (
-                        <p className="mb-3 text-center text-xs font-semibold text-red-500">
-                          {t('personalize.checkoutAcknowledgementRequired')}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="mb-3 w-full max-w-2xl px-2">
-                      <button
-                        type="button"
-                        onClick={handleOpenPreviewShare}
-                        disabled={isPreparingShare || !creationId}
-                        className="group relative z-20 flex w-full items-center gap-3 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/90 to-orange-50/85 px-4 py-3 text-left shadow-[0_10px_28px_rgba(251,146,60,0.12),inset_0_1px_0_rgba(255,255,255,0.82)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-amber-300/80 hover:shadow-[0_14px_34px_rgba(251,146,60,0.18),inset_0_1px_0_rgba(255,255,255,0.9)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-                      >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/75 bg-white/72 text-amber-600 shadow-sm transition group-hover:bg-white/90">
-                          <Share2 className="h-5 w-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-amber-900">
-                            {isPreparingShare ? t('common.loading') : t('share.previewButton')}
-                          </span>
-                          <span className="mt-0.5 block text-xs font-medium leading-5 text-amber-700/75">
-                            {t('share.previewDescription')}
-                          </span>
-                        </span>
-                        <span className="hidden rounded-full border border-white/70 bg-white/55 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-600 shadow-sm sm:inline-flex">
-                          {t('share.copyLink')}
-                        </span>
-                      </button>
-                    </div>
-
-                    <div className="flex w-full max-w-md flex-col justify-center gap-3 px-2 sm:max-w-none sm:flex-row sm:gap-4 md:gap-5">
-                         <Button
-                            ref={addToCartBtnRef}
-                            onClick={handleAddToCartClick}
-                            size="lg"
-                            variant="outline"
-                            className="glass-action-btn glass-action-btn--amber relative z-20 h-11 w-full rounded-full px-5 text-sm font-semibold sm:w-auto sm:px-7 md:h-12 md:px-8 md:text-base"
-                         >
-                            <ShoppingCart className="mr-2 h-4 w-4 md:h-5 md:w-5" />
-                            {t('personalize.addToCartPrice', { price: formatLocaleCurrency(currentPrice, language) })}
-                        </Button>
-                        <Button
-                            onClick={handleCheckoutClick}
-                            size="lg"
-                            disabled={!isCheckoutAcknowledged}
-                            className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-6 text-sm font-semibold sm:w-auto sm:px-9 md:h-12 md:px-10 md:text-base"
-                        >
-                            {t('personalize.checkoutNow')}
-                        </Button>
-                    </div>
-                    {shareError ? <p className="mt-3 text-center text-xs text-red-500">{shareError}</p> : null}
-                </motion.div>
+                <PreviewStepLayout
+                  intro={
+                    <PreviewIntroHeader
+                      title={t('personalize.previewTitle', { name })}
+                      subtitle={t('personalize.previewSubtitle')}
+                      changePhotoLabel={t('personalize.changePhoto')}
+                      onPhotoUpload={handlePhotoUpload}
+                    />
+                  }
+                  book={
+                    <PreviewBookStage
+                      stageHeight={previewStageHeight}
+                      previewScale={previewScale}
+                      pageWidth={PAGE_WIDTH}
+                      pageHeight={PREVIEW_PAGE_HEIGHT}
+                      animationDuration={ANIMATION_DURATION}
+                      currentSpread={currentSpread}
+                      isFlipping={isFlipping}
+                      flipDirection={flipDirection}
+                      isLeftPageVisible={isLeftPageVisible}
+                      staticLeftIndex={staticLeftIndex}
+                      centerBindingPattern={centerBindingPattern}
+                      pageStackPattern={pageStackPattern}
+                      faceStyle={faceStyle}
+                      previewBookShadow={previewBookShadow}
+                      renderPageContent={renderPageContent}
+                    />
+                  }
+                  actions={
+                    <PreviewActionBar
+                      acknowledgementLabel={t('personalize.checkoutAcknowledgement')}
+                      acknowledgementRequiredLabel={t('personalize.checkoutAcknowledgementRequired')}
+                      shareLabel={isPreparingShare ? t('common.loading') : t('share.previewButton')}
+                      shareDescription={t('share.previewDescription')}
+                      shareCopyLabel={t('share.copyLink')}
+                      addToCartLabel={t('personalize.addToCartPrice', { price: formatDisplayCurrency(currentPrice, displayCurrency) })}
+                      checkoutLabel={t('personalize.checkoutNow')}
+                      loadingLabel={t('common.loading')}
+                      shareError={shareError}
+                      canShare={Boolean(creationId)}
+                      isPreparingShare={isPreparingShare}
+                      isAddToCartPending={previewActionPending === 'ADD_TO_CART'}
+                      isCheckoutPending={previewActionPending === 'CHECKOUT'}
+                      onShare={handleOpenPreviewShare}
+                      onAddToCart={handleAddToCartClick}
+                      onCheckout={handleCheckoutClick}
+                      addToCartButtonRef={addToCartBtnRef}
+                    />
+                  }
+                />
             )}
         </AnimatePresence>
 
-        <ShareDialog
-          open={isShareDialogOpen && Boolean(previewShareUrl)}
+        <PreviewShareDialog
+          open={isShareDialogOpen}
           onClose={() => setIsShareDialogOpen(false)}
-          title={t('share.previewTitle')}
-          description={t('share.previewDescription')}
-          shareUrl={previewShareUrl || ''}
-          shareText={t('share.previewTemplate')}
-          editableShareText
-          includeTextInShareUrl
+          shareUrl={previewShareUrl}
           previewImageUrl={previewShareImageUrl}
-          note={t('share.previewNote')}
+          labels={{
+            title: t('share.previewTitle'),
+            description: t('share.previewDescription'),
+            shareText: t('share.previewTemplate'),
+            note: t('share.previewNote'),
+          }}
         />
 
-        {/* Loading Overlay */}
-        <AnimatePresence>
-            {viewState.showLoading && (
-                <motion.div 
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[60] flex flex-col items-center justify-center p-8 bg-gradient-to-br from-amber-50/95 via-white/95 to-orange-50/95 backdrop-blur-xl overflow-hidden"
-                >
-                    {/* Floating Decorative Elements (Absolute Corners - No Overlap) */}
-                    <motion.div animate={{ y: [0, -20, 0], rotate: [0, 10, -10, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }} className="absolute top-10 left-10 opacity-30 pointer-events-none">
-                        <BookOpen className="w-24 h-24 text-amber-500" />
-                    </motion.div>
-                    <motion.div animate={{ y: [0, 30, 0], rotate: [0, -15, 15, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }} className="absolute bottom-10 right-10 opacity-30 pointer-events-none">
-                        <Wand2 className="w-20 h-20 text-purple-500" />
-                    </motion.div>
-                    <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }} transition={{ duration: 2, repeat: Infinity }} className="absolute top-20 right-20 pointer-events-none">
-                        <Star className="w-16 h-16 text-yellow-400 fill-yellow-400" />
-                    </motion.div>
-
-                    {/* Central Loading Content */}
-                    <div className="max-w-2xl w-full text-center space-y-8 relative z-10 flex flex-col items-center">
-                        <div className="relative inline-block mb-4">
-                             <div className="absolute inset-0 bg-amber-200 blur-2xl opacity-40 animate-pulse"></div>
-                             <Sparkles className="h-16 w-16 text-amber-500 animate-spin-slow relative z-10" />
-                        </div>
-                        
-                        <div>
-                            <motion.h3 
-                                key={loadingText} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                                className="text-3xl font-serif font-bold text-gray-900 mb-2"
-                            >
-                                {loadingText}
-                            </motion.h3>
-                            <p className="text-gray-500 text-sm font-mono">
-                              {loadingCountdownSeconds > 0
-                                ? t('personalize.estimatedWait', { seconds: loadingCountdownSeconds })
-                                : t('personalize.almostThere')}
-                            </p>
-                        </div>
-                        
-                        {/* Progress Bar Container */}
-                        <div className="w-full max-w-2xl mx-auto">
-                             <div className="w-full max-w-lg mx-auto bg-gray-200 rounded-full h-2 overflow-hidden relative shadow-inner mb-6">
-                                <motion.div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full" style={{ width: `${progress}%` }} />
-                                <motion.div 
-                                    className="absolute top-0 bottom-0 w-20 bg-white/30 skew-x-[-20deg]" 
-                                    animate={{ x: ['-100%', '500%'] }} 
-                                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} 
-                                />
-                            </div>
-
-                            {/* Mini Game ??play while waiting */}
-                            <div className="flex justify-center">
-                              <MiniGame />
-                            </div>
-
-                             {/* Tip text below video */}
-                             <motion.p 
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}
-                                className="text-amber-900 text-sm font-medium flex items-center justify-center gap-2 mt-4"
-                             >
-                                 <Info className="h-4 w-4 text-amber-500" /> 
-                                 <span>{t('personalize.didYouKnow')}</span>
-                             </motion.p>
-                        </div>
-                    </div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-
-        {showExitConfirm && (
-          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-              <div className="rounded-3xl border border-white/60 bg-white/88 backdrop-blur-2xl p-6 max-w-md w-full shadow-[0_20px_60px_rgba(15,23,42,0.18)] animate-in zoom-in-95 text-center">
-                  <BookOpen className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">{t('personalize.exitConfirmTitle')}</h3>
-                  <p className="text-gray-600 mb-6">{t('personalize.exitConfirmBody')}</p>
-                  <div className="flex gap-3 justify-center">
-                      <Button variant="outline" onClick={dismissExitConfirm}>{t('personalize.exitConfirmStay')}</Button>
-                      <Button variant="primary" onClick={returnToCustomizeFromPreview}>{t('personalize.exitConfirmBack')}</Button>
-                  </div>
-              </div>
-          </div>
-        )}
+        <LoadingPreviewOverlay
+          show={viewState.showLoading}
+          loadingText={loadingText}
+          progress={progress}
+          countdownSeconds={loadingCountdownSeconds}
+          labels={{
+            estimatedWait: t('personalize.estimatedWait', { seconds: loadingCountdownSeconds }),
+            almostThere: t('personalize.almostThere'),
+            didYouKnow: t('personalize.didYouKnow'),
+          }}
+        />
       </main>
     </div>
   );
 };
-
-

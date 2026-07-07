@@ -4,7 +4,7 @@ import type { PendingUserAssetUpload } from '@/services/assets'
 export interface JobRecord {
   job_id: string
   job_type: 'preview' | 'final'
-  story_language?: 'English' | 'Traditional Chinese' | 'Spanish' | null
+  story_language?: 'English' | 'Simplified Chinese' | 'Traditional Chinese' | 'Spanish' | null
   selected_book_type?: 'Cloud Explorer' | 'Classic' | 'Immersive' | 'Signature Voice' | null
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancel_requested' | 'cancelled'
   progress?: number | null

@@ -44,7 +44,7 @@ export interface Book {
   magicAttributes?: MagicAttribute[];
 }
 
-export type StoryLanguage = 'English' | 'Traditional Chinese' | 'Spanish';
+export type StoryLanguage = 'English' | 'Simplified Chinese' | 'Traditional Chinese' | 'Spanish';
 
 export interface PersonalizationData {
   childName: string;
@@ -111,6 +111,18 @@ export interface Order {
 
 export type Language = 'en' | 'cn_s' | 'cn_t' | 'ja' | 'es' | 'ko';
 
+export type DisplayCurrency =
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'JPY'
+  | 'AUD'
+  | 'CAD'
+  | 'SGD'
+  | 'HKD'
+  | 'KRW'
+  | 'CNY';
+
 export type CollaborationLeadGender =
   | 'female'
   | 'male'
@@ -142,6 +154,7 @@ export type ViewState = 'home' | 'personalize' | 'cart' | 'checkout' | 'success'
 export interface GlobalContextType {
   user: User | null;
   language: Language;
+  displayCurrency: DisplayCurrency;
   cart: CartItem[];
   favorites: Book[];
   isLoginModalOpen: boolean;
@@ -162,8 +175,8 @@ export interface GlobalContextType {
   verifySignupOtp: (email: string, code: string, password: string) => Promise<{ error?: string } | void>;
   logout: () => void;
   addToCart: (book: Book,personalization?: PersonalizationData,step?: number,finalPrice?: number,previewCoverUrl?: string) => Promise<CartItem | null>;
-  removeFromCart: (itemId: string) => void;
-  updateCartQuantity: (itemId: string, quantity: number) => void;
+  removeFromCart: (itemId: string) => Promise<boolean>;
+  updateCartQuantity: (itemId: string, quantity: number) => Promise<boolean>;
   updateCheckoutQuantity: (itemId: string, quantity: number) => void;
   prepareCheckout: (items: CartItem[]) => void;
   hydrateCheckoutItems: (items: any[]) => void;
@@ -175,6 +188,7 @@ export interface GlobalContextType {
   refreshUserProfile: () => Promise<void>;
   toggleFavorite: (book: Book) => ToggleFavoriteResult;
   setLanguage: (lang: Language) => void;
+  setDisplayCurrency: (currency: DisplayCurrency) => void;
   setCheckoutEmail: (email: string) => void;
   openLoginModal: (mode?: 'login' | 'signup', email?: string) => void;
   closeLoginModal: () => void;

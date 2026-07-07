@@ -101,9 +101,14 @@ export function ShareDialog({
   const [copyTextState, setCopyTextState] = useState<'idle' | 'copied'>('idle')
   const [draftShareText, setDraftShareText] = useState(shareText)
   const [isLinkExpanded, setIsLinkExpanded] = useState(false)
+  const [isSystemSharing, setIsSystemSharing] = useState(false)
   const [isImageSharing, setIsImageSharing] = useState(false)
+  const [isImageDownloading, setIsImageDownloading] = useState(false)
   const [imageShareState, setImageShareState] = useState<'idle' | 'unavailable'>('idle')
   const imageFileCacheRef = useRef<{ url: string; file: File } | null>(null)
+  const isSystemSharingRef = useRef(false)
+  const isImageSharingRef = useRef(false)
+  const isImageDownloadingRef = useRef(false)
 
   const canNativeShare =
     typeof window !== 'undefined' &&
@@ -115,7 +120,13 @@ export function ShareDialog({
     setCopyLinkState('idle')
     setCopyTextState('idle')
     setIsLinkExpanded(false)
+    setIsSystemSharing(false)
+    setIsImageSharing(false)
+    setIsImageDownloading(false)
     setImageShareState('idle')
+    isSystemSharingRef.current = false
+    isImageSharingRef.current = false
+    isImageDownloadingRef.current = false
   }, [open, shareText])
 
   const getShareImageFile = useCallback(async () => {
@@ -187,11 +198,22 @@ export function ShareDialog({
 
   const handleNativeShare = async () => {
     if (!navigator.share) return
+    if (isSystemSharingRef.current || isImageSharingRef.current) return
+
+    isSystemSharingRef.current = true
+    setIsSystemSharing(true)
     try { await navigator.share({ title, text: effectiveShareText, url: effectiveShareUrl }) } catch { /* user cancelled */ }
+    finally {
+      isSystemSharingRef.current = false
+      setIsSystemSharing(false)
+    }
   }
 
   const handleNativeShareWithImage = async () => {
     if (!navigator.share || !previewImageUrl) return
+    if (isImageSharingRef.current || isSystemSharingRef.current) return
+
+    isImageSharingRef.current = true
     setIsImageSharing(true)
     setImageShareState('idle')
 
@@ -215,13 +237,17 @@ export function ShareDialog({
     } catch {
       // User cancellation or platform rejection should not close the dialog.
     } finally {
+      isImageSharingRef.current = false
       setIsImageSharing(false)
     }
   }
 
   const handleDownloadImage = async () => {
     if (!previewImageUrl || typeof document === 'undefined') return
+    if (isImageDownloadingRef.current) return
 
+    isImageDownloadingRef.current = true
+    setIsImageDownloading(true)
     try {
       const file = await getShareImageFile()
       const blob = file ?? await fetch(previewImageUrl).then((response) => response.ok ? response.blob() : null)
@@ -236,6 +262,9 @@ export function ShareDialog({
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
     } catch {
       openPopup(previewImageUrl)
+    } finally {
+      isImageDownloadingRef.current = false
+      setIsImageDownloading(false)
     }
   }
 
@@ -331,7 +360,7 @@ export function ShareDialog({
                 <button
                   type="button"
                   onClick={() => void handleNativeShareWithImage()}
-                  disabled={isImageSharing || !previewImageUrl}
+                  disabled={isImageSharing || isSystemSharing || !previewImageUrl}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200/70 bg-white/55 px-3 text-xs font-bold text-amber-700 backdrop-blur-sm transition hover:border-amber-300 hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   <ImageIcon className="h-3.5 w-3.5" />
@@ -342,10 +371,11 @@ export function ShareDialog({
                 <button
                   type="button"
                   onClick={() => void handleDownloadImage()}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/65 bg-white/55 px-3 text-xs font-bold text-slate-600 backdrop-blur-sm transition hover:border-amber-300/60 hover:bg-white/80 hover:text-amber-700"
+                  disabled={isImageDownloading}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/65 bg-white/55 px-3 text-xs font-bold text-slate-600 backdrop-blur-sm transition hover:border-amber-300/60 hover:bg-white/80 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Download image
+                  {isImageDownloading ? t('common.loading') : 'Download image'}
                 </button>
               ) : null}
               {imageShareState === 'unavailable' ? (
@@ -450,10 +480,11 @@ export function ShareDialog({
               <button
                 type="button"
                 onClick={() => void handleNativeShare()}
-                className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/65 bg-white/55 px-3 text-xs font-semibold text-slate-600 backdrop-blur-sm transition hover:border-amber-300/60 hover:bg-white/75 hover:text-amber-700"
+                disabled={isSystemSharing || isImageSharing}
+                className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/65 bg-white/55 px-3 text-xs font-semibold text-slate-600 backdrop-blur-sm transition hover:border-amber-300/60 hover:bg-white/75 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-55"
               >
                 <Share2 className="h-3.5 w-3.5" />
-                {t('share.systemShare')}
+                {isSystemSharing ? t('common.loading') : t('share.systemShare')}
               </button>
             ) : null}
           </div>

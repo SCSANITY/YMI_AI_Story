@@ -6,7 +6,7 @@ const SETTING_KEY = 'creator_promo_config'
 const DEFAULT_CONFIG = {
   enabled: true,
   suffix: '-YMI',
-  discount_amount_usd: 5,
+  discount_amount_usd: 1,
   first_order_only: true,
 }
 

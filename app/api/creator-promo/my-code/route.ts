@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-const DEFAULT_CREATOR_DISCOUNT_USD = 5
+const DEFAULT_CREATOR_DISCOUNT_USD = 1
 const CREATOR_SUFFIX = '-YMI'
 const CREATOR_PROMO_SETTING_KEY = 'creator_promo_config'
 

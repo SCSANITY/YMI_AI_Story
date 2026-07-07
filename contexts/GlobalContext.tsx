@@ -1,10 +1,9 @@
 'use client'
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
-import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData } from '@/types';
+import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData, type DisplayCurrency } from '@/types';
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
-import { UI_LOCALES } from '@/lib/i18n-config';
 import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, parseTemplateAmount, templateStorageUrl } from '@/lib/book-catalog';
 import {
   login as loginAction,
@@ -70,6 +69,34 @@ const normalizeStoryLanguage = (value: unknown) => {
   return 'English';
 };
 
+const DISPLAY_CURRENCIES: DisplayCurrency[] = [
+  'USD',
+  'EUR',
+  'GBP',
+  'JPY',
+  'AUD',
+  'CAD',
+  'SGD',
+  'HKD',
+  'KRW',
+  'CNY',
+];
+
+const normalizeDisplayCurrency = (value: unknown): DisplayCurrency => {
+  const raw = String(value ?? '').trim().toUpperCase();
+  return DISPLAY_CURRENCIES.includes(raw as DisplayCurrency) ? (raw as DisplayCurrency) : 'USD';
+};
+
+const migrateLegacyLanguageToCurrency = (value: unknown): DisplayCurrency => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'ja') return 'JPY';
+  if (raw === 'ko') return 'KRW';
+  if (raw === 'cn_t') return 'HKD';
+  if (raw === 'cn_s') return 'CNY';
+  if (raw === 'es') return 'EUR';
+  return 'USD';
+};
+
 const templateRelationToBook = (templateId: string, template: any, fallbackBook?: Book, price = 0): Book => {
   const storyTypes = parseStoryTypes(template?.story_type || fallbackBook?.category);
   const ageGroup = normalizeAgeGroup(template?.age_group || fallbackBook?.ageGroup);
@@ -126,7 +153,8 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const userRef = useRef<User | null>(null);
   const authSyncInFlightRef = useRef<string | null>(null);
   const favoriteTogglePendingRef = useRef(false);
-  const [language, setLanguageState] = useState<Language>('en');
+  const [language] = useState<Language>('en');
+  const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Book[]>([]);
   const [checkoutEmail, setCheckoutEmail] = useState('');
@@ -176,9 +204,13 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     const savedLanguage = localStorage.getItem('ymi_language') as Language | null;
-    if (savedLanguage && savedLanguage in UI_LOCALES) {
-      setLanguageState(savedLanguage);
-    }
+
+    const savedDisplayCurrency = localStorage.getItem('ymi_currency');
+    setDisplayCurrencyState(
+      savedDisplayCurrency
+        ? normalizeDisplayCurrency(savedDisplayCurrency)
+        : migrateLegacyLanguageToCurrency(savedLanguage)
+    );
 
     const savedCheckoutEmail = localStorage.getItem('ymi_checkout_email');
     if (savedCheckoutEmail) setCheckoutEmail(savedCheckoutEmail);
@@ -358,10 +390,13 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('ymi_language', language);
-    const htmlLang = UI_LOCALES[language]?.htmlLang ?? 'en';
-    document.documentElement.setAttribute('lang', htmlLang);
-  }, [language]);
+    document.documentElement.setAttribute('lang', 'en');
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('ymi_currency', displayCurrency);
+  }, [displayCurrency]);
 
   const finalizeAuth = useCallback(async (
     email: string,
@@ -766,21 +801,25 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     [resumeData, user?.customerId, cart, refreshCartFromDb]
   );
 
-  const updateCartQuantity = useCallback((itemId: string, quantity: number) => {
+  const updateCartQuantity = useCallback(async (itemId: string, quantity: number) => {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
     setCart(prev => prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item));
-    void fetch('/api/cart', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        cartItemId: itemId,
-        quantity: safeQuantity,
-        customerId: user?.customerId ?? null,
-      }),
-    }).catch((error) => {
+    try {
+      const response = await fetch('/api/cart', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          cartItemId: itemId,
+          quantity: safeQuantity,
+          customerId: user?.customerId ?? null,
+        }),
+      });
+      return response.ok;
+    } catch (error) {
       console.error('Order quantity update failed:', error)
-    });
+      return false;
+    }
   }, [user?.customerId]);
 
   const updateCheckoutQuantity = useCallback((itemId: string, quantity: number) => {
@@ -800,16 +839,20 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
   }, [user?.customerId]);
 
-  const removeFromCart = useCallback((itemId: string) => {
+  const removeFromCart = useCallback(async (itemId: string) => {
     setCart(prev => prev.filter(item => item.id !== itemId));
-    void fetch('/api/cart', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ cartItemId: itemId, customerId: user?.customerId ?? null }),
-    }).catch((error) => {
+    try {
+      const response = await fetch('/api/cart', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ cartItemId: itemId, customerId: user?.customerId ?? null }),
+      });
+      return response.ok;
+    } catch (error) {
       console.error('Order remove failed:', error)
-    });
+      return false;
+    }
   }, [user?.customerId]);
 
   const prepareCheckout = useCallback((items: CartItem[]) => {
@@ -894,8 +937,12 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return { success: true };
   }, [favorites, user?.customerId]);
 
-  const setLanguage = useCallback((lang: Language) => {
-    setLanguageState(lang);
+  const setLanguage = useCallback((_lang: Language) => {
+    // UI translation is retired; keep a no-op setter until Phase 2 removes the legacy type surface.
+  }, []);
+
+  const setDisplayCurrency = useCallback((currency: DisplayCurrency) => {
+    setDisplayCurrencyState(normalizeDisplayCurrency(currency));
   }, []);
 
   const openLoginModal = useCallback((mode: 'login' | 'signup' = 'login', email?: string) => {
@@ -918,6 +965,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const value: GlobalContextType = {
     user,
     language,
+    displayCurrency,
     cart,
     favorites,
     checkoutEmail,
@@ -949,6 +997,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     refreshUserProfile,
     toggleFavorite,
     setLanguage,
+    setDisplayCurrency,
     setCheckoutEmail,
     openLoginModal,
     closeLoginModal,

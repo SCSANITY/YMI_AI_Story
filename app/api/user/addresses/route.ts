@@ -32,7 +32,7 @@ function normalizeAddress(raw: unknown): AddressMetadata | null {
   const country = String(data.country ?? '').trim().toUpperCase()
   const region = String(data.region ?? '').trim()
   const city = String(data.city ?? '').trim()
-  const addressLine1 = String(data.addressLine1 ?? data.address ?? '').trim()
+  const addressLine1 = String(data.addressLine1 ?? '').trim()
   const addressLine2 = String(data.addressLine2 ?? '').trim()
   const zip = String(data.zip ?? '').trim()
   const phone = String(data.phone ?? '').trim()

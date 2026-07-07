@@ -11,6 +11,7 @@ import {
 } from '@/lib/footer-legal-content'
 import { openCookieSettings } from '@/lib/cookie-consent'
 import { useI18n } from '@/lib/useI18n'
+import { NewsletterSignup } from '@/components/footer/NewsletterSignup'
 
 type LegalModalType = 'privacy' | 'terms' | 'shipping' | 'refund' | 'safety' | 'impact' | 'faq' | 'ourStory' | null
 
@@ -31,9 +32,6 @@ export const Footer: React.FC = () => {
   const [openLegalModal, setOpenLegalModal] = useState<LegalModalType>(null)
   const [openFaqIndex, setOpenFaqIndex] = useState<string | null>(null)
   const [isTikTokComingSoonOpen, setIsTikTokComingSoonOpen] = useState(false)
-  const [subscriberEmail, setSubscriberEmail] = useState('')
-  const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
-  const [subscribeMessage, setSubscribeMessage] = useState('')
 
   const handleLegalModalChange = (nextModal: LegalModalType) => {
     if (nextModal !== 'faq') {
@@ -380,38 +378,6 @@ export const Footer: React.FC = () => {
       </section>
     ))
 
-  const handleSubscribe = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const email = subscriberEmail.trim()
-    if (!email) {
-      setSubscribeStatus('error')
-      setSubscribeMessage(t('footer.subscribeInvalid'))
-      return
-    }
-
-    setSubscribeStatus('submitting')
-    setSubscribeMessage('')
-
-    try {
-      const response = await fetch('/api/newsletter-subscribers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email }),
-      })
-      const data = await response.json().catch(() => null)
-      if (!response.ok) {
-        throw new Error(data?.error || t('footer.subscribeError'))
-      }
-      setSubscriberEmail('')
-      setSubscribeStatus('success')
-      setSubscribeMessage(t('footer.subscribeSuccess'))
-    } catch (error) {
-      setSubscribeStatus('error')
-      setSubscribeMessage(error instanceof Error ? error.message : t('footer.subscribeError'))
-    }
-  }
-
   return (
     <>
       <footer className="mt-0 border-t border-amber-100/60 bg-[rgba(255,250,244,1)]">
@@ -581,42 +547,7 @@ export const Footer: React.FC = () => {
             <div className="space-y-4 text-sm">
               <h3 className="text-base font-semibold text-gray-900">{t('footer.subscribeTitle')}</h3>
               <p className="text-gray-600">{t('footer.subscribeDescription')}</p>
-              <form onSubmit={handleSubscribe} className="flex flex-col gap-3">
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="email"
-                    value={subscriberEmail}
-                    onChange={(event) => {
-                      setSubscriberEmail(event.target.value)
-                      if (subscribeStatus !== 'submitting') {
-                        setSubscribeStatus('idle')
-                        setSubscribeMessage('')
-                      }
-                    }}
-                    className="h-11 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-sm"
-                    placeholder={t('footer.emailPlaceholder')}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={subscribeStatus === 'submitting'}
-                  className="h-11 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {subscribeStatus === 'submitting' ? t('footer.subscribing') : t('footer.subscribe')}
-                </button>
-                {subscribeMessage ? (
-                  <div
-                    className={`rounded-xl border px-3 py-2 text-xs font-semibold leading-5 ${
-                      subscribeStatus === 'success'
-                        ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-                        : 'border-rose-100 bg-rose-50 text-rose-600'
-                    }`}
-                  >
-                    {subscribeMessage}
-                  </div>
-                ) : null}
-              </form>
+              <NewsletterSignup t={t} />
               <div className="flex flex-wrap items-center gap-2 pt-2 text-gray-400">
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">AMEX</span>
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">Klarna</span>

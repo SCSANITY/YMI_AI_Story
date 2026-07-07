@@ -2,10 +2,11 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Star } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
+import { OrderReviewForm } from './OrderReviewForm'
 
 type OrderForReview = {
   id: string
@@ -25,11 +26,6 @@ export default function OrderReviewPage() {
 
   const [order, setOrder] = useState<OrderForReview | null>(null)
   const [loading, setLoading] = useState(true)
-  const [rating, setRating] = useState(0)
-  const [comment, setComment] = useState('')
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (!orderParam) return
@@ -64,55 +60,7 @@ export default function OrderReviewPage() {
     }
   }, [orderParam])
 
-  useEffect(() => {
-    if (!order?.id) return
-    const params = new URLSearchParams()
-    if (user?.customerId) params.set('customerId', user.customerId)
-    if (!user?.customerId && checkoutEmail) params.set('email', checkoutEmail)
-
-    fetch(`/api/orders/${encodeURIComponent(order.id)}/review?${params.toString()}`, { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : { review: null }))
-      .then((data) => {
-        const review = data?.review
-        if (!review) return
-        setRating(Number(review.rating ?? 0))
-        setComment(String(review.comment ?? ''))
-      })
-      .catch(() => {})
-  }, [order?.id, user?.customerId, checkoutEmail])
-
   const canReview = useMemo(() => REVIEWABLE_STATUSES.has(String(order?.status ?? '').toLowerCase()), [order?.status])
-
-  const saveReview = async () => {
-    if (!order?.id) return
-    if (!rating || rating < 1 || rating > 5) {
-      setError(t('orderReview.invalidRating'))
-      return
-    }
-
-    setError('')
-    setSaving(true)
-    const response = await fetch(`/api/orders/${encodeURIComponent(order.id)}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        rating,
-        comment,
-        customerId: user?.customerId ?? null,
-        email: !user?.customerId ? checkoutEmail : null,
-      }),
-    })
-    const data = response.ok ? await response.json() : null
-    setSaving(false)
-
-    if (!response.ok || !data?.saved) {
-      setError(data?.error || t('orderReview.saveFailed'))
-      return
-    }
-
-    setSaved(true)
-  }
 
   if (loading) {
     return (
@@ -154,51 +102,14 @@ export default function OrderReviewPage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
-        {!canReview ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            {t('orderReview.unavailable')}
-          </div>
-        ) : (
-          <>
-            <h2 className="text-lg font-semibold text-gray-900">{t('orderReview.rateExperience')}</h2>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setRating(value)}
-                  className="p-1"
-                  aria-label={`Rate ${value} stars`}
-                >
-                  <Star
-                    className={`h-7 w-7 ${value <= rating ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}`}
-                  />
-                </button>
-              ))}
-            </div>
-            <textarea
-              className="w-full min-h-[140px] rounded-xl border border-gray-200 p-3 text-sm"
-              placeholder={t('orderReview.tellUs')}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-            {error && <p className="text-xs text-red-500">{error}</p>}
-            {saved && <p className="text-xs text-emerald-600">{t('orderReview.saved')}</p>}
-            <div className="flex gap-3">
-              <Button size="lg" className="rounded-full px-8" onClick={saveReview} disabled={saving}>
-                {saving ? t('orderReview.saving') : t('orderReview.submit')}
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="rounded-full px-8"
-                onClick={() => router.push('/orders')}
-              >
-                {t('orderDetail.backToOrders')}
-              </Button>
-            </div>
-          </>
-        )}
+        <OrderReviewForm
+          orderId={order.id}
+          canReview={canReview}
+          customerId={user?.customerId}
+          checkoutEmail={checkoutEmail}
+          t={t}
+          onBackToOrders={() => router.push('/orders')}
+        />
       </div>
     </div>
   )

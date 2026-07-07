@@ -40,14 +40,14 @@ const FACE_CENTER_MIN_X = 0.22
 const FACE_CENTER_MAX_X = 0.78
 const FACE_CENTER_MIN_Y = 0.18
 const FACE_CENTER_MAX_Y = 0.74
-const FACE_ROLL_MAX_DEGREES = 18
-const FACE_NOSE_CENTER_MIN = 0.18
-const FACE_NOSE_CENTER_MAX = 0.82
+const FACE_ROLL_MAX_DEGREES = 25
+const FACE_NOSE_CENTER_MIN = 0.08
+const FACE_NOSE_CENTER_MAX = 0.92
 const FACE_BLUR_MIN_SCORE = 30
 const FACE_BRIGHTNESS_MIN = 45
 const FACE_BRIGHTNESS_MAX = 218
 const FACE_EYE_REGION_RATIO = 0.22
-const FACE_EYE_MIN_EDGE_SCORE = 8
+const FACE_EYE_MIN_EDGE_SCORE = 4
 
 export type FaceImageValidationCode =
   | 'missing'
@@ -308,7 +308,7 @@ function validateDetectedFace(detection: Detection, width: number, height: numbe
   const nose = getKeypointByLabel(detection, ['nose'], 2)
   const mouth = getKeypointByLabel(detection, ['mouth'], 3)
 
-  if (!leftEye || !rightEye || !nose || !mouth) {
+  if (!leftEye || !rightEye || !nose) {
     return { ok: false, code: 'faceCovered' }
   }
 
@@ -323,12 +323,12 @@ function validateDetectedFace(detection: Detection, width: number, height: numbe
   const maxEyeX = Math.max(leftEye.x, rightEye.x)
   const eyeDistance = Math.max(0.001, maxEyeX - minEyeX)
   const nosePosition = (nose.x - minEyeX) / eyeDistance
-  const mouthPosition = (mouth.x - minEyeX) / eyeDistance
+  const mouthPosition = mouth ? (mouth.x - minEyeX) / eyeDistance : 0.5
   if (
     nosePosition < FACE_NOSE_CENTER_MIN ||
     nosePosition > FACE_NOSE_CENTER_MAX ||
-    mouthPosition < -0.1 ||
-    mouthPosition > 1.1
+    mouthPosition < -0.25 ||
+    mouthPosition > 1.25
   ) {
     return { ok: false, code: 'notFrontFacing' }
   }

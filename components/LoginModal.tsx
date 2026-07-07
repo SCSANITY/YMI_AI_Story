@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React, { useEffect, useState, useTransition } from 'react';
+import React, { useEffect, useRef, useState, useTransition } from 'react';
 import { X, Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useGlobalContext } from '@/contexts/GlobalContext';
@@ -65,6 +65,8 @@ export function LoginModal() {
   const [info, setInfo] = useState<string | null>(null);
   const [pendingOAuthProvider, setPendingOAuthProvider] = useState<OAuthProvider | null>(null);
   const [isPending, startTransition] = useTransition();
+  const authSubmitInFlightRef = useRef(false);
+  const oauthInFlightRef = useRef<OAuthProvider | null>(null);
   const enabledSocialLogins = SOCIAL_LOGIN_OPTIONS.filter((option) => option.enabled);
 
   useEffect(() => {
@@ -82,6 +84,8 @@ export function LoginModal() {
     setError(null);
     setInfo(null);
     setPendingOAuthProvider(null);
+    authSubmitInFlightRef.current = false;
+    oauthInFlightRef.current = null;
   }, [isLoginModalOpen, loginModalMode, loginModalEmail, checkoutEmail]);
 
   if (!isLoginModalOpen) return null;
@@ -111,30 +115,40 @@ export function LoginModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (authSubmitInFlightRef.current || oauthInFlightRef.current) return;
+
+    authSubmitInFlightRef.current = true;
     setError(null);
     setInfo(null);
 
     startTransition(async () => {
-      if (mode === 'signup') {
-        if (signupStep === 'credentials') {
-          await sendSignupCode();
+      try {
+        if (mode === 'signup') {
+          if (signupStep === 'credentials') {
+            await sendSignupCode();
+            return;
+          }
+          await verifyCodeAndSignup();
           return;
         }
-        await verifyCodeAndSignup();
-        return;
-      }
 
-      const result = await Promise.resolve(login(email, password, 'login'));
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
+        const result = await Promise.resolve(login(email, password, 'login'));
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
 
-      closeLoginModal();
+        closeLoginModal();
+      } finally {
+        authSubmitInFlightRef.current = false;
+      }
     });
   };
 
   const handleOAuthLogin = async (option: (typeof SOCIAL_LOGIN_OPTIONS)[number]) => {
+    if (authSubmitInFlightRef.current || oauthInFlightRef.current) return;
+
+    oauthInFlightRef.current = option.provider;
     setError(null);
     setInfo(t(option.redirectingKey));
     setPendingOAuthProvider(option.provider);
@@ -144,6 +158,7 @@ export function LoginModal() {
       setError(`${t(option.failedKey)} ${result.error}`);
       setInfo(null);
       setPendingOAuthProvider(null);
+      oauthInFlightRef.current = null;
     }
   };
 
@@ -163,6 +178,7 @@ export function LoginModal() {
           <div className="flex rounded-full bg-gray-100 p-1 text-xs font-semibold text-gray-500">
             <button
               type="button"
+              disabled={isPending || Boolean(pendingOAuthProvider)}
               onClick={() => {
                 setMode('login');
                 setSignupStep('credentials');
@@ -172,12 +188,13 @@ export function LoginModal() {
               }}
               className={`flex-1 rounded-full px-3 py-2 transition ${
                 mode === 'login' ? 'bg-white text-gray-900 shadow' : ''
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-60`}
             >
               {t('login.logIn')}
             </button>
             <button
               type="button"
+              disabled={isPending || Boolean(pendingOAuthProvider)}
               onClick={() => {
                 setMode('signup');
                 setSignupStep('credentials');
@@ -187,7 +204,7 @@ export function LoginModal() {
               }}
               className={`flex-1 rounded-full px-3 py-2 transition ${
                 mode === 'signup' ? 'bg-white text-gray-900 shadow' : ''
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-60`}
             >
               {t('login.signUp')}
             </button>
@@ -250,7 +267,7 @@ export function LoginModal() {
             <p className="text-xs text-emerald-600">{info}</p>
           ) : null}
 
-          <Button type="submit" size="lg" className="w-full rounded-full" disabled={isPending}>
+          <Button type="submit" size="lg" className="w-full rounded-full" disabled={isPending || Boolean(pendingOAuthProvider)}>
             {isPending
               ? t('login.pleaseWait')
               : mode === 'signup'
@@ -265,13 +282,20 @@ export function LoginModal() {
               type="button"
               className="w-full text-xs font-semibold text-amber-700 hover:text-amber-800"
               onClick={() => {
+                if (authSubmitInFlightRef.current || oauthInFlightRef.current) return;
+
+                authSubmitInFlightRef.current = true;
                 setError(null);
                 setInfo(null);
                 startTransition(async () => {
-                  await sendSignupCode();
+                  try {
+                    await sendSignupCode();
+                  } finally {
+                    authSubmitInFlightRef.current = false;
+                  }
                 });
               }}
-              disabled={isPending}
+              disabled={isPending || Boolean(pendingOAuthProvider)}
             >
               {t('login.resendCode')}
             </button>

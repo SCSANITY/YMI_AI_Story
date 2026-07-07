@@ -124,7 +124,6 @@ function resolveRegionKey(countryCode: string, address: Record<string, unknown>)
     address.regionCode,
     address.city,
     address.addressLine1,
-    address.address,
   ]
     .map((value) => normalizeText(value).toUpperCase())
     .join(' ')
@@ -170,7 +169,7 @@ function choosePricingRule(rules: PricingRuleRow[], methodCode: string, zoneCode
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const address = body?.shippingAddress ?? body?.address ?? body ?? {}
+    const address = body?.shippingAddress ?? body ?? {}
     const countryCode = normalizeCode(address.country || address.countryCode)
     const city = normalizeText(address.city)
     const postalCode = normalizeText(address.zip || address.postalCode)

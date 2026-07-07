@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Book } from '@/types'
 import { BookCard } from '@/components/BookCard'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { useBookDisplayData } from '@/components/useBookDisplayData'
 import { useBookCatalog } from '@/components/useBookCatalog'
-import { canEnterCustomize } from '@/lib/customize-access-client'
+import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
 
 type HomeBookCategory = {
   titleKey: string
@@ -115,11 +117,19 @@ export function HomeBookCategories() {
   const { favorites, toggleFavorite } = useGlobalContext()
   const { books: catalogBooks } = useBookCatalog()
   const { ratingMap } = useBookDisplayData()
+  const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
+  const [isBooksRoutePending, setBooksRoutePending] = useState(false)
 
-  const handlePersonalize = async (bookID: string) => {
-    const allowed = await canEnterCustomize()
-    if (!allowed) return
-    router.push(`/personalize/${bookID}`)
+  const getPersonalizeHref = (bookID: string) => `/personalize/${bookID}`
+
+  const handlePersonalize = (bookID: string) => {
+    void navigateToCustomize(getPersonalizeHref(bookID))
+  }
+
+  const handleViewAllBooks = () => {
+    if (isBooksRoutePending) return
+    setBooksRoutePending(true)
+    router.push('/books')
   }
 
   return (
@@ -154,9 +164,11 @@ export function HomeBookCategories() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => router.push('/books')}
+                    onClick={handleViewAllBooks}
+                    disabled={isBooksRoutePending}
                     className="inline-flex w-fit shrink-0 items-center justify-center self-start rounded-full border border-orange-200/70 bg-orange-200/32 px-5 py-2.5 text-xs font-semibold tracking-normal text-orange-800 shadow-[0_8px_24px_rgba(234,88,12,0.12),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl transition-all duration-200 hover:border-orange-200/90 hover:bg-orange-200/45 hover:text-orange-900 hover:shadow-[0_12px_30px_rgba(251,146,60,0.20),inset_0_1px_0_rgba(255,255,255,0.88)] sm:-translate-y-1 sm:translate-x-2 sm:self-auto sm:px-6 sm:text-sm"
                   >
+                    {isBooksRoutePending ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
                     <span>{t('homeBooks.viewAll')}</span>
                   </button>
                 </div>
@@ -172,7 +184,9 @@ export function HomeBookCategories() {
                       storyType={book.storyTypeLabel || book.category}
                       description={book.description}
                       rating={ratingMap[book.bookID]}
+                      isNavigating={pendingCustomizeHref === getPersonalizeHref(book.bookID)}
                       onClick={() => handlePersonalize(book.bookID)}
+                      onPrefetch={() => prefetchCustomizeHref(getPersonalizeHref(book.bookID))}
                       onFavoriteClick={(event) => {
                         event.stopPropagation()
                         toggleFavorite(book)

@@ -1,74 +1,23 @@
 'use client'
 
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
-  BookOpen,
-  Gift,
   Heart,
-  LogOut,
+  Loader2,
   Menu,
-  Package,
-  PencilLine,
-  Shield,
   ShoppingCart,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
-import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { MyRewardsModal } from '@/components/MyRewardsModal'
-import { runAfterIdle } from '@/lib/schedule-idle'
-
-type NavNoticeModule = 'favorites' | 'rewards' | 'orders' | 'books'
-type NavNoticeCounts = Record<NavNoticeModule, number>
-
-const EMPTY_NOTICE_COUNTS: NavNoticeCounts = {
-  favorites: 0,
-  rewards: 0,
-  orders: 0,
-  books: 0,
-}
-
-function clampCount(value: unknown): number {
-  const numeric = Number(value ?? 0)
-  return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : 0
-}
-
-function noticeStorageKey(customerId: string) {
-  return `ymi_nav_seen_counts:${customerId}`
-}
-
-function parseNoticeCounts(raw: string | null): NavNoticeCounts | null {
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as Partial<NavNoticeCounts>
-    return {
-      favorites: clampCount(parsed.favorites),
-      rewards: clampCount(parsed.rewards),
-      orders: clampCount(parsed.orders),
-      books: clampCount(parsed.books),
-    }
-  } catch {
-    return null
-  }
-}
-
-function formatBadgeCount(count: number) {
-  return count > 9 ? '9+' : String(count)
-}
-
-function ModuleBadge({ count }: { count: number }) {
-  if (count <= 0) return null
-  return (
-    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-[10px] font-bold leading-none text-slate-950 shadow-sm shadow-amber-200/70">
-      {formatBadgeCount(count)}
-    </span>
-  )
-}
+import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
+import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
 
 export const Navbar: React.FC = () => {
   const router = useRouter()
@@ -80,10 +29,8 @@ export const Navbar: React.FC = () => {
   const [isUserMenuOpen, setUserMenuOpen] = useState(false)
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isRewardsOpen, setRewardsOpen] = useState(false)
-  const [moduleCounts, setModuleCounts] = useState<NavNoticeCounts>(EMPTY_NOTICE_COUNTS)
-  const [seenCounts, setSeenCounts] = useState<NavNoticeCounts>(EMPTY_NOTICE_COUNTS)
   const [scrolled, setScrolled] = useState(false)
-  const seenCountsInitializedRef = useRef(false)
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null)
 
   const userRef = useRef<HTMLDivElement>(null)
   const navContainerRef = useRef<HTMLDivElement>(null)
@@ -97,19 +44,29 @@ export const Navbar: React.FC = () => {
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
-  const newCounts: NavNoticeCounts = user?.customerId
-    ? {
-        favorites: Math.max(0, moduleCounts.favorites - seenCounts.favorites),
-        rewards: Math.max(0, moduleCounts.rewards - seenCounts.rewards),
-        orders: Math.max(0, moduleCounts.orders - seenCounts.orders),
-        books: Math.max(0, moduleCounts.books - seenCounts.books),
-      }
-    : EMPTY_NOTICE_COUNTS
-  const totalNewCount = newCounts.favorites + newCounts.rewards + newCounts.orders + newCounts.books
+  const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
+    customerId: user?.customerId,
+    isRewardsOpen,
+    pathname,
+  })
   const isBooksActive = pathname === '/books'
   const isHomeActive = isHomePage
   // transparent on homepage hero, transitions to glass after scroll
   const isTransparent = isHomePage && !scrolled
+
+  useEffect(() => {
+    setPendingRoute(null)
+  }, [pathname])
+
+  const navigateToRoute = (path: string) => {
+    if (!path || pendingRoute) return
+    if (pathname === path) {
+      setPendingRoute(null)
+      return
+    }
+    setPendingRoute(path)
+    router.push(path)
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -127,107 +84,6 @@ export const Navbar: React.FC = () => {
     onScroll()
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
-
-  useEffect(() => {
-    if (!user?.customerId) {
-      setModuleCounts(EMPTY_NOTICE_COUNTS)
-      setSeenCounts(EMPTY_NOTICE_COUNTS)
-      seenCountsInitializedRef.current = false
-      return
-    }
-
-    const stored = typeof window !== 'undefined' ? parseNoticeCounts(window.localStorage.getItem(noticeStorageKey(user.customerId))) : null
-    setSeenCounts(stored ?? EMPTY_NOTICE_COUNTS)
-    seenCountsInitializedRef.current = Boolean(stored)
-  }, [user?.customerId])
-
-  const persistSeenCounts = useCallback((next: NavNoticeCounts) => {
-    if (!user?.customerId || typeof window === 'undefined') return
-    window.localStorage.setItem(noticeStorageKey(user.customerId), JSON.stringify(next))
-  }, [user?.customerId])
-
-  const markModuleSeen = useCallback((module: NavNoticeModule) => {
-    if (!user?.customerId) return
-    setSeenCounts((prev) => {
-      const next = {
-        ...prev,
-        [module]: moduleCounts[module],
-      }
-      persistSeenCounts(next)
-      return next
-    })
-  }, [moduleCounts, persistSeenCounts, user?.customerId])
-
-  useEffect(() => {
-    if (!user?.customerId) return
-
-    let cancelled = false
-    const rawCustomerId = user.customerId
-
-    const cancelIdleTask = runAfterIdle(() => {
-      const customerId = encodeURIComponent(rawCustomerId)
-      Promise.all([
-        fetch(`/api/favourites?customerId=${customerId}`, {
-          credentials: 'include',
-        }).then((res) => (res.ok ? res.json() : { items: [] })),
-        fetch('/api/account/reward-vouchers', {
-          credentials: 'include',
-        }).then((res) => (res.ok ? res.json() : { active: [] })),
-        fetch(`/api/orders/list?customerId=${customerId}`, {
-          credentials: 'include',
-        }).then((res) => (res.ok ? res.json() : { orders: [], count: 0 })),
-        fetch(`/api/my-books?customerId=${customerId}`, {
-          credentials: 'include',
-        }).then((res) => (res.ok ? res.json() : { items: [] })),
-      ])
-        .then(([favoritesData, rewardsData, ordersData, booksData]) => {
-          if (cancelled) return
-          const nextCounts: NavNoticeCounts = {
-            favorites: Array.isArray(favoritesData?.items) ? favoritesData.items.length : 0,
-            rewards: Array.isArray(rewardsData?.active) ? rewardsData.active.length : 0,
-            orders: clampCount(ordersData?.count ?? (Array.isArray(ordersData?.orders) ? ordersData.orders.length : 0)),
-            books: Array.isArray(booksData?.items) ? booksData.items.length : 0,
-          }
-          setModuleCounts(nextCounts)
-          setSeenCounts((prev) => {
-            if (!seenCountsInitializedRef.current) {
-              seenCountsInitializedRef.current = true
-              persistSeenCounts(nextCounts)
-              return nextCounts
-            }
-
-            const normalized: NavNoticeCounts = {
-              favorites: Math.min(prev.favorites, nextCounts.favorites),
-              rewards: Math.min(prev.rewards, nextCounts.rewards),
-              orders: Math.min(prev.orders, nextCounts.orders),
-              books: Math.min(prev.books, nextCounts.books),
-            }
-            const changed =
-              normalized.favorites !== prev.favorites ||
-              normalized.rewards !== prev.rewards ||
-              normalized.orders !== prev.orders ||
-              normalized.books !== prev.books
-            if (changed) persistSeenCounts(normalized)
-            return changed ? normalized : prev
-          })
-        })
-        .catch(() => {
-          if (cancelled) return
-          setModuleCounts(EMPTY_NOTICE_COUNTS)
-        })
-    })
-
-    return () => {
-      cancelled = true
-      cancelIdleTask()
-    }
-  }, [isRewardsOpen, pathname, persistSeenCounts, user?.customerId])
-
-  useEffect(() => {
-    if (pathname === '/favorites') markModuleSeen('favorites')
-    else if (pathname === '/orders' || pathname?.startsWith('/orders/')) markModuleSeen('orders')
-    else if (pathname === '/my-books') markModuleSeen('books')
-  }, [markModuleSeen, pathname])
 
   useLayoutEffect(() => {
     let activeRef: React.RefObject<HTMLButtonElement | null>
@@ -256,17 +112,18 @@ export const Navbar: React.FC = () => {
   }, [isHomePage, pathname])
 
   const handleHomeClick = () => {
+    if (pendingRoute) return
     if (pathname === '/') {
       window.scrollTo({ top: 0, behavior: 'smooth' })
       window.history.pushState(null, '', '/')
       window.dispatchEvent(new Event('hashchange'))
     } else {
-      router.push('/')
+      navigateToRoute('/')
     }
   }
 
   const handleBooksClick = () => {
-    router.push('/books')
+    navigateToRoute('/books')
   }
 
   if (isPersonalizeRoute) return null
@@ -280,8 +137,8 @@ export const Navbar: React.FC = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {pathname !== '/' && !isCheckoutRoute && (
-            <button onClick={() => router.push('/')} className="mr-2 p-1 hover:bg-gray-100 rounded-full">
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
+            <button onClick={() => navigateToRoute('/')} disabled={Boolean(pendingRoute)} className="mr-2 p-1 hover:bg-gray-100 rounded-full">
+              {pendingRoute === '/' ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
             </button>
           )}
 
@@ -296,7 +153,7 @@ export const Navbar: React.FC = () => {
             href="#"
             onClick={(e) => {
               e.preventDefault()
-              router.push('/')
+              navigateToRoute('/')
             }}
             className="flex items-center"
           >
@@ -324,65 +181,91 @@ export const Navbar: React.FC = () => {
           <button
             ref={homeRef}
             onClick={handleHomeClick}
+            disabled={Boolean(pendingRoute)}
             className={`transition-colors duration-300 pb-0.5 ${isHomeActive
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
-            {t('navbar.home')}
+            <span className="inline-flex items-center gap-1.5">
+              {pendingRoute === '/' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {t('navbar.home')}
+            </span>
           </button>
           <button
             ref={booksRef}
             onClick={handleBooksClick}
+            disabled={Boolean(pendingRoute)}
             className={`transition-colors duration-300 pb-0.5 ${isBooksActive
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
-            {t('navbar.books')}
+            <span className="inline-flex items-center gap-1.5">
+              {pendingRoute === '/books' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {t('navbar.books')}
+            </span>
           </button>
           <button
             ref={favoritesRef}
-            onClick={() => router.push('/favorites')}
+            onClick={() => navigateToRoute('/favorites')}
+            disabled={Boolean(pendingRoute)}
             className={`flex items-center gap-1.5 transition-colors duration-300 pb-0.5 ${pathname === '/favorites'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-red-500'}`}
           >
             <Heart className="h-4 w-4" />
+            {pendingRoute === '/favorites' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             <span>{t('navbar.favorites')}</span>
           </button>
           <button
             ref={myBooksRef}
-            onClick={() => router.push('/my-books')}
+            onClick={() => navigateToRoute('/my-books')}
+            disabled={Boolean(pendingRoute)}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/my-books'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
-            {t('navbar.myBooks')}
+            <span className="inline-flex items-center gap-1.5">
+              {pendingRoute === '/my-books' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {t('navbar.myBooks')}
+            </span>
           </button>
           <button
             ref={collaborationRef}
-            onClick={() => router.push('/collaboration')}
+            onClick={() => navigateToRoute('/collaboration')}
+            disabled={Boolean(pendingRoute)}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/collaboration'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
-            {t('navbar.collaboration')}
+            <span className="inline-flex items-center gap-1.5">
+              {pendingRoute === '/collaboration' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {t('navbar.collaboration')}
+            </span>
           </button>
           <button
             ref={supportRef}
-            onClick={() => router.push('/support')}
+            onClick={() => navigateToRoute('/support')}
+            disabled={Boolean(pendingRoute)}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/support'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
           >
-            {t('navbar.support')}
+            <span className="inline-flex items-center gap-1.5">
+              {pendingRoute === '/support' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {t('navbar.support')}
+            </span>
           </button>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
-          <LanguageSwitcher menuClassName="w-40 animate-in fade-in zoom-in-95" />
+          <CurrencySwitcher menuClassName="animate-in fade-in zoom-in-95" />
 
-          <Button variant="ghost" size="sm" onClick={() => router.push('/cart')} className="relative px-2">
-            <ShoppingCart className={`h-5 w-5 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-700'}`} />
+          <Button variant="ghost" size="sm" onClick={() => navigateToRoute('/cart')} disabled={Boolean(pendingRoute)} className="relative px-2">
+            {pendingRoute === '/cart' ? (
+              <Loader2 className={`h-5 w-5 animate-spin transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-amber-600'}`} />
+            ) : (
+              <ShoppingCart className={`h-5 w-5 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-700'}`} />
+            )}
             {cartCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
                 {cartCount}
@@ -392,123 +275,19 @@ export const Navbar: React.FC = () => {
 
           <div className="relative" ref={userRef}>
             {user ? (
-              <div className="flex items-center">
-                <button
-                  onClick={() => setUserMenuOpen(!isUserMenuOpen)}
-                  className="relative flex items-center gap-2 focus:outline-none transition-transform hover:scale-105"
-                >
-                  {/* OAuth avatars can come from arbitrary domains; keep native img instead of expanding Next image remote allowlists. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="h-8 w-8 rounded-full border border-gray-200 object-cover shadow-sm"
-                  />
-                  {totalNewCount > 0 ? (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
-                      {formatBadgeCount(totalNewCount)}
-                    </span>
-                  ) : null}
-                </button>
-
-                {isUserMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-white/85 bg-white/92 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_14px_38px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.92)] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="px-4 py-2 border-b border-gray-50">
-                      <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        router.push('/account')
-                        setUserMenuOpen(false)
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <PencilLine className="h-4 w-4" />
-                      {t('navbar.myAccount')}
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        markModuleSeen('favorites')
-                        router.push('/favorites')
-                        setUserMenuOpen(false)
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Heart className="h-4 w-4" />
-                      <span>{t('navbar.favorites')}</span>
-                      <ModuleBadge count={newCounts.favorites} />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setUserMenuOpen(false)
-                        markModuleSeen('rewards')
-                        setRewardsOpen(true)
-                      }}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Gift className="h-4 w-4" />
-                        {t('navbar.myRewards')}
-                      </span>
-                      <ModuleBadge count={newCounts.rewards} />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        markModuleSeen('orders')
-                        router.push('/orders')
-                        setUserMenuOpen(false)
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Package className="h-4 w-4" />
-                      <span>{t('navbar.myOrders')}</span>
-                      <ModuleBadge count={newCounts.orders} />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        markModuleSeen('books')
-                        router.push('/my-books')
-                        setUserMenuOpen(false)
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <BookOpen className="h-4 w-4" />
-                      <span>{t('navbar.myBooks')}</span>
-                      <ModuleBadge count={newCounts.books} />
-                    </button>
-
-                    {user.role === 'admin' ? (
-                      <button
-                        onClick={() => {
-                          router.push('/admin')
-                          setUserMenuOpen(false)
-                        }}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 transition-colors"
-                      >
-                        <Shield className="h-4 w-4" />
-                        Admin Dashboard
-                      </button>
-                    ) : null}
-
-                    <button
-                      onClick={() => {
-                        logout()
-                        setUserMenuOpen(false)
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      {t('navbar.logOut')}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <NavbarUserMenu
+                user={user}
+                isOpen={isUserMenuOpen}
+                totalNewCount={totalNewCount}
+                newCounts={newCounts}
+                t={t}
+                onToggle={() => setUserMenuOpen((open) => !open)}
+                onClose={() => setUserMenuOpen(false)}
+                onNavigate={navigateToRoute}
+                onOpenRewards={() => setRewardsOpen(true)}
+                onLogout={logout}
+                onMarkModuleSeen={markModuleSeen}
+              />
             ) : (
               <Button
                 onClick={() => openLoginModal()}
@@ -532,13 +311,13 @@ export const Navbar: React.FC = () => {
 
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
-          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.home')}</button>
-          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.books')}</button>
-          <button onClick={() => { router.push('/favorites'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.favorites')}</button>
-          <button onClick={() => { router.push('/my-books'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.myBooks')}</button>
-          <button onClick={() => { router.push('/collaboration'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.collaboration')}</button>
-          <button onClick={() => { router.push('/support'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.support')}</button>
-          <button onClick={() => { router.push('/orders'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.myOrders')}</button>
+          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.home')}</button>
+          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.books')}</button>
+          <button onClick={() => { navigateToRoute('/favorites'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/favorites' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.favorites')}</button>
+          <button onClick={() => { navigateToRoute('/my-books'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/my-books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myBooks')}</button>
+          <button onClick={() => { navigateToRoute('/collaboration'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/collaboration' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.collaboration')}</button>
+          <button onClick={() => { navigateToRoute('/support'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/support' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.support')}</button>
+          <button onClick={() => { navigateToRoute('/orders'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/orders' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myOrders')}</button>
         </div>
       )}
     </nav>

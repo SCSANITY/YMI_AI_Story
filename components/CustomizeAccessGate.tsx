@@ -11,7 +11,7 @@ export function CustomizeAccessGate({ children }: { children: ReactNode }) {
     let active = true
 
     const checkAccess = async () => {
-      const allowed = await canEnterCustomize()
+      const allowed = await canEnterCustomize({ force: true })
       if (!active) return
 
       if (!allowed) {

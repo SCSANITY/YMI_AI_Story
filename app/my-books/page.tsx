@@ -2,38 +2,16 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
-import { Button } from '@/components/Button'
-import { BookCardCover } from '@/components/BookCardCover'
-import { BookOpen, ShoppingCart, Trash2, Sparkles } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { BOOKS } from '@/data/books'
 import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
 import { useI18n } from '@/lib/useI18n'
-import { formatLocaleCurrency } from '@/lib/locale-pricing'
-import { canEnterCustomize } from '@/lib/customize-access-client'
+import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
 import { parseTemplateAmount } from '@/lib/book-catalog'
-
-type CreationItem = {
-  creation_id: string
-  template_id: string
-  customize_snapshot?: Record<string, unknown> | null
-  preview_job_id?: string | null
-  preview_cover_url?: string | null
-  is_archived?: boolean | null
-  templates?: {
-    template_id?: string
-    name?: string
-    description?: string
-    cover_image_path?: string
-    normalized_cover_image_path?: string
-    story_type?: string
-    price_cents?: number | null
-    compare_at_price_cents?: number | null
-    discount_percent?: number | null
-    is_discount?: boolean | null
-  }
-}
+import { MyBooksGrid } from './MyBooksGrid'
+import type { CreationItem } from './myBooksTypes'
 
 const normalizeLanguage = (value: unknown): PersonalizationData['language'] => {
   const raw = String(value ?? '').trim().toLowerCase()
@@ -98,10 +76,12 @@ const toPersonalization = (item: CreationItem): PersonalizationData => {
 
 export default function MyBooksPage() {
   const router = useRouter()
-  const { t, language } = useI18n()
-  const { user, addToCart, hydrateCheckoutItems } = useGlobalContext()
+  const { t } = useI18n()
+  const { user, displayCurrency, addToCart, hydrateCheckoutItems } = useGlobalContext()
+  const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
   const [items, setItems] = useState<CreationItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendingAction, setPendingAction] = useState<{ creationId: string; action: 'add' | 'buy' | 'delete' } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -129,6 +109,8 @@ export default function MyBooksPage() {
   }, [user?.customerId])
 
   const handleAddToCart = async (item: CreationItem) => {
+    if (pendingAction) return
+    setPendingAction({ creationId: item.creation_id, action: 'add' })
     const coverUrl = resolveCover(item)
     const fallbackBook = BOOKS.find((b) => b.bookID === item.template_id)
     const book: Book = {
@@ -147,10 +129,16 @@ export default function MyBooksPage() {
       isDiscount: Boolean(item.templates?.is_discount ?? fallbackBook?.isDiscount),
     }
     const personalization = toPersonalization(item)
-    await addToCart(book, personalization, 3, undefined, coverUrl)
+    try {
+      await addToCart(book, personalization, 3, undefined, coverUrl)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   const handleBuyNow = async (item: CreationItem) => {
+    if (pendingAction) return
+    setPendingAction({ creationId: item.creation_id, action: 'buy' })
     const coverUrl = resolveCover(item)
     const fallbackBook = BOOKS.find((b) => b.bookID === item.template_id)
     const book: Book = {
@@ -181,88 +169,101 @@ export default function MyBooksPage() {
         ? book.price + 50
         : book.price
 
-    const response = await fetch('/api/orders/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        customerId: user?.customerId ?? null,
-        items: [
-          {
-            creationId: item.creation_id,
-            productType: mapProductType(personalization.bookType),
-            quantity: 1,
-            priceAtPurchase,
-          },
-        ],
-      }),
-    })
+    try {
+      const response = await fetch('/api/orders/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          customerId: user?.customerId ?? null,
+          items: [
+            {
+              creationId: item.creation_id,
+              productType: mapProductType(personalization.bookType),
+              quantity: 1,
+              priceAtPurchase,
+            },
+          ],
+        }),
+      })
 
-    if (!response.ok) return
-    const data = await response.json()
-    const cartItemIds = Array.isArray(data?.cartItemIds) ? data.cartItemIds : []
-    if (!cartItemIds.length) return
+      if (!response.ok) return
+      const data = await response.json()
+      const cartItemIds = Array.isArray(data?.cartItemIds) ? data.cartItemIds : []
+      if (!cartItemIds.length) return
 
-    const idsQuery = encodeURIComponent(cartItemIds.join(','))
-    const cartUrl = user?.customerId
-      ? `/api/cart?ids=${idsQuery}&customerId=${encodeURIComponent(user.customerId)}`
-      : `/api/cart?ids=${idsQuery}`
-    const cartResponse = await fetch(cartUrl, { credentials: 'include' })
-    if (cartResponse.ok) {
-      const cartData = await cartResponse.json()
-      const fetchedItems = Array.isArray(cartData?.items) ? cartData.items : []
-      if (fetchedItems.length > 0) {
-        hydrateCheckoutItems(fetchedItems)
+      const idsQuery = encodeURIComponent(cartItemIds.join(','))
+      const cartUrl = user?.customerId
+        ? `/api/cart?ids=${idsQuery}&customerId=${encodeURIComponent(user.customerId)}`
+        : `/api/cart?ids=${idsQuery}`
+      const cartResponse = await fetch(cartUrl, { credentials: 'include' })
+      if (cartResponse.ok) {
+        const cartData = await cartResponse.json()
+        const fetchedItems = Array.isArray(cartData?.items) ? cartData.items : []
+        if (fetchedItems.length > 0) {
+          hydrateCheckoutItems(fetchedItems)
+        }
       }
-    }
 
-    const params = new URLSearchParams()
-    params.set('ids', cartItemIds.join(','))
-    if (data?.orderId) params.set('orderId', data.orderId)
-    router.push(`/checkout?${params.toString()}`)
+      const params = new URLSearchParams()
+      params.set('ids', cartItemIds.join(','))
+      if (data?.orderId) params.set('orderId', data.orderId)
+      router.push(`/checkout?${params.toString()}`)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   const handleDelete = async (item: CreationItem) => {
+    if (pendingAction) return
     const confirmed = window.confirm(t('myBooks.deleteConfirm'))
     if (!confirmed) return
 
-    const response = await fetch('/api/my-books', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        creationId: item.creation_id,
-        customerId: user?.customerId ?? null,
-      }),
-    }).catch(() => null)
+    setPendingAction({ creationId: item.creation_id, action: 'delete' })
+    try {
+      const response = await fetch('/api/my-books', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          creationId: item.creation_id,
+          customerId: user?.customerId ?? null,
+        }),
+      }).catch(() => null)
 
-    if (!response || !response.ok) return
-    setItems((prev) => prev.filter((row) => row.creation_id !== item.creation_id))
+      if (!response || !response.ok) return
+      setItems((prev) => prev.filter((row) => row.creation_id !== item.creation_id))
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  const buildPreviewHref = (item: CreationItem) => {
+    const params = new URLSearchParams({ view: 'preview' })
+    params.set('creationId', item.creation_id)
+    if (item.preview_job_id) params.set('jobId', item.preview_job_id)
+    return `/personalize/${item.template_id}?${params.toString()}`
   }
 
   const goToPreview = (item: CreationItem) => {
     const coverUrl = resolveCover(item)
-    if (typeof window !== 'undefined') {
-      try {
-        window.sessionStorage.setItem(
-          `ymi_preview_${item.creation_id}`,
-          JSON.stringify({
-            coverUrl,
-            jobId: item.preview_job_id ?? null,
-          })
-        )
-      } catch {
-        // ignore cache errors
-      }
-    }
-    const params = new URLSearchParams({ view: 'preview' })
-    params.set('creationId', item.creation_id)
-    if (item.preview_job_id) params.set('jobId', item.preview_job_id)
-    void (async () => {
-      const allowed = await canEnterCustomize()
-      if (!allowed) return
-      router.push(`/personalize/${item.template_id}?${params.toString()}`)
-    })()
+    void navigateToCustomize(buildPreviewHref(item), {
+      onBeforeNavigate: () => {
+        if (typeof window !== 'undefined') {
+          try {
+            window.sessionStorage.setItem(
+              `ymi_preview_${item.creation_id}`,
+              JSON.stringify({
+                coverUrl,
+                jobId: item.preview_job_id ?? null,
+              })
+            )
+          } catch {
+            // ignore cache errors
+          }
+        }
+      },
+    })
   }
 
   const gridClass = useMemo(
@@ -296,116 +297,24 @@ export default function MyBooksPage() {
             {t('myBooks.empty')}
           </div>
         ) : (
-          <div className={gridClass}>
-            {items.map((item) => (
-              (() => {
-                const fallbackBook = BOOKS.find((book) => book.bookID === item.template_id)
-                const price = resolveTemplatePrice(item, fallbackBook)
-                const priceLabel = formatLocaleCurrency(price, language)
-                const compareAtPrice = resolveTemplateCompareAtPrice(item, fallbackBook, price)
-                const compareAtLabel = compareAtPrice && compareAtPrice > price ? formatLocaleCurrency(compareAtPrice, language) : null
-                const discountPercent = resolveTemplateDiscountPercent(item, fallbackBook, price, compareAtPrice)
-                const isDiscounted = Boolean((item.templates?.is_discount || compareAtLabel) && discountPercent && discountPercent > 0)
-
-                return (
-                <div
-                  key={item.creation_id}
-                  className="group book-card-hoverable relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out md:hover:-translate-y-1"
-                >
-                <BookCardCover
-                  src={resolveCover(item)}
-                  alt={item.templates?.name || item.template_id}
-                  loading="lazy"
-                  decoding="async"
-                >
-                  <button
-                    type="button"
-                    onClick={() => goToPreview(item)}
-                    className="absolute inset-0 z-10 block h-full w-full"
-                  >
-                  </button>
-
-                  {/* Hover sheen sweep */}
-                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out" style={{ background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%)' }} />
-
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(item)}
-                    className="absolute top-2 right-2 z-20 md:top-3 md:right-3 h-6 w-6 rounded-full bg-white/80 text-gray-300 hover:text-red-500 hover:bg-white/95 shadow-sm opacity-0 group-hover:opacity-100 transition"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mx-auto" />
-                  </button>
-                  {isDiscounted ? (
-                    <div className="pointer-events-none absolute -right-2 -top-3 z-30 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:-right-3 md:-top-5 md:px-5 md:py-2 md:text-lg">
-                      -{discountPercent}%
-                    </div>
-                  ) : null}
-                </BookCardCover>
-
-                <div className="glass-panel rounded-xl md:rounded-2xl flex flex-col flex-1 -mt-4 md:-mt-6 pt-10 md:pt-14 px-4 md:px-5 pb-4 md:pb-5">
-                  <div className="flex flex-col flex-1">
-                    <button type="button" onClick={() => goToPreview(item)} className="text-left">
-                      <h3 className="font-display pt-px md:pt-0 text-base md:text-lg font-medium text-gray-900 leading-snug md:leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">
-                        {item.templates?.name || item.template_id}
-                      </h3>
-                    </button>
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:mb-3 md:text-xs">
-                      {item.templates?.story_type || ''}
-                    </p>
-                    <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
-                      {item.templates?.description || t('common.personalizedStorybook')}
-                    </p>
-                    <div className="mt-3">
-                      {isDiscounted ? (
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
-                            {priceLabel}
-                          </span>
-                          {compareAtLabel ? (
-                            <span className="whitespace-nowrap text-xs font-semibold text-gray-400 line-through md:text-sm">
-                              {compareAtLabel}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap items-baseline gap-x-1.5">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 md:text-sm">
-                            {t('bookList.from')}
-                          </span>
-                          <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
-                            {priceLabel}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full rounded-full px-4 py-2 text-xs md:text-sm font-semibold border-amber-200 text-amber-700 hover:bg-amber-50"
-                      onClick={() => handleAddToCart(item)}
-                    >
-                      <ShoppingCart className="h-4 w-4 mr-2" />
-                      {t('myBooks.addToCart')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="w-full rounded-full px-4 py-2 text-xs md:text-sm font-semibold"
-                      onClick={() => handleBuyNow(item)}
-                    >
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      {t('myBooks.buyNow')}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-                )
-              })()
-            ))}
-          </div>
+          <MyBooksGrid
+            items={items}
+            gridClass={gridClass}
+            displayCurrency={displayCurrency}
+            pendingCustomizeHref={pendingCustomizeHref}
+            pendingAction={pendingAction}
+            t={t}
+            resolveCover={resolveCover}
+            resolveTemplatePrice={resolveTemplatePrice}
+            resolveTemplateCompareAtPrice={resolveTemplateCompareAtPrice}
+            resolveTemplateDiscountPercent={resolveTemplateDiscountPercent}
+            buildPreviewHref={buildPreviewHref}
+            onPreview={goToPreview}
+            onPrefetchPreview={prefetchCustomizeHref}
+            onDelete={handleDelete}
+            onAddToCart={(item) => void handleAddToCart(item)}
+            onBuyNow={(item) => void handleBuyNow(item)}
+          />
         )}
       </div>
     </div>

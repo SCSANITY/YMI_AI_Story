@@ -4,25 +4,26 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Heart } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
-import { BookCard } from '@/components/BookCard';
 import { Button } from '@/components/Button';
 import { supabase } from '@/lib/supabase';
 import { useI18n } from '@/lib/useI18n';
-import { canEnterCustomize } from '@/lib/customize-access-client';
+import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
+import { FavoritesGrid } from './FavoritesGrid';
 
 export default function FavoritesPage() {
   const router = useRouter();
   const { t } = useI18n();
   const { favorites, toggleFavorite, user, isHydrated } = useGlobalContext();
+  const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
   const [coverMap, setCoverMap] = useState<Record<string, string>>({});
   const [titleMap, setTitleMap] = useState<Record<string, string>>({});
   const [typeMap, setTypeMap] = useState<Record<string, string>>({});
   const [descMap, setDescMap] = useState<Record<string, string>>({});
 
-  const handlePersonalize = async (bookID: string) => {
-    const allowed = await canEnterCustomize();
-    if (!allowed) return;
-    router.push(`/personalize/${bookID}`);
+  const getPersonalizeHref = (bookID: string) => `/personalize/${bookID}`;
+
+  const handlePersonalize = (bookID: string) => {
+    void navigateToCustomize(getPersonalizeHref(bookID));
   };
 
   useEffect(() => {
@@ -105,21 +106,21 @@ export default function FavoritesPage() {
           <div className="mb-6 text-xs text-gray-500">{t('favorites.syncHint')}</div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-10">
-          {favorites.map((book) => (
-            <BookCard
-              key={book.bookID}
-              book={book}
-              isFavorite={true}
-              coverSrc={coverMap[book.bookID] || book.coverUrl}
-              title={titleMap[book.bookID] || book.title}
-              storyType={typeMap[book.bookID] || book.category}
-              description={descMap[book.bookID] || book.description}
-              onClick={() => void handlePersonalize(book.bookID)}
-              onFavoriteClick={(e) => { e.stopPropagation(); toggleFavorite(book); }}
-            />
-          ))}
-        </div>
+        <FavoritesGrid
+          books={favorites}
+          coverMap={coverMap}
+          titleMap={titleMap}
+          typeMap={typeMap}
+          descMap={descMap}
+          getPersonalizeHref={getPersonalizeHref}
+          pendingCustomizeHref={pendingCustomizeHref}
+          onPersonalize={handlePersonalize}
+          onPrefetch={prefetchCustomizeHref}
+          onToggleFavorite={(book, event) => {
+            event.stopPropagation();
+            toggleFavorite(book);
+          }}
+        />
       </div>
     </div>
   );

@@ -6,7 +6,8 @@ import { Book } from '@/types'
 import { BookCardCover } from '@/components/BookCardCover'
 import { useI18n } from '@/lib/useI18n'
 import type { BookRatingSummary } from '@/components/useBookDisplayData'
-import { formatLocaleCurrency } from '@/lib/locale-pricing'
+import { useGlobalContext } from '@/contexts/GlobalContext'
+import { formatDisplayCurrency } from '@/lib/locale-pricing'
 
 type BookCardProps = {
   book: Book
@@ -18,8 +19,10 @@ type BookCardProps = {
   rating?: BookRatingSummary
   suppressHover?: boolean
   priority?: boolean
+  isNavigating?: boolean
   onClick: () => void
   onFavoriteClick: (event: React.MouseEvent) => void
+  onPrefetch?: () => void
 }
 
 export function BookCard({
@@ -32,13 +35,16 @@ export function BookCard({
   rating,
   suppressHover = false,
   priority = false,
+  isNavigating = false,
   onClick,
   onFavoriteClick,
+  onPrefetch,
 }: BookCardProps) {
-  const { t, language } = useI18n()
-  const priceLabel = formatLocaleCurrency(book.price, language)
+  const { t } = useI18n()
+  const { displayCurrency } = useGlobalContext()
+  const priceLabel = formatDisplayCurrency(book.price, displayCurrency)
   const compareAtPrice = book.compareAtPrice && book.compareAtPrice > book.price ? book.compareAtPrice : null
-  const compareAtLabel = compareAtPrice ? formatLocaleCurrency(compareAtPrice, language) : null
+  const compareAtLabel = compareAtPrice ? formatDisplayCurrency(compareAtPrice, displayCurrency) : null
   const discountPercent =
     book.discountPercent ??
     (compareAtPrice ? Math.round((1 - book.price / compareAtPrice) * 100) : null)
@@ -53,7 +59,10 @@ export function BookCard({
         suppressHover || isComingSoon ? '' : 'md:hover:-translate-y-1 book-card-hoverable'
       }`}
       onClick={isComingSoon ? undefined : onClick}
+      onPointerEnter={isComingSoon ? undefined : onPrefetch}
+      onFocus={isComingSoon ? undefined : onPrefetch}
       aria-disabled={isComingSoon}
+      aria-busy={isNavigating || undefined}
     >
       <BookCardCover
         src={coverSrc}
@@ -82,6 +91,13 @@ export function BookCard({
         {isComingSoon ? (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 -rotate-12 rounded-full border-2 border-amber-500/90 bg-white/70 px-4 py-2 text-center text-sm font-black uppercase tracking-[0.16em] text-amber-700 shadow-[0_12px_36px_rgba(180,83,9,0.20)] backdrop-blur-md md:px-6 md:py-3 md:text-lg">
             {t('bookList.comingSoon')}
+          </div>
+        ) : null}
+        {isNavigating ? (
+          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-[inherit] bg-white/24 backdrop-blur-[2px]">
+            <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 shadow-sm md:text-xs">
+              {t('common.loading')}
+            </span>
           </div>
         ) : null}
       </BookCardCover>

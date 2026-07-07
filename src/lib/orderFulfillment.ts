@@ -4,20 +4,22 @@ import { checkJobQueueGuard } from '@/lib/jobQueue'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import { normalizeOrderStatus, type OrderStatus } from '@/lib/order-status'
+import { shippingStreet } from '@/lib/shipping-address'
 
-type StoryLanguage = 'English' | 'Traditional Chinese' | 'Spanish'
+type StoryLanguage = 'English'
 
 const DEFAULT_STORY_LANGUAGE: StoryLanguage = 'English'
 
 function normalizeStoryLanguage(value: unknown): StoryLanguage {
-  const raw = String(value ?? '').trim().toLowerCase()
-  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
-    return 'Traditional Chinese'
-  }
-  if (raw === 'spanish' || raw === 'es') {
-    return 'Spanish'
-  }
   return DEFAULT_STORY_LANGUAGE
+}
+
+function forceEnglishTextOverrides(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return {
+    ...(value as Record<string, unknown>),
+    language: DEFAULT_STORY_LANGUAGE,
+  }
 }
 
 export type CheckoutItemInput = {
@@ -540,7 +542,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       address: {
         firstName: String(shippingAddress?.firstName ?? ''),
         lastName: String(shippingAddress?.lastName ?? ''),
-        address: String(shippingAddress?.address ?? ''),
+        address: shippingStreet(shippingAddress),
         city: String(shippingAddress?.city ?? ''),
         zip: String(shippingAddress?.zip ?? ''),
       },
@@ -640,6 +642,11 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       const storagePath = creation?.customize_snapshot?.storagePath ?? null
       const configUrl = configUrlByTemplateId.get(creation.template_id)
       if (!configUrl) throw new Error('Failed to resolve config URL')
+      const rawTextOverrides =
+        creation?.customize_snapshot?.textOverrides ??
+        creation?.customize_snapshot?.text_overrides ??
+        null
+      const finalTextOverrides = forceEnglishTextOverrides(rawTextOverrides)
 
       jobsToInsert.push({
         owner_type: 'customer',
@@ -648,11 +655,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         creation_id: item.creation_id,
         template_id: creation.template_id,
         job_type: 'final',
-        story_language: normalizeStoryLanguage(
-          creation?.customize_snapshot?.textOverrides?.language ??
-            creation?.customize_snapshot?.text_overrides?.language ??
-            creation?.customize_snapshot?.language
-        ),
+        story_language: normalizeStoryLanguage(finalTextOverrides?.language),
         selected_book_type: mapBookTypeToDisplay(
           creation?.customize_snapshot?.textOverrides?.book_type ??
             creation?.customize_snapshot?.text_overrides?.book_type ??
@@ -662,7 +665,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         input_snapshot: {
           face_source_path: storagePath ? `raw-private/${storagePath}` : null,
           config_url: configUrl,
-          text_overrides: creation?.customize_snapshot?.textOverrides ?? null,
+          text_overrides: finalTextOverrides,
           params: creation?.customize_snapshot?.params ?? null,
         },
       })

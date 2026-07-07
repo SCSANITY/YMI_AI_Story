@@ -1,8 +1,7 @@
 'use client'
 
 import React from 'react'
-import { useRouter } from 'next/navigation'
-import { canEnterCustomize } from '@/lib/customize-access-client'
+import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
 
 type CustomizeAccessButtonProps = {
   href: string
@@ -11,17 +10,16 @@ type CustomizeAccessButtonProps = {
 }
 
 export function CustomizeAccessButton({ href, className, children }: CustomizeAccessButtonProps) {
-  const router = useRouter()
+  const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
 
   return (
     <button
       type="button"
-      onClick={async () => {
-        const allowed = await canEnterCustomize()
-        if (!allowed) return
-        router.push(href)
-      }}
+      onClick={() => void navigateToCustomize(href)}
+      onPointerEnter={() => prefetchCustomizeHref(href)}
+      onFocus={() => prefetchCustomizeHref(href)}
       className={className}
+      aria-busy={pendingCustomizeHref === href || undefined}
     >
       {children}
     </button>

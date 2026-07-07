@@ -21,7 +21,7 @@ export function ServiceControlSection() {
   const [creatorPromoConfig, setCreatorPromoConfig] = useState<CreatorPromoConfig>({
     enabled: true,
     suffix: '-YMI',
-    discount_amount_usd: 5,
+    discount_amount_usd: 1,
     first_order_only: true,
   })
   const [creatorPromoSaving, setCreatorPromoSaving] = useState(false)
@@ -60,7 +60,7 @@ export function ServiceControlSection() {
           setCreatorPromoConfig({
             enabled: Boolean(promoData.config.enabled ?? true),
             suffix: String(promoData.config.suffix ?? '-YMI'),
-            discount_amount_usd: Number(promoData.config.discount_amount_usd ?? 5),
+            discount_amount_usd: Number(promoData.config.discount_amount_usd ?? 1),
             first_order_only: promoData.config.first_order_only !== false,
           })
         }

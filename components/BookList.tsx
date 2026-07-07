@@ -1,17 +1,16 @@
 ﻿'use client'
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useDeferredValue, useState, useMemo, useEffect, useRef } from 'react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { Book } from '@/types';
 import { Search, Filter, X } from 'lucide-react';
 import { Button } from './Button';
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/useI18n';
 import { BookCard } from '@/components/BookCard';
 import { useBookDisplayData } from '@/components/useBookDisplayData';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import { AGE_GROUP_OPTIONS, parseStoryTypes } from '@/lib/book-catalog';
-import { canEnterCustomize } from '@/lib/customize-access-client';
+import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
 
 const FILTER_BAR_TOP_OFFSET = 72;
 
@@ -71,9 +70,11 @@ export const BookList: React.FC = () => {
   const { t } = useI18n();
   const { books } = useBookCatalog();
   const { ratingMap } = useBookDisplayData();
+  const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
 
   // Filter States
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [category, setCategory] = useState('All');
   const [age, setAge] = useState('All');
   const [gender, setGender] = useState('All');
@@ -100,6 +101,7 @@ export const BookList: React.FC = () => {
 
   // Filter Logic
   const filteredBooks = useMemo(() => {
+    const normalizedSearch = deferredSearch.trim().toLowerCase();
     return books.filter(book => {
       const storyTypes = book.storyTypes?.length ? book.storyTypes : parseStoryTypes(book.category);
       const searchable = [
@@ -109,16 +111,17 @@ export const BookList: React.FC = () => {
         book.bookID,
         ...storyTypes,
       ].join(' ').toLowerCase();
-      const matchesSearch = book.title.toLowerCase().includes(search.toLowerCase()) || 
-                            book.author.toLowerCase().includes(search.toLowerCase()) ||
-                            searchable.includes(search.toLowerCase());
+      const matchesSearch = !normalizedSearch ||
+                            book.title.toLowerCase().includes(normalizedSearch) ||
+                            book.author.toLowerCase().includes(normalizedSearch) ||
+                            searchable.includes(normalizedSearch);
       const matchesCategory = category === 'All' || storyTypes.includes(category);
       const matchesAge = age === 'All' || book.ageGroup === age;
       const matchesGender = gender === 'All' || book.gender === gender;
 
       return matchesSearch && matchesCategory && matchesAge && matchesGender;
     });
-  }, [books, search, category, age, gender]);
+  }, [books, deferredSearch, category, age, gender]);
 
   const pauseCardHover = () => {
     setSuppressCardHover(true);
@@ -222,17 +225,14 @@ export const BookList: React.FC = () => {
     toggleFavorite(book);
   };
 
-const router = useRouter();
+const getPersonalizeHref = (bookID: string) => `/personalize/${bookID}`;
 
-
-const handlePersonalize = async (bookID: string) => {
+const handlePersonalize = (bookID: string) => {
     if (!bookID) {
     console.error('[Personalize] bookID missing', bookID);
     return;
   }
-  const allowed = await canEnterCustomize()
-  if (!allowed) return
-  router.push(`/personalize/${bookID}`);
+  void navigateToCustomize(getPersonalizeHref(bookID));
 };
 
   
@@ -367,7 +367,9 @@ const handlePersonalize = async (bookID: string) => {
                         rating={ratingMap[book.bookID]}
                         priority={index < 4}
                         suppressHover={suppressCardHover}
+                        isNavigating={pendingCustomizeHref === getPersonalizeHref(book.bookID)}
                         onClick={() => handlePersonalize(book.bookID)}
+                        onPrefetch={() => prefetchCustomizeHref(getPersonalizeHref(book.bookID))}
                         onFavoriteClick={(event) => handleFavoriteClick(event, book)}
                       />
                     </motion.div>

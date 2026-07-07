@@ -9,7 +9,46 @@ type CustomizeAccessResponse = {
   message?: string
 }
 
-export async function fetchCustomizeAccess(): Promise<CustomizeAccessSettings> {
+const CUSTOMIZE_ACCESS_CACHE_TTL_MS = 30_000
+
+let cachedCustomizeAccess: CustomizeAccessSettings | null = null
+let cachedCustomizeAccessAt = 0
+let customizeAccessRequest: Promise<CustomizeAccessSettings> | null = null
+
+function isCustomizeAccessCacheFresh() {
+  return Boolean(
+    cachedCustomizeAccess &&
+    Date.now() - cachedCustomizeAccessAt < CUSTOMIZE_ACCESS_CACHE_TTL_MS
+  )
+}
+
+export function getCachedCustomizeAccess(): CustomizeAccessSettings | null {
+  return isCustomizeAccessCacheFresh() ? cachedCustomizeAccess : null
+}
+
+export async function fetchCustomizeAccess(options?: { force?: boolean }): Promise<CustomizeAccessSettings> {
+  if (!options?.force && isCustomizeAccessCacheFresh() && cachedCustomizeAccess) {
+    return cachedCustomizeAccess
+  }
+
+  if (!options?.force && customizeAccessRequest) {
+    return customizeAccessRequest
+  }
+
+  customizeAccessRequest = fetchCustomizeAccessUncached()
+    .then((access) => {
+      cachedCustomizeAccess = access
+      cachedCustomizeAccessAt = Date.now()
+      return access
+    })
+    .finally(() => {
+      customizeAccessRequest = null
+    })
+
+  return customizeAccessRequest
+}
+
+async function fetchCustomizeAccessUncached(): Promise<CustomizeAccessSettings> {
   try {
     const response = await fetch('/api/customize-access', {
       credentials: 'include',
@@ -34,6 +73,11 @@ export async function fetchCustomizeAccess(): Promise<CustomizeAccessSettings> {
   }
 }
 
+export function preloadCustomizeAccess() {
+  if (isCustomizeAccessCacheFresh() || customizeAccessRequest) return
+  void fetchCustomizeAccess()
+}
+
 export function openCustomizeAccessBlocked(message: string) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(
@@ -43,8 +87,8 @@ export function openCustomizeAccessBlocked(message: string) {
   )
 }
 
-export async function canEnterCustomize(): Promise<boolean> {
-  const access = await fetchCustomizeAccess()
+export async function canEnterCustomize(options?: { force?: boolean }): Promise<boolean> {
+  const access = await fetchCustomizeAccess(options)
   if (!access.enabled) {
     openCustomizeAccessBlocked(access.message)
     return false

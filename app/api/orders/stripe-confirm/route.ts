@@ -1,26 +1,12 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
 import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orderFulfillment'
 import { markOrderDiscountsPaid } from '@/lib/discounts'
 import { recordExternalEmailObserved } from '@/lib/emailEvents'
+import { resolveShippingAddress } from '@/lib/shipping-address'
 
 export const runtime = 'nodejs'
-
-function toShippingAddress(details: Stripe.Checkout.Session.CustomerDetails | null) {
-  const address = details?.address
-  if (!address) return {}
-  return {
-    firstName: (details?.name || '').split(' ').slice(0, -1).join(' ') || '',
-    lastName: (details?.name || '').split(' ').slice(-1).join(' ') || '',
-    address: [address.line1, address.line2].filter(Boolean).join(' '),
-    city: address.city || '',
-    zip: address.postal_code || '',
-    state: address.state || '',
-    country: address.country || '',
-  }
-}
 
 export async function POST(request: Request) {
   try {
@@ -83,10 +69,7 @@ export async function POST(request: Request) {
       customerId = customer.customer_id
     }
 
-    const shippingAddress = {
-      ...(order.shipping_address ?? {}),
-      ...toShippingAddress(session.customer_details ?? null),
-    }
+    const shippingAddress = resolveShippingAddress(order.shipping_address, session.customer_details ?? null)
 
     const amount = Number(session.amount_total ?? 0) / 100
     const currency = String(session.currency || 'usd')

@@ -11,14 +11,17 @@ const MAX_FACE_IMAGES = 8
 const DEFAULT_STORY_LANGUAGE = 'English'
 
 function normalizeStoryLanguage(value) {
-  const raw = String(value ?? '').trim().toLowerCase()
-  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
-    return 'Traditional Chinese'
-  }
-  if (raw === 'spanish' || raw === 'es') {
-    return 'Spanish'
-  }
   return DEFAULT_STORY_LANGUAGE
+}
+
+function forceEnglishTextOverrides(textOverrides) {
+  if (!textOverrides || typeof textOverrides !== 'object' || Array.isArray(textOverrides)) {
+    return null
+  }
+  return {
+    ...textOverrides,
+    language: DEFAULT_STORY_LANGUAGE,
+  }
 }
 
 async function saveTextProfile({
@@ -284,11 +287,12 @@ export async function POST(request) {
   }
 
   const rawFacePath = `raw-private/${asset.storage_path}`
-  const storyLanguage = normalizeStoryLanguage(textOverrides?.language)
+  const effectiveTextOverrides = forceEnglishTextOverrides(textOverrides)
+  const storyLanguage = normalizeStoryLanguage(effectiveTextOverrides?.language)
   const selectedBookType = mapBookTypeToDisplay(textOverrides?.book_type)
   const customizeSnapshot = {
     storagePath: asset.storage_path ?? null,
-    textOverrides: textOverrides ?? null,
+    textOverrides: effectiveTextOverrides,
     params: params ?? null,
     previewJobId: null,
   }
@@ -303,7 +307,7 @@ export async function POST(request) {
         p_customize_snapshot: customizeSnapshot,
         p_face_source_path: rawFacePath,
         p_config_url: configUrl,
-        p_text_overrides: textOverrides,
+        p_text_overrides: effectiveTextOverrides,
         p_params: params,
         p_story_language: storyLanguage,
         p_selected_book_type: selectedBookType,
@@ -312,7 +316,7 @@ export async function POST(request) {
     saveTextProfile({
       ownerType,
       ownerId,
-      textOverrides,
+      textOverrides: effectiveTextOverrides,
     }),
   ])
 
@@ -379,10 +383,13 @@ export async function PATCH(request) {
     return NextResponse.json({ error: 'No updates provided' }, { status: 400 })
   }
 
+  const effectiveTextOverrides = forceEnglishTextOverrides(
+    textOverrides ?? (job.input_snapshot || {}).text_overrides
+  )
   const inputSnapshot = {
     ...(job.input_snapshot || {}),
     ...(resolvedFaceSourcePath ? { face_source_path: resolvedFaceSourcePath } : {}),
-    text_overrides: textOverrides ?? (job.input_snapshot || {}).text_overrides,
+    text_overrides: effectiveTextOverrides,
     params: params ?? (job.input_snapshot || {}).params,
   }
   const storyLanguage = normalizeStoryLanguage(inputSnapshot?.text_overrides?.language)
