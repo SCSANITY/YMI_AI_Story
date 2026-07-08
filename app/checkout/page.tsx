@@ -1,14 +1,13 @@
 ﻿'use client';
 
 import React, { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, CheckCircle2, ChevronLeft } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { AddressFormSection } from './AddressFormSection';
-import { CheckoutIdentityModal } from './CheckoutIdentityModal';
 import { CheckoutItemsSection } from './CheckoutItemsSection';
-import { CheckoutPolicyModal } from './CheckoutPolicyModal';
 import { CheckoutSummaryPanel } from './CheckoutSummaryPanel';
 import { CurrencyPicker } from './CurrencyPicker';
 import { DiscountSection } from './DiscountSection';
@@ -23,6 +22,16 @@ import {
 } from '@/lib/locale-pricing';
 import { getFooterLegalContent } from '@/lib/footer-legal-content';
 import { canEnterCustomize } from '@/lib/customize-access-client';
+
+const CheckoutIdentityModal = dynamic(
+  () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
+  { ssr: false, loading: () => null }
+);
+
+const CheckoutPolicyModal = dynamic(
+  () => import('./CheckoutPolicyModal').then((module) => module.CheckoutPolicyModal),
+  { ssr: false, loading: () => null }
+);
 
 type CheckoutStep = 'address' | 'payment' | 'success';
 type CheckoutIdentityMode = 'guest' | 'auth';

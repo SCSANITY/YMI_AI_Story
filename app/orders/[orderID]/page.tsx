@@ -14,6 +14,89 @@ import { LogisticsTracker } from './LogisticsTracker'
 import { OrderDetailPanels } from './OrderDetailPanels'
 import type { OrderDetail } from './orderDetailTypes'
 
+function OrderDetailLoadingShell({
+  orderId,
+  t,
+  onBack,
+}: {
+  orderId: string
+  t: (key: string, params?: Record<string, string | number | null | undefined>) => string
+  onBack: () => void
+}) {
+  return (
+    <div className="page-surface min-h-screen">
+      <div className="max-w-5xl mx-auto px-4 md:px-8 pt-24 pb-16 space-y-6" aria-label="Loading order detail">
+        <div className="flex items-center gap-4">
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-full px-4 shrink-0"
+            onClick={onBack}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="ml-2">{t('common.back')}</span>
+          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{t('orderDetail.title')}</div>
+            <div className="mt-2 h-7 w-52 max-w-full animate-pulse rounded-full bg-slate-200" />
+            {orderId ? <div className="sr-only">{orderId}</div> : null}
+          </div>
+          <div className="h-7 w-28 animate-pulse rounded-full bg-amber-100/80" />
+        </div>
+
+        <section className="glass-panel rounded-3xl p-5 md:p-7 space-y-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-2">
+              <div className="h-3 w-24 animate-pulse rounded-full bg-amber-100" />
+              <div className="h-5 w-36 animate-pulse rounded-full bg-slate-200" />
+              <div className="h-3 w-48 animate-pulse rounded-full bg-slate-100" />
+            </div>
+            <div className="h-9 w-28 animate-pulse rounded-full bg-slate-100" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="rounded-2xl border border-white/70 bg-white/70 p-4">
+                <div className="h-10 w-10 animate-pulse rounded-full bg-amber-100/80" />
+                <div className="mt-3 h-4 w-24 animate-pulse rounded-full bg-slate-200" />
+                <div className="mt-2 h-3 w-28 animate-pulse rounded-full bg-slate-100" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="grid gap-5 md:grid-cols-[1.5fr_1fr]">
+          <section className="glass-panel rounded-3xl p-5 md:p-6 space-y-4">
+            <div className="h-4 w-24 animate-pulse rounded-full bg-slate-200" />
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-4">
+                <div className="h-20 w-16 shrink-0 animate-pulse rounded-xl bg-slate-100" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-48 max-w-full animate-pulse rounded-full bg-slate-200" />
+                  <div className="h-3 w-20 animate-pulse rounded-full bg-slate-100" />
+                </div>
+                <div className="h-4 w-16 animate-pulse rounded-full bg-slate-200" />
+              </div>
+            ))}
+          </section>
+
+          <section className="glass-panel rounded-3xl p-5 md:p-6 space-y-5">
+            <div className="h-4 w-28 animate-pulse rounded-full bg-slate-200" />
+            <div className="space-y-2">
+              <div className="h-4 w-40 animate-pulse rounded-full bg-slate-100" />
+              <div className="h-4 w-full animate-pulse rounded-full bg-slate-100" />
+              <div className="h-4 w-2/3 animate-pulse rounded-full bg-slate-100" />
+            </div>
+            <div className="border-t border-white/60 pt-4 space-y-3">
+              <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
+              <div className="h-5 w-32 animate-pulse rounded-full bg-amber-100/80 ml-auto" />
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function OrderDetailPage() {
   const { t } = useI18n()
   const params = useParams()
@@ -63,25 +146,23 @@ export default function OrderDetailPage() {
   }, [orderId, sessionId])
 
   if (loading) {
-    return (
-      <div className="page-surface min-h-screen flex items-center justify-center p-8">
-        <div className="text-sm text-gray-500">{t('orderDetail.loading')}</div>
-      </div>
-    )
+    return <OrderDetailLoadingShell orderId={orderId} t={t} onBack={() => router.push('/orders')} />
   }
 
   if (!order) {
     return (
-      <div className="page-surface min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-lg text-center space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
-            <Package className="h-7 w-7 text-amber-600" />
+      <div className="page-surface min-h-screen">
+        <div className="max-w-5xl mx-auto px-4 md:px-8 pt-24 pb-16">
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-center">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+              <Package className="h-6 w-6 text-amber-600" />
+            </div>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orderDetail.notFoundTitle')}</h1>
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">{t('orderDetail.notFoundDescription')}</p>
+            <Button size="lg" className="mt-6 rounded-full px-8" onClick={() => router.push('/orders')}>
+              {t('orderDetail.backToOrders')}
+            </Button>
           </div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orderDetail.notFoundTitle')}</h1>
-          <p className="text-gray-600">{t('orderDetail.notFoundDescription')}</p>
-          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/orders')}>
-            {t('orderDetail.backToOrders')}
-          </Button>
         </div>
       </div>
     )

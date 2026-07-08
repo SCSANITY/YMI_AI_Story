@@ -1,12 +1,64 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
-import { GlobalProvider } from '@/contexts/GlobalContext'
+import { GlobalProvider, useGlobalContext } from '@/contexts/GlobalContext'
 import { Navbar } from '@/components/Navbar'
-import { LoginModal } from '@/components/LoginModal'
-import { CookieConsentBanner } from '@/components/CookieConsentBanner'
-import { CustomizeAccessBlockedModal } from '@/components/CustomizeAccessBlockedModal'
+import {
+  CUSTOMIZE_ACCESS_BLOCKED_EVENT,
+  DEFAULT_CUSTOMIZE_ACCESS_MESSAGE,
+} from '@/lib/customize-access'
+
+const LoginModal = dynamic(() => import('@/components/LoginModal').then((module) => module.LoginModal), {
+  ssr: false,
+  loading: () => null,
+})
+
+const CookieConsentBanner = dynamic(
+  () => import('@/components/CookieConsentBanner').then((module) => module.CookieConsentBanner),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+)
+
+const CustomizeAccessBlockedModal = dynamic(
+  () => import('@/components/CustomizeAccessBlockedModal').then((module) => module.CustomizeAccessBlockedModal),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+)
+
+function LoginModalGate({ enabled }: { enabled: boolean }) {
+  const { isLoginModalOpen } = useGlobalContext()
+
+  if (!enabled || !isLoginModalOpen) return null
+  return <LoginModal />
+}
+
+function CustomizeAccessBlockedModalGate({ enabled }: { enabled: boolean }) {
+  const [initialMessage, setInitialMessage] = useState(DEFAULT_CUSTOMIZE_ACCESS_MESSAGE)
+  const [shouldMountModal, setShouldMountModal] = useState(false)
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const handleOpen = (event: Event) => {
+      const customEvent = event as CustomEvent<{ message?: string }>
+      const nextMessage = String(customEvent.detail?.message ?? '').trim()
+      setInitialMessage(nextMessage || DEFAULT_CUSTOMIZE_ACCESS_MESSAGE)
+      setShouldMountModal(true)
+    }
+
+    window.addEventListener(CUSTOMIZE_ACCESS_BLOCKED_EVENT, handleOpen as EventListener)
+    return () => window.removeEventListener(CUSTOMIZE_ACCESS_BLOCKED_EVENT, handleOpen as EventListener)
+  }, [enabled])
+
+  if (!enabled || !shouldMountModal) return null
+  return <CustomizeAccessBlockedModal initialMessage={initialMessage} initiallyOpen />
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -20,11 +72,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <GlobalProvider>
       {showGlobalNav ? <Navbar /> : null}
-      {!isMaintenanceRoute && !isAdminRoute ? <LoginModal /> : null}
-      {/* Home page: no pt-16 — Hero fills the full viewport and manages its own spacing */}
+      <LoginModalGate enabled={!isMaintenanceRoute && !isAdminRoute} />
+      {/* Home page: no pt-16. Hero fills the full viewport and manages its own spacing. */}
       <div className={showGlobalNav && !isHomePage ? 'pt-16' : undefined}>{children}</div>
       {!isMaintenanceRoute && !isAdminRoute ? <CookieConsentBanner /> : null}
-      {!isMaintenanceRoute && !isAdminRoute ? <CustomizeAccessBlockedModal /> : null}
+      <CustomizeAccessBlockedModalGate enabled={!isMaintenanceRoute && !isAdminRoute} />
     </GlobalProvider>
   )
 }

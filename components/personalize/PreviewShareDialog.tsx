@@ -1,7 +1,12 @@
 'use client'
 
 import React, { memo } from 'react'
-import { ShareDialog } from '@/components/ShareDialog'
+import dynamic from 'next/dynamic'
+
+const ShareDialog = dynamic(() => import('@/components/ShareDialog').then((module) => module.ShareDialog), {
+  ssr: false,
+  loading: () => null,
+})
 
 type PreviewShareDialogProps = {
   open: boolean
@@ -23,13 +28,15 @@ function PreviewShareDialogComponent({
   labels,
   onClose,
 }: PreviewShareDialogProps) {
+  if (!open || !shareUrl) return null
+
   return (
     <ShareDialog
-      open={open && Boolean(shareUrl)}
+      open
       onClose={onClose}
       title={labels.title}
       description={labels.description}
-      shareUrl={shareUrl || ''}
+      shareUrl={shareUrl}
       shareText={labels.shareText}
       editableShareText
       includeTextInShareUrl

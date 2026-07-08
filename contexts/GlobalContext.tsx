@@ -1,5 +1,5 @@
 'use client'
-import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
 import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData, type DisplayCurrency } from '@/types';
 import { BOOKS } from '@/data/books';
@@ -803,7 +803,19 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const updateCartQuantity = useCallback(async (itemId: string, quantity: number) => {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
-    setCart(prev => prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item));
+    let previousCart: CartItem[] | null = null;
+    setCart(prev => {
+      previousCart = prev;
+      return prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item);
+    });
+
+    const restoreCart = () => {
+      if (previousCart) {
+        setCart(previousCart);
+      }
+      void refreshCartFromDb();
+    };
+
     try {
       const response = await fetch('/api/cart', {
         method: 'PATCH',
@@ -815,12 +827,17 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           customerId: user?.customerId ?? null,
         }),
       });
+      if (!response.ok) {
+        restoreCart();
+        return false;
+      }
       return response.ok;
     } catch (error) {
       console.error('Order quantity update failed:', error)
+      restoreCart();
       return false;
     }
-  }, [user?.customerId]);
+  }, [refreshCartFromDb, user?.customerId]);
 
   const updateCheckoutQuantity = useCallback((itemId: string, quantity: number) => {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
@@ -840,7 +857,19 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [user?.customerId]);
 
   const removeFromCart = useCallback(async (itemId: string) => {
-    setCart(prev => prev.filter(item => item.id !== itemId));
+    let previousCart: CartItem[] | null = null;
+    setCart(prev => {
+      previousCart = prev;
+      return prev.filter(item => item.id !== itemId);
+    });
+
+    const restoreCart = () => {
+      if (previousCart) {
+        setCart(previousCart);
+      }
+      void refreshCartFromDb();
+    };
+
     try {
       const response = await fetch('/api/cart', {
         method: 'DELETE',
@@ -848,12 +877,17 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         credentials: 'include',
         body: JSON.stringify({ cartItemId: itemId, customerId: user?.customerId ?? null }),
       });
+      if (!response.ok) {
+        restoreCart();
+        return false;
+      }
       return response.ok;
     } catch (error) {
       console.error('Order remove failed:', error)
+      restoreCart();
       return false;
     }
-  }, [user?.customerId]);
+  }, [refreshCartFromDb, user?.customerId]);
 
   const prepareCheckout = useCallback((items: CartItem[]) => {
     setCheckoutItems(items);
@@ -962,7 +996,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setResumeData(item);
   }, []);
 
-  const value: GlobalContextType = {
+  const value: GlobalContextType = useMemo(() => ({
     user,
     language,
     displayCurrency,
@@ -1001,7 +1035,44 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setCheckoutEmail,
     openLoginModal,
     closeLoginModal,
-  };
+  }), [
+    user,
+    language,
+    displayCurrency,
+    cart,
+    favorites,
+    checkoutEmail,
+    checkoutItems,
+    resumeData,
+    isLoginModalOpen,
+    loginModalMode,
+    loginModalEmail,
+    isHydrated,
+    resumePersonalization,
+    login,
+    loginWithOAuth,
+    verifySignupOtp,
+    logout,
+    addToCart,
+    removeFromCart,
+    updateCartQuantity,
+    updateCheckoutQuantity,
+    prepareCheckout,
+    hydrateCheckoutItems,
+    removeFromCheckout,
+    clearCheckout,
+    restoreCheckout,
+    clearCart,
+    removeOrderedItems,
+    refreshCartFromDb,
+    refreshUserProfile,
+    toggleFavorite,
+    setLanguage,
+    setDisplayCurrency,
+    setCheckoutEmail,
+    openLoginModal,
+    closeLoginModal,
+  ]);
 
   return (
     <GlobalContext.Provider value={value}>

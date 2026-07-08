@@ -12,10 +12,18 @@ type CustomizeAccessBlockedDetail = {
   message?: string
 }
 
-export function CustomizeAccessBlockedModal() {
+type CustomizeAccessBlockedModalProps = {
+  initialMessage?: string
+  initiallyOpen?: boolean
+}
+
+export function CustomizeAccessBlockedModal({
+  initialMessage,
+  initiallyOpen = false,
+}: CustomizeAccessBlockedModalProps) {
   const router = useRouter()
-  const [isOpen, setIsOpen] = useState(false)
-  const [message, setMessage] = useState(DEFAULT_CUSTOMIZE_ACCESS_MESSAGE)
+  const [isOpen, setIsOpen] = useState(initiallyOpen)
+  const [message, setMessage] = useState(initialMessage || DEFAULT_CUSTOMIZE_ACCESS_MESSAGE)
 
   useEffect(() => {
     const handleOpen = (event: Event) => {

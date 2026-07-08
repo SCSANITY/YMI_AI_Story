@@ -1,7 +1,7 @@
 'use client'
 
 import React, { memo, type RefObject } from 'react'
-import { VoiceRecorderPanel } from '@/components/personalize/VoiceRecorderPanel'
+import dynamic from 'next/dynamic'
 import { PhotoUploadPanel } from '@/components/personalize/PhotoUploadPanel'
 import { RecentFacesStrip, type RecentFaceItem } from '@/components/personalize/RecentFacesStrip'
 import { ChildDetailsFields, type RecentProfileItem } from '@/components/personalize/ChildDetailsFields'
@@ -17,6 +17,20 @@ type VoiceUploadResult = {
   signedUrl?: string | null
   durationSeconds: number
 }
+
+const VoiceRecorderPanel = dynamic(
+  () => import('@/components/personalize/VoiceRecorderPanel').then((module) => module.VoiceRecorderPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-[1.5rem] border border-amber-100 bg-amber-50/60 p-5">
+        <div className="h-4 w-40 animate-pulse rounded-full bg-amber-100" />
+        <div className="mt-3 h-3 w-full max-w-md animate-pulse rounded-full bg-white/80" />
+        <div className="mt-5 h-11 w-36 animate-pulse rounded-full bg-amber-100/80" />
+      </div>
+    ),
+  }
+)
 
 type CustomizeFormFieldsProps = {
   photoPreview: string | null

@@ -1,11 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { BlogBoardHeader } from './BlogBoardHeader'
-import { BlogLightbox } from './BlogLightbox'
 import { BlogPostCard } from './BlogPostCard'
 import type { BlogPost, LightboxState } from './blogTypes'
+
+const BlogLightbox = dynamic(() => import('./BlogLightbox').then((module) => module.BlogLightbox), {
+  ssr: false,
+  loading: () => null,
+})
 
 export function BlogBoardClient() {
   const { user } = useGlobalContext()
@@ -124,20 +129,22 @@ export function BlogBoardClient() {
         )}
       </section>
 
-      <BlogLightbox
-        lightbox={lightbox}
-        onClose={() => setLightbox(null)}
-        onPrevious={() =>
-          setLightbox((prev) =>
-            prev ? { ...prev, index: (prev.index - 1 + prev.images.length) % prev.images.length } : prev
-          )
-        }
-        onNext={() =>
-          setLightbox((prev) =>
-            prev ? { ...prev, index: (prev.index + 1) % prev.images.length } : prev
-          )
-        }
-      />
+      {lightbox ? (
+        <BlogLightbox
+          lightbox={lightbox}
+          onClose={() => setLightbox(null)}
+          onPrevious={() =>
+            setLightbox((prev) =>
+              prev ? { ...prev, index: (prev.index - 1 + prev.images.length) % prev.images.length } : prev
+            )
+          }
+          onNext={() =>
+            setLightbox((prev) =>
+              prev ? { ...prev, index: (prev.index + 1) % prev.images.length } : prev
+            )
+          }
+        />
+      ) : null}
     </main>
   )
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import React, { memo, useMemo } from 'react'
-import { motion } from 'framer-motion'
 import { Book, Check, Package, Sparkles, Wand2 } from 'lucide-react'
 
 type ProgressStepsProps = {
@@ -27,11 +26,9 @@ function ProgressStepsComponent({ currentIndex, labels }: ProgressStepsProps) {
   return (
     <div className="relative mx-auto mb-10 hidden max-w-2xl px-4 md:block">
       <div className="absolute left-9 right-9 top-1/2 z-0 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-gray-100 shadow-inner">
-        <motion.div
+        <div
           className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
-          initial={false}
-          animate={{ width: `${fillPercent}%` }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          style={{ width: `${fillPercent}%`, transition: 'width 500ms ease-in-out' }}
         />
       </div>
 

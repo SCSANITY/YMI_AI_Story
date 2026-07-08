@@ -1,7 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
-import { AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
@@ -2116,9 +2115,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           }}
         />
 
-        <AnimatePresence mode="wait">
-            
-            {/* Step 1 (Skipped logic) */}
+        {/* Step 1 (Skipped logic) */}
 
 
             {/* Step 2: The Rich Form */}
@@ -2324,8 +2321,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                   }
                 />
             )}
-        </AnimatePresence>
-
         <PreviewShareDialog
           open={isShareDialogOpen}
           onClose={() => setIsShareDialogOpen(false)}

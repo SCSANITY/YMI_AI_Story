@@ -26,6 +26,31 @@ const getOrderTab = (status?: string | null): OrderTab => {
   return 'shipping';
 };
 
+function OrdersLoadingList() {
+  return (
+    <div className="space-y-4" aria-label="Loading orders">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="rounded-[22px] border border-white/70 bg-white/75 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-3">
+              <div className="h-4 w-40 animate-pulse rounded-full bg-gray-200" />
+              <div className="h-3 w-56 max-w-full animate-pulse rounded-full bg-gray-100" />
+              <div className="h-3 w-32 animate-pulse rounded-full bg-amber-100/80" />
+            </div>
+            <div className="flex gap-2">
+              <div className="h-9 w-24 animate-pulse rounded-full bg-gray-100" />
+              <div className="h-9 w-24 animate-pulse rounded-full bg-amber-100/80" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function OrdersPage() {
   const router = useRouter();
   const { t } = useI18n();
@@ -117,31 +142,6 @@ export default function OrdersPage() {
     router.push(`/orders/${orderId}/review`);
   };
 
-  if (loading) {
-    return (
-      <div className="page-surface min-h-screen flex items-center justify-center p-8">
-        <div className="text-sm text-gray-500">{t('common.loading')}</div>
-      </div>
-    );
-  }
-
-  if (orders.length === 0) {
-    return (
-      <div className="page-surface min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-lg text-center space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
-            <Package className="h-7 w-7 text-amber-600" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orders.emptyTitle')}</h1>
-          <p className="text-gray-600">{t('orders.emptyDescription')}</p>
-          <Button size="lg" className="px-8" onClick={() => router.push('/')}>
-            {t('common.browseBooks')}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="page-surface min-h-screen">
     <div className="max-w-6xl mx-auto px-4 md:px-8 pt-24 pb-16">
@@ -155,26 +155,43 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <OrderTabs
-        activeTab={activeTab}
-        counts={{
-          shipping: grouped.shipping.length,
-          unpaid: grouped.unpaid.length,
-          finished: grouped.finished.length,
-        }}
-        t={t}
-        onChange={setActiveTab}
-      />
+      {loading ? (
+        <OrdersLoadingList />
+      ) : orders.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-center">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+            <Package className="h-6 w-6 text-amber-600" />
+          </div>
+          <h2 className="text-xl md:text-2xl font-title text-gray-900">{t('orders.emptyTitle')}</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">{t('orders.emptyDescription')}</p>
+          <Button size="lg" className="mt-6 px-8" onClick={() => router.push('/')}>
+            {t('common.browseBooks')}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <OrderTabs
+            activeTab={activeTab}
+            counts={{
+              shipping: grouped.shipping.length,
+              unpaid: grouped.unpaid.length,
+              finished: grouped.finished.length,
+            }}
+            t={t}
+            onChange={setActiveTab}
+          />
 
-      <OrdersList
-        orders={visibleOrders}
-        pendingAction={pendingAction}
-        t={t}
-        onOpenOrder={handleOpenOrder}
-        onContinuePayment={handleContinuePayment}
-        onDeletePending={(orderId) => void handleDeletePending(orderId)}
-        onReview={handleReview}
-      />
+          <OrdersList
+            orders={visibleOrders}
+            pendingAction={pendingAction}
+            t={t}
+            onOpenOrder={handleOpenOrder}
+            onContinuePayment={handleContinuePayment}
+            onDeletePending={(orderId) => void handleDeletePending(orderId)}
+            onReview={handleReview}
+          />
+        </>
+      )}
     </div>
     </div>
   );

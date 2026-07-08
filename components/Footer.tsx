@@ -4,11 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronDown, Facebook, Instagram, Mail, Music2, X } from 'lucide-react'
-import {
-  getFooterLegalContent,
-  type LegalSection,
-  type LegalTextItem,
-} from '@/lib/footer-legal-content'
+import type { FooterLegalContent, LegalSection, LegalTextItem } from '@/lib/footer-legal-content'
 import { openCookieSettings } from '@/lib/cookie-consent'
 import { useI18n } from '@/lib/useI18n'
 import { NewsletterSignup } from '@/components/footer/NewsletterSignup'
@@ -32,6 +28,10 @@ export const Footer: React.FC = () => {
   const [openLegalModal, setOpenLegalModal] = useState<LegalModalType>(null)
   const [openFaqIndex, setOpenFaqIndex] = useState<string | null>(null)
   const [isTikTokComingSoonOpen, setIsTikTokComingSoonOpen] = useState(false)
+  const [legalContentState, setLegalContentState] = useState<{
+    language: string
+    content: FooterLegalContent
+  } | null>(null)
 
   const handleLegalModalChange = (nextModal: LegalModalType) => {
     if (nextModal !== 'faq') {
@@ -308,7 +308,24 @@ export const Footer: React.FC = () => {
     []
   )
 
-  const legalContent = useMemo(() => getFooterLegalContent(language), [language])
+  const legalContent = legalContentState?.language === language ? legalContentState.content : null
+
+  useEffect(() => {
+    if (!openLegalModal || openLegalModal === 'faq' || legalContent) return
+    let active = true
+
+    import('@/lib/footer-legal-content').then(({ getFooterLegalContent }) => {
+      if (!active) return
+      setLegalContentState({
+        language,
+        content: getFooterLegalContent(language),
+      })
+    })
+
+    return () => {
+      active = false
+    }
+  }, [language, legalContent, openLegalModal])
 
   useEffect(() => {
     if (!openLegalModal) return
@@ -735,6 +752,10 @@ export const Footer: React.FC = () => {
                       </div>
                     ))}
                   </section>
+                ) : !legalContent ? (
+                  <div className="rounded-2xl border border-amber-100/80 bg-white/45 px-4 py-5 text-sm text-gray-500">
+                    Loading policy...
+                  </div>
                 ) : isPrivacy ? (
                   renderLegalSections(legalContent.privacy)
                 ) : isOurStory ? (

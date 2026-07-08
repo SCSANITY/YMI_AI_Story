@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import dynamic from 'next/dynamic'
 import {
   AlertTriangle,
   Copy,
@@ -10,9 +11,13 @@ import {
   Share2,
   Ticket,
 } from 'lucide-react'
-import { ShareDialog } from '@/components/ShareDialog'
 import { useI18n } from '@/lib/useI18n'
 import type { User } from '@/types'
+
+const ShareDialog = dynamic(() => import('@/components/ShareDialog').then((module) => module.ShareDialog), {
+  ssr: false,
+  loading: () => null,
+})
 
 type CreatorPromoCode = {
   code: string
@@ -357,7 +362,7 @@ export function CreatorPromoSection({ user, openLoginModal }: CreatorPromoSectio
         onConfirm={() => void confirmChangePromoCode()}
       />
 
-      {promoCode ? (
+      {promoCode && isShareOpen ? (
         <ShareDialog
           open={isShareOpen}
           onClose={() => setIsShareOpen(false)}

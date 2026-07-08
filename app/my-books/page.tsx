@@ -74,6 +74,29 @@ const toPersonalization = (item: CreationItem): PersonalizationData => {
   }
 }
 
+function MyBooksLoadingGrid({ gridClass }: { gridClass: string }) {
+  return (
+    <div className={gridClass} aria-label="Loading saved books">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="overflow-hidden rounded-[22px] border border-white/70 bg-white/75 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
+        >
+          <div className="aspect-[4/5] animate-pulse bg-gradient-to-br from-amber-50 via-orange-50 to-white" />
+          <div className="space-y-3 p-4">
+            <div className="h-4 w-3/4 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-3 w-1/2 animate-pulse rounded-full bg-gray-100" />
+            <div className="flex gap-2 pt-2">
+              <div className="h-9 flex-1 animate-pulse rounded-full bg-amber-100/80" />
+              <div className="h-9 w-20 animate-pulse rounded-full bg-gray-100" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function MyBooksPage() {
   const router = useRouter()
   const { t } = useI18n()
@@ -271,14 +294,6 @@ export default function MyBooksPage() {
     []
   )
 
-  if (loading) {
-    return (
-      <div className="page-surface min-h-screen flex items-center justify-center">
-        <div className="text-sm text-gray-500">{t('myBooks.loading')}</div>
-      </div>
-    )
-  }
-
   return (
     <div className="page-surface min-h-screen">
       <div className="max-w-7xl mx-auto px-4 md:px-8 pt-24 pb-16 space-y-10">
@@ -292,7 +307,9 @@ export default function MyBooksPage() {
           </div>
         </div>
 
-        {items.length === 0 ? (
+        {loading ? (
+          <MyBooksLoadingGrid gridClass={gridClass} />
+        ) : items.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-sm text-gray-500 text-center">
             {t('myBooks.empty')}
           </div>

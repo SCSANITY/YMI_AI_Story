@@ -10,6 +10,26 @@ import { useI18n } from '@/lib/useI18n';
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
 import { FavoritesGrid } from './FavoritesGrid';
 
+function FavoritesLoadingGrid() {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-10" aria-label="Loading favorites">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="overflow-hidden rounded-[22px] border border-white/70 bg-white/75 shadow-[0_18px_50px_rgba(15,23,42,0.08)]"
+        >
+          <div className="aspect-[3/4] animate-pulse bg-gradient-to-br from-amber-50 via-orange-50 to-white" />
+          <div className="space-y-3 p-4">
+            <div className="h-4 w-3/4 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-3 w-1/2 animate-pulse rounded-full bg-gray-100" />
+            <div className="h-9 w-full animate-pulse rounded-full bg-amber-100/80" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function FavoritesPage() {
   const router = useRouter();
   const { t } = useI18n();
@@ -68,27 +88,6 @@ export default function FavoritesPage() {
     return () => { isMounted = false; };
   }, []);
 
-  if (!isHydrated) {
-    return <div className="page-surface min-h-screen" />;
-  }
-
-  if (favorites.length === 0) {
-    return (
-      <div className="page-surface min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-lg text-center space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
-            <Heart className="h-7 w-7 text-amber-600" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('favorites.emptyTitle')}</h1>
-          <p className="text-gray-600">{t('favorites.emptyDescription')}</p>
-          <Button size="lg" className="rounded-full px-8" onClick={() => router.push('/books')}>
-            {t('common.browseBooks')}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="page-surface min-h-screen">
       <div className="max-w-7xl mx-auto px-4 md:px-8 pt-24 pb-16">
@@ -102,25 +101,40 @@ export default function FavoritesPage() {
           </div>
         </div>
 
-        {!user && (
+        {isHydrated && !user && (
           <div className="mb-6 text-xs text-gray-500">{t('favorites.syncHint')}</div>
         )}
 
-        <FavoritesGrid
-          books={favorites}
-          coverMap={coverMap}
-          titleMap={titleMap}
-          typeMap={typeMap}
-          descMap={descMap}
-          getPersonalizeHref={getPersonalizeHref}
-          pendingCustomizeHref={pendingCustomizeHref}
-          onPersonalize={handlePersonalize}
-          onPrefetch={prefetchCustomizeHref}
-          onToggleFavorite={(book, event) => {
-            event.stopPropagation();
-            toggleFavorite(book);
-          }}
-        />
+        {!isHydrated ? (
+          <FavoritesLoadingGrid />
+        ) : favorites.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-center">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+              <Heart className="h-6 w-6 text-amber-600" />
+            </div>
+            <h2 className="text-xl md:text-2xl font-title text-gray-900">{t('favorites.emptyTitle')}</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">{t('favorites.emptyDescription')}</p>
+            <Button size="lg" className="mt-6 rounded-full px-8" onClick={() => router.push('/books')}>
+              {t('common.browseBooks')}
+            </Button>
+          </div>
+        ) : (
+          <FavoritesGrid
+            books={favorites}
+            coverMap={coverMap}
+            titleMap={titleMap}
+            typeMap={typeMap}
+            descMap={descMap}
+            getPersonalizeHref={getPersonalizeHref}
+            pendingCustomizeHref={pendingCustomizeHref}
+            onPersonalize={handlePersonalize}
+            onPrefetch={prefetchCustomizeHref}
+            onToggleFavorite={(book, event) => {
+              event.stopPropagation();
+              toggleFavorite(book);
+            }}
+          />
+        )}
       </div>
     </div>
   );

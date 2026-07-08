@@ -364,6 +364,17 @@ html[lang='zh-TW'] .font-serif {
   animation-play-state: paused;
 }
 
+@keyframes ymi-fly-to-cart {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--fly-x), var(--fly-y), 0) rotate(360deg) scale(0.5);
+  }
+}
+
 @media (max-width: 767px) {
   .collaboration-marquee-track {
     gap: 0.75rem;

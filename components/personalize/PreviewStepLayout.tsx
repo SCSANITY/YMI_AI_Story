@@ -1,7 +1,6 @@
 'use client'
 
 import React, { memo, type ReactNode } from 'react'
-import { motion } from 'framer-motion'
 
 type PreviewStepLayoutProps = {
   intro: ReactNode
@@ -11,16 +10,13 @@ type PreviewStepLayoutProps = {
 
 function PreviewStepLayoutComponent({ intro, book, actions }: PreviewStepLayoutProps) {
   return (
-    <motion.div
-      key="step3"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="mx-auto flex min-h-[600px] max-w-7xl flex-col items-center justify-center py-6 md:py-10"
+    <div
+      className="mx-auto flex min-h-[600px] max-w-7xl animate-in flex-col items-center justify-center fade-in py-6 duration-200 md:py-10"
     >
       {intro}
       {book}
       {actions}
-    </motion.div>
+    </div>
   )
 }
 

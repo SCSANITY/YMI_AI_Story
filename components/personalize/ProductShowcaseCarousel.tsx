@@ -2,7 +2,6 @@
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import NextImage from 'next/image'
-import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 type ProductShowcaseCarouselProps = {
@@ -307,29 +306,23 @@ function ProductShowcaseCarouselComponent({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeImage}
-              className="absolute inset-0"
-              initial={{ opacity: 0, x: 18, scale: 1.02 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -18, scale: 0.985 }}
-              transition={{ duration: 0.42, ease: 'easeOut' }}
-            >
-              {activeImageSrc ? (
-                <NextImage
-                  src={activeImageSrc}
-                  alt={`${title} showcase main`}
-                  fill
-                  sizes={isMobile ? 'min(100vw, 430px)' : `${desktopMainSize}px`}
-                  priority={activeIndex === 0}
-                  fetchPriority={activeIndex === 0 ? 'high' : 'auto'}
-                  onError={() => markImageError(activeImage)}
-                  className="object-cover"
-                />
-              ) : null}
-            </motion.div>
-          </AnimatePresence>
+          <div
+            key={activeImage}
+            className="absolute inset-0 animate-in fade-in slide-in-from-right-4 duration-300"
+          >
+            {activeImageSrc ? (
+              <NextImage
+                src={activeImageSrc}
+                alt={`${title} showcase main`}
+                fill
+                sizes={isMobile ? 'min(100vw, 430px)' : `${desktopMainSize}px`}
+                priority={activeIndex === 0}
+                fetchPriority={activeIndex === 0 ? 'high' : 'auto'}
+                onError={() => markImageError(activeImage)}
+                className="object-cover"
+              />
+            ) : null}
+          </div>
           {showcaseImages.length > 1 ? (
             <>
               <button

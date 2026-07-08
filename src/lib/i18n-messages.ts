@@ -230,6 +230,8 @@ const en: MessageDictionary = {
   'cart.checkoutSelected': 'Checkout Selected',
   'cart.selectHint': 'You can select one or multiple items.',
   'cart.verifyHint': 'Checkout requires a verified email.',
+  'cart.quantityUpdateError': 'Quantity could not be updated. We restored your cart and refreshed the latest version.',
+  'cart.removeItemError': 'This item could not be removed. We restored your cart and refreshed the latest version.',
 
   'checkout.title': 'Secure Checkout',
   'checkout.step': 'Step {{step}} of {{total}}',

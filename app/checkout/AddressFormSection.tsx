@@ -387,7 +387,6 @@ function AddressFormSectionComponent({
     setIsShippingDestinationsLoading(true);
     fetch('/api/checkout/shipping-destinations', {
       credentials: 'include',
-      cache: 'no-store',
     })
       .then((res) => (res.ok ? res.json() : { destinations: [] }))
       .then((data) => {

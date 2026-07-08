@@ -4,7 +4,6 @@ import { useGlobalContext } from '../contexts/GlobalContext';
 import { Book } from '@/types';
 import { Search, Filter, X } from 'lucide-react';
 import { Button } from './Button';
-import { motion } from 'framer-motion';
 import { useI18n } from '@/lib/useI18n';
 import { BookCard } from '@/components/BookCard';
 import { useBookDisplayData } from '@/components/useBookDisplayData';
@@ -351,11 +350,9 @@ const handlePersonalize = (bookID: string) => {
                 const coverSrc = book.coverUrl;
                 
                 return (
-                    <motion.div
+                    <div
                     key={book.bookID}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="animate-in fade-in slide-in-from-bottom-2 duration-200"
                     >
                       <BookCard
                         book={book}
@@ -372,7 +369,7 @@ const handlePersonalize = (bookID: string) => {
                         onPrefetch={() => prefetchCustomizeHref(getPersonalizeHref(book.bookID))}
                         onFavoriteClick={(event) => handleFavoriteClick(event, book)}
                       />
-                    </motion.div>
+                    </div>
                 );
                 })}
           </div>

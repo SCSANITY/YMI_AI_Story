@@ -3,7 +3,6 @@
 import React, { memo } from 'react'
 import Image from 'next/image'
 import { Camera, Check, X } from 'lucide-react'
-import { motion } from 'framer-motion'
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed'
 
@@ -87,18 +86,14 @@ function PhotoUploadPanelComponent({
         </div>
       ) : (
         <div className="pointer-events-none space-y-2">
-          <motion.div
-            className="relative mx-auto h-18 w-18 sm:h-20 sm:w-20"
-            animate={{ y: [0, -7, 0] }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-          >
+          <div className="relative mx-auto h-18 w-18 animate-bounce sm:h-20 sm:w-20" style={{ animationDuration: '2.4s' }}>
             <span className="absolute inset-0 animate-pulse-slow rounded-full bg-amber-300/45 blur-2xl" />
             <span className="absolute inset-3 animate-pulse rounded-full bg-orange-200/50 blur-xl" />
             <div className="absolute inset-2 rounded-full border border-amber-300/60" />
             <div className="relative mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-white via-amber-50 to-amber-100 text-amber-600 shadow-[0_14px_34px_rgba(245,158,11,0.34)] ring-4 ring-white/80 sm:h-20 sm:w-20">
               <Camera className="h-8 w-8 sm:h-9 sm:w-9" />
             </div>
-          </motion.div>
+          </div>
           <div>
             <h4 className="text-base font-bold text-gray-900 sm:text-lg">{labels.uploadChildPhoto}</h4>
             <p className="mt-0.5 text-xs font-medium text-amber-700">{labels.uploadPhotoHint}</p>

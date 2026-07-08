@@ -1,7 +1,6 @@
 'use client'
 
 import React, { memo } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { BookOpen, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 
@@ -40,45 +39,31 @@ function PersonalizeOverlaysComponent({
   onStay,
   onBackToCustomize,
 }: PersonalizeOverlaysProps) {
+  const flyDeltaX = flyTarget.x - flyOrigin.x
+  const flyDeltaY = flyTarget.y - flyOrigin.y
+
   return (
     <>
-      <AnimatePresence>
-        {showFlyAnimation && (
-          <motion.div
-            initial={{
-              position: 'fixed',
+      {showFlyAnimation && (
+          <div
+            className="pointer-events-none fixed z-[100] overflow-hidden rounded-md border-2 border-white shadow-2xl"
+            style={{
               top: flyOrigin.y,
               left: flyOrigin.x,
               width: 50,
               height: 70,
-              opacity: 1,
-              zIndex: 100,
-            }}
-            animate={{
-              top: flyTarget.y,
-              left: flyTarget.x,
-              width: 20,
-              height: 30,
-              opacity: 0,
-              rotate: 360,
-              scale: 0.5,
-            }}
-            transition={{ duration: 0.8, ease: 'easeInOut' }}
-            className="pointer-events-none overflow-hidden rounded-md border-2 border-white shadow-2xl"
+              animation: 'ymi-fly-to-cart 800ms ease-in-out forwards',
+              '--fly-x': `${flyDeltaX}px`,
+              '--fly-y': `${flyDeltaY}px`,
+            } as React.CSSProperties}
           >
             <img src={flyCoverUrl} className="h-full w-full object-cover" alt="" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
 
-      <AnimatePresence>
-        {showPreviewCancelledToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="fixed bottom-5 left-1/2 z-[120] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-white/80 bg-white/92 px-4 py-3 shadow-[0_18px_50px_rgba(218,119,31,0.18)] backdrop-blur-xl"
+      {showPreviewCancelledToast && (
+          <div
+            className="fixed bottom-5 left-1/2 z-[120] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 animate-in rounded-2xl border border-white/80 bg-white/92 px-4 py-3 shadow-[0_18px_50px_rgba(218,119,31,0.18)] slide-in-from-bottom-4 fade-in duration-200 backdrop-blur-xl"
           >
             <div className="flex items-center gap-3 text-sm font-semibold text-gray-800">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
@@ -86,9 +71,8 @@ function PersonalizeOverlaysComponent({
               </div>
               <span>{previewCancelledLabel}</span>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
 
       {showExitConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">

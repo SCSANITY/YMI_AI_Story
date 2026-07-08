@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -15,20 +17,13 @@ import {
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
 import { CurrencySwitcher } from '@/components/CurrencySwitcher'
-import { MyRewardsModal } from '@/components/MyRewardsModal'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
 import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
 
-const NAV_PREFETCH_ROUTES = [
-  '/',
-  '/books',
-  '/favorites',
-  '/my-books',
-  '/collaboration',
-  '/support',
-  '/cart',
-  '/orders',
-] as const
+const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then((module) => module.MyRewardsModal), {
+  ssr: false,
+  loading: () => null,
+})
 
 export const Navbar: React.FC = () => {
   const router = useRouter()
@@ -45,19 +40,18 @@ export const Navbar: React.FC = () => {
 
   const userRef = useRef<HTMLDivElement>(null)
   const navContainerRef = useRef<HTMLDivElement>(null)
-  const homeRef = useRef<HTMLButtonElement>(null)
-  const booksRef = useRef<HTMLButtonElement>(null)
-  const favoritesRef = useRef<HTMLButtonElement>(null)
-  const collaborationRef = useRef<HTMLButtonElement>(null)
-  const supportRef = useRef<HTMLButtonElement>(null)
-  const myBooksRef = useRef<HTMLButtonElement>(null)
+  const homeRef = useRef<HTMLElement | null>(null)
+  const booksRef = useRef<HTMLElement | null>(null)
+  const favoritesRef = useRef<HTMLElement | null>(null)
+  const collaborationRef = useRef<HTMLElement | null>(null)
+  const supportRef = useRef<HTMLElement | null>(null)
+  const myBooksRef = useRef<HTMLElement | null>(null)
 
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
   const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
     customerId: user?.customerId,
-    isRewardsOpen,
     pathname,
   })
   const isBooksActive = pathname === '/books'
@@ -69,43 +63,33 @@ export const Navbar: React.FC = () => {
     setPendingRoute(null)
   }, [pathname])
 
-  const navigateToRoute = (path: string) => {
-    if (!path || pendingRoute) return
+  const navigateToRoute = useCallback((path: string) => {
+    if (!path || pendingRoute === path) return
     if (pathname === path) {
       setPendingRoute(null)
       return
     }
     setPendingRoute(path)
     router.push(path)
-  }
+  }, [pathname, pendingRoute, router])
 
-  const prefetchRoute = useCallback((path: string) => {
-    if (!path || path === pathname) return
-    try {
-      router.prefetch(path)
-    } catch {
-      // Prefetch is a best-effort navigation warmup.
+  const handlePlainLinkClick = useCallback((event: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (pendingRoute === path) {
+      event.preventDefault()
+      return
     }
-  }, [pathname, router])
-
-  useEffect(() => {
-    const warmNavigation = () => {
-      NAV_PREFETCH_ROUTES.forEach((route) => prefetchRoute(route))
+    if (pathname === path) {
+      setPendingRoute(null)
+      return
     }
+    setPendingRoute(path)
+  }, [pathname, pendingRoute])
 
-    if ('requestIdleCallback' in window) {
-      const idleId = window.requestIdleCallback(warmNavigation, { timeout: 2500 })
-      return () => window.cancelIdleCallback(idleId)
-    }
-
-    const timeoutId = setTimeout(warmNavigation, 900)
-    return () => clearTimeout(timeoutId)
-  }, [prefetchRoute])
-
-  const getPrefetchHandlers = useCallback((path: string) => ({
-    onFocus: () => prefetchRoute(path),
-    onMouseEnter: () => prefetchRoute(path),
-  }), [prefetchRoute])
+  const scrollHomeToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.history.pushState(null, '', '/')
+    window.dispatchEvent(new Event('hashchange'))
+  }, [])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -179,20 +163,13 @@ export const Navbar: React.FC = () => {
     }
   }, [updateNavIndicator])
 
-  const handleHomeClick = () => {
-    if (pendingRoute) return
+  const handleHomeClick = useCallback(() => {
     if (pathname === '/') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      window.history.pushState(null, '', '/')
-      window.dispatchEvent(new Event('hashchange'))
+      scrollHomeToTop()
     } else {
       navigateToRoute('/')
     }
-  }
-
-  const handleBooksClick = () => {
-    navigateToRoute('/books')
-  }
+  }, [navigateToRoute, pathname, scrollHomeToTop])
 
   if (isPersonalizeRoute) return null
 
@@ -205,9 +182,9 @@ export const Navbar: React.FC = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {pathname !== '/' && !isCheckoutRoute && (
-            <button onClick={() => navigateToRoute('/')} disabled={Boolean(pendingRoute)} className="mr-2 p-1 hover:bg-gray-100 rounded-full">
+            <Link href="/" onClick={(event) => handlePlainLinkClick(event, '/')} className="mr-2 p-1 hover:bg-gray-100 rounded-full">
               {pendingRoute === '/' ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
-            </button>
+            </Link>
           )}
 
           <button
@@ -217,11 +194,15 @@ export const Navbar: React.FC = () => {
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
 
-          <a
-            href="#"
+          <Link
+            href="/"
             onClick={(e) => {
-              e.preventDefault()
-              navigateToRoute('/')
+              if (pathname === '/') {
+                e.preventDefault()
+                scrollHomeToTop()
+                return
+              }
+              handlePlainLinkClick(e, '/')
             }}
             className="flex items-center"
           >
@@ -233,7 +214,7 @@ export const Navbar: React.FC = () => {
               priority={isHomePage}
               className="h-8 w-auto"
             />
-          </a>
+          </Link>
         </div>
 
         <div className="hidden md:flex items-center gap-8 text-sm font-medium relative" ref={navContainerRef}>
@@ -246,25 +227,37 @@ export const Navbar: React.FC = () => {
               opacity: 'var(--nav-indicator-opacity, 0)',
             }}
           />
-          <button
-            ref={homeRef}
-            onClick={handleHomeClick}
-            disabled={Boolean(pendingRoute)}
-            {...getPrefetchHandlers('/')}
-            className={`transition-colors duration-300 pb-0.5 ${isHomeActive
-              ? isTransparent ? 'text-white' : 'text-gray-900'
-              : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              {pendingRoute === '/' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              {t('navbar.home')}
-            </span>
-          </button>
-          <button
-            ref={booksRef}
-            onClick={handleBooksClick}
-            disabled={Boolean(pendingRoute)}
-            {...getPrefetchHandlers('/books')}
+          {isHomePage ? (
+            <button
+              ref={(node) => { homeRef.current = node }}
+              onClick={handleHomeClick}
+              className={`transition-colors duration-300 pb-0.5 ${isHomeActive
+                ? isTransparent ? 'text-white' : 'text-gray-900'
+                : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {t('navbar.home')}
+              </span>
+            </button>
+          ) : (
+            <Link
+              ref={(node) => { homeRef.current = node }}
+              href="/"
+              onClick={(event) => handlePlainLinkClick(event, '/')}
+              className={`transition-colors duration-300 pb-0.5 ${isHomeActive
+                ? isTransparent ? 'text-white' : 'text-gray-900'
+                : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {pendingRoute === '/' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {t('navbar.home')}
+              </span>
+            </Link>
+          )}
+          <Link
+            ref={(node) => { booksRef.current = node }}
+            href="/books"
+            onClick={(event) => handlePlainLinkClick(event, '/books')}
             className={`transition-colors duration-300 pb-0.5 ${isBooksActive
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -273,12 +266,11 @@ export const Navbar: React.FC = () => {
               {pendingRoute === '/books' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {t('navbar.books')}
             </span>
-          </button>
-          <button
-            ref={favoritesRef}
-            onClick={() => navigateToRoute('/favorites')}
-            disabled={Boolean(pendingRoute)}
-            {...getPrefetchHandlers('/favorites')}
+          </Link>
+          <Link
+            ref={(node) => { favoritesRef.current = node }}
+            href="/favorites"
+            onClick={(event) => handlePlainLinkClick(event, '/favorites')}
             className={`flex items-center gap-1.5 transition-colors duration-300 pb-0.5 ${pathname === '/favorites'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-red-500'}`}
@@ -286,12 +278,11 @@ export const Navbar: React.FC = () => {
             <Heart className="h-4 w-4" />
             {pendingRoute === '/favorites' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             <span>{t('navbar.favorites')}</span>
-          </button>
-          <button
-            ref={myBooksRef}
-            onClick={() => navigateToRoute('/my-books')}
-            disabled={Boolean(pendingRoute)}
-            {...getPrefetchHandlers('/my-books')}
+          </Link>
+          <Link
+            ref={(node) => { myBooksRef.current = node }}
+            href="/my-books"
+            onClick={(event) => handlePlainLinkClick(event, '/my-books')}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/my-books'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -300,12 +291,11 @@ export const Navbar: React.FC = () => {
               {pendingRoute === '/my-books' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {t('navbar.myBooks')}
             </span>
-          </button>
-          <button
-            ref={collaborationRef}
-            onClick={() => navigateToRoute('/collaboration')}
-            disabled={Boolean(pendingRoute)}
-            {...getPrefetchHandlers('/collaboration')}
+          </Link>
+          <Link
+            ref={(node) => { collaborationRef.current = node }}
+            href="/collaboration"
+            onClick={(event) => handlePlainLinkClick(event, '/collaboration')}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/collaboration'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -314,12 +304,11 @@ export const Navbar: React.FC = () => {
               {pendingRoute === '/collaboration' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {t('navbar.collaboration')}
             </span>
-          </button>
-          <button
-            ref={supportRef}
-            onClick={() => navigateToRoute('/support')}
-            disabled={Boolean(pendingRoute)}
-            {...getPrefetchHandlers('/support')}
+          </Link>
+          <Link
+            ref={(node) => { supportRef.current = node }}
+            href="/support"
+            onClick={(event) => handlePlainLinkClick(event, '/support')}
             className={`transition-colors duration-300 pb-0.5 ${pathname === '/support'
               ? isTransparent ? 'text-white' : 'text-gray-900'
               : isTransparent ? 'text-white/70 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
@@ -328,13 +317,18 @@ export const Navbar: React.FC = () => {
               {pendingRoute === '/support' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {t('navbar.support')}
             </span>
-          </button>
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
           <CurrencySwitcher menuClassName="animate-in fade-in zoom-in-95" />
 
-          <Button variant="ghost" size="sm" onClick={() => navigateToRoute('/cart')} disabled={Boolean(pendingRoute)} className="relative px-2" {...getPrefetchHandlers('/cart')}>
+          <Link
+            href="/cart"
+            onClick={(event) => handlePlainLinkClick(event, '/cart')}
+            className="relative inline-flex h-8 items-center justify-center rounded-full px-2 text-xs font-medium text-gray-600 transition-all duration-200 hover:bg-amber-50/80 hover:text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1"
+            aria-label="Cart"
+          >
             {pendingRoute === '/cart' ? (
               <Loader2 className={`h-5 w-5 animate-spin transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-amber-600'}`} />
             ) : (
@@ -345,7 +339,7 @@ export const Navbar: React.FC = () => {
                 {cartCount}
               </span>
             )}
-          </Button>
+          </Link>
 
           <div className="relative" ref={userRef}>
             {user ? (
@@ -377,21 +371,27 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      <MyRewardsModal
-        open={isRewardsOpen}
-        user={user}
-        onClose={() => setRewardsOpen(false)}
-      />
+      {isRewardsOpen ? (
+        <MyRewardsModal
+          open={isRewardsOpen}
+          user={user}
+          onClose={() => setRewardsOpen(false)}
+        />
+      ) : null}
 
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
-          <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/')}>{pendingRoute === '/' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.home')}</button>
-          <button onClick={() => { handleBooksClick(); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/books')}>{pendingRoute === '/books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.books')}</button>
-          <button onClick={() => { navigateToRoute('/favorites'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/favorites')}>{pendingRoute === '/favorites' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.favorites')}</button>
-          <button onClick={() => { navigateToRoute('/my-books'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/my-books')}>{pendingRoute === '/my-books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myBooks')}</button>
-          <button onClick={() => { navigateToRoute('/collaboration'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/collaboration')}>{pendingRoute === '/collaboration' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.collaboration')}</button>
-          <button onClick={() => { navigateToRoute('/support'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/support')}>{pendingRoute === '/support' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.support')}</button>
-          <button onClick={() => { navigateToRoute('/orders'); setMobileMenuOpen(false) }} disabled={Boolean(pendingRoute)} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0" {...getPrefetchHandlers('/orders')}>{pendingRoute === '/orders' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myOrders')}</button>
+          {isHomePage ? (
+            <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.home')}</button>
+          ) : (
+            <Link href="/" onClick={(event) => { handlePlainLinkClick(event, '/'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.home')}</Link>
+          )}
+          <Link href="/books" onClick={(event) => { handlePlainLinkClick(event, '/books'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.books')}</Link>
+          <Link href="/favorites" onClick={(event) => { handlePlainLinkClick(event, '/favorites'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/favorites' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.favorites')}</Link>
+          <Link href="/my-books" onClick={(event) => { handlePlainLinkClick(event, '/my-books'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/my-books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myBooks')}</Link>
+          <Link href="/collaboration" onClick={(event) => { handlePlainLinkClick(event, '/collaboration'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/collaboration' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.collaboration')}</Link>
+          <Link href="/support" onClick={(event) => { handlePlainLinkClick(event, '/support'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/support' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.support')}</Link>
+          <Link href="/orders" onClick={(event) => { handlePlainLinkClick(event, '/orders'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/orders' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myOrders')}</Link>
         </div>
       )}
     </nav>
