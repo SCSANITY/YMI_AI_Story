@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 const DESKTOP_GAME_SIZE = { width: 960, height: 360 }
 const MOBILE_GAME_SIZE = { width: 560, height: 360 }
-const TARGET_FRAME_MS = 1000 / 30
+const FRAME_MS = 1000 / 60
 
 type State = 'idle' | 'playing' | 'dead'
 
@@ -48,8 +48,8 @@ export function MiniGame() {
     const W = gameSize.width
     const H = gameSize.height
     const GROUND_Y = H - (gameSize.isMobile ? 76 : 62)
-    const GRAVITY = gameSize.isMobile ? 0.86 : 0.78
-    const JUMP_V = gameSize.isMobile ? -15.8 : -14.4
+    const GRAVITY = gameSize.isMobile ? 0.92 : 0.88
+    const JUMP_V = gameSize.isMobile ? -17.2 : -16.4
     const CHAR_W = gameSize.isMobile ? 40 : 34
     const CHAR_H = gameSize.isMobile ? 50 : 42
     const CHAR_X = gameSize.isMobile ? 58 : 78
@@ -61,14 +61,13 @@ export function MiniGame() {
     let score = 0
     let best = 0
     let frame = 0
-    let speed = gameSize.isMobile ? 3.1 : 3.5
+    let speed = gameSize.isMobile ? 4.6 : 5.1
     let obstacles: Rect[] = []
     let coins: Coin[] = []
-    let nextObstacle = 90
-    let nextCoin = 130
+    let nextObstacle = 112
+    let nextCoin = 150
     let animationFrame = 0
     let lastFrameTime = 0
-    let background: HTMLCanvasElement | null = null
 
     const stopLoop = () => {
       if (animationFrame) {
@@ -78,76 +77,79 @@ export function MiniGame() {
       lastFrameTime = 0
     }
 
-    const buildBackground = () => {
-      const bg = document.createElement('canvas')
-      bg.width = W
-      bg.height = H
-      const bgCtx = bg.getContext('2d', { alpha: false })
-      if (!bgCtx) return null
-
-      const sky = bgCtx.createLinearGradient(0, 0, 0, GROUND_Y)
+    const drawBackground = () => {
+      const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y)
       sky.addColorStop(0, '#56b4d3')
       sky.addColorStop(1, '#a8e6f0')
-      bgCtx.fillStyle = sky
-      bgCtx.fillRect(0, 0, W, GROUND_Y)
+      ctx.fillStyle = sky
+      ctx.fillRect(0, 0, W, GROUND_Y)
 
       const sunX = W - 55
       const sunY = 38
-      bgCtx.fillStyle = '#fbbf24'
-      bgCtx.fillRect(sunX - 18, sunY - 18, 36, 36)
-      bgCtx.fillStyle = '#fde68a'
-      bgCtx.fillRect(sunX - 14, sunY - 14, 28, 28)
+      ctx.fillStyle = '#fbbf24'
+      ctx.fillRect(sunX - 18, sunY - 18, 36, 36)
+      ctx.fillStyle = '#fde68a'
+      ctx.fillRect(sunX - 14, sunY - 14, 28, 28)
 
       const hills = gameSize.isMobile
         ? [
-            { x: 62, y: GROUND_Y - 48, r: 58 },
-            { x: 210, y: GROUND_Y - 38, r: 46 },
-            { x: 370, y: GROUND_Y - 60, r: 70 },
-            { x: 515, y: GROUND_Y - 34, r: 46 },
+            { x: 62, y: GROUND_Y - 48, r: 58, layer: 0.16 },
+            { x: 210, y: GROUND_Y - 38, r: 46, layer: 0.18 },
+            { x: 370, y: GROUND_Y - 60, r: 70, layer: 0.14 },
+            { x: 515, y: GROUND_Y - 34, r: 46, layer: 0.2 },
           ]
         : [
-            { x: 80, y: GROUND_Y - 40, r: 52 },
-            { x: 230, y: GROUND_Y - 28, r: 38 },
-            { x: 420, y: GROUND_Y - 54, r: 66 },
-            { x: 640, y: GROUND_Y - 34, r: 44 },
-            { x: 810, y: GROUND_Y - 28, r: 36 },
+            { x: 80, y: GROUND_Y - 40, r: 52, layer: 0.16 },
+            { x: 230, y: GROUND_Y - 28, r: 38, layer: 0.2 },
+            { x: 420, y: GROUND_Y - 54, r: 66, layer: 0.14 },
+            { x: 640, y: GROUND_Y - 34, r: 44, layer: 0.18 },
+            { x: 810, y: GROUND_Y - 28, r: 36, layer: 0.22 },
           ]
 
-      bgCtx.fillStyle = '#86efac'
+      ctx.fillStyle = '#86efac'
       for (const h of hills) {
-        bgCtx.fillRect(h.x - h.r, h.y, h.r * 2, GROUND_Y - h.y + 2)
-        bgCtx.fillRect(h.x - Math.floor(h.r * 0.85), h.y - 10, Math.floor(h.r * 1.7), 14)
-        bgCtx.fillRect(h.x - Math.floor(h.r * 0.55), h.y - 18, Math.floor(h.r * 1.1), 12)
+        const loopW = W + h.r * 2
+        const hx = ((h.x - frame * speed * h.layer) % loopW + loopW) % loopW - h.r
+        ctx.fillRect(hx - h.r, h.y, h.r * 2, GROUND_Y - h.y + 2)
+        ctx.fillRect(hx - Math.floor(h.r * 0.85), h.y - 10, Math.floor(h.r * 1.7), 14)
+        ctx.fillRect(hx - Math.floor(h.r * 0.55), h.y - 18, Math.floor(h.r * 1.1), 12)
+        if (hx < h.r * 2) {
+          const wrapX = hx + loopW
+          ctx.fillRect(wrapX - h.r, h.y, h.r * 2, GROUND_Y - h.y + 2)
+          ctx.fillRect(wrapX - Math.floor(h.r * 0.85), h.y - 10, Math.floor(h.r * 1.7), 14)
+          ctx.fillRect(wrapX - Math.floor(h.r * 0.55), h.y - 18, Math.floor(h.r * 1.1), 12)
+        }
       }
 
       const cloudCount = gameSize.isMobile ? 4 : 5
       for (let i = 0; i < cloudCount; i += 1) {
         const cw = (gameSize.isMobile ? 66 : 58) + i * 7
-        const cx = Math.round((W / cloudCount) * i + 20)
+        const baseX = Math.round((W / cloudCount) * i + 20)
+        const cx = ((baseX - frame * (0.28 + i * 0.035)) % (W + cw) + W + cw) % (W + cw) - cw
         const cy = 24 + (i % 2) * (gameSize.isMobile ? 38 : 28)
-        bgCtx.fillStyle = 'rgba(255,255,255,0.92)'
-        bgCtx.fillRect(cx, cy + 8, cw, 14)
-        bgCtx.fillRect(cx + 8, cy, cw - 16, 22)
-        bgCtx.fillRect(cx + 18, cy - 6, Math.floor(cw * 0.5), 16)
+        ctx.fillStyle = 'rgba(255,255,255,0.92)'
+        ctx.fillRect(cx, cy + 8, cw, 14)
+        ctx.fillRect(cx + 8, cy, cw - 16, 22)
+        ctx.fillRect(cx + 18, cy - 6, Math.floor(cw * 0.5), 16)
       }
 
-      bgCtx.fillStyle = '#16a34a'
-      bgCtx.fillRect(0, GROUND_Y, W, 6)
-      bgCtx.fillStyle = '#15803d'
-      bgCtx.fillRect(0, GROUND_Y + 6, W, H - GROUND_Y - 6)
-      bgCtx.fillStyle = '#22c55e'
-      for (let gx = 0; gx < W; gx += 32) {
-        bgCtx.fillRect(gx, GROUND_Y - 2, 4, 4)
-        bgCtx.fillRect(gx + 12, GROUND_Y - 3, 3, 3)
-        bgCtx.fillRect(gx + 22, GROUND_Y - 2, 4, 3)
+      ctx.fillStyle = '#16a34a'
+      ctx.fillRect(0, GROUND_Y, W, 6)
+      ctx.fillStyle = '#15803d'
+      ctx.fillRect(0, GROUND_Y + 6, W, H - GROUND_Y - 6)
+      ctx.fillStyle = '#22c55e'
+      const grassOffset = -((frame * speed) % 32)
+      for (let gx = grassOffset; gx < W + 32; gx += 32) {
+        ctx.fillRect(gx, GROUND_Y - 2, 4, 4)
+        ctx.fillRect(gx + 12, GROUND_Y - 3, 3, 3)
+        ctx.fillRect(gx + 22, GROUND_Y - 2, 4, 3)
       }
-      bgCtx.fillStyle = '#92400e'
-      for (let gx = 0; gx < W; gx += 36) {
-        bgCtx.fillRect(gx + 4, GROUND_Y + 11, 12, 6)
-        bgCtx.fillRect(gx + 22, GROUND_Y + 11, 10, 6)
+      ctx.fillStyle = '#92400e'
+      const dirtOffset = -((frame * speed * 0.9) % 36)
+      for (let gx = dirtOffset; gx < W + 36; gx += 36) {
+        ctx.fillRect(gx + 4, GROUND_Y + 11, 12, 6)
+        ctx.fillRect(gx + 22, GROUND_Y + 11, 10, 6)
       }
-
-      return bg
     }
 
     const resetGame = () => {
@@ -156,11 +158,11 @@ export function MiniGame() {
       grounded = true
       score = 0
       frame = 0
-      speed = gameSize.isMobile ? 3.1 : 3.5
+      speed = gameSize.isMobile ? 4.6 : 5.1
       obstacles = []
       coins = []
-      nextObstacle = 90
-      nextCoin = 130
+      nextObstacle = 112
+      nextCoin = 150
     }
 
     const drawBook = (x: number, y: number, dead: boolean, runFrame: number) => {
@@ -234,14 +236,14 @@ export function MiniGame() {
       ctx.fillRect(cx - 2, cy - 2, 4, 4)
     }
 
-    const update = () => {
-      frame += 1
-      score += 1
-      speed = (gameSize.isMobile ? 3.1 : 3.5) + Math.floor(frame / 600) * 0.25
+    const update = (step: number) => {
+      frame += step
+      score += step
+      speed = (gameSize.isMobile ? 4.6 : 5.1) + Math.floor(frame / 900) * 0.35
 
       if (!grounded) {
-        charVY += GRAVITY
-        charY += charVY
+        charVY += GRAVITY * step
+        charY += charVY * step
       }
       if (charY >= GROUND_Y - CHAR_H) {
         charY = GROUND_Y - CHAR_H
@@ -249,26 +251,26 @@ export function MiniGame() {
         grounded = true
       }
 
-      nextObstacle -= 1
+      nextObstacle -= step
       if (nextObstacle <= 0) {
         const oh = (gameSize.isMobile ? 44 : 38) + Math.floor(Math.random() * (gameSize.isMobile ? 42 : 34))
         obstacles.push({ x: W + 10, y: GROUND_Y - oh, w: gameSize.isMobile ? 32 : 28, h: oh })
-        nextObstacle = Math.max(46, 66 + Math.floor(Math.random() * 72) - Math.floor(frame / 600) * 4)
+        nextObstacle = Math.max(54, 88 + Math.floor(Math.random() * 62) - Math.floor(frame / 900) * 4)
       }
 
-      nextCoin -= 1
+      nextCoin -= step
       if (nextCoin <= 0) {
         if (Math.random() < 0.58) {
           const yo = (gameSize.isMobile ? 42 : 34) + Math.floor(Math.random() * (gameSize.isMobile ? 62 : 48))
           const size = gameSize.isMobile ? 20 : 18
           coins.push({ x: W + 10, y: GROUND_Y - yo - size, w: size, h: size, taken: false })
         }
-        nextCoin = 88 + Math.floor(Math.random() * 110)
+        nextCoin = 110 + Math.floor(Math.random() * 95)
       }
 
       obstacles = obstacles.filter((o) => o.x > -24)
       for (const o of obstacles) {
-        o.x -= speed
+        o.x -= speed * step
         if (hits({ x: CHAR_X, y: charY, w: CHAR_W, h: CHAR_H }, o)) {
           state = 'dead'
           best = Math.max(best, score)
@@ -278,7 +280,7 @@ export function MiniGame() {
 
       coins = coins.filter((c) => c.x > -24)
       for (const c of coins) {
-        c.x -= speed
+        c.x -= speed * step
         if (!c.taken && hits({ x: CHAR_X, y: charY, w: CHAR_W, h: CHAR_H }, c)) {
           c.taken = true
           score += 50
@@ -328,19 +330,14 @@ export function MiniGame() {
       ctx.fillText('OOPS! GAME OVER', W / 2, H / 2 - 24)
       ctx.fillStyle = '#78350f'
       ctx.font = 'bold 16px "Courier New", monospace'
-      ctx.fillText(`Score: ${score}   Best: ${best}`, W / 2, H / 2 + 2)
+      ctx.fillText(`Score: ${Math.floor(score)}   Best: ${Math.floor(best)}`, W / 2, H / 2 + 2)
       ctx.fillStyle = '#92400e'
       ctx.font = 'bold 20px "Courier New", monospace'
       ctx.fillText('Tap to play again', W / 2, H / 2 + 42)
     }
 
     const render = () => {
-      if (background) {
-        ctx.drawImage(background, 0, 0)
-      } else {
-        ctx.fillStyle = '#a8e6f0'
-        ctx.fillRect(0, 0, W, H)
-      }
+      drawBackground()
 
       for (const c of coins) drawCoin(c)
       for (const o of obstacles) drawObstacle(o)
@@ -349,10 +346,10 @@ export function MiniGame() {
       ctx.textAlign = 'right'
       ctx.fillStyle = '#1e3a5f'
       ctx.font = 'bold 16px "Courier New", monospace'
-      ctx.fillText(`SCORE ${score}`, W - 10, 20)
+      ctx.fillText(`SCORE ${Math.floor(score)}`, W - 10, 20)
       if (best > 0) {
         ctx.fillStyle = 'rgba(30,58,95,0.52)'
-        ctx.fillText(`BEST ${best}`, W - 10, 40)
+        ctx.fillText(`BEST ${Math.floor(best)}`, W - 10, 40)
       }
 
       if (state === 'idle') drawIdleOverlay()
@@ -366,9 +363,15 @@ export function MiniGame() {
         return
       }
 
-      if (!lastFrameTime || time - lastFrameTime >= TARGET_FRAME_MS) {
+      if (!lastFrameTime) {
         lastFrameTime = time
-        update()
+      }
+
+      const step = Math.min(2, (time - lastFrameTime) / FRAME_MS)
+      lastFrameTime = time
+
+      if (step > 0) {
+        update(step)
         render()
       }
 
@@ -421,7 +424,6 @@ export function MiniGame() {
       }
     }
 
-    background = buildBackground()
     resetGame()
     render()
 

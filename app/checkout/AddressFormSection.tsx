@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
@@ -436,6 +437,15 @@ function AddressFormSectionComponent({
   }, [form, isMultiOrderCheckout]);
 
   useEffect(() => {
+    if (!isAddressBookOpen || typeof document === 'undefined') return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isAddressBookOpen]);
+
+  useEffect(() => {
     if (!form.email && checkoutEmail) {
       setForm((prev) => ({ ...prev, email: checkoutEmail }));
     }
@@ -617,6 +627,75 @@ function AddressFormSectionComponent({
       shippingQuote,
     });
   };
+
+  const addressBookDialog = isAddressBookOpen && typeof document !== 'undefined'
+    ? createPortal(
+        <div className="fixed inset-0 z-[120] grid min-h-dvh place-items-center bg-white/35 p-4 backdrop-blur-md sm:p-6">
+          <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-white/75 bg-white/90 shadow-[0_24px_70px_rgba(88,63,31,0.18)] ring-1 ring-amber-100/70 backdrop-blur-2xl">
+            <div className="flex items-center justify-between border-b border-amber-100/70 bg-gradient-to-r from-amber-50/90 to-white/85 px-5 py-4 sm:px-6">
+              <div>
+                <h3 className="text-base font-bold text-gray-950 sm:text-lg">{t('checkout.importAddress')}</h3>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">{t('checkout.importAddressDescription')}</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-amber-100 bg-white/75 px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                onClick={() => setIsAddressBookOpen(false)}
+              >
+                {t('common.close')}
+              </button>
+            </div>
+            <div className="max-h-[min(68dvh,420px)] overflow-y-auto p-4 sm:p-5">
+              {addressBook.length === 0 ? (
+                <p className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-sm text-slate-600">
+                  {t('common.savedAddress')}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {addressBook.map((entry) => {
+                    const metadata = entry?.metadata ?? {};
+                    const title = `${metadata.firstName ?? ''} ${metadata.lastName ?? ''}`.trim() || t('common.savedAddress');
+                    return (
+                      <button
+                        key={entry.asset_id || title}
+                        type="button"
+                        className="w-full rounded-2xl border border-amber-100/80 bg-white/75 p-4 text-left shadow-sm transition hover:border-amber-200 hover:bg-amber-50/65 hover:shadow-[0_12px_28px_rgba(217,119,6,0.10)]"
+                        onClick={() => {
+                          hasLocalEditsRef.current = true;
+                          setForm((prev) => ({
+                            ...prev,
+                            firstName: metadata.firstName ?? prev.firstName,
+                            lastName: metadata.lastName ?? prev.lastName,
+                            country: metadata.country ?? prev.country,
+                            shippingRegionKey: metadata.shippingRegionKey ?? metadata.regionKey ?? prev.shippingRegionKey,
+                            shippingDestinationLabel:
+                              metadata.shippingDestinationLabel ?? metadata.destinationLabel ?? prev.shippingDestinationLabel,
+                            region: metadata.region ?? prev.region,
+                            addressLine1: metadata.addressLine1 ?? prev.addressLine1,
+                            addressLine2: metadata.addressLine2 ?? prev.addressLine2,
+                            city: metadata.city ?? prev.city,
+                            zip: metadata.zip ?? prev.zip,
+                            phone: metadata.phone ?? prev.phone,
+                            company: metadata.company ?? prev.company,
+                          }));
+                          setIsAddressBookOpen(false);
+                        }}
+                      >
+                        <div className="text-sm font-semibold text-gray-950">{title}</div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">
+                          {[metadata.addressLine1, metadata.city, metadata.zip].filter(Boolean).join(', ')}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <>
@@ -948,62 +1027,7 @@ function AddressFormSectionComponent({
         {t('checkout.continue')}
       </Button>
 
-      {isAddressBookOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg space-y-4 rounded-3xl border border-white/60 bg-white/88 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">{t('checkout.importAddress')}</h3>
-              <button
-                className="text-sm text-gray-500 hover:text-gray-700"
-                onClick={() => setIsAddressBookOpen(false)}
-              >
-                {t('common.close')}
-              </button>
-            </div>
-            {addressBook.length === 0 ? (
-              <p className="text-sm text-gray-500">{t('common.savedAddress')}</p>
-            ) : (
-              <div className="max-h-[320px] space-y-3 overflow-y-auto">
-                {addressBook.map((entry) => {
-                  const metadata = entry?.metadata ?? {};
-                  const title = `${metadata.firstName ?? ''} ${metadata.lastName ?? ''}`.trim() || t('common.savedAddress');
-                  return (
-                    <button
-                      key={entry.asset_id || title}
-                      className="w-full rounded-xl border border-gray-200 p-4 text-left transition hover:border-amber-200 hover:bg-amber-50/40"
-                      onClick={() => {
-                        hasLocalEditsRef.current = true;
-                        setForm((prev) => ({
-                          ...prev,
-                          firstName: metadata.firstName ?? prev.firstName,
-                          lastName: metadata.lastName ?? prev.lastName,
-                          country: metadata.country ?? prev.country,
-                          shippingRegionKey: metadata.shippingRegionKey ?? metadata.regionKey ?? prev.shippingRegionKey,
-                          shippingDestinationLabel:
-                            metadata.shippingDestinationLabel ?? metadata.destinationLabel ?? prev.shippingDestinationLabel,
-                          region: metadata.region ?? prev.region,
-                          addressLine1: metadata.addressLine1 ?? prev.addressLine1,
-                          addressLine2: metadata.addressLine2 ?? prev.addressLine2,
-                          city: metadata.city ?? prev.city,
-                          zip: metadata.zip ?? prev.zip,
-                          phone: metadata.phone ?? prev.phone,
-                          company: metadata.company ?? prev.company,
-                        }));
-                        setIsAddressBookOpen(false);
-                      }}
-                    >
-                      <div className="text-sm font-semibold text-gray-900">{title}</div>
-                      <div className="mt-1 text-xs text-gray-500">
-                        {metadata.addressLine1}, {metadata.city} {metadata.zip}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+      {addressBookDialog}
     </>
   );
 }
