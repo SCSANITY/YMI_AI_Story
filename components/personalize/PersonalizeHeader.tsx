@@ -49,7 +49,7 @@ function PersonalizeHeaderComponent({
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/60 bg-white/72 shadow-[0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(16,24,40,0.06)] backdrop-blur-2xl">
+    <header className={`sticky top-0 ${isUserMenuOpen ? 'z-[150]' : 'z-50'} border-b border-white/60 bg-white/72 shadow-[0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(16,24,40,0.06)] backdrop-blur-2xl`}>
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <button onClick={onBack} className="flex items-center gap-2 text-gray-600 transition-colors hover:text-amber-600">
           <ChevronLeft className="h-5 w-5" />
@@ -78,7 +78,7 @@ function PersonalizeHeaderComponent({
                   <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full border border-gray-200 object-cover" />
                 </button>
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-md border border-gray-100 bg-white py-1 shadow-lg">
+                  <div className="absolute right-0 top-full z-[160] mt-2 w-56 rounded-md border border-gray-100 bg-white py-1 shadow-lg">
                     <div className="border-b border-gray-50 px-4 py-2">
                       <p className="text-sm font-semibold text-gray-900">{user.name}</p>
                     </div>

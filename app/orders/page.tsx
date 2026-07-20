@@ -64,7 +64,7 @@ export default function OrdersPage() {
     let cancelled = false;
     const url = user?.customerId ? `/api/orders?customerId=${user.customerId}` : '/api/orders';
 
-    fetch(url, { credentials: 'include' })
+    fetch(url, { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : { orders: [] }))
       .then((data) => {
         if (cancelled) return;

@@ -6,6 +6,7 @@ import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orde
 import { markOrderDiscountsPaid } from '@/lib/discounts'
 import { recordExternalEmailObserved } from '@/lib/emailEvents'
 import { resolveShippingAddress } from '@/lib/shipping-address'
+import { fromMinorUnit, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 
 export const runtime = 'nodejs'
 
@@ -82,8 +83,8 @@ export async function POST(request: Request) {
 
   const shippingAddress = resolveShippingAddress(order.shipping_address, session.customer_details ?? null)
 
-  const amount = Number(session.amount_total ?? 0) / 100
   const currency = String(session.currency || 'usd')
+  const amount = fromMinorUnit(Number(session.amount_total ?? 0), normalizeCheckoutCurrency(currency))
   const providerRef =
     (typeof session.payment_intent === 'string' ? session.payment_intent : null) ||
     session.id

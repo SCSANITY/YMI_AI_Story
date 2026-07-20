@@ -66,14 +66,14 @@ function PreviewBookPageContentComponent({
     const canShowGeneratedCover = Boolean(generatedCover) && !previewImageErrors.has(generatedCover)
 
     return (
-      <div className="relative h-full w-full overflow-hidden rounded-r-sm border-l border-white/20 shadow-inner" style={commonPageStyle}>
+      <div className="isolate relative h-full w-full overflow-hidden rounded-r-sm border-l border-white/20 bg-white shadow-inner" style={commonPageStyle}>
         <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-br from-white/30 via-transparent to-black/10" />
 
         {canShowGeneratedCover ? (
           <img
             src={generatedCover}
             alt={resolvedTitle || labels.previewAlt}
-            className="h-full w-full object-contain opacity-95 mix-blend-multiply"
+            className="relative z-10 h-full w-full object-contain"
             decoding="async"
             loading="eager"
             fetchPriority="high"

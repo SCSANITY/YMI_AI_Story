@@ -14,8 +14,13 @@ import {
   getOrderDisplayCurrency,
   getOrderDisplayTotal,
 } from '@/lib/order-display'
+import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import {
+  loadReleasedFinalPdfAssetsByJobId,
+  resolveLatestReleasedFinalPdfPath,
+} from '@/lib/purchase-state'
 
-const ORDER_DETAIL_CACHE_CONTROL = 'private, max-age=30'
+const ORDER_DETAIL_CACHE_CONTROL = 'private, no-store, max-age=0'
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
 
@@ -88,6 +93,7 @@ export async function GET(
           customer_id,
           status,
           creation_id,
+          final_job_id,
           quantity,
           price_at_purchase,
           creations:creations (
@@ -123,7 +129,13 @@ export async function GET(
     .map((row: any) => row.creations?.preview_job_id)
     .filter((value: string | null) => Boolean(value))
 
-  const previewCoverMap = await createGeneratedPreviewCoverMap(jobIds as string[])
+  const finalJobIds = cartItems
+    .map((row: any) => row.final_job_id)
+    .filter((value: string | null) => Boolean(value)) as string[]
+  const [previewCoverMap, finalPdfAssetsByJobId] = await Promise.all([
+    createGeneratedPreviewCoverMap(jobIds as string[]),
+    loadReleasedFinalPdfAssetsByJobId(finalJobIds),
+  ])
 
   const displayCurrency = getOrderDisplayCurrency(
     order.checkout_currency,
@@ -134,6 +146,11 @@ export async function GET(
     const cover = getGeneratedPreviewCover(previewCoverMap, row.creations?.preview_job_id ?? null)
     return {
       ...row,
+      template_name: resolvePersonalizedBookTitle({
+        templateId: row.creations?.template_id,
+        templateName: row.creations?.templates?.name,
+        customizeSnapshot: row.creations?.customize_snapshot,
+      }),
       preview_cover_url: cover.url,
       preview_cover_status: cover.status,
       display_currency: displayCurrency,
@@ -157,22 +174,12 @@ export async function GET(
   })
 
   let finalPdfUrl: string | null = null
-  const { data: releasedFinalJob } = await supabaseAdmin
-    .from('final_jobs')
-    .select('pdf_path, review_status, released_at')
-    .eq('order_id', order.order_id)
-    .not('pdf_path', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const finalPdfPath = resolveLatestReleasedFinalPdfPath(finalJobIds, finalPdfAssetsByJobId)
 
-  if (
-    releasedFinalJob?.pdf_path &&
-    (releasedFinalJob.released_at || releasedFinalJob.review_status === 'released')
-  ) {
+  if (finalPdfPath) {
     const { data: signedPdf } = await supabaseAdmin.storage
       .from(STORAGE_BUCKET)
-      .createSignedUrl(releasedFinalJob.pdf_path, FINAL_PDF_SIGN_TTL_SECONDS, {
+      .createSignedUrl(finalPdfPath, FINAL_PDF_SIGN_TTL_SECONDS, {
         download: `final-${order.order_id}.pdf`,
       })
     finalPdfUrl = signedPdf?.signedUrl ?? null

@@ -1,15 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildAbsoluteUrl } from '@/lib/site-url'
-
-type TemplateRelation = { name?: string | null } | { name?: string | null }[] | null
-
-function getTemplateName(templates: TemplateRelation) {
-  if (Array.isArray(templates)) {
-    return templates[0]?.name ?? null
-  }
-  return templates?.name ?? null
-}
+import { resolvePreviewShareDisplayTitle } from '@/lib/share-preview'
 
 export async function GET(
   _request: Request,
@@ -30,6 +22,9 @@ export async function GET(
         template_id,
         templates:templates (
           name
+        ),
+        creations:creations (
+          customize_snapshot
         )
       `
     )
@@ -40,10 +35,17 @@ export async function GET(
     return NextResponse.json({ error: 'Share link not found' }, { status: 404 })
   }
 
+  const displayTitle = resolvePreviewShareDisplayTitle({
+    templateId: data.template_id,
+    templates: data.templates,
+    creations: data.creations,
+  })
+
   return NextResponse.json({
     token: data.share_token,
     templateId: data.template_id,
-    templateName: getTemplateName(data.templates as TemplateRelation),
+    templateName: displayTitle,
+    displayTitle,
     shareUrl: buildAbsoluteUrl(`/share/preview/${data.share_token}`),
     imageUrl: buildAbsoluteUrl(`/share/preview/${data.share_token}/image`),
   })

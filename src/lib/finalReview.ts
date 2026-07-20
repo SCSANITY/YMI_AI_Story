@@ -1,6 +1,7 @@
 import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 import { sendOrderDeliveryEmail } from '@/lib/email'
+import { isFinalJobReleased } from '@/lib/purchase-state'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const STORAGE_BUCKET = 'raw-private'
@@ -284,7 +285,7 @@ export async function releaseFinalJob(params: {
     throw new Error(finalJobError?.message || 'Final job not found')
   }
 
-  const alreadyPdfReleased = Boolean(finalJob.released_at || finalJob.review_status === 'released')
+  const alreadyPdfReleased = isFinalJobReleased(finalJob)
   if (alreadyPdfReleased && finalJob.email_sent_at) {
     return {
       finalJobId,

@@ -7,7 +7,9 @@ import { Info, Sparkles } from 'lucide-react'
 const MiniGame = dynamic(() => import('@/components/MiniGame').then((module) => module.MiniGame), {
   ssr: false,
   loading: () => (
-    <div className="h-[220px] w-full max-w-3xl animate-pulse rounded-2xl border border-amber-100 bg-white/70 sm:h-[300px]" />
+    <div className="mb-5 w-full max-w-5xl rounded-[24px] border border-amber-100/80 bg-white/70 p-2 shadow-[0_12px_30px_rgba(148,93,34,0.10)] md:p-2.5">
+      <div className="aspect-[560/360] w-full animate-pulse rounded-2xl border border-white/70 bg-amber-50/80 shadow-sm sm:aspect-[960/360]" />
+    </div>
   ),
 })
 
@@ -34,13 +36,13 @@ function LoadingPreviewOverlayComponent({
 
   return (
     <div className="fixed inset-0 z-[60] flex animate-in flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-amber-50/97 via-white/97 to-orange-50/97 p-5 fade-in duration-200 sm:p-8">
-      <div className="relative z-10 flex w-full max-w-5xl flex-col items-center space-y-5 text-center sm:space-y-6">
+      <div className="relative z-10 flex w-full max-w-5xl flex-col items-center text-center">
         <div className="relative mb-1 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-100 bg-white/80 shadow-[0_12px_26px_rgba(217,119,6,0.12)]">
           <Sparkles className="h-8 w-8 text-amber-500" />
         </div>
 
-        <div>
-          <h3 className="mb-2 font-serif text-2xl font-bold text-gray-900 sm:text-3xl">
+        <div className="flex h-[7.25rem] w-full max-w-3xl flex-col items-center justify-center px-2 sm:h-[7.5rem]">
+          <h3 className="mb-2 max-w-3xl font-serif text-2xl font-bold leading-tight text-gray-900 sm:text-3xl">
             {loadingText}
           </h3>
           <p className="font-mono text-sm text-gray-500">
@@ -53,7 +55,7 @@ function LoadingPreviewOverlayComponent({
             <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} />
           </div>
 
-          <div className="flex justify-center">
+          <div className="flex min-h-[260px] w-full items-start justify-center sm:min-h-[300px]">
             <MiniGame />
           </div>
 

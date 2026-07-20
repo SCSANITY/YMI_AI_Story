@@ -149,6 +149,7 @@ export function AccountProfilePageClient() {
 
     fetch('/api/account/reward-vouchers', {
       credentials: 'include',
+      cache: 'no-store',
     })
       .then((response) => (response.ok ? response.json() : { active: [] }))
       .then((data: RewardVoucherSummary) => {
@@ -288,6 +289,7 @@ export function AccountProfilePageClient() {
             user={user}
             resolvedAvatar={resolvedAvatar}
             initialDisplayName={user.name || ''}
+            hasPendingAvatarChange={Boolean(selectedFile)}
             avatarError={avatarError}
             error={error}
             isSaving={isSaving}

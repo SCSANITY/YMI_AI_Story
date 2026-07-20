@@ -14,7 +14,6 @@ export type PersonalizeStage =
 
 export type ExitIntent =
   | 'NONE'
-  | 'ADD_TO_CART'
   | 'CHECKOUT'
   | 'EXIT'
 
@@ -110,14 +109,6 @@ export function usePersonalizeStage() {
   }, [])
 
 
-  const requestAddToCart = () => {
-    if (stage !== 'PREVIEW') return
-    if (exitPhase !== 'IDLE') return
-
-    setExitIntent('ADD_TO_CART')
-    setExitPhase('REQUESTED')
-  }
-
   const requestCheckout = () => {
     if (stage !== 'PREVIEW') return
     if (exitPhase !== 'IDLE') return
@@ -174,7 +165,7 @@ export function usePersonalizeStage() {
         stage === 'FORM'
         ? 'GENERATE_PREVIEW'
         : stage === 'PREVIEW'
-        ? 'ADD_TO_CART'
+        ? 'NONE'
         : 'NONE',
     }
 
@@ -197,11 +188,8 @@ export function usePersonalizeStage() {
       case 'FORM':
         generatePreview()
         break
-      case 'PREVIEW':
-        requestAddToCart()
-        break
     }
-  }, [stage, isExiting, generatePreview, requestAddToCart])
+  }, [stage, isExiting, generatePreview])
 
 
 
@@ -222,7 +210,6 @@ export function usePersonalizeStage() {
     restore,
 
     // exit intent
-    requestAddToCart,
     requestCheckout,
     consumeExitIntent,
     beginExitExecution,

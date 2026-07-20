@@ -1,9 +1,37 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 
 type StoredPageAsset = {
   page_index: number
   storage_path: string
   storage_path_full?: string | null
+}
+
+type TemplateRelation = { name?: string | null } | { name?: string | null }[] | null | undefined
+type CreationRelation =
+  | { customize_snapshot?: unknown }
+  | { customize_snapshot?: unknown }[]
+  | null
+  | undefined
+
+function firstRelation<T>(relation: T | T[] | null | undefined) {
+  if (Array.isArray(relation)) return relation[0] ?? null
+  return relation ?? null
+}
+
+export function resolvePreviewShareDisplayTitle(input: {
+  templateId?: unknown
+  templates?: TemplateRelation
+  creations?: CreationRelation
+}) {
+  const template = firstRelation(input.templates)
+  const creation = firstRelation(input.creations)
+
+  return resolvePersonalizedBookTitle({
+    templateId: input.templateId,
+    templateName: template?.name,
+    customizeSnapshot: creation?.customize_snapshot,
+  })
 }
 
 function normalizeStoragePath(bucket: string, storagePath: string) {

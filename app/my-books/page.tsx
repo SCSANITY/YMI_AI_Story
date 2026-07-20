@@ -11,6 +11,7 @@ import { useI18n } from '@/lib/useI18n'
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
 import { parseTemplateAmount } from '@/lib/book-catalog'
 import { MyBooksGrid } from './MyBooksGrid'
+import { PurchasedBooksGrid } from './PurchasedBooksGrid'
 import type { CreationItem } from './myBooksTypes'
 
 const normalizeLanguage = (value: unknown): PersonalizationData['language'] => {
@@ -105,17 +106,18 @@ export default function MyBooksPage() {
   const [items, setItems] = useState<CreationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState<{ creationId: string; action: 'add' | 'buy' | 'delete' } | null>(null)
+  const [pendingReaderHref, setPendingReaderHref] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const url = user?.customerId ? `/api/my-books?customerId=${user.customerId}` : '/api/my-books'
 
-    fetch(url, { credentials: 'include' })
+    fetch(url, { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : { items: [] }))
       .then((data) => {
         if (cancelled) return
         const next = Array.isArray(data?.items) ? data.items : []
-        setItems(next.filter((item: CreationItem) => item?.is_archived !== true))
+        setItems(next)
       })
       .catch(() => {
         if (cancelled) return
@@ -268,6 +270,20 @@ export default function MyBooksPage() {
     return `/personalize/${item.template_id}?${params.toString()}`
   }
 
+  const buildReaderHref = (item: CreationItem) => `/my-books/${item.creation_id}`
+
+  const goToReader = (item: CreationItem) => {
+    if (item.purchaseState === 'refunded') return
+    const href = buildReaderHref(item)
+    setPendingReaderHref(href)
+    router.push(href)
+  }
+
+  const prefetchReader = (item: CreationItem) => {
+    if (item.purchaseState === 'refunded') return
+    router.prefetch(buildReaderHref(item))
+  }
+
   const goToPreview = (item: CreationItem) => {
     const coverUrl = resolveCover(item)
     void navigateToCustomize(buildPreviewHref(item), {
@@ -293,6 +309,15 @@ export default function MyBooksPage() {
     () => 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-10',
     []
   )
+  const purchasedItems = useMemo(
+    () => items.filter((item) => item.purchaseState === 'purchased' || item.purchaseState === 'refunded'),
+    [items]
+  )
+  const unpurchasedItems = useMemo(
+    () => items.filter((item) => (item.purchaseState ?? 'unpurchased') === 'unpurchased' && item?.is_archived !== true),
+    [items]
+  )
+  const hasVisibleItems = purchasedItems.length > 0 || unpurchasedItems.length > 0
 
   return (
     <div className="page-surface min-h-screen">
@@ -309,29 +334,62 @@ export default function MyBooksPage() {
 
         {loading ? (
           <MyBooksLoadingGrid gridClass={gridClass} />
-        ) : items.length === 0 ? (
+        ) : !hasVisibleItems ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-sm text-gray-500 text-center">
             {t('myBooks.empty')}
           </div>
         ) : (
-          <MyBooksGrid
-            items={items}
-            gridClass={gridClass}
-            displayCurrency={displayCurrency}
-            pendingCustomizeHref={pendingCustomizeHref}
-            pendingAction={pendingAction}
-            t={t}
-            resolveCover={resolveCover}
-            resolveTemplatePrice={resolveTemplatePrice}
-            resolveTemplateCompareAtPrice={resolveTemplateCompareAtPrice}
-            resolveTemplateDiscountPercent={resolveTemplateDiscountPercent}
-            buildPreviewHref={buildPreviewHref}
-            onPreview={goToPreview}
-            onPrefetchPreview={prefetchCustomizeHref}
-            onDelete={handleDelete}
-            onAddToCart={(item) => void handleAddToCart(item)}
-            onBuyNow={(item) => void handleBuyNow(item)}
-          />
+          <div className="space-y-12">
+            {purchasedItems.length > 0 ? (
+              <section className="space-y-5" aria-labelledby="purchased-books-heading">
+                <div className="space-y-1">
+                  <h2 id="purchased-books-heading" className="text-xl font-display font-semibold text-gray-900">
+                    {t('myBooks.purchasedTitle')}
+                  </h2>
+                  <p className="text-sm text-gray-500">{t('myBooks.purchasedSubtitle')}</p>
+                </div>
+                <PurchasedBooksGrid
+                  items={purchasedItems}
+                  gridClass={gridClass}
+                  pendingReaderHref={pendingReaderHref}
+                  t={t}
+                  resolveCover={resolveCover}
+                  buildReaderHref={buildReaderHref}
+                  onPrefetchReader={prefetchReader}
+                  onOpenReader={goToReader}
+                />
+              </section>
+            ) : null}
+
+            {unpurchasedItems.length > 0 ? (
+              <section className="space-y-5" aria-labelledby="unpurchased-books-heading">
+                <div className="space-y-1">
+                  <h2 id="unpurchased-books-heading" className="text-xl font-display font-semibold text-gray-900">
+                    {t('myBooks.unpurchasedTitle')}
+                  </h2>
+                  <p className="text-sm text-gray-500">{t('myBooks.unpurchasedSubtitle')}</p>
+                </div>
+                <MyBooksGrid
+                  items={unpurchasedItems}
+                  gridClass={gridClass}
+                  displayCurrency={displayCurrency}
+                  pendingCustomizeHref={pendingCustomizeHref}
+                  pendingAction={pendingAction}
+                  t={t}
+                  resolveCover={resolveCover}
+                  resolveTemplatePrice={resolveTemplatePrice}
+                  resolveTemplateCompareAtPrice={resolveTemplateCompareAtPrice}
+                  resolveTemplateDiscountPercent={resolveTemplateDiscountPercent}
+                  buildPreviewHref={buildPreviewHref}
+                  onPreview={goToPreview}
+                  onPrefetchPreview={prefetchCustomizeHref}
+                  onDelete={handleDelete}
+                  onAddToCart={(item) => void handleAddToCart(item)}
+                  onBuyNow={(item) => void handleBuyNow(item)}
+                />
+              </section>
+            ) : null}
+          </div>
         )}
       </div>
     </div>

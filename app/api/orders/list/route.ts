@@ -7,7 +7,7 @@ import {
   getOrderDisplayTotal,
 } from '@/lib/order-display'
 
-const ORDERS_LIST_CACHE_CONTROL = 'private, max-age=30'
+const ORDERS_LIST_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 function privateJson(body: unknown) {
   const response = NextResponse.json(body)

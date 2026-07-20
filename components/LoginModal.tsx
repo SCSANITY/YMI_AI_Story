@@ -1,13 +1,16 @@
 ﻿'use client';
 
 import React, { useEffect, useRef, useState, useTransition } from 'react';
-import { X, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, X, Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useI18n } from '@/lib/useI18n';
 
 const SIGNUP_OTP_LENGTH = 8;
 type OAuthProvider = 'google' | 'facebook' | 'apple';
+
+const LOGIN_MODAL_INPUT_CLASS =
+  'login-modal-input w-full h-11 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-400 caret-amber-600 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100 disabled:bg-gray-50 disabled:text-gray-500 disabled:opacity-100';
 
 const SOCIAL_LOGIN_OPTIONS: Array<{
   provider: OAuthProvider;
@@ -60,6 +63,7 @@ export function LoginModal() {
   const [signupStep, setSignupStep] = useState<'credentials' | 'verify'>('credentials');
   const [email, setEmail] = useState(checkoutEmail);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -81,6 +85,7 @@ export function LoginModal() {
     }
 
     setPassword('');
+    setShowPassword(false);
     setError(null);
     setInfo(null);
     setPendingOAuthProvider(null);
@@ -218,7 +223,7 @@ export function LoginModal() {
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="email"
-                className="w-full h-11 pl-9 rounded-lg border border-gray-200 text-sm"
+                className={`${LOGIN_MODAL_INPUT_CLASS} pl-9`}
                 placeholder="alex@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -234,13 +239,22 @@ export function LoginModal() {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
-                  type="password"
-                  className="w-full h-11 pl-9 rounded-lg border border-gray-200 text-sm"
+                  type={showPassword ? 'text' : 'password'}
+                  className={`${LOGIN_MODAL_INPUT_CLASS} pl-9 pr-11`}
                   placeholder="********"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
           )}
@@ -252,7 +266,7 @@ export function LoginModal() {
                 type="text"
                 inputMode="numeric"
                 maxLength={SIGNUP_OTP_LENGTH}
-                className="w-full h-11 rounded-lg border border-gray-200 px-3 text-sm tracking-[0.3em]"
+                className={`${LOGIN_MODAL_INPUT_CLASS} px-3 tracking-[0.3em]`}
                 placeholder={t('login.enterCode', { length: SIGNUP_OTP_LENGTH })}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, SIGNUP_OTP_LENGTH))}

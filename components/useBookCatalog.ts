@@ -19,7 +19,7 @@ async function fetchCatalogBooks(): Promise<CatalogBook[]> {
           throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to load templates')
         }
 
-        const books = data.templates.length ? data.templates : FALLBACK_BOOKS
+        const books = data.templates
         cachedCatalog = { books, loadedAt: Date.now() }
         return books
       })
@@ -32,8 +32,9 @@ async function fetchCatalogBooks(): Promise<CatalogBook[]> {
 }
 
 export function useBookCatalog() {
-  const [books, setBooks] = useState<CatalogBook[]>(cachedCatalog?.books ?? FALLBACK_BOOKS)
+  const [books, setBooks] = useState<CatalogBook[]>(cachedCatalog?.books ?? [])
   const [isLoading, setIsLoading] = useState(!cachedCatalog)
+  const [hasResolved, setHasResolved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function useBookCatalog() {
       } finally {
         if (isMounted) {
           setIsLoading(false)
+          setHasResolved(true)
         }
       }
     }
@@ -71,8 +73,9 @@ export function useBookCatalog() {
     () => ({
       books,
       isLoading,
+      hasResolved,
       error,
     }),
-    [books, error, isLoading]
+    [books, error, hasResolved, isLoading]
   )
 }

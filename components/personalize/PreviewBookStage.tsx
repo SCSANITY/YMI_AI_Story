@@ -38,6 +38,13 @@ function PreviewBookStageComponent({
   previewBookShadow,
   renderPageContent,
 }: PreviewBookStageProps) {
+  const staticRightIndex =
+    isFlipping && flipDirection === 'prev'
+      ? currentSpread
+      : isFlipping && flipDirection === 'next'
+        ? currentSpread + 1
+        : currentSpread
+
   return (
     <div
       className="relative mb-7 flex select-none justify-center perspective-2000 md:mb-12"
@@ -104,7 +111,7 @@ function PreviewBookStageComponent({
               {renderPageContent('left', staticLeftIndex)}
             </div>
             <div className="relative h-full" style={{ width: pageWidth }}>
-              {(isFlipping && flipDirection === 'next') ? renderPageContent('right', currentSpread + 1) : renderPageContent('right', currentSpread)}
+              {renderPageContent('right', staticRightIndex)}
             </div>
           </div>
 

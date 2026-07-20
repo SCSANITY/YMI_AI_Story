@@ -114,7 +114,7 @@ export default function OrderDetailPage() {
     const detailUrl = sessionId
       ? `/api/orders/${encodeURIComponent(orderId)}?session_id=${encodeURIComponent(sessionId)}`
       : `/api/orders/${encodeURIComponent(orderId)}`
-    fetch(detailUrl, { credentials: 'include' })
+    fetch(detailUrl, { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : { order: null, items: [] }))
       .then((data) => {
         if (cancelled) return
@@ -222,7 +222,7 @@ export default function OrderDetailPage() {
           />
         )}
 
-        <OrderDetailPanels items={items} order={order} t={t} />
+        <OrderDetailPanels items={items} order={order} stripeSessionId={sessionId} t={t} />
       </div>
 
     </div>

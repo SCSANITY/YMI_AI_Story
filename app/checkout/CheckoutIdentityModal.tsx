@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, Circle, UserRound, UserPlus } from 'lucide-react';
 import { Button } from '@/components/Button';
 
 type CheckoutIdentityMode = 'guest' | 'auth';
@@ -58,6 +59,8 @@ export function CheckoutIdentityModal({
 
   const verificationEmail = identityEmail || (identityMode === 'guest' ? formEmail.trim() : userEmail || '');
   const hasPendingAction = Boolean(localPendingAction || isIdentityRequesting);
+  const guestSelected = draftIdentityMode === 'guest';
+  const authSelected = draftIdentityMode === 'auth';
 
   const runIdentityAction = async (
     action: 'mode' | 'requestOtp' | 'verifyOtp',
@@ -103,34 +106,70 @@ export function CheckoutIdentityModal({
           </div>
         )}
 
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <button
             type="button"
             disabled={hasPendingAction}
             onClick={() => setDraftIdentityMode('guest')}
-            className={`rounded-xl border px-4 py-3 text-left transition ${
-              draftIdentityMode === 'guest'
-                ? 'border-amber-300 bg-amber-50'
-                : 'border-gray-200 hover:border-amber-200 hover:bg-amber-50/40'
+            aria-pressed={guestSelected}
+            className={`group relative overflow-hidden rounded-2xl border-2 px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 ${
+              guestSelected
+                ? 'border-amber-500 bg-amber-50 shadow-[0_14px_34px_rgba(217,119,6,0.16)]'
+                : 'border-slate-200 bg-white shadow-sm hover:border-amber-300 hover:bg-amber-50/45'
             } disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            <div className="font-semibold text-gray-900">{t('checkout.guestTitle')}</div>
-            <div className="text-xs text-gray-600 mt-1">{t('checkout.guestDescription')} {formEmail || t('checkout.notSet')}</div>
+            <div className="flex items-start gap-3">
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                guestSelected ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-600'
+              }`}>
+                <UserPlus className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-gray-950">{t('checkout.guestTitle')}</span>
+                  {guestSelected ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-amber-600" />
+                  ) : (
+                    <Circle className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-amber-300" />
+                  )}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-slate-600">
+                  {t('checkout.guestDescription')} <span className="font-semibold text-slate-800">{formEmail || t('checkout.notSet')}</span>
+                </span>
+              </span>
+            </div>
           </button>
 
           <button
             type="button"
             disabled={hasPendingAction}
             onClick={() => setDraftIdentityMode('auth')}
-            className={`rounded-xl border px-4 py-3 text-left transition ${
-              draftIdentityMode === 'auth'
-                ? 'border-emerald-300 bg-emerald-50'
-                : 'border-gray-200 hover:border-emerald-200 hover:bg-emerald-50/40'
+            aria-pressed={authSelected}
+            className={`group relative overflow-hidden rounded-2xl border-2 px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 ${
+              authSelected
+                ? 'border-emerald-500 bg-emerald-50 shadow-[0_14px_34px_rgba(5,150,105,0.14)]'
+                : 'border-slate-200 bg-white shadow-sm hover:border-emerald-300 hover:bg-emerald-50/45'
             } disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            <div className="font-semibold text-gray-900">{userEmail ? t('checkout.paymentTitle') : t('checkout.authTitle')}</div>
-            <div className="text-xs text-gray-600 mt-1">
-              {userEmail ? t('checkout.codeSentTo', { email: userEmail }) : t('checkout.authDescription')}
+            <div className="flex items-start gap-3">
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                authSelected ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-600'
+              }`}>
+                <UserRound className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-gray-950">{userEmail ? t('checkout.paymentTitle') : t('checkout.authTitle')}</span>
+                  {authSelected ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <Circle className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-emerald-300" />
+                  )}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-slate-600">
+                  {userEmail ? t('checkout.codeSentTo', { email: userEmail }) : t('checkout.authDescription')}
+                </span>
+              </span>
             </div>
           </button>
         </div>

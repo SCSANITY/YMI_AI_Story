@@ -36,11 +36,13 @@ type CustomizeFormFieldsProps = {
   photoPreview: string | null
   facePrepareStatus: FacePrepareStatus
   facePrepareError: string | null
+  faceAutoCropped?: boolean
   photoLabels: {
     uploadChildPhoto: string
     photoChecking: string
     photoPreparing: string
     photoReady: string
+    photoAutoCentered: string
     photoPrepareFailed: string
     photoQualityReason: string
     clickToChangePhoto: string
@@ -62,6 +64,8 @@ type CustomizeFormFieldsProps = {
     agePlaceholder: string
     noHistory: string
   }
+  ageRangeWarning?: string | null
+  minimumRecommendedAge?: number
   onLoadProfiles: () => void
   onChildDetailsChange: (details: { name: string; age: string }) => void
   onDeleteProfileValue: (payload: { field: 'name' | 'age'; value: string | number }) => void
@@ -106,6 +110,7 @@ function CustomizeFormFieldsComponent({
   photoPreview,
   facePrepareStatus,
   facePrepareError,
+  faceAutoCropped = false,
   photoLabels,
   onPhotoUpload,
   recentFaces,
@@ -116,6 +121,8 @@ function CustomizeFormFieldsComponent({
   childDetailsSeedVersion,
   recentProfiles,
   childLabels,
+  ageRangeWarning,
+  minimumRecommendedAge,
   onLoadProfiles,
   onChildDetailsChange,
   onDeleteProfileValue,
@@ -142,6 +149,7 @@ function CustomizeFormFieldsComponent({
         photoPreview={photoPreview}
         facePrepareStatus={facePrepareStatus}
         facePrepareError={facePrepareError}
+        faceAutoCropped={faceAutoCropped}
         labels={photoLabels}
         onPhotoUpload={onPhotoUpload}
       />
@@ -157,6 +165,8 @@ function CustomizeFormFieldsComponent({
         seedVersion={childDetailsSeedVersion}
         recentProfiles={recentProfiles}
         labels={childLabels}
+        ageRangeWarning={ageRangeWarning}
+        minimumRecommendedAge={minimumRecommendedAge}
         onLoadProfiles={onLoadProfiles}
         onChange={onChildDetailsChange}
         onDeleteProfileValue={onDeleteProfileValue}

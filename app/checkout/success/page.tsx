@@ -8,7 +8,6 @@ import { CheckoutSuccessCard, type CheckoutSuccessOrder } from './CheckoutSucces
 
 function CheckoutSuccessPageContent() {
   const router = useRouter()
-  const { t } = useI18n()
   const searchParams = useSearchParams()
   const orderId = useMemo(() => {
     const raw = searchParams.get('orderId')
@@ -28,8 +27,23 @@ function CheckoutSuccessPageContent() {
     let cancelled = false
     let pollTimer: ReturnType<typeof setTimeout> | null = null
     let attempts = 0
+    let deferredFinalizeStarted = false
     const maxAttempts = 30
     const maxConfirmAttempts = 6
+
+    const startDeferredFinalize = () => {
+      if (!sessionId || deferredFinalizeStarted) return
+      deferredFinalizeStarted = true
+      void fetch('/api/orders/stripe-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        keepalive: true,
+        body: JSON.stringify({ orderId, sessionId }),
+      }).catch(() => {
+        // Stripe webhook remains the primary full-finalization path.
+      })
+    }
 
     const shouldStopPolling = (status: string | null | undefined) => {
       const normalized = normalizeOrderStatus(status)
@@ -48,12 +62,20 @@ function CheckoutSuccessPageContent() {
 
       if (sessionId && attempts <= maxConfirmAttempts) {
         try {
-          await fetch('/api/orders/stripe-confirm', {
+          const confirmResponse = await fetch('/api/orders/stripe-confirm', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ orderId, sessionId }),
+            body: JSON.stringify({ orderId, sessionId, fast: true }),
           })
+          const confirmData = confirmResponse.ok ? await confirmResponse.json().catch(() => null) : null
+          const confirmedOrder = confirmData?.order
+          if (!cancelled && confirmData?.finalized && confirmedOrder?.order_id) {
+            setOrder(confirmedOrder)
+            setLoading(false)
+            startDeferredFinalize()
+            return
+          }
         } catch {
           // Regular polling still handles status updates.
         }

@@ -31,7 +31,7 @@ export default function OrderReviewPage() {
     if (!orderParam) return
     let cancelled = false
     setLoading(true)
-    fetch(`/api/orders/${encodeURIComponent(orderParam)}`, { credentials: 'include' })
+    fetch(`/api/orders/${encodeURIComponent(orderParam)}`, { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return

@@ -21,7 +21,7 @@ export default function SupportOrderPage() {
     if (!orderId) return;
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/orders/${orderId}`, { credentials: 'include' })
+    fetch(`/api/orders/${orderId}`, { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;

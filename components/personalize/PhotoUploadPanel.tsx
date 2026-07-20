@@ -22,11 +22,13 @@ type PhotoUploadPanelProps = {
   photoPreview: string | null
   facePrepareStatus: FacePrepareStatus
   facePrepareError: string | null
+  faceAutoCropped?: boolean
   labels: {
     uploadChildPhoto: string
     photoChecking: string
     photoPreparing: string
     photoReady: string
+    photoAutoCentered: string
     photoPrepareFailed: string
     photoQualityReason: string
     clickToChangePhoto: string
@@ -40,6 +42,7 @@ function PhotoUploadPanelComponent({
   photoPreview,
   facePrepareStatus,
   facePrepareError,
+  faceAutoCropped = false,
   labels,
   onPhotoUpload,
 }: PhotoUploadPanelProps) {
@@ -71,7 +74,9 @@ function PhotoUploadPanelComponent({
               {facePrepareStatus === 'checking' ? labels.photoChecking : labels.photoPreparing}
             </p>
           ) : facePrepareStatus === 'ready' ? (
-            <p className="mt-2 text-xs font-semibold text-emerald-600">{labels.photoReady}</p>
+            <p className="mt-2 text-xs font-semibold text-emerald-600">
+              {faceAutoCropped ? labels.photoAutoCentered : labels.photoReady}
+            </p>
           ) : facePrepareStatus === 'failed' ? (
             <div className="mx-auto mt-2 max-w-xs space-y-1">
               <p className="text-xs font-semibold leading-5 text-rose-600">

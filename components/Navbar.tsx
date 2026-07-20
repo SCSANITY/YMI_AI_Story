@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
+import { isBrowserTranslated } from '@/lib/browser-translation'
 import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
 import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
@@ -59,6 +60,10 @@ export const Navbar: React.FC = () => {
   // transparent on homepage hero, transitions to glass after scroll
   const isTransparent = isHomePage && !scrolled
 
+  const navigateWithDocumentReload = useCallback((path: string) => {
+    window.location.assign(path)
+  }, [])
+
   useEffect(() => {
     setPendingRoute(null)
   }, [pathname])
@@ -69,11 +74,16 @@ export const Navbar: React.FC = () => {
       setPendingRoute(null)
       return
     }
+    if (isBrowserTranslated()) {
+      navigateWithDocumentReload(path)
+      return
+    }
     setPendingRoute(path)
     router.push(path)
-  }, [pathname, pendingRoute, router])
+  }, [navigateWithDocumentReload, pathname, pendingRoute, router])
 
   const handlePlainLinkClick = useCallback((event: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
     if (pendingRoute === path) {
       event.preventDefault()
       return
@@ -82,8 +92,13 @@ export const Navbar: React.FC = () => {
       setPendingRoute(null)
       return
     }
+    if (isBrowserTranslated()) {
+      event.preventDefault()
+      navigateWithDocumentReload(path)
+      return
+    }
     setPendingRoute(path)
-  }, [pathname, pendingRoute])
+  }, [navigateWithDocumentReload, pathname, pendingRoute])
 
   const scrollHomeToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -174,7 +189,7 @@ export const Navbar: React.FC = () => {
   if (isPersonalizeRoute) return null
 
   return (
-    <nav className={`fixed left-0 right-0 top-0 z-40 w-full transition-all duration-500 ${
+    <nav className={`fixed left-0 right-0 top-0 ${isUserMenuOpen ? 'z-[150]' : 'z-40'} w-full transition-all duration-500 ${
       isTransparent
         ? 'bg-transparent backdrop-blur-none border-b border-transparent shadow-none'
         : 'bg-white/60 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40'
@@ -321,7 +336,16 @@ export const Navbar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
-          <CurrencySwitcher menuClassName="animate-in fade-in zoom-in-95" />
+          <CurrencySwitcher
+            buttonClassName={
+              `border transition-colors duration-300 ease-out ${
+                isTransparent
+                  ? 'border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white'
+                  : 'border-transparent bg-transparent text-gray-600 hover:bg-amber-50/80 hover:text-amber-800'
+              }`
+            }
+            menuClassName="animate-in fade-in zoom-in-95"
+          />
 
           <Link
             href="/cart"

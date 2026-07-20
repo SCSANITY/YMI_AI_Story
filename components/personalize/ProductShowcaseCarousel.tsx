@@ -3,6 +3,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import NextImage from 'next/image'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { isSupabaseStorageImage } from '@/lib/storage-images'
 
 type ProductShowcaseCarouselProps = {
   bookId: string
@@ -16,6 +17,9 @@ type ProductShowcaseCarouselProps = {
 
 const toNextImagePreloadUrl = (src: string, width: 640 | 750) => {
   if (!src || src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/_next/image')) {
+    return src
+  }
+  if (isSupabaseStorageImage(src)) {
     return src
   }
 
@@ -32,6 +36,7 @@ function ProductShowcaseCarouselComponent({
   uploadPanelRef,
 }: ProductShowcaseCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0)
+  const [autoCycleResetKey, setAutoCycleResetKey] = useState(0)
   const [imageErrors, setImageErrors] = useState<Set<string>>(() => new Set())
   const [desktopThumbSize, setDesktopThumbSize] = useState(72)
   const [desktopMainSize, setDesktopMainSize] = useState(520)
@@ -65,15 +70,26 @@ function ProductShowcaseCarouselComponent({
     })
   }, [])
 
+  const resetAutoCycle = useCallback(() => {
+    setAutoCycleResetKey((value) => value + 1)
+  }, [])
+
+  const selectImage = useCallback((index: number) => {
+    resetAutoCycle()
+    setActiveIndex(index)
+  }, [resetAutoCycle])
+
   const goToPrevious = useCallback(() => {
     if (showcaseImages.length <= 1) return
+    resetAutoCycle()
     setActiveIndex((prev) => (prev - 1 + showcaseImages.length) % showcaseImages.length)
-  }, [showcaseImages.length])
+  }, [resetAutoCycle, showcaseImages.length])
 
   const goToNext = useCallback(() => {
     if (showcaseImages.length <= 1) return
+    resetAutoCycle()
     setActiveIndex((prev) => (prev + 1) % showcaseImages.length)
-  }, [showcaseImages.length])
+  }, [resetAutoCycle, showcaseImages.length])
 
   const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0]
@@ -105,18 +121,19 @@ function ProductShowcaseCarouselComponent({
 
   useEffect(() => {
     setActiveIndex(0)
+    setAutoCycleResetKey((value) => value + 1)
     setImageErrors(new Set())
   }, [bookId])
 
   useEffect(() => {
     if (showcaseImages.length <= 1) return
 
-    const interval = window.setInterval(() => {
+    const timer = window.setTimeout(() => {
       setActiveIndex((prev) => (prev + 1) % showcaseImages.length)
     }, 4000)
 
-    return () => window.clearInterval(interval)
-  }, [showcaseImages.length])
+    return () => window.clearTimeout(timer)
+  }, [activeIndex, autoCycleResetKey, showcaseImages.length])
 
   useEffect(() => {
     if (showcaseImages.length === 0) return
@@ -261,7 +278,7 @@ function ProductShowcaseCarouselComponent({
                     thumbRefs.current[index] = node
                   }}
                   type="button"
-                  onClick={() => setActiveIndex(index)}
+                  onClick={() => selectImage(index)}
                   className={`group relative aspect-square overflow-hidden rounded-[0.82rem] border transition-all duration-300 shrink-0 ${
                     isActive
                       ? 'border-amber-300/95 bg-white/85 ring-2 ring-amber-200/55 shadow-[0_8px_18px_-18px_rgba(217,119,6,0.24)]'
@@ -281,6 +298,7 @@ function ProductShowcaseCarouselComponent({
                       fill
                       sizes={isMobile ? '60px' : `${desktopThumbSize}px`}
                       loading="lazy"
+                      unoptimized={isSupabaseStorageImage(getImageSrc(image))}
                       onError={() => markImageError(image)}
                       className={`h-full w-full object-cover transition-transform duration-500 ${isActive ? 'scale-[1.04]' : 'scale-100 group-hover:scale-[1.03]'}`}
                     />
@@ -318,6 +336,7 @@ function ProductShowcaseCarouselComponent({
                 sizes={isMobile ? 'min(100vw, 430px)' : `${desktopMainSize}px`}
                 priority={activeIndex === 0}
                 fetchPriority={activeIndex === 0 ? 'high' : 'auto'}
+                unoptimized={isSupabaseStorageImage(activeImageSrc)}
                 onError={() => markImageError(activeImage)}
                 className="object-cover"
               />

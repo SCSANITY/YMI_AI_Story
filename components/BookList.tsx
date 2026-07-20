@@ -8,10 +8,41 @@ import { useI18n } from '@/lib/useI18n';
 import { BookCard } from '@/components/BookCard';
 import { useBookDisplayData } from '@/components/useBookDisplayData';
 import { useBookCatalog } from '@/components/useBookCatalog';
-import { AGE_GROUP_OPTIONS, parseStoryTypes } from '@/lib/book-catalog';
+import {
+  AGE_GROUP_OPTIONS,
+  catalogFilterKey,
+  normalizeCatalogFilterLabel,
+  normalizeTargetAudience,
+  parseStoryTypes,
+} from '@/lib/book-catalog';
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
 
 const FILTER_BAR_TOP_OFFSET = 72;
+
+function normalizeGenderQueryValue(rawValue: string | null) {
+  const normalized = normalizeTargetAudience(rawValue);
+  if (!rawValue || catalogFilterKey(rawValue) === 'all') return 'All';
+
+  return normalized === 'Boy' || normalized === 'Girl' ? normalized : 'All';
+}
+
+function uniqueFilterValues(values: unknown[]) {
+  const valuesByKey = new Map<string, string>();
+
+  values.forEach((value) => {
+    const label = normalizeCatalogFilterLabel(value);
+    const key = catalogFilterKey(label);
+    if (key && key !== 'all' && !valuesByKey.has(key)) valuesByKey.set(key, label);
+  });
+
+  return Array.from(valuesByKey.values()).sort((left, right) => left.localeCompare(right));
+}
+
+function resolveAvailableFilterValue(current: string, available: string[]) {
+  if (current === 'All') return current;
+  const currentKey = catalogFilterKey(current);
+  return available.find((value) => catalogFilterKey(value) === currentKey) ?? 'All';
+}
 
 function GlassSelect({ label, value, options, onChange }: {
   label: string
@@ -64,10 +95,15 @@ function GlassSelect({ label, value, options, onChange }: {
   )
 }
 
-export const BookList: React.FC = () => {
+type BookListProps = {
+  initialGenderQuery?: string | null;
+};
+
+export const BookList: React.FC<BookListProps> = ({ initialGenderQuery = null }) => {
+  const initialGender = normalizeGenderQueryValue(initialGenderQuery);
   const { toggleFavorite, favorites } = useGlobalContext();
   const { t } = useI18n();
-  const { books } = useBookCatalog();
+  const { books, hasResolved: hasCatalogResolved } = useBookCatalog();
   const { ratingMap } = useBookDisplayData();
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
 
@@ -76,7 +112,7 @@ export const BookList: React.FC = () => {
   const deferredSearch = useDeferredValue(search);
   const [category, setCategory] = useState('All');
   const [age, setAge] = useState('All');
-  const [gender, setGender] = useState('All');
+  const [gender, setGender] = useState(initialGender);
   const [suppressCardHover, setSuppressCardHover] = useState(false);
   const hoverResumeTimerRef = useRef<number | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -94,9 +130,18 @@ export const BookList: React.FC = () => {
   // Derive unique options from active templates.
   const categories = useMemo(() => {
     const storyTypes = books.flatMap((book) => book.storyTypes?.length ? book.storyTypes : parseStoryTypes(book.category))
-    return ['All', ...Array.from(new Set(storyTypes)).sort()]
+    return ['All', ...uniqueFilterValues(storyTypes)]
   }, [books]);
-  const genders = useMemo(() => ['All', ...Array.from(new Set(books.map(b => b.gender).filter(Boolean))).sort()], [books]);
+  const genders = useMemo(
+    () => ['All', ...uniqueFilterValues(books.map((book) => normalizeTargetAudience(book.gender)))],
+    [books]
+  );
+  const effectiveCategory = hasCatalogResolved
+    ? resolveAvailableFilterValue(category, categories)
+    : category;
+  const effectiveGender = hasCatalogResolved
+    ? resolveAvailableFilterValue(gender, genders)
+    : gender;
 
   // Filter Logic
   const filteredBooks = useMemo(() => {
@@ -114,13 +159,17 @@ export const BookList: React.FC = () => {
                             book.title.toLowerCase().includes(normalizedSearch) ||
                             book.author.toLowerCase().includes(normalizedSearch) ||
                             searchable.includes(normalizedSearch);
-      const matchesCategory = category === 'All' || storyTypes.includes(category);
+      const matchesCategory = effectiveCategory === 'All' || storyTypes.some(
+        (storyType) => catalogFilterKey(storyType) === catalogFilterKey(effectiveCategory)
+      );
       const matchesAge = age === 'All' || book.ageGroup === age;
-      const matchesGender = gender === 'All' || book.gender === gender;
+      const matchesGender =
+        effectiveGender === 'All' ||
+        catalogFilterKey(normalizeTargetAudience(book.gender)) === catalogFilterKey(effectiveGender);
 
       return matchesSearch && matchesCategory && matchesAge && matchesGender;
     });
-  }, [books, deferredSearch, category, age, gender]);
+  }, [books, deferredSearch, effectiveCategory, age, effectiveGender]);
 
   const pauseCardHover = () => {
     setSuppressCardHover(true);
@@ -235,7 +284,7 @@ const handlePersonalize = (bookID: string) => {
 };
 
   
-  const activeFilterCount = [category, age, gender].filter(x => x !== 'All').length;
+  const activeFilterCount = [effectiveCategory, age, effectiveGender].filter(x => x !== 'All').length;
 
   const categoryOptions = categories.map(c => ({ value: c, label: c === 'All' ? t('category.All') : c }))
   const ageOptions = [{ value: 'All', label: t('category.All') }, ...AGE_GROUP_OPTIONS]
@@ -303,9 +352,9 @@ const handlePersonalize = (bookID: string) => {
 
               {/* Glass selects */}
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
-                <GlassSelect label={t('bookList.filterType')} value={category} options={categoryOptions} onChange={(value) => { pauseCardHover(); setCategory(value); scrollToBooksTop(); }} />
+                <GlassSelect label={t('bookList.filterType')} value={effectiveCategory} options={categoryOptions} onChange={(value) => { pauseCardHover(); setCategory(value); scrollToBooksTop(); }} />
                 <GlassSelect label={t('bookList.filterAge')} value={age} options={ageOptions} onChange={(value) => { pauseCardHover(); setAge(value); scrollToBooksTop(); }} />
-                <GlassSelect label={t('bookList.filterFor')} value={gender} options={genderOptions} onChange={(value) => { pauseCardHover(); setGender(value); scrollToBooksTop(); }} />
+                <GlassSelect label={t('bookList.filterFor')} value={effectiveGender} options={genderOptions} onChange={(value) => { pauseCardHover(); setGender(value); scrollToBooksTop(); }} />
 
                 {activeFilterCount > 0 && (
                   <button

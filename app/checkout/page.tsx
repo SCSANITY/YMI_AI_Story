@@ -22,6 +22,7 @@ import {
 } from '@/lib/locale-pricing';
 import { getFooterLegalContent } from '@/lib/footer-legal-content';
 import { canEnterCustomize } from '@/lib/customize-access-client';
+import type { CartItem } from '@/types';
 
 const CheckoutIdentityModal = dynamic(
   () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
@@ -89,6 +90,13 @@ const EMPTY_SHIPPING_QUOTE: ShippingQuoteState = {
   selectedMethod: null,
   message: null,
 };
+
+const EMAIL_FORMAT_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function checkoutItemRequiresShipping(item: CartItem) {
+  return item.personalization?.bookType !== 'digital';
+}
+
 function CheckoutPageContent() {
   const router = useRouter();
   const { t, language } = useI18n();
@@ -115,6 +123,10 @@ function CheckoutPageContent() {
   const isMultiOrderCheckout = items.length > 1;
   const total = useMemo(
     () => items.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0),
+    [items]
+  );
+  const requiresShipping = useMemo(
+    () => items.some(checkoutItemRequiresShipping),
     [items]
   );
 
@@ -178,17 +190,18 @@ function CheckoutPageContent() {
   );
   const [shippingQuote, setShippingQuote] = useState<ShippingQuoteState>(EMPTY_SHIPPING_QUOTE);
   const selectedShippingOption = useMemo(() => {
+    if (!requiresShipping) return null;
     if (shippingQuote.status !== 'available') return null;
     return (
       shippingQuote.options.find((option) => option.methodCode === shippingQuote.selectedMethod) ??
       shippingQuote.options[0] ??
       null
     );
-  }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
-  const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
+  }, [requiresShipping, shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
+  const shippingAmountUsd = requiresShipping && selectedShippingOption ? selectedShippingOption.amountUsd : 0;
   const shippingDiscountTotalUsd = useMemo(
-    () => Math.min(shippingAmountUsd, Math.max(0, shippingDiscountAmountUsd)),
-    [shippingAmountUsd, shippingDiscountAmountUsd]
+    () => requiresShipping ? Math.min(shippingAmountUsd, Math.max(0, shippingDiscountAmountUsd)) : 0,
+    [requiresShipping, shippingAmountUsd, shippingDiscountAmountUsd]
   );
   const netShippingAmountUsd = useMemo(
     () => Math.max(0, shippingAmountUsd - shippingDiscountTotalUsd),
@@ -248,6 +261,10 @@ function CheckoutPageContent() {
     phone: '',
     company: '',
   });
+  const checkoutContactEmail = useMemo(
+    () => form.email.trim() || checkoutEmail.trim() || user?.email || '',
+    [checkoutEmail, form.email, user?.email]
+  );
   const selectedIdsFromQuery = useMemo(() => {
     const raw = searchParams?.get('ids');
     if (!raw) return [];
@@ -295,7 +312,27 @@ function CheckoutPageContent() {
     company: form.company.trim(),
   }), [form]);
 
-  const canUseShippingQuote = shippingQuote.status === 'available' && Boolean(selectedShippingOption);
+  const checkoutShippingContext = useMemo(() => {
+    if (!requiresShipping) {
+      return {
+        shippingAddress: { email: checkoutContactEmail },
+        shippingAmountUsd: 0,
+        shippingMethod: null,
+        shippingZoneCode: null,
+        shippingRateSnapshot: null,
+      };
+    }
+
+    return {
+      shippingAddress: shippingAddressPayload,
+      shippingAmountUsd,
+      shippingMethod: selectedShippingOption?.methodCode ?? null,
+      shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
+      shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
+    };
+  }, [checkoutContactEmail, requiresShipping, selectedShippingOption, shippingAddressPayload, shippingAmountUsd]);
+
+  const canUseShippingQuote = !requiresShipping || (shippingQuote.status === 'available' && Boolean(selectedShippingOption));
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -310,6 +347,18 @@ function CheckoutPageContent() {
     hasManualCurrencySelectionRef.current = true;
     setSelectedCurrency(currency);
   }, []);
+
+  useEffect(() => {
+    if (!items.length || requiresShipping || step !== 'address') return;
+    setStep('payment');
+  }, [items.length, requiresShipping, step]);
+
+  useEffect(() => {
+    if (!items.length || requiresShipping) return;
+    const email = checkoutEmail || user?.email || '';
+    if (!email) return;
+    setForm((prev) => prev.email ? prev : { ...prev, email });
+  }, [checkoutEmail, items.length, requiresShipping, user?.email]);
 
   const primaryCheckoutItem = useMemo(() => (items.length === 1 ? items[0] : null), [items]);
   const checkoutSourceTarget = useMemo(() => {
@@ -414,7 +463,7 @@ function CheckoutPageContent() {
     if (!queryOrderId) return;
     let cancelled = false;
 
-    fetch(`/api/orders?orderId=${encodeURIComponent(queryOrderId)}`, { credentials: 'include' })
+    fetch(`/api/orders?orderId=${encodeURIComponent(queryOrderId)}`, { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : { orders: [] }))
       .then((data) => {
         if (cancelled) return;
@@ -624,6 +673,7 @@ function CheckoutPageContent() {
   }, [resetIdentityVerification, setCheckoutEmail, skipIdentityVerification, user?.email]);
 
   const stepNumber = useMemo(() => {
+    if (!requiresShipping) return 1;
     switch (step) {
       case 'address':
         return 1;
@@ -633,21 +683,24 @@ function CheckoutPageContent() {
       default:
         return 1;
     }
-  }, [step]);
+  }, [requiresShipping, step]);
+  const totalSteps = requiresShipping ? 2 : 1;
 
-  const canGoBackStep = step === 'payment';
-  const canGoBackToSource = step === 'address';
+  const canGoBackStep = requiresShipping && step === 'payment';
+  const canGoBackToSource = step === 'address' || (!requiresShipping && step === 'payment');
 
   const goBackStep = useCallback(() => {
     setFormError('');
     switch (step) {
       case 'payment':
-        setStep('address');
+        if (requiresShipping) {
+          setStep('address');
+        }
         break;
       default:
         break;
     }
-  }, [step]);
+  }, [requiresShipping, step]);
 
   const goBackToSource = useCallback(() => {
     if (
@@ -684,14 +737,18 @@ function CheckoutPageContent() {
   const chooseGuestIdentity = useCallback(async () => {
     const targetEmail = form.email.trim();
     if (!targetEmail) {
-      setIdentityOtpError(t('checkout.identityEmailRequiredError'));
+      setIdentityOtpError(requiresShipping ? t('checkout.identityEmailRequiredError') : t('checkout.emailRequiredError'));
+      return;
+    }
+    if (!EMAIL_FORMAT_PATTERN.test(targetEmail)) {
+      setIdentityOtpError(t('checkout.emailInvalidError'));
       return;
     }
     setIdentityMode('guest');
     setIdentityEmail(targetEmail);
     setIdentityVerified(false);
     await requestIdentityOtp(targetEmail);
-  }, [form.email, requestIdentityOtp, t]);
+  }, [form.email, requestIdentityOtp, requiresShipping, t]);
 
   const chooseAuthIdentity = useCallback(async () => {
     if (user?.email) {
@@ -776,11 +833,11 @@ function CheckoutPageContent() {
           orderId,
           code,
           customerId: user?.customerId ?? null,
-          email: form.email.trim().toLowerCase() || checkoutEmail.trim().toLowerCase() || null,
+          email: checkoutContactEmail.trim().toLowerCase() || null,
           shippingAmountUsd,
-          shippingMethod: selectedShippingOption?.methodCode ?? null,
-          shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
-          shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
+          shippingMethod: checkoutShippingContext.shippingMethod,
+          shippingZoneCode: checkoutShippingContext.shippingZoneCode,
+          shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
         }),
       });
 
@@ -826,7 +883,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [appliedProductCode, appliedProductDiscountInstrumentId, appliedShippingCode, appliedShippingDiscountInstrumentId, checkoutEmail, form.email, orderId, selectedShippingOption, shippingAmountUsd, t, user?.customerId]);
+  }, [appliedProductCode, appliedProductDiscountInstrumentId, appliedShippingCode, appliedShippingDiscountInstrumentId, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, user?.customerId]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
     if (!orderId) {
@@ -851,9 +908,9 @@ function CheckoutPageContent() {
           orderId,
           instrumentId: instrumentId ?? '',
           shippingAmountUsd,
-          shippingMethod: selectedShippingOption?.methodCode ?? null,
-          shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
-          shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
+          shippingMethod: checkoutShippingContext.shippingMethod,
+          shippingZoneCode: checkoutShippingContext.shippingZoneCode,
+          shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
         }),
       });
 
@@ -884,7 +941,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [orderId, rewardVouchers, selectedShippingOption, shippingAmountUsd, t, user?.customerId]);
+  }, [checkoutShippingContext, orderId, rewardVouchers, shippingAmountUsd, t, user?.customerId]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
     if (!orderId) return false;
@@ -957,15 +1014,15 @@ function CheckoutPageContent() {
     try {
       const payload = {
         orderId,
-        email: form.email.trim(),
+        email: checkoutContactEmail,
         paymentMethod: 'card',
         isGuest: mode === 'guest',
         currency: selectedCurrency,
-        shippingAddress: shippingAddressPayload,
-        shippingAmountUsd,
-        shippingMethod: selectedShippingOption?.methodCode ?? null,
-        shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
-        shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
+        shippingAddress: checkoutShippingContext.shippingAddress,
+        shippingAmountUsd: checkoutShippingContext.shippingAmountUsd,
+        shippingMethod: checkoutShippingContext.shippingMethod,
+        shippingZoneCode: checkoutShippingContext.shippingZoneCode,
+        shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
         items: items.map(item => ({
           id: item.id,
           bookID: item.bookID,
@@ -990,7 +1047,7 @@ function CheckoutPageContent() {
       const displayId = data?.displayId ?? null;
 
       removeOrderedItems(items.map(item => item.id));
-      setCompletedOrder({ id: newOrderId, displayId: displayId ?? undefined, total: orderTotalUsd, email: form.email.trim() });
+      setCompletedOrder({ id: newOrderId, displayId: displayId ?? undefined, total: orderTotalUsd, email: checkoutContactEmail });
       setOrderId(null);
       clearCheckout();
       didFinalizeRef.current = true;
@@ -1021,15 +1078,15 @@ function CheckoutPageContent() {
     setIsPlacingOrder(true);
     const payload = {
       orderId,
-      email: form.email.trim(),
+      email: checkoutContactEmail,
       customerId: user?.customerId ?? null,
       isGuest: mode === 'guest',
       currency: selectedCurrency,
-      shippingAddress: shippingAddressPayload,
-      shippingAmountUsd,
-      shippingMethod: selectedShippingOption?.methodCode ?? null,
-      shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
-      shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
+      shippingAddress: checkoutShippingContext.shippingAddress,
+      shippingAmountUsd: checkoutShippingContext.shippingAmountUsd,
+      shippingMethod: checkoutShippingContext.shippingMethod,
+      shippingZoneCode: checkoutShippingContext.shippingZoneCode,
+      shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
       billingAddress: null,
       items: items.map((item) => ({
         id: item.id,
@@ -1064,12 +1121,18 @@ function CheckoutPageContent() {
   const handlePlaceOrder = () => {
     if (isPlacingOrderRef.current || isPlacingOrder) return;
 
-    if (!form.email.trim()) {
+    const normalizedEmail = checkoutContactEmail.trim();
+    if (!normalizedEmail) {
       setFormError(t('checkout.emailRequiredError'));
       return;
     }
 
-    if (!canUseShippingQuote) {
+    if (!EMAIL_FORMAT_PATTERN.test(normalizedEmail)) {
+      setFormError(t('checkout.emailInvalidError'));
+      return;
+    }
+
+    if (requiresShipping && !canUseShippingQuote) {
       setFormError(shippingQuote.message || t('checkout.shippingUnavailable'));
       return;
     }
@@ -1110,7 +1173,7 @@ function CheckoutPageContent() {
     const payload = {
       customerId: user?.customerId ?? null,
       orderId,
-      email: form.email?.trim() || null,
+      email: checkoutContactEmail || null,
         items: selected.map(item => ({
           cartItemId: item.id,
           creationId: item.creationId ?? item.personalization?.creationId ?? null,
@@ -1139,7 +1202,7 @@ function CheckoutPageContent() {
     setActiveCartItemIds(prev => Array.from(new Set([...prev, ...ids])));
     setCheckoutStarted(true);
     return true;
-  }, [user?.customerId, orderId, form.email]);
+  }, [user?.customerId, orderId, checkoutContactEmail]);
 
   const handleRemoveCheckoutItem = async (itemId: string) => {
     setFormError('');
@@ -1299,7 +1362,7 @@ function CheckoutPageContent() {
         </div>
         <div>
           <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('checkout.title')}</h1>
-          <p className="text-gray-500 text-sm">{t('checkout.step', { step: stepNumber, total: 2 })}</p>
+          <p className="text-gray-500 text-sm">{t('checkout.step', { step: stepNumber, total: totalSteps })}</p>
         </div>
       </div>
 
@@ -1376,6 +1439,36 @@ function CheckoutPageContent() {
                   </div>
                 </div>
 
+                {!requiresShipping ? (
+                  <div className="rounded-[24px] border border-white/80 bg-white/72 p-4 shadow-[0_10px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500" htmlFor="digital-checkout-email">
+                      {t('checkout.emailRequired')}
+                    </label>
+                    <input
+                      id="digital-checkout-email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={form.email}
+                      onChange={(event) => {
+                        const email = event.target.value;
+                        setForm((prev) => ({ ...prev, email }));
+                        setCheckoutEmail(email.trim());
+                        setFormError('');
+                        setIdentityOtpError('');
+                      }}
+                      onBlur={() => {
+                        const email = form.email.trim();
+                        if (email && !EMAIL_FORMAT_PATTERN.test(email)) {
+                          setFormError(t('checkout.emailInvalidError'));
+                        }
+                      }}
+                      placeholder={t('checkout.emailRequired')}
+                      className="mt-2 h-12 w-full rounded-2xl border-2 border-gray-200 bg-white px-4 text-base font-semibold text-gray-900 transition placeholder:font-normal placeholder:text-gray-400 focus:border-amber-400 focus:outline-none"
+                    />
+                  </div>
+                ) : null}
+
                 <DiscountSection
                   isOpen={isPaymentOffersOpen}
                   onToggleOpen={() => setIsPaymentOffersOpen((prev) => !prev)}
@@ -1438,6 +1531,7 @@ function CheckoutPageContent() {
 
         <CheckoutSummaryPanel
           hiddenOnPaymentStep={isPaymentStep}
+          showShipping={requiresShipping}
           shippingStatus={shippingQuote.status}
           estimatedDelivery={selectedShippingOption?.estimatedDelivery}
           discountTotalUsd={discountTotalUsd}

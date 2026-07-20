@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from 'react'
 import Image from 'next/image'
+import { isSupabaseStorageImage } from '@/lib/storage-images'
 
 type BookCardCoverProps = {
   src: string
@@ -31,6 +32,7 @@ export function BookCardCover({
   isMuted = false,
 }: BookCardCoverProps) {
   const cutout = isCutoutImage(src)
+  const unoptimized = isSupabaseStorageImage(src)
   const imageStyle: CSSProperties | undefined = coverZoom ? { transform: `scale(${coverZoom})` } : undefined
 
   if (cutout) {
@@ -47,6 +49,7 @@ export function BookCardCover({
             loading={loading === 'eager' ? undefined : loading}
             decoding={decoding}
             fetchPriority={fetchPriority}
+            unoptimized={unoptimized}
             style={imageStyle}
             className={`block h-auto w-full select-none book-cover-img ${isMuted ? 'blur-[1.5px] opacity-65' : ''}`}
           />
@@ -69,6 +72,7 @@ export function BookCardCover({
         sizes={BOOK_CARD_IMAGE_SIZES}
         priority={loading === 'eager'}
         fetchPriority={fetchPriority}
+        unoptimized={unoptimized}
         style={imageStyle}
         className={`h-full w-full object-cover ${isMuted ? 'blur-[1.5px] opacity-65 saturate-75' : ''}`}
       />

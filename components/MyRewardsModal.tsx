@@ -120,6 +120,7 @@ export const MyRewardsModal: React.FC<MyRewardsModalProps> = ({ open, user, onCl
 
     fetch('/api/account/reward-vouchers', {
       credentials: 'include',
+      cache: 'no-store',
     })
       .then((res) => (res.ok ? res.json() : res.json().then((data) => Promise.reject(data))))
       .then((data) => {

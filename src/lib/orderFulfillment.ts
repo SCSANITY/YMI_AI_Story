@@ -5,6 +5,8 @@ import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import { normalizeOrderStatus, type OrderStatus } from '@/lib/order-status'
 import { shippingStreet } from '@/lib/shipping-address'
+import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import { isFinalJobReleased } from '@/lib/purchase-state'
 
 type StoryLanguage = 'English'
 
@@ -83,6 +85,7 @@ type FinalizeOrderInput = {
   currency?: string
   cartItemIds?: string[]
   receiptItems?: CheckoutItemInput[]
+  deferPostPaymentWork?: boolean
 }
 
 type FinalizeOrderResult = {
@@ -102,6 +105,9 @@ type CartItemForFinal = {
   creations: {
     template_id: string | null
     customize_snapshot: CustomizeSnapshot | null
+    templates?: {
+      name?: string | null
+    } | null
   } | null
 }
 
@@ -195,6 +201,72 @@ async function loadFinalJobIdsByCartItem(cartItemIds: string[]) {
   return result
 }
 
+type ReusableFinalJobRow = {
+  job_id: string | null
+  creation_id: string | null
+  review_status?: string | null
+  released_at?: string | null
+  created_at: string | null
+}
+
+async function loadReusableFinalJobIdsByCreation(creationIds: string[]) {
+  const result = new Map<string, string>()
+  const chosenRows = new Map<string, ReusableFinalJobRow>()
+  const uniqueCreationIds = Array.from(new Set(creationIds.filter(Boolean)))
+  if (!uniqueCreationIds.length) return result
+
+  const { data: finalJobs, error: finalJobsError } = await supabaseAdmin
+    .from('final_jobs')
+    .select('job_id, creation_id, review_status, released_at, created_at')
+    .in('creation_id', uniqueCreationIds)
+
+  if (finalJobsError) {
+    throw new Error(`Failed to check reusable final jobs: ${finalJobsError.message}`)
+  }
+
+  for (const row of (finalJobs ?? []) as ReusableFinalJobRow[]) {
+    const creationId = String(row.creation_id || '')
+    const jobId = String(row.job_id || '')
+    if (!creationId || !jobId) continue
+
+    const current = chosenRows.get(creationId)
+    const rowReleased = isFinalJobReleased(row)
+    const currentReleased = isFinalJobReleased(current)
+    const rowCreatedAt = Date.parse(String(row.created_at || '')) || 0
+    const currentCreatedAt = Date.parse(String(current?.created_at || '')) || 0
+    if (!current || (rowReleased && !currentReleased) || (rowReleased === currentReleased && rowCreatedAt > currentCreatedAt)) {
+      chosenRows.set(creationId, row)
+      result.set(creationId, jobId)
+    }
+  }
+
+  const unresolvedCreationIds = uniqueCreationIds.filter((creationId) => !result.has(creationId))
+  if (!unresolvedCreationIds.length) return result
+
+  // A finalize call may have created the worker job but not its review row yet.
+  // Reuse that in-flight job as well so recovery never queues a second render.
+  const { data: jobs, error: jobsError } = await supabaseAdmin
+    .from('jobs')
+    .select('job_id, creation_id, created_at')
+    .eq('job_type', 'final')
+    .in('creation_id', unresolvedCreationIds)
+    .order('created_at', { ascending: false })
+
+  if (jobsError) {
+    throw new Error(`Failed to check reusable final worker jobs: ${jobsError.message}`)
+  }
+
+  for (const row of jobs ?? []) {
+    const creationId = String(row.creation_id || '')
+    const jobId = String(row.job_id || '')
+    if (creationId && jobId && !result.has(creationId)) {
+      result.set(creationId, jobId)
+    }
+  }
+
+  return result
+}
+
 async function loadFinalPageIndices(configUrl: string): Promise<number[]> {
   const response = await fetch(configUrl, { cache: 'no-store' })
   if (!response.ok) {
@@ -253,7 +325,10 @@ async function loadOrderItemsForFinal(orderId: string, cartItemIds?: string[]): 
         quantity,
         creations:creations (
           template_id,
-          customize_snapshot
+          customize_snapshot,
+          templates:templates (
+            name
+          )
         )
       `
     )
@@ -329,6 +404,7 @@ export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderIt
         quantity,
         creations:creations (
           template_id,
+          customize_snapshot,
           preview_job_id,
           templates:templates ( name )
         )
@@ -367,7 +443,11 @@ export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderIt
   return items.map((r) => {
     const previewJobId = r.creations?.preview_job_id as string | undefined
     return {
-      name: String(r.creations?.templates?.name || r.creations?.template_id || 'Custom Story Book'),
+      name: resolvePersonalizedBookTitle({
+        templateId: r.creations?.template_id,
+        templateName: r.creations?.templates?.name,
+        customizeSnapshot: r.creations?.customize_snapshot,
+      }),
       quantity: Number(r.quantity ?? 1),
       coverImageUrl: previewJobId ? coverByJob.get(previewJobId) : undefined,
     }
@@ -391,6 +471,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     currency = 'usd',
     cartItemIds,
     receiptItems = [],
+    deferPostPaymentWork = false,
   } = params
 
   if (!orderId) throw new Error('Missing orderId')
@@ -514,16 +595,36 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   const cartItems = await loadOrderItemsForFinal(orderId, cartItemIds)
   const effectiveCartItemIds = cartItems.map((item) => item.cart_item_id)
 
+  if (deferPostPaymentWork) {
+    return {
+      orderId,
+      displayId: existingOrder.display_id ?? null,
+      paymentId,
+      cartItemIds: effectiveCartItemIds,
+      status: 'paid',
+    }
+  }
+
   try {
+    const cartItemById = new Map(cartItems.map((item) => [item.cart_item_id, item]))
     const emailItems =
       receiptItems.length > 0
         ? receiptItems.map((item) => ({
-            name: String(item.bookID || 'Custom Story Book'),
+            name: resolvePersonalizedBookTitle({
+              templateId: cartItemById.get(item.id)?.creations?.template_id ?? item.bookID,
+              templateName: cartItemById.get(item.id)?.creations?.templates?.name,
+              customizeSnapshot: cartItemById.get(item.id)?.creations?.customize_snapshot,
+              fallbackTitle: item.bookID,
+            }),
             quantity: Number(item.quantity ?? 1),
             unitPrice: convertUsdToCurrency(Number(item.priceAtPurchase ?? 0), normalizedCurrency),
           }))
         : cartItems.map((item) => ({
-            name: String(item.creations?.template_id || 'Custom Story Book'),
+            name: resolvePersonalizedBookTitle({
+              templateId: item.creations?.template_id,
+              templateName: item.creations?.templates?.name,
+              customizeSnapshot: item.creations?.customize_snapshot,
+            }),
             quantity: Number(item.quantity ?? 1),
             unitPrice: convertUsdToCurrency(Number(item.price_at_purchase ?? 0), normalizedCurrency),
           }))
@@ -562,6 +663,19 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     const existingJobsByCartItem = await loadFinalJobIdsByCartItem(effectiveCartItemIds)
     for (const [cartItemId, jobId] of existingJobsByCartItem.entries()) {
       jobIdByCartItem.set(cartItemId, jobId)
+    }
+  }
+
+  const unresolvedCreationIds = cartItems
+    .filter((item) => !jobIdByCartItem.has(item.cart_item_id))
+    .map((item) => item.creation_id)
+    .filter((creationId): creationId is string => Boolean(creationId))
+  const reusableJobIdByCreation = await loadReusableFinalJobIdsByCreation(unresolvedCreationIds)
+  for (const item of cartItems) {
+    if (jobIdByCartItem.has(item.cart_item_id) || !item.creation_id) continue
+    const reusableJobId = reusableJobIdByCreation.get(item.creation_id)
+    if (reusableJobId) {
+      jobIdByCartItem.set(item.cart_item_id, reusableJobId)
     }
   }
 
@@ -749,7 +863,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
             const { data: existingFinalJob } = await supabaseAdmin
               .from('final_jobs')
               .select('final_job_id')
-              .eq('cart_item_id', item.cart_item_id)
+              .eq('job_id', jobId)
               .maybeSingle()
             finalJobId = existingFinalJob?.final_job_id ? String(existingFinalJob.final_job_id) : null
           }

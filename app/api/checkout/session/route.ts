@@ -19,6 +19,7 @@ import {
   requireCheckoutOrderAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
+import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 
 type SessionItemInput = {
   id?: string
@@ -42,11 +43,11 @@ export async function POST(request: Request) {
     const body = await request.json()
     const orderId = String(body?.orderId || '').trim()
     const email = String(body?.email || '').trim().toLowerCase()
-    const shippingAddress = body?.shippingAddress ?? {}
-    const shippingAmountUsd = Math.max(0, Number(body?.shippingAmountUsd ?? 0))
-    const shippingRateSnapshot = body?.shippingRateSnapshot ?? null
-    const shippingMethod = body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null
-    const shippingZoneCode = body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null
+    let shippingAddress = body?.shippingAddress ?? {}
+    let shippingAmountUsd = Math.max(0, Number(body?.shippingAmountUsd ?? 0))
+    let shippingRateSnapshot = body?.shippingRateSnapshot ?? null
+    let shippingMethod = body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null
+    let shippingZoneCode = body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null
     const billingAddress = body?.billingAddress ?? null
     const isGuest = Boolean(body?.isGuest)
     const currency = normalizeCheckoutCurrency(body?.currency) as CheckoutCurrency
@@ -79,6 +80,37 @@ export async function POST(request: Request) {
     }
     if (order.order_status !== 'unpaid') {
       return NextResponse.json({ error: 'Order is no longer payable' }, { status: 400 })
+    }
+
+    let cartItemTypesQuery = supabaseAdmin
+      .from('cart_items')
+      .select('cart_item_id, product_type')
+      .eq('order_id', orderId)
+      .eq('status', 'ordered')
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
+
+    if (selectedCartItemIds.length > 0) {
+      cartItemTypesQuery = cartItemTypesQuery.in('cart_item_id', selectedCartItemIds)
+    }
+
+    const { data: cartItemTypes, error: cartItemTypesError } = await cartItemTypesQuery
+    if (cartItemTypesError || !cartItemTypes || cartItemTypes.length === 0) {
+      return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
+    }
+
+    const selectedRowsComplete =
+      selectedCartItemIds.length === 0 || cartItemTypes.length === selectedCartItemIds.length
+    const hasOnlyEbookItems =
+      selectedRowsComplete &&
+      cartItemTypes.every((item) => item.product_type === 'ebook')
+
+    if (hasOnlyEbookItems) {
+      shippingAddress = { email }
+      shippingAmountUsd = 0
+      shippingRateSnapshot = null
+      shippingMethod = null
+      shippingZoneCode = null
     }
 
     const { error: orderUpdateError } = await supabaseAdmin
@@ -121,6 +153,7 @@ export async function POST(request: Request) {
         price_at_purchase,
         creations:creations(
           template_id,
+          customize_snapshot,
           templates:templates(name)
         )
       `
@@ -144,7 +177,11 @@ export async function POST(request: Request) {
         const qty = Math.max(1, Number(item.quantity ?? 1))
         const unitPriceUsd = Math.max(0, Number(item.price_at_purchase ?? 0))
         const templateId = item?.creations?.template_id ?? 'custom-story-book'
-        const title = item?.creations?.templates?.name ?? `Story Book (${templateId})`
+        const title = resolvePersonalizedBookTitle({
+          templateId,
+          templateName: item?.creations?.templates?.name,
+          customizeSnapshot: item?.creations?.customize_snapshot,
+        })
         return {
           id: item.cart_item_id,
           name: qty > 1 ? `${title} x${qty}` : title,

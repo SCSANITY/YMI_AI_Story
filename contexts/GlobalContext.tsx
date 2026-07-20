@@ -5,6 +5,7 @@ import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
 import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, parseTemplateAmount, templateStorageUrl } from '@/lib/book-catalog';
+import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title';
 import {
   login as loginAction,
   signup as signupAction,
@@ -157,6 +158,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Book[]>([]);
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const [checkoutEmail, setCheckoutEmail] = useState('');
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -249,8 +251,15 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         normalized_cover_image_path: row.preview_cover_url || '',
       };
       const baseBook = templateRelationToBook(templateId, template, fallbackBook, Number(row.price_at_purchase ?? 0) || 0);
+      const displayTitle = resolvePersonalizedBookTitle({
+        templateId,
+        templateName: creation.templates?.name,
+        fallbackTitle: fallbackBook?.title,
+        customizeSnapshot: creation.customize_snapshot,
+      });
       const book = {
         ...baseBook,
+        title: displayTitle,
         coverUrl: row.preview_cover_url || '',
         showcaseImages: row.preview_cover_url ? [row.preview_cover_url] : [],
       };
@@ -311,7 +320,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const refreshFavoritesFromDb = useCallback(async () => {
     if (favoriteTogglePendingRef.current) return;
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-    const response = await fetch(`/api/favourites${params}`, { credentials: 'include' });
+    const response = await fetch(`/api/favourites${params}`, { credentials: 'include', cache: 'no-store' });
     if (!response.ok || favoriteTogglePendingRef.current) return;
     const data = await response.json();
     const items = Array.isArray(data?.items) ? data.items : [];
@@ -341,17 +350,26 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [user?.customerId, mapCartItems]);
 
   useEffect(() => {
+    if (!isHydrated) return;
+
     let isActive = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    setIsFavoritesLoading(true);
 
     const loadFavoritesFromDb = async () => {
-      const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-      const response = await fetch(`/api/favourites${params}`, { credentials: 'include' });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (!isActive) return;
-      const items = Array.isArray(data?.items) ? data.items : [];
-      setFavorites(mapFavouriteItems(items));
+      try {
+        const params = user?.customerId ? `?customerId=${user.customerId}` : '';
+        const response = await fetch(`/api/favourites${params}`, { credentials: 'include', cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!isActive || favoriteTogglePendingRef.current) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setFavorites(mapFavouriteItems(items));
+      } catch {
+        // Keep the current in-memory favorites; the next focus/interval refresh can recover.
+      } finally {
+        if (isActive) setIsFavoritesLoading(false);
+      }
     };
 
     loadFavoritesFromDb();
@@ -377,7 +395,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       isActive = false;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [mapFavouriteItems, refreshFavoritesFromDb, user?.customerId]);
+  }, [isHydrated, mapFavouriteItems, refreshFavoritesFromDb, user?.customerId]);
 
   useEffect(() => {
     if (user) localStorage.setItem('ymi_user', JSON.stringify(user));
@@ -647,7 +665,18 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           ? book.price + 50
           : book.price
 
-      const bookWithPreview = previewCoverUrl ? { ...book, coverUrl: previewCoverUrl } : book
+      const displayTitle = resolvePersonalizedBookTitle({
+        templateId: book.bookID,
+        templateName: book.title,
+        customizeSnapshot: {
+          textOverrides: personalization?.textOverrides,
+        },
+        childName: personalization?.childName,
+      })
+      const bookWithTitle = { ...book, title: displayTitle }
+      const bookWithPreview = previewCoverUrl
+        ? { ...bookWithTitle, coverUrl: previewCoverUrl }
+        : bookWithTitle
 
       const creationId = personalization?.creationId ?? null
       if (!creationId) {
@@ -947,6 +976,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
+          keepalive: true,
           body: JSON.stringify({
             templateId: book.bookID,
             customerId: user?.customerId ?? null,
@@ -1002,6 +1032,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     displayCurrency,
     cart,
     favorites,
+    isFavoritesLoading,
     checkoutEmail,
     checkoutItems,
     resumeData,
@@ -1041,6 +1072,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     displayCurrency,
     cart,
     favorites,
+    isFavoritesLoading,
     checkoutEmail,
     checkoutItems,
     resumeData,

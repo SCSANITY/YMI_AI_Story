@@ -8,10 +8,11 @@ import type { OrderDetail, OrderItem } from './orderDetailTypes'
 type OrderDetailPanelsProps = {
   items: OrderItem[]
   order: OrderDetail
+  stripeSessionId?: string | null
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string
 }
 
-export function OrderDetailPanels({ items, order, t }: OrderDetailPanelsProps) {
+export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDetailPanelsProps) {
   const address = order.shipping_address ?? {}
 
   return (
@@ -24,6 +25,8 @@ export function OrderDetailPanels({ items, order, t }: OrderDetailPanelsProps) {
               <span className="relative block h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-100 shadow-md shadow-black/10">
                 <OrderCoverImage
                   cartItemId={item.cart_item_id}
+                  orderId={order.order_id}
+                  stripeSessionId={stripeSessionId}
                   src={item.preview_cover_url ?? item.cover_url ?? null}
                   status={item.preview_cover_status ?? item.cover_status}
                   alt={item.template_name || 'Order item'}

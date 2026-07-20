@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { BookList } from '@/components/BookList'
+import { Suspense } from 'react'
+import { BooksFilterBridge } from '@/components/BooksFilterBridge'
 import { Footer } from '@/components/Footer'
 import { publicPageMetadata } from '@/lib/seo'
 
@@ -12,7 +13,9 @@ export const metadata: Metadata = publicPageMetadata({
 export default function BooksPage() {
   return (
     <>
-      <BookList />
+      <Suspense fallback={null}>
+        <BooksFilterBridge />
+      </Suspense>
       <Footer />
     </>
   )

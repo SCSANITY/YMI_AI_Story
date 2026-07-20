@@ -20,6 +20,8 @@ type ChildDetailsFieldsProps = {
     agePlaceholder: string
     noHistory: string
   }
+  ageRangeWarning?: string | null
+  minimumRecommendedAge?: number
   onLoadProfiles: () => void
   onChange: (details: { name: string; age: string }) => void
   onDeleteProfileValue: (payload: { field: 'name' | 'age'; value: string | number }) => void
@@ -32,6 +34,8 @@ function ChildDetailsFieldsComponent({
   seedVersion,
   recentProfiles,
   labels,
+  ageRangeWarning,
+  minimumRecommendedAge,
   onLoadProfiles,
   onChange,
   onDeleteProfileValue,
@@ -85,6 +89,11 @@ function ChildDetailsFieldsComponent({
       )
     )
   ), [recentProfiles])
+  const shouldShowAgeRangeWarning = useMemo(() => {
+    if (!ageRangeWarning || !minimumRecommendedAge) return false
+    const parsedAge = Number.parseFloat(age.trim())
+    return Number.isFinite(parsedAge) && parsedAge < minimumRecommendedAge
+  }, [age, ageRangeWarning, minimumRecommendedAge])
 
   const handleNameChange = useCallback((value: string) => {
     setName(value)
@@ -188,6 +197,11 @@ function ChildDetailsFieldsComponent({
           placeholder={labels.agePlaceholder}
           className="h-12 w-full rounded-2xl px-4 text-[15px] font-semibold text-slate-950 placeholder:text-slate-400/70 glass-input"
         />
+        {shouldShowAgeRangeWarning ? (
+          <p className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs font-medium leading-5 text-amber-700">
+            {ageRangeWarning}
+          </p>
+        ) : null}
         {showAgeHistory && (
           <div
             className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 max-h-44 overflow-auto"

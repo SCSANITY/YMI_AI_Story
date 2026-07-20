@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
+import { getEmptyPurchaseSummary, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
 
-const MY_BOOKS_CACHE_CONTROL = 'private, max-age=60'
+const MY_BOOKS_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 type Owner = {
   ownerType: 'customer' | 'anon'
@@ -33,7 +34,9 @@ function resolveOwner(request: Request, customerId: string | null): Owner | null
   return { ownerType: 'anon', ownerId: anonSessionId }
 }
 
-function buildOwnerScopedQuery(query: any, owner: Owner) {
+// Supabase query builders have very deep generated types here; keep this helper dynamic.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildOwnerScopedQuery(query: any, owner: Owner): any {
   if (owner.ownerType === 'customer') {
     return query.eq('owner_type', 'customer').eq('customer_id', owner.ownerId)
   }
@@ -99,7 +102,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to load items' }, { status: 500 })
   }
 
-  const visibleRows = (items ?? []).filter((row: { is_archived?: boolean | null }) => row?.is_archived !== true)
+  const allRows = items ?? []
+  const purchaseSummaryByCreation = await loadPurchaseSummaryByCreation(
+    allRows.map((row: { creation_id?: string | null }) => String(row.creation_id || '')).filter(Boolean)
+  )
+  const visibleRows = allRows.filter((row: { creation_id?: string | null; is_archived?: boolean | null }) => {
+    const summary = purchaseSummaryByCreation.get(String(row.creation_id || '')) ?? getEmptyPurchaseSummary()
+    return summary.purchaseState !== 'unpurchased' || row?.is_archived !== true
+  })
   const jobIds = visibleRows
     .map((row: { preview_job_id?: string | null }) => row.preview_job_id)
     .filter((value: string | null) => Boolean(value))
@@ -139,10 +149,14 @@ export async function GET(request: Request) {
     signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
   }
 
-  const enriched = visibleRows.map((row: { preview_job_id?: string | null }) => ({
-    ...row,
-    preview_cover_url: row.preview_job_id ? previewUrlMap.get(row.preview_job_id) ?? null : null,
-  }))
+  const enriched = visibleRows.map((row: { creation_id?: string | null; preview_job_id?: string | null }) => {
+    const purchaseSummary = purchaseSummaryByCreation.get(String(row.creation_id || '')) ?? getEmptyPurchaseSummary()
+    return {
+      ...row,
+      ...purchaseSummary,
+      preview_cover_url: row.preview_job_id ? previewUrlMap.get(row.preview_job_id) ?? null : null,
+    }
+  })
 
   return privateJson({ items: enriched })
 }
@@ -184,7 +198,8 @@ export async function DELETE(request: Request) {
 
   const linkedItems = cartItems ?? []
   const hasTransactionHistory = linkedItems.some(
-    (item: any) => item.status === 'ordered' || Boolean(item.payment_id) || Boolean(item.order_id)
+    (item: { status?: string | null; payment_id?: string | null; order_id?: string | null }) =>
+      item.status === 'ordered' || Boolean(item.payment_id) || Boolean(item.order_id)
   )
 
   // Scenario A: creation already entered transaction flow -> soft delete only.

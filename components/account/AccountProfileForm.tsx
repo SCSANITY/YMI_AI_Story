@@ -9,6 +9,7 @@ type AccountProfileFormProps = {
   user: User
   resolvedAvatar: string
   initialDisplayName: string
+  hasPendingAvatarChange: boolean
   avatarError: string
   error: string
   isSaving: boolean
@@ -22,6 +23,7 @@ export function AccountProfileForm({
   user,
   resolvedAvatar,
   initialDisplayName,
+  hasPendingAvatarChange,
   avatarError,
   error,
   isSaving,
@@ -33,6 +35,8 @@ export function AccountProfileForm({
   const [draftDisplayName, setDraftDisplayName] = useState(initialDisplayName)
   const draftDisplayNameRef = useRef(initialDisplayName)
   const hasLocalEditsRef = useRef(false)
+  const hasDisplayNameChange = draftDisplayName.trim() !== initialDisplayName.trim()
+  const canSave = hasDisplayNameChange || hasPendingAvatarChange
 
   useEffect(() => {
     if (hasLocalEditsRef.current) return
@@ -48,12 +52,13 @@ export function AccountProfileForm({
   }
 
   const handleDisplayNameChange = (value: string) => {
-    hasLocalEditsRef.current = true
+    hasLocalEditsRef.current = value.trim() !== initialDisplayName.trim()
     draftDisplayNameRef.current = value
     setDraftDisplayName(value)
   }
 
   const handleSave = async () => {
+    if (!canSave) return
     const submittedDisplayName = draftDisplayName
     const saved = await onSave(submittedDisplayName)
     if (!saved || draftDisplayNameRef.current !== submittedDisplayName) return
@@ -140,7 +145,12 @@ export function AccountProfileForm({
           ) : null}
 
           <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
-            <Button type="button" className="h-auto min-h-10 whitespace-normal px-5 py-2 text-center" onClick={() => void handleSave()} disabled={isSaving}>
+            <Button
+              type="button"
+              className="h-auto min-h-10 whitespace-normal px-5 py-2 text-center disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-500 disabled:shadow-none"
+              onClick={() => void handleSave()}
+              disabled={isSaving || !canSave}
+            >
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />

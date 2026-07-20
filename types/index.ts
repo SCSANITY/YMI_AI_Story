@@ -157,6 +157,7 @@ export interface GlobalContextType {
   displayCurrency: DisplayCurrency;
   cart: CartItem[];
   favorites: Book[];
+  isFavoritesLoading: boolean;
   isLoginModalOpen: boolean;
   loginModalMode: 'login' | 'signup';
   loginModalEmail: string;

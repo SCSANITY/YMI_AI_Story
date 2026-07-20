@@ -1,8 +1,14 @@
 import './globals.css';
 import { AppShell } from '@/components/AppShell';
 import { Cormorant_Garamond, Inter, Playfair_Display } from 'next/font/google';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { DEFAULT_OG_IMAGE, DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE, SITE_NAME, SITE_URL, absoluteUrl } from '@/lib/seo';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import { ExternalLink, Heart, Loader2 } from 'lucide-react'
 import type { BlogPost } from './blogTypes'
+import { isSupabaseStorageImage } from '@/lib/storage-images'
 
 function formatDate(value: string | null) {
   if (!value) return ''
@@ -55,6 +56,7 @@ export function BlogPostCard({ post, isLikePending, onOpenLightbox, onLike }: Bl
                 fill
                 sizes="(max-width: 767px) 30vw, 180px"
                 loading="lazy"
+                unoptimized={isSupabaseStorageImage(url)}
                 className="object-cover transition-transform duration-300 hover:scale-105"
               />
             </button>

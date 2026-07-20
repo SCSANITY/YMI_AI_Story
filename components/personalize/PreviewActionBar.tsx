@@ -16,7 +16,6 @@ type PreviewActionBarProps = {
   shareError: string | null
   canShare: boolean
   isPreparingShare: boolean
-  isAddToCartPending: boolean
   isCheckoutPending: boolean
   onShare: () => void
   onAddToCart: () => void
@@ -36,7 +35,6 @@ function PreviewActionBarComponent({
   shareError,
   canShare,
   isPreparingShare,
-  isAddToCartPending,
   isCheckoutPending,
   onShare,
   onAddToCart,
@@ -114,20 +112,16 @@ function PreviewActionBarComponent({
           onClick={onAddToCart}
           size="lg"
           variant="outline"
-          disabled={isAddToCartPending || isCheckoutPending}
+          disabled={isCheckoutPending}
           className="glass-action-btn glass-action-btn--amber relative z-20 h-11 w-full rounded-full px-5 text-sm font-semibold sm:w-auto sm:px-7 md:h-12 md:px-8 md:text-base"
         >
-          {isAddToCartPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin md:h-5 md:w-5" />
-          ) : (
-            <ShoppingCart className="mr-2 h-4 w-4 md:h-5 md:w-5" />
-          )}
-          {isAddToCartPending ? loadingLabel : addToCartLabel}
+          <ShoppingCart className="mr-2 h-4 w-4 md:h-5 md:w-5" />
+          {addToCartLabel}
         </Button>
         <Button
           onClick={handleCheckout}
           size="lg"
-          disabled={!isCheckoutAcknowledged || isAddToCartPending || isCheckoutPending}
+          disabled={!isCheckoutAcknowledged || isCheckoutPending}
           className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-6 text-sm font-semibold sm:w-auto sm:px-9 md:h-12 md:px-10 md:text-base"
         >
           {isCheckoutPending ? (

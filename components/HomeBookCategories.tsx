@@ -16,6 +16,7 @@ type HomeBookCategory = {
   titleKey: string
   descriptionKey: string
   sectionId: string
+  bookListGender?: 'Boy' | 'Girl'
   fallbackBookIds: string[]
   afterBanner?: {
     src: string
@@ -46,6 +47,7 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     titleKey: 'homeBooks.category.forBoys',
     descriptionKey: 'homeBooks.category.forBoysDescription',
     sectionId: 'for_boys',
+    bookListGender: 'Boy',
     fallbackBookIds: ['Planet_story', 'Noah_story', 'Space_story', 'Scientist_story'],
     afterBanner: {
       src: '/banners/optimized/swapface-desktop.webp',
@@ -60,6 +62,7 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     titleKey: 'homeBooks.category.forGirls',
     descriptionKey: 'homeBooks.category.forGirlsDescription',
     sectionId: 'for_girls',
+    bookListGender: 'Girl',
     fallbackBookIds: ['Adventure_story', 'Sister_story', 'Birthday_story', 'Seed_story'],
   },
   {
@@ -126,10 +129,16 @@ export function HomeBookCategories() {
     void navigateToCustomize(getPersonalizeHref(bookID))
   }
 
-  const handleViewAllBooks = () => {
+  const getBooksHref = (category: HomeBookCategory) => (
+    category.bookListGender
+      ? `/books?gender=${encodeURIComponent(category.bookListGender)}`
+      : '/books'
+  )
+
+  const handleViewAllBooks = (category: HomeBookCategory) => {
     if (isBooksRoutePending) return
     setBooksRoutePending(true)
-    router.push('/books')
+    router.push(getBooksHref(category))
   }
 
   return (
@@ -164,7 +173,7 @@ export function HomeBookCategories() {
                   </div>
                   <button
                     type="button"
-                    onClick={handleViewAllBooks}
+                    onClick={() => handleViewAllBooks(category)}
                     disabled={isBooksRoutePending}
                     className="inline-flex w-fit shrink-0 items-center justify-center self-start rounded-full border border-orange-200/70 bg-orange-200/32 px-5 py-2.5 text-xs font-semibold tracking-normal text-orange-800 shadow-[0_8px_24px_rgba(234,88,12,0.12),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl transition-all duration-200 hover:border-orange-200/90 hover:bg-orange-200/45 hover:text-orange-900 hover:shadow-[0_12px_30px_rgba(251,146,60,0.20),inset_0_1px_0_rgba(255,255,255,0.88)] sm:-translate-y-1 sm:translate-x-2 sm:self-auto sm:px-6 sm:text-sm"
                   >

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
 
-const FAVOURITES_CACHE_CONTROL = 'private, max-age=60'
+const FAVOURITES_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 type OwnerContext =
   | { ownerType: 'customer'; customerId: string }

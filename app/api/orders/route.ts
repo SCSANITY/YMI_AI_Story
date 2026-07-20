@@ -19,10 +19,15 @@ import {
   getOrderDisplayTotal,
   getOrderCheckoutCurrency,
 } from '@/lib/order-display'
+import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import {
+  loadReleasedFinalPdfAssetsByJobId,
+  resolveLatestReleasedFinalPdfPath,
+} from '@/lib/purchase-state'
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
-const ORDERS_CACHE_CONTROL = 'private, max-age=30'
+const ORDERS_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 function privateJson(body: unknown) {
   const response = NextResponse.json(body)
@@ -105,11 +110,31 @@ export async function POST(request: Request) {
       .eq('anon_session_id', anonSessionId)
   }
 
-  const shippingAddress = body?.shippingAddress ?? {}
-  const shippingAmountUsd = Math.max(0, Number(body?.shippingAmountUsd ?? 0))
-  const shippingRateSnapshot = body?.shippingRateSnapshot ?? null
-  const shippingMethod = body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null
-  const shippingZoneCode = body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null
+  const { data: cartItemTypes, error: cartItemTypesError } = await supabaseAdmin
+    .from('cart_items')
+    .select('cart_item_id, product_type')
+    .in('cart_item_id', cartItemIds)
+
+  if (cartItemTypesError) {
+    return NextResponse.json({ error: 'Failed to load cart item types' }, { status: 500 })
+  }
+
+  const hasOnlyEbookItems =
+    (cartItemTypes?.length ?? 0) === cartItemIds.length &&
+    cartItemIds.length > 0 &&
+    (cartItemTypes ?? []).every((item) => item.product_type === 'ebook')
+  const requiresShipping = !hasOnlyEbookItems
+  const requestedShippingRateSnapshot = body?.shippingRateSnapshot ?? null
+  const requestedShippingAddress = body?.shippingAddress ?? {}
+  const shippingAddress = requiresShipping ? requestedShippingAddress : { email }
+  const shippingAmountUsd = requiresShipping ? Math.max(0, Number(body?.shippingAmountUsd ?? 0)) : 0
+  const shippingRateSnapshot = requiresShipping ? requestedShippingRateSnapshot : null
+  const shippingMethod = requiresShipping
+    ? (body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null)
+    : null
+  const shippingZoneCode = requiresShipping
+    ? (body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null)
+    : null
   let orderId = incomingOrderId as string | null
 
   if (!orderId) {
@@ -305,11 +330,13 @@ export async function GET(request: Request) {
           customer_id,
           status,
           creation_id,
+          final_job_id,
           quantity,
           price_at_purchase,
           creations:creations (
             creation_id,
             template_id,
+            customize_snapshot,
             preview_job_id,
             templates:templates (
               template_id,
@@ -383,10 +410,11 @@ export async function GET(request: Request) {
   const orderIds = orderRows.map((order: any) => order.order_id).filter(Boolean) as string[]
   const finalPdfUrlMap = new Map<string, string>()
   if (orderIds.length > 0) {
-    const { data: finalJobs } = await supabaseAdmin
-      .from('final_jobs')
-      .select('order_id, pdf_path, review_status, released_at')
-      .in('order_id', orderIds)
+    const finalJobIds = orderRows
+      .flatMap((order: any) => order.cart_items ?? [])
+      .map((item: any) => item.final_job_id)
+      .filter((value: string | null) => Boolean(value)) as string[]
+    const finalPdfAssetsByJobId = await loadReleasedFinalPdfAssetsByJobId(finalJobIds)
 
     const finalPdfRequests: Array<{
       key: string
@@ -396,11 +424,13 @@ export async function GET(request: Request) {
       options: { download: string }
     }> = []
 
-    for (const finalJob of finalJobs ?? []) {
-      const orderIdValue = String(finalJob.order_id || '')
-      const pdfPath = String(finalJob.pdf_path || '')
-      const isReleased = Boolean(finalJob.released_at || finalJob.review_status === 'released')
-      if (!orderIdValue || !pdfPath || !isReleased) continue
+    for (const order of orderRows) {
+      const orderIdValue = String(order.order_id || '')
+      const pdfPath = resolveLatestReleasedFinalPdfPath(
+        (order.cart_items ?? []).map((item: any) => item.final_job_id),
+        finalPdfAssetsByJobId
+      )
+      if (!orderIdValue || !pdfPath) continue
 
       finalPdfRequests.push({
         key: orderIdValue,
@@ -442,6 +472,11 @@ export async function GET(request: Request) {
     const detailedItems = items.map((item: any) => {
       const itemPreviewJobId = item?.creations?.preview_job_id ?? null
       const itemCover = getGeneratedPreviewCover(previewCoverMap, itemPreviewJobId)
+      const itemName = resolvePersonalizedBookTitle({
+        templateId: item?.creations?.template_id,
+        templateName: item?.creations?.templates?.name,
+        customizeSnapshot: item?.creations?.customize_snapshot,
+      })
       return {
         cart_item_id: item.cart_item_id,
         creation_id: item.creation_id,
@@ -450,7 +485,7 @@ export async function GET(request: Request) {
         display_unit_price: getDisplayUnitPrice(Number(item.price_at_purchase ?? 0), displayCurrency),
         display_line_total: getDisplayUnitPrice(Number(item.price_at_purchase ?? 0), displayCurrency) * Number(item.quantity ?? 1),
         display_currency: displayCurrency,
-        template_name: item?.creations?.templates?.name ?? null,
+        template_name: itemName,
         cover_url: itemCover.url,
         cover_status: itemCover.status,
       }
@@ -486,7 +521,13 @@ export async function GET(request: Request) {
       cover_url: cover.url,
       cover_status: cover.status,
       cover_cart_item_id: firstItem?.cart_item_id ?? null,
-      first_item_name: firstItem?.creations?.templates?.name ?? null,
+      first_item_name: firstItem
+        ? resolvePersonalizedBookTitle({
+            templateId: firstItem?.creations?.template_id,
+            templateName: firstItem?.creations?.templates?.name,
+            customizeSnapshot: firstItem?.creations?.customize_snapshot,
+          })
+        : null,
       shipping_address: order.shipping_address ?? null,
       items: detailedItems,
     }

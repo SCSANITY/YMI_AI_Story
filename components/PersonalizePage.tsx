@@ -4,7 +4,7 @@ import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
-import { faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
+import { autoCropFaceImage, faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
 import { cancelPreviewJob, createPreviewJob, getJob, getPreviewPages, getPreviewUrl } from '@/services/jobs';
 import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
@@ -32,7 +32,7 @@ import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import type { CatalogBook } from '@/lib/book-catalog';
-import type { StoryLanguage } from '@/types';
+import type { CartItem, StoryLanguage } from '@/types';
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
 
@@ -75,6 +75,36 @@ const normalizePersonalizeBookType = (value: unknown): PersonalizeBookType => {
   return 'basic';
 };
 
+const getBookMinimumAge = (book?: Pick<CatalogBook, 'ageGroup'> | null) => (
+  book?.ageGroup === 'ages_6_plus' ? 6 : 2
+);
+
+const AUTO_FACE_CROP_TIMEOUT_MS = 2500;
+const AUTO_CROP_FIXABLE_CODES = new Set(['faceTooSmall', 'faceNotCentered']);
+
+type TimedResult<T> =
+  | { status: 'done'; value: T }
+  | { status: 'timeout' };
+
+function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<TimedResult<T>> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<TimedResult<T>>((resolve) => {
+    timeoutId = setTimeout(() => resolve({ status: 'timeout' }), timeoutMs);
+  });
+
+  return Promise.race([
+    work.then((value): TimedResult<T> => ({ status: 'done', value })),
+    timeout,
+  ]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
+const parseChildAge = (value: string) => {
+  const parsed = Number.parseFloat(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const fsm = usePersonalizeStage()
@@ -85,7 +115,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const { books: catalogBooks, isLoading: isBookCatalogLoading } = useBookCatalog();
   const [templateDetailBook, setTemplateDetailBook] = useState<CatalogBook | null>(null);
   const catalogBook = catalogBooks.find(b => b.bookID === bookID);
-  const book = templateDetailBook ?? catalogBook;
+  const book = templateDetailBook ?? (isBookCatalogLoading ? undefined : catalogBook);
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewMode = searchParams?.get('view') || 'edit';
@@ -127,7 +157,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     canCheckout,
     canBack,
     backIntent,
-    requestAddToCart,
     requestCheckout,
     primaryAction,
     } = fsm;
@@ -143,19 +172,23 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   // --- Animation States ---
   const [showFlyAnimation, setShowFlyAnimation] = useState(false);
+  const [flyAnimationId, setFlyAnimationId] = useState(0);
   const addToCartBtnRef = useRef<HTMLButtonElement>(null);
   const cartIconRef = useRef<HTMLButtonElement>(null); 
   const [flyOrigin, setFlyOrigin] = useState({ x: 0, y: 0 });
   const [flyTarget, setFlyTarget] = useState({ x: 0, y: 0 });
-  const shouldAnimateToCartRef = useRef(false);
+  const flyAnimationTimerRef = useRef<number | null>(null);
+  const addToCartPromiseRef = useRef<Promise<CartItem | null> | null>(null);
+  const lastAddToCartItemRef = useRef<CartItem | null>(null);
   const exitRunningRef = useRef(false);
-  const [showPreviewCancelledToast, setShowPreviewCancelledToast] = useState(false);
-  const previewCancelToastTimerRef = useRef<number | null>(null);
+  const [pageToastMessage, setPageToastMessage] = useState<string | null>(null);
+  const pageToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
   const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(65);
   const [facePrepareStatus, setFacePrepareStatus] = useState<FacePrepareStatus>('idle');
   const [preparedFaceFile, setPreparedFaceFile] = useState<File | null>(null);
   const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
+  const [faceAutoCropped, setFaceAutoCropped] = useState(false);
   const facePrepareRunIdRef = useRef(0);
   const photoRef = useRef<File | null>(photo);
   const photoAssetIdRef = useRef<string | null>(photoAssetId);
@@ -194,6 +227,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [flipDirection, setFlipDirection] = useState<'next' | 'prev' | null>(null);
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
+  const pendingGenerateConsentRef = useRef<{ dataGeneration: boolean; marketing: boolean } | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
@@ -208,9 +243,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [isPreparingShare, setIsPreparingShare] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const generationInFlightRef = useRef(false);
-  const previewActionInFlightRef = useRef<'ADD_TO_CART' | 'CHECKOUT' | null>(null);
-  const [previewActionPending, setPreviewActionPending] = useState<'ADD_TO_CART' | 'CHECKOUT' | null>(null);
+  const previewActionInFlightRef = useRef<'CHECKOUT' | null>(null);
+  const [previewActionPending, setPreviewActionPending] = useState<'CHECKOUT' | null>(null);
   const checkoutInFlightRef = useRef(false);
+  const preloadedPreviewImagesRef = useRef<Set<string>>(new Set());
   const previewRefreshInFlightRef = useRef(false);
   const lastPreviewRefreshAtRef = useRef(0);
   const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(null);
@@ -266,6 +302,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const ageRef = useRef(age);
   const [areChildDetailsReady, setAreChildDetailsReady] = useState(false);
   const [childDetailsSeedVersion, setChildDetailsSeedVersion] = useState(0);
+  const minimumRecommendedAge = getBookMinimumAge(book);
+  const ageRangeWarningText = t('personalize.ageRangeInlineWarning', {
+    minAge: minimumRecommendedAge,
+    ageRange: book?.ageLabel ?? `${minimumRecommendedAge}+`,
+  });
   // --- Mobile Responsive State ---
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const resolvedBook = useMemo(() => {
@@ -292,6 +333,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const handleChildDetailsChange = useCallback((details: { name: string; age: string }) => {
     nameRef.current = details.name;
     ageRef.current = details.age;
+    setShowAgeRangeConfirm(false);
     setAreChildDetailsReady((prev) => {
       const next = details.name.trim().length > 0 && details.age.trim().length > 0;
       return prev === next ? prev : next;
@@ -462,6 +504,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setPhotoAssetId(data.assetId || null)
     setPhotoStoragePath(data.storagePath || null)
     setFaceImageUrl(data.faceImageUrl || null)
+    setFaceAutoCropped(false)
     setVoiceAssetId(data.voiceAssetId || null)
     setVoiceStoragePath(data.voiceStoragePath || null)
     setVoiceSignedUrl(null)
@@ -714,6 +757,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setPreparedFaceFile(null)
     setFacePrepareStatus('idle')
     setFacePrepareError(null)
+    setFaceAutoCropped(false)
     facePrepareRunIdRef.current += 1
     setTemplateCoverUrl(null)
     setTemplateTitle(null)
@@ -1301,31 +1345,68 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setRecentProfiles(profiles);
   }, [user?.customerId]);
 
-  useEffect(() => {
-    if (!previewPages.length && !viewState.showPreview) return
+  const preloadPreviewImage = useCallback((url?: string | null) => {
+    if (!url || typeof window === 'undefined') return;
+    if (preloadedPreviewImagesRef.current.has(url)) return;
 
-    const preloadIndexes = new Set([
+    preloadedPreviewImagesRef.current.add(url);
+    const img = new Image();
+    img.decoding = 'async';
+    img.loading = 'eager';
+    img.src = url;
+    void img.decode?.().catch(() => {
+      // The visible image still owns error handling and signed-url refresh.
+    });
+  }, []);
+
+  const resolvePreviewSpreadImage = useCallback((spreadIndex: number) => {
+    if (spreadIndex <= 0) return previewPages[0] || '';
+    if (spreadIndex === 1) return previewPages[1] || staticPreviewSecondPageUrl || '';
+    return previewPages[spreadIndex] || finalPreviewImages[spreadIndex - 1] || '';
+  }, [finalPreviewImages, previewPages, staticPreviewSecondPageUrl]);
+
+  useEffect(() => {
+    if (!viewState.showPreview) return;
+
+    const immediateIndexes = new Set([
       0,
       Math.max(0, currentSpread - 1),
       currentSpread,
       currentSpread + 1,
-    ])
+      currentSpread + 2,
+    ]);
+    const immediateUrls = new Set<string>();
 
-    const preloadUrls = Array.from(preloadIndexes)
-      .map((spreadIndex) => {
-        if (spreadIndex === 0) return previewPages[0]
-        if (spreadIndex === 1) return previewPages[1] || staticPreviewSecondPageUrl
-        return previewPages[spreadIndex] || (viewState.showPreview ? finalPreviewImages[spreadIndex - 1] : '')
-      })
-      .filter(Boolean)
+    immediateIndexes.forEach((spreadIndex) => {
+      const url = resolvePreviewSpreadImage(spreadIndex);
+      if (!url) return;
+      immediateUrls.add(url);
+      preloadPreviewImage(url);
+    });
 
-    Array.from(new Set(preloadUrls)).forEach((url) => {
-      if (!url) return
-      const img = new Image()
-      img.decoding = 'async'
-      img.src = url
-    })
-  }, [currentSpread, finalPreviewImages, previewPages, staticPreviewSecondPageUrl, viewState.showPreview])
+    const allPreviewUrls = [
+      ...previewPages,
+      staticPreviewSecondPageUrl,
+      ...finalPreviewImages,
+    ].filter(Boolean);
+
+    const backgroundPreloadId = window.setTimeout(() => {
+      allPreviewUrls.forEach((url) => {
+        if (!url || immediateUrls.has(url)) return;
+        preloadPreviewImage(url);
+      });
+    }, 500);
+
+    return () => window.clearTimeout(backgroundPreloadId);
+  }, [
+    currentSpread,
+    finalPreviewImages,
+    preloadPreviewImage,
+    previewPages,
+    resolvePreviewSpreadImage,
+    staticPreviewSecondPageUrl,
+    viewState.showPreview,
+  ]);
 
   // --- Handlers ---
   const handleDeleteFace = useCallback(async (assetId: string) => {
@@ -1339,6 +1420,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       setPreparedFaceFile(null);
       setFacePrepareStatus('idle');
       setFacePrepareError(null);
+      setFaceAutoCropped(false);
       facePrepareRunIdRef.current += 1;
     }
 
@@ -1365,6 +1447,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setPreparedFaceFile(null);
     setFacePrepareStatus('ready');
     setFacePrepareError(null);
+    setFaceAutoCropped(false);
     setPhotoPreview(face.signed_url);
     setFaceImageUrl(face.signed_url);
     setPhotoAssetId(face.asset_id);
@@ -1456,32 +1539,54 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const originRect = addToCartBtnRef.current?.getBoundingClientRect();
     const targetRect = cartIconRef.current?.getBoundingClientRect();
 
-    if (!originRect || !targetRect) return;
+    if (flyAnimationTimerRef.current !== null) {
+      window.clearTimeout(flyAnimationTimerRef.current);
+    }
 
     setFlyOrigin({
-      x: originRect.left + originRect.width / 2 - 25,
-      y: originRect.top + originRect.height / 2 - 35,
+      x: originRect ? originRect.left + originRect.width / 2 - 25 : window.innerWidth / 2 - 25,
+      y: originRect ? originRect.top + originRect.height / 2 - 35 : window.innerHeight - 140,
     });
 
     setFlyTarget({
-      x: targetRect.left + targetRect.width / 2 - 10,
-      y: targetRect.top + targetRect.height / 2 - 10,
+      x: targetRect ? targetRect.left + targetRect.width / 2 - 10 : window.innerWidth - 54,
+      y: targetRect ? targetRect.top + targetRect.height / 2 - 10 : 22,
     });
 
+    setFlyAnimationId((value) => value + 1);
     setShowFlyAnimation(true);
-    window.setTimeout(() => setShowFlyAnimation(false), 800);
+    flyAnimationTimerRef.current = window.setTimeout(() => {
+      setShowFlyAnimation(false);
+      flyAnimationTimerRef.current = null;
+    }, 800);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (flyAnimationTimerRef.current !== null) {
+        window.clearTimeout(flyAnimationTimerRef.current);
+      }
+    };
+  }, []);
+
+  const triggerPageToast = useCallback((message: string) => {
+    setPageToastMessage(message);
+    if (pageToastTimerRef.current) {
+      window.clearTimeout(pageToastTimerRef.current);
+    }
+    pageToastTimerRef.current = window.setTimeout(() => {
+      setPageToastMessage(null);
+      pageToastTimerRef.current = null;
+    }, 2200);
   }, []);
 
   const triggerPreviewCancelledToast = useCallback(() => {
-    setShowPreviewCancelledToast(true);
-    if (previewCancelToastTimerRef.current) {
-      window.clearTimeout(previewCancelToastTimerRef.current);
-    }
-    previewCancelToastTimerRef.current = window.setTimeout(() => {
-      setShowPreviewCancelledToast(false);
-      previewCancelToastTimerRef.current = null;
-    }, 1800);
-  }, []);
+    triggerPageToast(t('personalize.previewCancelledToast'));
+  }, [t, triggerPageToast]);
+
+  const triggerAddToCartFailedToast = useCallback(() => {
+    triggerPageToast(t('personalize.addToCartFailedToast'));
+  }, [t, triggerPageToast]);
 
   const persistDraftForCustomizeReturn = useCallback((options?: { clearPreviewRefs?: boolean }) => {
     if (!book) return;
@@ -1646,8 +1751,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
   const performAddToCart = useCallback(async () => {
-    if (!canAddToCart) return
-    if (!resolvedBook) return
+    if (!canAddToCart) return null
+    if (!resolvedBook) return null
     if (!ensurePremiumVoiceSample()) return null
     const currentName = nameRef.current
     const currentAge = ageRef.current
@@ -1703,9 +1808,33 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         previewPages[0] || previewUrl || undefined
     )
 
-    shouldAnimateToCartRef.current = false;
     return item ?? null;
     }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample]);
+
+  const startAddToCart = useCallback(() => {
+    const promise = performAddToCart()
+      .then((item) => {
+        if (!item) {
+          triggerAddToCartFailedToast();
+        } else {
+          lastAddToCartItemRef.current = item;
+        }
+        return item;
+      })
+      .catch((error) => {
+        console.error('Add to cart failed', error);
+        triggerAddToCartFailedToast();
+        return null;
+      })
+      .finally(() => {
+        if (addToCartPromiseRef.current === promise) {
+          addToCartPromiseRef.current = null;
+        }
+      });
+
+    addToCartPromiseRef.current = promise;
+    return promise;
+  }, [performAddToCart, triggerAddToCartFailedToast]);
 
 
   const performCheckout = useCallback(async () => {
@@ -1756,7 +1885,17 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               creationId: ensuredCreationId ?? undefined,
             }
 
-            const existingItem = ensuredCreationId
+            const pendingAddToCartItem = addToCartPromiseRef.current
+              ? await addToCartPromiseRef.current
+              : null
+            const recentAddToCartItem = pendingAddToCartItem?.creationId === ensuredCreationId
+              ? pendingAddToCartItem
+              : lastAddToCartItemRef.current?.creationId === ensuredCreationId
+              ? lastAddToCartItemRef.current
+              : null
+            const existingItem = recentAddToCartItem
+              ? recentAddToCartItem
+              : ensuredCreationId
               ? cart.find(item => item.creationId === ensuredCreationId)
               : undefined
             const productType =
@@ -1822,13 +1961,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;
-    if (previewActionInFlightRef.current) return;
+    if (previewActionInFlightRef.current === 'CHECKOUT') return;
     if (!ensurePremiumVoiceSample()) return;
-    previewActionInFlightRef.current = 'ADD_TO_CART';
-    setPreviewActionPending('ADD_TO_CART');
-    shouldAnimateToCartRef.current = true;
     triggerFlyToCart();
-    requestAddToCart();
+    if (!addToCartPromiseRef.current) {
+      void startAddToCart();
+    }
   };
 
   const handleCheckoutClick = () => {
@@ -1848,8 +1986,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   useEffect(() => {
     return () => {
-      if (previewCancelToastTimerRef.current) {
-        window.clearTimeout(previewCancelToastTimerRef.current);
+      if (pageToastTimerRef.current) {
+        window.clearTimeout(pageToastTimerRef.current);
       }
     };
   }, []);
@@ -1869,13 +2007,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const run = async () => {
         try {
         switch (exitIntent) {
-            case 'ADD_TO_CART':
-            await performAddToCart()
-            break
-            case 'CHECKOUT':
+          case 'CHECKOUT':
             await performCheckout()
             break
-            case 'EXIT':
+          case 'EXIT':
             returnToCustomizeFromPreview()
             break
         }
@@ -1888,7 +2023,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     }
 
     run()
-    }, [exitPhase, exitIntent, completeExit, failExit, performAddToCart, performCheckout, returnToCustomizeFromPreview])
+    }, [exitPhase, exitIntent, completeExit, failExit, performCheckout, returnToCustomizeFromPreview])
 
 
 
@@ -1897,6 +2032,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       setFacePrepareStatus('checking');
       setFacePrepareError(null);
       setPreparedFaceFile(null);
+      setFaceAutoCropped(false);
 
       const validation = await validateFaceImage(file);
       if (facePrepareRunIdRef.current !== runId) return;
@@ -1911,8 +2047,47 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       if (facePrepareRunIdRef.current !== runId) return;
 
       if (!quality.ok) {
+        const canAttemptAutoCrop =
+          Boolean(quality.analysis?.autoCropCandidate) &&
+          Boolean(quality.code && AUTO_CROP_FIXABLE_CODES.has(quality.code));
+
+        if (canAttemptAutoCrop) {
+          setFacePrepareStatus('preparing');
+          const cropAttempt = await withTimeout(
+            (async () => {
+              const cropped = await autoCropFaceImage(file, quality.analysis);
+              if (!cropped) return { file: null, error: null as FaceImageValidationResult | null };
+
+              const croppedValidation = await validateFaceImage(cropped);
+              if (!croppedValidation.ok) return { file: null, error: croppedValidation };
+
+              const croppedQuality = await faceQualityCheck(cropped);
+              if (!croppedQuality.ok) return { file: null, error: croppedQuality };
+
+              return { file: cropped, error: null as FaceImageValidationResult | null };
+            })(),
+            AUTO_FACE_CROP_TIMEOUT_MS
+          );
+          if (facePrepareRunIdRef.current !== runId) return;
+
+          if (cropAttempt.status === 'done' && cropAttempt.value.file) {
+            const croppedFile = cropAttempt.value.file;
+            setPreparedFaceFile(croppedFile);
+            setPhotoPreview(URL.createObjectURL(croppedFile));
+            setFaceAutoCropped(true);
+            setFacePrepareStatus('ready');
+            return;
+          }
+
+          if (cropAttempt.status === 'done' && cropAttempt.value.error) {
+            setFacePrepareError(resolveFaceValidationError(cropAttempt.value.error));
+          } else {
+            setFacePrepareError(resolveFaceValidationError(quality));
+          }
+        } else {
+          setFacePrepareError(resolveFaceValidationError(quality));
+        }
         setFacePrepareStatus('failed');
-        setFacePrepareError(resolveFaceValidationError(quality));
         return;
       }
 
@@ -1921,14 +2096,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         const prepared = await prepareFaceImage(file);
         if (facePrepareRunIdRef.current !== runId) return;
         setPreparedFaceFile(prepared);
+        setFaceAutoCropped(false);
         setFacePrepareStatus('ready');
       } catch {
         if (facePrepareRunIdRef.current !== runId) return;
         setPreparedFaceFile(null);
+        setFaceAutoCropped(false);
         setFacePrepareStatus('failed');
         setFacePrepareError(t('personalize.photoPrepareFailed'));
       }
-    }, [resolveFaceValidationError, t]);
+    }, [resolveFaceValidationError, setPhotoPreview, t]);
 
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
@@ -1942,6 +2119,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           setFaceImageUrl(null);
           setPreparedFaceFile(null);
           setFacePrepareError(null);
+          setFaceAutoCropped(false);
           setPreviewUrl(null);
           void startFacePreparation(file, nextRunId);
           e.target.value = '';
@@ -1963,6 +2141,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       if (isFlipping) return;
       if (direction === 'next' && currentSpread >= maxSpreadIndex) return;
       if (direction === 'prev' && currentSpread <= 0) return;
+
+      const targetSpread = direction === 'next' ? currentSpread + 1 : currentSpread - 1;
+      preloadPreviewImage(resolvePreviewSpreadImage(targetSpread));
+      preloadPreviewImage(resolvePreviewSpreadImage(targetSpread + 1));
 
       setFlipDirection(direction);
       setIsFlipping(true);
@@ -2036,13 +2218,42 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing';
   const hasUsablePhoto = Boolean(photoAssetId || (photo && preparedFaceFile && facePrepareStatus === 'ready'));
   const isFormReady = areChildDetailsReady && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
-  const handleGeneratePreviewAction = useCallback((consent: { dataGeneration: boolean; marketing: boolean }) => {
+  const isAgeBelowRecommendedRange = useCallback((value: string) => {
+    const parsedAge = parseChildAge(value);
+    return parsedAge !== null && parsedAge < minimumRecommendedAge;
+  }, [minimumRecommendedAge]);
+
+  const startGeneratePreview = useCallback((consent: { dataGeneration: boolean; marketing: boolean }) => {
     dataGenerationConsentRef.current = consent.dataGeneration;
     marketingConsentRef.current = consent.marketing;
     setName(nameRef.current);
     setAge(ageRef.current);
     primaryAction();
   }, [primaryAction, setAge, setName]);
+
+  const handleGeneratePreviewAction = useCallback((consent: { dataGeneration: boolean; marketing: boolean }) => {
+    if (isAgeBelowRecommendedRange(ageRef.current)) {
+      pendingGenerateConsentRef.current = consent;
+      setShowAgeRangeConfirm(true);
+      return;
+    }
+
+    startGeneratePreview(consent);
+  }, [isAgeBelowRecommendedRange, startGeneratePreview]);
+
+  const handleCloseAgeRangeConfirm = useCallback(() => {
+    pendingGenerateConsentRef.current = null;
+    setShowAgeRangeConfirm(false);
+  }, []);
+
+  const handleContinueAgeRangeConfirm = useCallback(() => {
+    const consent = pendingGenerateConsentRef.current;
+    pendingGenerateConsentRef.current = null;
+    setShowAgeRangeConfirm(false);
+    if (!consent) return;
+    startGeneratePreview(consent);
+  }, [startGeneratePreview]);
+
   if (!book) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#fffaf3] px-4 text-center text-sm font-medium text-gray-500">
@@ -2068,20 +2279,32 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     <div className="page-surface min-h-screen flex flex-col font-sans relative z-20">
       <PersonalizeOverlays
         showFlyAnimation={showFlyAnimation}
+        flyAnimationId={flyAnimationId}
         flyOrigin={flyOrigin}
         flyTarget={flyTarget}
-        flyCoverUrl={book.coverUrl}
-        showPreviewCancelledToast={showPreviewCancelledToast}
-        previewCancelledLabel={t('personalize.previewCancelledToast')}
+        flyCoverUrl={previewPages[0] || previewUrl || book.coverUrl}
+        toastMessage={pageToastMessage}
         showExitConfirm={showExitConfirm}
+        showAgeRangeConfirm={showAgeRangeConfirm}
         exitLabels={{
           title: t('personalize.exitConfirmTitle'),
           body: t('personalize.exitConfirmBody'),
           stay: t('personalize.exitConfirmStay'),
           back: t('personalize.exitConfirmBack'),
         }}
+        ageRangeLabels={{
+          title: t('personalize.ageRangeConfirmTitle'),
+          body: t('personalize.ageRangeConfirmBody', {
+            minAge: minimumRecommendedAge,
+            ageRange: book.ageLabel ?? `${minimumRecommendedAge}+`,
+          }),
+          continueAnyway: t('personalize.ageRangeContinueAnyway'),
+          close: t('common.close'),
+        }}
         onStay={dismissExitConfirm}
         onBackToCustomize={returnToCustomizeFromPreview}
+        onCloseAgeRangeConfirm={handleCloseAgeRangeConfirm}
+        onContinueAgeRangeConfirm={handleContinueAgeRangeConfirm}
       />
 
       <PersonalizeHeader
@@ -2178,11 +2401,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       photoPreview={photoPreview}
                       facePrepareStatus={facePrepareStatus}
                       facePrepareError={facePrepareError}
+                      faceAutoCropped={faceAutoCropped}
                       photoLabels={{
                         uploadChildPhoto: t('personalize.uploadChildPhoto'),
                         photoChecking: t('personalize.photoChecking'),
                         photoPreparing: t('personalize.photoPreparing'),
                         photoReady: t('personalize.photoReady'),
+                        photoAutoCentered: t('personalize.photoAutoCentered'),
                         photoPrepareFailed: t('personalize.photoPrepareFailed'),
                         photoQualityReason: t('personalize.photoQualityReason'),
                         clickToChangePhoto: t('personalize.clickToChangePhoto'),
@@ -2204,6 +2429,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                         agePlaceholder: t('personalize.agePlaceholder'),
                         noHistory: t('personalize.noHistory'),
                       }}
+                      ageRangeWarning={ageRangeWarningText}
+                      minimumRecommendedAge={minimumRecommendedAge}
                       onLoadProfiles={loadProfiles}
                       onChildDetailsChange={handleChildDetailsChange}
                       onDeleteProfileValue={handleDeleteProfile}
@@ -2311,7 +2538,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       shareError={shareError}
                       canShare={Boolean(creationId)}
                       isPreparingShare={isPreparingShare}
-                      isAddToCartPending={previewActionPending === 'ADD_TO_CART'}
                       isCheckoutPending={previewActionPending === 'CHECKOUT'}
                       onShare={handleOpenPreviewShare}
                       onAddToCart={handleAddToCartClick}

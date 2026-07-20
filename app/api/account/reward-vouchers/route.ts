@@ -9,7 +9,7 @@ import {
   type DiscountStackingGroup,
 } from '@/lib/discounts'
 
-const REWARD_VOUCHERS_CACHE_CONTROL = 'private, max-age=30'
+const REWARD_VOUCHERS_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 function toNumber(value: unknown): number {
   const numeric = Number(value ?? 0)

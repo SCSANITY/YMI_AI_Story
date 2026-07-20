@@ -4,6 +4,7 @@ type ShippingQuoteStatus = 'idle' | 'missing' | 'loading' | 'available' | 'unava
 
 type CheckoutSummaryPanelProps = {
   hiddenOnPaymentStep: boolean;
+  showShipping: boolean;
   shippingStatus: ShippingQuoteStatus;
   estimatedDelivery?: string | null;
   discountTotalUsd: number;
@@ -20,6 +21,7 @@ type CheckoutSummaryPanelProps = {
 
 export function CheckoutSummaryPanel({
   hiddenOnPaymentStep,
+  showShipping,
   shippingStatus,
   estimatedDelivery,
   discountTotalUsd,
@@ -52,17 +54,19 @@ export function CheckoutSummaryPanel({
           <span>{t('checkout.subtotal')}</span>
           <span className="text-gray-900 font-semibold">{formattedSubtotal}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span>{t('checkout.shipping')}</span>
-          <span className={`text-right font-semibold ${
-            shippingStatus === 'unavailable' || shippingStatus === 'error'
-              ? 'text-red-500'
-              : 'text-gray-900'
-          }`}>
-            {shippingLabel}
-          </span>
-        </div>
-        {shippingStatus === 'available' && estimatedDelivery ? (
+        {showShipping ? (
+          <div className="flex items-center justify-between">
+            <span>{t('checkout.shipping')}</span>
+            <span className={`text-right font-semibold ${
+              shippingStatus === 'unavailable' || shippingStatus === 'error'
+                ? 'text-red-500'
+                : 'text-gray-900'
+            }`}>
+              {shippingLabel}
+            </span>
+          </div>
+        ) : null}
+        {showShipping && shippingStatus === 'available' && estimatedDelivery ? (
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>{t('checkout.estimatedDelivery')}</span>
             <span>{estimatedDelivery}</span>
@@ -74,7 +78,7 @@ export function CheckoutSummaryPanel({
             <span className="font-semibold text-emerald-700">-{formattedDiscount}</span>
           </div>
         ) : null}
-        {shippingDiscountTotalUsd > 0 ? (
+        {showShipping && shippingDiscountTotalUsd > 0 ? (
           <div className="flex items-center justify-between">
             <span>{t('checkout.shipping')} {t('checkout.discountLine').toLowerCase()}</span>
             <span className="font-semibold text-emerald-700">-{formattedShippingDiscount}</span>

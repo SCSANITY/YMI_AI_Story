@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { GlobalProvider, useGlobalContext } from '@/contexts/GlobalContext'
 import { Navbar } from '@/components/Navbar'
+import { getTranslatedInternalNavigationHref } from '@/lib/browser-translation'
 import {
   CUSTOMIZE_ACCESS_BLOCKED_EVENT,
   DEFAULT_CUSTOMIZE_ACCESS_MESSAGE,
@@ -68,6 +69,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const showGlobalNav = !isMaintenanceRoute && !isPersonalizeRoute && !isAdminRoute
 
   const isHomePage = pathname === '/'
+
+  useEffect(() => {
+    const handleTranslatedNavigation = (event: MouseEvent) => {
+      const href = getTranslatedInternalNavigationHref(event)
+      if (!href) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      window.location.assign(href)
+    }
+
+    document.addEventListener('click', handleTranslatedNavigation, true)
+    return () => document.removeEventListener('click', handleTranslatedNavigation, true)
+  }, [])
 
   return (
     <GlobalProvider>

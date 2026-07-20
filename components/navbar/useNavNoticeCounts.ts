@@ -35,15 +35,19 @@ async function fetchNoticeCounts(customerId: string): Promise<NavNoticeCounts> {
     const [favoritesData, rewardsData, ordersData, booksData] = await Promise.all([
       fetch(`/api/favourites?customerId=${encodedCustomerId}`, {
         credentials: 'include',
+        cache: 'no-store',
       }).then((res) => (res.ok ? res.json() : { items: [] })),
       fetch('/api/account/reward-vouchers', {
         credentials: 'include',
+        cache: 'no-store',
       }).then((res) => (res.ok ? res.json() : { active: [] })),
       fetch(`/api/orders/list?customerId=${encodedCustomerId}`, {
         credentials: 'include',
+        cache: 'no-store',
       }).then((res) => (res.ok ? res.json() : { orders: [], count: 0 })),
       fetch(`/api/my-books?customerId=${encodedCustomerId}`, {
         credentials: 'include',
+        cache: 'no-store',
       }).then((res) => (res.ok ? res.json() : { items: [] })),
     ])
 

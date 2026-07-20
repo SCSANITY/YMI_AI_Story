@@ -61,11 +61,38 @@ export type CatalogBook = Book & {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 
+export function normalizeCatalogFilterLabel(value: unknown): string {
+  return String(value ?? '').trim().replace(/\s+/g, ' ')
+}
+
+export function catalogFilterKey(value: unknown): string {
+  return normalizeCatalogFilterLabel(value).toLowerCase()
+}
+
+export function normalizeTargetAudience(value: unknown): string {
+  const label = normalizeCatalogFilterLabel(value)
+  if (!label) return 'Neutral'
+
+  const key = label.toLowerCase().replace(/[\s_-]+/g, '_')
+  if (['boy', 'boys', 'for_boy', 'for_boys'].includes(key)) return 'Boy'
+  if (['girl', 'girls', 'for_girl', 'for_girls'].includes(key)) return 'Girl'
+  if (key === 'neutral' || key === 'all') return 'Neutral'
+
+  return label
+}
+
 export function parseStoryTypes(value: unknown): string[] {
+  const seen = new Set<string>()
+
   return String(value ?? '')
     .split(/[,，]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
+    .map(normalizeCatalogFilterLabel)
+    .filter((item) => {
+      const key = catalogFilterKey(item)
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 }
 
 export function formatStoryTypeLabel(storyTypes: string[], fallback = 'Story'): string {
@@ -186,7 +213,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     ageGroup,
     ageLabel: AGE_GROUP_LABELS[ageGroup],
     ageRange: AGE_GROUP_LABELS[ageGroup],
-    gender: String(row.target_gender ?? 'Neutral').trim() || 'Neutral',
+    gender: normalizeTargetAudience(row.target_gender),
     homeSections: Array.from(homeSections),
     isBrandNew,
     isForBoys,

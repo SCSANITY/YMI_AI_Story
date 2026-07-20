@@ -29,6 +29,7 @@ const FACE_UPLOAD_TARGET_BYTES = 2 * 1024 * 1024
 const FACE_UPLOAD_JPEG_QUALITY = 0.88
 const FACE_UPLOAD_MIN_EDGE = 320
 const FACE_UPLOAD_MIN_BYTES = 100 * 1024
+const FACE_AUTO_CROP_MIN_EDGE = Math.max(512, FACE_UPLOAD_MIN_EDGE)
 const FACE_DETECTOR_WASM_URL = '/mediapipe/tasks-vision/wasm'
 const FACE_DETECTOR_MODEL_URL = '/mediapipe/models/blaze_face_short_range.tflite'
 const FACE_DETECTION_MIN_CONFIDENCE = 0.55
@@ -48,6 +49,9 @@ const FACE_BRIGHTNESS_MIN = 45
 const FACE_BRIGHTNESS_MAX = 218
 const FACE_EYE_REGION_RATIO = 0.22
 const FACE_EYE_MIN_EDGE_SCORE = 4
+const FACE_AUTO_CROP_SIDE_MARGIN_RATIO = 0.8
+const FACE_AUTO_CROP_TOP_MARGIN_RATIO = 0.8
+const FACE_AUTO_CROP_BOTTOM_MARGIN_RATIO = 1.25
 
 export type FaceImageValidationCode =
   | 'missing'
@@ -68,10 +72,40 @@ export type FaceImageValidationCode =
   | 'tooBright'
   | 'eyesClosed'
 
+export type FaceImageFaceMetrics = {
+  originX: number
+  originY: number
+  width: number
+  height: number
+  areaRatio: number
+  centerX: number
+  centerY: number
+  score: number
+}
+
+export type FaceImageAnalysis = {
+  width: number
+  height: number
+  brightness?: number
+  blurScore?: number
+  detectedFaceCount?: number
+  hasSignificantSecondFace?: boolean
+  face?: FaceImageFaceMetrics
+  autoCropCandidate?: boolean
+}
+
 export type FaceImageValidationResult = {
   ok: boolean
   code?: FaceImageValidationCode
   message?: string
+  analysis?: FaceImageAnalysis
+}
+
+type FaceCropRect = {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 let faceDetectorPromise: Promise<FaceDetector> | null = null
@@ -251,6 +285,22 @@ function getDetectionScore(detection: Detection): number {
   return detection.categories[0]?.score ?? 0
 }
 
+function getFaceMetrics(detection: Detection, width: number, height: number): FaceImageFaceMetrics | null {
+  const box = detection.boundingBox
+  if (!box) return null
+  const imageArea = width * height
+  return {
+    originX: box.originX,
+    originY: box.originY,
+    width: box.width,
+    height: box.height,
+    areaRatio: imageArea ? (box.width * box.height) / imageArea : 0,
+    centerX: width ? (box.originX + box.width / 2) / width : 0,
+    centerY: height ? (box.originY + box.height / 2) / height : 0,
+    score: getDetectionScore(detection),
+  }
+}
+
 function hasSignificantSecondFace(detections: Detection[], imageArea: number): boolean {
   return detections.slice(1).some((detection) => {
     const box = detection.boundingBox
@@ -269,28 +319,35 @@ function getKeypointByLabel(detection: Detection, labels: string[], fallbackInde
   return keypoint ?? detection.keypoints[fallbackIndex]
 }
 
-function validateDetectedFace(detection: Detection, width: number, height: number): FaceImageValidationResult {
+function validateDetectedFace(
+  detection: Detection,
+  width: number,
+  height: number,
+  options: { ignoreAutoCropFixable?: boolean } = {}
+): FaceImageValidationResult {
   const box = detection.boundingBox
   if (!box) return { ok: false, code: 'noFace' }
 
-  const imageArea = width * height
-  const faceAreaRatio = (box.width * box.height) / imageArea
-  const centerX = (box.originX + box.width / 2) / width
-  const centerY = (box.originY + box.height / 2) / height
+  const metrics = getFaceMetrics(detection, width, height)
+  if (!metrics) return { ok: false, code: 'noFace' }
   const edgeMarginX = Math.max(2, width * 0.01)
   const edgeMarginY = Math.max(2, height * 0.01)
 
-  if (Math.min(box.width, box.height) < FACE_MIN_BOX_EDGE || faceAreaRatio < FACE_MIN_AREA_RATIO) {
+  if (
+    !options.ignoreAutoCropFixable &&
+    (Math.min(box.width, box.height) < FACE_MIN_BOX_EDGE || metrics.areaRatio < FACE_MIN_AREA_RATIO)
+  ) {
     return { ok: false, code: 'faceTooSmall' }
   }
-  if (faceAreaRatio > FACE_MAX_AREA_RATIO) {
+  if (metrics.areaRatio > FACE_MAX_AREA_RATIO) {
     return { ok: false, code: 'faceTooLarge' }
   }
   if (
-    centerX < FACE_CENTER_MIN_X ||
-    centerX > FACE_CENTER_MAX_X ||
-    centerY < FACE_CENTER_MIN_Y ||
-    centerY > FACE_CENTER_MAX_Y
+    !options.ignoreAutoCropFixable &&
+    (metrics.centerX < FACE_CENTER_MIN_X ||
+      metrics.centerX > FACE_CENTER_MAX_X ||
+      metrics.centerY < FACE_CENTER_MIN_Y ||
+      metrics.centerY > FACE_CENTER_MAX_Y)
   ) {
     return { ok: false, code: 'faceNotCentered' }
   }
@@ -370,6 +427,10 @@ export async function validateFaceImage(file: File): Promise<FaceImageValidation
   }
 }
 
+function isAutoCropFixableCode(code?: FaceImageValidationCode): boolean {
+  return code === 'faceTooSmall' || code === 'faceNotCentered'
+}
+
 export async function faceQualityCheck(file: File): Promise<FaceImageValidationResult> {
   if (typeof window === 'undefined') return { ok: true }
 
@@ -377,49 +438,117 @@ export async function faceQualityCheck(file: File): Promise<FaceImageValidationR
     const image = await decodeImageFile(file)
     const width = image.naturalWidth || image.width
     const height = image.naturalHeight || image.height
+    const analysis: FaceImageAnalysis = { width, height }
     if (!width || !height) {
-      return { ok: false, code: 'unreadable', message: 'We could not read this photo. Please try another image.' }
+      return { ok: false, code: 'unreadable', message: 'We could not read this photo. Please try another image.', analysis }
     }
 
     const analysisCanvas = createAnalysisCanvas(image)
     const imageQuality = analysisCanvas ? measureImageQuality(analysisCanvas) : null
     if (imageQuality) {
+      analysis.brightness = imageQuality.brightness
+      analysis.blurScore = imageQuality.blurScore
       if (imageQuality.brightness < FACE_BRIGHTNESS_MIN) {
-        return { ok: false, code: 'tooDark' }
+        return { ok: false, code: 'tooDark', analysis }
       }
       if (imageQuality.brightness > FACE_BRIGHTNESS_MAX) {
-        return { ok: false, code: 'tooBright' }
+        return { ok: false, code: 'tooBright', analysis }
       }
       if (imageQuality.blurScore < FACE_BLUR_MIN_SCORE) {
-        return { ok: false, code: 'tooBlurry' }
+        return { ok: false, code: 'tooBlurry', analysis }
       }
     }
 
     const detector = await getFaceDetector()
     const result = await withMediapipeNoiseSuppressed(() => detector.detect(image))
     const detections = [...result.detections].sort((a, b) => getDetectionScore(b) - getDetectionScore(a))
+    analysis.detectedFaceCount = detections.length
     if (detections.length === 0) {
-      return { ok: false, code: 'noFace' }
+      return { ok: false, code: 'noFace', analysis }
     }
-    if (hasSignificantSecondFace(detections, width * height)) {
-      return { ok: false, code: 'multipleFaces' }
+    analysis.face = getFaceMetrics(detections[0], width, height) ?? undefined
+    analysis.hasSignificantSecondFace = hasSignificantSecondFace(detections, width * height)
+    if (analysis.hasSignificantSecondFace) {
+      return { ok: false, code: 'multipleFaces', analysis }
     }
 
     const faceValidation = validateDetectedFace(detections[0], width, height)
-    if (!faceValidation.ok) return faceValidation
-
-    if (analysisCanvas && !checkEyesOpen(detections[0], analysisCanvas, height)) {
-      return { ok: false, code: 'eyesClosed' }
+    if (!faceValidation.ok) {
+      if (isAutoCropFixableCode(faceValidation.code)) {
+        const terminalValidation = validateDetectedFace(detections[0], width, height, {
+          ignoreAutoCropFixable: true,
+        })
+        const eyesOpen = !analysisCanvas || checkEyesOpen(detections[0], analysisCanvas, height)
+        analysis.autoCropCandidate = terminalValidation.ok && eyesOpen && detections.length === 1
+      }
+      return { ...faceValidation, analysis }
     }
 
-    return { ok: true }
+    if (analysisCanvas && !checkEyesOpen(detections[0], analysisCanvas, height)) {
+      return { ok: false, code: 'eyesClosed', analysis }
+    }
+
+    return { ok: true, analysis }
   } catch (error) {
     console.warn('[face-quality] Photo check failed', error)
     return { ok: false, code: 'checkUnavailable', message: 'We could not check this photo. Please try again.' }
   }
 }
 
-export async function prepareFaceImage(file: File): Promise<File> {
+function computeAutoCropRect(analysis: FaceImageAnalysis | undefined): FaceCropRect | null {
+  const face = analysis?.face
+  if (!analysis || !face) return null
+  if (Math.min(face.width, face.height) < FACE_MIN_BOX_EDGE) return null
+
+  const desiredLeft = face.originX - face.width * FACE_AUTO_CROP_SIDE_MARGIN_RATIO
+  const desiredRight = face.originX + face.width * (1 + FACE_AUTO_CROP_SIDE_MARGIN_RATIO)
+  const desiredTop = face.originY - face.height * FACE_AUTO_CROP_TOP_MARGIN_RATIO
+  const desiredBottom = face.originY + face.height * (1 + FACE_AUTO_CROP_BOTTOM_MARGIN_RATIO)
+
+  if (
+    desiredLeft < 0 ||
+    desiredTop < 0 ||
+    desiredRight > analysis.width ||
+    desiredBottom > analysis.height
+  ) {
+    return null
+  }
+
+  const desiredWidth = desiredRight - desiredLeft
+  const desiredHeight = desiredBottom - desiredTop
+  const side = Math.max(desiredWidth, desiredHeight)
+  if (side < FACE_AUTO_CROP_MIN_EDGE || side > analysis.width || side > analysis.height) {
+    return null
+  }
+
+  const desiredCenterX = (desiredLeft + desiredRight) / 2
+  const desiredCenterY = (desiredTop + desiredBottom) / 2
+  let x = desiredCenterX - side / 2
+  let y = desiredCenterY - side / 2
+
+  if (x < 0) x = 0
+  if (y < 0) y = 0
+  if (x + side > analysis.width) x = analysis.width - side
+  if (y + side > analysis.height) y = analysis.height - side
+
+  if (x > desiredLeft || y > desiredTop || x + side < desiredRight || y + side < desiredBottom) {
+    return null
+  }
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(side),
+    height: Math.round(side),
+  }
+}
+
+type PrepareFaceImageOptions = {
+  cropRect?: FaceCropRect | null
+  nameSuffix?: string
+}
+
+export async function prepareFaceImage(file: File, options: PrepareFaceImageOptions = {}): Promise<File> {
   if (!file.type.startsWith('image/')) return file
   if (typeof window === 'undefined') return file
 
@@ -430,12 +559,22 @@ export async function prepareFaceImage(file: File): Promise<File> {
     const originalHeight = image.naturalHeight || image.height
     if (!originalWidth || !originalHeight) return file
 
-    const maxEdge = Math.max(originalWidth, originalHeight)
-    const scale = maxEdge > FACE_UPLOAD_MAX_EDGE ? FACE_UPLOAD_MAX_EDGE / maxEdge : 1
-    const width = Math.max(1, Math.round(originalWidth * scale))
-    const height = Math.max(1, Math.round(originalHeight * scale))
+    const cropRect = options.cropRect ?? null
+    const sourceX = cropRect ? Math.max(0, Math.min(originalWidth - 1, cropRect.x)) : 0
+    const sourceY = cropRect ? Math.max(0, Math.min(originalHeight - 1, cropRect.y)) : 0
+    const sourceWidth = cropRect
+      ? Math.max(1, Math.min(originalWidth - sourceX, cropRect.width))
+      : originalWidth
+    const sourceHeight = cropRect
+      ? Math.max(1, Math.min(originalHeight - sourceY, cropRect.height))
+      : originalHeight
 
-    if (scale >= 1 && file.size <= FACE_UPLOAD_TARGET_BYTES) {
+    const maxEdge = Math.max(sourceWidth, sourceHeight)
+    const scale = maxEdge > FACE_UPLOAD_MAX_EDGE ? FACE_UPLOAD_MAX_EDGE / maxEdge : 1
+    const width = Math.max(1, Math.round(sourceWidth * scale))
+    const height = Math.max(1, Math.round(sourceHeight * scale))
+
+    if (!cropRect && scale >= 1 && file.size <= FACE_UPLOAD_TARGET_BYTES) {
       return file
     }
 
@@ -444,18 +583,19 @@ export async function prepareFaceImage(file: File): Promise<File> {
     canvas.height = height
     const ctx = canvas.getContext('2d')
     if (!ctx) return file
-    ctx.drawImage(image, 0, 0, width, height)
+    ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height)
 
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, 'image/jpeg', FACE_UPLOAD_JPEG_QUALITY)
     )
     if (!blob) return file
-    if (blob.size >= file.size && file.size <= FACE_UPLOAD_TARGET_BYTES) {
+    if (!cropRect && blob.size >= file.size && file.size <= FACE_UPLOAD_TARGET_BYTES) {
       return file
     }
 
     const baseName = file.name.replace(/\.[^.]+$/, '')
-    const optimizedName = `${baseName}.jpg`
+    const suffix = options.nameSuffix ? `-${options.nameSuffix}` : ''
+    const optimizedName = `${baseName}${suffix}.jpg`
     return new File([blob], optimizedName, {
       type: 'image/jpeg',
       lastModified: Date.now(),
@@ -463,6 +603,13 @@ export async function prepareFaceImage(file: File): Promise<File> {
   } catch {
     return file
   }
+}
+
+export async function autoCropFaceImage(file: File, analysis: FaceImageAnalysis | undefined): Promise<File | null> {
+  const cropRect = computeAutoCropRect(analysis)
+  if (!cropRect) return null
+  const prepared = await prepareFaceImage(file, { cropRect, nameSuffix: 'centered' })
+  return prepared === file ? null : prepared
 }
 
 type UserAssetRole = 'face' | 'text' | 'voice' | 'avatar'

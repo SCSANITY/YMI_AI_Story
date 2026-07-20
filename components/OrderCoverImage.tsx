@@ -2,11 +2,14 @@
 
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
+import { isSupabaseStorageImage } from '@/lib/storage-images'
 
 type CoverStatus = 'ready' | 'pending' | 'unavailable'
 
 type OrderCoverImageProps = {
   cartItemId?: string | null
+  orderId?: string | null
+  stripeSessionId?: string | null
   src?: string | null
   status?: CoverStatus | null
   alt: string
@@ -18,6 +21,8 @@ type OrderCoverImageProps = {
 
 export default function OrderCoverImage({
   cartItemId,
+  orderId,
+  stripeSessionId,
   src,
   status,
   alt,
@@ -44,7 +49,11 @@ export default function OrderCoverImage({
     lastRefreshAtRef.current = now
 
     try {
-      const response = await fetch(`/api/order-covers?cartItemIds=${encodeURIComponent(cartItemId)}`, {
+      const params = new URLSearchParams({ cartItemIds: cartItemId })
+      if (orderId) params.set('orderId', orderId)
+      if (stripeSessionId) params.set('session_id', stripeSessionId)
+
+      const response = await fetch(`/api/order-covers?${params.toString()}`, {
         credentials: 'include',
       })
       if (!response.ok) {
@@ -76,6 +85,7 @@ export default function OrderCoverImage({
           alt={alt}
           fill
           sizes={sizes}
+          unoptimized={isSupabaseStorageImage(currentSrc)}
           className={imageClassName}
           onError={() => {
             setCurrentSrc(null)

@@ -37,6 +37,20 @@ html {
   overflow-x: hidden;
 }
 
+.login-modal-input {
+  color: #111827;
+  background-color: #ffffff;
+  color-scheme: light;
+}
+
+.login-modal-input:-webkit-autofill,
+.login-modal-input:-webkit-autofill:hover,
+.login-modal-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #111827;
+  caret-color: #d97706;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+}
+
 .font-display {
   font-family: var(--font-playfair), "Playfair Display", "Georgia", serif;
   font-weight: 700;

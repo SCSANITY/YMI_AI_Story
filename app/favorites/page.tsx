@@ -33,7 +33,7 @@ function FavoritesLoadingGrid() {
 export default function FavoritesPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { favorites, toggleFavorite, user, isHydrated } = useGlobalContext();
+  const { favorites, isFavoritesLoading, toggleFavorite, user, isHydrated } = useGlobalContext();
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
   const [coverMap, setCoverMap] = useState<Record<string, string>>({});
   const [titleMap, setTitleMap] = useState<Record<string, string>>({});
@@ -105,7 +105,7 @@ export default function FavoritesPage() {
           <div className="mb-6 text-xs text-gray-500">{t('favorites.syncHint')}</div>
         )}
 
-        {!isHydrated ? (
+        {!isHydrated || isFavoritesLoading ? (
           <FavoritesLoadingGrid />
         ) : favorites.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-center">

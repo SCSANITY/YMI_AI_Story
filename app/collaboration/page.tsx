@@ -8,6 +8,7 @@ import { CreatorPromoSection } from './CreatorPromoSection'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { useBookCatalog } from '@/components/useBookCatalog'
+import { isSupabaseStorageImage } from '@/lib/storage-images'
 
 export default function CollaborationPage() {
   const { user, openLoginModal } = useGlobalContext()
@@ -61,6 +62,7 @@ export default function CollaborationPage() {
                         alt={book.title}
                         fill
                         sizes="(max-width: 767px) 190px, 230px"
+                        unoptimized={isSupabaseStorageImage(book.coverUrl)}
                         className="object-cover"
                       />
                     </div>
@@ -84,6 +86,7 @@ export default function CollaborationPage() {
                         alt={book.title}
                         fill
                         sizes="(max-width: 767px) 160px, 200px"
+                        unoptimized={isSupabaseStorageImage(book.coverUrl)}
                         className="object-cover"
                       />
                     </div>
