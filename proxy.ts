@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { CURRENCY_GEO_COOKIE } from '@/lib/currency-geo'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const BYPASS_COOKIE = 'ymi_maintenance_bypass'
+const VERCEL_COUNTRY_HEADER = 'x-vercel-ip-country'
 
 const ALLOWED_API_PREFIXES = [
   '/api/webhooks/',
@@ -65,6 +67,18 @@ export async function proxy(request: NextRequest) {
       headers: request.headers,
     },
   })
+
+  if (!request.cookies.get(CURRENCY_GEO_COOKIE)) {
+    const country = String(request.headers.get(VERCEL_COUNTRY_HEADER) ?? '').trim().toUpperCase()
+    if (/^[A-Z]{2}$/.test(country)) {
+      response.cookies.set(CURRENCY_GEO_COOKIE, country, {
+        path: '/',
+        maxAge: 60 * 60 * 24,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      })
+    }
+  }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

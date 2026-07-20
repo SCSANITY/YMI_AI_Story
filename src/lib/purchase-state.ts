@@ -25,6 +25,11 @@ export type PurchaseSummary = {
   finalReleasedAt: string | null
 }
 
+export type CreationPhotoLockState = {
+  purchaseState: PurchaseState
+  hasCartAttachment: boolean
+}
+
 type CartPurchaseRow = {
   cart_item_id: string
   creation_id: string | null
@@ -77,6 +82,50 @@ export function getEmptyPurchaseSummary(): PurchaseSummary {
     finalReady: false,
     finalReviewStatus: null,
     finalReleasedAt: null,
+  }
+}
+
+export async function loadCreationPhotoLockState(
+  creationId: string
+): Promise<CreationPhotoLockState> {
+  const { data: cartItems, error: cartItemsError } = await supabaseAdmin
+    .from('cart_items')
+    .select('cart_item_id, order_id, status')
+    .eq('creation_id', creationId)
+
+  if (cartItemsError) {
+    throw new Error(`Failed to load creation cart state: ${cartItemsError.message}`)
+  }
+
+  const rows = cartItems ?? []
+  const orderIds = Array.from(
+    new Set(
+      rows
+        .map((item) => (item.order_id ? String(item.order_id) : null))
+        .filter((orderId): orderId is string => Boolean(orderId))
+    )
+  )
+
+  if (!orderIds.length) {
+    return {
+      purchaseState: 'unpurchased',
+      hasCartAttachment: rows.length > 0,
+    }
+  }
+
+  const { data: orders, error: ordersError } = await supabaseAdmin
+    .from('orders')
+    .select('order_status')
+    .in('order_id', orderIds)
+
+  if (ordersError) {
+    throw new Error(`Failed to load creation order state: ${ordersError.message}`)
+  }
+
+  return {
+    purchaseState: classifyPurchaseState(orders ?? []),
+    // Add-to-Cart is the commit boundary for photo selection, including draft cart rows.
+    hasCartAttachment: rows.length > 0,
   }
 }
 

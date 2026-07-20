@@ -5,12 +5,23 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeFlow } from '@/components/personalize/usePersonalizeFlow';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
 import { autoCropFaceImage, faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
-import { cancelPreviewJob, createPreviewJob, getJob, getPreviewPages, getPreviewUrl } from '@/services/jobs';
+import {
+  cancelPreviewJob,
+  commitPreviewVariant,
+  createPreviewJob,
+  createPreviewVariant,
+  discardPreviewVariant,
+  discardPreviewVariantSession,
+  getJob,
+  getPreviewPages,
+  PreviewVariantRequestError,
+} from '@/services/jobs';
 import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
 import { isUuid } from '@/lib/validators';
 import { useI18n } from '@/lib/useI18n';
 import { formatDisplayCurrency } from '@/lib/locale-pricing';
+import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants';
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar';
 import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction';
 import { ProductShowcaseCarousel } from '@/components/personalize/ProductShowcaseCarousel';
@@ -29,12 +40,31 @@ import { CustomizeFormCard } from '@/components/personalize/CustomizeFormCard';
 import { StoryShowcaseCard } from '@/components/personalize/StoryShowcaseCard';
 import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayout';
 import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
+import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGallery';
 import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import type { CatalogBook } from '@/lib/book-catalog';
 import type { CartItem, StoryLanguage } from '@/types';
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
+
+type FacePreparationOutcome =
+  | { status: 'ready'; file: File; autoCropped: boolean }
+  | { status: 'failed'; error: FaceImageValidationResult | null }
+  | { status: 'cancelled' };
+
+type PreviewVariantView = {
+  jobId: string
+  status: 'generating' | 'ready' | 'failed'
+  pages: string[]
+  coverUrl: string | null
+  photoPreviewUrl: string | null
+  faceAssetId: string | null
+  faceStoragePath: string | null
+  faceImageUrl: string | null
+  original: boolean
+  countsTowardLimit: boolean
+}
 
 const logPreviewDebug = (...args: unknown[]) => {
   if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PREVIEW_DEBUG === 'true') {
@@ -100,10 +130,79 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<TimedResul
   });
 }
 
+function waitForImageDecode(url: string, timeoutMs = 15_000) {
+  return new Promise<void>((resolve, reject) => {
+    const image = new Image();
+    const timer = window.setTimeout(() => reject(new Error('Preview cover timed out')), timeoutMs);
+    const finish = (error?: Error) => {
+      window.clearTimeout(timer);
+      image.onload = null;
+      image.onerror = null;
+      if (error) reject(error);
+      else resolve();
+    };
+    image.onload = () => {
+      if (typeof image.decode === 'function') {
+        void image.decode().catch(() => undefined).finally(() => finish());
+      } else {
+        finish();
+      }
+    };
+    image.onerror = () => finish(new Error('Preview cover failed to load'));
+    image.src = url;
+  });
+}
+
 const parseChildAge = (value: string) => {
   const parsed = Number.parseFloat(value.trim());
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const previewVariantSessionStorageKey = (creationId: string) =>
+  `ymi_preview_variant_sessions_${creationId}`;
+
+function readPreviewVariantSessionIds(creationId: string) {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(
+      window.sessionStorage.getItem(previewVariantSessionStorageKey(creationId)) || '[]'
+    );
+    return Array.isArray(parsed)
+      ? Array.from(new Set(parsed.filter((value): value is string => isUuid(value))))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePreviewVariantSessionIds(creationId: string, sessionIds: string[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = previewVariantSessionStorageKey(creationId);
+    const uniqueIds = Array.from(new Set(sessionIds.filter(isUuid)));
+    if (uniqueIds.length === 0) {
+      window.sessionStorage.removeItem(key);
+      return;
+    }
+    window.sessionStorage.setItem(key, JSON.stringify(uniqueIds));
+  } catch {
+    // The in-memory session still supports cleanup when storage is unavailable.
+  }
+}
+
+function rememberPreviewVariantSession(creationId: string, sessionId: string) {
+  writePreviewVariantSessionIds(creationId, [
+    ...readPreviewVariantSessionIds(creationId),
+    sessionId,
+  ]);
+}
+
+function forgetPreviewVariantSession(creationId: string, sessionId: string) {
+  writePreviewVariantSessionIds(
+    creationId,
+    readPreviewVariantSessionIds(creationId).filter((value) => value !== sessionId)
+  );
+}
 
 export default function PersonalizePage({ bookID }: { bookID: string }) {
 
@@ -228,10 +327,24 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
+  const [showAddToCartConfirm, setShowAddToCartConfirm] = useState(false);
   const pendingGenerateConsentRef = useRef<{ dataGeneration: boolean; marketing: boolean } | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
+  const [selectedPreviewJobId, setSelectedPreviewJobId] = useState<string | null>(null);
+  const selectedPreviewCreationIdRef = useRef<string | null>(null);
+  const previewVariantSessionIdRef = useRef<string | null>(null);
+  const previewVariantCleanupInFlightRef = useRef<Map<string, Promise<boolean>>>(new Map());
+  const [previewVariants, setPreviewVariants] = useState<PreviewVariantView[]>([]);
+  const previewVariantsRef = useRef<PreviewVariantView[]>([]);
+  const [previewVariantSessionCount, setPreviewVariantSessionCount] = useState(0);
+  const [previewVariantPrepareStatus, setPreviewVariantPrepareStatus] = useState<FacePrepareStatus>('idle');
+  const [previewVariantError, setPreviewVariantError] = useState<string | null>(null);
+  const [discardingPreviewVariantIds, setDiscardingPreviewVariantIds] = useState<Set<string>>(() => new Set());
+  const [isPreviewPhotoLocked, setIsPreviewPhotoLocked] = useState(false);
+  const previewVariantGenerationRef = useRef(false);
+  const previewVariantPhotoUrlsRef = useRef<Set<string>>(new Set());
   const [creationId, setCreationId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewPages, setPreviewPages] = useState<string[]>([]);
@@ -261,6 +374,204 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     asset_id: string
     metadata?: { child_name?: string; child_age?: number; name?: string; age?: number; gender?: string }
   }
+
+  useEffect(() => {
+    previewVariantsRef.current = previewVariants;
+  }, [previewVariants]);
+
+  useEffect(() => {
+    if (!creationId || !previewJobId) {
+      if (!creationId) {
+        selectedPreviewCreationIdRef.current = null;
+        setSelectedPreviewJobId(null);
+        previewVariantSessionIdRef.current = null;
+        setPreviewVariants([]);
+        setPreviewVariantSessionCount(0);
+        setPreviewVariantError(null);
+        setIsPreviewPhotoLocked(false);
+      }
+      return;
+    }
+
+    if (selectedPreviewCreationIdRef.current !== creationId) {
+      selectedPreviewCreationIdRef.current = creationId;
+      setSelectedPreviewJobId(previewJobId);
+      setPreviewVariants([
+        {
+          jobId: previewJobId,
+          status: previewPages[0] || previewUrl ? 'ready' : 'generating',
+          pages: previewPages,
+          coverUrl: previewPages[0] || previewUrl,
+          photoPreviewUrl: photoPreview,
+          faceAssetId: photoAssetId,
+          faceStoragePath: photoStoragePath,
+          faceImageUrl,
+          original: true,
+          countsTowardLimit: false,
+        },
+      ]);
+      setPreviewVariantSessionCount(0);
+      setPreviewVariantError(null);
+      setIsPreviewPhotoLocked(false);
+    }
+  }, [creationId, previewJobId, previewPages, previewUrl, photoPreview, photoAssetId, photoStoragePath, faceImageUrl]);
+
+  useEffect(() => {
+    if (!selectedPreviewJobId) return;
+    setPreviewVariants((current) =>
+      current.map((variant) =>
+        variant.jobId === selectedPreviewJobId
+          ? {
+              ...variant,
+              status: previewPages[0] || previewUrl ? 'ready' : variant.status,
+              pages: previewPages,
+              coverUrl: previewPages[0] || previewUrl || variant.coverUrl,
+              photoPreviewUrl: photoPreview || variant.photoPreviewUrl,
+              faceAssetId: photoAssetId || variant.faceAssetId,
+              faceStoragePath: photoStoragePath || variant.faceStoragePath,
+              faceImageUrl: faceImageUrl || variant.faceImageUrl,
+            }
+          : variant
+      )
+    );
+  }, [selectedPreviewJobId, previewPages, previewUrl, photoPreview, photoAssetId, photoStoragePath, faceImageUrl]);
+
+  useEffect(() => {
+    const photoUrls = previewVariantPhotoUrlsRef.current;
+    return () => {
+      photoUrls.forEach((url) => URL.revokeObjectURL(url));
+      photoUrls.clear();
+    };
+  }, []);
+
+  const applyPreviewVariantSelection = useCallback((variant: PreviewVariantView) => {
+    if (variant.status !== 'ready' || !variant.coverUrl) return;
+    setSelectedPreviewJobId(variant.jobId);
+    setPreviewPages(variant.pages.length ? variant.pages : [variant.coverUrl]);
+    setPreviewUrl(variant.coverUrl);
+    setPreviewImageErrors(() => new Set());
+    setCurrentSpread(0);
+    setIsFlipping(false);
+    setFlipDirection(null);
+    setPhoto(null);
+    setPreparedFaceFile(null);
+    setFacePrepareStatus('ready');
+    setFacePrepareError(null);
+    setFaceAutoCropped(false);
+    setPhotoPreview(variant.photoPreviewUrl);
+    setPhotoAssetId(variant.faceAssetId);
+    setPhotoStoragePath(variant.faceStoragePath);
+    setFaceImageUrl(variant.faceImageUrl);
+  }, [setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath]);
+
+  const handleSelectPreviewVariant = useCallback((jobId: string) => {
+    const variant = previewVariantsRef.current.find((item) => item.jobId === jobId);
+    if (variant) applyPreviewVariantSelection(variant);
+  }, [applyPreviewVariantSelection]);
+
+  const cleanupPreviewVariantSession = useCallback((
+    sessionId: string,
+    options?: { keepalive?: boolean }
+  ) => {
+    if (!creationId || !isUuid(sessionId)) return Promise.resolve(true);
+    const cleanupKey = `${creationId}:${sessionId}`;
+    const existing = previewVariantCleanupInFlightRef.current.get(cleanupKey);
+    if (existing) return existing;
+
+    const cleanup = discardPreviewVariantSession({
+      creationId,
+      variantSessionId: sessionId,
+      keepalive: options?.keepalive,
+    })
+      .then(() => {
+        forgetPreviewVariantSession(creationId, sessionId);
+        return true;
+      })
+      .catch((error) => {
+        console.error('Preview variant session cleanup failed', error);
+        return false;
+      })
+      .finally(() => {
+        previewVariantCleanupInFlightRef.current.delete(cleanupKey);
+      });
+
+    previewVariantCleanupInFlightRef.current.set(cleanupKey, cleanup);
+    return cleanup;
+  }, [creationId]);
+
+  const ensurePreviewVariantSession = useCallback(() => {
+    if (!creationId) throw new Error('Preview creation is unavailable');
+    const current = previewVariantSessionIdRef.current;
+    if (current) return current;
+
+    const sessionId = window.crypto.randomUUID();
+    previewVariantSessionIdRef.current = sessionId;
+    rememberPreviewVariantSession(creationId, sessionId);
+    return sessionId;
+  }, [creationId]);
+
+  const resetPreviewVariantGallery = useCallback(() => {
+    const committed = previewVariantsRef.current.find((variant) => variant.original);
+    if (committed) {
+      applyPreviewVariantSelection(committed);
+      setPreviewVariants([{ ...committed, countsTowardLimit: false }]);
+    }
+    setPreviewVariantSessionCount(0);
+    setPreviewVariantError(null);
+    previewVariantGenerationRef.current = false;
+  }, [applyPreviewVariantSelection]);
+
+  const cleanupCurrentPreviewVariantSession = useCallback(async (options?: {
+    keepalive?: boolean
+    resetGallery?: boolean
+  }) => {
+    const sessionId = previewVariantSessionIdRef.current;
+    if (!sessionId) return true;
+    if (options?.resetGallery) resetPreviewVariantGallery();
+    const cleaned = await cleanupPreviewVariantSession(sessionId, options);
+    if (cleaned && previewVariantSessionIdRef.current === sessionId) {
+      previewVariantSessionIdRef.current = null;
+    }
+    return cleaned;
+  }, [cleanupPreviewVariantSession, resetPreviewVariantGallery]);
+
+  useEffect(() => {
+    if (viewMode !== 'preview' || !creationId) return;
+    const staleSessionIds = readPreviewVariantSessionIds(creationId).filter(
+      (sessionId) => sessionId !== previewVariantSessionIdRef.current
+    );
+    staleSessionIds.forEach((sessionId) => {
+      void cleanupPreviewVariantSession(sessionId);
+    });
+  }, [cleanupPreviewVariantSession, creationId, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'preview' || !creationId) return;
+
+    const handlePageHide = () => {
+      void cleanupCurrentPreviewVariantSession({ keepalive: true });
+    };
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted || !previewVariantSessionIdRef.current) return;
+      void cleanupCurrentPreviewVariantSession({ resetGallery: true });
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+      void cleanupCurrentPreviewVariantSession({ keepalive: true });
+    };
+  }, [cleanupCurrentPreviewVariantSession, creationId, viewMode]);
+
+  const displayedPreviewJobId = selectedPreviewJobId ?? previewJobId;
+  const isPreviewVariantBusy =
+    previewVariantPrepareStatus === 'checking' ||
+    previewVariantPrepareStatus === 'preparing' ||
+    previewVariants.some((variant) => variant.status === 'generating');
+  const isPreviewVariantLimitReached =
+    previewVariantSessionCount >= PREVIEW_VARIANT_SESSION_CAP;
 
   const handleOpenPreviewShare = useCallback(async () => {
     if (!creationId) {
@@ -392,7 +703,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     options?: { force?: boolean }
   ) => {
     if (!viewState.showPreview) return;
-    if (!previewJobId) return;
+    if (!displayedPreviewJobId) return;
     if (previewRefreshInFlightRef.current) return;
 
     const now = Date.now();
@@ -403,7 +714,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     previewRefreshInFlightRef.current = true;
     try {
-      const urls = await getPreviewPages(previewJobId, undefined, {
+      const urls = await getPreviewPages(displayedPreviewJobId, undefined, {
         size: 'small',
         customerId: user?.customerId ?? null,
       });
@@ -413,13 +724,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       setPreviewUrl(urls[0]);
       setPreviewImageErrors(() => new Set());
       lastPreviewRefreshAtRef.current = Date.now();
-      logPreviewDebug('preview images refreshed', { reason, jobId: previewJobId, count: urls.length });
+      logPreviewDebug('preview images refreshed', { reason, jobId: displayedPreviewJobId, count: urls.length });
     } catch {
       // Keep the controlled fallback UI. The next focus/visibility change or image error can retry.
     } finally {
       previewRefreshInFlightRef.current = false;
     }
-  }, [previewJobId, user?.customerId, viewState.showPreview]);
+  }, [displayedPreviewJobId, user?.customerId, viewState.showPreview]);
   const bookFaqItems = useMemo(() => {
     const storyTitle = templateTitle || book?.title || 'this story';
     return [
@@ -671,7 +982,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         const url = user?.customerId
           ? `/api/creations/${encodeURIComponent(creationId)}?customerId=${encodeURIComponent(user.customerId)}`
           : `/api/creations/${encodeURIComponent(creationId)}`
-        const res = await fetch(url, { credentials: 'include' })
+        const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
         if (!res.ok) return
         const data = await res.json()
         if (!isActive) return
@@ -682,8 +993,34 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           window.sessionStorage.setItem(cacheKey, JSON.stringify({ creation }))
         }
 
-        if (!previewJobId && creation.preview_job_id) {
-          setPreviewJobId(creation.preview_job_id)
+        const activePreviewJobId = String(creation.preview_job_id || '')
+        if (
+          isUuid(activePreviewJobId) &&
+          activePreviewJobId !== previewJobId &&
+          !previewVariantSessionIdRef.current
+        ) {
+          selectedPreviewCreationIdRef.current = null
+          setPreviewVariants([])
+          setSelectedPreviewJobId(activePreviewJobId)
+          setPreviewJobId(activePreviewJobId)
+          setPreviewPages([])
+          setPreviewUrl(null)
+          if (typeof window !== 'undefined') {
+            try {
+              window.sessionStorage.removeItem(`ymi_preview_${creationId}`)
+            } catch {
+              // Continue URL reconciliation when session storage is unavailable.
+            }
+            const params = new URLSearchParams(window.location.search)
+            params.set('view', 'preview')
+            params.set('creationId', creationId)
+            params.set('jobId', activePreviewJobId)
+            window.history.replaceState(
+              window.history.state,
+              '',
+              `/personalize/${bookID}?${params.toString()}`
+            )
+          }
         }
 
         const snapshot = creation.customize_snapshot ?? {}
@@ -731,7 +1068,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return () => {
       isActive = false
     }
-  }, [viewMode, creationId, user?.customerId, previewJobId, name, age, selectedLang, bookType, templateTitle, templateDescription, templateInnerDescription, templateCoverUrl, setName, setAge, setSelectedLang, setBookType, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription, setTemplateCoverUrl])
+  }, [viewMode, creationId, user?.customerId, previewJobId, name, age, selectedLang, bookType, templateTitle, templateDescription, templateInnerDescription, templateCoverUrl, setName, setAge, setSelectedLang, setBookType, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription, setTemplateCoverUrl, bookID])
 
   useEffect(() => {
     if (resumeData && resumeData.bookID === bookID) return
@@ -1171,7 +1508,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   useEffect(() => {
     if (!viewState.showPreview) return;
-    if (!previewJobId) return;
+    if (!displayedPreviewJobId) return;
     if (previewPages.length >= 2) return;
 
     let isActive = true;
@@ -1180,7 +1517,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     const pollForRemainingPreviewPages = async () => {
       while (isActive) {
         try {
-          const urls = await getPreviewPages(previewJobId, undefined, {
+          const urls = await getPreviewPages(displayedPreviewJobId, undefined, {
             size: 'small',
             customerId: user?.customerId ?? null,
           });
@@ -1192,7 +1529,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             }
           }
 
-          const job = await getJob(previewJobId, user?.customerId ?? null);
+          const job = await getJob(displayedPreviewJobId, user?.customerId ?? null);
           if (!isActive) return;
           if (job.status === 'done' && urls.length >= 2) {
             return;
@@ -1217,11 +1554,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return () => {
       isActive = false;
     };
-  }, [viewState.showPreview, previewJobId, previewPages.length, user?.customerId]);
+  }, [viewState.showPreview, displayedPreviewJobId, previewPages.length, user?.customerId]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
-    if (!previewJobId) return;
+    if (!displayedPreviewJobId) return;
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     const handleVisibilityChange = () => {
@@ -1247,7 +1584,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [previewJobId, refreshPreviewImages, viewState.showPreview]);
+  }, [displayedPreviewJobId, refreshPreviewImages, viewState.showPreview]);
 
   useEffect(() => {
     if (!bookID) return;
@@ -1713,12 +2050,27 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     replacePersonalizeUrl(null);
   }, [replacePersonalizeUrl, stage, viewMode]);
 
-  const returnToCustomizeFromPreview = useCallback(() => {
+  const returnToCustomizeFromPreview = useCallback(async () => {
     persistDraftForCustomizeReturn();
     setShowExitConfirm(false);
+    await cleanupCurrentPreviewVariantSession();
     router.replace(`/personalize/${bookID}`);
     startForm();
-  }, [bookID, persistDraftForCustomizeReturn, router, startForm]);
+  }, [bookID, cleanupCurrentPreviewVariantSession, persistDraftForCustomizeReturn, router, startForm]);
+
+  const navigateAwayFromPreview = useCallback(async (href: string) => {
+    if (viewState.showPreview) {
+      await cleanupCurrentPreviewVariantSession();
+    }
+    router.push(href);
+  }, [cleanupCurrentPreviewVariantSession, router, viewState.showPreview]);
+
+  const logoutFromPreview = useCallback(async () => {
+    if (viewState.showPreview) {
+      await cleanupCurrentPreviewVariantSession();
+    }
+    logout();
+  }, [cleanupCurrentPreviewVariantSession, logout, viewState.showPreview]);
 
   const ensurePremiumVoiceSample = useCallback(() => {
     if (!requiresVoiceSample) {
@@ -1732,7 +2084,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     setVoiceValidationError(t('personalize.voiceSampleRequired'));
     if (stage === 'PREVIEW') {
-      returnToCustomizeFromPreview();
+      void returnToCustomizeFromPreview();
     } else {
       voicePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -1748,6 +2100,136 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     },
     []
   );
+
+  const handleDiscardPreviewVariant = useCallback(async (jobId: string) => {
+    const variant = previewVariantsRef.current.find((item) => item.jobId === jobId);
+    const variantSessionId = previewVariantSessionIdRef.current;
+    if (!variant || variant.original || !creationId || !variantSessionId) return;
+
+    setDiscardingPreviewVariantIds((current) => new Set(current).add(jobId));
+    setPreviewVariantError(null);
+    try {
+      await discardPreviewVariant({ creationId, jobId, variantSessionId });
+
+      if (selectedPreviewJobId === jobId) {
+        const fallback = previewVariantsRef.current.find(
+          (item) => item.jobId !== jobId && item.original && item.status === 'ready'
+        ) ?? previewVariantsRef.current.find(
+          (item) => item.jobId !== jobId && item.status === 'ready'
+        );
+        if (fallback) applyPreviewVariantSelection(fallback);
+      }
+
+      setPreviewVariants((current) => current.filter((item) => item.jobId !== jobId));
+      if (variant.countsTowardLimit) {
+        setPreviewVariantSessionCount((count) => Math.max(0, count - 1));
+      }
+      if (variant.photoPreviewUrl && previewVariantPhotoUrlsRef.current.has(variant.photoPreviewUrl)) {
+        previewVariantPhotoUrlsRef.current.delete(variant.photoPreviewUrl);
+        URL.revokeObjectURL(variant.photoPreviewUrl);
+      }
+    } catch (error) {
+      if (error instanceof PreviewVariantRequestError) {
+        if (error.code === 'committed_preview' || error.code === 'creation_photo_locked') {
+          setIsPreviewPhotoLocked(true);
+        }
+      }
+      setPreviewVariantError(
+        error instanceof Error ? error.message : t('personalize.previewVariantDiscardFailed')
+      );
+    } finally {
+      setDiscardingPreviewVariantIds((current) => {
+        const next = new Set(current);
+        next.delete(jobId);
+        return next;
+      });
+    }
+  }, [applyPreviewVariantSelection, creationId, selectedPreviewJobId, t]);
+
+  const commitSelectedPreviewForExit = useCallback(async (ensuredCreationId: string) => {
+    const expectedPreviewJobId = previewJobId;
+    const selectedJobId = selectedPreviewJobId ?? expectedPreviewJobId;
+    if (!expectedPreviewJobId || !selectedJobId) {
+      throw new Error('Preview selection is unavailable');
+    }
+
+    const variantSessionId = previewVariantSessionIdRef.current;
+    const result = await commitPreviewVariant({
+      creationId: ensuredCreationId,
+      expectedPreviewJobId,
+      selectedPreviewJobId: selectedJobId,
+      variantSessionId,
+    });
+
+    setPreviewJobId(result.activePreviewJobId);
+    setSelectedPreviewJobId(result.activePreviewJobId);
+    setIsPreviewPhotoLocked(true);
+    setPreviewVariantSessionCount(0);
+    const selectedVariant = previewVariantsRef.current.find(
+      (variant) => variant.jobId === result.activePreviewJobId
+    );
+    previewVariantsRef.current.forEach((variant) => {
+      if (
+        variant.jobId !== result.activePreviewJobId &&
+        variant.photoPreviewUrl &&
+        previewVariantPhotoUrlsRef.current.has(variant.photoPreviewUrl)
+      ) {
+        previewVariantPhotoUrlsRef.current.delete(variant.photoPreviewUrl);
+        URL.revokeObjectURL(variant.photoPreviewUrl);
+      }
+    });
+    if (selectedVariant) {
+      setPreviewVariants([
+        { ...selectedVariant, original: true, countsTowardLimit: false },
+      ]);
+    }
+
+    if (variantSessionId) {
+      forgetPreviewVariantSession(ensuredCreationId, variantSessionId);
+      previewVariantSessionIdRef.current = null;
+    }
+    setPreviewShareUrl(null);
+    setPreviewPublicShareImageUrl(null);
+    setIsShareDialogOpen(false);
+    setShareError(null);
+    replacePreviewUrl(ensuredCreationId, result.activePreviewJobId);
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.removeItem(`ymi_creation_${ensuredCreationId}`);
+        window.sessionStorage.setItem(
+          `ymi_preview_${ensuredCreationId}`,
+          JSON.stringify({
+            coverUrl: selectedVariant?.coverUrl ?? previewPages[0] ?? previewUrl ?? null,
+            jobId: result.activePreviewJobId,
+          })
+        );
+      } catch {
+        // Cache refresh is optional after the database commit succeeds.
+      }
+    }
+
+    void getPreviewPages(result.activePreviewJobId, undefined, {
+      size: 'small',
+      customerId: user?.customerId ?? null,
+    }).then((urls) => {
+      if (!urls[0]) return;
+      setPreviewPages(urls);
+      setPreviewUrl(urls[0]);
+      if (typeof window !== 'undefined') {
+        try {
+          window.sessionStorage.setItem(
+            `ymi_preview_${ensuredCreationId}`,
+            JSON.stringify({ coverUrl: urls[0], jobId: result.activePreviewJobId })
+          );
+        } catch {
+          // The live state already has the refreshed signed URLs.
+        }
+      }
+    }).catch(() => undefined);
+
+    return result.activePreviewJobId;
+  }, [previewJobId, previewPages, previewUrl, replacePreviewUrl, selectedPreviewJobId, user?.customerId]);
 
 
   const performAddToCart = useCallback(async () => {
@@ -1779,6 +2261,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       return null
     }
 
+    const committedPreviewJobId = await commitSelectedPreviewForExit(ensuredCreationId)
+
     const item = await addToCart(
         resolvedBook!,
         {
@@ -1800,7 +2284,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         },
         voiceAssetId: voiceAssetId ?? undefined,
         voiceStoragePath: voiceStoragePath ?? undefined,
-        previewJobId: previewJobId ?? undefined,
+        previewJobId: committedPreviewJobId,
         creationId: ensuredCreationId ?? undefined,
         },
         flowStep,
@@ -1809,7 +2293,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     )
 
     return item ?? null;
-    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample]);
+    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample, commitSelectedPreviewForExit]);
 
   const startAddToCart = useCallback(() => {
     const promise = performAddToCart()
@@ -1862,6 +2346,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               console.error('Missing creationId for cart')
               return
             }
+            const committedPreviewJobId = await commitSelectedPreviewForExit(ensuredCreationId)
             const personalization = {
               childName: currentName,
               childAge: currentAge,
@@ -1881,7 +2366,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               },
               voiceAssetId: voiceAssetId ?? undefined,
               voiceStoragePath: voiceStoragePath ?? undefined,
-              previewJobId: previewJobId ?? undefined,
+              previewJobId: committedPreviewJobId,
               creationId: ensuredCreationId ?? undefined,
             }
 
@@ -1957,12 +2442,25 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample]);
+    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, commitSelectedPreviewForExit]);
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;
     if (previewActionInFlightRef.current === 'CHECKOUT') return;
     if (!ensurePremiumVoiceSample()) return;
+    if (!isPreviewPhotoLocked) {
+      setShowAddToCartConfirm(true);
+      return;
+    }
+    triggerFlyToCart();
+    if (!addToCartPromiseRef.current) {
+      void startAddToCart();
+    }
+  };
+
+  const handleConfirmAddToCart = () => {
+    setShowAddToCartConfirm(false);
+    if (!canAddToCart || isExiting) return;
     triggerFlyToCart();
     if (!addToCartPromiseRef.current) {
       void startAddToCart();
@@ -1973,6 +2471,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     if (isExiting) return;
     if (previewActionInFlightRef.current) return;
     if (!ensurePremiumVoiceSample()) return;
+    setShowAddToCartConfirm(false);
     previewActionInFlightRef.current = 'CHECKOUT';
     setPreviewActionPending('CHECKOUT');
     requestCheckout();
@@ -2011,7 +2510,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             await performCheckout()
             break
           case 'EXIT':
-            returnToCustomizeFromPreview()
+            await returnToCustomizeFromPreview()
             break
         }
         completeExit()
@@ -2028,103 +2527,294 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
 
 
-    const startFacePreparation = useCallback(async (file: File, runId: number) => {
-      setFacePrepareStatus('checking');
-      setFacePrepareError(null);
-      setPreparedFaceFile(null);
-      setFaceAutoCropped(false);
+    const prepareFaceForUpload = useCallback(async (
+      file: File,
+      runId: number,
+      onPhase: (phase: 'checking' | 'preparing') => void
+    ): Promise<FacePreparationOutcome> => {
+      const isCurrent = () => facePrepareRunIdRef.current === runId;
+      onPhase('checking');
 
       const validation = await validateFaceImage(file);
-      if (facePrepareRunIdRef.current !== runId) return;
-
-      if (!validation.ok) {
-        setFacePrepareStatus('failed');
-        setFacePrepareError(resolveFaceValidationError(validation));
-        return;
-      }
+      if (!isCurrent()) return { status: 'cancelled' };
+      if (!validation.ok) return { status: 'failed', error: validation };
 
       const quality = await faceQualityCheck(file);
-      if (facePrepareRunIdRef.current !== runId) return;
+      if (!isCurrent()) return { status: 'cancelled' };
 
       if (!quality.ok) {
         const canAttemptAutoCrop =
           Boolean(quality.analysis?.autoCropCandidate) &&
           Boolean(quality.code && AUTO_CROP_FIXABLE_CODES.has(quality.code));
 
-        if (canAttemptAutoCrop) {
-          setFacePrepareStatus('preparing');
-          const cropAttempt = await withTimeout(
-            (async () => {
-              const cropped = await autoCropFaceImage(file, quality.analysis);
-              if (!cropped) return { file: null, error: null as FaceImageValidationResult | null };
-
-              const croppedValidation = await validateFaceImage(cropped);
-              if (!croppedValidation.ok) return { file: null, error: croppedValidation };
-
-              const croppedQuality = await faceQualityCheck(cropped);
-              if (!croppedQuality.ok) return { file: null, error: croppedQuality };
-
-              return { file: cropped, error: null as FaceImageValidationResult | null };
-            })(),
-            AUTO_FACE_CROP_TIMEOUT_MS
-          );
-          if (facePrepareRunIdRef.current !== runId) return;
-
-          if (cropAttempt.status === 'done' && cropAttempt.value.file) {
-            const croppedFile = cropAttempt.value.file;
-            setPreparedFaceFile(croppedFile);
-            setPhotoPreview(URL.createObjectURL(croppedFile));
-            setFaceAutoCropped(true);
-            setFacePrepareStatus('ready');
-            return;
-          }
-
-          if (cropAttempt.status === 'done' && cropAttempt.value.error) {
-            setFacePrepareError(resolveFaceValidationError(cropAttempt.value.error));
-          } else {
-            setFacePrepareError(resolveFaceValidationError(quality));
-          }
-        } else {
-          setFacePrepareError(resolveFaceValidationError(quality));
+        if (!canAttemptAutoCrop) {
+          return { status: 'failed', error: quality };
         }
+
+        onPhase('preparing');
+        const cropAttempt = await withTimeout(
+          (async () => {
+            const cropped = await autoCropFaceImage(file, quality.analysis);
+            if (!cropped) return { file: null, error: null as FaceImageValidationResult | null };
+
+            const croppedValidation = await validateFaceImage(cropped);
+            if (!croppedValidation.ok) return { file: null, error: croppedValidation };
+
+            const croppedQuality = await faceQualityCheck(cropped);
+            if (!croppedQuality.ok) return { file: null, error: croppedQuality };
+
+            return { file: cropped, error: null as FaceImageValidationResult | null };
+          })(),
+          AUTO_FACE_CROP_TIMEOUT_MS
+        );
+        if (!isCurrent()) return { status: 'cancelled' };
+        if (cropAttempt.status === 'done' && cropAttempt.value.file) {
+          return { status: 'ready', file: cropAttempt.value.file, autoCropped: true };
+        }
+        return {
+          status: 'failed',
+          error: cropAttempt.status === 'done' && cropAttempt.value.error
+            ? cropAttempt.value.error
+            : quality,
+        };
+      }
+
+      onPhase('preparing');
+      try {
+        const prepared = await prepareFaceImage(file);
+        if (!isCurrent()) return { status: 'cancelled' };
+        return { status: 'ready', file: prepared, autoCropped: false };
+      } catch {
+        if (!isCurrent()) return { status: 'cancelled' };
+        return { status: 'failed', error: null };
+      }
+    }, []);
+
+    const startFacePreparation = useCallback(async (file: File, runId: number) => {
+      setFacePrepareError(null);
+      setPreparedFaceFile(null);
+      setFaceAutoCropped(false);
+
+      const result = await prepareFaceForUpload(file, runId, setFacePrepareStatus);
+      if (result.status === 'cancelled') return;
+      if (result.status === 'failed') {
         setFacePrepareStatus('failed');
+        setFacePrepareError(
+          result.error
+            ? resolveFaceValidationError(result.error)
+            : t('personalize.photoPrepareFailed')
+        );
         return;
       }
 
-      setFacePrepareStatus('preparing');
-      try {
-        const prepared = await prepareFaceImage(file);
-        if (facePrepareRunIdRef.current !== runId) return;
-        setPreparedFaceFile(prepared);
-        setFaceAutoCropped(false);
-        setFacePrepareStatus('ready');
-      } catch {
-        if (facePrepareRunIdRef.current !== runId) return;
-        setPreparedFaceFile(null);
-        setFaceAutoCropped(false);
-        setFacePrepareStatus('failed');
-        setFacePrepareError(t('personalize.photoPrepareFailed'));
+      setPreparedFaceFile(result.file);
+      setFaceAutoCropped(result.autoCropped);
+      if (result.autoCropped) {
+        setPhotoPreview(URL.createObjectURL(result.file));
       }
-    }, [resolveFaceValidationError, setPhotoPreview, t]);
+      setFacePrepareStatus('ready');
+    }, [prepareFaceForUpload, resolveFaceValidationError, setPhotoPreview, t]);
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-          const file = e.target.files[0];
-          const nextRunId = facePrepareRunIdRef.current + 1;
-          facePrepareRunIdRef.current = nextRunId;
-          setPhoto(file);
-          setPhotoPreview(URL.createObjectURL(file));
-          setPhotoAssetId(null);
-          setPhotoStoragePath(null);
-          setFaceImageUrl(null);
-          setPreparedFaceFile(null);
-          setFacePrepareError(null);
-          setFaceAutoCropped(false);
-          setPreviewUrl(null);
-          void startFacePreparation(file, nextRunId);
-          e.target.value = '';
+    const resolvePreviewVariantError = useCallback((error: unknown) => {
+      if (error instanceof PreviewVariantRequestError) {
+        if (error.code === 'preview_variant_limit') {
+          setPreviewVariantSessionCount(PREVIEW_VARIANT_SESSION_CAP);
+          return t('personalize.previewVariantLimit');
+        }
+        if (error.code === 'preview_variant_in_flight') {
+          return t('personalize.previewVariantInFlight');
+        }
+        if (
+          error.code === 'creation_photo_committed' ||
+          error.code === 'creation_cart_locked' ||
+          error.code === 'creation_purchase_locked'
+        ) {
+          setIsPreviewPhotoLocked(true);
+          return t('personalize.previewPhotoLocked');
+        }
       }
-  };
+      return error instanceof Error ? error.message : t('personalize.previewVariantFailed');
+    }, [t]);
+
+    const startPreviewVariantGeneration = useCallback(async (
+      originalFile: File,
+      preparedFile: File,
+      preparedPhotoUrl: string
+    ) => {
+      if (!creationId || !previewJobId || previewVariantGenerationRef.current) return;
+      if (previewVariantSessionCount >= PREVIEW_VARIANT_SESSION_CAP) {
+        setPreviewVariantError(t('personalize.previewVariantLimit'));
+        return;
+      }
+
+      previewVariantGenerationRef.current = true;
+      setPreviewVariantError(null);
+      setPreviewVariantPrepareStatus('preparing');
+      const variantSessionId = ensurePreviewVariantSession();
+      const requestId = window.crypto.randomUUID();
+      let insertedJobId: string | null = null;
+
+      try {
+        const pendingFaceAsset = await uploadUserAsset(
+          preparedFile,
+          'face_image',
+          'face',
+          user?.customerId ?? undefined,
+          {
+            skipFacePreparation: true,
+            originalName: originalFile.name,
+            deferConfirm: true,
+          }
+        );
+        if (!('bucket' in pendingFaceAsset)) {
+          throw new Error('Pending face upload missing upload metadata');
+        }
+
+        const created = await createPreviewVariant({
+          creationId,
+          variantSessionId,
+          requestId,
+          pendingFaceAsset,
+        });
+        insertedJobId = created.jobId;
+        setPreviewVariantSessionCount(created.sessionVariantCount);
+        setPreviewVariantPrepareStatus('idle');
+
+        const candidate: PreviewVariantView = {
+          jobId: created.jobId,
+          status: 'generating',
+          pages: [],
+          coverUrl: null,
+          photoPreviewUrl: preparedPhotoUrl,
+          faceAssetId: pendingFaceAsset.asset_id,
+          faceStoragePath: pendingFaceAsset.storage_path,
+          faceImageUrl: preparedPhotoUrl,
+          original: false,
+          countsTowardLimit: true,
+        };
+        setPreviewVariants((current) => {
+          const existingIndex = current.findIndex((item) => item.jobId === candidate.jobId);
+          if (existingIndex < 0) return [...current, candidate];
+          return current.map((item) => item.jobId === candidate.jobId ? candidate : item);
+        });
+
+        const startedAt = Date.now();
+        let fetchFailures = 0;
+        while (Date.now() - startedAt < 10 * 60 * 1000) {
+          try {
+            const job = await getJob(created.jobId, user?.customerId ?? null);
+            fetchFailures = 0;
+            if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'cancel_requested') {
+              setPreviewVariants((current) => current.map((item) =>
+                item.jobId === created.jobId
+                  ? { ...item, status: 'failed', countsTowardLimit: false }
+                  : item
+              ));
+              setPreviewVariantSessionCount((count) => Math.max(0, count - 1));
+              setPreviewVariantError(job.error_message || t('personalize.previewVariantFailed'));
+              return;
+            }
+
+            if (job.status === 'running' || job.status === 'done') {
+              const urls = await getPreviewPages(created.jobId, undefined, {
+                size: 'small',
+                customerId: user?.customerId ?? null,
+              }).catch(() => []);
+              if (urls[0]) {
+                await waitForImageDecode(urls[0]);
+                const readyVariant: PreviewVariantView = {
+                  ...candidate,
+                  status: 'ready',
+                  pages: urls,
+                  coverUrl: urls[0],
+                };
+                setPreviewVariants((current) => current.map((item) =>
+                  item.jobId === created.jobId ? readyVariant : item
+                ));
+                applyPreviewVariantSelection(readyVariant);
+                return;
+              }
+            }
+          } catch {
+            fetchFailures += 1;
+            if (fetchFailures >= 8) {
+              setPreviewVariantError(t('personalize.previewVariantStillProcessing'));
+              return;
+            }
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 1800));
+        }
+
+        setPreviewVariantError(t('personalize.previewVariantStillProcessing'));
+      } catch (error) {
+        if (!insertedJobId) {
+          previewVariantPhotoUrlsRef.current.delete(preparedPhotoUrl);
+          URL.revokeObjectURL(preparedPhotoUrl);
+        }
+        setPreviewVariantPrepareStatus('failed');
+        setPreviewVariantError(resolvePreviewVariantError(error));
+      } finally {
+        previewVariantGenerationRef.current = false;
+      }
+    }, [
+      applyPreviewVariantSelection,
+      creationId,
+      ensurePreviewVariantSession,
+      previewJobId,
+      previewVariantSessionCount,
+      resolvePreviewVariantError,
+      t,
+      user?.customerId,
+    ]);
+
+    const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+
+      const nextRunId = facePrepareRunIdRef.current + 1;
+      facePrepareRunIdRef.current = nextRunId;
+
+      if (viewState.showPreview) {
+        if (isPreviewPhotoLocked || isPreviewVariantBusy || isPreviewVariantLimitReached) return;
+        setPreviewVariantError(null);
+        setPreviewVariantPrepareStatus('checking');
+        void (async () => {
+          const result = await prepareFaceForUpload(
+            file,
+            nextRunId,
+            setPreviewVariantPrepareStatus
+          );
+          if (result.status === 'cancelled') return;
+          if (result.status === 'failed') {
+            setPreviewVariantPrepareStatus('failed');
+            setPreviewVariantError(
+              result.error
+                ? resolveFaceValidationError(result.error)
+                : t('personalize.photoPrepareFailed')
+            );
+            return;
+          }
+
+          const preparedPhotoUrl = URL.createObjectURL(result.file);
+          previewVariantPhotoUrlsRef.current.add(preparedPhotoUrl);
+          await startPreviewVariantGeneration(file, result.file, preparedPhotoUrl);
+        })();
+        return;
+      }
+
+      setPhoto(file);
+      setPhotoPreview(URL.createObjectURL(file));
+      setPhotoAssetId(null);
+      setPhotoStoragePath(null);
+      setFaceImageUrl(null);
+      setPreparedFaceFile(null);
+      setFacePrepareError(null);
+      setFaceAutoCropped(false);
+      setPreviewUrl(null);
+      void startFacePreparation(file, nextRunId);
+    };
 
 
   // Persist the current form/preview stage for reload recovery.
@@ -2286,6 +2976,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         toastMessage={pageToastMessage}
         showExitConfirm={showExitConfirm}
         showAgeRangeConfirm={showAgeRangeConfirm}
+        showAddToCartConfirm={showAddToCartConfirm}
         exitLabels={{
           title: t('personalize.exitConfirmTitle'),
           body: t('personalize.exitConfirmBody'),
@@ -2301,10 +2992,19 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           continueAnyway: t('personalize.ageRangeContinueAnyway'),
           close: t('common.close'),
         }}
+        addToCartConfirmLabels={{
+          title: t('personalize.addToCartConfirmTitle'),
+          body: t('personalize.addToCartConfirmBody'),
+          cancel: t('personalize.addToCartConfirmCancel'),
+          confirm: t('personalize.addToCartConfirmContinue'),
+          close: t('common.close'),
+        }}
         onStay={dismissExitConfirm}
-        onBackToCustomize={returnToCustomizeFromPreview}
+        onBackToCustomize={() => void returnToCustomizeFromPreview()}
         onCloseAgeRangeConfirm={handleCloseAgeRangeConfirm}
         onContinueAgeRangeConfirm={handleContinueAgeRangeConfirm}
+        onCloseAddToCartConfirm={() => setShowAddToCartConfirm(false)}
+        onConfirmAddToCart={handleConfirmAddToCart}
       />
 
       <PersonalizeHeader
@@ -2319,10 +3019,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           logIn: t('navbar.logIn'),
         }}
         onBack={handleBack}
-        onCartClick={() => router.push('/cart')}
-        onOrdersClick={() => router.push('/orders')}
+        onCartClick={() => void navigateAwayFromPreview('/cart')}
+        onOrdersClick={() => void navigateAwayFromPreview('/orders')}
         onLoginClick={() => openLoginModal()}
-        onLogoutClick={logout}
+        onLogoutClick={() => void logoutFromPreview()}
       />
 
       {/* Main Content */}
@@ -2503,6 +3203,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       title={t('personalize.previewTitle', { name })}
                       subtitle={t('personalize.previewSubtitle')}
                       changePhotoLabel={t('personalize.changePhoto')}
+                      busyLabel={t('personalize.previewVariantPreparing')}
+                      showChangePhoto={!isPreviewPhotoLocked}
+                      changePhotoDisabled={isPreviewVariantBusy || isPreviewVariantLimitReached}
+                      changePhotoBusy={isPreviewVariantBusy}
+                      changePhotoError={previewVariantError}
                       onPhotoUpload={handlePhotoUpload}
                     />
                   }
@@ -2524,6 +3229,33 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       previewBookShadow={previewBookShadow}
                       renderPageContent={renderPageContent}
                     />
+                  }
+                  gallery={
+                    !isPreviewPhotoLocked ? (
+                      <PreviewVariantGallery
+                        items={previewVariants.map((variant) => ({
+                          jobId: variant.jobId,
+                          thumbnailUrl: variant.coverUrl || variant.photoPreviewUrl,
+                          status: variant.status,
+                          selected: variant.jobId === selectedPreviewJobId,
+                          original: variant.original,
+                          removing: discardingPreviewVariantIds.has(variant.jobId),
+                        }))}
+                        atLimit={isPreviewVariantLimitReached}
+                        labels={{
+                          title: t('personalize.previewVariantsTitle'),
+                          original: t('personalize.previewVariantOriginal'),
+                          version: (number) => t('personalize.previewVariantNumber', { number }),
+                          selected: t('personalize.previewVariantSelected'),
+                          generating: t('personalize.previewVariantGenerating'),
+                          failed: t('personalize.previewVariantFailedShort'),
+                          remove: t('personalize.previewVariantRemove'),
+                          limit: t('personalize.previewVariantLimit'),
+                        }}
+                        onSelect={handleSelectPreviewVariant}
+                        onRemove={(jobId) => void handleDiscardPreviewVariant(jobId)}
+                      />
+                    ) : null
                   }
                   actions={
                     <PreviewActionBar

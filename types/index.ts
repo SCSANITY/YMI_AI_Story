@@ -155,6 +155,7 @@ export interface GlobalContextType {
   user: User | null;
   language: Language;
   displayCurrency: DisplayCurrency;
+  displayRegion: string;
   cart: CartItem[];
   favorites: Book[];
   isFavoritesLoading: boolean;
@@ -190,6 +191,7 @@ export interface GlobalContextType {
   toggleFavorite: (book: Book) => ToggleFavoriteResult;
   setLanguage: (lang: Language) => void;
   setDisplayCurrency: (currency: DisplayCurrency) => void;
+  setCurrencyRegion: (region: string) => void;
   setCheckoutEmail: (email: string) => void;
   openLoginModal: (mode?: 'login' | 'signup', email?: string) => void;
   closeLoginModal: () => void;

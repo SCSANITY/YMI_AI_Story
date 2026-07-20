@@ -1,6 +1,7 @@
 'use client'
 
 import React, { memo } from 'react'
+import { createPortal } from 'react-dom'
 import { BookOpen, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 
@@ -18,6 +19,7 @@ type PersonalizeOverlaysProps = {
   toastMessage: string | null
   showExitConfirm: boolean
   showAgeRangeConfirm: boolean
+  showAddToCartConfirm: boolean
   exitLabels: {
     title: string
     body: string
@@ -30,10 +32,19 @@ type PersonalizeOverlaysProps = {
     continueAnyway: string
     close: string
   }
+  addToCartConfirmLabels: {
+    title: string
+    body: string
+    cancel: string
+    confirm: string
+    close: string
+  }
   onStay: () => void
   onBackToCustomize: () => void
   onCloseAgeRangeConfirm: () => void
   onContinueAgeRangeConfirm: () => void
+  onCloseAddToCartConfirm: () => void
+  onConfirmAddToCart: () => void
 }
 
 function PersonalizeOverlaysComponent({
@@ -45,17 +56,23 @@ function PersonalizeOverlaysComponent({
   toastMessage,
   showExitConfirm,
   showAgeRangeConfirm,
+  showAddToCartConfirm,
   exitLabels,
   ageRangeLabels,
+  addToCartConfirmLabels,
   onStay,
   onBackToCustomize,
   onCloseAgeRangeConfirm,
   onContinueAgeRangeConfirm,
+  onCloseAddToCartConfirm,
+  onConfirmAddToCart,
 }: PersonalizeOverlaysProps) {
   const flyDeltaX = flyTarget.x - flyOrigin.x
   const flyDeltaY = flyTarget.y - flyOrigin.y
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <>
       {showFlyAnimation && (
           <div
@@ -125,7 +142,40 @@ function PersonalizeOverlaysComponent({
           </div>
         </div>
       )}
-    </>
+
+      {showAddToCartConfirm && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-to-cart-confirm-title"
+            className="relative w-full max-w-md animate-in rounded-3xl border border-white/70 bg-white/95 p-6 text-left shadow-[0_20px_60px_rgba(15,23,42,0.2)] zoom-in-95 backdrop-blur-2xl"
+          >
+            <button
+              type="button"
+              aria-label={addToCartConfirmLabels.close}
+              onClick={onCloseAddToCartConfirm}
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="pr-10">
+              <h3 id="add-to-cart-confirm-title" className="text-lg font-bold text-gray-900">{addToCartConfirmLabels.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-gray-600">{addToCartConfirmLabels.body}</p>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={onCloseAddToCartConfirm}>
+                {addToCartConfirmLabels.cancel}
+              </Button>
+              <Button variant="primary" onClick={onConfirmAddToCart}>
+                {addToCartConfirmLabels.confirm}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>,
+    document.body
   )
 }
 

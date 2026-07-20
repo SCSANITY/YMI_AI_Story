@@ -6,6 +6,8 @@ import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
 import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, parseTemplateAmount, templateStorageUrl } from '@/lib/book-catalog';
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title';
+import { getCurrencyRegionOption, resolveCurrencyRegionOption, resolveInitialCurrencyRegionOption } from '@/lib/currency-regions';
+import { CURRENCY_GEO_COOKIE, CURRENCY_USER_SELECTED_KEY, readCookieValue } from '@/lib/currency-geo';
 import {
   login as loginAction,
   signup as signupAction,
@@ -156,6 +158,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const favoriteTogglePendingRef = useRef(false);
   const [language] = useState<Language>('en');
   const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
+  const [displayRegion, setDisplayRegionState] = useState('US');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Book[]>([]);
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
@@ -208,11 +211,15 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const savedLanguage = localStorage.getItem('ymi_language') as Language | null;
 
     const savedDisplayCurrency = localStorage.getItem('ymi_currency');
-    setDisplayCurrencyState(
-      savedDisplayCurrency
-        ? normalizeDisplayCurrency(savedDisplayCurrency)
-        : migrateLegacyLanguageToCurrency(savedLanguage)
-    );
+    const initialCurrencyRegion = resolveInitialCurrencyRegionOption({
+      savedCurrency: savedDisplayCurrency,
+      savedRegion: localStorage.getItem('ymi_currency_region'),
+      geoRegion: readCookieValue(document.cookie, CURRENCY_GEO_COOKIE),
+      fallbackCurrency: migrateLegacyLanguageToCurrency(savedLanguage),
+      preferSaved: localStorage.getItem(CURRENCY_USER_SELECTED_KEY) === '1',
+    });
+    setDisplayCurrencyState(initialCurrencyRegion.currency);
+    setDisplayRegionState(initialCurrencyRegion.region);
 
     const savedCheckoutEmail = localStorage.getItem('ymi_checkout_email');
     if (savedCheckoutEmail) setCheckoutEmail(savedCheckoutEmail);
@@ -415,6 +422,11 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (typeof window === 'undefined') return;
     localStorage.setItem('ymi_currency', displayCurrency);
   }, [displayCurrency]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isHydrated) return;
+    localStorage.setItem('ymi_currency_region', displayRegion);
+  }, [displayRegion, isHydrated]);
 
   const finalizeAuth = useCallback(async (
     email: string,
@@ -1006,7 +1018,18 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, []);
 
   const setDisplayCurrency = useCallback((currency: DisplayCurrency) => {
-    setDisplayCurrencyState(normalizeDisplayCurrency(currency));
+    const normalizedCurrency = normalizeDisplayCurrency(currency);
+    setDisplayCurrencyState(normalizedCurrency);
+    setDisplayRegionState(resolveCurrencyRegionOption(null, normalizedCurrency).region);
+    if (typeof window !== 'undefined') localStorage.setItem(CURRENCY_USER_SELECTED_KEY, '1');
+  }, []);
+
+  const setCurrencyRegion = useCallback((region: string) => {
+    const option = getCurrencyRegionOption(region);
+    if (!option) return;
+    setDisplayRegionState(option.region);
+    setDisplayCurrencyState(option.currency);
+    if (typeof window !== 'undefined') localStorage.setItem(CURRENCY_USER_SELECTED_KEY, '1');
   }, []);
 
   const openLoginModal = useCallback((mode: 'login' | 'signup' = 'login', email?: string) => {
@@ -1030,6 +1053,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     user,
     language,
     displayCurrency,
+    displayRegion,
     cart,
     favorites,
     isFavoritesLoading,
@@ -1063,6 +1087,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     toggleFavorite,
     setLanguage,
     setDisplayCurrency,
+    setCurrencyRegion,
     setCheckoutEmail,
     openLoginModal,
     closeLoginModal,
@@ -1070,6 +1095,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     user,
     language,
     displayCurrency,
+    displayRegion,
     cart,
     favorites,
     isFavoritesLoading,
@@ -1101,6 +1127,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     toggleFavorite,
     setLanguage,
     setDisplayCurrency,
+    setCurrencyRegion,
     setCheckoutEmail,
     openLoginModal,
     closeLoginModal,

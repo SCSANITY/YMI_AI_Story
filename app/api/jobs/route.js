@@ -3,11 +3,14 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
 import { checkJobQueueGuard } from '@/lib/jobQueue'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
-import { isValidUserAssetStoragePath } from '@/lib/userAssetsStorage'
 import { getCustomizeAccessSettings } from '@/lib/customize-access-server'
+import {
+  confirmPendingFaceAsset,
+  loadOwnedFaceAsset,
+  normalizePendingFaceAsset,
+} from '@/lib/face-assets-server'
 
 const MAX_TEXT_PROFILES = 5
-const MAX_FACE_IMAGES = 8
 const DEFAULT_STORY_LANGUAGE = 'English'
 
 function normalizeStoryLanguage(value) {
@@ -111,84 +114,6 @@ async function saveTextProfile({
   return { saved: true }
 }
 
-function normalizePendingFaceAsset(raw) {
-  if (!raw || typeof raw !== 'object') return null
-  const assetId = typeof raw.asset_id === 'string' ? raw.asset_id : typeof raw.assetId === 'string' ? raw.assetId : null
-  const storagePath =
-    typeof raw.storage_path === 'string' ? raw.storage_path : typeof raw.storagePath === 'string' ? raw.storagePath : null
-  const assetType =
-    typeof raw.asset_type === 'string' ? raw.asset_type : typeof raw.assetType === 'string' ? raw.assetType : null
-  const role = typeof raw.role === 'string' ? raw.role : null
-  const originalName =
-    typeof raw.original_name === 'string' ? raw.original_name : typeof raw.originalName === 'string' ? raw.originalName : null
-  const contentType =
-    typeof raw.content_type === 'string' ? raw.content_type : typeof raw.contentType === 'string' ? raw.contentType : null
-
-  if (!assetId || !storagePath || assetType !== 'face_image' || role !== 'face') {
-    return null
-  }
-  if (!storagePath.startsWith('user-assets/') || !isValidUserAssetStoragePath(storagePath, assetId)) {
-    return null
-  }
-
-  return {
-    asset_id: assetId,
-    storage_path: storagePath,
-    asset_type: assetType,
-    role,
-    original_name: originalName,
-    content_type: contentType,
-  }
-}
-
-async function confirmPendingFaceAsset({
-  pendingFaceAsset,
-  ownerType,
-  ownerId,
-}) {
-  const { data: asset, error: assetError } = await supabaseAdmin
-    .from('user_assets')
-    .insert({
-      asset_id: pendingFaceAsset.asset_id,
-      owner_type: ownerType,
-      anon_session_id: ownerType === 'anon' ? ownerId : null,
-      customer_id: ownerType === 'customer' ? ownerId : null,
-      asset_type: 'face_image',
-      storage_path: pendingFaceAsset.storage_path,
-      metadata: {
-        role: pendingFaceAsset.role,
-        original_name: pendingFaceAsset.original_name,
-        created_for: 'preview',
-        source: 'upload',
-        content_type: pendingFaceAsset.content_type,
-      },
-    })
-    .select('asset_id, storage_path')
-    .single()
-
-  if (assetError || !asset?.storage_path) {
-    throw new Error(assetError?.message || 'Failed to record pending face asset')
-  }
-
-  const ownerColumn = ownerType === 'anon' ? 'anon_session_id' : 'customer_id'
-  const { data: assets } = await supabaseAdmin
-    .from('user_assets')
-    .select('asset_id')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
-    .eq('asset_type', 'face_image')
-    .order('created_at', { ascending: true })
-
-  if (assets && assets.length > MAX_FACE_IMAGES) {
-    const toRemove = assets.slice(0, assets.length - MAX_FACE_IMAGES).map((row) => row.asset_id)
-    if (toRemove.length) {
-      await supabaseAdmin.from('user_assets').delete().in('asset_id', toRemove)
-    }
-  }
-
-  return asset
-}
-
 export async function POST(request) {
   const body = await request.json()
   const templateId = body?.template_id || body?.templateId
@@ -234,8 +159,7 @@ export async function POST(request) {
   let asset
   if (pendingFaceAsset?.asset_id) {
     try {
-      asset = await confirmPendingFaceAsset({
-        pendingFaceAsset,
+      asset = await confirmPendingFaceAsset(pendingFaceAsset, {
         ownerType,
         ownerId,
       })
@@ -246,16 +170,11 @@ export async function POST(request) {
       )
     }
   } else {
-    const { data: existingAsset, error: assetError } = await supabaseAdmin
-      .from('user_assets')
-      .select('storage_path')
-      .eq('asset_id', faceAssetId)
-      .single()
-
-    if (assetError || !existingAsset?.storage_path) {
+    try {
+      asset = await loadOwnedFaceAsset(faceAssetId, { ownerType, ownerId })
+    } catch {
       return NextResponse.json({ error: 'Face asset not found' }, { status: 404 })
     }
-    asset = existingAsset
   }
 
   const { data: template, error: templateError } = await supabaseAdmin
