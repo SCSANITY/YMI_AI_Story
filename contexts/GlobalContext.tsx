@@ -155,6 +155,8 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [user, setUser] = useState<User | null>(null);
   const userRef = useRef<User | null>(null);
   const authSyncInFlightRef = useRef<string | null>(null);
+  const authSyncPromiseRef = useRef<Promise<void> | null>(null);
+  const authResolutionRunIdRef = useRef(0);
   const favoriteTogglePendingRef = useRef(false);
   const [language] = useState<Language>('en');
   const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
@@ -164,6 +166,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const [checkoutEmail, setCheckoutEmail] = useState('');
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isAuthResolved, setIsAuthResolved] = useState(false);
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loginModalMode, setLoginModalMode] = useState<'login' | 'signup'>('login');
@@ -475,7 +478,10 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [cart, favorites, fetchAccountProfile]);
 
   const syncSupabaseUser = useCallback(async (authUser?: SupabaseUser | null) => {
-    if (!authUser?.id || !authUser.email) return;
+    if (!authUser?.id || !authUser.email) {
+      if (userRef.current) setUser(null);
+      return;
+    }
 
     const resolvedEmail = authUser.email.trim().toLowerCase();
     const currentUser = userRef.current;
@@ -497,37 +503,67 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     if (currentUser?.id === authUser.id && currentUser.customerId) return;
-    if (authSyncInFlightRef.current === authUser.id) return;
+    if (authSyncInFlightRef.current === authUser.id && authSyncPromiseRef.current) {
+      return authSyncPromiseRef.current;
+    }
 
     authSyncInFlightRef.current = authUser.id;
+    const syncPromise = finalizeAuth(resolvedEmail, authUser.id, {
+      displayName: getAuthDisplayName(authUser),
+      avatarUrl: getAuthAvatarUrl(authUser),
+    });
+    authSyncPromiseRef.current = syncPromise;
     try {
       setCheckoutEmail(resolvedEmail);
-      await finalizeAuth(resolvedEmail, authUser.id, {
-        displayName: getAuthDisplayName(authUser),
-        avatarUrl: getAuthAvatarUrl(authUser),
-      });
+      await syncPromise;
     } finally {
-      authSyncInFlightRef.current = null;
+      if (authSyncInFlightRef.current === authUser.id) {
+        authSyncInFlightRef.current = null;
+        authSyncPromiseRef.current = null;
+      }
     }
   }, [finalizeAuth]);
 
+  const syncSupabaseUserRef = useRef(syncSupabaseUser);
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    syncSupabaseUserRef.current = syncSupabaseUser;
+  }, [syncSupabaseUser]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isHydrated) return;
 
     let active = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!active) return;
-      void syncSupabaseUser(data.user);
-    });
+    const resolveAuthUser = async (authUser?: SupabaseUser | null) => {
+      const runId = ++authResolutionRunIdRef.current;
+      setIsAuthResolved(false);
+      try {
+        await syncSupabaseUserRef.current(authUser ?? null);
+      } catch (error) {
+        console.warn('[auth] failed to resolve customer session', error);
+      } finally {
+        if (active && runId === authResolutionRunIdRef.current) {
+          setIsAuthResolved(true);
+        }
+      }
+    };
+
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => resolveAuthUser(data.user))
+      .catch((error) => {
+        console.warn('[auth] failed to inspect current session', error);
+      });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        void syncSupabaseUser(session?.user ?? null);
+        void resolveAuthUser(session?.user ?? null);
       }
       if (event === 'SIGNED_OUT') {
+        authResolutionRunIdRef.current += 1;
         setUser(null);
+        setIsAuthResolved(true);
       }
     });
 
@@ -535,7 +571,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       active = false;
       subscription.unsubscribe();
     };
-  }, [syncSupabaseUser]);
+  }, [isHydrated]);
 
   const refreshUserProfile = useCallback(async () => {
     if (!user?.customerId) return;
@@ -1064,6 +1100,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     loginModalMode,
     loginModalEmail,
     isHydrated,
+    isAuthResolved,
 
     resumePersonalization,
 
@@ -1106,6 +1143,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     loginModalMode,
     loginModalEmail,
     isHydrated,
+    isAuthResolved,
     resumePersonalization,
     login,
     loginWithOAuth,

@@ -240,10 +240,19 @@ type EmailLayoutProps = {
   subtitle?: string
   /** Header illustration. Defaults to the brand banner; pass null to hide. */
   bannerUrl?: string | null
+  /** Authentication emails keep links first-party by omitting the social row. */
+  showSocialLinks?: boolean
   children: React.ReactNode
 }
 
-export function EmailLayout({ previewText, title, subtitle, bannerUrl, children }: EmailLayoutProps) {
+export function EmailLayout({
+  previewText,
+  title,
+  subtitle,
+  bannerUrl,
+  showSocialLinks = true,
+  children,
+}: EmailLayoutProps) {
   const banner = bannerUrl === null ? null : bannerUrl || emailAsset('banner.png')
   // Computed at render time so the preview script's EMAIL_ASSET_BASE override applies.
   const innerFrameStyle: React.CSSProperties = {
@@ -296,13 +305,15 @@ export function EmailLayout({ previewText, title, subtitle, bannerUrl, children 
                   <EmailDivider width="70%" />
 
                   {/* Symmetric centered stack: social icons → Contact Us → copyright */}
-                  <Section style={styles.socialRow}>
-                    {SOCIAL_LINKS.map((s) => (
-                      <Link key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" style={styles.socialLink}>
-                        <Img src={emailAsset(s.icon)} alt={s.label} width="32" height="32" style={styles.socialIcon} />
-                      </Link>
-                    ))}
-                  </Section>
+                  {showSocialLinks ? (
+                    <Section style={styles.socialRow}>
+                      {SOCIAL_LINKS.map((s) => (
+                        <Link key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" style={styles.socialLink}>
+                          <Img src={emailAsset(s.icon)} alt={s.label} width="32" height="32" style={styles.socialIcon} />
+                        </Link>
+                      ))}
+                    </Section>
+                  ) : null}
 
                   <Text style={styles.contactLine}>
                     <Link href={`${SITE}/support`} style={styles.footerLink}>Contact&nbsp;Us</Link>

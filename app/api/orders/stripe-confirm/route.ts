@@ -126,6 +126,7 @@ export async function POST(request: Request) {
         order_status: result.status,
         display_total: amount,
         display_currency: normalizeCheckoutCurrency(currency),
+        email: emailFromSession.trim().toLowerCase(),
       },
     })
   } catch (error: any) {

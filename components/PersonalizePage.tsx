@@ -21,6 +21,8 @@ import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStag
 import { isUuid } from '@/lib/validators';
 import { useI18n } from '@/lib/useI18n';
 import { formatDisplayCurrency } from '@/lib/locale-pricing';
+import { isBrowserTranslated } from '@/lib/browser-translation';
+import { buildPreviewCartHref } from '@/lib/cart-navigation';
 import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants';
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar';
 import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction';
@@ -209,7 +211,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const fsm = usePersonalizeStage()
   const { t } = useI18n()
 
-  const { user, openLoginModal, logout, addToCart, prepareCheckout, resumeData, resumePersonalization, displayCurrency, cart} = useGlobalContext();
+  const { user, openLoginModal, logout, addToCart, removeFromCart, updateCartQuantity, prepareCheckout, resumeData, resumePersonalization, displayCurrency, cart, isHydrated } = useGlobalContext();
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   const { books: catalogBooks, isLoading: isBookCatalogLoading } = useBookCatalog();
   const [templateDetailBook, setTemplateDetailBook] = useState<CatalogBook | null>(null);
@@ -289,6 +291,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
   const [faceAutoCropped, setFaceAutoCropped] = useState(false);
   const facePrepareRunIdRef = useRef(0);
+  const localPhotoPreviewUrlRef = useRef<string | null>(null);
   const photoRef = useRef<File | null>(photo);
   const photoAssetIdRef = useRef<string | null>(photoAssetId);
   const preparedFaceFileRef = useRef<File | null>(preparedFaceFile);
@@ -304,6 +307,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     facePrepareStatusRef.current = facePrepareStatus;
     facePrepareErrorRef.current = facePrepareError;
   }, [photo, photoAssetId, preparedFaceFile, facePrepareStatus, facePrepareError]);
+
+  const showLocalPhotoPreview = useCallback((file: File) => {
+    const nextUrl = URL.createObjectURL(file);
+    const previousUrl = localPhotoPreviewUrlRef.current;
+    localPhotoPreviewUrlRef.current = nextUrl;
+    setPhotoPreview(nextUrl);
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+  }, [setPhotoPreview]);
+
+  useEffect(() => () => {
+    if (localPhotoPreviewUrlRef.current) {
+      URL.revokeObjectURL(localPhotoPreviewUrlRef.current);
+    }
+  }, []);
 
   const resolveFaceValidationError = useCallback((result: FaceImageValidationResult) => {
     return result.code
@@ -2062,6 +2079,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     if (viewState.showPreview) {
       await cleanupCurrentPreviewVariantSession();
     }
+    if (isBrowserTranslated()) {
+      window.location.assign(href);
+      return;
+    }
     router.push(href);
   }, [cleanupCurrentPreviewVariantSession, router, viewState.showPreview]);
 
@@ -2610,10 +2631,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       setPreparedFaceFile(result.file);
       setFaceAutoCropped(result.autoCropped);
       if (result.autoCropped) {
-        setPhotoPreview(URL.createObjectURL(result.file));
+        showLocalPhotoPreview(result.file);
       }
       setFacePrepareStatus('ready');
-    }, [prepareFaceForUpload, resolveFaceValidationError, setPhotoPreview, t]);
+    }, [prepareFaceForUpload, resolveFaceValidationError, showLocalPhotoPreview, t]);
 
     const resolvePreviewVariantError = useCallback((error: unknown) => {
       if (error instanceof PreviewVariantRequestError) {
@@ -2805,7 +2826,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       }
 
       setPhoto(file);
-      setPhotoPreview(URL.createObjectURL(file));
+      showLocalPhotoPreview(file);
       setPhotoAssetId(null);
       setPhotoStoragePath(null);
       setFaceImageUrl(null);
@@ -3011,6 +3032,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         title={book.title}
         user={user}
         cartCount={cartCount}
+        cartItems={cart}
+        displayCurrency={displayCurrency}
+        isCartHydrated={isHydrated}
         cartButtonRef={cartIconRef}
         labels={{
           back: t('common.back'),
@@ -3019,7 +3043,17 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           logIn: t('navbar.logIn'),
         }}
         onBack={handleBack}
-        onCartClick={() => void navigateAwayFromPreview('/cart')}
+        onUpdateCartQuantity={updateCartQuantity}
+        onRemoveCartItem={removeFromCart}
+        onViewCart={() => void navigateAwayFromPreview(
+          viewState.showPreview
+            ? buildPreviewCartHref({
+                bookId: bookID,
+                creationId: creationId ?? '',
+                committedPreviewJobId: previewJobId ?? '',
+              })
+            : '/cart'
+        )}
         onOrdersClick={() => void navigateAwayFromPreview('/orders')}
         onLoginClick={() => openLoginModal()}
         onLogoutClick={() => void logoutFromPreview()}

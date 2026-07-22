@@ -605,11 +605,10 @@ function CheckoutPageContent() {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
       setIdentityOtpError('Email is required before verification.');
-      return false;
+      return { sent: false };
     }
     setIsIdentityRequesting(true);
     setIdentityOtpError('');
-    setIdentityOtpRequested(false);
     setIdentityOtpDevCode('');
 
     try {
@@ -618,18 +617,26 @@ function CheckoutPageContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: normalizedEmail }),
       });
-      const data = response.ok ? await response.json() : null;
+      const data = await response.json().catch(() => null);
+      if (response.status === 429) {
+        const retryAfterSeconds = Math.max(1, Number(data?.retryAfterSeconds) || 60);
+        setIdentityOtpError(t('checkout.codeRateLimited', { seconds: retryAfterSeconds }));
+        return { sent: false, retryAfterSeconds };
+      }
       if (!response.ok || !data?.sent) {
         setIdentityOtpError(t('checkout.sendCodeError'));
-        return false;
+        return { sent: false };
       }
       setIdentityOtpRequested(true);
       setIdentityOtpDevCode(data.devCode || '');
       setIdentityEmail(normalizedEmail);
-      return true;
+      return {
+        sent: true,
+        retryAfterSeconds: Math.max(1, Number(data.resendAfterSeconds) || 60),
+      };
     } catch {
       setIdentityOtpError(t('checkout.sendCodeError'));
-      return false;
+      return { sent: false };
     } finally {
       setIsIdentityRequesting(false);
     }

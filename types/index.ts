@@ -164,6 +164,7 @@ export interface GlobalContextType {
   loginModalEmail: string;
   checkoutEmail: string;
   isHydrated: boolean;
+  isAuthResolved: boolean;
 
   // Checkout State
   checkoutItems: CartItem[];

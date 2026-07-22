@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, UserRound, UserPlus } from 'lucide-react';
 import { Button } from '@/components/Button';
 
 type CheckoutIdentityMode = 'guest' | 'auth';
+type OtpRequestResult = { sent: boolean; retryAfterSeconds?: number };
 
 type CheckoutIdentityModalProps = {
   identityMode: CheckoutIdentityMode | null;
@@ -19,7 +20,7 @@ type CheckoutIdentityModalProps = {
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   onClose: () => void;
   onConfirmMode: (mode: CheckoutIdentityMode | null) => Promise<void>;
-  onRequestOtp: (email: string) => Promise<boolean | void>;
+  onRequestOtp: (email: string) => Promise<OtpRequestResult | void>;
   onVerifyOtp: (code: string) => Promise<void>;
 };
 
@@ -41,15 +42,33 @@ export function CheckoutIdentityModal({
 }: CheckoutIdentityModalProps) {
   const [draftIdentityMode, setDraftIdentityMode] = useState<CheckoutIdentityMode | null>(identityMode);
   const [identityOtpCode, setIdentityOtpCode] = useState('');
+  const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null);
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [localPendingAction, setLocalPendingAction] = useState<'mode' | 'requestOtp' | 'verifyOtp' | null>(null);
   const localPendingActionRef = useRef<typeof localPendingAction>(null);
 
   useEffect(() => {
     setDraftIdentityMode(identityMode);
     setIdentityOtpCode('');
+    setResendAvailableAt(null);
+    setResendSeconds(0);
     localPendingActionRef.current = null;
     setLocalPendingAction(null);
   }, [identityMode]);
+
+  useEffect(() => {
+    if (!resendAvailableAt) return;
+
+    const updateCountdown = () => {
+      const seconds = Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000));
+      setResendSeconds(seconds);
+      if (seconds === 0) setResendAvailableAt(null);
+    };
+
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendAvailableAt]);
 
   useEffect(() => {
     if (isIdentityRequesting) return;
@@ -210,10 +229,21 @@ export function CheckoutIdentityModal({
                 size="sm"
                 variant="outline"
                 className="rounded-full"
-                onClick={() => void runIdentityAction('requestOtp', () => onRequestOtp(identityMode === 'guest' ? formEmail.trim() : (userEmail || identityEmail)))}
-                disabled={hasPendingAction}
+                onClick={() => void runIdentityAction('requestOtp', async () => {
+                  const result = await onRequestOtp(identityMode === 'guest' ? formEmail.trim() : (userEmail || identityEmail));
+                  if (result?.retryAfterSeconds) {
+                    setResendAvailableAt(Date.now() + result.retryAfterSeconds * 1000);
+                  }
+                })}
+                disabled={hasPendingAction || resendSeconds > 0}
               >
-                {localPendingAction === 'requestOtp' || isIdentityRequesting ? `${t('common.loading')}` : identityOtpRequested ? t('login.resendCode') : t('checkout.sendCode')}
+                {localPendingAction === 'requestOtp' || isIdentityRequesting
+                  ? `${t('common.loading')}`
+                  : resendSeconds > 0
+                    ? t('checkout.resendCodeIn', { seconds: resendSeconds })
+                    : identityOtpRequested
+                      ? t('login.resendCode')
+                      : t('checkout.sendCode')}
               </Button>
               <Button
                 size="sm"
@@ -225,6 +255,12 @@ export function CheckoutIdentityModal({
               </Button>
             </div>
 
+            {identityOtpRequested && !identityVerified ? (
+              <p className="text-xs leading-5 text-slate-500">
+                {t('email.spamFolderHint')}
+              </p>
+            ) : null}
+
             {identityVerified && (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
                 {t('checkout.continuePayment')}
@@ -233,11 +269,11 @@ export function CheckoutIdentityModal({
           </div>
         )}
 
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Button
             size="sm"
             variant="ghost"
-            className="glass-action-btn glass-action-btn--neutral rounded-full px-5 text-sm font-semibold text-slate-700"
+            className="glass-action-btn glass-action-btn--neutral w-full rounded-full px-5 text-sm font-semibold text-slate-700 sm:w-auto"
             onClick={onClose}
             disabled={hasPendingAction}
           >
@@ -245,11 +281,15 @@ export function CheckoutIdentityModal({
           </Button>
           <Button
             size="sm"
-            className="glass-action-btn glass-action-btn--brand rounded-full px-5 text-sm font-semibold"
+            className="glass-action-btn glass-action-btn--brand w-full rounded-full px-5 text-sm font-semibold sm:w-auto"
             onClick={() => void runIdentityAction('mode', () => onConfirmMode(draftIdentityMode))}
             disabled={hasPendingAction || !draftIdentityMode || draftIdentityMode === identityMode}
           >
-            {localPendingAction === 'mode' || isIdentityRequesting ? t('common.loading') : t('checkout.confirmCheckoutMethod')}
+            {localPendingAction === 'mode' || isIdentityRequesting
+              ? t('common.loading')
+              : draftIdentityMode === 'auth' && !userEmail
+                ? t('checkout.signInOrCreateAccount')
+                : t('checkout.confirmCheckoutMethod')}
           </Button>
         </div>
       </div>

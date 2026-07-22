@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package } from 'lucide-react';
+import { LogIn, Package, UserPlus } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
@@ -10,6 +10,7 @@ import {
   isFinishedOrderStatus,
   normalizeOrderStatus,
 } from '@/lib/order-status';
+import { resolveOrdersPageState } from '@/lib/orders-page-state';
 import { OrderTabs } from './OrderTabs';
 import { OrdersList } from './OrdersList';
 import type { OrderSummary, OrderTab } from './ordersTypes';
@@ -54,17 +55,31 @@ function OrdersLoadingList() {
 export default function OrdersPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user, refreshCart } = useGlobalContext();
+  const {
+    user,
+    refreshCart,
+    isHydrated,
+    isAuthResolved,
+    checkoutEmail,
+    openLoginModal,
+  } = useGlobalContext();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedCustomerId, setLoadedCustomerId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<OrderTab>('shipping');
   const [pendingAction, setPendingAction] = useState<PendingOrderAction>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    const url = user?.customerId ? `/api/orders?customerId=${user.customerId}` : '/api/orders';
+    const customerId = user?.customerId;
+    if (!isHydrated || !isAuthResolved || !customerId) return;
 
-    fetch(url, { credentials: 'include', cache: 'no-store' })
+    let cancelled = false;
+    setLoading(true);
+
+    fetch(`/api/orders?customerId=${encodeURIComponent(customerId)}`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
       .then((res) => (res.ok ? res.json() : { orders: [] }))
       .then((data) => {
         if (cancelled) return;
@@ -76,13 +91,14 @@ export default function OrdersPage() {
       })
       .finally(() => {
         if (cancelled) return;
+        setLoadedCustomerId(customerId);
         setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [user?.customerId]);
+  }, [isAuthResolved, isHydrated, user?.customerId]);
 
   const grouped = useMemo(() => {
     const shipping = orders.filter((order) => getOrderTab(order.order_status) === 'shipping');
@@ -92,6 +108,18 @@ export default function OrdersPage() {
   }, [orders]);
 
   const visibleOrders = grouped[activeTab];
+  const pageState = resolveOrdersPageState({
+    isHydrated,
+    isAuthResolved,
+    customerId: user?.customerId,
+    loadedCustomerId,
+    isLoading: loading,
+    orderCount: orders.length,
+  });
+
+  const handleAccountAction = (mode: 'login' | 'signup') => {
+    openLoginModal(mode, checkoutEmail.trim() || undefined);
+  };
 
   const handleDeletePending = async (orderId: string) => {
     if (pendingAction) return;
@@ -155,9 +183,47 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {loading ? (
+      {pageState === 'loading' ? (
         <OrdersLoadingList />
-      ) : orders.length === 0 ? (
+      ) : pageState === 'signed_out' ? (
+        <div className="rounded-2xl border border-amber-200/70 bg-white/80 px-5 py-8 text-center shadow-sm sm:px-8">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+            <LogIn className="h-6 w-6 text-amber-700" />
+          </div>
+          <h2 className="text-xl font-title text-gray-900 md:text-2xl">
+            {t('orders.signedOutTitle')}
+          </h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-gray-600">
+            {t('orders.signedOutDescription')}
+          </p>
+          <div className="mx-auto mt-6 flex max-w-md flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button
+              size="lg"
+              className="w-full gap-2 sm:w-auto"
+              onClick={() => handleAccountAction('login')}
+            >
+              <LogIn className="h-4 w-4" />
+              {t('orders.signIn')}
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="w-full gap-2 sm:w-auto"
+              onClick={() => handleAccountAction('signup')}
+            >
+              <UserPlus className="h-4 w-4" />
+              {t('orders.createAccount')}
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            className="mt-3"
+            onClick={() => router.push('/')}
+          >
+            {t('common.browseBooks')}
+          </Button>
+        </div>
+      ) : pageState === 'empty' ? (
         <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-center">
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
             <Package className="h-6 w-6 text-amber-600" />

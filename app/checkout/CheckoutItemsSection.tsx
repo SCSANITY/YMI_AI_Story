@@ -1,6 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Check, ShoppingCart, X } from 'lucide-react';
 import { Button } from '@/components/Button';
 import OrderCoverImage from '@/components/OrderCoverImage';
 import type { CartItem } from '@/types';
@@ -35,14 +37,32 @@ export function CheckoutItemsSection({
   const [addFromCartSelection, setAddFromCartSelection] = useState<string[]>([]);
   const [removingCheckoutItemId, setRemovingCheckoutItemId] = useState<string | null>(null);
   const [isAddingFromCart, setIsAddingFromCart] = useState(false);
+  const addFromCartTriggerRef = useRef<HTMLButtonElement>(null);
+  const addFromCartCloseRef = useRef<HTMLButtonElement>(null);
   const removingCheckoutItemIdRef = useRef<string | null>(null);
   const isAddingFromCartRef = useRef(false);
 
-  const closeAddFromCart = () => {
+  const closeAddFromCart = useCallback(() => {
     if (isAddingFromCartRef.current) return;
     setIsAddFromCartOpen(false);
     setAddFromCartSelection([]);
-  };
+    window.requestAnimationFrame(() => addFromCartTriggerRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    if (!isAddFromCartOpen) return;
+    const focusFrame = window.requestAnimationFrame(() => addFromCartCloseRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeAddFromCart();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeAddFromCart, isAddFromCartOpen]);
 
   const toggleAddFromCart = (itemId: string) => {
     setAddFromCartSelection(prev =>
@@ -84,6 +104,137 @@ export function CheckoutItemsSection({
       setIsAddingFromCart(false);
     }
   };
+
+  const addFromCartDialog = isAddFromCartOpen && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-[180] grid min-h-dvh place-items-center bg-white/45 p-3 backdrop-blur-md sm:p-6"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) closeAddFromCart();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-from-cart-title"
+            className="flex max-h-[min(86dvh,680px)] w-full max-w-xl flex-col overflow-hidden rounded-[28px] border border-white/80 bg-white/94 shadow-[0_28px_90px_rgba(88,63,31,0.22)] ring-1 ring-amber-100/80 backdrop-blur-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-amber-100/70 bg-gradient-to-r from-amber-50/95 via-orange-50/70 to-white/90 px-4 py-4 sm:px-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/85 text-amber-600 shadow-sm ring-1 ring-amber-100">
+                  <ShoppingCart className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h3 id="add-from-cart-title" className="truncate text-base font-bold text-gray-950 sm:text-lg">
+                    {t('checkout.addFromCart')}
+                  </h3>
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">
+                    {remainingCartItems.length} {t(remainingCartItems.length === 1 ? 'cart.miniItem' : 'cart.miniItems')}
+                  </p>
+                </div>
+              </div>
+              <button
+                ref={addFromCartCloseRef}
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                onClick={closeAddFromCart}
+                disabled={isAddingFromCart}
+                aria-label={t('common.close')}
+                title={t('common.close')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
+              {remainingCartItems.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-8 text-center text-sm text-slate-500">
+                  {t('checkout.noBookSelected')}
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {remainingCartItems.map(item => {
+                    const isSelected = addFromCartSelection.includes(item.id);
+                    const quantity = item.quantity ?? 1;
+                    return (
+                      <label
+                        key={item.id}
+                        className={`grid cursor-pointer grid-cols-[28px_56px_minmax(0,1fr)] items-center gap-3 rounded-2xl border p-3 transition sm:grid-cols-[28px_56px_minmax(0,1fr)_auto] ${
+                          isSelected
+                            ? 'border-amber-300 bg-amber-50/80 shadow-[0_10px_28px_rgba(217,119,6,0.12)] ring-1 ring-amber-200/70'
+                            : 'border-slate-100 bg-white/85 shadow-sm hover:border-amber-200 hover:bg-amber-50/45'
+                        } ${isAddingFromCart ? 'cursor-wait opacity-70' : ''}`}
+                      >
+                        <span className={`flex h-6 w-6 items-center justify-center rounded-md border transition ${
+                          isSelected ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-300 bg-white text-transparent'
+                        }`}>
+                          <Check className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={isSelected}
+                          disabled={isAddingFromCart}
+                          onChange={() => toggleAddFromCart(item.id)}
+                        />
+                        <OrderCoverImage
+                          cartItemId={item.id}
+                          src={resolveCoverUrl(item)}
+                          status={resolveCoverStatus(item)}
+                          alt={item.book.title}
+                          sizes="56px"
+                          className="h-[72px] w-14 rounded-lg"
+                          imageClassName="object-cover"
+                        />
+                        <div className="min-w-0">
+                          <div className="line-clamp-2 text-sm font-semibold leading-5 text-gray-950">
+                            {item.book.title}
+                          </div>
+                          <div className="mt-1 truncate text-xs text-slate-500">
+                            {t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}
+                          </div>
+                          <div className="mt-1 text-xs font-medium text-slate-500 sm:hidden">
+                            {t('cart.miniQuantity', { quantity })} -{' '}
+                            <span className="font-semibold text-slate-800">
+                              {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * quantity, selectedCurrency)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="hidden shrink-0 text-right sm:block">
+                          <div className="text-sm font-semibold text-gray-950">
+                            {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * quantity, selectedCurrency)}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">{t('cart.miniQuantity', { quantity })}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-amber-100/70 bg-amber-50/45 px-4 py-4 sm:flex-row sm:justify-end sm:px-5">
+              <Button
+                variant="ghost"
+                className="glass-action-btn glass-action-btn--neutral h-10 w-full rounded-full px-5 text-sm font-semibold text-slate-700 sm:w-auto"
+                onClick={closeAddFromCart}
+                disabled={isAddingFromCart}
+              >
+                {t('common.close')}
+              </Button>
+              <Button
+                onClick={() => void confirmAddFromCart()}
+                disabled={addFromCartSelection.length === 0 || isAddingFromCart}
+                className="glass-action-btn glass-action-btn--brand h-10 w-full rounded-full px-5 text-sm font-semibold sm:w-auto"
+              >
+                {isAddingFromCart ? t('common.loading') : t('checkout.continue')}
+              </Button>
+            </div>
+          </section>
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <>
@@ -161,6 +312,7 @@ export function CheckoutItemsSection({
         )}
         <div className="pt-4">
           <Button
+            ref={addFromCartTriggerRef}
             variant="outline"
             className="glass-action-btn glass-action-btn--neutral h-11 w-full rounded-full px-5 text-sm font-semibold text-slate-700 md:h-12 md:text-base"
             disabled={remainingCartItems.length === 0}
@@ -170,73 +322,7 @@ export function CheckoutItemsSection({
           </Button>
         </div>
       </div>
-
-      {isAddFromCartOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="glass-panel w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/70 p-4 shadow-2xl sm:p-5 md:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">{t('checkout.addFromCart')}</h3>
-              <button
-                className="text-sm text-gray-500 hover:text-gray-700"
-                onClick={closeAddFromCart}
-                disabled={isAddingFromCart}
-              >
-                {t('common.close')}
-              </button>
-            </div>
-
-            {remainingCartItems.length === 0 ? (
-              <p className="text-sm text-gray-500">{t('checkout.noBookSelected')}</p>
-            ) : (
-              <div className="max-h-[320px] overflow-y-auto space-y-3">
-                {remainingCartItems.map(item => (
-                  <label key={item.id} className="flex cursor-pointer flex-col gap-3 rounded-[22px] border border-white/80 bg-white/80 p-3 shadow-[0_8px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl sm:flex-row sm:items-center">
-                    <input
-                      type="checkbox"
-                      className="accent-amber-500"
-                      checked={addFromCartSelection.includes(item.id)}
-                      disabled={isAddingFromCart}
-                      onChange={() => toggleAddFromCart(item.id)}
-                    />
-                    <OrderCoverImage
-                      cartItemId={item.id}
-                      src={resolveCoverUrl(item)}
-                      status={resolveCoverStatus(item)}
-                      alt={item.book.title}
-                      sizes="(max-width: 639px) 80px, 56px"
-                      className="h-24 w-20 rounded-xl sm:h-18 sm:w-14"
-                      imageClassName="object-cover"
-                    />
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-gray-900">{item.book.title}</div>
-                      <div className="text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
-                    </div>
-                    <div className="text-sm font-semibold text-gray-900">{formatCurrencyAmount((item.priceAtPurchase ?? item.book.price), selectedCurrency)}</div>
-                  </label>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                variant="ghost"
-                className="glass-action-btn glass-action-btn--neutral h-10 rounded-full px-5 text-sm font-semibold text-slate-700"
-                onClick={closeAddFromCart}
-                disabled={isAddingFromCart}
-              >
-                {t('common.close')}
-              </Button>
-              <Button
-                onClick={() => void confirmAddFromCart()}
-                disabled={addFromCartSelection.length === 0 || isAddingFromCart}
-                className="glass-action-btn glass-action-btn--brand h-10 rounded-full px-5 text-sm font-semibold"
-              >
-                {isAddingFromCart ? t('common.loading') : t('checkout.continue')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {addFromCartDialog}
     </>
   );
 }

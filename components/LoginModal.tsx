@@ -281,6 +281,12 @@ export function LoginModal() {
             <p className="text-xs text-emerald-600">{info}</p>
           ) : null}
 
+          {isSignupVerify ? (
+            <p className="text-xs leading-5 text-gray-500">
+              {t('email.spamFolderHint')}
+            </p>
+          ) : null}
+
           <Button type="submit" size="lg" className="w-full rounded-full" disabled={isPending || Boolean(pendingOAuthProvider)}>
             {isPending
               ? t('login.pleaseWait')

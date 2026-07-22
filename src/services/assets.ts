@@ -27,8 +27,9 @@ export type PendingUserAssetUpload = {
 const FACE_UPLOAD_MAX_EDGE = 1400
 const FACE_UPLOAD_TARGET_BYTES = 2 * 1024 * 1024
 const FACE_UPLOAD_JPEG_QUALITY = 0.88
-const FACE_UPLOAD_MIN_EDGE = 320
-const FACE_UPLOAD_MIN_BYTES = 100 * 1024
+const FACE_UPLOAD_MIN_EDGE = 256
+const FACE_UPLOAD_MIN_BYTES = 50 * 1024
+// Auto-cropping still needs enough source pixels to avoid enlarging a weak face crop.
 const FACE_AUTO_CROP_MIN_EDGE = Math.max(512, FACE_UPLOAD_MIN_EDGE)
 const FACE_DETECTOR_WASM_URL = '/mediapipe/tasks-vision/wasm'
 const FACE_DETECTOR_MODEL_URL = '/mediapipe/models/blaze_face_short_range.tflite'
@@ -44,9 +45,9 @@ const FACE_CENTER_MAX_Y = 0.74
 const FACE_ROLL_MAX_DEGREES = 25
 const FACE_NOSE_CENTER_MIN = 0.08
 const FACE_NOSE_CENTER_MAX = 0.92
-const FACE_BLUR_MIN_SCORE = 30
-const FACE_BRIGHTNESS_MIN = 45
-const FACE_BRIGHTNESS_MAX = 218
+const FACE_BLUR_MIN_SCORE = 24
+const FACE_BRIGHTNESS_MIN = 38
+const FACE_BRIGHTNESS_MAX = 225
 const FACE_EYE_REGION_RATIO = 0.22
 const FACE_EYE_MIN_EDGE_SCORE = 4
 const FACE_AUTO_CROP_SIDE_MARGIN_RATIO = 0.8
@@ -402,7 +403,7 @@ export async function validateFaceImage(file: File): Promise<FaceImageValidation
     return {
       ok: false,
       code: 'tooSmall',
-      message: 'This photo is too small. Please upload a clear face photo that is at least 100KB and 320px wide/tall.',
+      message: 'This photo is too small. Please upload a clear face photo that is at least 50KB and 256px on its shortest side.',
     }
   }
   if (typeof window === 'undefined') return { ok: true }
@@ -418,7 +419,7 @@ export async function validateFaceImage(file: File): Promise<FaceImageValidation
       return {
         ok: false,
         code: 'tooSmall',
-        message: 'This photo is too small. Please upload a clear face photo that is at least 100KB and 320px wide/tall.',
+        message: 'This photo is too small. Please upload a clear face photo that is at least 50KB and 256px on its shortest side.',
       }
     }
     return { ok: true }

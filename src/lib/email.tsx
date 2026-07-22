@@ -1,6 +1,6 @@
 import React from 'react'
 import { Resend } from 'resend'
-import { OtpEmail } from '@/components/emails/OtpEmail'
+import { buildOtpEmailText, OtpEmail } from '@/components/emails/OtpEmail'
 import {
   OrderReceiptEmail,
   type ReceiptAddress,
@@ -214,7 +214,7 @@ export async function sendOtpEmail(to: string, code: string, verificationId: str
     fromEnvName: 'EMAIL_FROM_SECURITY',
     subject: 'Your checkout verification code',
     react: <OtpEmail code={code} />,
-    text: `Your verification code is ${code}. It expires in 10 minutes.`,
+    text: buildOtpEmailText(code),
   })
 }
 

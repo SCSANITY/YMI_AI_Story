@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import {
+  PurchaseOwnershipConflictError,
+  recoverPurchasedCreationOwnership,
+} from '@/lib/purchase-ownership-recovery'
+import { supabasePurchaseOwnershipRecoveryStore } from '@/lib/purchase-ownership-recovery-store'
 
 const COOKIE_NAME = 'ymi_anon_session'
 const FIRST_REMINDER_MINUTES = Number(
@@ -96,6 +101,22 @@ export async function POST(request: Request) {
   }
 
   const anonSessionId = getCookieValue(request.headers.get('cookie') || '', COOKIE_NAME)
+
+  try {
+    await recoverPurchasedCreationOwnership(
+      customer.customer_id,
+      supabasePurchaseOwnershipRecoveryStore
+    )
+  } catch (error) {
+    if (error instanceof PurchaseOwnershipConflictError) {
+      console.error('[purchase-recovery] ownership conflict', {
+        customerId: customer.customer_id,
+        creationIds: error.creationIds,
+      })
+    } else {
+      console.warn('[purchase-recovery] recovery failed; continuing customer merge', error)
+    }
+  }
 
   if (anonSessionId) {
     const { data: anonOrderedItems } = await supabaseAdmin

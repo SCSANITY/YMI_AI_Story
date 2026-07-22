@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { BookMarked, CheckCircle2, Loader2, MailCheck } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
 import { formatMajorCurrencyValue, type CheckoutCurrency } from '@/lib/locale-pricing';
@@ -13,12 +13,17 @@ export type CheckoutSuccessOrder = {
   order_status?: string | null;
   display_total?: number | null;
   display_currency?: CheckoutCurrency;
+  email?: string | null;
 };
 
 type CheckoutSuccessCardProps = {
   loading: boolean;
   order: CheckoutSuccessOrder | null;
   orderId: string;
+  showPdfDeliveryNote: boolean;
+  accountPromptEmail?: string | null;
+  onCreateAccount: () => void;
+  onSignIn: () => void;
   onTrackOrder: () => void;
   onBackHome: () => void;
 };
@@ -27,6 +32,10 @@ export function CheckoutSuccessCard({
   loading,
   order,
   orderId,
+  showPdfDeliveryNote,
+  accountPromptEmail,
+  onCreateAccount,
+  onSignIn,
   onTrackOrder,
   onBackHome,
 }: CheckoutSuccessCardProps) {
@@ -85,6 +94,49 @@ export function CheckoutSuccessCard({
             </>
           )}
         </div>
+
+        {showPdfDeliveryNote ? (
+          <div className="mx-auto mt-4 flex max-w-xl items-start gap-2 text-left text-sm leading-6 text-gray-600">
+            <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+            <p>{t('checkout.pdfDeliveryNotice')}</p>
+          </div>
+        ) : null}
+
+        {accountPromptEmail ? (
+          <section className="mt-6 border-y border-emerald-100 bg-emerald-50/65 px-4 py-4 text-left">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <BookMarked className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-semibold text-gray-900">
+                  {t('checkout.accountContinuityTitle')}
+                </h2>
+                <p className="mt-1 break-words text-sm leading-6 text-gray-600">
+                  {t('checkout.accountContinuityDescription', { email: accountPromptEmail })}
+                </p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full rounded-full sm:w-auto"
+                    onClick={onCreateAccount}
+                  >
+                    {t('checkout.createAccount')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="w-full rounded-full sm:w-auto"
+                    onClick={onSignIn}
+                  >
+                    {t('checkout.signIn')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           <Button

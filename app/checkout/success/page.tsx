@@ -2,6 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useGlobalContext } from '@/contexts/GlobalContext'
+import { resolveCheckoutSuccessAccountPromptEmail } from '@/lib/checkout-success-account-prompt'
+import { shouldShowCheckoutSuccessDeliveryNote } from '@/lib/checkout-success-delivery-note'
 import { useI18n } from '@/lib/useI18n'
 import { normalizeOrderStatus } from '@/lib/order-status'
 import { CheckoutSuccessCard, type CheckoutSuccessOrder } from './CheckoutSuccessCard'
@@ -9,6 +12,7 @@ import { CheckoutSuccessCard, type CheckoutSuccessOrder } from './CheckoutSucces
 function CheckoutSuccessPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user, isHydrated, isAuthResolved, openLoginModal } = useGlobalContext()
   const orderId = useMemo(() => {
     const raw = searchParams.get('orderId')
     return raw && raw.trim().length > 0 ? raw.trim() : ''
@@ -123,11 +127,54 @@ function CheckoutSuccessPageContent() {
     window.localStorage.removeItem('ymi_discount_code')
   }, [])
 
+  useEffect(() => {
+    const customerId = user?.customerId
+    const targetOrderId = order?.order_id || orderId
+    if (!customerId || !targetOrderId) return
+
+    let cancelled = false
+    const url = `/api/orders?orderId=${encodeURIComponent(targetOrderId)}&customerId=${encodeURIComponent(customerId)}`
+    void fetch(url, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled) return
+        const refreshedOrder = Array.isArray(data?.orders) ? data.orders[0] ?? null : null
+        if (refreshedOrder?.order_id) setOrder(refreshedOrder)
+      })
+      .catch(() => {
+        // Keep the confirmed success facts; account recovery can be refreshed again from Orders.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [order?.order_id, orderId, user?.customerId])
+
+  const accountPromptEmail = resolveCheckoutSuccessAccountPromptEmail({
+    isHydrated,
+    isAuthResolved,
+    customerId: user?.customerId ?? null,
+    paymentFactsReady: !loading && Boolean(order?.order_id),
+    orderStatus: order?.order_status,
+    orderEmail: order?.email,
+  })
+  const showPdfDeliveryNote = shouldShowCheckoutSuccessDeliveryNote({
+    paymentFactsReady: !loading && Boolean(order?.order_id),
+    orderStatus: order?.order_status,
+  })
+
   return (
     <CheckoutSuccessCard
       loading={loading}
       order={order}
       orderId={orderId}
+      showPdfDeliveryNote={showPdfDeliveryNote}
+      accountPromptEmail={accountPromptEmail}
+      onCreateAccount={() => openLoginModal('signup', accountPromptEmail ?? undefined)}
+      onSignIn={() => openLoginModal('login', accountPromptEmail ?? undefined)}
       onTrackOrder={() => {
         const targetOrderId = order?.order_id || orderId
         const suffix = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''

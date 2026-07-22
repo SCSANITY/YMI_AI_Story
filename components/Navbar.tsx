@@ -17,7 +17,9 @@ import {
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
 import { isBrowserTranslated } from '@/lib/browser-translation'
+import { resolveCartBackNavigation } from '@/lib/cart-navigation'
 import { CurrencySwitcher } from '@/components/CurrencySwitcher'
+import { MiniCart } from '@/components/cart/MiniCart'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
 import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
 
@@ -29,17 +31,28 @@ const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then(
 export const Navbar: React.FC = () => {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, cart, openLoginModal, logout } = useGlobalContext()
+  const {
+    user,
+    cart,
+    displayCurrency,
+    isHydrated,
+    openLoginModal,
+    logout,
+    removeFromCart,
+    updateCartQuantity,
+  } = useGlobalContext()
   const { t } = useI18n()
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0)
 
   const [isUserMenuOpen, setUserMenuOpen] = useState(false)
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isRewardsOpen, setRewardsOpen] = useState(false)
+  const [cartOpenPath, setCartOpenPath] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const [pendingRoute, setPendingRoute] = useState<string | null>(null)
 
   const userRef = useRef<HTMLDivElement>(null)
+  const cartButtonRef = useRef<HTMLButtonElement>(null)
   const navContainerRef = useRef<HTMLDivElement>(null)
   const homeRef = useRef<HTMLElement | null>(null)
   const booksRef = useRef<HTMLElement | null>(null)
@@ -51,6 +64,7 @@ export const Navbar: React.FC = () => {
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
+  const isCartOpen = Boolean(pathname) && cartOpenPath === pathname
   const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
     customerId: user?.customerId,
     pathname,
@@ -69,6 +83,7 @@ export const Navbar: React.FC = () => {
   }, [pathname])
 
   const navigateToRoute = useCallback((path: string) => {
+    setCartOpenPath(null)
     if (!path || pendingRoute === path) return
     if (pathname === path) {
       setPendingRoute(null)
@@ -83,6 +98,7 @@ export const Navbar: React.FC = () => {
   }, [navigateWithDocumentReload, pathname, pendingRoute, router])
 
   const handlePlainLinkClick = useCallback((event: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    setCartOpenPath(null)
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
     if (pendingRoute === path) {
       event.preventDefault()
@@ -179,6 +195,7 @@ export const Navbar: React.FC = () => {
   }, [updateNavIndicator])
 
   const handleHomeClick = useCallback(() => {
+    setCartOpenPath(null)
     if (pathname === '/') {
       scrollHomeToTop()
     } else {
@@ -186,10 +203,46 @@ export const Navbar: React.FC = () => {
     }
   }, [navigateToRoute, pathname, scrollHomeToTop])
 
+  const dismissCart = useCallback((restoreFocus: boolean) => {
+    setCartOpenPath(null)
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => cartButtonRef.current?.focus())
+    }
+  }, [])
+
+  const handleCartToggle = useCallback(() => {
+    setUserMenuOpen(false)
+    setMobileMenuOpen(false)
+    setCartOpenPath((openPath) => openPath === pathname ? null : pathname)
+  }, [pathname])
+
+  const handleViewCart = useCallback(() => {
+    setCartOpenPath(null)
+    navigateToRoute('/cart')
+  }, [navigateToRoute])
+
+  const handleCartBackClick = useCallback(() => {
+    if (pendingRoute) return
+    const navigation = resolveCartBackNavigation(
+      window.location.search,
+      isBrowserTranslated()
+    )
+    setPendingRoute(navigation.href)
+    if (navigation.method === 'assign') {
+      navigateWithDocumentReload(navigation.href)
+      return
+    }
+    if (navigation.method === 'replace') {
+      router.replace(navigation.href)
+      return
+    }
+    router.push(navigation.href)
+  }, [navigateWithDocumentReload, pendingRoute, router])
+
   if (isPersonalizeRoute) return null
 
   return (
-    <nav className={`fixed left-0 right-0 top-0 ${isUserMenuOpen ? 'z-[150]' : 'z-40'} w-full transition-all duration-500 ${
+    <nav className={`fixed left-0 right-0 top-0 ${isUserMenuOpen || isCartOpen ? 'z-[150]' : 'z-40'} w-full transition-all duration-500 ${
       isTransparent
         ? 'bg-transparent backdrop-blur-none border-b border-transparent shadow-none'
         : 'bg-white/60 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40'
@@ -197,14 +250,28 @@ export const Navbar: React.FC = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {pathname !== '/' && !isCheckoutRoute && (
-            <Link href="/" onClick={(event) => handlePlainLinkClick(event, '/')} className="mr-2 p-1 hover:bg-gray-100 rounded-full">
-              {pendingRoute === '/' ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
-            </Link>
+            pathname === '/cart' ? (
+              <button
+                type="button"
+                onClick={handleCartBackClick}
+                className="mr-2 rounded-full p-1 hover:bg-gray-100"
+                aria-label={t('common.back')}
+              >
+                {pendingRoute ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
+              </button>
+            ) : (
+              <Link href="/" onClick={(event) => handlePlainLinkClick(event, '/')} className="mr-2 rounded-full p-1 hover:bg-gray-100">
+                {pendingRoute === '/' ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
+              </Link>
+            )
           )}
 
           <button
             className={`md:hidden p-2 -ml-2 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-600'}`}
-            onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}
+            onClick={() => {
+              setCartOpenPath(null)
+              setMobileMenuOpen(!isMobileMenuOpen)
+            }}
           >
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -347,23 +414,36 @@ export const Navbar: React.FC = () => {
             menuClassName="animate-in fade-in zoom-in-95"
           />
 
-          <Link
-            href="/cart"
-            onClick={(event) => handlePlainLinkClick(event, '/cart')}
+          <button
+            ref={cartButtonRef}
+            type="button"
+            onClick={handleCartToggle}
             className="relative inline-flex h-8 items-center justify-center rounded-full px-2 text-xs font-medium text-gray-600 transition-all duration-200 hover:bg-amber-50/80 hover:text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1"
-            aria-label="Cart"
+            aria-label={t('cart.miniTitle')}
+            aria-expanded={isCartOpen}
+            aria-controls="mini-cart"
+            aria-haspopup="dialog"
           >
-            {pendingRoute === '/cart' ? (
-              <Loader2 className={`h-5 w-5 animate-spin transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-amber-600'}`} />
-            ) : (
-              <ShoppingCart className={`h-5 w-5 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-700'}`} />
-            )}
+            <ShoppingCart className={`h-5 w-5 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-700'}`} />
             {cartCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
                 {cartCount}
               </span>
             )}
-          </Link>
+          </button>
+          {isCartOpen ? (
+            <MiniCart
+              open={isCartOpen}
+              anchorRef={cartButtonRef}
+              items={cart}
+              displayCurrency={displayCurrency}
+              isHydrated={isHydrated}
+              onDismiss={dismissCart}
+              onUpdateQuantity={updateCartQuantity}
+              onRemoveItem={removeFromCart}
+              onViewCart={handleViewCart}
+            />
+          ) : null}
 
           <div className="relative" ref={userRef}>
             {user ? (
@@ -373,7 +453,10 @@ export const Navbar: React.FC = () => {
                 totalNewCount={totalNewCount}
                 newCounts={newCounts}
                 t={t}
-                onToggle={() => setUserMenuOpen((open) => !open)}
+                onToggle={() => {
+                  setCartOpenPath(null)
+                  setUserMenuOpen((open) => !open)
+                }}
                 onClose={() => setUserMenuOpen(false)}
                 onNavigate={navigateToRoute}
                 onOpenRewards={() => setRewardsOpen(true)}
@@ -382,7 +465,10 @@ export const Navbar: React.FC = () => {
               />
             ) : (
               <Button
-                onClick={() => openLoginModal()}
+                onClick={() => {
+                  setCartOpenPath(null)
+                  openLoginModal()
+                }}
                 size="sm"
                 className={isTransparent
                   ? 'rounded-full border border-white/50 bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm'

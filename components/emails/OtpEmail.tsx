@@ -13,6 +13,7 @@ export function OtpEmail({ code, expiresInMinutes = 10 }: OtpEmailProps) {
       previewText="Your checkout verification code"
       title="Welcome to the Magic ✦"
       subtitle="To verify your email and begin creating your story, please enter the code below."
+      showSocialLinks={false}
     >
       <Section style={styles.codeWrap}>
         <Section style={styles.codeInner}>
@@ -27,6 +28,10 @@ export function OtpEmail({ code, expiresInMinutes = 10 }: OtpEmailProps) {
       </Text>
     </EmailLayout>
   )
+}
+
+export function buildOtpEmailText(code: string, expiresInMinutes = 10): string {
+  return `YMI Story checkout verification code: ${code}\n\nEnter this code to continue checkout. It expires in ${expiresInMinutes} minutes. If you did not request this code, you can safely ignore this email.`
 }
 
 const styles: Record<string, React.CSSProperties> = {

@@ -1,17 +1,68 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendOtpEmail } from '@/lib/email'
+import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  createGuestOtpRateLimitKey,
+  normalizeGuestOtpEmail,
+  parseGuestOtpRateLimitDecision,
+  resolveGuestOtpClientIp,
+} from '@/lib/guest-otp'
 
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
 export async function POST(request: Request) {
-  const { email } = await request.json()
+  const body = await request.json().catch(() => null)
+  const normalizedEmail = normalizeGuestOtpEmail(body?.email)
 
-  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
   if (!normalizedEmail) {
-    return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+    return NextResponse.json({ error: 'A valid email is required' }, { status: 400 })
+  }
+
+  const rateLimitSecret =
+    process.env.OTP_RATE_LIMIT_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY
+
+  if (!rateLimitSecret) {
+    console.error('[otp] rate-limit secret is unavailable')
+    return NextResponse.json({ error: 'Unable to send verification code' }, { status: 503 })
+  }
+
+  try {
+    const anonSessionId = await getOrCreateAnonSession()
+    const clientIp = resolveGuestOtpClientIp(request.headers)
+    const { data, error } = await supabaseAdmin.rpc('consume_guest_otp_rate_limit', {
+      p_email_key: createGuestOtpRateLimitKey('email', normalizedEmail, rateLimitSecret),
+      p_session_key: createGuestOtpRateLimitKey('session', anonSessionId, rateLimitSecret),
+      p_ip_key: clientIp
+        ? createGuestOtpRateLimitKey('ip', clientIp, rateLimitSecret)
+        : null,
+    })
+
+    const decision = parseGuestOtpRateLimitDecision(data)
+    if (error || !decision) {
+      console.error('[otp] rate-limit check failed', error)
+      return NextResponse.json({ error: 'Unable to send verification code' }, { status: 503 })
+    }
+
+    if (!decision.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Too many verification requests. Please wait before trying again.',
+          retryAfterSeconds: decision.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(decision.retryAfterSeconds) },
+        }
+      )
+    }
+  } catch (error) {
+    console.error('[otp] rate-limit guard failed', error)
+    return NextResponse.json({ error: 'Unable to send verification code' }, { status: 503 })
   }
 
   const code = generateCode()
@@ -55,6 +106,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     sent: true,
     expiresAt,
+    resendAfterSeconds: 60,
     devCode: process.env.NODE_ENV === 'production' ? undefined : code,
   })
 }
