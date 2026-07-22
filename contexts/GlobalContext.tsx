@@ -971,6 +971,17 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setCart(prev => prev.filter(item => !items.some(selected => selected.id === item.id)));
   }, []);
 
+  const addToCheckout = useCallback((items: CartItem[]) => {
+    if (!items.length) return;
+    const incomingIds = new Set(items.map(item => item.id));
+    setCheckoutItems(prev => {
+      const existingIds = new Set(prev.map(item => item.id));
+      const additions = items.filter(item => !existingIds.has(item.id));
+      return additions.length ? [...prev, ...additions] : prev;
+    });
+    setCart(prev => prev.filter(item => !incomingIds.has(item.id)));
+  }, []);
+
   const hydrateCheckoutItems = useCallback((rawItems: any[]) => {
     setCheckoutItems(mapCartItems(rawItems));
   }, [mapCartItems]);
@@ -1113,6 +1124,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     updateCartQuantity,
     updateCheckoutQuantity,
     prepareCheckout,
+    addToCheckout,
     hydrateCheckoutItems,
     removeFromCheckout,
     clearCheckout,
@@ -1154,6 +1166,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     updateCartQuantity,
     updateCheckoutQuantity,
     prepareCheckout,
+    addToCheckout,
     hydrateCheckoutItems,
     removeFromCheckout,
     clearCheckout,

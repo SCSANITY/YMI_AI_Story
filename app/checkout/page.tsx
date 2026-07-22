@@ -106,6 +106,7 @@ function CheckoutPageContent() {
     cart,
     checkoutItems,
     prepareCheckout,
+    addToCheckout,
     hydrateCheckoutItems,
     removeFromCheckout,
     removeOrderedItems,
@@ -161,11 +162,7 @@ function CheckoutPageContent() {
   const [pendingAuthIdentity, setPendingAuthIdentity] = useState(false);
   const [isIdentityRequesting, setIsIdentityRequesting] = useState(false);
   const [checkoutStarted, setCheckoutStarted] = useState(false);
-  const [activeCartItemIds, setActiveCartItemIds] = useState<string[]>([]);
-  const checkoutSnapshotRef = useRef<typeof items>([]);
-  const activeCartItemIdsRef = useRef<string[]>([]);
   const checkoutInitRef = useRef(false);
-  const didFinalizeRef = useRef(false);
   const hasSeededCheckoutCurrencyRef = useRef(false);
   const hasManualCurrencySelectionRef = useRef(false);
   const shippingDiscountRefreshKeyRef = useRef('');
@@ -239,7 +236,6 @@ function CheckoutPageContent() {
   }, [
     appliedProductCode,
     appliedShippingCode,
-    appliedDiscountCode,
     discountTotalUsd,
     formattedDiscount,
     formattedShippingDiscount,
@@ -295,7 +291,6 @@ function CheckoutPageContent() {
     const raw = searchParams?.get('ref');
     return raw && raw.trim().length > 0 ? raw.trim().toUpperCase() : '';
   }, [searchParams]);
-  const [hasHydratedExistingOrder, setHasHydratedExistingOrder] = useState(() => !queryOrderId);
   const shippingAddressPayload = useMemo(() => ({
     firstName: form.firstName.trim(),
     lastName: form.lastName.trim(),
@@ -456,10 +451,6 @@ function CheckoutPageContent() {
   }, [queryOrderId, checkoutItems.length, user?.customerId, hydrateCheckoutItems]);
 
   useEffect(() => {
-    setHasHydratedExistingOrder(!queryOrderId);
-  }, [queryOrderId]);
-
-  useEffect(() => {
     if (!queryOrderId) return;
     let cancelled = false;
 
@@ -526,11 +517,7 @@ function CheckoutPageContent() {
         setAppliedProductDiscountInstrumentId(current.applied_product_discount_instrument_id ?? null);
         setAppliedShippingDiscountInstrumentId(current.applied_shipping_discount_instrument_id ?? null);
       })
-      .catch(() => {})
-      .finally(() => {
-        if (cancelled) return;
-        setHasHydratedExistingOrder(true);
-      });
+      .catch(() => {});
 
     return () => {
       cancelled = true;
@@ -1057,10 +1044,8 @@ function CheckoutPageContent() {
       setCompletedOrder({ id: newOrderId, displayId: displayId ?? undefined, total: orderTotalUsd, email: checkoutContactEmail });
       setOrderId(null);
       clearCheckout();
-      didFinalizeRef.current = true;
       setCheckoutStarted(false);
       checkoutInitRef.current = false;
-      setActiveCartItemIds([]);
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem('ymi_checkout_form');
         window.localStorage.removeItem('ymi_discount_code');
@@ -1202,42 +1187,41 @@ function CheckoutPageContent() {
     });
     if (!response.ok) return false;
     const data = await response.json();
-    const ids = Array.isArray(data?.cartItemIds) ? data.cartItemIds : selected.map(item => item.id);
     if (data?.orderId && !orderId) {
       setOrderId(data.orderId);
     }
-    setActiveCartItemIds(prev => Array.from(new Set([...prev, ...ids])));
     setCheckoutStarted(true);
     return true;
   }, [user?.customerId, orderId, checkoutContactEmail]);
 
-  const handleRemoveCheckoutItem = async (itemId: string) => {
+  const handleRemoveCheckoutItem = useCallback(async (itemId: string) => {
+    const removedItem = items.find(item => item.id === itemId);
+    if (!removedItem) return false;
+
     setFormError('');
+    removeFromCheckout(itemId);
     try {
       const response = await fetch('/api/orders/cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        cartItemIds: [itemId],
-        customerId: user?.customerId ?? null,
-        orderId,
-      }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          cartItemIds: [itemId],
+          customerId: user?.customerId ?? null,
+          orderId,
+        }),
       });
       const data = response.ok ? null : await response.json().catch(() => null);
       if (!response.ok) {
+        addToCheckout([removedItem]);
         setFormError(data?.error || t('checkout.removeItemError'));
         return false;
       }
 
-      removeFromCheckout(itemId);
       if (items.length === 1) {
         setCheckoutStarted(false);
-        setActiveCartItemIds([]);
-        checkoutSnapshotRef.current = [];
         setOrderId(null);
       }
-      setActiveCartItemIds(prev => prev.filter(id => id !== itemId));
       setAppliedDiscountCode(null);
       setSelectedRewardVoucherId(null);
       setSelectedRewardVoucherName(null);
@@ -1249,21 +1233,32 @@ function CheckoutPageContent() {
       return true;
     } catch (error) {
       console.error('Checkout item removal failed:', error);
+      addToCheckout([removedItem]);
       setFormError(t('checkout.removeItemError'));
       return false;
     }
-  };
+  }, [addToCheckout, items, orderId, removeFromCheckout, t, user?.customerId]);
 
-  const handleAddFromCartItems = async (selected: typeof items) => {
+  const handleAddFromCartItems = useCallback(async (selected: typeof items) => {
     if (!selected.length) {
       return true;
     }
-    const ok = await startCheckoutForItems(selected);
-    if (!ok) return false;
-    prepareCheckout([...items, ...selected]);
-    checkoutSnapshotRef.current = [...checkoutSnapshotRef.current, ...selected];
-    return true;
-  };
+    setFormError('');
+    if (!requiresShipping && selected.some(checkoutItemRequiresShipping)) {
+      setStep('address');
+    }
+    addToCheckout(selected);
+    try {
+      const ok = await startCheckoutForItems(selected);
+      if (ok) return true;
+    } catch (error) {
+      console.error('Checkout item addition failed:', error);
+    }
+
+    selected.forEach(item => removeFromCheckout(item.id));
+    setFormError(t('checkout.addItemsError'));
+    return false;
+  }, [addToCheckout, removeFromCheckout, requiresShipping, startCheckoutForItems, t]);
 
   useEffect(() => {
     if (!items.length || checkoutStarted) {
@@ -1273,14 +1268,11 @@ function CheckoutPageContent() {
       return;
     }
     if (orderId) {
-      checkoutSnapshotRef.current = items;
-      setActiveCartItemIds(items.map(item => item.id));
       setCheckoutStarted(true);
       return;
     }
     if (checkoutInitRef.current) return;
     checkoutInitRef.current = true;
-    checkoutSnapshotRef.current = items;
     void (async () => {
       const ok = await startCheckoutForItems(items);
       if (!ok) {
@@ -1288,16 +1280,6 @@ function CheckoutPageContent() {
       }
     })();
   }, [items, checkoutStarted, orderId, startCheckoutForItems]);
-
-  useEffect(() => {
-    activeCartItemIdsRef.current = activeCartItemIds;
-  }, [activeCartItemIds]);
-
-  useEffect(() => {
-    if (!checkoutStarted) return;
-    if (didFinalizeRef.current) return;
-    return () => {};
-  }, [checkoutStarted]);
 
   const isPaymentStep = step === 'payment';
   const shouldShowMobilePaymentBar = isPaymentStep;
@@ -1405,7 +1387,6 @@ function CheckoutPageContent() {
             <AddressFormSection
               initialForm={form}
               checkoutEmail={checkoutEmail}
-              isMultiOrderCheckout={isMultiOrderCheckout}
               language={language}
               selectedCurrency={selectedCurrency}
               userCustomerId={user?.customerId ?? null}

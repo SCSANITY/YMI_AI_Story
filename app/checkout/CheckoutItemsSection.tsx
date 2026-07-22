@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ShoppingCart, X } from 'lucide-react';
+import { Check, LoaderCircle, ShoppingCart, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/Button';
 import OrderCoverImage from '@/components/OrderCoverImage';
 import type { CartItem } from '@/types';
@@ -35,15 +36,14 @@ export function CheckoutItemsSection({
 }: CheckoutItemsSectionProps) {
   const [isAddFromCartOpen, setIsAddFromCartOpen] = useState(false);
   const [addFromCartSelection, setAddFromCartSelection] = useState<string[]>([]);
-  const [removingCheckoutItemId, setRemovingCheckoutItemId] = useState<string | null>(null);
-  const [isAddingFromCart, setIsAddingFromCart] = useState(false);
+  const [pendingAddItemIds, setPendingAddItemIds] = useState<string[]>([]);
+  const [pendingRemovalItemIds, setPendingRemovalItemIds] = useState<string[]>([]);
   const addFromCartTriggerRef = useRef<HTMLButtonElement>(null);
   const addFromCartCloseRef = useRef<HTMLButtonElement>(null);
-  const removingCheckoutItemIdRef = useRef<string | null>(null);
+  const removingCheckoutItemIdsRef = useRef(new Set<string>());
   const isAddingFromCartRef = useRef(false);
 
   const closeAddFromCart = useCallback(() => {
-    if (isAddingFromCartRef.current) return;
     setIsAddFromCartOpen(false);
     setAddFromCartSelection([]);
     window.requestAnimationFrame(() => addFromCartTriggerRef.current?.focus());
@@ -71,14 +71,14 @@ export function CheckoutItemsSection({
   };
 
   const handleRemoveItem = async (itemId: string) => {
-    if (removingCheckoutItemIdRef.current) return;
-    removingCheckoutItemIdRef.current = itemId;
-    setRemovingCheckoutItemId(itemId);
+    if (removingCheckoutItemIdsRef.current.has(itemId)) return;
+    removingCheckoutItemIdsRef.current.add(itemId);
+    setPendingRemovalItemIds(prev => [...prev, itemId]);
     try {
       await onRemoveItem(itemId);
     } finally {
-      removingCheckoutItemIdRef.current = null;
-      setRemovingCheckoutItemId(null);
+      removingCheckoutItemIdsRef.current.delete(itemId);
+      setPendingRemovalItemIds(prev => prev.filter(id => id !== itemId));
     }
   };
 
@@ -92,16 +92,15 @@ export function CheckoutItemsSection({
     }
 
     isAddingFromCartRef.current = true;
-    setIsAddingFromCart(true);
+    setPendingAddItemIds(selected.map(item => item.id));
+    setIsAddFromCartOpen(false);
+    setAddFromCartSelection([]);
+    window.requestAnimationFrame(() => addFromCartTriggerRef.current?.focus());
     try {
-      const ok = await onAddFromCartItems(selected);
-      if (ok) {
-        setIsAddFromCartOpen(false);
-        setAddFromCartSelection([]);
-      }
+      await onAddFromCartItems(selected);
     } finally {
       isAddingFromCartRef.current = false;
-      setIsAddingFromCart(false);
+      setPendingAddItemIds([]);
     }
   };
 
@@ -138,7 +137,6 @@ export function CheckoutItemsSection({
                 type="button"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                 onClick={closeAddFromCart}
-                disabled={isAddingFromCart}
                 aria-label={t('common.close')}
                 title={t('common.close')}
               >
@@ -163,7 +161,7 @@ export function CheckoutItemsSection({
                           isSelected
                             ? 'border-amber-300 bg-amber-50/80 shadow-[0_10px_28px_rgba(217,119,6,0.12)] ring-1 ring-amber-200/70'
                             : 'border-slate-100 bg-white/85 shadow-sm hover:border-amber-200 hover:bg-amber-50/45'
-                        } ${isAddingFromCart ? 'cursor-wait opacity-70' : ''}`}
+                        }`}
                       >
                         <span className={`flex h-6 w-6 items-center justify-center rounded-md border transition ${
                           isSelected ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-300 bg-white text-transparent'
@@ -174,7 +172,6 @@ export function CheckoutItemsSection({
                           type="checkbox"
                           className="sr-only"
                           checked={isSelected}
-                          disabled={isAddingFromCart}
                           onChange={() => toggleAddFromCart(item.id)}
                         />
                         <OrderCoverImage
@@ -218,16 +215,15 @@ export function CheckoutItemsSection({
                 variant="ghost"
                 className="glass-action-btn glass-action-btn--neutral h-10 w-full rounded-full px-5 text-sm font-semibold text-slate-700 sm:w-auto"
                 onClick={closeAddFromCart}
-                disabled={isAddingFromCart}
               >
                 {t('common.close')}
               </Button>
               <Button
                 onClick={() => void confirmAddFromCart()}
-                disabled={addFromCartSelection.length === 0 || isAddingFromCart}
+                disabled={addFromCartSelection.length === 0}
                 className="glass-action-btn glass-action-btn--brand h-10 w-full rounded-full px-5 text-sm font-semibold sm:w-auto"
               >
-                {isAddingFromCart ? t('common.loading') : t('checkout.continue')}
+                {t('checkout.continue')}
               </Button>
             </div>
           </section>
@@ -246,68 +242,91 @@ export function CheckoutItemsSection({
           </div>
         ) : (
           <div className="space-y-3">
-            {items.map(item => (
-              <div key={item.id} className="rounded-[24px] border border-white/80 bg-white/72 px-3 py-3 shadow-[0_8px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl sm:px-4">
-                <div className="flex items-start gap-3 sm:gap-4">
-                  <OrderCoverImage
-                    cartItemId={item.id}
-                    src={resolveCoverUrl(item)}
-                    status={resolveCoverStatus(item)}
-                    alt={item.book.title}
-                    sizes="(max-width: 639px) 80px, 64px"
-                    className="h-24 w-20 rounded-xl sm:h-20 sm:w-16"
-                    imageClassName="object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{item.book.title}</div>
-                    <div className="mt-1 text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
-                    <div className="mt-2 text-sm font-semibold text-gray-900 sm:hidden">
-                      {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}
+            <AnimatePresence initial={false} mode="popLayout">
+              {items.map(item => {
+                const isPendingAddition = pendingAddItemIds.includes(item.id);
+                return (
+                <motion.div
+                  layout
+                  key={item.id}
+                  aria-busy={isPendingAddition}
+                  initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: -12, scale: 0.985 }}
+                  transition={{ duration: 0.18, ease: 'easeOut', layout: { duration: 0.2 } }}
+                  className="rounded-[24px] border border-white/80 bg-white/72 px-3 py-3 shadow-[0_8px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl sm:px-4"
+                >
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <OrderCoverImage
+                      cartItemId={item.id}
+                      src={resolveCoverUrl(item)}
+                      status={resolveCoverStatus(item)}
+                      alt={item.book.title}
+                      sizes="(max-width: 639px) 80px, 64px"
+                      className="h-24 w-20 rounded-xl sm:h-20 sm:w-16"
+                      imageClassName="object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{item.book.title}</div>
+                      <div className="mt-1 text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
+                      <div className="mt-2 text-sm font-semibold text-gray-900 sm:hidden">
+                        {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-900">
+                      {isPendingAddition ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin text-amber-500" aria-label={t('common.loading')} />
+                      ) : null}
+                      <span className="hidden sm:inline">
+                        {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}
+                      </span>
                     </div>
                   </div>
-                  <div className="hidden text-sm font-semibold text-gray-900 sm:block">
-                    {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="inline-flex w-fit items-center rounded-full border border-white/80 bg-white/90 px-1 py-0.5 shadow-sm">
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="inline-flex w-fit items-center rounded-full border border-white/80 bg-white/90 px-1 py-0.5 shadow-sm">
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 transition hover:bg-amber-100"
+                        onClick={() => onQuantityChange(item.id, Math.max(1, (item.quantity ?? 1) - 1))}
+                        disabled={isPendingAddition}
+                        aria-label={t('checkout.decreaseQuantity')}
+                      >
+                        <span className="text-base font-semibold leading-none">-</span>
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.quantity ?? 1}
+                        disabled={isPendingAddition}
+                        onChange={(event) => {
+                          const nextValue = Number.parseInt(event.target.value, 10);
+                          onQuantityChange(item.id, Number.isNaN(nextValue) ? 1 : nextValue);
+                        }}
+                        className="h-8 w-12 appearance-none bg-transparent text-center text-xs font-semibold leading-none text-gray-700 outline-none"
+                      />
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 transition hover:bg-amber-100"
+                        onClick={() => onQuantityChange(item.id, (item.quantity ?? 1) + 1)}
+                        disabled={isPendingAddition}
+                        aria-label={t('checkout.increaseQuantity')}
+                      >
+                        <span className="text-base font-semibold leading-none">+</span>
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 transition hover:bg-amber-100"
-                      onClick={() => onQuantityChange(item.id, Math.max(1, (item.quantity ?? 1) - 1))}
-                      aria-label={t('checkout.decreaseQuantity')}
+                      className="w-fit text-xs font-semibold text-red-500 transition hover:text-red-600"
+                      onClick={() => void handleRemoveItem(item.id)}
+                      disabled={isPendingAddition}
                     >
-                      <span className="text-base font-semibold leading-none">-</span>
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      value={item.quantity ?? 1}
-                      onChange={(event) => {
-                        const nextValue = Number.parseInt(event.target.value, 10);
-                        onQuantityChange(item.id, Number.isNaN(nextValue) ? 1 : nextValue);
-                      }}
-                      className="h-8 w-12 appearance-none bg-transparent text-center text-xs font-semibold leading-none text-gray-700 outline-none"
-                    />
-                    <button
-                      type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 transition hover:bg-amber-100"
-                      onClick={() => onQuantityChange(item.id, (item.quantity ?? 1) + 1)}
-                      aria-label={t('checkout.increaseQuantity')}
-                    >
-                      <span className="text-base font-semibold leading-none">+</span>
+                      {t('common.remove')}
                     </button>
                   </div>
-                  <button
-                    className="w-fit text-xs font-semibold text-red-500 transition hover:text-red-600"
-                    onClick={() => void handleRemoveItem(item.id)}
-                    disabled={removingCheckoutItemId === item.id}
-                  >
-                    {removingCheckoutItemId === item.id ? t('checkout.removingItem') : t('common.remove')}
-                  </button>
-                </div>
-              </div>
-            ))}
+                </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
         <div className="pt-4">
@@ -315,7 +334,7 @@ export function CheckoutItemsSection({
             ref={addFromCartTriggerRef}
             variant="outline"
             className="glass-action-btn glass-action-btn--neutral h-11 w-full rounded-full px-5 text-sm font-semibold text-slate-700 md:h-12 md:text-base"
-            disabled={remainingCartItems.length === 0}
+            disabled={remainingCartItems.length === 0 || pendingAddItemIds.length > 0 || pendingRemovalItemIds.length > 0}
             onClick={() => setIsAddFromCartOpen(true)}
           >
             {t('checkout.addFromCart')}

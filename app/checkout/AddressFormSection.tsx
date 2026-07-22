@@ -100,7 +100,6 @@ type ShippingQuoteApiOption = {
 type AddressFormSectionProps = {
   initialForm: CheckoutAddressForm;
   checkoutEmail: string;
-  isMultiOrderCheckout: boolean;
   language: string;
   selectedCurrency: CheckoutCurrency;
   userCustomerId?: string | null;
@@ -224,7 +223,6 @@ function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDe
 function AddressFormSectionComponent({
   initialForm,
   checkoutEmail,
-  isMultiOrderCheckout,
   language,
   selectedCurrency,
   userCustomerId,
@@ -329,7 +327,6 @@ function AddressFormSectionComponent({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isMultiOrderCheckout) return;
     const raw = window.localStorage.getItem('ymi_checkout_form');
     if (!raw) return;
     try {
@@ -343,7 +340,7 @@ function AddressFormSectionComponent({
     } catch {
       // Ignore malformed local checkout drafts.
     }
-  }, [isMultiOrderCheckout]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -409,32 +406,9 @@ function AddressFormSectionComponent({
   }, []);
 
   useEffect(() => {
-    if (!isMultiOrderCheckout) return;
-    setForm((prev) => ({
-      ...prev,
-      firstName: '',
-      lastName: '',
-      country: '',
-      shippingRegionKey: '',
-      shippingDestinationLabel: '',
-      region: '',
-      addressLine1: '',
-      addressLine2: '',
-      city: '',
-      zip: '',
-      phone: '',
-      company: '',
-    }));
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('ymi_checkout_form');
-    }
-  }, [isMultiOrderCheckout]);
-
-  useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isMultiOrderCheckout) return;
     window.localStorage.setItem('ymi_checkout_form', JSON.stringify(form));
-  }, [form, isMultiOrderCheckout]);
+  }, [form]);
 
   useEffect(() => {
     if (!isAddressBookOpen || typeof document === 'undefined') return;

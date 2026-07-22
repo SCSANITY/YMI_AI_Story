@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { BookOpen } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -12,6 +12,12 @@ import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
 import { parseTemplateAmount } from '@/lib/book-catalog'
 import { MyBooksGrid } from './MyBooksGrid'
 import { PurchasedBooksGrid } from './PurchasedBooksGrid'
+import { MyBooksShelfSwitcher } from './MyBooksShelfSwitcher'
+import {
+  buildMyBooksShelfPath,
+  resolveInitialMyBooksShelf,
+  type MyBooksShelf,
+} from './myBooksShelf'
 import type { CreationItem } from './myBooksTypes'
 
 const normalizeLanguage = (value: unknown): PersonalizationData['language'] => {
@@ -107,6 +113,7 @@ export default function MyBooksPage() {
   const [loading, setLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState<{ creationId: string; action: 'add' | 'buy' | 'delete' } | null>(null)
   const [pendingReaderHref, setPendingReaderHref] = useState<string | null>(null)
+  const [activeShelf, setActiveShelf] = useState<MyBooksShelf | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -319,56 +326,86 @@ export default function MyBooksPage() {
   )
   const hasVisibleItems = purchasedItems.length > 0 || unpurchasedItems.length > 0
 
+  useEffect(() => {
+    if (loading || activeShelf !== null) return
+    const requestedShelf = new URL(window.location.href).searchParams.get('shelf')
+    setActiveShelf(resolveInitialMyBooksShelf(requestedShelf, purchasedItems.length))
+  }, [activeShelf, loading, purchasedItems.length])
+
+  const handleShelfChange = useCallback((shelf: MyBooksShelf) => {
+    setActiveShelf(shelf)
+    window.history.replaceState(
+      window.history.state,
+      '',
+      buildMyBooksShelfPath(window.location.href, shelf)
+    )
+  }, [])
+
+  const isResolvingShelf = !loading && hasVisibleItems && activeShelf === null
+
   return (
     <div className="page-surface min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 md:px-8 pt-24 pb-16 space-y-10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-            <BookOpen className="h-5 w-5 text-amber-600" />
+      <div className="max-w-7xl mx-auto px-4 md:px-8 pt-24 pb-16">
+        <header className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <BookOpen className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('myBooks.title')}</h1>
+              <p className="text-gray-500 text-sm">{t('myBooks.subtitle')}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('myBooks.title')}</h1>
-            <p className="text-gray-500 text-sm">{t('myBooks.subtitle')}</p>
-          </div>
-        </div>
 
-        {loading ? (
+          {!loading && !isResolvingShelf && hasVisibleItems && activeShelf ? (
+            <MyBooksShelfSwitcher
+              activeShelf={activeShelf}
+              purchasedCount={purchasedItems.length}
+              previewCount={unpurchasedItems.length}
+              purchasedLabel={t('myBooks.purchasedTitle')}
+              purchasedDescription={t('myBooks.purchasedTabDescription')}
+              previewsLabel={t('myBooks.unpurchasedTitle')}
+              previewsDescription={t('myBooks.unpurchasedTabDescription')}
+              ariaLabel={t('myBooks.shelfSwitcherLabel')}
+              onChange={handleShelfChange}
+            />
+          ) : null}
+        </header>
+
+        <div className="mt-8 md:mt-10">
+        {loading || isResolvingShelf ? (
           <MyBooksLoadingGrid gridClass={gridClass} />
         ) : !hasVisibleItems ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-sm text-gray-500 text-center">
             {t('myBooks.empty')}
           </div>
         ) : (
-          <div className="space-y-12">
-            {purchasedItems.length > 0 ? (
-              <section className="space-y-5" aria-labelledby="purchased-books-heading">
-                <div className="space-y-1">
-                  <h2 id="purchased-books-heading" className="text-xl font-display font-semibold text-gray-900">
-                    {t('myBooks.purchasedTitle')}
-                  </h2>
-                  <p className="text-sm text-gray-500">{t('myBooks.purchasedSubtitle')}</p>
-                </div>
-                <PurchasedBooksGrid
-                  items={purchasedItems}
-                  gridClass={gridClass}
-                  pendingReaderHref={pendingReaderHref}
-                  t={t}
-                  resolveCover={resolveCover}
-                  buildReaderHref={buildReaderHref}
-                  onPrefetchReader={prefetchReader}
-                  onOpenReader={goToReader}
-                />
-              </section>
-            ) : null}
-
-            {unpurchasedItems.length > 0 ? (
-              <section className="space-y-5" aria-labelledby="unpurchased-books-heading">
-                <div className="space-y-1">
-                  <h2 id="unpurchased-books-heading" className="text-xl font-display font-semibold text-gray-900">
-                    {t('myBooks.unpurchasedTitle')}
-                  </h2>
-                  <p className="text-sm text-gray-500">{t('myBooks.unpurchasedSubtitle')}</p>
-                </div>
+            <section
+              key={activeShelf}
+              id={`my-books-panel-${activeShelf}`}
+              role="tabpanel"
+              aria-labelledby={`my-books-tab-${activeShelf}`}
+              tabIndex={0}
+              className="animate-in fade-in slide-in-from-bottom-2 duration-200 focus:outline-none"
+            >
+              {activeShelf === 'purchased' ? (
+                purchasedItems.length > 0 ? (
+                  <PurchasedBooksGrid
+                    items={purchasedItems}
+                    gridClass={gridClass}
+                    pendingReaderHref={pendingReaderHref}
+                    t={t}
+                    resolveCover={resolveCover}
+                    buildReaderHref={buildReaderHref}
+                    onPrefetchReader={prefetchReader}
+                    onOpenReader={goToReader}
+                  />
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-200 bg-white/70 p-8 text-center text-sm text-gray-500">
+                    {t('myBooks.purchasedEmpty')}
+                  </div>
+                )
+              ) : unpurchasedItems.length > 0 ? (
                 <MyBooksGrid
                   items={unpurchasedItems}
                   gridClass={gridClass}
@@ -387,10 +424,14 @@ export default function MyBooksPage() {
                   onAddToCart={(item) => void handleAddToCart(item)}
                   onBuyNow={(item) => void handleBuyNow(item)}
                 />
-              </section>
-            ) : null}
-          </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-gray-200 bg-white/70 p-8 text-center text-sm text-gray-500">
+                  {t('myBooks.previewsEmpty')}
+                </div>
+              )}
+            </section>
         )}
+        </div>
       </div>
     </div>
   )

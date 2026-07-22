@@ -182,6 +182,7 @@ export interface GlobalContextType {
   updateCartQuantity: (itemId: string, quantity: number) => Promise<boolean>;
   updateCheckoutQuantity: (itemId: string, quantity: number) => void;
   prepareCheckout: (items: CartItem[]) => void;
+  addToCheckout: (items: CartItem[]) => void;
   hydrateCheckoutItems: (items: any[]) => void;
   restoreCheckout: (items: CartItem[]) => void;
   removeFromCheckout: (itemId: string) => void;
