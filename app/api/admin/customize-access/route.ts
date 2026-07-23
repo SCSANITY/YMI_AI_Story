@@ -8,15 +8,20 @@ export async function GET() {
     return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const customizeAccess = await getCustomizeAccessSettings()
-  return NextResponse.json(
-    { customizeAccess },
-    {
-      headers: {
-        'Cache-Control': 'no-store',
-      },
-    }
-  )
+  try {
+    const customizeAccess = await getCustomizeAccessSettings({ failOnError: true })
+    return NextResponse.json(
+      { customizeAccess },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load customize access'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
 
 export async function PATCH(request: Request) {

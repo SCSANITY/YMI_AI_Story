@@ -18,11 +18,11 @@ type Props = {
  */
 export function AdminShell({ adminName, adminEmail, children }: Props) {
   return (
-    <main className="min-h-screen bg-[#0b1120] text-white">
-      <div className="grid min-h-screen lg:grid-cols-[18rem_minmax(0,1fr)]">
+    <main className="min-h-dvh max-w-full overflow-x-clip bg-[#0b1120] text-white">
+      <div className="grid min-h-dvh min-w-0 max-w-full lg:grid-cols-[18rem_minmax(0,1fr)]">
         <AdminSidebar adminName={adminName} adminEmail={adminEmail} />
-        <section className="min-w-0 p-4 lg:p-6">
-          {children}
+        <section className="min-w-0 max-w-full px-3 pb-6 pt-4 sm:px-4 lg:px-6 lg:py-6">
+          <div className="min-w-0 max-w-full">{children}</div>
         </section>
       </div>
     </main>

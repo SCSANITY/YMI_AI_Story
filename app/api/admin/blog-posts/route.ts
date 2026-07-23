@@ -6,6 +6,15 @@ const STATUSES = new Set(['draft', 'published', 'hidden', 'archived'])
 const MAX_IMAGES = 9
 const IMAGE_SIGN_TTL_SECONDS = 60 * 20
 
+function jsonNoStore(body: unknown, init?: { status?: number }) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  })
+}
+
 type AdminBlogPostRow = {
   post_id: string
   title: string
@@ -53,17 +62,31 @@ async function signImage(storagePath: string) {
 
 async function withImageUrls<T extends AdminBlogPostRow>(rows: T[]) {
   return Promise.all(
-    rows.map(async (row) => ({
-      ...row,
-      image_urls: (await Promise.all((row.image_storage_paths ?? []).map(signImage))).filter(Boolean),
-    }))
+    rows.map(async (row) => {
+      const imageStoragePaths = Array.isArray(row.image_storage_paths)
+        ? row.image_storage_paths
+        : []
+      return {
+        ...row,
+        image_storage_paths: imageStoragePaths,
+        image_urls: await Promise.all(imageStoragePaths.map(signImage)),
+        links: Array.isArray(row.links)
+          ? row.links
+              .map((link) => ({
+                label: String(link?.label || link?.url || ''),
+                url: String(link?.url || ''),
+              }))
+              .filter((link) => link.url)
+          : [],
+      }
+    })
   )
 }
 
 export async function GET() {
   const admin = await requireAdminCustomer()
   if (!admin) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    return jsonNoStore({ error: 'Admin access required' }, { status: 403 })
   }
 
   const { data, error } = await supabaseAdmin
@@ -73,10 +96,15 @@ export async function GET() {
     .limit(100)
 
   if (error) {
-    return NextResponse.json({ error: error.message || 'Failed to load announcements' }, { status: 500 })
+    return jsonNoStore(
+      { error: error.message || 'Failed to load announcements' },
+      { status: 500 }
+    )
   }
 
-  return NextResponse.json({ posts: await withImageUrls((data ?? []) as AdminBlogPostRow[]) })
+  return jsonNoStore({
+    posts: await withImageUrls((data ?? []) as AdminBlogPostRow[]),
+  })
 }
 
 export async function POST(request: Request) {

@@ -10,9 +10,18 @@ const ORDER_GROUPS: Record<string, string[]> = {
   refunded: ['refunded'],
 }
 
+function jsonNoStore(body: unknown, init?: { status?: number }) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  })
+}
+
 export async function GET(request: Request) {
   const admin = await requireAdminCustomer()
-  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!admin) return jsonNoStore({ error: 'Forbidden' }, { status: 403 })
 
   const url = new URL(request.url)
   const group = url.searchParams.get('group') || 'production'
@@ -49,8 +58,8 @@ export async function GET(request: Request) {
   const { data, error } = await query
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return jsonNoStore({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, orders: data ?? [] })
+  return jsonNoStore({ ok: true, orders: data ?? [] })
 }

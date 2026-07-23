@@ -5,11 +5,20 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 const EFFECT_TYPES = new Set(['free_shipping', 'fixed_amount', 'percentage'])
 const INSTRUMENT_TYPES = new Set(['promo_code', 'voucher'])
 
+function jsonNoStore(body: unknown, init?: { status?: number }) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  })
+}
+
 function normalizeCode(value: unknown) {
   return String(value || '').trim().toUpperCase()
 }
 
-function normalizeEffectConfig(effectType: string, body: any) {
+function normalizeEffectConfig(effectType: string, body: Record<string, unknown>) {
   if (effectType === 'fixed_amount') {
     return { amount_usd: Math.max(0, Number(body.amountUsd ?? body.amount_usd ?? 0)) }
   }
@@ -61,10 +70,10 @@ export async function GET() {
     .limit(100)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return jsonNoStore({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, instruments: data ?? [] })
+  return jsonNoStore({ ok: true, instruments: data ?? [] })
 }
 
 export async function POST(request: Request) {
@@ -113,7 +122,9 @@ export async function POST(request: Request) {
           : null,
       created_by_admin_id: admin.customer_id,
     })
-    .select('offer_id')
+    .select(
+      'offer_id, name, effect_type, effect_config, stacking_group, is_active, expires_at'
+    )
     .single()
 
   if (offerError || !offer?.offer_id) {
@@ -143,7 +154,9 @@ export async function POST(request: Request) {
             : null,
       created_by_admin_id: admin.customer_id,
     })
-    .select('instrument_id')
+    .select(
+      'instrument_id, instrument_type, code, owner_email, is_public, is_active, reserved_count, paid_count'
+    )
     .single()
 
   if (instrumentError || !instrument?.instrument_id) {
@@ -151,7 +164,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: instrumentError?.message || 'Failed to create discount instrument' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, offerId: offer.offer_id, instrumentId: instrument.instrument_id })
+  return NextResponse.json({
+    ok: true,
+    offerId: offer.offer_id,
+    instrumentId: instrument.instrument_id,
+    instrument: {
+      instrument_id: instrument.instrument_id,
+      instrument_type: instrument.instrument_type,
+      code: instrument.code,
+      owner_email: instrument.owner_email,
+      is_public: instrument.is_public,
+      is_active: instrument.is_active,
+      reserved_count: instrument.reserved_count,
+      paid_count: instrument.paid_count,
+      discount_offers: {
+        name: offer.name,
+        effect_type: offer.effect_type,
+        effect_config: offer.effect_config,
+        stacking_group: offer.stacking_group,
+        is_active: offer.is_active,
+        expires_at: offer.expires_at,
+      },
+    },
+  })
 }
 
 export async function PATCH(request: Request) {
@@ -163,21 +198,32 @@ export async function PATCH(request: Request) {
   const instrumentId = String(body.instrumentId || body.instrument_id || '').trim()
   const isActive = Boolean(body.isActive ?? body.is_active)
 
+  if (Number(Boolean(offerId)) + Number(Boolean(instrumentId)) !== 1) {
+    return NextResponse.json(
+      { error: 'Provide exactly one discount offer or instrument id' },
+      { status: 400 }
+    )
+  }
+
   if (offerId) {
-    const { error } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('discount_offers')
       .update({ is_active: isActive, updated_at: new Date().toISOString() })
       .eq('offer_id', offerId)
+      .select('offer_id, is_active')
+      .maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data) return NextResponse.json({ error: 'Discount offer not found' }, { status: 404 })
+    return NextResponse.json({ ok: true, offer: data })
   }
 
-  if (instrumentId) {
-    const { error } = await supabaseAdmin
-      .from('discount_instruments')
-      .update({ is_active: isActive, updated_at: new Date().toISOString() })
-      .eq('instrument_id', instrumentId)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ ok: true })
+  const { data, error } = await supabaseAdmin
+    .from('discount_instruments')
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq('instrument_id', instrumentId)
+    .select('instrument_id, is_active')
+    .maybeSingle()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'Discount instrument not found' }, { status: 404 })
+  return NextResponse.json({ ok: true, instrument: data })
 }

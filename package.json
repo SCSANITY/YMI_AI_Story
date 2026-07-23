@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "admin:contracts": "node --test tests/admin-contracts.test.mjs",
     "covers:normalize": "node scripts/normalize-template-covers.mjs",
     "images:optimize": "node scripts/optimize-images.mjs",
     "products:optimize": "node scripts/optimize-template-products.mjs",

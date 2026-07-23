@@ -291,6 +291,9 @@ export async function releaseFinalJob(params: {
       finalJobId,
       pdfPath: finalJob.pdf_path,
       releaseMode: finalJob.release_mode,
+      releasedAt: finalJob.released_at,
+      emailSentAt: finalJob.email_sent_at,
+      approvedPages: Number(finalJob.approved_pages || 0),
       alreadyReleased: true,
     }
   }
@@ -310,6 +313,13 @@ export async function releaseFinalJob(params: {
     .select('output_assets')
     .eq('job_id', finalJob.job_id)
     .maybeSingle()
+  const linkedOutputAssets =
+    linkedJob?.output_assets && typeof linkedJob.output_assets === 'object'
+      ? (linkedJob.output_assets as Record<string, unknown>)
+      : {}
+  if (linkedOutputAssets.pdf_fallback === true) {
+    throw new Error('Final job contains a fallback PDF marker and must be regenerated before release')
+  }
 
   const { data: pages, error: pagesError } = await supabaseAdmin
     .from('final_job_pages')
@@ -321,6 +331,12 @@ export async function releaseFinalJob(params: {
 
   if (pagesError || !pages?.length) {
     throw new Error(pagesError?.message || 'Final job pages not found')
+  }
+  const expectedTotalPages = Number(finalJob.total_pages || 0)
+  if (expectedTotalPages <= 0 || pages.length !== expectedTotalPages) {
+    throw new Error(
+      `Final page count mismatch (expected=${expectedTotalPages}; review_rows=${pages.length})`
+    )
   }
 
   const approvedPaths: string[] = []
@@ -375,7 +391,7 @@ export async function releaseFinalJob(params: {
       status: 'done',
       progress: 100,
       output_assets: {
-        ...((linkedJob?.output_assets as Record<string, unknown> | null) ?? {}),
+        ...linkedOutputAssets,
         bucket: STORAGE_BUCKET,
         pdf_path: pdfPath,
         pages: pages.map((page) => ({
@@ -421,6 +437,7 @@ export async function releaseFinalJob(params: {
   // later, and a broken cover looks worse than a missing one. 1-year signed URL.
   const previewPath = approvedPaths[0] || null
   const previewImageUrl = previewPath ? await signStorageUrl(previewPath, 60 * 60 * 24 * 365) : null
+  let emailSentAt = finalJob.email_sent_at || null
 
   try {
     const emailResult = await sendOrderDeliveryEmail({
@@ -435,11 +452,12 @@ export async function releaseFinalJob(params: {
 
     const eventStatus = emailResult.event?.status ?? null
     if (!emailResult.skipped || eventStatus === 'sent') {
+      emailSentAt = new Date().toISOString()
       const { error: emailUpdateError } = await supabaseAdmin
         .from('final_jobs')
         .update({
-          email_sent_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          email_sent_at: emailSentAt,
+          updated_at: emailSentAt,
         })
         .eq('final_job_id', finalJobId)
 
@@ -454,7 +472,10 @@ export async function releaseFinalJob(params: {
   return {
     finalJobId,
     pdfPath,
-    releaseMode,
+    releaseMode: alreadyPdfReleased ? finalJob.release_mode : releaseMode,
+    releasedAt: finalJob.released_at || now,
+    emailSentAt,
+    approvedPages: pages.length,
     alreadyReleased: alreadyPdfReleased,
   }
 }

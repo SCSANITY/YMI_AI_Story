@@ -79,7 +79,7 @@ export async function PATCH(
   const shippedAt = nextStatus === 'shipped' && !order.shipped_at ? now : order.shipped_at
   const deliveredAt = nextStatus === 'delivered' && !order.delivered_at ? now : order.delivered_at
 
-  const { error: updateError } = await supabaseAdmin
+  const { data: updatedOrder, error: updateError } = await supabaseAdmin
     .from('orders')
     .update({
       order_status: nextStatus,
@@ -92,9 +92,34 @@ export async function PATCH(
       logistics_updated_at: now,
     })
     .eq('order_id', orderId)
+    .select(
+      `
+        order_id,
+        display_id,
+        order_status,
+        payment_id,
+        customer_id,
+        email,
+        created_at,
+        checkout_currency,
+        shipping_method,
+        shipping_zone_code,
+        tracking_number,
+        tracking_carrier,
+        tracking_url,
+        logistics_note,
+        shipped_at,
+        delivered_at,
+        logistics_updated_at
+      `
+    )
+    .maybeSingle()
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message || 'Failed to update order status' }, { status: 500 })
+  }
+  if (!updatedOrder?.order_id) {
+    return NextResponse.json({ error: 'Order no longer exists' }, { status: 404 })
   }
 
   const { data: event, error: eventError } = await supabaseAdmin
@@ -113,7 +138,17 @@ export async function PATCH(
     .single()
 
   if (eventError || !event?.status_event_id) {
-    return NextResponse.json({ error: eventError?.message || 'Failed to create order status event' }, { status: 500 })
+    return NextResponse.json(
+      {
+        error:
+          eventError?.message ||
+          'Order changes were saved, but the status event could not be created',
+        persisted: true,
+        order: updatedOrder,
+        emailStatus: 'not_sent',
+      },
+      { status: 500 }
+    )
   }
 
   let emailStatus: 'not_sent' | 'sent' | 'failed' = 'not_sent'
@@ -168,5 +203,6 @@ export async function PATCH(
     statusChanged,
     emailStatus,
     emailError,
+    order: updatedOrder,
   })
 }

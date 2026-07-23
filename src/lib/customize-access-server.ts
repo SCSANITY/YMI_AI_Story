@@ -28,8 +28,12 @@ async function loadCustomizeAccessRow() {
   return (data as AdminSettingsRow | null) ?? null
 }
 
-export async function getCustomizeAccessSettings(): Promise<CustomizeAccessSettings> {
-  const row = await loadCustomizeAccessRow().catch(() => null)
+export async function getCustomizeAccessSettings(options?: {
+  failOnError?: boolean
+}): Promise<CustomizeAccessSettings> {
+  const row = options?.failOnError
+    ? await loadCustomizeAccessRow()
+    : await loadCustomizeAccessRow().catch(() => null)
   if (!row) {
     return buildCustomizeAccessSettings()
   }
@@ -38,7 +42,7 @@ export async function getCustomizeAccessSettings(): Promise<CustomizeAccessSetti
 }
 
 export async function setCustomizeAccessEnabled(enabled: boolean, updatedBy?: string | null) {
-  const current = await getCustomizeAccessSettings()
+  const current = await getCustomizeAccessSettings({ failOnError: true })
   const next = buildCustomizeAccessSettings({
     enabled: Boolean(enabled),
     message: current.message || DEFAULT_CUSTOMIZE_ACCESS_MESSAGE,

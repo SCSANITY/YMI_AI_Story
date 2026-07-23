@@ -49,9 +49,21 @@ async function signImage(storagePath: string) {
 }
 
 async function withImageUrl(row: AdminBlogPostRow) {
+  const imageStoragePaths = Array.isArray(row.image_storage_paths)
+    ? row.image_storage_paths
+    : []
   return {
     ...row,
-    image_urls: (await Promise.all((row.image_storage_paths ?? []).map(signImage))).filter(Boolean),
+    image_storage_paths: imageStoragePaths,
+    image_urls: await Promise.all(imageStoragePaths.map(signImage)),
+    links: Array.isArray(row.links)
+      ? row.links
+          .map((link) => ({
+            label: String(link?.label || link?.url || ''),
+            url: String(link?.url || ''),
+          }))
+          .filter((link) => link.url)
+      : [],
   }
 }
 
@@ -98,11 +110,20 @@ export async function PATCH(
     }
     updates.status = status
     if (status === 'published') {
-      const { data: existing } = await supabaseAdmin
+      const { data: existing, error: existingError } = await supabaseAdmin
         .from('blog_posts')
         .select('published_at')
         .eq('post_id', postId)
         .maybeSingle()
+      if (existingError) {
+        return NextResponse.json(
+          { error: existingError.message || 'Failed to load announcement status' },
+          { status: 500 }
+        )
+      }
+      if (!existing) {
+        return NextResponse.json({ error: 'Announcement not found' }, { status: 404 })
+      }
       if (!existing?.published_at) {
         updates.published_at = new Date().toISOString()
       }
@@ -114,10 +135,16 @@ export async function PATCH(
     .update(updates)
     .eq('post_id', postId)
     .select('post_id, title, body, image_storage_paths, links, status, like_count, published_at, created_at, updated_at')
-    .single()
+    .maybeSingle()
 
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message || 'Failed to update announcement' }, { status: 500 })
+  if (error) {
+    return NextResponse.json(
+      { error: error.message || 'Failed to update announcement' },
+      { status: 500 }
+    )
+  }
+  if (!data) {
+    return NextResponse.json({ error: 'Announcement not found' }, { status: 404 })
   }
 
   return NextResponse.json({ post: await withImageUrl(data as AdminBlogPostRow) })

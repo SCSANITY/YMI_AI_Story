@@ -14,7 +14,7 @@ export async function POST(
   const { finalJobId } = await Promise.resolve(context.params)
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, total_pages, print_completed_pages, print_status, released_at')
+    .select('final_job_id, total_pages, print_completed_pages, print_status, released_at, print_released_at')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
 
@@ -27,7 +27,13 @@ export async function POST(
   }
 
   if (finalJob.print_status === 'released') {
-    return NextResponse.json({ ok: true, alreadyReleased: true })
+    return NextResponse.json({
+      ok: true,
+      alreadyReleased: true,
+      finalJobId,
+      printReleasedAt: finalJob.print_released_at,
+      printCompletedPages: Number(finalJob.print_completed_pages || 0),
+    })
   }
 
   const { data: pages, error: pagesError } = await supabaseAdmin
@@ -69,6 +75,7 @@ export async function POST(
     ok: true,
     finalJobId,
     printReleasedAt: now,
+    printCompletedPages: pages.length,
     releasedBy: admin.customer_id,
   })
 }
