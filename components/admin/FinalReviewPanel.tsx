@@ -944,7 +944,8 @@ export function FinalReviewPanel() {
 
   return (
     <>
-    <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
+    <div className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
+    <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl xl:shrink-0">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">Final review</p>
@@ -1010,10 +1011,10 @@ export function FinalReviewPanel() {
       ) : null}
     </section>
 
-      <div className="mt-6 flex min-h-0 flex-col gap-5 xl:flex-row xl:items-start">
+      <div className="mt-6 flex min-h-0 flex-col gap-5 xl:flex-1 xl:flex-row xl:items-stretch xl:overflow-hidden">
 
-        {/* ── Job Queue — sticky ── */}
-        <div className="min-h-0 xl:sticky xl:top-6 xl:z-10 xl:h-fit xl:max-h-[calc(100dvh-3rem)] xl:w-64 xl:shrink-0 xl:overflow-y-auto">
+        {/* Job Queue owns its scroll inside the bounded desktop workspace. */}
+        <div className="min-h-0 xl:h-full xl:w-64 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain">
           <JobQueue
             jobs={jobs}
             selectedJobId={selectedJobId}
@@ -1023,7 +1024,7 @@ export function FinalReviewPanel() {
         </div>
 
         {/* ── Center panel: version review ── */}
-        <section className="min-h-0 min-w-0 flex-1 overflow-x-clip rounded-[24px] border border-white/10 bg-white/[0.06]">
+        <section className="min-h-0 min-w-0 flex-1 overflow-x-clip rounded-[24px] border border-white/10 bg-white/[0.06] xl:h-full xl:overflow-y-auto xl:overscroll-contain">
           {/* Sticky version header */}
           <div className="border-b border-white/10 bg-[#0c1322]/95 px-4 pb-4 pt-4 backdrop-blur-xl lg:sticky lg:top-0 lg:z-10">
             <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
@@ -1121,6 +1122,7 @@ export function FinalReviewPanel() {
           onReleasePdf={() => void releaseJob(false)}
           onReleasePrint={() => void releasePrintVersion()}
         />
+      </div>
       </div>
 
       <input

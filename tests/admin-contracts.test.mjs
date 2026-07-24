@@ -129,6 +129,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   const printReview = await read('components/admin/final-review/PrintVersionReview.tsx')
   const printDialog = await read('components/admin/final-review/PrintPageDialog.tsx')
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
+  const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
   const finalReviewFiles = await listFiles('components/admin/final-review')
   const thumbnail = await read('components/admin/final-review/thumbnail.tsx')
   const releaseApi = await read('app/api/admin/final-jobs/[finalJobId]/release/route.ts')
@@ -158,13 +159,16 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(panel, /<FinalReviewStage/)
   assert.match(
     panel,
-    /min-h-0 xl:sticky xl:top-6 xl:z-10 xl:h-fit xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+    /min-h-0 xl:h-full xl:w-64 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
   )
-  assert.match(panel, /min-h-0 min-w-0 flex-1 overflow-x-clip/)
+  assert.match(
+    panel,
+    /min-h-0 min-w-0 flex-1 overflow-x-clip[^"]*xl:h-full xl:overflow-y-auto xl:overscroll-contain/
+  )
   assert.doesNotMatch(
     panel,
     /min-w-0 flex-1 overflow-hidden/,
-    'the center sticky header must attach to the Admin content scroller'
+    'the center review pane must retain independent horizontal clipping'
   )
   assert.match(panel, /uploadPendingByPage/)
   assert.match(panel, /setPageUploadPending/)
@@ -204,9 +208,10 @@ test('Final Review preserves server authority and stale-response intent guards',
 
   assert.match(
     stage,
-    /min-h-0 space-y-4 xl:sticky xl:top-6 xl:z-10 xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+    /min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
   )
   assert.doesNotMatch(stage, /useFinalReviewStageDock|fixed z-30|stageDockMetrics/)
+  assert.match(finalsPage, /xl:h-\[calc\(100dvh-3rem\)\][^"]*xl:min-h-0 xl:flex-col/)
   assert.equal(
     finalReviewFiles.some((file) => file.endsWith('useFinalReviewStageDock.ts')),
     false,
@@ -237,16 +242,18 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
   const printDialog = await read('components/admin/final-review/PrintPageDialog.tsx')
   const sidebar = await read('components/admin/AdminSidebar.tsx')
+  const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
 
-  assert.match(panel, /xl:flex-row xl:items-start/)
+  assert.match(panel, /xl:flex-1 xl:flex-row xl:items-stretch xl:overflow-hidden/)
   assert.match(
     panel,
-    /min-h-0 xl:sticky xl:top-6 xl:z-10 xl:h-fit xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+    /min-h-0 xl:h-full xl:w-64 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
   )
   assert.match(
     stage,
-    /min-h-0 space-y-4 xl:sticky xl:top-6 xl:z-10 xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+    /min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
   )
+  assert.match(finalsPage, /xl:h-\[calc\(100dvh-3rem\)\]/)
   assert.match(panel, /lg:sticky lg:top-0 lg:z-10/)
   assert.doesNotMatch(panel, /className="sticky top-0 z-10/)
   assert.match(panel, /2xl:flex-row 2xl:items-center 2xl:justify-between/)

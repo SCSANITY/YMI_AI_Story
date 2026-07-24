@@ -36,7 +36,7 @@ export function FinalReviewStage({
   onReleasePrint: () => void
 }) {
   return (
-    <div className="min-h-0 space-y-4 xl:sticky xl:top-6 xl:z-10 xl:max-h-[calc(100dvh-3rem)] xl:w-80 xl:shrink-0 xl:overflow-y-auto">
+    <div className="min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain">
       <aside className="space-y-4">
         <StageCard
           label="Stage 1"
