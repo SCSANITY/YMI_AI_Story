@@ -7,6 +7,11 @@ function asRecord(value: unknown): UnknownRecord | null {
   return value as UnknownRecord
 }
 
+function asRelationRecord(value: unknown) {
+  if (Array.isArray(value)) return asRecord(value[0])
+  return asRecord(value)
+}
+
 function firstNonEmptyString(...values: unknown[]) {
   for (const value of values) {
     const text = String(value ?? '').trim()
@@ -106,5 +111,19 @@ export function resolveCartItemDisplayTitle(input: {
     customizeSnapshot: personalization,
     textOverrides: personalization?.textOverrides ?? personalization?.text_overrides,
     childName: personalization?.childName ?? personalization?.child_name,
+  })
+}
+
+export function resolveFinalJobDisplayTitle(input: {
+  template_id?: unknown
+  creations?: unknown
+}) {
+  const creation = asRelationRecord(input.creations)
+  const template = asRelationRecord(creation?.templates)
+
+  return resolvePersonalizedBookTitle({
+    templateId: input.template_id,
+    templateName: template?.name,
+    customizeSnapshot: creation?.customize_snapshot,
   })
 }

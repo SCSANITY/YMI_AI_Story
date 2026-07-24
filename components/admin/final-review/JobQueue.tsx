@@ -42,21 +42,19 @@ export function JobQueue({
                     : 'border-white/10 bg-white/[0.05] hover:bg-white/[0.08]'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                      {job.orders?.display_id || job.order_id.slice(0, 8)}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-white">{job.template_id}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusClass(job.review_status)}`}>
-                      PDF {job.review_status}
-                    </span>
-                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusClass(job.print_status)}`}>
-                      Print {job.print_status}
-                    </span>
-                  </div>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  {job.orders?.display_id || job.order_id.slice(0, 8)}
+                </p>
+                <p className="mt-1 line-clamp-2 break-words text-sm font-semibold leading-5 text-white">
+                  {job.display_title}
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold uppercase leading-4 tracking-wide ${statusClass(job.review_status)}`}>
+                    PDF {job.review_status}
+                  </span>
+                  <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold uppercase leading-4 tracking-wide ${statusClass(job.print_status)}`}>
+                    Print {job.print_status}
+                  </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
                   <span>PDF {job.approved_pages}/{job.total_pages}</span>

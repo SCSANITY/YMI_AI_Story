@@ -18,6 +18,7 @@ export type FinalJobSummary = {
   cart_item_id: string
   creation_id: string | null
   template_id: string
+  display_title: string
   status: string
   review_status: string
   total_pages: number

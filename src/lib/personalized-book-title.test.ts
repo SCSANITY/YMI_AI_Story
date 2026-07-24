@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   resolveCartItemDisplayTitle,
   resolveChildNameFromCustomization,
+  resolveFinalJobDisplayTitle,
 } from './personalized-book-title'
 
 test('cart item title uses the current personalization name', () => {
@@ -46,5 +47,30 @@ test('shared child-name resolver accepts direct snapshot names', () => {
       customizeSnapshot: { childName: 'Ava' },
     }),
     'Ava'
+  )
+})
+
+test('final job title derives the customer-facing name from its creation relation', () => {
+  assert.equal(
+    resolveFinalJobDisplayTitle({
+      template_id: 'Food_Story',
+      creations: {
+        customize_snapshot: {
+          text_overrides: { child_name: 'Mia' },
+        },
+        templates: { name: 'Food Story' },
+      },
+    }),
+    "Mia's Food Story"
+  )
+})
+
+test('legacy final jobs without a creation use a cleaned template title', () => {
+  assert.equal(
+    resolveFinalJobDisplayTitle({
+      template_id: 'Birthdaygirl_story',
+      creations: null,
+    }),
+    'Birthdaygirl Story'
   )
 })

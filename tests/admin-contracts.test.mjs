@@ -260,6 +260,37 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.match(sidebar, /fixed inset-0 z-\[180\] lg:hidden/)
 })
 
+test('Final Review derives personalized job titles and keeps queue status rows stable', async () => {
+  const panel = await read('components/admin/FinalReviewPanel.tsx')
+  const jobQueue = await read('components/admin/final-review/JobQueue.tsx')
+  const finalReviewTypes = await read('src/lib/finalReview.ts')
+  const listApi = await read('app/api/admin/final-jobs/route.ts')
+  const detailApi = await read('app/api/admin/final-jobs/[finalJobId]/route.ts')
+
+  for (const [name, source] of [
+    ['list API', listApi],
+    ['detail API', detailApi],
+  ]) {
+    assert.match(source, /resolveFinalJobDisplayTitle/)
+    assert.match(source, /customize_snapshot/)
+    assert.match(source, /templates:templates\(name\)/)
+    assert.match(source, /display_title:/)
+    assert.match(
+      source,
+      /const \{ creations, \.\.\.summary \}/,
+      `${name} must not expose the full customization snapshot to the client`
+    )
+  }
+
+  assert.match(finalReviewTypes, /display_title:\s*string/)
+  assert.match(jobQueue, /\{job\.display_title\}/)
+  assert.doesNotMatch(jobQueue, /\{job\.template_id\}/)
+  assert.match(jobQueue, /grid grid-cols-2 gap-2/)
+  assert.match(jobQueue, /line-clamp-2 break-words/)
+  assert.match(panel, /\{selectedJob\.display_title\}/)
+  assert.doesNotMatch(panel, /\{selectedJob\.template_id\}/)
+})
+
 test('Service Control keeps independent islands and fails visibly on Admin reads', async () => {
   const section = await read('components/admin/sections/ServiceControlSection.tsx')
   const customizeControl = await read(

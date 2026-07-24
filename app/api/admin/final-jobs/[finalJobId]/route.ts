@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const SIGN_TTL_SECONDS = 60 * 20
@@ -47,7 +48,11 @@ export async function GET(
         error_message,
         created_at,
         updated_at,
-        orders:orders(display_id, email, order_status)
+        orders:orders(display_id, email, order_status),
+        creations:creations(
+          customize_snapshot,
+          templates:templates(name)
+        )
       `
     )
     .eq('final_job_id', finalJobId)
@@ -79,5 +84,11 @@ export async function GET(
     }))
   )
 
-  return NextResponse.json({ finalJob, pages: signedPages })
+  const { creations, ...summary } = finalJob
+  const finalJobSummary = {
+    ...summary,
+    display_title: resolveFinalJobDisplayTitle({ ...summary, creations }),
+  }
+
+  return NextResponse.json({ finalJob: finalJobSummary, pages: signedPages })
 }

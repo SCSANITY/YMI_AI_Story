@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function GET() {
@@ -33,7 +34,11 @@ export async function GET() {
         error_message,
         created_at,
         updated_at,
-        orders:orders(display_id, email, order_status)
+        orders:orders(display_id, email, order_status),
+        creations:creations(
+          customize_snapshot,
+          templates:templates(name)
+        )
       `
     )
     .order('updated_at', { ascending: false })
@@ -43,5 +48,13 @@ export async function GET() {
     return NextResponse.json({ error: error.message || 'Failed to load final jobs' }, { status: 500 })
   }
 
-  return NextResponse.json({ finalJobs: data ?? [] })
+  const finalJobs = (data ?? []).map((row) => {
+    const { creations, ...summary } = row
+    return {
+      ...summary,
+      display_title: resolveFinalJobDisplayTitle({ ...summary, creations }),
+    }
+  })
+
+  return NextResponse.json({ finalJobs })
 }

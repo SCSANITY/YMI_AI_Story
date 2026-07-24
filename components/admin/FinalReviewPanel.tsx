@@ -1033,10 +1033,10 @@ export function FinalReviewPanel() {
                 </p>
                 <h3 className="mt-0.5 truncate text-lg font-bold text-white">
                   {selectedJob?.orders?.display_id || selectedJob?.order_id || 'Select a final job'}
-                </h3>
+                  </h3>
                 {selectedJob ? (
                   <p className="mt-0.5 truncate text-xs text-slate-400">
-                    {selectedJob.template_id} · PDF {approvedPageCount}/{totalPageCount} approved
+                    {selectedJob.display_title} · PDF {approvedPageCount}/{totalPageCount} approved
                   </p>
                 ) : null}
               </div>
