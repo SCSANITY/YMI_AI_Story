@@ -1,7 +1,6 @@
 import { CheckCircle2, FileText, Loader2, Lock, PackageCheck, Send } from 'lucide-react'
 import type { FinalJobDetail } from '@/lib/finalReview'
 import { formatDate } from './reviewUi'
-import { useFinalReviewStageDock } from './useFinalReviewStageDock'
 
 export function FinalReviewStage({
   detail,
@@ -36,24 +35,9 @@ export function FinalReviewStage({
   onReleasePdf: () => void
   onReleasePrint: () => void
 }) {
-  const { stageSlotRef, stageBarRef, isStageDocked, stageDockMetrics } =
-    useFinalReviewStageDock()
-
   return (
-    <div
-      ref={stageSlotRef}
-      className="space-y-4 xl:w-80 xl:shrink-0"
-      style={isStageDocked ? { height: stageDockMetrics.height, width: stageDockMetrics.width } : undefined}
-    >
-      <aside
-        ref={stageBarRef}
-        className={`space-y-4${isStageDocked ? ' fixed z-30' : ''}`}
-        style={isStageDocked ? {
-          left: stageDockMetrics.left,
-          top: stageDockMetrics.top,
-          width: stageDockMetrics.width,
-        } : undefined}
-      >
+    <div className="min-h-0 space-y-4 xl:sticky xl:top-6 xl:z-10 xl:max-h-[calc(100dvh-3rem)] xl:w-80 xl:shrink-0 xl:overflow-y-auto">
+      <aside className="space-y-4">
         <StageCard
           label="Stage 1"
           title="PDF version"

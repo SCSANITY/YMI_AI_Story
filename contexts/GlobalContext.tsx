@@ -5,7 +5,10 @@ import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
 import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, parseTemplateAmount, templateStorageUrl } from '@/lib/book-catalog';
-import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title';
+import {
+  resolveChildNameFromCustomization,
+  resolvePersonalizedBookTitle,
+} from '@/lib/personalized-book-title';
 import { getCurrencyRegionOption, resolveCurrencyRegionOption, resolveInitialCurrencyRegionOption } from '@/lib/currency-regions';
 import { CURRENCY_GEO_COOKIE, CURRENCY_USER_SELECTED_KEY, readCookieValue } from '@/lib/currency-geo';
 import {
@@ -274,7 +277,10 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         showcaseImages: row.preview_cover_url ? [row.preview_cover_url] : [],
       };
       const overrides = creation.customize_snapshot?.textOverrides ?? creation.customize_snapshot?.text_overrides ?? {};
-      const childName = overrides.child_name ?? overrides.childName ?? '';
+      const childName = resolveChildNameFromCustomization({
+        customizeSnapshot: creation.customize_snapshot,
+        textOverrides: overrides,
+      });
       const childAge = overrides.child_age ?? overrides.childAge ?? overrides.age ?? '';
       const language = normalizeStoryLanguage(overrides.language ?? creation.customize_snapshot?.language);
       const bookType = overrides.book_type ?? creation.customize_snapshot?.bookType ?? 'basic';

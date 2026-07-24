@@ -90,3 +90,21 @@ export function resolvePersonalizedBookTitle(input: {
 
   return `${possessiveName(childName)} ${baseTitle}`
 }
+
+export function resolveCartItemDisplayTitle(input: {
+  bookID?: unknown
+  book?: unknown
+  personalization?: unknown
+}) {
+  const book = asRecord(input.book)
+  const personalization = asRecord(input.personalization)
+
+  return resolvePersonalizedBookTitle({
+    templateId: input.bookID,
+    templateName: book?.title,
+    fallbackTitle: book?.title,
+    customizeSnapshot: personalization,
+    textOverrides: personalization?.textOverrides ?? personalization?.text_overrides,
+    childName: personalization?.childName ?? personalization?.child_name,
+  })
+}

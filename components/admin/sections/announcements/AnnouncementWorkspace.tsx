@@ -403,7 +403,7 @@ export function AnnouncementWorkspace({
       </div>
 
       <div className={mobileTab === 'preview' ? 'block' : 'hidden lg:block'}>
-        <aside className="rounded-[26px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl xl:sticky xl:top-5 xl:max-h-[calc(100vh-2.5rem)] xl:overflow-auto">
+        <aside className="rounded-[26px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:overflow-auto">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">
             Live Preview
           </p>

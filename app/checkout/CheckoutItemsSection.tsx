@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import OrderCoverImage from '@/components/OrderCoverImage';
 import type { CartItem } from '@/types';
 import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
+import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title';
 
 type CoverStatus = 'ready' | 'pending' | 'unavailable';
 
@@ -154,6 +155,7 @@ export function CheckoutItemsSection({
                   {remainingCartItems.map(item => {
                     const isSelected = addFromCartSelection.includes(item.id);
                     const quantity = item.quantity ?? 1;
+                    const displayTitle = resolveCartItemDisplayTitle(item);
                     return (
                       <label
                         key={item.id}
@@ -178,14 +180,14 @@ export function CheckoutItemsSection({
                           cartItemId={item.id}
                           src={resolveCoverUrl(item)}
                           status={resolveCoverStatus(item)}
-                          alt={item.book.title}
+                          alt={displayTitle}
                           sizes="56px"
                           className="h-[72px] w-14 rounded-lg"
                           imageClassName="object-cover"
                         />
                         <div className="min-w-0">
                           <div className="line-clamp-2 text-sm font-semibold leading-5 text-gray-950">
-                            {item.book.title}
+                            {displayTitle}
                           </div>
                           <div className="mt-1 truncate text-xs text-slate-500">
                             {t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}
@@ -245,6 +247,7 @@ export function CheckoutItemsSection({
             <AnimatePresence initial={false} mode="popLayout">
               {items.map(item => {
                 const isPendingAddition = pendingAddItemIds.includes(item.id);
+                const displayTitle = resolveCartItemDisplayTitle(item);
                 return (
                 <motion.div
                   layout
@@ -261,13 +264,13 @@ export function CheckoutItemsSection({
                       cartItemId={item.id}
                       src={resolveCoverUrl(item)}
                       status={resolveCoverStatus(item)}
-                      alt={item.book.title}
+                      alt={displayTitle}
                       sizes="(max-width: 639px) 80px, 64px"
                       className="h-24 w-20 rounded-xl sm:h-20 sm:w-16"
                       imageClassName="object-cover"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{item.book.title}</div>
+                      <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{displayTitle}</div>
                       <div className="mt-1 text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
                       <div className="mt-2 text-sm font-semibold text-gray-900 sm:hidden">
                         {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}

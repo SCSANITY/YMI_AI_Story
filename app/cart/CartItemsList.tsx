@@ -5,6 +5,7 @@ import { CheckSquare, Loader2, Pencil, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import OrderCoverImage from '@/components/OrderCoverImage';
 import { formatDisplayCurrency } from '@/lib/locale-pricing';
+import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title';
 import type { CartItem, DisplayCurrency } from '@/types';
 
 type CartItemsListProps = {
@@ -63,6 +64,7 @@ const CartItemCard = memo(function CartItemCard({
 }: CartItemCardProps) {
   const quantity = item.quantity ?? 1;
   const lineTotal = (item.priceAtPurchase ?? item.book.price) * quantity;
+  const displayTitle = resolveCartItemDisplayTitle(item);
   const activeAction = pendingAction?.itemId === item.id ? pendingAction.action : null;
   const hasPendingAction = Boolean(activeAction);
 
@@ -89,7 +91,7 @@ const CartItemCard = memo(function CartItemCard({
             cartItemId={item.id}
             src={item.book.coverUrl}
             status={item.coverStatus}
-            alt={item.book.title}
+            alt={displayTitle}
             sizes="(max-width: 640px) 80px, 96px"
             className="h-full w-full"
             imageClassName="object-cover saturate-110 contrast-110 brightness-105"
@@ -107,7 +109,7 @@ const CartItemCard = memo(function CartItemCard({
               disabled={hasPendingAction}
               className="text-left min-w-0 w-full"
             >
-              <h2 className="font-display text-base sm:text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors line-clamp-2">{item.book.title}</h2>
+              <h2 className="font-display text-base sm:text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors line-clamp-2">{displayTitle}</h2>
             </button>
             <p className="text-xs text-gray-500 uppercase tracking-wide">{item.book.author}</p>
           </div>

@@ -166,7 +166,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
         </div>
       </header>
 
-      <aside className="hidden h-dvh flex-col border-r border-white/10 bg-slate-950/80 p-5 backdrop-blur-2xl lg:sticky lg:top-0 lg:flex">
+      <aside className="hidden min-h-0 flex-col border-r border-white/10 bg-slate-950/80 p-5 backdrop-blur-2xl lg:flex lg:h-dvh">
         <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.04] p-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-base font-black text-slate-950">
             Y
@@ -181,7 +181,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
           <AdminNavigationLinks pathname={pathname} />
         </div>
 
-        <div className="mt-4 border-t border-white/[0.08] pt-4">
+        <div className="mt-4 shrink-0 border-t border-white/[0.08] pt-4">
           <AdminIdentity adminName={adminName} adminEmail={adminEmail} />
         </div>
       </aside>

@@ -33,7 +33,7 @@ export function PrintPageDialog({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-      <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950 p-5 shadow-2xl">
+      <div className="max-h-[92dvh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950 p-5 shadow-2xl">
         <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Print version compare</p>

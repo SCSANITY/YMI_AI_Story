@@ -6,6 +6,7 @@ import { Loader2, Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
+import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title'
 import { useI18n } from '@/lib/useI18n'
 import type { CartItem, DisplayCurrency } from '@/types'
 
@@ -203,6 +204,7 @@ function MiniCartComponent({
           {items.map((item) => {
             const quantity = item.quantity ?? 1
             const lineTotal = (item.priceAtPurchase ?? item.book.price) * quantity
+            const displayTitle = resolveCartItemDisplayTitle(item)
             const isPending = pendingAction?.itemId === item.id
             const controlsDisabled = Boolean(pendingAction)
             return (
@@ -211,7 +213,7 @@ function MiniCartComponent({
                   cartItemId={item.id}
                   src={item.book.coverUrl}
                   status={item.coverStatus}
-                  alt={item.book.title}
+                  alt={displayTitle}
                   sizes="48px"
                   className="h-16 w-12 shrink-0 rounded-md"
                   imageClassName="object-cover"
@@ -219,7 +221,7 @@ function MiniCartComponent({
                 />
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900">
-                    {item.book.title}
+                    {displayTitle}
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 shadow-sm">

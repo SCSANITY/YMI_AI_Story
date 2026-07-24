@@ -42,6 +42,29 @@ test('the protected Admin shell owns scoped loading and error boundaries', async
   assert.match(errorBoundary, /href="\/admin\/finals"/)
 })
 
+test('desktop Admin scroll ownership stays lg-gated while mobile keeps document scroll', async () => {
+  const shell = await read('components/admin/AdminShell.tsx')
+  const sidebar = await read('components/admin/AdminSidebar.tsx')
+  const announcementWorkspace = await read(
+    'components/admin/sections/announcements/AnnouncementWorkspace.tsx'
+  )
+
+  assert.match(shell, /min-h-dvh[^"]*lg:h-dvh[^"]*lg:overflow-hidden/)
+  assert.match(
+    shell,
+    /<section className="[^"]*lg:h-dvh[^"]*lg:min-h-0[^"]*lg:overflow-y-auto/
+  )
+  assert.doesNotMatch(shell, /<main className="[^"]*\sh-dvh(?:\s|")/)
+  assert.match(sidebar, /hidden min-h-0 flex-col[^"]*lg:flex lg:h-dvh/)
+  assert.doesNotMatch(sidebar, /lg:sticky|lg:top-0/)
+  assert.match(sidebar, /min-h-0 flex-1 overflow-y-auto/)
+  assert.match(sidebar, /mt-4 shrink-0 border-t/)
+  assert.match(sidebar, /document\.body\.style\.overflow = ['"]hidden['"]/)
+  assert.match(announcementWorkspace, /xl:top-6/)
+  assert.match(announcementWorkspace, /calc\(100dvh-3rem\)/)
+  assert.doesNotMatch(announcementWorkspace, /calc\(100vh-/)
+})
+
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
   assert.equal(routeFiles.length, 19, 'Update the reviewed Admin API inventory when routes are added or removed')
@@ -106,9 +129,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   const printReview = await read('components/admin/final-review/PrintVersionReview.tsx')
   const printDialog = await read('components/admin/final-review/PrintPageDialog.tsx')
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
-  const stageDock = await read(
-    'components/admin/final-review/useFinalReviewStageDock.ts'
-  )
+  const finalReviewFiles = await listFiles('components/admin/final-review')
   const thumbnail = await read('components/admin/final-review/thumbnail.tsx')
   const releaseApi = await read('app/api/admin/final-jobs/[finalJobId]/release/route.ts')
   const printReleaseApi = await read(
@@ -135,6 +156,16 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(panel, /<PrintVersionReview/)
   assert.match(panel, /<PrintPageDialog/)
   assert.match(panel, /<FinalReviewStage/)
+  assert.match(
+    panel,
+    /min-h-0 xl:sticky xl:top-6 xl:z-10 xl:h-fit xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+  )
+  assert.match(panel, /min-h-0 min-w-0 flex-1 overflow-x-clip/)
+  assert.doesNotMatch(
+    panel,
+    /min-w-0 flex-1 overflow-hidden/,
+    'the center sticky header must attach to the Admin content scroller'
+  )
   assert.match(panel, /uploadPendingByPage/)
   assert.match(panel, /setPageUploadPending/)
   assert.match(panel, /type UploadTarget = \{ finalJobId: string; page: FinalJobPageRow \}/)
@@ -171,8 +202,16 @@ test('Final Review preserves server authority and stale-response intent guards',
     assert.doesNotMatch(source, /fetch\s*\(/, `${name} must remain a presentation island`)
   }
 
-  assert.match(stageDock, /ResizeObserver/)
-  assert.match(stageDock, /requestAnimationFrame/)
+  assert.match(
+    stage,
+    /min-h-0 space-y-4 xl:sticky xl:top-6 xl:z-10 xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+  )
+  assert.doesNotMatch(stage, /useFinalReviewStageDock|fixed z-30|stageDockMetrics/)
+  assert.equal(
+    finalReviewFiles.some((file) => file.endsWith('useFinalReviewStageDock.ts')),
+    false,
+    'Final Review must use native sticky positioning without a JS docking hook'
+  )
   assert.match(thumbnail, /ymi-admin-final-thumbs/)
   assert.match(thumbnail, /createImageBitmap/)
   assert.match(thumbnail, /state\.sourceUrl === sourceUrl/)
@@ -191,6 +230,34 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(finalReview, /releasedAt:/)
   assert.match(finalReview, /emailSentAt/)
   assert.match(finalReview, /approvedPages:/)
+})
+
+test('Final Review responsive scroll behavior stays breakpoint-scoped', async () => {
+  const panel = await read('components/admin/FinalReviewPanel.tsx')
+  const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
+  const printDialog = await read('components/admin/final-review/PrintPageDialog.tsx')
+  const sidebar = await read('components/admin/AdminSidebar.tsx')
+
+  assert.match(panel, /xl:flex-row xl:items-start/)
+  assert.match(
+    panel,
+    /min-h-0 xl:sticky xl:top-6 xl:z-10 xl:h-fit xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+  )
+  assert.match(
+    stage,
+    /min-h-0 space-y-4 xl:sticky xl:top-6 xl:z-10 xl:max-h-\[calc\(100dvh-3rem\)\][^"]*xl:overflow-y-auto/
+  )
+  assert.match(panel, /lg:sticky lg:top-0 lg:z-10/)
+  assert.doesNotMatch(panel, /className="sticky top-0 z-10/)
+  assert.match(panel, /2xl:flex-row 2xl:items-center 2xl:justify-between/)
+  assert.match(panel, /2xl:w-\[16rem\]/)
+  assert.doesNotMatch(panel, /gap-3 lg:flex-row/)
+  assert.doesNotMatch(panel, /p-0\.5 lg:w-\[16rem\]/)
+  assert.match(printDialog, /fixed inset-0 z-\[100\]/)
+  assert.match(printDialog, /max-h-\[92dvh\][^"]*overflow-y-auto/)
+  assert.doesNotMatch(printDialog, /max-h-\[92vh\]/)
+  assert.match(sidebar, /sticky top-0 z-40[^"]*lg:hidden/)
+  assert.match(sidebar, /fixed inset-0 z-\[180\] lg:hidden/)
 })
 
 test('Service Control keeps independent islands and fails visibly on Admin reads', async () => {

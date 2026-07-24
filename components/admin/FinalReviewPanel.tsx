@@ -1010,10 +1010,10 @@ export function FinalReviewPanel() {
       ) : null}
     </section>
 
-      <div className="mt-6 flex flex-col gap-5 xl:flex-row xl:items-start">
+      <div className="mt-6 flex min-h-0 flex-col gap-5 xl:flex-row xl:items-start">
 
         {/* ── Job Queue — sticky ── */}
-        <div className="xl:w-64 xl:shrink-0 xl:sticky xl:top-6 xl:h-fit">
+        <div className="min-h-0 xl:sticky xl:top-6 xl:z-10 xl:h-fit xl:max-h-[calc(100dvh-3rem)] xl:w-64 xl:shrink-0 xl:overflow-y-auto">
           <JobQueue
             jobs={jobs}
             selectedJobId={selectedJobId}
@@ -1023,10 +1023,10 @@ export function FinalReviewPanel() {
         </div>
 
         {/* ── Center panel: version review ── */}
-        <section className="min-w-0 flex-1 overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.06]">
+        <section className="min-h-0 min-w-0 flex-1 overflow-x-clip rounded-[24px] border border-white/10 bg-white/[0.06]">
           {/* Sticky version header */}
-          <div className="sticky top-0 z-10 border-b border-white/10 bg-[#0c1322]/95 px-4 pb-4 pt-4 backdrop-blur-xl">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="border-b border-white/10 bg-[#0c1322]/95 px-4 pb-4 pt-4 backdrop-blur-xl lg:sticky lg:top-0 lg:z-10">
+            <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">
                   {activeVersion === 'pdf' ? 'PDF Review' : 'Print Review'}
@@ -1040,7 +1040,7 @@ export function FinalReviewPanel() {
                   </p>
                 ) : null}
               </div>
-              <div className="flex w-full shrink-0 rounded-xl border border-white/10 bg-slate-950/50 p-0.5 lg:w-[16rem]">
+              <div className="flex w-full shrink-0 rounded-xl border border-white/10 bg-slate-950/50 p-0.5 2xl:w-[16rem]">
                 <button
                   type="button"
                   onClick={() => setActiveVersion('pdf')}
