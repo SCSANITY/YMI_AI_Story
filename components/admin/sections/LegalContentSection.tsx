@@ -173,8 +173,9 @@ export function LegalContentSection() {
     <div className="min-w-0 space-y-4">
       <div className="flex flex-col gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4 text-xs text-amber-100 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-3xl leading-5">
-          S4 manages drafts and immutable revisions. Customer-facing legal pages remain on
-          the code-owned source until the separate S5 migration.
+          Drafts and immutable revisions are managed here. Customer-facing legal
+          surfaces read only the current published revision, with the code-owned
+          policies retained as an emergency fallback.
         </p>
         <button
           type="button"
@@ -201,7 +202,8 @@ export function LegalContentSection() {
           <h2 className="mt-4 text-lg font-bold text-white">Initialize legal publishing</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
             Create the first immutable database revisions from the current live English
-            policies. This does not switch any public page to database content.
+            policies. Public legal surfaces will continue showing the same text through
+            the published-content store after initialization.
           </p>
           <button
             type="button"

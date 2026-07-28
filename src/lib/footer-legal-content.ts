@@ -118,7 +118,7 @@ const privacyEn: LegalSection[] = [
   {
     paragraphs: [
       {
-        text: 'Google Analytics may set first-party cookies such as _ga and _ga_<container-id> to distinguish consented users and sessions. Google documents a default cookie duration of up to two years, subject to browser limits and YMI\'s configuration. YMI will configure user-level and event-level Google Analytics retention to two months. Google and Meta may retain data under their own terms, settings, and legal obligations. YMI periodically reviews its configuration and keeps provider access only while it is needed for the purposes described above.',
+        text: 'Google Analytics may set first-party cookies such as _ga and property-specific _ga cookies to distinguish consented users and sessions. Google documents a default cookie duration of up to two years, subject to browser limits and YMI\'s configuration. YMI will configure user-level and event-level Google Analytics retention to two months. Google and Meta may retain data under their own terms, settings, and legal obligations. YMI periodically reviews its configuration and keeps provider access only while it is needed for the purposes described above.',
       },
       {
         text: 'You can accept, reject, or change optional choices at any time through Cookie Settings in the website footer. Withdrawing consent stops future optional collection from YMI Story after the updated choice takes effect and removes reachable YMI-domain analytics or advertising cookies where technically possible. It cannot recall information already sent to a provider. You can also clear cookies through your browser and use the privacy and advertising controls offered by Google and Meta.',

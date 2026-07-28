@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { getCanonicalLegalDocuments } from './legal-documents'
 import {
   LegalPublishingConflictError,
   LegalPublishingValidationError,
@@ -13,6 +14,21 @@ import {
   type LegalRevision,
   type LegalRevisionContent,
 } from './legal-publishing'
+
+test('all code-owned canonical policies are valid bootstrap content', () => {
+  for (const document of getCanonicalLegalDocuments()) {
+    const content = normalizeLegalRevisionContent({
+      en: {
+        sections: document.sections,
+        effectiveDate: document.version,
+        version: document.version,
+      },
+    })
+
+    assert.equal(content.en.version, document.version)
+    assert.ok(content.en.sections.length > 0)
+  }
+})
 
 const contentA: LegalRevisionContent = {
   en: {
