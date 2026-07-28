@@ -12,6 +12,7 @@ import {
   Menu,
   Megaphone,
   PackageCheck,
+  ScrollText,
   TicketPercent,
   ToggleLeft,
   X,
@@ -19,6 +20,7 @@ import {
 
 const navItems = [
   { label: 'Final Review', icon: FileTextIcon, href: '/admin/finals' },
+  { label: 'Legal Content', icon: ScrollText, href: '/admin/legal' },
   { label: 'Announcements', icon: Megaphone, href: '/admin/announcements' },
   { label: 'Discounts', icon: TicketPercent, href: '/admin/discounts' },
   { label: 'Emails', icon: Mail, href: '/admin/emails' },

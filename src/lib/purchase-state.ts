@@ -1,12 +1,13 @@
+import {
+  isFinalJobReleased,
+  type FinalJobReleaseLike,
+} from '@/lib/final-job-release'
 import { isPaidLikeOrderStatus, normalizeOrderStatus } from '@/lib/order-status'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export type PurchaseState = 'purchased' | 'refunded' | 'unpurchased'
+export { isFinalJobReleased, type FinalJobReleaseLike }
 
-export type FinalJobReleaseLike = {
-  released_at?: string | null
-  review_status?: string | null
-}
+export type PurchaseState = 'purchased' | 'refunded' | 'unpurchased'
 
 export type ReleasedFinalPdfAsset = {
   jobId: string
@@ -60,10 +61,6 @@ type FinalJobSummaryRow = {
 type PurchaseEntry = {
   cartItem: CartPurchaseRow
   order: OrderPurchaseRow
-}
-
-export function isFinalJobReleased(finalJob: FinalJobReleaseLike | null | undefined) {
-  return Boolean(finalJob?.released_at || finalJob?.review_status === 'released')
 }
 
 export function classifyPurchaseState(orderRows: Array<{ order_status?: string | null }>): PurchaseState {

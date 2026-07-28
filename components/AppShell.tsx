@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { GlobalProvider, useGlobalContext } from '@/contexts/GlobalContext'
@@ -18,6 +18,16 @@ const LoginModal = dynamic(() => import('@/components/LoginModal').then((module)
 
 const CookieConsentBanner = dynamic(
   () => import('@/components/CookieConsentBanner').then((module) => module.CookieConsentBanner),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+)
+
+const ConsentGatedTagAdapter = dynamic(
+  () => import('@/components/tracking/ConsentGatedTagAdapter').then(
+    (module) => module.ConsentGatedTagAdapter,
+  ),
   {
     ssr: false,
     loading: () => null,
@@ -66,11 +76,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isMaintenanceRoute = pathname?.startsWith('/maintenance') ?? false
   const isPersonalizeRoute = pathname?.startsWith('/personalize/') ?? false
   const isAdminRoute = pathname?.startsWith('/admin') ?? false
+  const isTrackingFrameRoute = pathname === '/tracking/meta-frame'
   const showGlobalNav = !isMaintenanceRoute && !isPersonalizeRoute && !isAdminRoute
 
   const isHomePage = pathname === '/'
 
   useEffect(() => {
+    if (isTrackingFrameRoute) return
+
     const handleTranslatedNavigation = (event: MouseEvent) => {
       const href = getTranslatedInternalNavigationHref(event)
       if (!href) return
@@ -82,7 +95,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     document.addEventListener('click', handleTranslatedNavigation, true)
     return () => document.removeEventListener('click', handleTranslatedNavigation, true)
-  }, [])
+  }, [isTrackingFrameRoute])
+
+  if (isTrackingFrameRoute) return <>{children}</>
 
   return (
     <GlobalProvider>
@@ -91,6 +106,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Home page: no pt-16. Hero fills the full viewport and manages its own spacing. */}
       <div className={showGlobalNav && !isHomePage ? 'pt-16' : undefined}>{children}</div>
       {!isMaintenanceRoute && !isAdminRoute ? <CookieConsentBanner /> : null}
+      {!isMaintenanceRoute && !isAdminRoute ? (
+        <Suspense fallback={null}>
+          <ConsentGatedTagAdapter />
+        </Suspense>
+      ) : null}
       <CustomizeAccessBlockedModalGate enabled={!isMaintenanceRoute && !isAdminRoute} />
     </GlobalProvider>
   )

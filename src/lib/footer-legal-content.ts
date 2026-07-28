@@ -4,6 +4,7 @@ import { footerLegalContentCnT } from '@/lib/footer-legal-content-traditional'
 export type LegalTextItem = {
   label?: string
   text: string
+  href?: string
 }
 
 export type LegalSection = {
@@ -42,7 +43,10 @@ const privacyEn: LegalSection[] = [
       { label: 'Voice Data:', text: 'Audio samples you provide for AI voice generation and related processing.' },
       { label: 'Visual Data:', text: 'Uploaded child photos and profile images used for personalization and account display.' },
       { label: 'Account Information:', text: 'Name, email address, shipping details, and profile settings.' },
-      { label: 'Technical Data:', text: 'Basic device, browser, IP, and upload session information needed to operate the service securely.' },
+      {
+        label: 'Technical and Usage Data:',
+        text: 'Basic device, browser, approximate location derived from IP address, referral or campaign information, consent choices, and coarse interactions with YMI Story that are needed to operate, secure, measure, and improve the service. We do not send uploaded child photos or audio, personalized book titles, customer contact details, order identifiers, or session tokens to analytics or advertising providers.',
+      },
     ],
   },
   {
@@ -84,10 +88,60 @@ const privacyEn: LegalSection[] = [
         label: 'No Child Marketing:',
         text: 'We do not use children\'s uploaded materials for profiling, advertising, or unrelated marketing purposes.',
       },
+      {
+        label: 'Analytics and Advertising Exclusion:',
+        text: 'We do not intentionally send a child\'s name, age, uploaded photo or audio, generated likeness, personalized book title, or other child profile information to Google Analytics, Google Ads, Meta Pixel, or another advertising provider.',
+      },
     ],
   },
   {
-    title: '5. Third-Party Processors',
+    title: '5. Cookies, Analytics, and Advertising Technologies',
+    paragraphs: [
+      {
+        text: 'YMI Story uses cookies and similar browser technologies for different purposes. Necessary storage supports functions such as authentication, cart, checkout, security, regional preferences, and remembering your privacy choices. Necessary storage cannot be disabled through Cookie Settings because the service may not function correctly without it.',
+      },
+      {
+        text: 'Optional technologies are disabled unless and until you grant the matching choice in Cookie Settings.',
+      },
+    ],
+    bullets: [
+      {
+        label: 'Analytics:',
+        text: 'With Analytics consent, YMI Story may use Google Analytics to understand coarse website usage, page performance, and shopping-flow completion. Google Analytics may process browser and device information, approximate location, referral or campaign information, consented first-party identifiers, and redacted page categories. YMI Story does not send raw personalized routes, query strings, child information, uploaded media, customer contact details, or internal order and creation identifiers.',
+      },
+      {
+        label: 'Marketing:',
+        text: 'With Marketing consent, YMI Story may use Google Ads measurement and Meta Pixel to understand whether an advertisement led to a permitted website action and, where YMI separately enables it, to support advertising audiences or remarketing. These providers may use cookies, pixels, web beacons, and similar technologies for measurement and advertising services. YMI Story limits these events to approved coarse funnel facts and does not use children\'s uploaded materials for advertising profiles.',
+      },
+    ],
+  },
+  {
+    paragraphs: [
+      {
+        text: 'Google Analytics may set first-party cookies such as _ga and _ga_<container-id> to distinguish consented users and sessions. Google documents a default cookie duration of up to two years, subject to browser limits and YMI\'s configuration. YMI will configure user-level and event-level Google Analytics retention to two months. Google and Meta may retain data under their own terms, settings, and legal obligations. YMI periodically reviews its configuration and keeps provider access only while it is needed for the purposes described above.',
+      },
+      {
+        text: 'You can accept, reject, or change optional choices at any time through Cookie Settings in the website footer. Withdrawing consent stops future optional collection from YMI Story after the updated choice takes effect and removes reachable YMI-domain analytics or advertising cookies where technically possible. It cannot recall information already sent to a provider. You can also clear cookies through your browser and use the privacy and advertising controls offered by Google and Meta.',
+      },
+      {
+        text: 'You can review provider privacy information at the following official pages:',
+      },
+    ],
+    bullets: [
+      {
+        label: 'Google:',
+        text: 'Google Privacy Policy',
+        href: 'https://policies.google.com/privacy',
+      },
+      {
+        label: 'Meta:',
+        text: 'Meta Privacy Policy',
+        href: 'https://www.facebook.com/privacy/policy/',
+      },
+    ],
+  },
+  {
+    title: '6. Third-Party Processors',
     paragraphs: [
       {
         text: 'We may share limited data with trusted service providers only when necessary to operate the service, such as hosting, payments, production, shipping, and technical infrastructure.',
@@ -97,10 +151,14 @@ const privacyEn: LegalSection[] = [
       { label: 'Cloud Infrastructure:', text: 'Secure hosting and storage providers used to operate uploads, generated assets, and application services.' },
       { label: 'Payment Processors:', text: 'Providers such as Stripe or PayPal used to securely process payments.' },
       { label: 'Production and Logistics:', text: 'Manufacturing and shipping partners involved in producing and delivering your physical order.' },
+      {
+        label: 'Analytics and Advertising Providers:',
+        text: 'With the relevant optional consent, providers such as Google and Meta may process limited technical and coarse event data for analytics, campaign measurement, and any separately enabled advertising features described in this policy.',
+      },
     ],
   },
   {
-    title: '6. Your Rights',
+    title: '7. Your Rights',
     paragraphs: [
       { text: 'Depending on your jurisdiction, you may have the right to access, correct, or request deletion of your personal data.' },
     ],
@@ -108,18 +166,25 @@ const privacyEn: LegalSection[] = [
       { label: 'Access:', text: 'You may ask what account or order data we hold about you.' },
       { label: 'Correction:', text: 'You may request updates to inaccurate profile or order information.' },
       { label: 'Erasure:', text: 'You may request deletion of eligible account data, subject to legal, operational, and fulfillment requirements.' },
-    ],
-  },
-  {
-    title: '7. International Transfers',
-    paragraphs: [
       {
-        text: 'Because YMI operates online and serves multiple regions, your data may be processed in jurisdictions outside your place of residence. We use reasonable safeguards for such transfers.',
+        label: 'Withdraw Optional Consent:',
+        text: 'You may change Analytics and Marketing choices at any time through Cookie Settings. Withdrawal applies to future collection after the updated choice takes effect and does not make earlier lawful processing reversible.',
       },
     ],
   },
   {
-    title: '8. Policy Updates',
+    title: '8. International Transfers',
+    paragraphs: [
+      {
+        text: 'Because YMI operates online and serves multiple regions, your data may be processed in jurisdictions outside your place of residence. We use reasonable safeguards for such transfers.',
+      },
+      {
+        text: 'Where you consent to optional analytics or advertising, Google or Meta may process limited technical and event data in countries outside your place of residence. Their processing is also governed by their privacy terms and applicable transfer safeguards.',
+      },
+    ],
+  },
+  {
+    title: '9. Policy Updates',
     paragraphs: [
       {
         text: 'We may revise this Privacy Policy from time to time. Material updates will be reflected on this page and may also be communicated through the site or your registered email address.',
@@ -127,7 +192,7 @@ const privacyEn: LegalSection[] = [
     ],
   },
   {
-    title: '9. Contact',
+    title: '10. Contact',
     paragraphs: [
       {
         text: 'If you have privacy-related questions or requests, please contact us at admin@ymistory.com.',

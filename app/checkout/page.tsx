@@ -20,7 +20,8 @@ import {
   normalizeCheckoutCurrency,
   toChargeCurrency,
 } from '@/lib/locale-pricing';
-import { getFooterLegalContent } from '@/lib/footer-legal-content';
+import { fetchPublishedLegalContentSnapshot } from '@/lib/published-legal-content-client';
+import type { PublishedLegalContentSnapshot } from '@/lib/published-legal-content-core';
 import { canEnterCustomize } from '@/lib/customize-access-client';
 import type { CartItem } from '@/types';
 
@@ -148,6 +149,9 @@ function CheckoutPageContent() {
   const [discountError, setDiscountError] = useState('');
   const [isPaymentOffersOpen, setIsPaymentOffersOpen] = useState(false);
   const [openPolicyModal, setOpenPolicyModal] = useState<CheckoutPolicyModal>(null);
+  const [publishedLegalContent, setPublishedLegalContent] =
+    useState<PublishedLegalContentSnapshot | null>(null);
+  const [policyContentError, setPolicyContentError] = useState<string | null>(null);
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [rewardVouchers, setRewardVouchers] = useState<RewardVoucher[]>([]);
   const [isRewardVouchersLoading, setIsRewardVouchersLoading] = useState(false);
@@ -177,6 +181,30 @@ function CheckoutPageContent() {
   const resolveCheckoutItemCoverStatus = useCallback((item: (typeof items)[number]) => {
     return item.coverStatus ?? (resolveCheckoutItemCoverUrl(item) ? 'ready' : 'pending');
   }, [resolveCheckoutItemCoverUrl]);
+
+  useEffect(() => {
+    if (!openPolicyModal) return;
+    const controller = new AbortController();
+    let active = true;
+
+    fetchPublishedLegalContentSnapshot(controller.signal)
+      .then((content) => {
+        if (!active) return;
+        setPolicyContentError(null);
+        setPublishedLegalContent(content);
+      })
+      .catch((error) => {
+        if (!active || controller.signal.aborted) return;
+        setPolicyContentError(
+          error instanceof Error ? error.message : 'Policy content is unavailable'
+        );
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [openPolicyModal]);
 
   const discountTotalUsd = useMemo(() => Math.min(total, Math.max(0, discountAmountUsd)), [discountAmountUsd, total]);
   const discountedTotalUsd = useMemo(() => Math.max(0, total - discountTotalUsd), [discountTotalUsd, total]);
@@ -1291,7 +1319,6 @@ function CheckoutPageContent() {
       : stripeCheckoutEnabled
       ? t('checkout.payWithStripe')
       : t('checkout.placeOrder');
-  const checkoutLegalContent = useMemo(() => getFooterLegalContent(language), [language]);
   const policyModalTitle =
     openPolicyModal === 'shipping'
       ? t('footer.legalTitleShipping')
@@ -1303,15 +1330,13 @@ function CheckoutPageContent() {
       ? t('footer.legalTitleImpact')
       : '';
   const policyModalSections =
-    openPolicyModal === 'shipping'
-      ? checkoutLegalContent.shipping
-      : openPolicyModal === 'refund'
-      ? checkoutLegalContent.refund
-      : openPolicyModal === 'safety'
-      ? checkoutLegalContent.safety
-      : openPolicyModal === 'impact'
-      ? checkoutLegalContent.impact
+    openPolicyModal && publishedLegalContent
+      ? publishedLegalContent.footerContent[openPolicyModal]
       : [];
+  const policyModalEffectiveDate =
+    openPolicyModal && publishedLegalContent
+      ? publishedLegalContent.footerEffectiveDates[openPolicyModal]
+      : '';
 
   const policyAgreementNotice = (
     <div className="mt-3 rounded-[18px] border border-slate-200/80 bg-white/70 px-4 py-3 text-xs leading-5 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
@@ -1566,7 +1591,9 @@ function CheckoutPageContent() {
         <CheckoutPolicyModal
           title={policyModalTitle}
           sections={policyModalSections}
-          effectiveDate="May 11, 2026"
+          effectiveDate={policyModalEffectiveDate}
+          isLoading={!publishedLegalContent && !policyContentError}
+          error={publishedLegalContent ? null : policyContentError}
           t={t}
           onClose={() => setOpenPolicyModal(null)}
         />

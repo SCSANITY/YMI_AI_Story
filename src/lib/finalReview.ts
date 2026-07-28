@@ -1,6 +1,7 @@
 import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 import { sendOrderDeliveryEmail } from '@/lib/email'
+import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production-transition-store'
 import { isFinalJobReleased } from '@/lib/purchase-state'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -288,6 +289,11 @@ export async function releaseFinalJob(params: {
 
   const alreadyPdfReleased = isFinalJobReleased(finalJob)
   if (alreadyPdfReleased && finalJob.email_sent_at) {
+    await advanceOrdersToProductionAfterPdfRelease({
+      jobId: finalJob.job_id,
+      orderIds: [finalJob.order_id],
+      changedByAdminId: approvedByCustomerId,
+    })
     return {
       finalJobId,
       pdfPath: finalJob.pdf_path,
@@ -469,6 +475,12 @@ export async function releaseFinalJob(params: {
   } catch (error) {
     console.error('[email] final delivery failed', { finalJobId, orderId: finalJob.order_id, error })
   }
+
+  await advanceOrdersToProductionAfterPdfRelease({
+    jobId: finalJob.job_id,
+    orderIds: [finalJob.order_id],
+    changedByAdminId: approvedByCustomerId,
+  })
 
   return {
     finalJobId,

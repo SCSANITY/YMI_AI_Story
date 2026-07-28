@@ -8,6 +8,8 @@ type CheckoutPolicyModalProps = {
   title: string;
   sections: LegalSection[];
   effectiveDate: string;
+  isLoading: boolean;
+  error: string | null;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   onClose: () => void;
 };
@@ -16,7 +18,16 @@ const renderPolicyTextItem = (item: LegalTextItem, key: string, className = '') 
   <p key={key} className={className}>
     {item.label ? <span className="font-semibold">{item.label}</span> : null}
     {item.label ? ' ' : null}
-    {item.text}
+    {item.href ? (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-800"
+      >
+        {item.text}
+      </a>
+    ) : item.text}
   </p>
 );
 
@@ -39,7 +50,16 @@ const renderPolicySections = (sections: LegalSection[]) =>
             <li key={`b-${sectionIndex}-${bulletIndex}`}>
               {item.label ? <span className="font-semibold">{item.label}</span> : null}
               {item.label ? ' ' : null}
-              {item.text}
+              {item.href ? (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-800"
+                >
+                  {item.text}
+                </a>
+              ) : item.text}
             </li>
           ))}
         </ul>
@@ -51,6 +71,8 @@ export function CheckoutPolicyModal({
   title,
   sections,
   effectiveDate,
+  isLoading,
+  error,
   t,
   onClose,
 }: CheckoutPolicyModalProps) {
@@ -97,13 +119,25 @@ export function CheckoutPolicyModal({
         </button>
         <div className="relative z-10 border-b border-black/8 px-6 py-5 sm:px-8">
           <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-          <p className="mt-0.5 text-sm text-gray-500">
-            {t('footer.effectiveDate', { date: effectiveDate })}
-          </p>
+          {effectiveDate ? (
+            <p className="mt-0.5 text-sm text-gray-500">
+              {t('footer.effectiveDate', { date: effectiveDate })}
+            </p>
+          ) : null}
         </div>
         <div className="relative z-10">
           <div className="max-h-[62vh] space-y-6 overflow-y-auto px-6 py-6 text-sm leading-relaxed text-gray-700 [scrollbar-color:rgba(0,0,0,0.15)_transparent] [scrollbar-width:thin] sm:px-8">
-            {renderPolicySections(sections)}
+            {error ? (
+              <div className="rounded-2xl border border-rose-100/80 bg-white/45 px-4 py-5 text-sm text-gray-600">
+                Policy content could not be loaded. Close this window and try again.
+              </div>
+            ) : isLoading ? (
+              <div className="rounded-2xl border border-amber-100/80 bg-white/45 px-4 py-5 text-sm text-gray-500">
+                Loading policy...
+              </div>
+            ) : (
+              renderPolicySections(sections)
+            )}
           </div>
           <div
             aria-hidden="true"

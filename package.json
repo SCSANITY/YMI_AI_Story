@@ -9,6 +9,8 @@
     "lint": "eslint",
     "admin:contracts": "node --test tests/admin-contracts.test.mjs",
     "cart:contracts": "node --test tests/cart-title-contract.test.mjs",
+    "legal:tests": "tsx --test src/lib/legal-publishing.test.ts src/lib/published-legal-content.test.ts",
+    "tracking:tests": "tsx --test src/lib/tracking-policy.test.ts",
     "test:contracts": "node --test tests/*.test.mjs",
     "covers:normalize": "node scripts/normalize-template-covers.mjs",
     "images:optimize": "node scripts/optimize-images.mjs",

@@ -4,6 +4,7 @@ import { checkJobQueueGuard } from '@/lib/jobQueue'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import { normalizeOrderStatus, type OrderStatus } from '@/lib/order-status'
+import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production-transition-store'
 import { shippingStreet } from '@/lib/shipping-address'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import { isFinalJobReleased } from '@/lib/purchase-state'
@@ -503,6 +504,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   if (currentStatus !== 'unpaid' && currentStatus !== 'paid' && currentStatus !== 'production') {
     throw new Error(`Order status ${existingOrder.order_status} cannot be finalized`)
   }
+  const paymentOrderStatus: OrderStatus = currentStatus === 'production' ? 'production' : 'paid'
 
   let paymentId = existingOrder.payment_id ?? null
   const resolvedAmount = amount ?? (await computeOrderTotal(orderId, cartItemIds))
@@ -553,7 +555,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       shipping_zone_code: shippingZoneCode ?? (shippingRateSnapshot?.zoneCode as string | undefined) ?? null,
       billing_address: billingAddress,
       checkout_currency: normalizedCurrency,
-      order_status: 'paid',
+      order_status: paymentOrderStatus,
     })
     .eq('order_id', orderId)
 
@@ -601,7 +603,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       displayId: existingOrder.display_id ?? null,
       paymentId,
       cartItemIds: effectiveCartItemIds,
-      status: 'paid',
+      status: paymentOrderStatus,
     }
   }
 
@@ -912,11 +914,23 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     }
   }
 
+  let completedOrderStatus = paymentOrderStatus
+  try {
+    const transition = await advanceOrdersToProductionAfterPdfRelease({
+      orderIds: [orderId],
+    })
+    if (transition.promotedOrderIds.includes(orderId)) {
+      completedOrderStatus = 'production'
+    }
+  } catch (error) {
+    console.error('[orders] post-payment PDF status reconciliation failed', { orderId, error })
+  }
+
   return {
     orderId,
     displayId: existingOrder.display_id ?? null,
     paymentId,
     cartItemIds: effectiveCartItemIds,
-    status: 'paid',
+    status: completedOrderStatus,
   }
 }

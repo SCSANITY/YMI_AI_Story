@@ -8,9 +8,10 @@ export type CookieConsentPreferences = {
   updatedAt: string
 }
 
-export const COOKIE_CONSENT_VERSION = '2026-05-v1'
+export const COOKIE_CONSENT_VERSION = '2026-07-v2'
 export const COOKIE_CONSENT_STORAGE_KEY = 'ymi_cookie_consent'
 export const COOKIE_CONSENT_OPEN_EVENT = 'ymi:open-cookie-settings'
+export const COOKIE_CONSENT_CHANGE_EVENT = 'ymi:cookie-consent-change'
 
 export function createCookieConsentPreferences(
   options: { analytics: boolean; marketing: boolean },
@@ -56,9 +57,18 @@ export function readStoredCookieConsent(): CookieConsentPreferences | null {
   }
 }
 
+export function readCurrentCookieConsent(): CookieConsentPreferences | null {
+  const consent = readStoredCookieConsent()
+  return consent?.version === COOKIE_CONSENT_VERSION ? consent : null
+}
+
 export function storeCookieConsent(consent: CookieConsentPreferences) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, JSON.stringify(consent))
+  window.dispatchEvent(new CustomEvent<CookieConsentPreferences>(
+    COOKIE_CONSENT_CHANGE_EVENT,
+    { detail: consent },
+  ))
 }
 
 export function hasCookieConsent(category: Exclude<CookieConsentCategory, 'necessary'>) {

@@ -4,8 +4,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronDown, Facebook, Instagram, Mail, Music2, X } from 'lucide-react'
-import type { FooterLegalContent, LegalSection, LegalTextItem } from '@/lib/footer-legal-content'
+import type { LegalSection, LegalTextItem } from '@/lib/footer-legal-content'
 import { openCookieSettings } from '@/lib/cookie-consent'
+import { fetchPublishedLegalContentSnapshot } from '@/lib/published-legal-content-client'
+import type { PublishedLegalContentSnapshot } from '@/lib/published-legal-content-core'
 import { useI18n } from '@/lib/useI18n'
 import { NewsletterSignup } from '@/components/footer/NewsletterSignup'
 
@@ -24,14 +26,13 @@ type FaqSection = {
 }
 
 export const Footer: React.FC = () => {
-  const { language, t } = useI18n()
+  const { t } = useI18n()
   const [openLegalModal, setOpenLegalModal] = useState<LegalModalType>(null)
   const [openFaqIndex, setOpenFaqIndex] = useState<string | null>(null)
   const [isTikTokComingSoonOpen, setIsTikTokComingSoonOpen] = useState(false)
-  const [legalContentState, setLegalContentState] = useState<{
-    language: string
-    content: FooterLegalContent
-  } | null>(null)
+  const [publishedLegalContent, setPublishedLegalContent] =
+    useState<PublishedLegalContentSnapshot | null>(null)
+  const [legalContentError, setLegalContentError] = useState<string | null>(null)
 
   const handleLegalModalChange = (nextModal: LegalModalType) => {
     if (nextModal !== 'faq') {
@@ -308,24 +309,30 @@ export const Footer: React.FC = () => {
     []
   )
 
-  const legalContent = legalContentState?.language === language ? legalContentState.content : null
+  const legalContent = publishedLegalContent?.footerContent ?? null
 
   useEffect(() => {
-    if (!openLegalModal || openLegalModal === 'faq' || legalContent) return
+    if (!openLegalModal || openLegalModal === 'faq') return
+    const controller = new AbortController()
     let active = true
 
-    import('@/lib/footer-legal-content').then(({ getFooterLegalContent }) => {
-      if (!active) return
-      setLegalContentState({
-        language,
-        content: getFooterLegalContent(language),
+    fetchPublishedLegalContentSnapshot(controller.signal)
+      .then((content) => {
+        if (!active) return
+        setLegalContentError(null)
+        setPublishedLegalContent(content)
       })
-    })
-
+      .catch((error) => {
+        if (!active || controller.signal.aborted) return
+        setLegalContentError(
+          error instanceof Error ? error.message : 'Policy content is unavailable',
+        )
+      })
     return () => {
       active = false
+      controller.abort()
     }
-  }, [language, legalContent, openLegalModal])
+  }, [openLegalModal])
 
   useEffect(() => {
     if (!openLegalModal) return
@@ -358,13 +365,28 @@ export const Footer: React.FC = () => {
               : isImpact
                 ? t('footer.legalTitleImpact')
             : t('footer.legalTitleTerms')
-  const modalEffectiveDate = isShipping || isRefund || isSafety ? 'May 11, 2026' : 'March 12, 2026'
+  const legalContentKey =
+    openLegalModal && openLegalModal !== 'faq' ? openLegalModal : null
+  const modalEffectiveDate = isFaq
+    ? 'March 12, 2026'
+    : legalContentKey
+      ? publishedLegalContent?.footerEffectiveDates[legalContentKey] ?? null
+      : null
 
   const renderTextItem = (item: LegalTextItem, key: string, className = '') => (
     <p key={key} className={className}>
       {item.label ? <span className="font-semibold">{item.label}</span> : null}
       {item.label ? ' ' : null}
-      {item.text}
+      {item.href ? (
+        <a
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-800"
+        >
+          {item.text}
+        </a>
+      ) : item.text}
     </p>
   )
 
@@ -387,7 +409,16 @@ export const Footer: React.FC = () => {
               <li key={`b-${sectionIndex}-${bulletIndex}`}>
                 {item.label ? <span className="font-semibold">{item.label}</span> : null}
                 {item.label ? ' ' : null}
-                {item.text}
+                {item.href ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-800"
+                  >
+                    {item.text}
+                  </a>
+                ) : item.text}
               </li>
             ))}
           </ul>
@@ -682,7 +713,7 @@ export const Footer: React.FC = () => {
 
             <div className="relative z-10 border-b border-black/8 px-6 py-5 sm:px-8">
               <h2 className="text-2xl font-bold text-gray-900">{modalTitle}</h2>
-              {isOurStory ? null : (
+              {isOurStory || !modalEffectiveDate ? null : (
                 <p className="mt-0.5 text-sm text-gray-500">
                   {t('footer.effectiveDate', { date: modalEffectiveDate })}
                 </p>
@@ -752,6 +783,10 @@ export const Footer: React.FC = () => {
                       </div>
                     ))}
                   </section>
+                ) : !legalContent && legalContentError ? (
+                  <div className="rounded-2xl border border-rose-100/80 bg-white/45 px-4 py-5 text-sm text-gray-600">
+                    Policy content could not be loaded. Close this window and try again.
+                  </div>
                 ) : !legalContent ? (
                   <div className="rounded-2xl border border-amber-100/80 bg-white/45 px-4 py-5 text-sm text-gray-500">
                     Loading policy...

@@ -10,6 +10,11 @@ const PUBLIC_STATIC_PATHS = [
   '/community',
   '/collaboration',
   '/support',
+  '/legal',
+  '/privacy',
+  '/terms',
+  '/shipping-policy',
+  '/refund-policy',
 ]
 
 async function loadTemplatePaths() {

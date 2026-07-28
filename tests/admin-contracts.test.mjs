@@ -67,7 +67,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 19, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 23, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -92,6 +92,7 @@ test('active and placeholder Admin pages remain explicitly separated', async () 
     ['discounts', 'DiscountManagementSection'],
     ['emails', 'email_events'],
     ['finals', 'FinalReviewPanel'],
+    ['legal', 'LegalContentSection'],
     ['orders', 'OrdersManagementSection'],
     ['service', 'ServiceControlSection'],
   ])
@@ -119,6 +120,75 @@ test('Admin client components never import the service-role Supabase client', as
       /@\/lib\/supabaseAdmin/,
       `${componentFile} must use authenticated Admin APIs rather than service-role access`
     )
+  }
+})
+
+test('Legal Content preserves draft isolation, atomic publishing, and immutable history', async () => {
+  const sql = await read('../Template_folder/sql_legal_content_publishing.sql')
+  const publishing = await read('src/lib/legal-publishing.ts')
+  const store = await read('src/lib/legal-publishing-store.ts')
+  const rootApi = await read('app/api/admin/legal-documents/route.ts')
+  const documentApi = await read('app/api/admin/legal-documents/[documentKey]/route.ts')
+  const publishApi = await read(
+    'app/api/admin/legal-documents/[documentKey]/publish/route.ts'
+  )
+  const rollbackApi = await read(
+    'app/api/admin/legal-documents/[documentKey]/rollback/route.ts'
+  )
+  const section = await read('components/admin/sections/LegalContentSection.tsx')
+  const editor = await read('components/admin/legal/LegalDocumentEditor.tsx')
+  const history = await read('components/admin/legal/LegalRevisionHistory.tsx')
+  const preview = await read('components/admin/legal/LegalDraftPreview.tsx')
+  const publicConsumers = await Promise.all([
+    read('components/Footer.tsx'),
+    read('app/checkout/CheckoutPolicyModal.tsx'),
+    read('components/legal/LegalDocumentPage.tsx'),
+    read('src/lib/legal-documents.ts'),
+  ])
+
+  assert.match(sql, /current_published_revision_id uuid/)
+  assert.match(sql, /unique \(document_id, revision_id\)/)
+  assert.match(sql, /deferrable initially deferred/)
+  assert.match(sql, /idx_legal_document_one_active_draft/)
+  assert.match(sql, /for update/g)
+  assert.match(sql, /errcode = '40001'/)
+  assert.match(sql, /Published legal revisions are immutable/)
+  assert.match(sql, /Legal publishing audit history is immutable/)
+  assert.match(sql, /insert into public\.legal_document_revisions[\s\S]*'published'/)
+  assert.match(sql, /'rolled_back'/)
+  assert.match(sql, /revoke all on table public\.legal_documents from public, anon, authenticated/)
+  assert.match(sql, /revoke all on table public\.legal_documents from service_role/)
+  assert.match(sql, /grant select on table public\.legal_documents to service_role/)
+  assert.doesNotMatch(sql, /grant select,\s*insert|grant insert|grant update/)
+  assert.match(sql, /grant execute on function public\.publish_legal_document_draft/)
+
+  assert.match(publishing, /normalizeLegalRevisionContent/)
+  assert.match(publishing, /HTML_TAG_PATTERN/)
+  assert.match(publishing, /LegalPublishingConflictError/)
+  assert.match(store, /\.rpc\(name, params\)/)
+  assert.match(store, /bootstrapAdminLegalDocuments/)
+  assert.match(store, /getCanonicalLegalDocuments\(\)/)
+
+  for (const api of [rootApi, documentApi, publishApi, rollbackApi]) {
+    assert.match(api, /['"]Cache-Control['"]:\s*['"]no-store['"]/)
+  }
+  assert.match(documentApi, /saveAdminLegalDraft/)
+  assert.match(publishApi, /publishAdminLegalDraft/)
+  assert.match(rollbackApi, /rollbackAdminLegalRevision/)
+
+  assert.match(section, /listRequestIntentRef/)
+  assert.match(section, /detailRequestIntentRef/)
+  assert.match(section, /detailAbortControllerRef/)
+  assert.match(section, /<LegalDocumentPicker/)
+  assert.match(section, /<LegalDocumentEditor/)
+  assert.match(section, /<LegalRevisionHistory/)
+  assert.match(editor, /expectedDraftVersion/)
+  assert.match(editor, /basePublishedRevisionId/)
+  assert.match(history, /expectedCurrentPublishedRevisionId/)
+  assert.doesNotMatch(editor + history + preview, /dangerouslySetInnerHTML/)
+
+  for (const publicConsumer of publicConsumers) {
+    assert.doesNotMatch(publicConsumer, /legal-publishing|legal_documents/)
   }
 })
 
