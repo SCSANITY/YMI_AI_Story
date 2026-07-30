@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Gift, Loader2, Ticket, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
@@ -155,11 +156,21 @@ export const MyRewardsModal: React.FC<MyRewardsModalProps> = ({ open, user, onCl
     }
   }, [open])
 
-  if (!open || !user?.customerId) return null
+  if (!open || !user?.customerId || typeof document === 'undefined') return null
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/28 px-3 py-3 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
-      <div className="my-2 flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/88 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-2xl sm:my-0 sm:max-h-[calc(100dvh-3rem)]">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[180] flex items-start justify-center overflow-y-auto bg-white/45 px-3 py-3 backdrop-blur-md sm:items-center sm:px-4 sm:py-6"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="my-rewards-title"
+        className="my-2 flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-amber-100/90 bg-[#fffdf9] shadow-[0_24px_70px_rgba(92,43,10,0.18)] sm:my-0 sm:max-h-[calc(100dvh-3rem)]"
+      >
         <div className="sticky top-0 z-10 border-b border-white/70 bg-white/92 px-5 py-4 backdrop-blur-xl sm:px-6 sm:py-5">
           <button
             type="button"
@@ -172,7 +183,7 @@ export const MyRewardsModal: React.FC<MyRewardsModalProps> = ({ open, user, onCl
 
           <div className="pr-10">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-500">{t('rewards.label')}</p>
-            <h2 className="mt-2 flex items-center gap-2 text-2xl font-semibold text-slate-900">
+            <h2 id="my-rewards-title" className="mt-2 flex items-center gap-2 text-2xl font-semibold text-slate-900">
               <Gift className="h-6 w-6 text-amber-500" />
               {t('rewards.title')}
             </h2>
@@ -222,6 +233,7 @@ export const MyRewardsModal: React.FC<MyRewardsModalProps> = ({ open, user, onCl
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

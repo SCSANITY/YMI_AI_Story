@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedCustomer } from '@/lib/adminAuth'
+import {
+  CREATOR_PROMO_DISCOUNT_USD,
+  CREATOR_PROMO_FIRST_ORDER_ONLY,
+} from '@/lib/creator-promo-policy'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-const DEFAULT_CREATOR_DISCOUNT_USD = 1
 const CREATOR_SUFFIX = '-YMI'
 const CREATOR_PROMO_SETTING_KEY = 'creator_promo_config'
 
 type CreatorPromoConfig = {
   enabled: boolean
   suffix: string
-  discountAmountUsd: number
-  firstOrderOnly: boolean
 }
 
 function escapeRegExp(value: string) {
@@ -19,13 +20,10 @@ function escapeRegExp(value: string) {
 
 function normalizeCreatorPromoConfig(value: unknown): CreatorPromoConfig {
   const input = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  const discountAmountUsd = Number(input.discount_amount_usd ?? input.discountAmountUsd ?? DEFAULT_CREATOR_DISCOUNT_USD)
   const suffix = String(input.suffix ?? CREATOR_SUFFIX).trim().toUpperCase() || CREATOR_SUFFIX
   return {
     enabled: input.enabled !== false,
     suffix: suffix.startsWith('-') ? suffix : `-${suffix}`,
-    discountAmountUsd: Number.isFinite(discountAmountUsd) && discountAmountUsd > 0 ? discountAmountUsd : DEFAULT_CREATOR_DISCOUNT_USD,
-    firstOrderOnly: input.first_order_only !== false && input.firstOrderOnly !== false,
   }
 }
 
@@ -54,7 +52,7 @@ function toPromoCode(row: any, suffix = CREATOR_SUFFIX) {
   return {
     code: row.code,
     rawInput: String(row.code || '').replace(new RegExp(`${escapeRegExp(suffix)}$`), ''),
-    discountAmountUsd: Number(offer?.effect_config?.amount_usd ?? DEFAULT_CREATOR_DISCOUNT_USD),
+    discountAmountUsd: Number(offer?.effect_config?.amount_usd ?? CREATOR_PROMO_DISCOUNT_USD),
     status: row.is_active ? 'active' : 'disabled',
   }
 }
@@ -130,9 +128,9 @@ export async function POST(request: Request) {
         name: `Creator promo ${code}`,
         description: 'Collaboration creator promo code',
         effect_type: 'fixed_amount',
-        effect_config: { amount_usd: config.discountAmountUsd },
+        effect_config: { amount_usd: CREATOR_PROMO_DISCOUNT_USD },
         stacking_group: 'product_discount',
-        first_order_only: config.firstOrderOnly,
+        first_order_only: CREATOR_PROMO_FIRST_ORDER_ONLY,
         created_by_admin_id: customer.customer_id,
       })
       .select('offer_id')

@@ -343,6 +343,10 @@ export function CreatorPromoSection({ user, openLoginModal }: CreatorPromoSectio
               <p className="rounded-xl bg-slate-50 px-3 py-2">{t('collaboration.creatorPromoUsage')}</p>
               <p className="rounded-xl bg-slate-50 px-3 py-2">{t('collaboration.creatorPromoValidity')}</p>
             </div>
+            <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold leading-5 text-amber-800">
+              <AlertTriangle aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{t('collaboration.creatorPromoSelfUse')}</span>
+            </p>
             <p className="mt-2 text-[11px] leading-5 text-slate-400">{t('collaboration.creatorPromoHint')}</p>
             {promoError ? (
               <p className="mt-2.5 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{promoError}</p>

@@ -313,7 +313,10 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const refreshCartFromDb = useCallback(async () => {
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-    const response = await fetch(`/api/cart${params}`, { credentials: 'include' });
+    const response = await fetch(`/api/cart${params}`, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
     if (!response.ok) return;
     const data = await response.json();
     const items = Array.isArray(data?.items) ? data.items : [];
@@ -350,7 +353,10 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const loadCartFromDb = async () => {
       const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-      const response = await fetch(`/api/cart${params}`, { credentials: 'include' });
+      const response = await fetch(`/api/cart${params}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       if (!response.ok) return;
       const data = await response.json();
       if (!isActive) return;
@@ -887,14 +893,22 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const updateCartQuantity = useCallback(async (itemId: string, quantity: number) => {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
     let previousCart: CartItem[] | null = null;
+    let previousCheckoutItems: CartItem[] | null = null;
     setCart(prev => {
       previousCart = prev;
+      return prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item);
+    });
+    setCheckoutItems(prev => {
+      previousCheckoutItems = prev;
       return prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item);
     });
 
     const restoreCart = () => {
       if (previousCart) {
         setCart(previousCart);
+      }
+      if (previousCheckoutItems) {
+        setCheckoutItems(previousCheckoutItems);
       }
       void refreshCartFromDb();
     };
@@ -925,6 +939,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const updateCheckoutQuantity = useCallback((itemId: string, quantity: number) => {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
     setCheckoutItems(prev => prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item));
+    setCart(prev => prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item));
     void fetch('/api/cart', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -941,14 +956,22 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const removeFromCart = useCallback(async (itemId: string) => {
     let previousCart: CartItem[] | null = null;
+    let previousCheckoutItems: CartItem[] | null = null;
     setCart(prev => {
       previousCart = prev;
+      return prev.filter(item => item.id !== itemId);
+    });
+    setCheckoutItems(prev => {
+      previousCheckoutItems = prev;
       return prev.filter(item => item.id !== itemId);
     });
 
     const restoreCart = () => {
       if (previousCart) {
         setCart(previousCart);
+      }
+      if (previousCheckoutItems) {
+        setCheckoutItems(previousCheckoutItems);
       }
       void refreshCartFromDb();
     };
@@ -974,18 +997,25 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const prepareCheckout = useCallback((items: CartItem[]) => {
     setCheckoutItems(items);
-    setCart(prev => prev.filter(item => !items.some(selected => selected.id === item.id)));
+    setCart(prev => {
+      const existingIds = new Set(prev.map(item => item.id));
+      const missingItems = items.filter(item => !existingIds.has(item.id));
+      return missingItems.length ? [...prev, ...missingItems] : prev;
+    });
   }, []);
 
   const addToCheckout = useCallback((items: CartItem[]) => {
     if (!items.length) return;
-    const incomingIds = new Set(items.map(item => item.id));
     setCheckoutItems(prev => {
       const existingIds = new Set(prev.map(item => item.id));
       const additions = items.filter(item => !existingIds.has(item.id));
       return additions.length ? [...prev, ...additions] : prev;
     });
-    setCart(prev => prev.filter(item => !incomingIds.has(item.id)));
+    setCart(prev => {
+      const existingIds = new Set(prev.map(item => item.id));
+      const additions = items.filter(item => !existingIds.has(item.id));
+      return additions.length ? [...prev, ...additions] : prev;
+    });
   }, []);
 
   const hydrateCheckoutItems = useCallback((rawItems: any[]) => {
@@ -993,16 +1023,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [mapCartItems]);
 
   const removeFromCheckout = useCallback((itemId: string) => {
-    setCheckoutItems(prev => {
-      const target = prev.find(item => item.id === itemId);
-      if (target) {
-        setCart(cartPrev => {
-          if (cartPrev.some(item => item.id === target.id)) return cartPrev;
-          return [target, ...cartPrev];
-        });
-      }
-      return prev.filter(item => item.id !== itemId);
-    });
+    setCheckoutItems(prev => prev.filter(item => item.id !== itemId));
   }, []);
 
   const restoreCheckout = useCallback((items: CartItem[]) => {

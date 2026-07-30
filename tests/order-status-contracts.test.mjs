@@ -15,6 +15,7 @@ test('PDF release advances only complete paid orders into the existing productio
   const fulfillment = await read('src/lib/orderFulfillment.ts')
   const transition = await read('src/lib/order-production-transition.ts')
   const transitionStore = await read('src/lib/order-production-transition-store.ts')
+  const messages = await read('src/lib/i18n-messages.ts')
 
   assert.match(finalReview, /advanceOrdersToProductionAfterPdfRelease/)
   assert.match(fulfillment, /advanceOrdersToProductionAfterPdfRelease/)
@@ -24,6 +25,9 @@ test('PDF release advances only complete paid orders into the existing productio
   assert.match(transitionStore, /previous_status:\s*['"]paid['"]/)
   assert.match(transitionStore, /new_status:\s*['"]production['"]/)
   assert.doesNotMatch(transitionStore, /sendLogisticsUpdateEmail/)
+  assert.match(finalReview, /sendOrderDeliveryEmail[\s\S]*await advanceOrdersToProductionAfterPdfRelease/)
+  assert.match(messages, /['"]orders\.status\.paid['"]:\s*['"]Order Confirmed['"]/)
+  assert.match(messages, /['"]orders\.status\.production['"]:\s*['"]Printing['"]/)
   assert.match(
     fulfillment,
     /currentStatus === ['"]production['"] \? ['"]production['"] : ['"]paid['"]/

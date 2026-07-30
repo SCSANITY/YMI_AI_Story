@@ -1,24 +1,25 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import {
+  CREATOR_PROMO_DISCOUNT_USD,
+  CREATOR_PROMO_FIRST_ORDER_ONLY,
+} from '@/lib/creator-promo-policy'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const SETTING_KEY = 'creator_promo_config'
 const DEFAULT_CONFIG = {
   enabled: true,
   suffix: '-YMI',
-  discount_amount_usd: 1,
-  first_order_only: true,
 }
 
 function normalizeConfig(value: unknown) {
   const input = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  const discount = Number(input.discount_amount_usd ?? input.discountAmountUsd ?? DEFAULT_CONFIG.discount_amount_usd)
   const suffix = String(input.suffix ?? DEFAULT_CONFIG.suffix).trim().toUpperCase() || DEFAULT_CONFIG.suffix
   return {
     enabled: input.enabled !== false,
     suffix: suffix.startsWith('-') ? suffix : `-${suffix}`,
-    discount_amount_usd: Number.isFinite(discount) && discount > 0 ? discount : DEFAULT_CONFIG.discount_amount_usd,
-    first_order_only: input.first_order_only !== false && input.firstOrderOnly !== false,
+    discount_amount_usd: CREATOR_PROMO_DISCOUNT_USD,
+    first_order_only: CREATOR_PROMO_FIRST_ORDER_ONLY,
   }
 }
 
@@ -61,17 +62,7 @@ export async function PATCH(request: Request) {
     const next = normalizeConfig({
       ...current,
       enabled: typeof body.enabled === 'boolean' ? body.enabled : current.enabled,
-      discount_amount_usd:
-        body.discountAmountUsd != null || body.discount_amount_usd != null
-          ? Number(body.discountAmountUsd ?? body.discount_amount_usd)
-          : current.discount_amount_usd,
       suffix: body.suffix ?? current.suffix,
-      first_order_only:
-        typeof body.firstOrderOnly === 'boolean'
-          ? body.firstOrderOnly
-          : typeof body.first_order_only === 'boolean'
-            ? body.first_order_only
-            : current.first_order_only,
     })
 
     const { error } = await supabaseAdmin.from('admin_settings').upsert({

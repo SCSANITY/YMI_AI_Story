@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { resolveCheckoutSuccessAccountPromptEmail } from '@/lib/checkout-success-account-prompt'
@@ -12,7 +12,7 @@ import { CheckoutSuccessCard, type CheckoutSuccessOrder } from './CheckoutSucces
 function CheckoutSuccessPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, isHydrated, isAuthResolved, openLoginModal } = useGlobalContext()
+  const { user, isHydrated, isAuthResolved, openLoginModal, refreshCart } = useGlobalContext()
   const orderId = useMemo(() => {
     const raw = searchParams.get('orderId')
     return raw && raw.trim().length > 0 ? raw.trim() : ''
@@ -24,6 +24,7 @@ function CheckoutSuccessPageContent() {
 
   const [loading, setLoading] = useState(Boolean(orderId))
   const [order, setOrder] = useState<CheckoutSuccessOrder | null>(null)
+  const reconciledCartOrderIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!orderId) return
@@ -126,6 +127,27 @@ function CheckoutSuccessPageContent() {
     if (typeof window === 'undefined') return
     window.localStorage.removeItem('ymi_discount_code')
   }, [])
+
+  useEffect(() => {
+    const normalizedStatus = normalizeOrderStatus(order?.order_status)
+    const paymentComplete =
+      normalizedStatus === 'paid' ||
+      normalizedStatus === 'production' ||
+      normalizedStatus === 'shipped' ||
+      normalizedStatus === 'delivered' ||
+      normalizedStatus === 'refunded'
+    const paidOrderId = order?.order_id || orderId
+    if (
+      !paymentComplete ||
+      !paidOrderId ||
+      reconciledCartOrderIdRef.current === paidOrderId
+    ) {
+      return
+    }
+
+    reconciledCartOrderIdRef.current = paidOrderId
+    void refreshCart()
+  }, [order?.order_id, order?.order_status, orderId, refreshCart])
 
   useEffect(() => {
     const customerId = user?.customerId

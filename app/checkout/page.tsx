@@ -17,7 +17,6 @@ import { useI18n } from '@/lib/useI18n';
 import {
   CheckoutCurrency,
   formatCurrencyAmount,
-  normalizeCheckoutCurrency,
   toChargeCurrency,
 } from '@/lib/locale-pricing';
 import { fetchPublishedLegalContentSnapshot } from '@/lib/published-legal-content-client';
@@ -117,7 +116,7 @@ function CheckoutPageContent() {
     setCheckoutEmail,
     updateCheckoutQuantity,
     displayCurrency,
-    isHydrated,
+    setDisplayCurrency,
   } = useGlobalContext();
 
   const items = checkoutItems;
@@ -135,7 +134,7 @@ function CheckoutPageContent() {
   const [step, setStep] = useState<CheckoutStep>('address');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<{ id: string; displayId?: string; total: number; email?: string } | null>(null);
-  const [selectedCurrency, setSelectedCurrency] = useState<CheckoutCurrency>(() => toChargeCurrency(displayCurrency));
+  const selectedCurrency = toChargeCurrency(displayCurrency);
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
   const [selectedRewardVoucherId, setSelectedRewardVoucherId] = useState<string | null>(null);
   const [selectedRewardVoucherName, setSelectedRewardVoucherName] = useState<string | null>(null);
@@ -167,8 +166,6 @@ function CheckoutPageContent() {
   const [isIdentityRequesting, setIsIdentityRequesting] = useState(false);
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const checkoutInitRef = useRef(false);
-  const hasSeededCheckoutCurrencyRef = useRef(false);
-  const hasManualCurrencySelectionRef = useRef(false);
   const shippingDiscountRefreshKeyRef = useRef('');
   const isPlacingOrderRef = useRef(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -357,19 +354,9 @@ function CheckoutPageContent() {
 
   const canUseShippingQuote = !requiresShipping || (shippingQuote.status === 'available' && Boolean(selectedShippingOption));
 
-  useEffect(() => {
-    if (!isHydrated) return;
-    if (hasSeededCheckoutCurrencyRef.current) return;
-    if (hasManualCurrencySelectionRef.current) return;
-    hasSeededCheckoutCurrencyRef.current = true;
-    setSelectedCurrency(toChargeCurrency(displayCurrency));
-  }, [displayCurrency, isHydrated]);
-
   const handleCurrencyChange = useCallback((currency: CheckoutCurrency) => {
-    hasSeededCheckoutCurrencyRef.current = true;
-    hasManualCurrencySelectionRef.current = true;
-    setSelectedCurrency(currency);
-  }, []);
+    setDisplayCurrency(currency);
+  }, [setDisplayCurrency]);
 
   useEffect(() => {
     if (!items.length || requiresShipping || step !== 'address') return;
@@ -528,12 +515,6 @@ function CheckoutPageContent() {
             message: null,
           });
         }
-        if (current.checkout_currency) {
-          hasSeededCheckoutCurrencyRef.current = true;
-          hasManualCurrencySelectionRef.current = true;
-          setSelectedCurrency(normalizeCheckoutCurrency(current.checkout_currency));
-        }
-
         if (!checkoutEmail && current.email) {
           setCheckoutEmail(current.email);
         }

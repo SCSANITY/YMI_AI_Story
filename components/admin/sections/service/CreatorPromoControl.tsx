@@ -6,15 +6,11 @@ import { RotateCcw, Save, Undo2 } from 'lucide-react'
 type CreatorPromoConfig = {
   enabled: boolean
   suffix: string
-  discount_amount_usd: number
-  first_order_only: boolean
 }
 
 const DEFAULT_CONFIG: CreatorPromoConfig = {
   enabled: true,
   suffix: '-YMI',
-  discount_amount_usd: 1,
-  first_order_only: true,
 }
 
 function normalizeConfig(value: unknown): CreatorPromoConfig {
@@ -22,8 +18,6 @@ function normalizeConfig(value: unknown): CreatorPromoConfig {
   return {
     enabled: input.enabled !== false,
     suffix: String(input.suffix ?? DEFAULT_CONFIG.suffix),
-    discount_amount_usd: Number(input.discount_amount_usd ?? DEFAULT_CONFIG.discount_amount_usd),
-    first_order_only: input.first_order_only !== false,
   }
 }
 
@@ -31,9 +25,7 @@ function configsEqual(left: CreatorPromoConfig | null, right: CreatorPromoConfig
   if (!left || !right) return left === right
   return (
     left.enabled === right.enabled &&
-    left.suffix === right.suffix &&
-    left.discount_amount_usd === right.discount_amount_usd &&
-    left.first_order_only === right.first_order_only
+    left.suffix === right.suffix
   )
 }
 
@@ -46,11 +38,7 @@ export function CreatorPromoControl() {
   const [message, setMessage] = useState('')
   const requestIntentRef = useRef(0)
   const isDirty = useMemo(() => !configsEqual(savedConfig, draftConfig), [draftConfig, savedConfig])
-  const isValid = Boolean(
-    draftConfig?.suffix.trim() &&
-    Number.isFinite(draftConfig?.discount_amount_usd) &&
-    Number(draftConfig?.discount_amount_usd) > 0
-  )
+  const isValid = Boolean(draftConfig?.suffix.trim())
 
   const loadConfig = useCallback(async () => {
     const intentId = ++requestIntentRef.current
@@ -103,8 +91,6 @@ export function CreatorPromoControl() {
         body: JSON.stringify({
           enabled: submitted.enabled,
           suffix: submitted.suffix,
-          discountAmountUsd: submitted.discount_amount_usd,
-          firstOrderOnly: submitted.first_order_only,
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -171,31 +157,17 @@ export function CreatorPromoControl() {
                 className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold normal-case text-white outline-none focus:border-amber-300/70 disabled:opacity-60"
               />
             </label>
-            <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-              Discount (USD)
-              <input
-                type="number"
-                min="0.01"
-                step="0.5"
-                value={draftConfig.discount_amount_usd}
-                disabled={saving}
-                onChange={(event) => setDraftConfig((current) => current ? { ...current, discount_amount_usd: Number(event.target.value) } : current)}
-                className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70 disabled:opacity-60"
-              />
-            </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06]">
-              <input
-                type="checkbox"
-                checked={draftConfig.first_order_only}
-                disabled={saving}
-                onChange={(event) => setDraftConfig((current) => current ? { ...current, first_order_only: event.target.checked } : current)}
-                className="h-4 w-4 accent-amber-400"
-              />
-              First order only
-            </label>
+            <div className="rounded-lg border border-white/10 bg-slate-950/40 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Customer discount</p>
+              <p className="mt-2 text-sm font-bold text-white">$5 USD per valid order</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-slate-950/40 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Usage policy</p>
+              <p className="mt-2 text-sm font-bold text-white">Any order / owner excluded</p>
+            </div>
           </div>
 
-          {!isValid ? <p role="alert" className="mt-3 text-sm text-rose-200">Enter a suffix and a discount above zero.</p> : null}
+          {!isValid ? <p role="alert" className="mt-3 text-sm text-rose-200">Enter a code suffix.</p> : null}
 
           <div className="mt-5 flex flex-col-reverse gap-2 border-t border-white/[0.07] pt-5 sm:flex-row sm:justify-end">
             <button

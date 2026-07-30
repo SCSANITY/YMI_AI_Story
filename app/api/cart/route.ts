@@ -6,7 +6,19 @@ import {
   requireCheckoutOrderAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
+import { filterActiveCartItems } from '@/lib/cart-lifecycle'
 import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
+
+const CART_CACHE_CONTROL = 'private, no-store, max-age=0'
+
+function cartJson(body: unknown, init?: { status?: number }) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: {
+      'Cache-Control': CART_CACHE_CONTROL,
+    },
+  })
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -36,10 +48,14 @@ export async function GET(request: Request) {
   }
 
   if (!owner) {
-    return NextResponse.json({ items: [] })
+    return cartJson({ items: [] })
   }
 
   const filter = ownerFilter(owner)
+  const isActiveCartRequest =
+    ids.length === 0 &&
+    !orderIdParam &&
+    (!statusParam || statusParam === 'cart')
 
   let query = supabaseAdmin
     .from('cart_items')
@@ -72,8 +88,8 @@ export async function GET(request: Request) {
     } else if (statusParam !== 'all') {
       query = query.eq('status', statusParam)
     }
-  } else if (!statusParam || statusParam === 'cart') {
-    query = query.eq('status', 'cart')
+  } else if (isActiveCartRequest) {
+    query = query.in('status', ['cart', 'ordered'])
   } else if (statusParam !== 'all') {
     query = query.eq('status', statusParam)
   }
@@ -81,14 +97,44 @@ export async function GET(request: Request) {
   const { data: items, error } = await query
 
   if (error) {
-    return NextResponse.json({ error: 'Failed to load cart' }, { status: 500 })
+    return cartJson({ error: 'Failed to load cart' }, { status: 500 })
   }
 
   type CartRow = {
+    status?: string | null
+    order_id?: string | null
     creations?: { preview_job_id?: string | null } | null
     [key: string]: unknown
   }
-  const cartItems: CartRow[] = (items ?? []) as CartRow[]
+  let cartItems: CartRow[] = (items ?? []) as CartRow[]
+  if (isActiveCartRequest) {
+    const linkedOrderIds = Array.from(
+      new Set(
+        cartItems
+          .map((row) => String(row.order_id || '').trim())
+          .filter(Boolean)
+      )
+    )
+    let linkedOrders: Array<{
+      order_id: string
+      order_status: string | null
+      payment_id: string | null
+    }> = []
+
+    if (linkedOrderIds.length > 0) {
+      const { data: orders, error: ordersError } = await supabaseAdmin
+        .from('orders')
+        .select('order_id, order_status, payment_id')
+        .in('order_id', linkedOrderIds)
+
+      if (ordersError) {
+        return cartJson({ error: 'Failed to load cart order state' }, { status: 500 })
+      }
+      linkedOrders = orders ?? []
+    }
+
+    cartItems = filterActiveCartItems(cartItems, linkedOrders)
+  }
   const jobIds = cartItems
     .map((row) => row.creations?.preview_job_id)
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
@@ -104,7 +150,7 @@ export async function GET(request: Request) {
     }
   })
 
-  return NextResponse.json({ items: enriched })
+  return cartJson({ items: enriched })
 }
 
 export async function POST(request: Request) {

@@ -526,7 +526,7 @@ export const Footer: React.FC = () => {
               <h3 className="text-base font-semibold text-gray-900">{t('footer.customerArea')}</h3>
               <ul className="space-y-2 text-gray-600">
                 <li>
-                  <Link href="/favorites" className="hover:text-amber-600">
+                  <Link href="/account" className="hover:text-amber-600">
                     {t('footer.myAccount')}
                   </Link>
                 </li>
