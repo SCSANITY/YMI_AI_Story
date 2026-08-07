@@ -3,10 +3,16 @@ import { requireAdminCustomer } from '@/lib/adminAuth'
 import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers)
+  headers.set('Cache-Control', 'no-store')
+  return NextResponse.json(body, { ...init, headers })
+}
+
 export async function GET() {
   const admin = await requireAdminCustomer()
   if (!admin) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    return jsonNoStore({ error: 'Admin access required' }, { status: 403 })
   }
 
   const { data, error } = await supabaseAdmin
@@ -24,13 +30,11 @@ export async function GET() {
         total_pages,
         approved_pages,
         release_mode,
-        pdf_path,
         released_at,
         email_sent_at,
         print_status,
         print_completed_pages,
         print_released_at,
-        print_package_path,
         error_message,
         created_at,
         updated_at,
@@ -45,7 +49,7 @@ export async function GET() {
     .limit(100)
 
   if (error) {
-    return NextResponse.json({ error: error.message || 'Failed to load final jobs' }, { status: 500 })
+    return jsonNoStore({ error: error.message || 'Failed to load final jobs' }, { status: 500 })
   }
 
   const finalJobs = (data ?? []).map((row) => {
@@ -56,5 +60,5 @@ export async function GET() {
     }
   })
 
-  return NextResponse.json({ finalJobs })
+  return jsonNoStore({ finalJobs })
 }

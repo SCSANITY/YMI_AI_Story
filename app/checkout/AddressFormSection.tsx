@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
+import { CheckoutEmailOwnershipHint } from './CheckoutEmailOwnershipHint';
 
 type ShippingMethodCode = 'standard' | 'speedy';
 
@@ -103,6 +104,7 @@ type AddressFormSectionProps = {
   language: string;
   selectedCurrency: CheckoutCurrency;
   userCustomerId?: string | null;
+  isAuthResolved: boolean;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   onComplete: (payload: {
     form: CheckoutAddressForm;
@@ -226,6 +228,7 @@ function AddressFormSectionComponent({
   language,
   selectedCurrency,
   userCustomerId,
+  isAuthResolved,
   t,
   onComplete,
 }: AddressFormSectionProps) {
@@ -775,6 +778,11 @@ function AddressFormSectionComponent({
                 ))}
               </div>
             ) : null}
+            <CheckoutEmailOwnershipHint
+              isAuthResolved={isAuthResolved}
+              isSignedIn={Boolean(userCustomerId)}
+              t={t}
+            />
           </div>
         </div>
       </div>

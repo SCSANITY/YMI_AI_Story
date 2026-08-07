@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server'
+import {
+  buildSignedPreviewResponse,
+  selectPreviewSignTargets,
+  type StoredPreviewPage,
+} from '@/lib/preview-page-contract'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const NO_STORE_HEADERS = {
@@ -76,7 +81,9 @@ export async function GET(
     | {
         storage_path?: string
         bucket?: string
-        pages?: { page_index: number; preview_order?: number; storage_path: string; storage_path_full?: string }[]
+        schema_version?: number
+        asset_layout?: string
+        pages?: StoredPreviewPage[]
       }
     | null
   const bucket = outputAssets?.bucket || 'raw-private'
@@ -91,61 +98,23 @@ export async function GET(
     return jsonNoStore({ error: 'Preview not ready' }, 400)
   }
 
-  const sortedPages = [...pages].sort((a, b) => {
-    const orderA = typeof a.preview_order === 'number' ? a.preview_order : Number.MAX_SAFE_INTEGER
-    const orderB = typeof b.preview_order === 'number' ? b.preview_order : Number.MAX_SAFE_INTEGER
-    if (orderA !== orderB) {
-      return orderA - orderB
-    }
-    return a.page_index - b.page_index
+  const signTargets = selectPreviewSignTargets({
+    pages,
+    pagesParam,
+    limitParam,
+    sizeParam,
+    legacyStoragePath: outputAssets?.storage_path,
   })
 
-  let requestedIndices: number[] | null = null
-  if (pagesParam) {
-    requestedIndices = pagesParam
-      .split(',')
-      .map((value) => Number.parseInt(value.trim(), 10))
-      .filter((value) => Number.isFinite(value))
-  } else if (limitParam) {
-    const limit = Number.parseInt(limitParam, 10)
-    if (Number.isFinite(limit) && limit > 0) {
-      requestedIndices = sortedPages.slice(0, limit).map((page) => page.page_index)
-    }
-  }
-
-  const pagePaths = requestedIndices?.length
-    ? requestedIndices
-        .map((index) => sortedPages.find((page) => page.page_index === index))
-        .filter(Boolean)
-        .map((page) => {
-          const pageData = page as { page_index: number; storage_path: string; storage_path_full?: string }
-          if (sizeParam === 'full' && pageData.storage_path_full) {
-            return pageData.storage_path_full
-          }
-          return pageData.storage_path
-        })
-    : []
-
-  const storagePaths = pagePaths.length
-    ? pagePaths
-    : outputAssets?.storage_path
-    ? [outputAssets.storage_path]
-    : sortedPages.map((page) => {
-        if (sizeParam === 'full' && page.storage_path_full) {
-          return page.storage_path_full
-        }
-        return page.storage_path
-      })
-
-  if (!storagePaths.length) {
+  if (!signTargets.length) {
     return jsonNoStore({ error: 'Preview asset missing' }, 400)
   }
 
   const signedResults = await Promise.all(
-    storagePaths.map(async (path) => {
+    signTargets.map(async (target) => {
       const { data: signed, error: signedError } = await supabaseAdmin.storage
         .from(bucket)
-        .createSignedUrl(path, 60 * 10)
+        .createSignedUrl(target.storagePath, 60 * 10)
       if (signedError || !signed?.signedUrl) {
         throw new Error('Failed to sign URL')
       }
@@ -156,11 +125,12 @@ export async function GET(
   if (!signedResults) {
     return jsonNoStore({ error: 'Failed to sign URL' }, 500)
   }
-  const signedUrls = signedResults
-
-  if (signedUrls.length === 1) {
-    return jsonNoStore({ url: signedUrls[0] })
-  }
-
-  return jsonNoStore({ urls: signedUrls })
+  return jsonNoStore(
+    buildSignedPreviewResponse({
+      targets: signTargets,
+      signedUrls: signedResults,
+      schemaVersion: outputAssets?.schema_version,
+      assetLayout: outputAssets?.asset_layout,
+    })
+  )
 }

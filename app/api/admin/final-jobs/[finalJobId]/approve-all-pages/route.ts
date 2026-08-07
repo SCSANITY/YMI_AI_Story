@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import {
+  FinalReviewMutationContractError,
+  resolveFinalReviewMutationPage,
+} from '@/lib/final-review-mutation-contract'
+import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
+import {
+  approveFinalReviewTasks,
+  type FinalReviewApprovalTask,
+} from '@/lib/final-review-batch-approval'
 import { getFinalPagePath, refreshFinalJobApprovalState } from '@/lib/finalReview'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type PageIntentMap = Record<string, string>
-type ApprovalTask = {
-  finalJobPageId: string
-  pageIndex: number
-  sourcePath: string
-  approvedPath: string
-  approvedSource: 'ai' | 'manual'
-  reviewIntentId: string
-}
-
 function getPageIntent(pageIntents: PageIntentMap, pageIndex: number) {
   const value = pageIntents[String(pageIndex)]
   return typeof value === 'string' && value.trim() ? value.trim() : crypto.randomUUID()
@@ -33,7 +33,7 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, order_id')
+    .select('final_job_id, job_id, order_id, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob?.order_id) {
@@ -50,6 +50,21 @@ export async function POST(
     return NextResponse.json({ error: pagesError?.message || 'Final pages not found' }, { status: 404 })
   }
 
+  let mutationPlan
+  try {
+    mutationPlan = await loadFinalReviewMutationPlan({
+      finalJobId,
+      jobId: finalJob.job_id,
+      totalPages: Number(finalJob.total_pages),
+      reviewPageIndices: pages.map((page) => Number(page.page_index)),
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to resolve Final page contract' },
+      { status: error instanceof FinalReviewMutationContractError ? 409 : 500 }
+    )
+  }
+
   const now = new Date().toISOString()
   const results: Array<{
     pageIndex: number
@@ -58,9 +73,9 @@ export async function POST(
     skipped?: boolean
     error?: string
   }> = []
-  const tasks: ApprovalTask[] = []
+  const tasks: FinalReviewApprovalTask[] = []
 
-  for (const [orderIndex, page] of pages.entries()) {
+  for (const page of pages) {
     if (page.status === 'processing' || page.status === 'rerunning' || page.status === 'failed') {
       results.push({ pageIndex: page.page_index, skipped: true, error: `Page status is ${page.status}` })
       continue
@@ -74,7 +89,11 @@ export async function POST(
 
     const reviewIntentId = getPageIntent(pageIntents, page.page_index)
     const approvedSource = page.manual_output_path ? 'manual' : 'ai'
-    const approvedPath = getFinalPagePath(finalJob.order_id, orderIndex + 1)
+    const storagePageNumber = resolveFinalReviewMutationPage(
+      mutationPlan,
+      Number(page.page_index)
+    ).storage_page_number
+    const approvedPath = getFinalPagePath(finalJob.order_id, storagePageNumber)
     tasks.push({
       finalJobPageId: page.final_job_page_id,
       pageIndex: page.page_index,
@@ -85,62 +104,11 @@ export async function POST(
     })
   }
 
-  for (const task of tasks) {
-    const { error: intentError } = await supabaseAdmin
-      .from('final_job_pages')
-      .update({
-        review_intent_id: task.reviewIntentId,
-        review_intent_type: 'approve_all',
-        review_intent_at: now,
-        updated_at: now,
-      })
-      .eq('final_job_page_id', task.finalJobPageId)
-
-    if (intentError) {
-      results.push({ pageIndex: task.pageIndex, error: intentError.message || 'Failed to set review intent' })
-    }
-  }
-
-  const blockedPageIndexes = new Set(results.map((result) => result.pageIndex))
-  for (const task of tasks) {
-    if (blockedPageIndexes.has(task.pageIndex)) continue
-
-    if (task.sourcePath !== task.approvedPath) {
-      await supabaseAdmin.storage.from('raw-private').remove([task.approvedPath])
-      const { error: copyError } = await supabaseAdmin.storage.from('raw-private').copy(task.sourcePath, task.approvedPath)
-      if (copyError) {
-        results.push({ pageIndex: task.pageIndex, error: copyError.message || 'Failed to copy approved image' })
-        continue
-      }
-    }
-
-    const { data: updatedPage, error: updateError } = await supabaseAdmin
-      .from('final_job_pages')
-      .update({
-        status: 'approved',
-        approved_output_path: task.approvedPath,
-        approved_source: task.approvedSource,
-        reviewed_by: admin.customer_id,
-        reviewed_at: now,
-        error_message: null,
-        updated_at: now,
-      })
-      .eq('final_job_page_id', task.finalJobPageId)
-      .eq('review_intent_id', task.reviewIntentId)
-      .select('final_job_page_id')
-      .maybeSingle()
-
-    if (updateError) {
-      results.push({ pageIndex: task.pageIndex, error: updateError.message || 'Failed to approve page' })
-      continue
-    }
-    if (!updatedPage?.final_job_page_id) {
-      results.push({ pageIndex: task.pageIndex, approvedPath: task.approvedPath, superseded: true })
-      continue
-    }
-
-    results.push({ pageIndex: task.pageIndex, approvedPath: task.approvedPath, superseded: false })
-  }
+  results.push(...await approveFinalReviewTasks({
+    tasks,
+    reviewedBy: admin.customer_id,
+    reviewedAt: now,
+  }))
 
   await refreshFinalJobApprovalState(finalJobId)
 

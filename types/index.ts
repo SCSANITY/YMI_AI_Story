@@ -14,6 +14,15 @@ export type MagicAttribute = {
   percent: number;
 }
 
+export type TemplateFinalPreviewPage = {
+  pageIndex: number;
+  url: string;
+  role: 'final_back_cover' | 'final_front_cover' | 'final_interior';
+  spreadIndex: number;
+  side: 'left' | 'right';
+  pageNumber: number | null;
+}
+
 export interface Book {
   bookID: string;
   title: string;
@@ -24,6 +33,7 @@ export interface Book {
   coverUrl: string;
   showcaseImages: string[];
   finalPreviewImages?: string[];
+  finalPreviewPages?: TemplateFinalPreviewPage[];
   description: string;
   innerDescription?: string;
   category: string;

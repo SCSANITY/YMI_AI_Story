@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import {
+  FinalReviewMutationContractError,
+  resolveFinalReviewMutationPage,
+} from '@/lib/final-review-mutation-contract'
+import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function POST(
@@ -19,10 +24,14 @@ export async function POST(
 
   const body = await request.json().catch(() => ({}))
   const reviewNote = String(body?.reviewNote ?? body?.note ?? '').trim().slice(0, 1000)
+  const reviewIntentId =
+    typeof body?.reviewIntentId === 'string' && body.reviewIntentId.trim()
+      ? body.reviewIntentId.trim()
+      : crypto.randomUUID()
 
   const { data: finalJob } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, review_status')
+    .select('final_job_id, job_id, order_id, review_status, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (!finalJob?.job_id) {
@@ -39,9 +48,23 @@ export async function POST(
     return NextResponse.json({ error: 'Final page not found' }, { status: 404 })
   }
 
+  try {
+    const plan = await loadFinalReviewMutationPlan({
+      finalJobId,
+      jobId: finalJob.job_id,
+      totalPages: Number(finalJob.total_pages),
+    })
+    resolveFinalReviewMutationPage(plan, pageIndex)
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to resolve Final page contract' },
+      { status: error instanceof FinalReviewMutationContractError ? 409 : 500 }
+    )
+  }
+
   const now = new Date().toISOString()
   const nextAttemptCount = Number(page.attempt_count ?? 0) + 1
-  const { error: pageUpdateError } = await supabaseAdmin
+  const { data: updatedPage, error: pageUpdateError } = await supabaseAdmin
     .from('final_job_pages')
     .update({
       status: 'rerunning',
@@ -50,12 +73,21 @@ export async function POST(
       reviewed_at: now,
       attempt_count: nextAttemptCount,
       error_message: null,
+      review_intent_id: reviewIntentId,
+      review_intent_type: 'needs_fix',
+      review_intent_at: now,
       updated_at: now,
     })
     .eq('final_job_page_id', page.final_job_page_id)
+    .in('status', ['pending_review', 'approved', 'replaced', 'needs_fix'])
+    .select('final_job_page_id')
+    .maybeSingle()
 
   if (pageUpdateError) {
     return NextResponse.json({ error: pageUpdateError.message || 'Failed to mark page for rerun' }, { status: 500 })
+  }
+  if (!updatedPage?.final_job_page_id) {
+    return NextResponse.json({ ok: true, superseded: true })
   }
 
   const { data: currentJob } = await supabaseAdmin
@@ -98,7 +130,9 @@ export async function POST(
 
   return NextResponse.json({
     ok: true,
+    superseded: false,
     requeuedPageIndex: pageIndex,
     previousFinalPageIndices: existingPageIndices,
+    reviewIntentId,
   })
 }

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Package } from 'lucide-react'
+import { ArrowLeft, Package, ShieldCheck, UserX } from 'lucide-react'
 import { Button } from '@/components/Button'
+import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import {
   getOrderStatusLabelKey,
@@ -13,6 +14,29 @@ import {
 import { LogisticsTracker } from './LogisticsTracker'
 import { OrderDetailPanels } from './OrderDetailPanels'
 import type { OrderDetail } from './orderDetailTypes'
+
+type OrderDetailLoadState =
+  | 'loading'
+  | 'ready'
+  | 'secure_access'
+  | 'account_mismatch'
+  | 'not_found'
+  | 'unavailable'
+
+type SettledOrderDetailLoadState = Exclude<OrderDetailLoadState, 'loading'>
+
+type OrderDetailLoadResult = {
+  requestKey: string
+  loadState: SettledOrderDetailLoadState
+  order: OrderDetail | null
+}
+
+function resolveOrderDetailFailureState(status: number): SettledOrderDetailLoadState {
+  if (status === 401) return 'secure_access'
+  if (status === 403) return 'account_mismatch'
+  if (status === 404) return 'not_found'
+  return 'unavailable'
+}
 
 function OrderDetailLoadingShell({
   orderId,
@@ -99,69 +123,127 @@ function OrderDetailLoadingShell({
 
 export default function OrderDetailPage() {
   const { t } = useI18n()
+  const { isAuthResolved, openLoginModal, user } = useGlobalContext()
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
   const orderId = typeof params?.orderID === 'string' ? params.orderID : ''
   const sessionId = searchParams.get('session_id') || ''
-  const [order, setOrder] = useState<OrderDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const customerId = user?.customerId ?? ''
+  const requestKey = `${orderId}:${sessionId}:${customerId || 'guest'}`
+  const [loadResult, setLoadResult] = useState<OrderDetailLoadResult | null>(null)
 
   useEffect(() => {
-    if (!orderId) return
+    if (!isAuthResolved || !orderId) return
     let cancelled = false
-    setLoading(true)
     const detailUrl = sessionId
       ? `/api/orders/${encodeURIComponent(orderId)}?session_id=${encodeURIComponent(sessionId)}`
       : `/api/orders/${encodeURIComponent(orderId)}`
     fetch(detailUrl, { credentials: 'include', cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : { order: null, items: [] }))
+      .then(async (res) => {
+        if (!res.ok) {
+          return { failureState: resolveOrderDetailFailureState(res.status), data: null }
+        }
+        return { failureState: null, data: await res.json() }
+      })
       .then((data) => {
         if (cancelled) return
-        if (!data?.order) {
-          setOrder(null)
+        if (data.failureState) {
+          setLoadResult({
+            requestKey,
+            loadState: data.failureState,
+            order: null,
+          })
           return
         }
-        setOrder({
-          order_id: data.order.id,
-          display_id: data.order.displayId,
-          order_status: data.order.status,
-          created_at: data.order.createdAt,
-          email: data.order.email,
-          total: data.total,
-          final_pdf_url: data.order.finalPdfUrl,
-          display_currency: data.displayCurrency,
-          shipping_address: data.order.shippingAddress,
-          tracking_number: data.order.trackingNumber,
-          tracking_carrier: data.order.trackingCarrier,
-          tracking_url: data.order.trackingUrl,
-          logistics_note: data.order.logisticsNote,
-          logistics_updated_at: data.order.logisticsUpdatedAt,
-          items: Array.isArray(data.items) ? data.items : [],
+        if (!data.data?.order) {
+          setLoadResult({ requestKey, loadState: 'not_found', order: null })
+          return
+        }
+        setLoadResult({
+          requestKey,
+          loadState: 'ready',
+          order: {
+            order_id: data.data.order.id,
+            display_id: data.data.order.displayId,
+            order_status: data.data.order.status,
+            created_at: data.data.order.createdAt,
+            email: data.data.order.email,
+            total: data.data.total,
+            final_pdf_url: data.data.order.finalPdfUrl,
+            display_currency: data.data.displayCurrency,
+            shipping_address: data.data.order.shippingAddress,
+            tracking_number: data.data.order.trackingNumber,
+            tracking_carrier: data.data.order.trackingCarrier,
+            tracking_url: data.data.order.trackingUrl,
+            logistics_note: data.data.order.logisticsNote,
+            logistics_updated_at: data.data.order.logisticsUpdatedAt,
+            items: Array.isArray(data.data.items) ? data.data.items : [],
+          },
         })
       })
-      .catch(() => { if (!cancelled) setOrder(null) })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .catch(() => {
+        if (cancelled) return
+        setLoadResult({ requestKey, loadState: 'unavailable', order: null })
+      })
     return () => { cancelled = true }
-  }, [orderId, sessionId])
+  }, [customerId, isAuthResolved, orderId, requestKey, sessionId])
 
-  if (loading) {
+  const currentResult = loadResult?.requestKey === requestKey ? loadResult : null
+  const loadState: OrderDetailLoadState = !orderId
+    ? 'not_found'
+    : !isAuthResolved || !currentResult
+      ? 'loading'
+      : currentResult.loadState
+  const order = currentResult?.order ?? null
+
+  if (loadState === 'loading') {
     return <OrderDetailLoadingShell orderId={orderId} t={t} onBack={() => router.push('/orders')} />
   }
 
-  if (!order) {
+  if (loadState !== 'ready' || !order) {
+    const isSecureAccess = loadState === 'secure_access'
+    const isAccountMismatch = loadState === 'account_mismatch'
+    const isUnavailable = loadState === 'unavailable'
+    const Icon = isSecureAccess ? ShieldCheck : isAccountMismatch ? UserX : Package
+    const titleKey = isSecureAccess
+      ? 'orderDetail.secureAccessTitle'
+      : isAccountMismatch
+        ? 'orderDetail.accountMismatchTitle'
+        : isUnavailable
+          ? 'orderDetail.unavailableTitle'
+          : 'orderDetail.notFoundTitle'
+    const descriptionKey = isSecureAccess
+      ? 'orderDetail.secureAccessDescription'
+      : isAccountMismatch
+        ? 'orderDetail.accountMismatchDescription'
+        : isUnavailable
+          ? 'orderDetail.unavailableDescription'
+          : 'orderDetail.notFoundDescription'
+
     return (
       <div className="page-surface min-h-screen">
         <div className="max-w-5xl mx-auto px-4 md:px-8 pt-24 pb-16">
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-center">
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
-              <Package className="h-6 w-6 text-amber-600" />
+              <Icon className="h-6 w-6 text-amber-600" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('orderDetail.notFoundTitle')}</h1>
-            <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">{t('orderDetail.notFoundDescription')}</p>
-            <Button size="lg" className="mt-6 rounded-full px-8" onClick={() => router.push('/orders')}>
-              {t('orderDetail.backToOrders')}
-            </Button>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t(titleKey)}</h1>
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">{t(descriptionKey)}</p>
+            {isSecureAccess ? (
+              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                <Button size="lg" className="rounded-full px-8" onClick={() => openLoginModal('login')}>
+                  {t('orders.signIn')}
+                </Button>
+                <Button size="lg" variant="outline" className="rounded-full px-8" onClick={() => openLoginModal('signup')}>
+                  {t('orders.createAccount')}
+                </Button>
+              </div>
+            ) : (
+              <Button size="lg" className="mt-6 rounded-full px-8" onClick={() => router.push('/orders')}>
+                {t('orderDetail.backToOrders')}
+              </Button>
+            )}
           </div>
         </div>
       </div>

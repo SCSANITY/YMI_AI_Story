@@ -1,4 +1,5 @@
 const DEFAULT_BOOK_TITLE = 'Custom Story Book'
+const WINDOWS_RESERVED_FILE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
 
 type UnknownRecord = Record<string, unknown>
 
@@ -122,8 +123,26 @@ export function resolveFinalJobDisplayTitle(input: {
   const template = asRelationRecord(creation?.templates)
 
   return resolvePersonalizedBookTitle({
-    templateId: input.template_id,
+    templateId: input.template_id ?? creation?.template_id,
     templateName: template?.name,
     customizeSnapshot: creation?.customize_snapshot,
   })
+}
+
+export function buildSafeBookDownloadBaseName(title: unknown) {
+  const normalized = String(title ?? '')
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\.pdf$/i, '')
+    .replace(/[. ]+$/g, '')
+    .trim()
+  const bounded = Array.from(normalized || DEFAULT_BOOK_TITLE).slice(0, 120).join('').trim()
+  const safeBase = WINDOWS_RESERVED_FILE_NAME.test(bounded) ? `YMI ${bounded}` : bounded
+  return safeBase || DEFAULT_BOOK_TITLE
+}
+
+export function buildPersonalizedBookPdfFileName(title: unknown) {
+  return `${buildSafeBookDownloadBaseName(title)}.pdf`
 }

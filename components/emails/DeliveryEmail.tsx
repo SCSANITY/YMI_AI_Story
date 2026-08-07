@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Link, Section, Text } from '@react-email/components'
 import { EmailLayout, SignoffStamp, emailTheme, emailButtons } from './EmailLayout'
 import { BookCoverCard } from './BookCoverCard'
+import { OrderAccessNotice } from './OrderAccessNotice'
 
 type DeliveryEmailProps = {
   orderUrl: string
@@ -49,6 +50,8 @@ export function DeliveryEmail({ orderUrl, displayId, orderId, downloadUrl, cover
           Open Order Page
         </Link>
       </Section>
+
+      <OrderAccessNotice />
 
       <SignoffStamp />
 

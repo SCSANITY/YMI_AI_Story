@@ -58,7 +58,7 @@ export function JobQueue({
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
                   <span>PDF {job.approved_pages}/{job.total_pages}</span>
-                  <span>Print {job.print_completed_pages}/{job.total_pages}</span>
+                  <span>Print {job.print_status}</span>
                   <span>{job.release_mode}</span>
                 </div>
               </button>

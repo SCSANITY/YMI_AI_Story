@@ -1,55 +1,12 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import {
+  FinalReviewMutationContractError,
+  resolveFinalReviewMutationPage,
+} from '@/lib/final-review-mutation-contract'
+import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
+import { getFinalPagePath, refreshFinalJobApprovalState } from '@/lib/finalReview'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-function finalPagePath(orderId: string, pageNumber: number) {
-  return `orders/${orderId}/final/pages/approved/page_${String(pageNumber).padStart(2, '0')}.png`
-}
-
-async function resolveFinalPageNumber(finalJobId: string, pageIndex: number) {
-  const { data, error } = await supabaseAdmin
-    .from('final_job_pages')
-    .select('page_index')
-    .eq('final_job_id', finalJobId)
-    .order('page_index', { ascending: true })
-
-  if (error || !data?.length) {
-    throw new Error(error?.message || 'Failed to resolve final page order')
-  }
-
-  const resolved = data.findIndex((row) => row.page_index === pageIndex)
-  return resolved >= 0 ? resolved + 1 : null
-}
-
-async function refreshApprovedCount(finalJobId: string) {
-  const { data: finalJob } = await supabaseAdmin
-    .from('final_jobs')
-    .select('total_pages')
-    .eq('final_job_id', finalJobId)
-    .maybeSingle()
-
-  const { count } = await supabaseAdmin
-    .from('final_job_pages')
-    .select('final_job_page_id', { count: 'exact', head: true })
-    .eq('final_job_id', finalJobId)
-    .eq('status', 'approved')
-
-  const approvedCount = count ?? 0
-  await supabaseAdmin
-    .from('final_jobs')
-    .update({
-      approved_pages: approvedCount,
-      review_status:
-        finalJob?.total_pages && approvedCount >= finalJob.total_pages
-          ? 'approved'
-          : approvedCount > 0
-            ? 'in_review'
-            : 'pending',
-      status: 'review_pending',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('final_job_id', finalJobId)
-}
 
 export async function POST(
   request: Request,
@@ -68,7 +25,7 @@ export async function POST(
 
   const { data: finalJob } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, order_id')
+    .select('final_job_id, job_id, order_id, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (!finalJob?.order_id) {
@@ -88,9 +45,19 @@ export async function POST(
     return NextResponse.json({ error: `Page cannot be approved from status ${page.status}` }, { status: 409 })
   }
 
-  const finalPageNumber = await resolveFinalPageNumber(finalJobId, pageIndex)
-  if (!finalPageNumber) {
-    return NextResponse.json({ error: 'Final page order not found' }, { status: 404 })
+  let storagePageNumber: number
+  try {
+    const plan = await loadFinalReviewMutationPlan({
+      finalJobId,
+      jobId: finalJob.job_id,
+      totalPages: Number(finalJob.total_pages),
+    })
+    storagePageNumber = resolveFinalReviewMutationPage(plan, pageIndex).storage_page_number
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to resolve Final page contract' },
+      { status: error instanceof FinalReviewMutationContractError ? 409 : 500 }
+    )
   }
 
   const sourcePath = page.manual_output_path || page.ai_output_path
@@ -105,7 +72,7 @@ export async function POST(
       ? body.reviewIntentId.trim()
       : crypto.randomUUID()
   const now = new Date().toISOString()
-  const { error: intentError } = await supabaseAdmin
+  const { data: intentPage, error: intentError } = await supabaseAdmin
     .from('final_job_pages')
     .update({
       review_intent_id: reviewIntentId,
@@ -114,12 +81,18 @@ export async function POST(
       updated_at: now,
     })
     .eq('final_job_page_id', page.final_job_page_id)
+    .in('status', ['pending_review', 'approved', 'replaced', 'needs_fix'])
+    .select('final_job_page_id')
+    .maybeSingle()
 
   if (intentError) {
     return NextResponse.json({ error: intentError.message || 'Failed to set review intent' }, { status: 500 })
   }
+  if (!intentPage?.final_job_page_id) {
+    return NextResponse.json({ ok: true, superseded: true })
+  }
 
-  const approvedPath = finalPagePath(finalJob.order_id, finalPageNumber)
+  const approvedPath = getFinalPagePath(finalJob.order_id, storagePageNumber)
   if (sourcePath !== approvedPath) {
     await supabaseAdmin.storage.from('raw-private').remove([approvedPath])
     const { error: copyError } = await supabaseAdmin.storage
@@ -153,6 +126,6 @@ export async function POST(
     return NextResponse.json({ ok: true, superseded: true, approvedPath })
   }
 
-  await refreshApprovedCount(finalJobId)
+  await refreshFinalJobApprovalState(finalJobId)
   return NextResponse.json({ ok: true, superseded: false, approvedPath, reviewIntentId })
 }

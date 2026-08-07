@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  buildPersonalizedBookPdfFileName,
+  buildSafeBookDownloadBaseName,
   resolveCartItemDisplayTitle,
   resolveChildNameFromCustomization,
   resolveFinalJobDisplayTitle,
@@ -73,4 +75,15 @@ test('legacy final jobs without a creation use a cleaned template title', () => 
     }),
     'Birthdaygirl Story'
   )
+})
+
+test('personalized PDF filename preserves readable names while removing header and path hazards', () => {
+  assert.equal(
+    buildPersonalizedBookPdfFileName("  Mia/Leo's Birthday: Story\r\n.pdf  "),
+    "Mia Leo's Birthday Story.pdf"
+  )
+  assert.equal(buildPersonalizedBookPdfFileName('CON'), 'YMI CON.pdf')
+  assert.equal(buildPersonalizedBookPdfFileName('Mia Story. .pdf'), 'Mia Story.pdf')
+  assert.equal(buildPersonalizedBookPdfFileName(''), 'Custom Story Book.pdf')
+  assert.equal(buildSafeBookDownloadBaseName('Mia/Story'), 'Mia Story')
 })

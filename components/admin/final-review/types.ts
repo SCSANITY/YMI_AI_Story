@@ -4,5 +4,5 @@ export type ReviewPendingState = Record<
   string,
   { action: ReviewPendingAction; intentId: string }
 >
-export type UploadPendingKind = 'replacement' | 'print'
+export type UploadPendingKind = 'replacement'
 export type UploadPendingState = Record<string, UploadPendingKind>

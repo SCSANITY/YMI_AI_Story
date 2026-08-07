@@ -14,10 +14,14 @@ import {
   getOrderDisplayCurrency,
   getOrderDisplayTotal,
 } from '@/lib/order-display'
-import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import {
+  buildPersonalizedBookPdfFileName,
+  resolveFinalJobDisplayTitle,
+  resolvePersonalizedBookTitle,
+} from '@/lib/personalized-book-title'
 import {
   loadReleasedFinalPdfAssetsByJobId,
-  resolveLatestReleasedFinalPdfPath,
+  resolveLatestReleasedFinalPdfAsset,
 } from '@/lib/purchase-state'
 
 const ORDER_DETAIL_CACHE_CONTROL = 'private, no-store, max-age=0'
@@ -174,13 +178,17 @@ export async function GET(
   })
 
   let finalPdfUrl: string | null = null
-  const finalPdfPath = resolveLatestReleasedFinalPdfPath(finalJobIds, finalPdfAssetsByJobId)
+  const finalPdfAsset = resolveLatestReleasedFinalPdfAsset(finalJobIds, finalPdfAssetsByJobId)
 
-  if (finalPdfPath) {
+  if (finalPdfAsset) {
+    const finalPdfItem = cartItems.find((item: any) => item.final_job_id === finalPdfAsset.jobId)
+    const finalPdfTitle = resolveFinalJobDisplayTitle({
+      creations: finalPdfItem?.creations,
+    })
     const { data: signedPdf } = await supabaseAdmin.storage
       .from(STORAGE_BUCKET)
-      .createSignedUrl(finalPdfPath, FINAL_PDF_SIGN_TTL_SECONDS, {
-        download: `final-${order.order_id}.pdf`,
+      .createSignedUrl(finalPdfAsset.pdfPath, FINAL_PDF_SIGN_TTL_SECONDS, {
+        download: buildPersonalizedBookPdfFileName(finalPdfTitle),
       })
     finalPdfUrl = signedPdf?.signedUrl ?? null
   }

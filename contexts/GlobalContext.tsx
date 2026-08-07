@@ -457,8 +457,6 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          email,
-          authUserId: authUserId ?? null,
           displayName: metadata?.displayName ?? null,
           favorites,
           cart,

@@ -9,18 +9,9 @@ import {
 import { FinalReviewStage } from '@/components/admin/final-review/FinalReviewStage'
 import { JobQueue } from '@/components/admin/final-review/JobQueue'
 import { PdfVersionReview } from '@/components/admin/final-review/PdfVersionReview'
-import { PrintPageDialog } from '@/components/admin/final-review/PrintPageDialog'
 import { PrintVersionReview } from '@/components/admin/final-review/PrintVersionReview'
-import {
-  pageNumberLabel,
-  pagePreviewUrl,
-} from '@/components/admin/final-review/reviewUi'
+import { pagePreviewUrl } from '@/components/admin/final-review/reviewUi'
 import { StatCard } from '@/components/admin/final-review/StatCard'
-import {
-  getPageImageSource,
-  getThumbCacheKey,
-  warmAdminThumbnails,
-} from '@/components/admin/final-review/thumbnail'
 import type {
   ReviewPendingAction,
   ReviewPendingState,
@@ -29,6 +20,19 @@ import type {
   UploadPendingState,
 } from '@/components/admin/final-review/types'
 import type { FinalJobDetail, FinalJobPageRow, FinalJobSummary } from '@/lib/finalReview'
+import { getFinalReviewPageLabel } from '@/lib/admin-final-review-workspace'
+import {
+  downloadApprovedSourceZip,
+  downloadSingleApprovedSource,
+  requestApprovedSourceZipDestination,
+  type ApprovedSourceExportResponse,
+} from '@/lib/admin-approved-source-export-client'
+import { buildSafeBookDownloadBaseName } from '@/lib/personalized-book-title'
+import {
+  validateManualPrintUpload,
+  type ManualPrintArtifactClient,
+} from '@/lib/manual-print-artifact'
+import { supabase } from '@/lib/supabase'
 
 type ApiResponse<T> = { error?: string } & T
 type UploadTarget = { finalJobId: string; page: FinalJobPageRow }
@@ -43,9 +47,15 @@ type ReleaseResponse = {
 }
 type PrintReleaseResponse = {
   finalJobId?: string
+  artifactId?: string | null
   printReleasedAt?: string | null
-  printCompletedPages?: number
   alreadyReleased?: boolean
+}
+type PrintUploadSpec = {
+  artifactId: string
+  bucket: string
+  storagePath: string
+  token: string
 }
 type BusyActionState = Record<string, string>
 
@@ -55,7 +65,11 @@ function createReviewIntentId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16)
+    const value = character === 'x' ? random : (random & 0x3) | 0x8
+    return value.toString(16)
+  })
 }
 
 function pickDefaultJob(jobs: FinalJobSummary[]) {
@@ -87,11 +101,9 @@ export function FinalReviewPanel() {
   const [reviewPendingByPage, setReviewPendingByPage] = useState<ReviewPendingState>({})
   const [uploadPendingByPage, setUploadPendingByPage] = useState<UploadPendingState>({})
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
-  const [printUploadTarget, setPrintUploadTarget] = useState<UploadTarget | null>(null)
   const [activeVersion, setActiveVersion] = useState<ReviewVersion>('pdf')
-  const [selectedPrintPage, setSelectedPrintPage] = useState<FinalJobPageRow | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const printFileInputRef = useRef<HTMLInputElement | null>(null)
+  const printPackageInputRef = useRef<HTMLInputElement | null>(null)
   const reviewIntentRef = useRef<Record<string, string>>({})
   const jobsRequestIntentRef = useRef(0)
   const jobsAbortControllerRef = useRef<AbortController | null>(null)
@@ -146,7 +158,6 @@ export function FinalReviewPanel() {
         page.final_job_page_id === pageId ? { ...page, ...patch } : page
       )
       const approvedPages = nextPages.filter((page) => page.status === 'approved').length
-      const printCompletedPages = nextPages.filter((page) => page.print_status === 'completed').length
       const nextFinalJob = {
         ...current.finalJob,
         approved_pages: approvedPages,
@@ -154,17 +165,6 @@ export function FinalReviewPanel() {
           current.finalJob.review_status === 'released'
             ? current.finalJob.review_status
             : derivePdfReviewStatus(approvedPages, current.finalJob.total_pages),
-        print_completed_pages: printCompletedPages,
-        print_status:
-          current.finalJob.print_status === 'released'
-            ? current.finalJob.print_status
-            : current.finalJob.print_status === 'locked'
-              ? current.finalJob.print_status
-              : printCompletedPages >= current.finalJob.total_pages
-                ? 'ready'
-                : printCompletedPages > 0
-                  ? 'in_review'
-                  : 'pending',
         updated_at: new Date().toISOString(),
       } satisfies FinalJobSummary
       setJobs((currentJobs) =>
@@ -174,8 +174,6 @@ export function FinalReviewPanel() {
                 ...job,
                 approved_pages: nextFinalJob.approved_pages,
                 review_status: nextFinalJob.review_status,
-                print_completed_pages: nextFinalJob.print_completed_pages,
-                print_status: nextFinalJob.print_status,
                 updated_at: nextFinalJob.updated_at,
               }
             : job
@@ -349,6 +347,7 @@ export function FinalReviewPanel() {
         if (!current || current.finalJob.final_job_id !== finalJobId) return current
         return {
           ...current,
+          print_artifact: data.print_artifact,
           pages: current.pages.map((page) => {
             const signedPage = signedPages.get(page.final_job_page_id)
             if (!signedPage) return page
@@ -357,7 +356,6 @@ export function FinalReviewPanel() {
               ai_url: signedPage.ai_url ?? null,
               manual_url: signedPage.manual_url ?? null,
               approved_url: signedPage.approved_url ?? null,
-              print_url: signedPage.print_url ?? null,
             }
           }),
         }
@@ -439,14 +437,6 @@ export function FinalReviewPanel() {
     void loadDetail(selectedJobId)
   }, [loadDetail, selectedJobId])
 
-  useEffect(() => {
-    if (!selectedPrintPage || !detail?.pages.length) return
-    const updatedPage = detail.pages.find((page) => page.final_job_page_id === selectedPrintPage.final_job_page_id)
-    if (updatedPage && updatedPage !== selectedPrintPage) {
-      setSelectedPrintPage(updatedPage)
-    }
-  }, [detail?.pages, selectedPrintPage])
-
   const refresh = useCallback(async () => {
     const finalJobId = selectedJobIdRef.current
     await Promise.all([
@@ -456,9 +446,7 @@ export function FinalReviewPanel() {
   }, [loadDetail, loadJobs])
 
   const handleSelectJob = useCallback((finalJobId: string) => {
-    setSelectedPrintPage(null)
     setUploadTarget(null)
-    setPrintUploadTarget(null)
     setSelectedJobId(finalJobId)
   }, [])
 
@@ -475,7 +463,7 @@ export function FinalReviewPanel() {
     if (!selectedJobId) return
     const finalJobId = selectedJobId
     const previous = { ...page }
-    const approvedSource = page.manual_output_path ? 'manual' : 'ai'
+    const approvedSource = page.has_manual_output ? 'manual' : 'ai'
     const reviewIntentId = createReviewIntentId()
     setPageReviewPending(page.final_job_page_id, 'approve', reviewIntentId)
     setError('')
@@ -502,7 +490,7 @@ export function FinalReviewPanel() {
       if (!response.ok) throw new Error(payload.error || 'Failed to approve page')
       if (reviewIntentRef.current[page.final_job_page_id] !== reviewIntentId || payload.superseded) return
       patchPage(finalJobId, page.final_job_page_id, {
-        approved_output_path: payload.approvedPath || page.approved_output_path,
+        has_approved_output: Boolean(payload.approvedPath) || page.has_approved_output,
         updated_at: new Date().toISOString(),
       })
     } catch (actionError) {
@@ -579,7 +567,7 @@ export function FinalReviewPanel() {
       setPageReviewPending(page.final_job_page_id, 'approve_all', reviewIntentId)
       patchPage(finalJobId, page.final_job_page_id, {
         status: 'approved',
-        approved_source: page.manual_output_path ? 'manual' : 'ai',
+        approved_source: page.has_manual_output ? 'manual' : 'ai',
         error_message: null,
         reviewed_at: now,
         review_intent_id: reviewIntentId,
@@ -613,7 +601,7 @@ export function FinalReviewPanel() {
           continue
         }
         patchPage(finalJobId, page.final_job_page_id, {
-          approved_output_path: result.approvedPath || page.approved_output_path,
+          has_approved_output: Boolean(result.approvedPath) || page.has_approved_output,
           updated_at: new Date().toISOString(),
         })
       }
@@ -663,7 +651,6 @@ export function FinalReviewPanel() {
         review_status: 'released',
         approved_pages: payload.approvedPages ?? current.approved_pages,
         release_mode: payload.releaseMode ?? current.release_mode,
-        pdf_path: payload.pdfPath ?? current.pdf_path,
         released_at: payload.releasedAt ?? current.released_at ?? updatedAt,
         email_sent_at: payload.emailSentAt ?? current.email_sent_at,
         print_status: current.print_status === 'locked' ? 'pending' : current.print_status,
@@ -682,7 +669,9 @@ export function FinalReviewPanel() {
     const { finalJobId, page: targetPage } = uploadTarget
     const previous = { ...targetPage }
     const localUrl = URL.createObjectURL(file)
+    const reviewIntentId = createReviewIntentId()
     setUploadTarget(null)
+    setPageReviewPending(targetPage.final_job_page_id, 'approve', reviewIntentId)
     setPageUploadPending(targetPage.final_job_page_id, 'replacement')
     setError('')
     setMessage('')
@@ -692,11 +681,15 @@ export function FinalReviewPanel() {
       approved_url: localUrl,
       approved_source: 'manual',
       error_message: null,
+      review_intent_id: reviewIntentId,
+      review_intent_type: 'approve',
+      review_intent_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     try {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('reviewIntentId', reviewIntentId)
       const response = await fetch(
         `/api/admin/final-jobs/${finalJobId}/pages/${targetPage.page_index}/upload-replacement`,
         {
@@ -706,17 +699,24 @@ export function FinalReviewPanel() {
         }
       )
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<{
-        manualPath?: string
-        approvedPath?: string
+        superseded?: boolean
+        hasManualOutput?: boolean
+        hasApprovedOutput?: boolean
         manualUrl?: string | null
         approvedUrl?: string | null
       }>
       if (!response.ok) throw new Error(payload.error || 'Failed to upload replacement image')
+      if (reviewIntentRef.current[targetPage.final_job_page_id] !== reviewIntentId) return
+      if (payload.superseded) {
+        patchPage(finalJobId, targetPage.final_job_page_id, previous)
+        URL.revokeObjectURL(localUrl)
+        return
+      }
       const manualUrl = payload.manualUrl || localUrl
       const approvedUrl = payload.approvedUrl || localUrl
       patchPage(finalJobId, targetPage.final_job_page_id, {
-        manual_output_path: payload.manualPath || targetPage.manual_output_path,
-        approved_output_path: payload.approvedPath || targetPage.approved_output_path,
+        has_manual_output: payload.hasManualOutput === true || targetPage.has_manual_output,
+        has_approved_output: payload.hasApprovedOutput === true || targetPage.has_approved_output,
         manual_url: manualUrl,
         approved_url: approvedUrl,
         status: 'approved',
@@ -726,73 +726,114 @@ export function FinalReviewPanel() {
       if (manualUrl !== localUrl && approvedUrl !== localUrl) {
         window.setTimeout(() => URL.revokeObjectURL(localUrl), 0)
       }
-      setMessage(`Replacement uploaded for page ${pageNumberLabel(targetPage.page_index)}.`)
+      setMessage(`Replacement uploaded for ${getFinalReviewPageLabel(targetPage, targetPage.page_index)}.`)
     } catch (actionError) {
-      patchPage(finalJobId, targetPage.final_job_page_id, previous)
-      reconcileOffscreenFailure(finalJobId)
-      URL.revokeObjectURL(localUrl)
-      setError(actionError instanceof Error ? actionError.message : 'Failed to upload replacement image')
+      if (reviewIntentRef.current[targetPage.final_job_page_id] === reviewIntentId) {
+        patchPage(finalJobId, targetPage.final_job_page_id, previous)
+        reconcileOffscreenFailure(finalJobId)
+        URL.revokeObjectURL(localUrl)
+        setError(actionError instanceof Error ? actionError.message : 'Failed to upload replacement image')
+      }
     } finally {
+      clearPageReviewPending(targetPage.final_job_page_id, reviewIntentId)
       clearPageUploadPending(targetPage.final_job_page_id, 'replacement')
     }
   }
 
-  const uploadPrintPage = async (file: File) => {
-    if (!printUploadTarget) return
-    const { finalJobId, page: targetPage } = printUploadTarget
-    const previous = { ...targetPage }
-    const localUrl = URL.createObjectURL(file)
-    setPrintUploadTarget(null)
-    setPageUploadPending(targetPage.final_job_page_id, 'print')
+  const uploadPrintPackage = async (file: File) => {
+    if (!selectedJobId) return
+    const finalJobId = selectedJobId
+    const action = 'upload-print-package'
+    setJobBusyAction(finalJobId, action)
     setError('')
     setMessage('')
-    patchPage(finalJobId, targetPage.final_job_page_id, {
-      print_status: 'completed',
-      print_url: localUrl,
-      updated_at: new Date().toISOString(),
-    })
+
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const response = await fetch(
-        `/api/admin/final-jobs/${finalJobId}/pages/${targetPage.page_index}/upload-print-page`,
+      const validated = validateManualPrintUpload({
+        fileName: file.name,
+        sizeBytes: file.size,
+        contentType: file.type,
+      })
+      const uploadResponse = await fetch(
+        `/api/admin/final-jobs/${finalJobId}/print-package/upload-url`,
         {
           method: 'POST',
           credentials: 'include',
-          body: formData,
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: validated.fileName,
+            sizeBytes: validated.sizeBytes,
+            contentType: validated.contentType,
+          }),
         }
       )
-      const payload = (await response.json().catch(() => ({}))) as ApiResponse<{
-        printPath?: string
-        printUrl?: string | null
-        print_output_path?: string
-        print_url?: string | null
-      }>
-      if (!response.ok) throw new Error(payload.error || 'Failed to upload print page')
-      const printUrl = payload.printUrl || payload.print_url || localUrl
-      patchPage(finalJobId, targetPage.final_job_page_id, {
-        print_output_path: payload.printPath || payload.print_output_path || targetPage.print_output_path,
-        print_url: printUrl,
-        print_status: 'completed',
-        updated_at: new Date().toISOString(),
-      })
-      if (printUrl !== localUrl) {
-        window.setTimeout(() => URL.revokeObjectURL(localUrl), 0)
+      const uploadSpec = (await uploadResponse.json().catch(() => ({}))) as ApiResponse<PrintUploadSpec>
+      if (!uploadResponse.ok) {
+        throw new Error(uploadSpec.error || 'Failed to prepare print PDF upload')
       }
-      setMessage(`Print page ${pageNumberLabel(targetPage.page_index)} uploaded.`)
+      if (!uploadSpec.artifactId || !uploadSpec.storagePath || !uploadSpec.token) {
+        throw new Error('Print PDF upload specification is incomplete')
+      }
+
+      const { error: storageError } = await supabase.storage
+        .from(uploadSpec.bucket || 'raw-private')
+        .uploadToSignedUrl(uploadSpec.storagePath, uploadSpec.token, file, {
+          contentType: validated.contentType,
+        })
+      if (storageError) {
+        throw new Error(storageError.message || 'Failed to upload print PDF')
+      }
+
+      if (selectedJobIdRef.current === finalJobId) {
+        setMessage('Upload complete. Verifying the PDF before Print Release...')
+      }
+
+      const confirmResponse = await fetch(
+        `/api/admin/final-jobs/${finalJobId}/print-package/confirm`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ artifactId: uploadSpec.artifactId }),
+        }
+      )
+      const confirmed = (await confirmResponse.json().catch(() => ({}))) as ApiResponse<{
+        artifact?: ManualPrintArtifactClient
+      }>
+      if (!confirmResponse.ok || !confirmed.artifact) {
+        throw new Error(confirmed.error || 'Failed to verify print PDF')
+      }
+
+      patchFinalJob(finalJobId, {
+        print_package_artifact_id: confirmed.artifact.artifact_id,
+        print_status: 'ready',
+        print_completed_pages: 0,
+        updated_at: confirmed.artifact.verified_at,
+      })
+      setDetail((current) =>
+        current?.finalJob.final_job_id === finalJobId
+          ? { ...current, print_artifact: confirmed.artifact ?? null }
+          : current
+      )
+      if (selectedJobIdRef.current === finalJobId) {
+        setMessage('Printer PDF uploaded and verified. It is ready for Print Release.')
+      }
     } catch (actionError) {
-      patchPage(finalJobId, targetPage.final_job_page_id, previous)
       reconcileOffscreenFailure(finalJobId)
-      URL.revokeObjectURL(localUrl)
-      setError(actionError instanceof Error ? actionError.message : 'Failed to upload print page')
+      if (selectedJobIdRef.current === finalJobId) {
+        setError(actionError instanceof Error ? actionError.message : 'Failed to upload print PDF')
+      }
     } finally {
-      clearPageUploadPending(targetPage.final_job_page_id, 'print')
+      clearJobBusyAction(finalJobId, action)
     }
   }
 
   const releasePrintVersion = async () => {
-    if (!selectedJobId) return
+    if (!selectedJobId || !detail?.print_artifact) return
     const finalJobId = selectedJobId
+    const expectedArtifactId = detail.print_artifact.artifact_id
     const action = 'release-print'
     setJobBusyAction(finalJobId, action)
     setError('')
@@ -801,6 +842,9 @@ export function FinalReviewPanel() {
       const response = await fetch(`/api/admin/final-jobs/${finalJobId}/release-print`, {
         method: 'POST',
         credentials: 'include',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedArtifactId }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<PrintReleaseResponse>
       if (!response.ok) {
@@ -809,17 +853,31 @@ export function FinalReviewPanel() {
       const updatedAt = payload.printReleasedAt || new Date().toISOString()
       patchFinalJob(finalJobId, (current) => ({
         print_status: 'released',
-        print_completed_pages:
-          payload.printCompletedPages ?? current.print_completed_pages,
+        print_completed_pages: 0,
         print_released_at:
           payload.printReleasedAt ?? current.print_released_at ?? updatedAt,
         updated_at: updatedAt,
       }))
-      setMessage(
-        payload.alreadyReleased
-          ? 'Print version already released.'
-          : 'Print version released successfully.'
-      )
+      setDetail((current) => {
+        if (!current || current.finalJob.final_job_id !== finalJobId || !current.print_artifact) {
+          return current
+        }
+        return {
+          ...current,
+          print_artifact: {
+            ...current.print_artifact,
+            status: 'released',
+            released_at: updatedAt,
+          },
+        }
+      })
+      if (selectedJobIdRef.current === finalJobId) {
+        setMessage(
+          payload.alreadyReleased
+            ? 'Print version already released.'
+            : 'Print version released successfully.'
+        )
+      }
     } catch (actionError) {
       setError(
         actionError instanceof Error
@@ -831,11 +889,44 @@ export function FinalReviewPanel() {
     }
   }
 
+  const exportApprovedSources = async (
+    pageIndices: number[],
+    mode: 'single' | 'zip'
+  ) => {
+    if (!selectedJobId || !selectedJob) throw new Error('Select a final job first')
+    const destination = mode === 'zip'
+      ? requestApprovedSourceZipDestination(
+          `${buildSafeBookDownloadBaseName(selectedJob.display_title)} Approved Sources.zip`
+        )
+      : null
+    destination?.catch(() => undefined)
+
+    const response = await fetch(`/api/admin/final-jobs/${selectedJobId}/export-approved`, {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageIndices }),
+    })
+    const payload = (await response.json().catch(() => ({}))) as ApiResponse<ApprovedSourceExportResponse>
+    if (!response.ok) throw new Error(payload.error || 'Failed to prepare approved source export')
+
+    if (mode === 'single') {
+      await downloadSingleApprovedSource(payload)
+      return
+    }
+    await downloadApprovedSourceZip(payload, destination)
+  }
+
   const activeDetail =
     detail?.finalJob.final_job_id === selectedJobId ? detail : null
   const isDetailLoading =
     loadingDetail || Boolean(selectedJobId && !activeDetail)
   const pages = useMemo(() => activeDetail?.pages ?? [], [activeDetail])
+  const pageContract = activeDetail?.page_contract ?? {
+    schema_version: null,
+    asset_layout: null,
+  }
   const currentReviewPendingByPage = useMemo(
     () =>
       Object.fromEntries(
@@ -860,43 +951,6 @@ export function FinalReviewPanel() {
       ) as UploadPendingState,
     [pages, uploadPendingByPage]
   )
-  const activeSelectedPrintPage = selectedPrintPage
-    ? pages.find(
-        (page) =>
-          page.final_job_page_id === selectedPrintPage.final_job_page_id
-      ) ?? null
-    : null
-  useEffect(() => {
-    if (!pages.length) return
-    const pdfItems = pages.map((page) => {
-      const sourceKind = getPageImageSource(page)
-      return {
-        url: pagePreviewUrl(page),
-        cacheKey: sourceKind === 'none' ? null : getThumbCacheKey(page, sourceKind),
-      }
-    })
-    warmAdminThumbnails(pdfItems.slice(0, 6), 3)
-    window.setTimeout(() => warmAdminThumbnails(pdfItems.slice(6), 2), 250)
-  }, [pages])
-
-  useEffect(() => {
-    if (activeVersion !== 'print' || !pages.length) return
-    const printItems = pages.flatMap((page) => {
-      const sourceKind = getPageImageSource(page)
-      return [
-        {
-          url: pagePreviewUrl(page),
-          cacheKey: sourceKind === 'none' ? null : getThumbCacheKey(page, sourceKind),
-        },
-        {
-          url: page.print_url ?? null,
-          cacheKey: page.print_url ? getThumbCacheKey(page, 'print') : null,
-        },
-      ]
-    })
-    warmAdminThumbnails(printItems, 2)
-  }, [activeVersion, pages])
-
   const readyToRelease = pages.length > 0 && pages.every((page) => page.status === 'approved')
   const approvedPageCount = pages.filter((page) => page.status === 'approved').length
   const totalPageCount = activeDetail?.finalJob.total_pages ?? pages.length
@@ -906,15 +960,13 @@ export function FinalReviewPanel() {
     activeDetail?.finalJob.released_at ||
       activeDetail?.finalJob.review_status === 'released'
   )
-  const printCompletedCount =
-    activeDetail?.finalJob.print_completed_pages ??
-    pages.filter((page) => page.print_status === 'completed').length
-  const printTotalCount = pages.length || activeDetail?.finalJob.total_pages || 0
+  const printArtifact = activeDetail?.print_artifact ?? null
   const printReleased =
     activeDetail?.finalJob.print_status === 'released' ||
     Boolean(activeDetail?.finalJob.print_released_at)
-  const printReadyToRelease =
-    pdfReleased && !printReleased && printTotalCount > 0 && printCompletedCount >= printTotalCount
+  const printReadyToRelease = Boolean(
+    pdfReleased && !printReleased && printArtifact?.status === 'verified'
+  )
   const releaseDisabledReason = !selectedJobId
     ? 'Select a final job first.'
     : pdfReleased
@@ -930,9 +982,13 @@ export function FinalReviewPanel() {
     ? 'PDF version must be released before print production files can be prepared.'
     : printReleased
       ? 'Print version has already been released.'
-    : hasUploadPending
-      ? 'Wait for page uploads to finish before releasing the print version.'
-    : `Upload and complete all bleed pages before print release (${printCompletedCount}/${printTotalCount} completed).`
+    : busyAction === 'upload-print-package'
+      ? 'Wait for the printer PDF upload and verification to finish.'
+    : !printArtifact
+      ? 'Upload and verify one complete printer PDF before Print Release.'
+      : printArtifact.status !== 'verified'
+        ? 'The current printer PDF is not in a verified state.'
+        : 'Release and lock this verified printer PDF.'
 
   const needsPdfReviewCount = jobs.filter((job) => job.review_status !== 'released').length
   const printPendingCount = jobs.filter(
@@ -951,7 +1007,7 @@ export function FinalReviewPanel() {
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">Final review</p>
           <h2 className="mt-1 text-2xl font-bold text-white">PDF version and print version approvals</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            Approve the customer PDF first, then prepare print-production bleed files in a separate stage.
+            Approve the customer PDF first, then upload the manually prepared printer PDF in a separate stage.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1067,7 +1123,9 @@ export function FinalReviewPanel() {
           <div className="p-4">
             {activeVersion === 'pdf' ? (
               <PdfVersionReview
+                key={selectedJobId ?? 'no-final-job'}
                 pages={pages}
+                pageContract={pageContract}
                 loadingDetail={isDetailLoading}
                 selectedJob={selectedJob}
                 reviewNote={reviewNote}
@@ -1078,6 +1136,7 @@ export function FinalReviewPanel() {
                 approvePage={approvePage}
                 markNeedsFix={markNeedsFix}
                 approveAllPages={approveAllPages}
+                exportApprovedSources={exportApprovedSources}
                 openReplacementPicker={(page) => {
                   if (!selectedJobId) return
                   setUploadTarget({ finalJobId: selectedJobId, page })
@@ -1087,19 +1146,12 @@ export function FinalReviewPanel() {
               />
             ) : (
               <PrintVersionReview
-                pages={pages}
                 loadingDetail={isDetailLoading}
                 pdfReleased={pdfReleased}
                 printReleased={printReleased}
-                busyAction={busyAction}
-                uploadPendingByPage={currentUploadPendingByPage}
-                onInspectPage={setSelectedPrintPage}
-                onUploadPrintPage={(page) => {
-                  if (!selectedJobId) return
-                  setPrintUploadTarget({ finalJobId: selectedJobId, page })
-                  printFileInputRef.current?.click()
-                }}
-                onImageLoadError={requestSignedUrlRefresh}
+                artifact={printArtifact}
+                uploading={busyAction === 'upload-print-package'}
+                onUploadPrintPdf={() => printPackageInputRef.current?.click()}
               />
             )}
           </div>
@@ -1113,8 +1165,8 @@ export function FinalReviewPanel() {
           readyToRelease={readyToRelease}
           hasReviewPending={hasReviewPending}
           hasUploadPending={hasUploadPending}
-          printCompletedCount={printCompletedCount}
-          printTotalCount={printTotalCount}
+          printArtifactReady={printArtifact?.status === 'verified'}
+          printReleased={printReleased}
           printReadyToRelease={printReadyToRelease}
           busyAction={busyAction}
           releaseDisabledReason={releaseDisabledReason}
@@ -1138,44 +1190,16 @@ export function FinalReviewPanel() {
         }}
       />
 
-      {activeSelectedPrintPage && activeDetail ? (
-        <PrintPageDialog
-          page={activeSelectedPrintPage}
-          pageNumber={
-            pages.findIndex(
-              (page) =>
-                page.final_job_page_id ===
-                activeSelectedPrintPage.final_job_page_id
-            ) + 1
-          }
-          pdfReleased={pdfReleased}
-          printReleased={printReleased}
-          uploadPending={
-            currentUploadPendingByPage[
-              activeSelectedPrintPage.final_job_page_id
-            ] === 'print'
-          }
-          busyAction={busyAction}
-          onUploadPrintPage={(page) => {
-            if (!selectedJobId) return
-            setPrintUploadTarget({ finalJobId: selectedJobId, page })
-            printFileInputRef.current?.click()
-          }}
-          onImageLoadError={requestSignedUrlRefresh}
-          onClose={() => setSelectedPrintPage(null)}
-        />
-      ) : null}
-
       <input
-        ref={printFileInputRef}
+        ref={printPackageInputRef}
         type="file"
-        accept="image/*"
+        accept="application/pdf,.pdf"
         className="sr-only"
         onChange={(event) => {
           const file = event.target.files?.[0]
           event.currentTarget.value = ''
           if (!file) return
-          void uploadPrintPage(file)
+          void uploadPrintPackage(file)
         }}
       />
     </>

@@ -156,6 +156,13 @@ export function resolveLatestReleasedFinalPdfPath(
   jobIds: Array<string | null | undefined>,
   assetsByJobId: Map<string, ReleasedFinalPdfAsset>
 ) {
+  return resolveLatestReleasedFinalPdfAsset(jobIds, assetsByJobId)?.pdfPath ?? null
+}
+
+export function resolveLatestReleasedFinalPdfAsset(
+  jobIds: Array<string | null | undefined>,
+  assetsByJobId: Map<string, ReleasedFinalPdfAsset>
+) {
   const assets = jobIds
     .map((jobId) => (jobId ? assetsByJobId.get(jobId) : null))
     .filter((asset): asset is ReleasedFinalPdfAsset => Boolean(asset))
@@ -165,7 +172,7 @@ export function resolveLatestReleasedFinalPdfPath(
       return bTime - aTime
     })
 
-  return assets[0]?.pdfPath ?? null
+  return assets[0] ?? null
 }
 
 export async function loadPurchaseSummaryByCreation(creationIds: string[]): Promise<Map<string, PurchaseSummary>> {

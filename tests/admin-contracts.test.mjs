@@ -67,7 +67,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 23, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 25, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -84,6 +84,21 @@ test('every exported Admin API method performs its own authorization check', asy
       `${routeFile} must authorize each exported method independently (${methods.join(', ')})`
     )
   }
+})
+
+test('Final Review detail uses the protected no-store V2 page read model', async () => {
+  const [route, readModel] = await Promise.all([
+    read('app/api/admin/final-jobs/[finalJobId]/route.ts'),
+    read('src/lib/admin-final-page-read-model.ts'),
+  ])
+
+  assert.match(route, /await\s+requireAdminCustomer\s*\(\s*\)/)
+  assert.match(route, /Cache-Control['"],\s*['"]no-store/)
+  assert.match(route, /\.from\(['"]jobs['"]\)[\s\S]*\.select\(['"]output_assets['"]\)/)
+  assert.match(route, /buildAdminFinalPageReadModel/)
+  assert.match(route, /page_contract:\s*readModel\.page_contract/)
+  assert.match(readModel, /parseFinalPageMetadataContract/)
+  assert.doesNotMatch(readModel, /\.\.\.page/)
 })
 
 test('active and placeholder Admin pages remain explicitly separated', async () => {
@@ -197,7 +212,6 @@ test('Final Review preserves server authority and stale-response intent guards',
   const jobQueue = await read('components/admin/final-review/JobQueue.tsx')
   const pdfReview = await read('components/admin/final-review/PdfVersionReview.tsx')
   const printReview = await read('components/admin/final-review/PrintVersionReview.tsx')
-  const printDialog = await read('components/admin/final-review/PrintPageDialog.tsx')
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
   const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
   const finalReviewFiles = await listFiles('components/admin/final-review')
@@ -209,9 +223,13 @@ test('Final Review preserves server authority and stale-response intent guards',
   const replacementApi = await read(
     'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-replacement/route.ts'
   )
-  const printUploadApi = await read(
-    'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-print-page/route.ts'
+  const printUploadUrlApi = await read(
+    'app/api/admin/final-jobs/[finalJobId]/print-package/upload-url/route.ts'
   )
+  const printConfirmApi = await read(
+    'app/api/admin/final-jobs/[finalJobId]/print-package/confirm/route.ts'
+  )
+  const manualPrintPolicy = await read('src/lib/manual-print-artifact.ts')
   const finalReview = await read('src/lib/finalReview.ts')
 
   assert.match(panel, /reviewIntentRef/)
@@ -225,7 +243,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(panel, /<JobQueue/)
   assert.match(panel, /<PdfVersionReview/)
   assert.match(panel, /<PrintVersionReview/)
-  assert.match(panel, /<PrintPageDialog/)
+  assert.doesNotMatch(panel, /PrintPageDialog|uploadPrintPage/)
   assert.match(panel, /<FinalReviewStage/)
   assert.match(
     panel,
@@ -270,7 +288,6 @@ test('Final Review preserves server authority and stale-response intent guards',
     ['job queue', jobQueue],
     ['PDF review', pdfReview],
     ['print review', printReview],
-    ['print dialog', printDialog],
     ['release stage', stage],
   ]) {
     assert.doesNotMatch(source, /fetch\s*\(/, `${name} must remain a presentation island`)
@@ -289,16 +306,24 @@ test('Final Review preserves server authority and stale-response intent guards',
   )
   assert.match(thumbnail, /ymi-admin-final-thumbs/)
   assert.match(thumbnail, /createImageBitmap/)
+  assert.match(thumbnail, /IntersectionObserver/)
+  assert.match(thumbnail, /inFlightThumbs/)
   assert.match(thumbnail, /state\.sourceUrl === sourceUrl/)
   assert.match(thumbnail, /onError=\{onError\}/)
 
   assert.match(releaseApi, /await\s+requireAdminCustomer\s*\(\s*\)/)
   assert.match(releaseApi, /releaseFinalJob/)
   assert.match(printReleaseApi, /printReleasedAt/)
-  assert.match(printReleaseApi, /printCompletedPages/)
+  assert.match(printReleaseApi, /release_final_print_artifact/)
   assert.match(replacementApi, /manualUrl:\s*signedManual\?\.signedUrl/)
-  assert.match(replacementApi, /approvedUrl:\s*signedApproved\?\.signedUrl/)
-  assert.match(printUploadApi, /printUrl:\s*signed\?\.signedUrl/)
+  assert.match(replacementApi, /approvedUrl:\s*signedManual\?\.signedUrl/)
+  assert.match(replacementApi, /hasManualOutput:\s*true/)
+  assert.match(replacementApi, /hasApprovedOutput:\s*true/)
+  assert.match(printUploadUrlApi, /createSignedUploadUrl/)
+  assert.match(printUploadUrlApi, /create_final_print_artifact/)
+  assert.match(printConfirmApi, /commit_final_print_artifact/)
+  assert.match(printConfirmApi, /verifyRemotePdfHeader/)
+  assert.match(manualPrintPolicy, /Range:\s*['"]bytes=0-4['"]/)
   assert.match(finalReview, /\.from\(['"]final_jobs['"]\)/)
   assert.match(finalReview, /review_status:\s*['"]released['"]/)
   assert.match(finalReview, /sendOrderDeliveryEmail/)
@@ -310,7 +335,6 @@ test('Final Review preserves server authority and stale-response intent guards',
 test('Final Review responsive scroll behavior stays breakpoint-scoped', async () => {
   const panel = await read('components/admin/FinalReviewPanel.tsx')
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
-  const printDialog = await read('components/admin/final-review/PrintPageDialog.tsx')
   const sidebar = await read('components/admin/AdminSidebar.tsx')
   const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
 
@@ -330,11 +354,32 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.match(panel, /2xl:w-\[16rem\]/)
   assert.doesNotMatch(panel, /gap-3 lg:flex-row/)
   assert.doesNotMatch(panel, /p-0\.5 lg:w-\[16rem\]/)
-  assert.match(printDialog, /fixed inset-0 z-\[100\]/)
-  assert.match(printDialog, /max-h-\[92dvh\][^"]*overflow-y-auto/)
-  assert.doesNotMatch(printDialog, /max-h-\[92vh\]/)
   assert.match(sidebar, /sticky top-0 z-40[^"]*lg:hidden/)
   assert.match(sidebar, /fixed inset-0 z-\[180\] lg:hidden/)
+})
+
+test('Final Review V2 PDF workspace and manual Print handoff add no nested scroll owners', async () => {
+  const [panel, pdfReview, printReview, workspace] = await Promise.all([
+    read('components/admin/FinalReviewPanel.tsx'),
+    read('components/admin/final-review/PdfVersionReview.tsx'),
+    read('components/admin/final-review/PrintVersionReview.tsx'),
+    read('src/lib/admin-final-review-workspace.ts'),
+  ])
+
+  assert.match(panel, /pageContract=\{pageContract\}/)
+  assert.match(pdfReview, /buildFinalReviewWorkspace/)
+  assert.match(pdfReview, /aria-label="Final page navigator"/)
+  assert.match(pdfReview, /aria-pressed=\{selected\}/)
+  assert.match(pdfReview, /aspect-square/)
+  assert.doesNotMatch(printReview, /buildFinalReviewWorkspace|final_job_pages/)
+  assert.match(printReview, /Manual print artifact/)
+  assert.match(workspace, /final_back_cover/)
+  assert.match(workspace, /final_front_cover/)
+  assert.match(workspace, /page\.spread_index/)
+  assert.match(workspace, /page\.page_number/)
+  assert.doesNotMatch(workspace, /template_image|filename|_L|_R|_A|_B/)
+  assert.doesNotMatch(pdfReview + printReview, /overflow-y-auto|overflow-y-scroll/)
+  assert.doesNotMatch(workspace, /spreadIndex\s*<=\s*15|length\s*===\s*15/)
 })
 
 test('Final Review derives personalized job titles and keeps queue status rows stable', async () => {

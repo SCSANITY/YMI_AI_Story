@@ -19,10 +19,14 @@ import {
   getOrderDisplayTotal,
   getOrderCheckoutCurrency,
 } from '@/lib/order-display'
-import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import {
+  buildPersonalizedBookPdfFileName,
+  resolveFinalJobDisplayTitle,
+  resolvePersonalizedBookTitle,
+} from '@/lib/personalized-book-title'
 import {
   loadReleasedFinalPdfAssetsByJobId,
-  resolveLatestReleasedFinalPdfPath,
+  resolveLatestReleasedFinalPdfAsset,
 } from '@/lib/purchase-state'
 
 const STORAGE_BUCKET = 'raw-private'
@@ -426,19 +430,25 @@ export async function GET(request: Request) {
 
     for (const order of orderRows) {
       const orderIdValue = String(order.order_id || '')
-      const pdfPath = resolveLatestReleasedFinalPdfPath(
+      const pdfAsset = resolveLatestReleasedFinalPdfAsset(
         (order.cart_items ?? []).map((item: any) => item.final_job_id),
         finalPdfAssetsByJobId
       )
-      if (!orderIdValue || !pdfPath) continue
+      if (!orderIdValue || !pdfAsset) continue
+      const pdfItem = (order.cart_items ?? []).find(
+        (item: any) => item.final_job_id === pdfAsset.jobId
+      )
+      const pdfTitle = resolveFinalJobDisplayTitle({
+        creations: pdfItem?.creations,
+      })
 
       finalPdfRequests.push({
         key: orderIdValue,
         bucket: STORAGE_BUCKET,
-        path: pdfPath,
+        path: pdfAsset.pdfPath,
         expiresIn: FINAL_PDF_SIGN_TTL_SECONDS,
         options: {
-          download: `final-${orderIdValue}.pdf`,
+          download: buildPersonalizedBookPdfFileName(pdfTitle),
         },
       })
     }

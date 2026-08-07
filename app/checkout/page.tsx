@@ -7,6 +7,7 @@ import { Lock, CheckCircle2, ChevronLeft } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { AddressFormSection } from './AddressFormSection';
+import { CheckoutEmailOwnershipHint } from './CheckoutEmailOwnershipHint';
 import { CheckoutItemsSection } from './CheckoutItemsSection';
 import { CheckoutSummaryPanel } from './CheckoutSummaryPanel';
 import { CurrencyPicker } from './CurrencyPicker';
@@ -117,6 +118,7 @@ function CheckoutPageContent() {
     updateCheckoutQuantity,
     displayCurrency,
     setDisplayCurrency,
+    isAuthResolved,
   } = useGlobalContext();
 
   const items = checkoutItems;
@@ -1396,6 +1398,7 @@ function CheckoutPageContent() {
               language={language}
               selectedCurrency={selectedCurrency}
               userCustomerId={user?.customerId ?? null}
+              isAuthResolved={isAuthResolved}
               t={t}
               onComplete={handleAddressComplete}
             />
@@ -1460,6 +1463,13 @@ function CheckoutPageContent() {
                       placeholder={t('checkout.emailRequired')}
                       className="mt-2 h-12 w-full rounded-2xl border-2 border-gray-200 bg-white px-4 text-base font-semibold text-gray-900 transition placeholder:font-normal placeholder:text-gray-400 focus:border-amber-400 focus:outline-none"
                     />
+                    <div className="mt-2">
+                      <CheckoutEmailOwnershipHint
+                        isAuthResolved={isAuthResolved}
+                        isSignedIn={Boolean(user?.customerId)}
+                        t={t}
+                      />
+                    </div>
                   </div>
                 ) : null}
 

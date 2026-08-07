@@ -10,8 +10,8 @@ export function FinalReviewStage({
   readyToRelease,
   hasReviewPending,
   hasUploadPending,
-  printCompletedCount,
-  printTotalCount,
+  printArtifactReady,
+  printReleased,
   printReadyToRelease,
   busyAction,
   releaseDisabledReason,
@@ -26,8 +26,8 @@ export function FinalReviewStage({
   readyToRelease: boolean
   hasReviewPending: boolean
   hasUploadPending: boolean
-  printCompletedCount: number
-  printTotalCount: number
+  printArtifactReady: boolean
+  printReleased: boolean
   printReadyToRelease: boolean
   busyAction: string | null
   releaseDisabledReason: string
@@ -44,8 +44,7 @@ export function FinalReviewStage({
           icon={<FileText className="h-4 w-4" />}
           tone="emerald"
           status={detail?.finalJob.review_status ?? 'Not set'}
-          completed={approvedPageCount}
-          total={totalPageCount}
+          progress={`${approvedPageCount} / ${totalPageCount} pages`}
           description="Customer-facing PDF approval, PDF build, and delivery email."
         >
           <button
@@ -85,9 +84,8 @@ export function FinalReviewStage({
           icon={<PackageCheck className="h-4 w-4" />}
           tone="amber"
           status={detail?.finalJob.print_status ?? (pdfReleased ? 'pending' : 'locked')}
-          completed={printCompletedCount}
-          total={printTotalCount}
-          description="Bleed-safe production files for the print vendor. This stage unlocks after PDF release."
+          progress={printReleased ? 'Artifact locked' : printArtifactReady ? '1 verified PDF' : 'Awaiting upload'}
+          description="A manually prepared, private printer PDF. This stage unlocks after customer PDF release."
         >
           <button
             type="button"
@@ -98,15 +96,17 @@ export function FinalReviewStage({
           >
             {busyAction === 'release-print' ? (
               <Loader2 className="h-4 w-4 animate-spin" />
+            ) : printReleased ? (
+              <CheckCircle2 className="h-4 w-4" />
             ) : pdfReleased ? (
               <PackageCheck className="h-4 w-4" />
             ) : (
               <Lock className="h-4 w-4" />
             )}
-            Release print version
+            {printReleased ? 'Print Released' : 'Release print version'}
           </button>
           <p className="text-xs leading-6 text-slate-400">
-            Format pending: bleed PDF or separated image package.
+            Release locks the verified upload. Shipping remains a separate logistics action.
           </p>
         </StageCard>
       </aside>
@@ -120,8 +120,7 @@ function StageCard({
   icon,
   tone,
   status,
-  completed,
-  total,
+  progress,
   description,
   children,
 }: {
@@ -130,8 +129,7 @@ function StageCard({
   icon: React.ReactNode
   tone: 'emerald' | 'amber'
   status: string
-  completed: number
-  total: number
+  progress: string
   description: string
   children: React.ReactNode
 }) {
@@ -151,8 +149,7 @@ function StageCard({
       </div>
       <div className="mt-4 space-y-2 text-sm text-slate-300">
         <p>
-          Progress: <span className="font-semibold text-white">{completed}</span> /{' '}
-          <span className="font-semibold text-white">{total}</span>
+          Progress: <span className="font-semibold text-white">{progress}</span>
         </p>
         <p>
           Status: <span className="font-semibold text-white">{status}</span>

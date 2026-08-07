@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Hr, Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, EmailDivider, SignoffStamp, emailAsset, emailTheme, emailButtons } from './EmailLayout'
 import { BookCoverCard } from './BookCoverCard'
+import { OrderAccessNotice } from './OrderAccessNotice'
 import { CheckoutCurrency, formatMajorCurrencyValue } from '@/lib/locale-pricing'
 
 export type ReceiptItem = {
@@ -212,6 +213,8 @@ export function OrderReceiptEmail({
           </Link>
         </Section>
       ) : null}
+
+      <OrderAccessNotice />
     </EmailLayout>
   )
 }

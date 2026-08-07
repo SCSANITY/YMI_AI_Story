@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Link, Section, Text } from '@react-email/components'
 import { EmailLayout, emailAsset, emailTheme, emailButtons } from './EmailLayout'
 import { BookCoverCard } from './BookCoverCard'
+import { OrderAccessNotice } from './OrderAccessNotice'
 
 type LogisticsUpdateEmailProps = {
   orderUrl: string
@@ -109,6 +110,8 @@ export function LogisticsUpdateEmail({
           </Link>
         </Section>
       )}
+
+      <OrderAccessNotice />
     </EmailLayout>
   )
 }

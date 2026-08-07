@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FinalJobPageRow } from '@/lib/finalReview'
 
 type ThumbState = {
@@ -15,6 +15,7 @@ const THUMB_STORE_NAME = 'thumbs'
 const THUMB_MAX_EDGE = 900
 const THUMB_QUALITY = 0.8
 const memoryThumbCache = new Map<string, string>()
+const inFlightThumbs = new Map<string, Promise<string>>()
 
 function openThumbDb(): Promise<IDBDatabase | null> {
   if (typeof window === 'undefined' || !('indexedDB' in window)) return Promise.resolve(null)
@@ -103,38 +104,34 @@ export function getThumbCacheKey(page: FinalJobPageRow, sourceKind: string) {
   return `${page.final_job_page_id}:${page.updated_at}:${sourceKind}`
 }
 
-async function ensureAdminThumbnail(sourceUrl: string | null, cacheKey: string | null) {
-  if (!sourceUrl || !cacheKey || memoryThumbCache.has(cacheKey)) return
-  const cachedBlob = await readThumbBlob(cacheKey)
-  if (cachedBlob) {
-    memoryThumbCache.set(cacheKey, URL.createObjectURL(cachedBlob))
-    return
+async function ensureAdminThumbnail(sourceUrl: string, cacheKey: string) {
+  const memoryUrl = memoryThumbCache.get(cacheKey)
+  if (memoryUrl) return memoryUrl
+
+  const activeRequest = inFlightThumbs.get(cacheKey)
+  if (activeRequest) return activeRequest
+
+  const request = (async () => {
+    const cachedBlob = await readThumbBlob(cacheKey)
+    const blob = cachedBlob ?? await buildThumbBlob(sourceUrl)
+    if (!cachedBlob) await writeThumbBlob(cacheKey, blob)
+    const objectUrl = URL.createObjectURL(blob)
+    memoryThumbCache.set(cacheKey, objectUrl)
+    return objectUrl
+  })()
+  inFlightThumbs.set(cacheKey, request)
+  try {
+    return await request
+  } finally {
+    inFlightThumbs.delete(cacheKey)
   }
-  const blob = await buildThumbBlob(sourceUrl)
-  await writeThumbBlob(cacheKey, blob)
-  memoryThumbCache.set(cacheKey, URL.createObjectURL(blob))
 }
 
-export function warmAdminThumbnails(
-  items: Array<{ url: string | null; cacheKey: string | null }>,
-  concurrency = 2
-) {
-  let cursor = 0
-  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
-    while (cursor < items.length) {
-      const item = items[cursor]
-      cursor += 1
-      try {
-        await ensureAdminThumbnail(item.url, item.cacheKey)
-      } catch {
-        // Thumbnail generation is optional; the signed source URL remains available.
-      }
-    }
-  })
-  void Promise.all(workers)
-}
-
-function useAdminThumbnail(sourceUrl: string | null, cacheKey: string | null): ThumbState {
+function useAdminThumbnail(
+  sourceUrl: string | null,
+  cacheKey: string | null,
+  enabled: boolean
+): ThumbState {
   const cachedUrl = cacheKey ? memoryThumbCache.get(cacheKey) ?? null : null
   const [state, setState] = useState<ThumbState>({
     key: null,
@@ -145,18 +142,12 @@ function useAdminThumbnail(sourceUrl: string | null, cacheKey: string | null): T
 
   useEffect(() => {
     let cancelled = false
-    if (!sourceUrl || !cacheKey || cachedUrl) return
+    if (!enabled || !sourceUrl || !cacheKey || cachedUrl) return
 
     void (async () => {
       try {
-        let blob = await readThumbBlob(cacheKey)
-        if (!blob) {
-          blob = await buildThumbBlob(sourceUrl)
-          await writeThumbBlob(cacheKey, blob)
-        }
+        const objectUrl = await ensureAdminThumbnail(sourceUrl, cacheKey)
         if (cancelled) return
-        const objectUrl = URL.createObjectURL(blob)
-        memoryThumbCache.set(cacheKey, objectUrl)
         setState({ key: cacheKey, sourceUrl, status: 'ready', url: objectUrl })
       } catch {
         if (!cancelled) {
@@ -168,9 +159,9 @@ function useAdminThumbnail(sourceUrl: string | null, cacheKey: string | null): T
     return () => {
       cancelled = true
     }
-  }, [cacheKey, cachedUrl, sourceUrl])
+  }, [cacheKey, cachedUrl, enabled, sourceUrl])
 
-  if (!sourceUrl || !cacheKey) {
+  if (!enabled || !sourceUrl || !cacheKey) {
     return { key: cacheKey, sourceUrl, status: 'idle', url: null }
   }
   if (cachedUrl) {
@@ -201,18 +192,48 @@ export function ThumbnailImage({
   loading?: 'eager' | 'lazy'
   onError?: () => void
 }) {
-  const thumbnail = useAdminThumbnail(sourceUrl, cacheKey)
-  const displayUrl = thumbnail.url || sourceUrl
+  const containerRef = useRef<HTMLSpanElement | null>(null)
+  const [nearViewport, setNearViewport] = useState(loading === 'eager')
+
+  useEffect(() => {
+    if (loading === 'eager' || nearViewport) return
+    const target = containerRef.current
+    if (!target || typeof IntersectionObserver === 'undefined') {
+      const timer = window.setTimeout(() => setNearViewport(true), 0)
+      return () => window.clearTimeout(timer)
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setNearViewport(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '240px 0px' }
+    )
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [loading, nearViewport])
+
+  const thumbnail = useAdminThumbnail(sourceUrl, cacheKey, nearViewport)
+  const displayUrl = thumbnail.status === 'ready' || thumbnail.status === 'failed'
+    ? thumbnail.url
+    : null
 
   if (!displayUrl) {
-    return <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">No preview</div>
+    return (
+      <span ref={containerRef} className="relative block h-full w-full">
+        {sourceUrl ? (
+          <span className="absolute inset-0 animate-pulse bg-white/[0.06]" aria-hidden="true" />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center text-xs text-slate-500">No preview</span>
+        )}
+      </span>
+    )
   }
 
   return (
-    <>
-      {thumbnail.status === 'loading' ? (
-        <div className="absolute inset-0 animate-pulse bg-white/[0.06]" aria-hidden="true" />
-      ) : null}
+    <span ref={containerRef} className="relative block h-full w-full">
       {/* eslint-disable-next-line @next/next/no-img-element -- Admin thumbnails use local object URLs generated from canvas/IndexedDB. */}
       <img
         src={displayUrl}
@@ -220,8 +241,33 @@ export function ThumbnailImage({
         loading={loading}
         decoding="async"
         onError={onError}
-        className={`transition-opacity duration-200 ${thumbnail.status === 'loading' ? 'opacity-0' : 'opacity-100'} ${className || ''}`}
+        className={`transition-opacity duration-200 ${className || ''}`}
       />
-    </>
+    </span>
+  )
+}
+
+export function FullResolutionImage({
+  sourceUrl,
+  alt,
+  className,
+  onError,
+}: {
+  sourceUrl: string
+  alt: string
+  className?: string
+  onError?: () => void
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- Private signed images must bypass the Vercel optimizer.
+    <img
+      src={sourceUrl}
+      alt={alt}
+      loading="eager"
+      decoding="async"
+      fetchPriority="high"
+      onError={onError}
+      className={className}
+    />
   )
 }

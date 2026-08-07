@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { templateRowToBook, type TemplateCatalogRow } from '@/lib/book-catalog'
+import {
+  templateRowToBook,
+  templateStorageUrl,
+  type TemplateCatalogRow,
+} from '@/lib/book-catalog'
+import { parseTemplateFinalPreviewPages } from '@/lib/template-final-preview'
 
 const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.webp$/i
 const FINAL_PREVIEW_IMAGE_PATTERN = /^page_(\d+)\.png$/i
@@ -102,6 +107,24 @@ async function withFinalPreviewImages(row: TemplateCatalogRow): Promise<Template
   }
 }
 
+async function withStructuredFinalPreviewPages(row: TemplateCatalogRow): Promise<TemplateCatalogRow> {
+  const configPath = normalizeTemplatePath(row.default_config_path)
+  if (!configPath) return row
+
+  const { data, error } = await supabaseAdmin.storage.from('app-templates').download(configPath)
+  if (error || !data) return row
+
+  let config: unknown
+  try {
+    config = JSON.parse(await data.text())
+  } catch {
+    return row
+  }
+
+  const finalPreviewPages = parseTemplateFinalPreviewPages(config, templateStorageUrl)
+  return finalPreviewPages.length ? { ...row, final_preview_pages: finalPreviewPages } : row
+}
+
 export async function GET(_request: Request, context: { params: Promise<{ templateId: string }> }) {
   const { templateId } = await context.params
 
@@ -121,10 +144,15 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
   }
 
   const row = data
-    ? await Promise.all([withProductShowcaseImages(data), withFinalPreviewImages(data)]).then(
-        ([productRow, finalRow]) => ({
+    ? await Promise.all([
+        withProductShowcaseImages(data),
+        withFinalPreviewImages(data),
+        withStructuredFinalPreviewPages(data),
+      ]).then(
+        ([productRow, finalRow, structuredRow]) => ({
           ...productRow,
           final_preview_paths: finalRow.final_preview_paths,
+          final_preview_pages: structuredRow.final_preview_pages,
         })
       )
     : null

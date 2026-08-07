@@ -9,6 +9,12 @@ import { useGlobalContext } from '@/contexts/GlobalContext'
 import { BOOKS } from '@/data/books'
 import { parseTemplateAmount } from '@/lib/book-catalog'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import {
+  buildReaderBookDisplay,
+  getReaderSpreadUrls,
+  type ReaderBookDisplay,
+  type SignedReaderPage,
+} from '@/lib/reader-page-contract'
 import { useI18n } from '@/lib/useI18n'
 import type { Book, PersonalizationData, StoryLanguage } from '@/types'
 
@@ -36,21 +42,17 @@ type ReaderCreation = {
   coverUrl?: string | null
 }
 
-type ReaderPage = {
-  pageIndex: number
-  status?: string | null
-  url?: string | null
-}
-
 type ReaderResponse = {
   eligible?: boolean
   purchaseState?: 'purchased' | 'refunded' | 'unpurchased'
   finalReady?: boolean
   reason?: string
   error?: string
+  schemaVersion?: number | null
+  assetLayout?: string | null
   creation?: ReaderCreation
   latestOrderDisplayId?: string | null
-  pages?: ReaderPage[]
+  pages?: Array<Omit<SignedReaderPage, 'url'> & { url?: string | null }>
 }
 
 function normalizeLanguage(value: unknown): StoryLanguage {
@@ -129,6 +131,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const { t } = useI18n()
   const { user, isHydrated, addToCart } = useGlobalContext()
   const [reader, setReader] = useState<ReaderResponse | null>(null)
+  const [bookDisplay, setBookDisplay] = useState<ReaderBookDisplay | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -158,8 +161,20 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       if (!response.ok && response.status !== 403) {
         throw new Error(data.error || 'Failed to load reader')
       }
+      const nextBookDisplay = data.finalReady
+        ? buildReaderBookDisplay({
+            schemaVersion: data.schemaVersion,
+            assetLayout: data.assetLayout,
+            legacyCoverUrl: data.creation?.coverUrl,
+            pages: (data.pages ?? []).map((page) => {
+              if (!page.url) throw new Error(`Missing signed Reader URL for page ${page.pageIndex}`)
+              return { ...page, url: page.url }
+            }),
+          })
+        : null
       if (runId !== loadRunIdRef.current) return
       setReader(data)
+      setBookDisplay(nextBookDisplay)
       setLoadError(null)
       setImageErrors(new Set())
     } catch (error) {
@@ -220,21 +235,15 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         customizeSnapshot: creation.customizeSnapshot,
       })
     : '', [creation])
-  const signedInnerPages = useMemo(() => (reader?.pages ?? [])
-    .slice()
-    .sort((a, b) => a.pageIndex - b.pageIndex)
-    .map((page) => page.url || ''), [reader?.pages])
-  const bookSpreads = useMemo(() => creation
-    ? [creation.coverUrl || '', ...signedInnerPages]
-    : [], [creation, signedInnerPages])
-  const maxSpreadIndex = Math.max(0, bookSpreads.length - 1)
+  const bookSpreads = bookDisplay?.legacySpreads ?? []
+  const maxSpreadIndex = bookDisplay?.maxSpreadIndex ?? 0
 
   useEffect(() => {
     setCurrentSpread((current) => Math.min(current, maxSpreadIndex))
   }, [maxSpreadIndex])
 
   useEffect(() => {
-    if (!reader?.finalReady || !bookSpreads.length) return
+    if (!reader?.finalReady || !bookDisplay) return
     const immediateIndexes = new Set([
       Math.max(0, currentSpread - 1),
       currentSpread,
@@ -248,14 +257,20 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       image.src = url
       void image.decode?.().catch(() => undefined)
     }
-    immediateIndexes.forEach((index) => preload(bookSpreads[index] || ''))
+    const immediateUrls = new Set<string>()
+    immediateIndexes.forEach((index) => {
+      getReaderSpreadUrls(bookDisplay, index).forEach((url) => {
+        immediateUrls.add(url)
+        preload(url)
+      })
+    })
     const backgroundId = window.setTimeout(() => {
-      bookSpreads.forEach((url, index) => {
-        if (!immediateIndexes.has(index)) preload(url)
+      bookDisplay.preloadUrls.forEach((url) => {
+        if (!immediateUrls.has(url)) preload(url)
       })
     }, 500)
     return () => window.clearTimeout(backgroundId)
-  }, [bookSpreads, currentSpread, reader?.finalReady])
+  }, [bookDisplay, currentSpread, reader?.finalReady])
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current)
@@ -339,7 +354,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
 
   if (!isHydrated || loading) return <MyBookReaderSkeleton />
 
-  if (loadError || !reader || !reader.eligible || !creation) {
+  if (loadError || !reader || !reader.eligible || !creation || (reader.finalReady && !bookDisplay)) {
     return (
       <ReaderStateShell backLabel={t('myBooks.readerBack')}>
         <BookOpen className="h-10 w-10 text-gray-400" />
@@ -385,6 +400,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       previewImageErrors={imageErrors}
       staticPreviewSecondPageUrl={null}
       finalPreviewImages={[]}
+      bookPresentation={bookDisplay?.presentation}
       currentSpread={currentSpread}
       isFlipping={isFlipping}
       resolvedTitle={resolvedTitle}

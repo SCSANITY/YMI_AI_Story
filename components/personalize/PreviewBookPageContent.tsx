@@ -3,6 +3,12 @@
 import React, { memo, type CSSProperties } from 'react'
 import { BookOpen, ChevronLeft, ChevronRight, Lock, Wand2 } from 'lucide-react'
 import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector'
+import { BookLeafImage } from '@/components/personalize/BookLeafImage'
+import {
+  createLegacySpreadLeaf,
+  resolveBookLeaf,
+  type BookPresentation,
+} from '@/lib/book-presentation'
 
 type PreviewBookPageContentProps = {
   side: 'left' | 'right'
@@ -12,6 +18,8 @@ type PreviewBookPageContentProps = {
   previewImageErrors: Set<string>
   staticPreviewSecondPageUrl: string | null
   finalPreviewImages: string[]
+  bookPresentation?: BookPresentation | null
+  lockedFinalPresentation?: BookPresentation | null
   currentSpread: number
   isFlipping: boolean
   resolvedTitle: string
@@ -36,6 +44,8 @@ function PreviewBookPageContentComponent({
   previewImageErrors,
   staticPreviewSecondPageUrl,
   finalPreviewImages,
+  bookPresentation,
+  lockedFinalPresentation,
   currentSpread,
   isFlipping,
   resolvedTitle,
@@ -62,7 +72,9 @@ function PreviewBookPageContentComponent({
   }
 
   if (spreadIndex === 0 && side === 'right') {
-    const generatedCover = previewPages[0] || ''
+    const generatedCover = bookPresentation
+      ? bookPresentation.cover?.url || ''
+      : previewPages[0] || ''
     const canShowGeneratedCover = Boolean(generatedCover) && !previewImageErrors.has(generatedCover)
 
     return (
@@ -102,18 +114,44 @@ function PreviewBookPageContentComponent({
 
   if (
     spreadIndex > 0 &&
-    (spreadIndex < previewPages.length || (spreadIndex === 1 && (previewPages.length === 1 || staticPreviewSecondPageUrl)) || finalPreviewImages[spreadIndex - 1]) &&
+    (bookPresentation?.spreads.some(
+      (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex
+    ) || lockedFinalPresentation?.spreads.some(
+      (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex
+    ) ||
+      spreadIndex < previewPages.length ||
+      (spreadIndex === 1 && (previewPages.length === 1 || staticPreviewSecondPageUrl)) ||
+      finalPreviewImages[spreadIndex - 1]) &&
     (side === 'left' || side === 'right')
   ) {
-    const previewSpreadImage = previewPages[spreadIndex] || ''
+    const usesStructuredLeaves = Boolean(bookPresentation)
+    const structuredLeaf = resolveBookLeaf(bookPresentation, spreadIndex, side)
+    const usableStructuredLeaf = structuredLeaf && !previewImageErrors.has(structuredLeaf.url)
+      ? structuredLeaf
+      : null
+    const lockedStructuredLeaf = resolveBookLeaf(lockedFinalPresentation, spreadIndex, side)
+    const usableLockedLeaf = lockedStructuredLeaf && !previewImageErrors.has(lockedStructuredLeaf.url)
+      ? lockedStructuredLeaf
+      : null
+    const previewSpreadImage = usesStructuredLeaves ? '' : previewPages[spreadIndex] || ''
     const generatedSpreadImage = previewSpreadImage && !previewImageErrors.has(previewSpreadImage) ? previewSpreadImage : ''
-    const staticSecondPageImage = spreadIndex === 1 && staticPreviewSecondPageUrl && !previewImageErrors.has(staticPreviewSecondPageUrl)
+    const staticSecondPageImage = !usesStructuredLeaves && spreadIndex === 1 && staticPreviewSecondPageUrl && !previewImageErrors.has(staticPreviewSecondPageUrl)
       ? staticPreviewSecondPageUrl
       : ''
-    const finalPreviewImage = spreadIndex > 1 ? finalPreviewImages[spreadIndex - 1] || '' : ''
+    const finalPreviewImage = !usesStructuredLeaves && spreadIndex > 1 ? finalPreviewImages[spreadIndex - 1] || '' : ''
     const spreadImage = generatedSpreadImage || staticSecondPageImage || finalPreviewImage
-    const isGeneratingSecondPreview = spreadIndex === 1 && !generatedSpreadImage
-    const isLockedFinalPreview = !generatedSpreadImage && !staticSecondPageImage && Boolean(finalPreviewImage)
+    const displayLeaf = usableStructuredLeaf || usableLockedLeaf || (spreadImage
+      ? createLegacySpreadLeaf(
+          spreadImage,
+          spreadIndex,
+          side,
+          finalPreviewImage === spreadImage ? 'final_interior' : 'preview_interior'
+        )
+      : null)
+    const isGeneratingSecondPreview = spreadIndex === 1 && !usableStructuredLeaf && !generatedSpreadImage
+    const isLockedFinalPreview = Boolean(usableLockedLeaf) || (
+      !usableStructuredLeaf && !generatedSpreadImage && !staticSecondPageImage && Boolean(finalPreviewImage)
+    )
     const isLeftSide = side === 'left'
     const isNearbySpread = Math.abs(spreadIndex - currentSpread) <= 1
 
@@ -122,20 +160,17 @@ function PreviewBookPageContentComponent({
         className={`relative h-full w-full overflow-hidden ${isLeftSide ? 'rounded-l-sm border-r border-gray-200' : 'rounded-r-sm'}`}
         style={commonPageStyle}
       >
-        {spreadImage ? (
+        {displayLeaf ? (
           <div className="absolute inset-0 overflow-hidden">
-            <img
-              src={spreadImage}
+            <BookLeafImage
+              leaf={displayLeaf}
               alt="Preview spread"
-              className={`absolute top-0 h-full max-w-none object-cover ${isLockedFinalPreview || isGeneratingSecondPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}`}
-              decoding="async"
+              className={isLockedFinalPreview || isGeneratingSecondPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}
               loading={isNearbySpread ? 'eager' : 'lazy'}
               fetchPriority={isNearbySpread ? 'high' : 'auto'}
-              onError={() => onImageError(spreadImage, { refreshGenerated: Boolean(generatedSpreadImage && spreadImage === generatedSpreadImage) })}
-              style={{
-                width: '200%',
-                left: isLeftSide ? '0%' : '-100%',
-              }}
+              onError={() => onImageError(displayLeaf.url, {
+                refreshGenerated: Boolean(usableStructuredLeaf || (generatedSpreadImage && displayLeaf.url === generatedSpreadImage)),
+              })}
             />
           </div>
         ) : (

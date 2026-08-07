@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getEmptyPurchaseSummary, isFinalJobReleased, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
+import { buildReleasedReaderContract, type ReleasedReaderContract } from '@/lib/reader-page-contract'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 
@@ -22,7 +23,6 @@ type FinalJobRow = {
   review_status: string | null
   total_pages: number | null
   approved_pages: number | null
-  pdf_path: string | null
   released_at: string | null
   created_at: string | null
 }
@@ -163,7 +163,7 @@ export async function GET(
   const { data: finalJobs, error: finalJobsError } = await supabaseAdmin
     .from('final_jobs')
     .select(
-      'final_job_id, job_id, order_id, cart_item_id, creation_id, template_id, status, review_status, total_pages, approved_pages, pdf_path, released_at, created_at'
+      'final_job_id, job_id, order_id, cart_item_id, creation_id, template_id, status, review_status, total_pages, approved_pages, released_at, created_at'
     )
     .eq('creation_id', creationId)
 
@@ -271,19 +271,76 @@ export async function GET(
     })
   }
 
+  const { data: linkedJob, error: linkedJobError } = await supabaseAdmin
+    .from('jobs')
+    .select('output_assets')
+    .eq('job_id', finalJob.job_id)
+    .eq('job_type', 'final')
+    .maybeSingle()
+
+  if (linkedJobError) {
+    return privateJson({ error: 'Failed to load final page metadata' }, { status: 500 })
+  }
+
+  let releasedContract: ReleasedReaderContract
+  try {
+    releasedContract = buildReleasedReaderContract({
+      outputAssets: linkedJob?.output_assets ?? null,
+      approvedPages: readyPages.map((page) => ({
+        pageIndex: page.page_index,
+        status: page.status,
+        approvedPath: page.approved_output_path,
+      })),
+      totalPages: Number(finalJob.total_pages ?? 0),
+    })
+  } catch (error) {
+    console.error('[my-books-reader] Invalid released Final contract', {
+      creationId,
+      finalJobId: finalJob.final_job_id,
+      error,
+    })
+    return privateJson({ error: 'Released book page contract is invalid' }, { status: 500 })
+  }
+
+  const usesSinglePageLayout =
+    releasedContract.schemaVersion === 2 && releasedContract.assetLayout === 'single-page'
   const signedPages = await createSignedStorageUrlMap(
     [
-      ...(previewCoverPath
+      ...(!usesSinglePageLayout && previewCoverPath
         ? [{ key: 'cover', bucket: previewCoverBucket, path: previewCoverPath, expiresIn: 60 * 60 }]
         : []),
-      ...readyPages.map((page) => ({
-        key: String(page.page_index),
+      ...releasedContract.pages.map((page) => ({
+        key: `page:${page.pageIndex}`,
         bucket: STORAGE_BUCKET,
-        path: page.approved_output_path,
+        path: page.approvedPath,
         expiresIn: 60 * 60,
       })),
     ]
   )
+
+  const signedReaderPages = releasedContract.pages.map((page) => ({
+    pageIndex: page.pageIndex,
+    status: page.status,
+    url: signedPages.get(`page:${page.pageIndex}`) ?? null,
+    ...(usesSinglePageLayout
+      ? {
+          outputOrder: page.outputOrder,
+          role: page.role,
+          spreadIndex: page.spreadIndex,
+          side: page.side,
+          pageNumber: page.pageNumber,
+        }
+      : {}),
+  }))
+  if (signedReaderPages.some((page) => !page.url)) {
+    return privateJson({ error: 'Failed to sign released book pages' }, { status: 500 })
+  }
+  const finalCoverUrl = usesSinglePageLayout && releasedContract.frontCoverPageIndex !== null
+    ? signedPages.get(`page:${releasedContract.frontCoverPageIndex}`) ?? null
+    : signedPages.get('cover') ?? null
+  if (usesSinglePageLayout && !finalCoverUrl) {
+    return privateJson({ error: 'Failed to sign released book cover' }, { status: 500 })
+  }
 
   return privateJson({
     eligible: true,
@@ -295,7 +352,7 @@ export async function GET(
       previewJobId: creation.preview_job_id ?? null,
       template: creation.templates ?? null,
       customizeSnapshot: creation.customize_snapshot ?? {},
-      coverUrl: signedPages.get('cover') ?? null,
+      coverUrl: finalCoverUrl,
     },
     latestOrderId: purchaseSummary.latestOrderId,
     latestOrderDisplayId: purchaseSummary.latestOrderDisplayId,
@@ -305,12 +362,8 @@ export async function GET(
       status: finalJob.status,
       reviewStatus: finalJob.review_status,
       releasedAt: finalJob.released_at ?? null,
-      pdfPath: finalJob.pdf_path ?? null,
     },
-    pages: readyPages.map((page) => ({
-      pageIndex: page.page_index,
-      status: page.status,
-      url: signedPages.get(String(page.page_index)) ?? null,
-    })),
+    ...(usesSinglePageLayout ? { schemaVersion: 2, assetLayout: 'single-page' } : {}),
+    pages: signedReaderPages,
   })
 }

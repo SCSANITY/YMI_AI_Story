@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/validators'
 import type { PendingUserAssetUpload } from '@/services/assets'
+import { parseSignedPreviewAssets, type SignedPreviewAssets } from '@/lib/preview-page-contract'
 
 export interface JobRecord {
   job_id: string
@@ -416,6 +417,15 @@ export async function getPreviewPages(
   pageIndices?: number[],
   options?: { size?: 'small' | 'full'; customerId?: string | null }
 ): Promise<string[]> {
+  const assets = await getPreviewPageAssets(jobId, pageIndices, options)
+  return assets.urls
+}
+
+export async function getPreviewPageAssets(
+  jobId: string,
+  pageIndices?: number[],
+  options?: { size?: 'small' | 'full'; customerId?: string | null }
+): Promise<SignedPreviewAssets> {
   if (!jobId) {
     throw new Error('Missing job ID')
   }
@@ -451,9 +461,5 @@ export async function getPreviewPages(
     }
     throw new Error(`Failed to fetch preview URLs${details}`)
   }
-  const data = await response.json()
-  const urls = Array.isArray(data?.urls) ? data.urls : []
-  if (urls.length) return urls as string[]
-  if (typeof data?.url === 'string') return [data.url]
-  return []
+  return parseSignedPreviewAssets(await response.json())
 }

@@ -1,8 +1,25 @@
 import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 import { sendOrderDeliveryEmail } from '@/lib/email'
+import {
+  assertFinalOutputAssetsReleasable,
+  isStructuredFinalOutputAssets,
+  isStructuredFinalPdfReleaseProofValid,
+  mergeApprovedFinalOutputPages,
+  readStructuredFinalPdfReleaseProof,
+} from '@/lib/finalReleaseContract'
+import {
+  buildFinalPdfReleaseArtifact,
+  getFinalPdfPreviewImagePath,
+  type ApprovedFinalPdfPage,
+} from '@/lib/finalPdfRelease'
 import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production-transition-store'
+import {
+  buildPersonalizedBookPdfFileName,
+  resolveFinalJobDisplayTitle,
+} from '@/lib/personalized-book-title'
 import { isFinalJobReleased } from '@/lib/purchase-state'
+import type { ManualPrintArtifactClient } from '@/lib/manual-print-artifact'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const STORAGE_BUCKET = 'raw-private'
@@ -25,13 +42,12 @@ export type FinalJobSummary = {
   total_pages: number
   approved_pages: number
   release_mode: FinalReleaseMode
-  pdf_path: string | null
   released_at: string | null
   email_sent_at: string | null
   print_status: 'locked' | 'pending' | 'in_review' | 'ready' | 'released'
   print_completed_pages: number
   print_released_at: string | null
-  print_package_path: string | null
+  print_package_artifact_id?: string | null
   error_message: string | null
   created_at: string
   updated_at: string
@@ -44,15 +60,14 @@ export type FinalJobSummary = {
 
 export type FinalJobPageRow = {
   final_job_page_id: string
-  final_job_id: string
   page_index: number
+  output_order: number | null
+  role: 'final_back_cover' | 'final_front_cover' | 'final_interior' | null
+  spread_index: number | null
+  side: 'left' | 'right' | null
+  page_number: number | null
   status: string
-  ai_output_path: string | null
-  manual_output_path: string | null
-  approved_output_path: string | null
   approved_source: 'ai' | 'manual' | null
-  print_output_path: string | null
-  print_status: 'locked' | 'waiting_upload' | 'completed'
   provider_request_id: string | null
   review_note: string | null
   reviewed_by: string | null
@@ -64,15 +79,24 @@ export type FinalJobPageRow = {
   error_message: string | null
   created_at: string
   updated_at: string
+  has_ai_output: boolean
+  has_manual_output: boolean
+  has_approved_output: boolean
   ai_url?: string | null
   manual_url?: string | null
   approved_url?: string | null
-  print_url?: string | null
+}
+
+export type FinalPageContractSummary = {
+  schema_version: 2 | null
+  asset_layout: 'single-page' | null
 }
 
 export type FinalJobDetail = {
   finalJob: FinalJobSummary
+  page_contract: FinalPageContractSummary
   pages: FinalJobPageRow[]
+  print_artifact: ManualPrintArtifactClient | null
 }
 
 function isPngBuffer(buffer: Buffer) {
@@ -97,10 +121,6 @@ export function getFinalPageManualPath(orderId: string, pageNumber: number) {
 
 export function getFinalPdfPath(orderId: string) {
   return `orders/${orderId}/final/pdf/final.pdf`
-}
-
-export function getFinalPagePrintPath(orderId: string, pageNumber: number) {
-  return `orders/${orderId}/final/pages/print/page_${String(pageNumber).padStart(2, '0')}.png`
 }
 
 export async function downloadStorageBuffer(path: string): Promise<Buffer> {
@@ -211,43 +231,6 @@ export async function refreshFinalJobApprovalState(finalJobId: string) {
   }
 }
 
-export async function refreshFinalJobPrintState(finalJobId: string) {
-  const { data: finalJob } = await supabaseAdmin
-    .from('final_jobs')
-    .select('total_pages, print_released_at')
-    .eq('final_job_id', finalJobId)
-    .maybeSingle()
-
-  const { count } = await supabaseAdmin
-    .from('final_job_pages')
-    .select('final_job_page_id', { count: 'exact', head: true })
-    .eq('final_job_id', finalJobId)
-    .eq('print_status', 'completed')
-
-  const completedCount = count ?? 0
-  const totalPages = Number(finalJob?.total_pages ?? 0)
-  const printStatus = finalJob?.print_released_at
-    ? 'released'
-    : totalPages > 0 && completedCount >= totalPages
-      ? 'ready'
-      : completedCount > 0
-        ? 'in_review'
-        : 'pending'
-
-  const { error } = await supabaseAdmin
-    .from('final_jobs')
-    .update({
-      print_completed_pages: completedCount,
-      print_status: printStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('final_job_id', finalJobId)
-
-  if (error) {
-    throw new Error(error.message || 'Failed to refresh final job print state')
-  }
-}
-
 export async function releaseFinalJob(params: {
   finalJobId: string
   releaseMode: FinalReleaseMode
@@ -277,7 +260,11 @@ export async function releaseFinalJob(params: {
         print_completed_pages,
         print_released_at,
         print_package_path,
-        error_message
+        error_message,
+        creations:creations(
+          customize_snapshot,
+          templates:templates(name)
+        )
       `
     )
     .eq('final_job_id', finalJobId)
@@ -287,8 +274,24 @@ export async function releaseFinalJob(params: {
     throw new Error(finalJobError?.message || 'Final job not found')
   }
 
+  const { data: linkedJob, error: linkedJobError } = await supabaseAdmin
+    .from('jobs')
+    .select('output_assets')
+    .eq('job_id', finalJob.job_id)
+    .maybeSingle()
+  if (linkedJobError) {
+    throw new Error(linkedJobError.message || 'Failed to load linked Final job output assets')
+  }
+  const linkedOutputAssets =
+    linkedJob?.output_assets && typeof linkedJob.output_assets === 'object'
+      ? (linkedJob.output_assets as Record<string, unknown>)
+      : {}
   const alreadyPdfReleased = isFinalJobReleased(finalJob)
   if (alreadyPdfReleased && finalJob.email_sent_at) {
+    const structuredProof = isStructuredFinalOutputAssets(linkedOutputAssets)
+      ? readStructuredFinalPdfReleaseProof(linkedOutputAssets)
+      : null
+    assertFinalOutputAssetsReleasable(linkedOutputAssets, structuredProof)
     await advanceOrdersToProductionAfterPdfRelease({
       jobId: finalJob.job_id,
       orderIds: [finalJob.order_id],
@@ -315,19 +318,6 @@ export async function releaseFinalJob(params: {
     throw new Error(orderError?.message || 'Order not found for final release')
   }
 
-  const { data: linkedJob } = await supabaseAdmin
-    .from('jobs')
-    .select('output_assets')
-    .eq('job_id', finalJob.job_id)
-    .maybeSingle()
-  const linkedOutputAssets =
-    linkedJob?.output_assets && typeof linkedJob.output_assets === 'object'
-      ? (linkedJob.output_assets as Record<string, unknown>)
-      : {}
-  if (linkedOutputAssets.pdf_fallback === true) {
-    throw new Error('Final job contains a fallback PDF marker and must be regenerated before release')
-  }
-
   const { data: pages, error: pagesError } = await supabaseAdmin
     .from('final_job_pages')
     .select(
@@ -346,7 +336,7 @@ export async function releaseFinalJob(params: {
     )
   }
 
-  const approvedPaths: string[] = []
+  const approvedPages: ApprovedFinalPdfPage[] = []
   for (const page of pages) {
     if (!page.approved_output_path) {
       throw new Error(`Missing approved output for final page ${page.page_index}`)
@@ -354,15 +344,42 @@ export async function releaseFinalJob(params: {
     if (page.status !== 'approved' && page.status !== 'replaced') {
       throw new Error(`Page ${page.page_index} is not approved`)
     }
-    approvedPaths.push(page.approved_output_path)
+    approvedPages.push({
+      page_index: page.page_index,
+      approved_output_path: page.approved_output_path,
+    })
   }
 
   const pdfPath = finalJob.pdf_path || getFinalPdfPath(finalJob.order_id)
   const now = new Date().toISOString()
+  const reviewedOutputAssets: Record<string, unknown> = {
+    ...linkedOutputAssets,
+    pages: mergeApprovedFinalOutputPages(linkedOutputAssets, approvedPages),
+  }
+  const isStructuredOutput = isStructuredFinalOutputAssets(reviewedOutputAssets)
+  const persistedStructuredProof = isStructuredOutput
+    ? readStructuredFinalPdfReleaseProof(linkedOutputAssets)
+    : null
+  const canReuseExistingPdf = Boolean(
+    alreadyPdfReleased &&
+      finalJob.pdf_path &&
+      (!isStructuredOutput ||
+        isStructuredFinalPdfReleaseProofValid(reviewedOutputAssets, persistedStructuredProof))
+  )
+  let releaseOutputAssets: Record<string, unknown> = reviewedOutputAssets
+  let previewPath = getFinalPdfPreviewImagePath(reviewedOutputAssets, approvedPages)
 
-  if (!alreadyPdfReleased || !finalJob.pdf_path) {
-    const pdfBuffer = await buildFinalPdfFromPaths(approvedPaths)
-    const { error: uploadError } = await supabaseAdmin.storage.from(STORAGE_BUCKET).upload(pdfPath, pdfBuffer, {
+  if (!canReuseExistingPdf) {
+    const artifact = await buildFinalPdfReleaseArtifact({
+      outputAssets: linkedOutputAssets,
+      totalPages: expectedTotalPages,
+      approvedPages,
+      loadApprovedPage: (path) => downloadStorageBuffer(path),
+      buildLegacyPdf: buildFinalPdfFromPaths,
+    })
+    releaseOutputAssets = artifact.outputAssets
+    previewPath = artifact.previewImagePath
+    const { error: uploadError } = await supabaseAdmin.storage.from(STORAGE_BUCKET).upload(pdfPath, artifact.buffer, {
       contentType: 'application/pdf',
       upsert: true,
     })
@@ -370,6 +387,8 @@ export async function releaseFinalJob(params: {
     if (uploadError) {
       throw new Error(uploadError.message || 'Failed to upload final PDF')
     }
+  } else {
+    assertFinalOutputAssetsReleasable(reviewedOutputAssets, persistedStructuredProof)
   }
 
   if (!alreadyPdfReleased) {
@@ -398,13 +417,9 @@ export async function releaseFinalJob(params: {
       status: 'done',
       progress: 100,
       output_assets: {
-        ...linkedOutputAssets,
+        ...releaseOutputAssets,
         bucket: STORAGE_BUCKET,
         pdf_path: pdfPath,
-        pages: pages.map((page) => ({
-          page_index: page.page_index,
-          storage_path: page.approved_output_path,
-        })),
       },
       updated_at: now,
     })
@@ -432,9 +447,11 @@ export async function releaseFinalJob(params: {
     throw new Error('Missing order email for final release')
   }
 
+  const displayTitle = resolveFinalJobDisplayTitle(finalJob)
+  const downloadFileName = buildPersonalizedBookPdfFileName(displayTitle)
   const { data: signedPdf, error: signedPdfError } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
-    .createSignedUrl(pdfPath, FINAL_PDF_TTL_SECONDS, { download: `final-${finalJob.order_id}.pdf` })
+    .createSignedUrl(pdfPath, FINAL_PDF_TTL_SECONDS, { download: downloadFileName })
 
   if (signedPdfError || !signedPdf?.signedUrl) {
     throw new Error(signedPdfError?.message || 'Failed to create signed PDF url')
@@ -442,7 +459,6 @@ export async function releaseFinalJob(params: {
 
   // Cover thumbnail must outlive the 24h PDF link — the email may be opened weeks
   // later, and a broken cover looks worse than a missing one. 1-year signed URL.
-  const previewPath = approvedPaths[0] || null
   const previewImageUrl = previewPath ? await signStorageUrl(previewPath, 60 * 60 * 24 * 365) : null
   let emailSentAt = finalJob.email_sent_at || null
 

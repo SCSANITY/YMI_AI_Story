@@ -1,4 +1,4 @@
-import type { Book, MagicAttribute } from '@/types'
+import type { Book, MagicAttribute, TemplateFinalPreviewPage } from '@/types'
 
 export type AgeGroup = 'ages_2_plus' | 'ages_6_plus'
 
@@ -38,6 +38,7 @@ export type TemplateCatalogRow = {
   is_coming_soon?: boolean | null
   showcase_image_paths?: string[] | null
   final_preview_paths?: string[] | null
+  final_preview_pages?: TemplateFinalPreviewPage[] | null
   magic_attributes?: unknown
 }
 
@@ -57,6 +58,7 @@ export type CatalogBook = Book & {
   createdAt: string
   normalizedCoverUrl?: string
   finalPreviewImages: string[]
+  finalPreviewPages: TemplateFinalPreviewPage[]
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
@@ -173,6 +175,9 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const finalPreviewImages = normalizeStringArray(row.final_preview_paths)
     .map(templateStorageUrl)
     .filter(Boolean)
+  const finalPreviewPages = Array.isArray(row.final_preview_pages)
+    ? row.final_preview_pages.filter((page) => Boolean(page?.url))
+    : []
   const magicAttributes = normalizeMagicAttributes(row.magic_attributes)
 
   const fallbackShowcaseImages = coverUrl ? [coverUrl] : []
@@ -205,6 +210,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     normalizedCoverUrl: normalizedCoverUrl || undefined,
     showcaseImages: showcaseImages.length ? showcaseImages : fallbackShowcaseImages,
     finalPreviewImages,
+    finalPreviewPages,
     description: String(row.description ?? '').trim(),
     innerDescription: String(row.inner_description ?? '').trim() || undefined,
     category: storyTypes[0] || 'Story',
@@ -259,6 +265,7 @@ export function staticBookToCatalogBook(book: Book, index = 0): CatalogBook {
     displayOrder: index,
     createdAt: '',
     finalPreviewImages: book.finalPreviewImages ?? [],
+    finalPreviewPages: book.finalPreviewPages ?? [],
     magicAttributes: book.magicAttributes ?? [],
   }
 }
