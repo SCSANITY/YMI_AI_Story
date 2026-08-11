@@ -11,6 +11,15 @@ import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { CheckoutCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import {
+  buildSupportReplyEmailText,
+  SupportReplyEmail,
+} from '@/components/emails/SupportReplyEmail'
+import {
+  buildGeneralInboxReplyEmailText,
+  GeneralInboxReplyEmail,
+} from '@/components/emails/GeneralInboxReplyEmail'
+import type { GeneralInboxSenderKey } from '@/lib/general-inbox'
+import {
   markEmailEventFailed,
   markEmailEventSent,
   prepareEmailEvent,
@@ -29,6 +38,9 @@ type SendEmailParams = {
   text?: string
   html?: string
   from?: string
+  replyTo?: string
+  headers?: Record<string, string>
+  idempotencyKey?: string
 }
 
 type ManagedEmailParams = SendEmailParams & {
@@ -41,6 +53,7 @@ type ManagedEmailParams = SendEmailParams & {
   customerId?: string | null
   context?: Record<string, unknown>
   retryFailed?: boolean
+  retryPendingAfterMs?: number
 }
 
 type SenderResolution = {
@@ -96,7 +109,17 @@ function getSender(envName: string): string {
   return sender.normalizedValue
 }
 
-async function sendEmail({ to, subject, react, text, html, from }: SendEmailParams) {
+async function sendEmail({
+  to,
+  subject,
+  react,
+  text,
+  html,
+  from,
+  replyTo,
+  headers,
+  idempotencyKey,
+}: SendEmailParams) {
   const resolvedFrom = from || getSender('EMAIL_FROM')
 
   if (!resend) {
@@ -120,7 +143,10 @@ async function sendEmail({ to, subject, react, text, html, from }: SendEmailPara
       ...(react ? { react } : {}),
       ...(!react && html ? { html } : {}),
       ...(text ? { text } : {}),
-    } as Parameters<typeof resend.emails.send>[0]
+      ...(replyTo ? { replyTo } : {}),
+      ...(headers && Object.keys(headers).length ? { headers } : {}),
+    } as Parameters<typeof resend.emails.send>[0],
+    idempotencyKey ? { idempotencyKey } : undefined
   )
 
   const responseAny = response as
@@ -178,10 +204,11 @@ async function sendManagedEmail(params: ManagedEmailParams) {
     customerId: params.customerId ?? null,
     context,
     retryFailed: params.retryFailed,
+    retryPendingAfterMs: params.retryPendingAfterMs,
   })
 
   if (!shouldSend || !event) {
-    return { skipped: true, event }
+    return { skipped: true, event, response: null }
   }
 
   if (!sender.isValid) {
@@ -398,4 +425,148 @@ export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailP
       />
     ),
   })
+}
+
+type SendSupportReplyEmailParams = {
+  to: string
+  customerId: string | null
+  customerName?: string | null
+  ticketId: string
+  ticketCode: string
+  messageId: string
+  replyBody: string
+  replyTo: string
+  subject: string
+  originalQuestion?: string | null
+  inReplyTo?: string | null
+  references?: string | null
+}
+
+export async function sendSupportReplyEmail(params: SendSupportReplyEmailParams) {
+  const headers: Record<string, string> = {}
+  if (params.inReplyTo) headers['In-Reply-To'] = params.inReplyTo
+  if (params.references) headers.References = params.references
+
+  const emailResult = await sendManagedEmail({
+    emailKey: 'support_reply',
+    idempotencyKey: `support_reply:${params.messageId}`,
+    to: params.to,
+    fromEnvName: 'EMAIL_FROM_SUPPORT',
+    replyTo: params.replyTo,
+    headers,
+    subject: params.subject,
+    customerId: params.customerId,
+    context: {
+      ticketId: params.ticketId,
+      ticketCode: params.ticketCode,
+      supportMessageId: params.messageId,
+      replyToDomain: params.replyTo.split('@').pop() || null,
+    },
+    retryFailed: true,
+    retryPendingAfterMs: 2 * 60 * 1000,
+    react: (
+      <SupportReplyEmail
+        customerName={params.customerName}
+        replyBody={params.replyBody}
+        ticketCode={params.ticketCode}
+        originalQuestion={params.originalQuestion}
+      />
+    ),
+    text: buildSupportReplyEmailText({
+      customerName: params.customerName,
+      replyBody: params.replyBody,
+      ticketCode: params.ticketCode,
+      originalQuestion: params.originalQuestion,
+    }),
+  })
+
+  const response = emailResult.response as
+    | { data?: { id?: string | null } | null; id?: string | null }
+    | null
+    | undefined
+
+  if (emailResult.skipped && emailResult.event?.status !== 'sent') {
+    throw new Error('Support email is still pending and cannot be reconciled yet')
+  }
+
+  return {
+    skipped: emailResult.skipped,
+    emailEventId: emailResult.event?.email_event_id ?? null,
+    providerMessageId: response?.data?.id || response?.id || emailResult.event?.resend_message_id || null,
+  }
+}
+
+const GENERAL_INBOX_SENDER_ENV: Record<GeneralInboxSenderKey, string> = {
+  default: 'EMAIL_FROM',
+  support: 'EMAIL_FROM_SUPPORT',
+  orders: 'EMAIL_FROM_ORDERS',
+  delivery: 'EMAIL_FROM_DELIVERY',
+  security: 'EMAIL_FROM_SECURITY',
+}
+
+export function getGeneralInboxSenderAddress(senderKey: GeneralInboxSenderKey): string {
+  return getSender(GENERAL_INBOX_SENDER_ENV[senderKey])
+}
+
+type SendGeneralInboxReplyEmailParams = {
+  to: string
+  recipientName?: string | null
+  inboundEmailId: string
+  replyId: string
+  replyBody: string
+  replyTo: string
+  senderKey: GeneralInboxSenderKey
+  subject: string
+  inReplyTo?: string | null
+  references?: string | null
+}
+
+export async function sendGeneralInboxReplyEmail(params: SendGeneralInboxReplyEmailParams) {
+  const headers: Record<string, string> = {}
+  if (params.inReplyTo) headers['In-Reply-To'] = params.inReplyTo
+  if (params.references) headers.References = params.references
+
+  const emailResult = await sendManagedEmail({
+    emailKey: 'general_inbox_reply',
+    idempotencyKey: `general_inbox_reply:${params.replyId}`,
+    to: params.to,
+    fromEnvName: GENERAL_INBOX_SENDER_ENV[params.senderKey],
+    replyTo: params.replyTo,
+    headers,
+    subject: params.subject,
+    context: {
+      inboundEmailId: params.inboundEmailId,
+      replyId: params.replyId,
+      senderKey: params.senderKey,
+      replyToLocalPart: params.replyTo.split('@')[0] || null,
+    },
+    retryFailed: true,
+    retryPendingAfterMs: 2 * 60 * 1000,
+    react: (
+      <GeneralInboxReplyEmail
+        recipientName={params.recipientName}
+        replyBody={params.replyBody}
+      />
+    ),
+    text: buildGeneralInboxReplyEmailText({
+      recipientName: params.recipientName,
+      replyBody: params.replyBody,
+    }),
+  })
+
+  const response = emailResult.response as
+    | { data?: { id?: string | null } | null; id?: string | null }
+    | null
+    | undefined
+
+  if (emailResult.skipped && emailResult.event?.status !== 'sent') {
+    throw new Error('General Inbox email is still pending and cannot be reconciled yet')
+  }
+
+  return {
+    skipped: emailResult.skipped,
+    emailEventId: emailResult.event?.email_event_id ?? null,
+    providerMessageId:
+      response?.data?.id || response?.id || emailResult.event?.resend_message_id || null,
+  }
 }

@@ -14,37 +14,39 @@ export default function SupportOrderPage() {
   const router = useRouter();
   const params = useParams();
   const orderId = params?.orderID as string | undefined;
-  const [order, setOrder] = useState<SupportOrderSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadState, setLoadState] = useState<{
+    orderId: string | undefined;
+    order: SupportOrderSummary | null;
+  }>({ orderId: undefined, order: null });
+  const loading = loadState.orderId !== orderId;
+  const order = loading ? null : loadState.order;
 
   useEffect(() => {
     if (!orderId) return;
     let cancelled = false;
-    setLoading(true);
     fetch(`/api/orders/${orderId}`, { credentials: 'include', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
         if (!data?.order) {
-          setOrder(null);
+          setLoadState({ orderId, order: null });
           return;
         }
-        setOrder({
-          id: data.order.id,
-          displayId: data.order.displayId ?? null,
-          status: data.order.status ?? null,
-          total: Number(data.total ?? 0),
-          displayCurrency: (data.order.displayCurrency ?? 'USD') as CheckoutCurrency,
-          createdAt: data.order.createdAt ?? null,
+        setLoadState({
+          orderId,
+          order: {
+            id: data.order.id,
+            displayId: data.order.displayId ?? null,
+            status: data.order.status ?? null,
+            total: Number(data.total ?? 0),
+            displayCurrency: (data.order.displayCurrency ?? 'USD') as CheckoutCurrency,
+            createdAt: data.order.createdAt ?? null,
+          },
         });
       })
       .catch(() => {
         if (cancelled) return;
-        setOrder(null);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
+        setLoadState({ orderId, order: null });
       });
     return () => {
       cancelled = true;
@@ -69,7 +71,7 @@ export default function SupportOrderPage() {
       </div>
 
       <div className="grid lg:grid-cols-[1.2fr_1fr] gap-8">
-        <SupportOrderMessageSection t={t} />
+        <SupportOrderMessageSection orderId={orderId || ''} t={t} />
         <SupportOrderSummaryCard loading={loading} order={order} t={t} />
       </div>
     </div>

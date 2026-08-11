@@ -48,6 +48,23 @@ export type EmailEventRow = {
   sent_at: string | null
   failed_at: string | null
   observed_at: string | null
+  provider_delivery_status: string | null
+  provider_event_type: string | null
+  provider_event_at: string | null
+}
+
+export type ResendOperationsSummary = {
+  dailySent: number
+  dailyReceived: number
+  monthlySent: number
+  monthlyReceived: number
+  inboundFailed: number
+  inboundStranded: number
+  webhookFailed: number
+  webhookPendingMatch: number
+  webhookStaleProcessing: number
+  providerDeliveryFailures: number
+  optionalTrackingEvents: number
 }
 
 function normalizeOption<T extends readonly string[]>(

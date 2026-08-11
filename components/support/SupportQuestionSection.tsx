@@ -47,7 +47,11 @@ export function SupportQuestionSection({ user, openLoginModal, t }: SupportQuest
       }
       setQuestion('')
       setStatus('success')
-      setMessage(t('support.submitSuccess'))
+      setMessage(
+        data?.ticketCode
+          ? t('support.submitSuccessReference', { ticketCode: data.ticketCode })
+          : t('support.submitSuccess')
+      )
     } catch (error) {
       setStatus('error')
       setMessage(error instanceof Error ? error.message : t('support.submitError'))

@@ -45,7 +45,7 @@ function normalizeContext(context?: Record<string, unknown>) {
 }
 
 export async function prepareEmailEvent(
-  params: EmailEventBase & { retryFailed?: boolean }
+  params: EmailEventBase & { retryFailed?: boolean; retryPendingAfterMs?: number }
 ): Promise<PreparedEmailEvent> {
   const now = new Date().toISOString()
   const insertPayload = {
@@ -88,6 +88,32 @@ export async function prepareEmailEvent(
 
   const existingRow = existing as EmailEventRow | null
   if (!existingRow) return { event: null, shouldSend: false }
+
+  if (existingRow.status === 'pending' && params.retryPendingAfterMs) {
+    const pendingAge = Date.now() - new Date(existingRow.updated_at).getTime()
+    if (pendingAge >= params.retryPendingAfterMs) {
+      const { data: reclaimed, error: reclaimError } = await supabaseAdmin
+        .from('email_events')
+        .update({
+          error_message: null,
+          context: normalizeContext(params.context),
+          updated_at: now,
+        })
+        .eq('email_event_id', existingRow.email_event_id)
+        .eq('status', 'pending')
+        .eq('updated_at', existingRow.updated_at)
+        .select('*')
+        .maybeSingle()
+
+      if (reclaimError) {
+        throw new Error(`Failed to reclaim pending email event: ${reclaimError.message}`)
+      }
+      return {
+        event: (reclaimed as EmailEventRow | null) ?? existingRow,
+        shouldSend: Boolean(reclaimed),
+      }
+    }
+  }
 
   if (existingRow.status !== 'failed' || !params.retryFailed) {
     return { event: existingRow, shouldSend: false }

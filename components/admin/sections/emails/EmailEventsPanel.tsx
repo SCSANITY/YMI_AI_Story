@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, RotateCcw } from 'lucide-react'
+import { Activity, CircleAlert, CircleCheck, MailCheck, RefreshCw, RotateCcw } from 'lucide-react'
 import { isBrowserTranslated } from '@/lib/browser-translation'
 import {
   areEmailEventFiltersEqual,
@@ -14,6 +14,7 @@ import {
   type EmailEventProvider,
   type EmailEventRow,
   type EmailEventStatus,
+  type ResendOperationsSummary,
 } from '@/components/admin/sections/emails/types'
 
 function formatDate(value: string | null) {
@@ -51,17 +52,21 @@ function buildEmailEventsHref(filters: EmailEventFilters) {
 }
 
 function eventActivityAt(event: EmailEventRow) {
-  return event.failed_at || event.sent_at || event.observed_at
+  return event.provider_event_at || event.failed_at || event.sent_at || event.observed_at
 }
 
 export function EmailEventsPanel({
   filters,
   events,
   loadError,
+  operations,
+  operationsError,
 }: {
   filters: EmailEventFilters
   events: EmailEventRow[]
   loadError: string | null
+  operations: ResendOperationsSummary
+  operationsError: string | null
 }) {
   const router = useRouter()
   const [draftFilters, setDraftFilters] = useState(filters)
@@ -103,6 +108,8 @@ export function EmailEventsPanel({
 
   return (
     <>
+      <ResendOperationsPanel summary={operations} loadError={operationsError} />
+
       <form
         onSubmit={(event) => {
           event.preventDefault()
@@ -221,6 +228,101 @@ export function EmailEventsPanel({
   )
 }
 
+function ResendOperationsPanel({
+  summary,
+  loadError,
+}: {
+  summary: ResendOperationsSummary
+  loadError: string | null
+}) {
+  const dailyCombined = summary.dailySent + summary.dailyReceived
+  const monthlyCombined = summary.monthlySent + summary.monthlyReceived
+  const alerts: string[] = []
+  if (dailyCombined >= 70) alerts.push(`Daily Resend volume is ${dailyCombined}; review before the 100-message provider cap.`)
+  if (monthlyCombined >= 2400) alerts.push(`Monthly Resend volume is ${monthlyCombined}; review before the 3,000-message provider cap.`)
+  if (summary.inboundFailed > 0) alerts.push(`${summary.inboundFailed} inbound message(s) failed processing.`)
+  if (summary.inboundStranded > 0) alerts.push(`${summary.inboundStranded} inbound message(s) appear stranded.`)
+  if (summary.webhookFailed > 0) alerts.push(`${summary.webhookFailed} Resend event(s) failed reconciliation.`)
+  if (summary.webhookPendingMatch > 0) alerts.push(`${summary.webhookPendingMatch} delivery event(s) are waiting for a provider-message match.`)
+  if (summary.webhookStaleProcessing > 0) alerts.push(`${summary.webhookStaleProcessing} Resend event(s) are stale in processing.`)
+  if (summary.providerDeliveryFailures > 0) alerts.push(`${summary.providerDeliveryFailures} managed email(s) have a provider failure, bounce, complaint, or suppression.`)
+  if (summary.optionalTrackingEvents > 0) alerts.push(`${summary.optionalTrackingEvents} open/click event(s) were observed in 30 days; verify optional tracking remains disabled.`)
+
+  return (
+    <section className="space-y-3" aria-label="Resend operations">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <OperationsMetric
+          icon={Activity}
+          label="Today combined"
+          value={dailyCombined}
+          detail={`${summary.dailySent} sent / ${summary.dailyReceived} received`}
+          warning={dailyCombined >= 70}
+        />
+        <OperationsMetric
+          icon={MailCheck}
+          label="Month combined"
+          value={monthlyCombined}
+          detail={`${summary.monthlySent} sent / ${summary.monthlyReceived} received`}
+          warning={monthlyCombined >= 2400}
+        />
+        <OperationsMetric
+          icon={CircleAlert}
+          label="Processing issues"
+          value={summary.inboundFailed + summary.inboundStranded + summary.webhookFailed + summary.webhookStaleProcessing}
+          detail="Inbound and webhook recovery"
+          warning={summary.inboundFailed + summary.inboundStranded + summary.webhookFailed + summary.webhookStaleProcessing > 0}
+        />
+        <OperationsMetric
+          icon={CircleAlert}
+          label="Delivery attention"
+          value={summary.providerDeliveryFailures + summary.webhookPendingMatch}
+          detail="Provider failures and unmatched events"
+          warning={summary.providerDeliveryFailures + summary.webhookPendingMatch > 0}
+        />
+      </div>
+
+      {loadError ? (
+        <div role="alert" className="flex items-start gap-2 rounded-2xl border border-rose-300/20 bg-rose-300/[0.07] p-3 text-xs leading-5 text-rose-200">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /> Operations metrics failed to load: {loadError}
+        </div>
+      ) : alerts.length > 0 ? (
+        <div role="alert" className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-3 text-xs leading-5 text-amber-100">
+          {alerts.map((alert) => <p key={alert}>{alert}</p>)}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.06] p-3 text-xs text-emerald-100">
+          <CircleCheck className="h-4 w-4" /> No Resend quota or processing alert is currently active.
+        </div>
+      )}
+    </section>
+  )
+}
+
+function OperationsMetric({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  warning,
+}: {
+  icon: typeof Activity
+  label: string
+  value: number
+  detail: string
+  warning: boolean
+}) {
+  return (
+    <div className={`rounded-2xl border p-4 ${warning ? 'border-amber-300/25 bg-amber-300/[0.07]' : 'border-white/[0.08] bg-white/[0.04]'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+        <Icon className={`h-4 w-4 ${warning ? 'text-amber-200' : 'text-slate-500'}`} />
+      </div>
+      <p className="mt-2 text-2xl font-black text-white">{value}</p>
+      <p className="mt-1 text-[10px] text-slate-500">{detail}</p>
+    </div>
+  )
+}
+
 function FilterSelect({
   label,
   value,
@@ -269,6 +371,7 @@ function EmailEventCard({ event }: { event: EmailEventRow }) {
         <EventDetail label="Created" value={formatDate(event.created_at)} />
         <EventDetail label="Activity" value={formatDate(eventActivityAt(event))} />
         <EventDetail label="Provider" value={formatOption(event.provider)} />
+        <EventDetail label="Delivery" value={event.provider_delivery_status ? formatOption(event.provider_delivery_status) : '-'} />
         <EventDetail label="Recipient" value={event.to_email || '-'} breakWords />
         <EventDetail label="Order" value={event.order_id || '-'} breakWords />
         <EventDetail label="Final job" value={event.final_job_id || '-'} breakWords />
@@ -291,6 +394,7 @@ function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
           <th className="px-4 py-3">Type</th>
           <th className="px-4 py-3">Provider</th>
           <th className="px-4 py-3">Status</th>
+          <th className="px-4 py-3">Delivery</th>
           <th className="px-4 py-3">Recipient</th>
           <th className="px-4 py-3">Linked Object</th>
           <th className="px-4 py-3">Error</th>
@@ -313,6 +417,9 @@ function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
             <td className="px-4 py-3 text-slate-400">{formatOption(event.provider)}</td>
             <td className="px-4 py-3">
               <StatusBadge status={event.status} />
+            </td>
+            <td className="px-4 py-3">
+              {event.provider_delivery_status ? <StatusBadge status={event.provider_delivery_status} /> : <span className="text-slate-600">-</span>}
             </td>
             <td className="max-w-[240px] break-all px-4 py-3 text-slate-400">
               {event.to_email || '-'}

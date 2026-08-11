@@ -67,7 +67,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 25, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 32, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -110,6 +110,8 @@ test('active and placeholder Admin pages remain explicitly separated', async () 
     ['legal', 'LegalContentSection'],
     ['orders', 'OrdersManagementSection'],
     ['service', 'ServiceControlSection'],
+    ['support', 'SupportInbox'],
+    ['inbox', 'GeneralInbox'],
   ])
   const placeholderPages = ['analytics', 'banner', 'catalog']
 
