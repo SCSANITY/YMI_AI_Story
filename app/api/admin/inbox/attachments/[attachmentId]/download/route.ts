@@ -4,8 +4,6 @@ import { INBOUND_ATTACHMENT_BUCKET } from '@/lib/inbound-email-attachments'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/support-ticket'
 
-const DOWNLOAD_TTL_SECONDS = 60
-
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
@@ -39,19 +37,24 @@ export async function GET(
     return jsonNoStore({ error: 'Attachment is not available for download' }, 409)
   }
 
-  const { data: signed, error: signedError } = await supabaseAdmin.storage
+  const { data: file, error: downloadError } = await supabaseAdmin.storage
     .from(INBOUND_ATTACHMENT_BUCKET)
-    .createSignedUrl(attachment.storage_path, DOWNLOAD_TTL_SECONDS, {
-      download: attachment.safe_filename,
-    })
-  if (signedError || !signed?.signedUrl) {
-    return jsonNoStore({ error: signedError?.message || 'Failed to sign attachment' }, 500)
+    .download(attachment.storage_path)
+  if (downloadError || !file) {
+    return jsonNoStore({ error: downloadError?.message || 'Failed to download attachment' }, 500)
   }
 
-  return jsonNoStore({
-    ok: true,
-    url: signed.signedUrl,
-    expiresIn: DOWNLOAD_TTL_SECONDS,
-    filename: attachment.safe_filename,
+  const bytes = await file.arrayBuffer()
+  return new NextResponse(bytes, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'private, no-store, max-age=0',
+      Pragma: 'no-cache',
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${attachment.safe_filename}"`,
+      'Content-Length': String(bytes.byteLength),
+      'X-Content-Type-Options': 'nosniff',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+    },
   })
 }

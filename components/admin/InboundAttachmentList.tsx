@@ -35,17 +35,20 @@ export function InboundAttachmentList({
         `/api/admin/inbox/attachments/${attachment.attachment_id}/download`,
         { credentials: 'include', cache: 'no-store' }
       )
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok || typeof data?.url !== 'string') {
-        throw new Error(data?.error || 'Failed to prepare attachment download')
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data?.error || 'Failed to download attachment')
       }
+      const file = await response.blob()
+      const objectUrl = URL.createObjectURL(file)
       const link = document.createElement('a')
-      link.href = data.url
+      link.href = objectUrl
       link.download = attachment.safe_filename
       link.rel = 'noopener noreferrer'
       document.body.appendChild(link)
       link.click()
       link.remove()
+      URL.revokeObjectURL(objectUrl)
     } catch (error) {
       setDownloadError(error instanceof Error ? error.message : 'Attachment download failed')
     } finally {

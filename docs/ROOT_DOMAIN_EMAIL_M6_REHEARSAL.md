@@ -156,9 +156,12 @@ body containing real customer or child data.
 1. Send one small PDF and one PNG with the Direct Support or General Inbox test.
 2. Verify both show as stored and downloadable only while authenticated as
    Admin.
-3. Open the download URL in a signed-out browser and verify access is rejected.
-4. Confirm the browser downloads the file rather than rendering sender HTML or
-   executable content inline.
+3. Copy the same-origin `/api/admin/inbox/attachments/.../download` request URL
+   from the browser network panel. Open it in a signed-out browser and verify
+   access is rejected.
+4. Confirm the authenticated response downloads the file rather than rendering
+   sender HTML or executable content inline, and never exposes a Storage signed
+   URL to the client.
 
 ### E. Provider Lifecycle
 
