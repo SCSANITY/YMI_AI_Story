@@ -1,6 +1,6 @@
 # T3-025 M6 Pre-Cutover Rehearsal
 
-Status: deployment preparation in progress; live rehearsal not started
+Status: live rehearsal completed; M7 remains owner-gated
 Date prepared: 2026-08-11
 
 ## Boundary
@@ -193,21 +193,29 @@ appears. Remove the temporary env file after all probes.
 
 | Proof | Required result | Result |
 | --- | --- | --- |
-| Strict preflight | Zero failures | Pending |
-| Direct Support | One ticket, no replay duplicate | Pending |
-| Multi-turn reply | Same ticket; changed subject safe | Pending |
-| Closed reply | Existing ticket reopens | Pending |
-| General Inbox | `admin` and `orders` visible | Pending |
-| Unknown recipient | Minimal reject, no content import | Pending |
-| Attachments | Stored, Admin-only download | Pending |
-| Delivered event | Provider status `delivered` | Pending |
-| Bounce event | Provider status `bounced` | Pending |
-| Complaint event | Provider status `complained` | Pending |
-| Suppression event | Provider status `suppressed` | Pending |
-| Open/click | No events | Pending |
-| Recovery | No failed/stale/pending match remains | Pending |
-| Admin authorization | Signed-out access rejected | Pending |
-| Root MX after rehearsal | Still `5 mail.ymistory.com` | Pending |
+| Strict preflight | Zero failures | Passed: 16/16, zero warnings |
+| Direct Support | One ticket, no replay duplicate | Passed |
+| Multi-turn reply | Same ticket; changed subject safe | Passed |
+| Closed reply | Existing ticket reopens | Passed |
+| General Inbox | `admin` and `orders` visible | Passed |
+| Unknown recipient | Minimal reject, no content import | Passed |
+| Attachments | Stored, Admin-only download | Passed after authenticated proxy fix |
+| Delivered event | Provider status `delivered` | Passed |
+| Bounce event | Provider status `bounced` | Passed |
+| Complaint event | Provider status `complained` | Passed after priority guard |
+| Suppression event | Provider status `suppressed` | Passed |
+| Open/click | No events | Passed: zero events |
+| Recovery | No failed/stale/pending match remains | Passed: zero backlog failures |
+| Admin authorization | Signed-out access rejected | Passed |
+| Root MX after rehearsal | Still `5 mail.ymistory.com` | Passed |
+
+Live evidence is retained in Supabase under run id `M6-20260811-A`. The
+rehearsal found and closed two blocking defects before cutover: attachment
+downloads now proxy bytes through the authenticated Admin route instead of
+exposing a Storage signed URL, and provider lifecycle reconciliation now makes
+event priority authoritative so a later low-priority delivery event cannot
+downgrade a complaint. Application-owned send status remained `sent` for all
+four provider probes.
 
 ## M6 Rollback
 

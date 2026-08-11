@@ -245,9 +245,10 @@ test('Inbound attachments are bounded, privately persisted, and Admin-downloaded
 })
 
 test('one signed Resend boundary isolates inbound, delivery, and ignored events', async () => {
-  const [sql, webhook, policy, processor, recovery, emailEventsPage, emailEventsPanel] =
+  const [sql, priorityGuard, webhook, policy, processor, recovery, emailEventsPage, emailEventsPanel] =
     await Promise.all([
       read('sql_resend_event_operations.sql', templates),
+      read('sql_resend_event_priority_guard.sql', templates),
       read('app/api/webhooks/resend/route.ts'),
       read('src/lib/resend-webhook-policy.ts'),
       read('src/lib/resend-webhook-events.ts'),
@@ -277,6 +278,12 @@ test('one signed Resend boundary isolates inbound, delivery, and ignored events'
   assert.match(sql, /reconcile_resend_delivery_event/)
   assert.match(sql, /where resend_message_id = trim\(p_provider_email_id\)/)
   assert.match(sql, /provider_delivery_status/)
+  for (const source of [sql, priorityGuard]) {
+    assert.match(source, /v_priority > v_email_event\.provider_event_priority/)
+    assert.match(source, /v_priority = v_email_event\.provider_event_priority/)
+    assert.match(source, /p_event_created_at >= v_email_event\.provider_event_at/)
+    assert.doesNotMatch(source, /p_event_created_at > v_email_event\.provider_event_at\s+or/)
+  }
   assert.doesNotMatch(sql, /^\s*status\s*=\s*v_status/m)
   assert.match(sql, /enable row level security/)
   assert.match(sql, /grant execute on function public\.claim_resend_webhook_event/)
