@@ -1,5 +1,6 @@
 import { CheckCircle2, FileText, Loader2, Lock, PackageCheck, Send } from 'lucide-react'
 import type { FinalJobDetail } from '@/lib/finalReview'
+import { AdminButton, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminUi'
 import { formatDate } from './reviewUi'
 
 export function FinalReviewStage({
@@ -38,6 +39,29 @@ export function FinalReviewStage({
   return (
     <div className="min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain">
       <aside className="space-y-4">
+        <AdminPanel className="flex items-center gap-4 p-4">
+          <div
+            className="admin-v3-ring h-[92px] w-[92px] shrink-0"
+            style={{ ['--p']: totalPageCount ? Math.round((approvedPageCount / totalPageCount) * 100) : 0 } as React.CSSProperties}
+          >
+            <div className="admin-v3-ring-hole h-[70px] w-[70px]">
+              <div>
+                <b className="block text-xl font-black tabular-nums text-[var(--admin-page-ink)]">{approvedPageCount}</b>
+                <span className="block text-[10px] text-[var(--admin-page-muted)]">of {totalPageCount}</span>
+              </div>
+            </div>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Pages approved</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--admin-page-ink)]">
+              {readyToRelease
+                ? 'Ready to release'
+                : totalPageCount > 0
+                  ? `${Math.max(totalPageCount - approvedPageCount, 0)} to approve`
+                  : 'Select a job'}
+            </p>
+          </div>
+        </AdminPanel>
         <StageCard
           label="Stage 1"
           title="PDF version"
@@ -47,7 +71,7 @@ export function FinalReviewStage({
           progress={`${approvedPageCount} / ${totalPageCount} pages`}
           description="Customer-facing PDF approval, PDF build, and delivery email."
         >
-          <button
+          <AdminButton
             type="button"
             onClick={onReleasePdf}
             disabled={
@@ -58,11 +82,8 @@ export function FinalReviewStage({
               hasUploadPending
             }
             title={releaseDisabledReason}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold disabled:cursor-not-allowed ${
-              pdfReleased
-                ? 'border border-white/10 bg-white/[0.05] text-slate-400'
-                : 'bg-gradient-to-r from-emerald-400 to-lime-300 text-slate-950 disabled:opacity-60'
-            }`}
+            tone={pdfReleased ? 'secondary' : 'primary'}
+            className="w-full"
           >
             {pdfReleased ? (
               <CheckCircle2 className="h-4 w-4" />
@@ -72,9 +93,9 @@ export function FinalReviewStage({
               <Send className="h-4 w-4" />
             )}
             {pdfReleased ? 'PDF Released' : 'Release PDF version'}
-          </button>
-          <p className="text-xs leading-6 text-slate-400">
-            Updated: <span className="text-slate-200">{formatDate(detail?.finalJob.updated_at)}</span>
+          </AdminButton>
+          <p className="text-xs leading-6 text-[var(--admin-page-muted)]">
+            Updated: <span className="text-[var(--admin-page-ink)]">{formatDate(detail?.finalJob.updated_at)}</span>
           </p>
         </StageCard>
 
@@ -87,12 +108,13 @@ export function FinalReviewStage({
           progress={printReleased ? 'Artifact locked' : printArtifactReady ? '1 verified PDF' : 'Awaiting upload'}
           description="A manually prepared, private printer PDF. This stage unlocks after customer PDF release."
         >
-          <button
+          <AdminButton
             type="button"
             onClick={onReleasePrint}
             disabled={!printReadyToRelease || busyAction !== null || hasUploadPending}
             title={printDisabledReason}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-slate-300 disabled:cursor-not-allowed disabled:text-slate-500"
+            tone="secondary"
+            className="w-full"
           >
             {busyAction === 'release-print' ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -104,8 +126,8 @@ export function FinalReviewStage({
               <Lock className="h-4 w-4" />
             )}
             {printReleased ? 'Print Released' : 'Release print version'}
-          </button>
-          <p className="text-xs leading-6 text-slate-400">
+          </AdminButton>
+          <p className="text-xs leading-6 text-[var(--admin-page-muted)]">
             Release locks the verified upload. Shipping remains a separate logistics action.
           </p>
         </StageCard>
@@ -135,30 +157,30 @@ function StageCard({
 }) {
   const toneClass =
     tone === 'emerald'
-      ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
-      : 'border-amber-300/20 bg-amber-300/10 text-amber-100'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : 'border-[color-mix(in_srgb,var(--admin-accent-dp)_40%,transparent)] bg-amber-50 text-amber-700'
 
   return (
-    <div className="rounded-[24px] border border-white/10 bg-slate-950/30 p-4">
+    <AdminPanel className="p-4">
       <div className="flex items-center gap-2">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${toneClass}`}>{icon}</div>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${toneClass}`}>{icon}</div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-          <h3 className="text-lg font-bold text-white">{title}</h3>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">{label}</p>
+          <h3 className="text-lg font-semibold text-[var(--admin-page-ink)]">{title}</h3>
         </div>
       </div>
-      <div className="mt-4 space-y-2 text-sm text-slate-300">
+      <div className="mt-4 space-y-2 text-sm text-[var(--admin-page-muted)]">
         <p>
-          Progress: <span className="font-semibold text-white">{progress}</span>
+          Progress: <span className="font-semibold text-[var(--admin-page-ink)]">{progress}</span>
         </p>
         <p>
-          Status: <span className="font-semibold text-white">{status}</span>
+          Status: <AdminStatusBadge className="ml-1 capitalize">{status}</AdminStatusBadge>
         </p>
       </div>
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-sm text-slate-300">
+      <div className="mt-4 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4 text-sm text-[var(--admin-page-muted)]">
         {description}
       </div>
       <div className="mt-4 space-y-3">{children}</div>
-    </div>
+    </AdminPanel>
   )
 }

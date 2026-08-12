@@ -1,4 +1,5 @@
 export type ReviewVersion = 'pdf' | 'print'
+export type FinalReviewQueueFilter = 'all' | 'pdf_review' | 'print_pending' | 'completed'
 export type ReviewPendingAction = 'approve' | 'needs_fix' | 'approve_all'
 export type ReviewPendingState = Record<
   string,

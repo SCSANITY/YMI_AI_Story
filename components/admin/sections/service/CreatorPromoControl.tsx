@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RotateCcw, Save, Undo2 } from 'lucide-react'
+import {
+  AdminButton,
+  AdminNotice,
+  AdminPanel,
+  adminFieldClass,
+  adminLabelClass,
+} from '@/components/admin/AdminUi'
 
 type CreatorPromoConfig = {
   enabled: boolean
@@ -114,12 +121,12 @@ export function CreatorPromoControl() {
   }
 
   return (
-    <section className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:p-6">
+    <AdminPanel className="p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-300">Creator Promo</p>
-          <h2 className="mt-1 text-xl font-bold text-white">Signature code settings</h2>
-          <p className="mt-1.5 max-w-md text-sm leading-6 text-slate-400">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Creator Promo</p>
+          <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Signature code settings</h2>
+          <p className="mt-1.5 max-w-md text-sm leading-6 text-[var(--admin-page-muted)]">
             Controls Collaboration page promo code generation and default checkout discount.
           </p>
         </div>
@@ -131,46 +138,46 @@ export function CreatorPromoControl() {
             aria-pressed={draftConfig.enabled}
             className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full px-5 text-sm font-bold transition disabled:cursor-wait disabled:opacity-60 ${
               draftConfig.enabled
-                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-400'
-                : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                ? 'border border-[#b9dec8] bg-[#e7f5ec] text-[#237044] hover:bg-[#dcefe4]'
+                : 'border border-[#d9ddd6] bg-[#f1f3ef] text-[#646960] hover:bg-white'
             }`}
           >
-            <span className={`h-2 w-2 rounded-full ${draftConfig.enabled ? 'bg-white' : 'bg-slate-400'}`} />
+            <span className={`h-2 w-2 rounded-full ${draftConfig.enabled ? 'bg-[#3e8c5c]' : 'bg-[#8d928a]'}`} />
             {draftConfig.enabled ? 'Enabled' : 'Disabled'}
           </button>
         ) : null}
       </div>
 
       {loading ? (
-        <div role="status" className="mt-5 h-36 animate-pulse rounded-lg border border-white/[0.06] bg-white/[0.04]">
+        <div role="status" className="admin-v2-data-row mt-5 h-36 animate-pulse">
           <span className="sr-only">Loading Creator Promo settings</span>
         </div>
       ) : draftConfig ? (
         <>
           <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            <label className={adminLabelClass}>
               Code suffix
               <input
                 value={draftConfig.suffix}
                 disabled={saving}
                 onChange={(event) => setDraftConfig((current) => current ? { ...current, suffix: event.target.value } : current)}
-                className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold normal-case text-white outline-none focus:border-amber-300/70 disabled:opacity-60"
+                className={adminFieldClass}
               />
             </label>
-            <div className="rounded-lg border border-white/10 bg-slate-950/40 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Customer discount</p>
-              <p className="mt-2 text-sm font-bold text-white">$5 USD per valid order</p>
+            <div className="admin-v2-data-row px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Customer discount</p>
+              <p className="mt-2 text-sm font-bold text-[var(--admin-page-ink)]">$5 USD per valid order</p>
             </div>
-            <div className="rounded-lg border border-white/10 bg-slate-950/40 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Usage policy</p>
-              <p className="mt-2 text-sm font-bold text-white">Any order / owner excluded</p>
+            <div className="admin-v2-data-row px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Usage policy</p>
+              <p className="mt-2 text-sm font-bold text-[var(--admin-page-ink)]">Any order / owner excluded</p>
             </div>
           </div>
 
-          {!isValid ? <p role="alert" className="mt-3 text-sm text-rose-200">Enter a code suffix.</p> : null}
+          {!isValid ? <p role="alert" className="mt-3 text-sm text-[#963535]">Enter a code suffix.</p> : null}
 
-          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-white/[0.07] pt-5 sm:flex-row sm:justify-end">
-            <button
+          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-black/[0.07] pt-5 sm:flex-row sm:justify-end">
+            <AdminButton
               type="button"
               onClick={() => {
                 setDraftConfig(savedConfig)
@@ -178,35 +185,35 @@ export function CreatorPromoControl() {
                 setMessage('')
               }}
               disabled={!isDirty || saving}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 px-4 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+              tone="quiet"
             >
               <Undo2 aria-hidden="true" className="h-4 w-4" />
               Discard changes
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
               type="button"
               onClick={() => void saveConfig()}
               disabled={!isDirty || !isValid || saving}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-400 px-5 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-45"
+              tone="primary"
             >
               <Save aria-hidden="true" className="h-4 w-4" />
               {saving ? 'Saving...' : 'Save settings'}
-            </button>
+            </AdminButton>
           </div>
         </>
       ) : (
-        <button
+        <AdminButton
           type="button"
           onClick={() => void loadConfig()}
-          className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 px-4 text-sm font-semibold text-slate-200 hover:bg-white/[0.06]"
+          className="mt-5"
         >
           <RotateCcw aria-hidden="true" className="h-4 w-4" />
           Retry
-        </button>
+        </AdminButton>
       )}
 
-      {error ? <p role="alert" className="mt-4 text-sm text-rose-200">{error}</p> : null}
-      {message ? <p role="status" className="mt-4 text-sm text-emerald-200">{message}</p> : null}
-    </section>
+      {error ? <AdminNotice tone="danger" className="mt-4">{error}</AdminNotice> : null}
+      {message ? <AdminNotice tone="success" className="mt-4">{message}</AdminNotice> : null}
+    </AdminPanel>
   )
 }

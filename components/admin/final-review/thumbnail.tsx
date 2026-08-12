@@ -224,9 +224,9 @@ export function ThumbnailImage({
     return (
       <span ref={containerRef} className="relative block h-full w-full">
         {sourceUrl ? (
-          <span className="absolute inset-0 animate-pulse bg-white/[0.06]" aria-hidden="true" />
+          <span className="absolute inset-0 animate-pulse bg-[var(--admin-panel-2)]" aria-hidden="true" />
         ) : (
-          <span className="flex h-full w-full items-center justify-center text-xs text-slate-500">No preview</span>
+          <span className="flex h-full w-full items-center justify-center text-xs text-[var(--admin-muted)]">No preview</span>
         )}
       </span>
     )

@@ -11,6 +11,12 @@ import { LegalDocumentEditor } from '@/components/admin/legal/LegalDocumentEdito
 import { LegalDocumentPicker } from '@/components/admin/legal/LegalDocumentPicker'
 import { LegalRevisionHistory } from '@/components/admin/legal/LegalRevisionHistory'
 import { ADMIN_SECONDARY_BUTTON_CLASS } from '@/components/admin/legal/legalUi'
+import {
+  AdminButton,
+  AdminEmptyState,
+  AdminNotice,
+  AdminPanel,
+} from '@/components/admin/AdminUi'
 
 function updateSummary(
   documents: LegalDocumentSummary[],
@@ -163,16 +169,16 @@ export function LegalContentSection() {
 
   if (listLoading) {
     return (
-      <div role="status" className="rounded-lg border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-slate-400">
+      <AdminEmptyState role="status" className="p-8 text-sm">
         Loading legal publishing workspace...
-      </div>
+      </AdminEmptyState>
     )
   }
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex flex-col gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4 text-xs text-amber-100 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-3xl leading-5">
+      <AdminNotice className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-3xl text-xs leading-5">
           Drafts and immutable revisions are managed here. Customer-facing legal
           surfaces read only the current published revision, with the code-owned
           policies retained as an emergency fallback.
@@ -186,40 +192,41 @@ export function LegalContentSection() {
           <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
           Refresh
         </button>
-      </div>
+      </AdminNotice>
 
       {error ? (
-        <p role="alert" className="rounded-md border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+        <AdminNotice tone="danger" role="alert">
           {error}
-        </p>
+        </AdminNotice>
       ) : null}
 
       {needsBootstrap ? (
-        <section className="rounded-lg border border-white/10 bg-slate-950/55 p-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-amber-300/15 text-amber-200">
+        <AdminPanel className="p-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
             <DatabaseZap aria-hidden="true" className="h-5 w-5" />
           </div>
-          <h2 className="mt-4 text-lg font-bold text-white">Initialize legal publishing</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+          <h2 className="mt-4 text-lg font-semibold text-[var(--admin-page-ink)]">Initialize legal publishing</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--admin-page-muted)]">
             Create the first immutable database revisions from the current live English
             policies. Public legal surfaces will continue showing the same text through
             the published-content store after initialization.
           </p>
-          <button
+          <AdminButton
             type="button"
             onClick={() => void bootstrap()}
             disabled={bootstrapPending}
-            className="mt-5 inline-flex min-h-10 items-center justify-center rounded-md bg-amber-300 px-4 text-xs font-black text-slate-950 disabled:opacity-50"
+            tone="primary"
+            className="mt-5"
           >
             {bootstrapPending ? 'Initializing...' : 'Initialize from live policies'}
-          </button>
-        </section>
+          </AdminButton>
+        </AdminPanel>
       ) : null}
 
       {documents.length === 0 && !error ? (
-        <p className="rounded-lg border border-white/10 bg-white/[0.03] p-6 text-sm text-slate-400">
+        <AdminEmptyState className="p-6 text-sm">
           No legal documents are available. Apply the S4 SQL foundation first.
-        </p>
+        </AdminEmptyState>
       ) : null}
 
       {documents.length > 0 && !needsBootstrap ? (
@@ -234,9 +241,9 @@ export function LegalContentSection() {
 
           <div className="min-w-0">
             {detailLoading || !detail || detail.document.documentKey !== selectedKey ? (
-              <div role="status" className="rounded-lg border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-slate-400">
+              <AdminEmptyState role="status" className="p-8 text-sm">
                 Loading document revision...
-              </div>
+              </AdminEmptyState>
             ) : (
               <LegalDocumentEditor
                 key={[

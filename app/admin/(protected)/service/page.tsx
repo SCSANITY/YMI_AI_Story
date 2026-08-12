@@ -1,15 +1,17 @@
 import { ServiceControlSection } from '@/components/admin/sections/ServiceControlSection'
+import { AdminPage, AdminPageHeader } from '@/components/admin/AdminUi'
 
 export default function ServicePage() {
   return (
-    <>
-      <header className="mb-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">YMI Admin</p>
-        <h1 className="mt-0.5 text-2xl font-bold text-white">Service Control</h1>
-      </header>
-      <div className="max-w-2xl">
+    <AdminPage className="space-y-5">
+      <AdminPageHeader
+        eyebrow="Runtime controls"
+        title="Service Control"
+        description="Operate customer access and collaboration promo settings as independent controls."
+      />
+      <div className="max-w-5xl">
         <ServiceControlSection />
       </div>
-    </>
+    </AdminPage>
   )
 }

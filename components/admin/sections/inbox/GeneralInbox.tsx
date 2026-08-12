@@ -4,17 +4,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
   ArrowLeft,
+  ChevronDown,
   CircleAlert,
   Inbox,
   LoaderCircle,
   Mail,
   MailOpen,
   RefreshCw,
+  Reply,
   RotateCcw,
   Search,
   Send,
 } from 'lucide-react'
 import { InboundAttachmentList } from '@/components/admin/InboundAttachmentList'
+import {
+  AdminButton,
+  AdminEmptyState,
+  AdminIconButton,
+  AdminNotice,
+  adminFieldClass,
+} from '@/components/admin/AdminUi'
+import { handleAdminTabKeyDown } from '@/components/admin/adminA11y'
 import { isInboundEmailAttachmentRow } from '@/lib/inbound-email-attachment-types'
 import {
   isGeneralInboxMessageSummary,
@@ -64,7 +74,9 @@ export function GeneralInbox() {
   const [draft, setDraft] = useState('')
   const [sendError, setSendError] = useState('')
   const [sending, setSending] = useState(false)
+  const [composerExpanded, setComposerExpanded] = useState(false)
   const requestIdRef = useRef(crypto.randomUUID())
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const listIntentRef = useRef(0)
   const detailIntentRef = useRef(0)
 
@@ -218,6 +230,7 @@ export function GeneralInbox() {
   useEffect(() => {
     setDraft('')
     setSendError('')
+    setComposerExpanded(false)
     requestIdRef.current = crypto.randomUUID()
     if (!selectedId) {
       setDetail(null)
@@ -231,6 +244,11 @@ export function GeneralInbox() {
       detailIntentRef.current += 1
     }
   }, [loadDetail, selectedId])
+
+  // Focus the editor the moment the composer expands (Outlook-style click-to-open).
+  useEffect(() => {
+    if (composerExpanded) textareaRef.current?.focus()
+  }, [composerExpanded])
 
   useEffect(() => {
     const refresh = () => {
@@ -305,6 +323,7 @@ export function GeneralInbox() {
       }
       if (!response.ok) throw new Error(data?.error || 'Failed to send reply')
       setDraft('')
+      setComposerExpanded(false)
       requestIdRef.current = crypto.randomUUID()
     } catch (error) {
       setSendError(error instanceof Error ? error.message : 'Failed to send reply')
@@ -314,55 +333,55 @@ export function GeneralInbox() {
   }
 
   return (
-    <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.035] xl:flex xl:h-full">
-      <aside className={`${mobileDetailOpen ? 'hidden' : 'flex'} min-h-0 flex-col border-b border-white/[0.08] bg-slate-950/35 xl:flex xl:h-full xl:w-[22rem] xl:shrink-0 xl:border-b-0 xl:border-r`}>
-        <div className="shrink-0 space-y-3 border-b border-white/[0.08] p-3">
+    <div className="admin-v2-comm-workspace min-h-0 min-w-0 flex-1 2xl:flex 2xl:h-full">
+      <aside className={`${mobileDetailOpen ? 'hidden' : 'flex'} admin-v2-comm-queue min-h-0 flex-col border-b border-black/[0.08] 2xl:flex 2xl:h-full 2xl:w-[22rem] 2xl:shrink-0 2xl:border-b-0 2xl:border-r`}>
+        <div className="admin-v2-comm-toolbar shrink-0 space-y-3 border-b p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Root mail</p>
-              <p className="text-sm font-semibold text-white">{messages.length} messages</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Root mail</p>
+              <p className="text-sm font-semibold text-[var(--admin-page-ink)]">{messages.length} messages</p>
             </div>
-            <button type="button" onClick={() => void loadMessages(view)} disabled={listLoading} title="Refresh Inbox" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-300 disabled:opacity-50">
+            <AdminIconButton type="button" onClick={() => void loadMessages(view)} disabled={listLoading} title="Refresh Inbox" className="h-9 min-h-9 w-9 basis-9">
               <RefreshCw className={`h-4 w-4 ${listLoading ? 'animate-spin' : ''}`} />
-            </button>
+            </AdminIconButton>
           </div>
           <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search sender, subject, or message" className="h-10 w-full rounded-xl border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-amber-300/60" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--admin-page-muted)]" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search sender, subject, or message" className={`${adminFieldClass} mt-0 h-10 min-h-10 pl-9`} />
           </label>
           <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Inbox view">
             {VIEWS.map(([value, label]) => (
-              <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => setView(value)} className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold ${view === value ? 'bg-amber-400 text-slate-950' : 'bg-white/[0.05] text-slate-400'}`}>
+              <button key={value} id={`inbox-${value}-tab`} type="button" role="tab" aria-selected={view === value} aria-controls="general-inbox-list" tabIndex={view === value ? 0 : -1} onKeyDown={handleAdminTabKeyDown} onClick={() => setView(value)} className={`admin-v2-comm-tab shrink-0 px-2.5 py-1.5 text-[11px] font-bold ${view === value ? 'admin-v2-comm-tab--active' : 'hover:bg-white'}`}>
                 {label}
               </button>
             ))}
           </div>
         </div>
-        <div className="min-h-0 max-h-[28rem] flex-1 overflow-y-auto overscroll-contain p-2 xl:max-h-none">
-          {listError ? <p role="alert" className="m-2 rounded-xl bg-rose-400/10 p-3 text-xs text-rose-200">{listError}</p> : null}
+        <div id="general-inbox-list" role="tabpanel" aria-labelledby={`inbox-${view}-tab`} className="admin-v2-comm-scroll min-h-0 max-h-[28rem] flex-1 overflow-y-auto overscroll-contain p-2 2xl:max-h-none">
+          {listError ? <AdminNotice tone="danger" className="m-2">{listError}</AdminNotice> : null}
           {!listError && !listLoading && visibleMessages.length === 0 ? (
-            <div className="flex min-h-52 flex-col items-center justify-center text-sm text-slate-500"><Inbox className="mb-3 h-7 w-7" />No messages in this view.</div>
+            <AdminEmptyState className="flex min-h-52 flex-col items-center justify-center border-0 bg-transparent text-center"><Inbox className="mb-3 h-7 w-7" />No messages in this view.</AdminEmptyState>
           ) : (
             <div className="space-y-1.5">
               {visibleMessages.map((message) => {
                 const selected = message.inbound_email_id === selectedId
                 const processLabel = processingLabel(message)
                 return (
-                  <button key={message.inbound_email_id} type="button" onClick={() => { setSelectedId(message.inbound_email_id); setMobileDetailOpen(true) }} className={`w-full rounded-xl border p-3 text-left ${selected ? 'border-amber-300/40 bg-amber-300/[0.10]' : 'border-transparent bg-white/[0.035] hover:bg-white/[0.065]'}`}>
+                  <button key={message.inbound_email_id} type="button" onClick={() => { setSelectedId(message.inbound_email_id); setMobileDetailOpen(true) }} className={`admin-v2-comm-item w-full p-3 text-left ${selected ? 'admin-v2-comm-item--selected' : ''}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          {!message.admin_read_at ? <span className="h-2 w-2 shrink-0 rounded-full bg-amber-300" aria-label="Unread" /> : null}
-                          <p className="truncate text-sm font-bold text-white">{message.from_display_name || message.from_email || 'Unknown sender'}</p>
+                          {!message.admin_read_at ? <span className="h-2 w-2 shrink-0 rounded-full bg-[#d2a329]" aria-label="Unread" /> : null}
+                          <p className="truncate text-sm font-bold text-[var(--admin-page-ink)]">{message.from_display_name || message.from_email || 'Unknown sender'}</p>
                         </div>
-                        <p className="mt-1 truncate text-xs text-slate-400">{message.subject || '(No subject)'}</p>
+                        <p className="mt-1 truncate text-xs text-[var(--admin-page-muted)]">{message.subject || '(No subject)'}</p>
                       </div>
-                      <time className="shrink-0 text-[10px] text-slate-600">{formatDate(message.created_at, true)}</time>
+                      <time className="shrink-0 text-[10px] text-[var(--admin-page-muted)]">{formatDate(message.created_at, true)}</time>
                     </div>
-                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{message.body_text || message.last_error || 'Content is not available yet.'}</p>
-                    <div className="mt-2 flex items-center justify-between gap-2 text-[9px] uppercase tracking-wide text-slate-600">
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--admin-page-muted)]">{message.body_text || message.last_error || 'Content is not available yet.'}</p>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[9px] uppercase tracking-wide text-[var(--admin-page-muted)]">
                       <span>{message.route_address}</span>
-                      {processLabel ? <span className="text-rose-300">{processLabel}</span> : null}
+                      {processLabel ? <span className="font-semibold text-[var(--admin-crit)]">{processLabel}</span> : null}
                     </div>
                   </button>
                 )
@@ -372,31 +391,38 @@ export function GeneralInbox() {
         </div>
       </aside>
 
-      <section className={`${mobileDetailOpen ? 'flex' : 'hidden'} min-h-[38rem] min-w-0 flex-1 flex-col bg-[#0d1526] xl:flex xl:min-h-0`}>
-        {detailLoading && !detail ? <div className="flex flex-1 items-center justify-center text-sm text-slate-500"><LoaderCircle className="mr-2 h-5 w-5 animate-spin" />Loading message...</div> : null}
-        {!detailLoading && !detail ? <div className="flex flex-1 flex-col items-center justify-center text-sm text-slate-500"><Mail className="mb-3 h-8 w-8" />Select an Inbox message.</div> : null}
+      <section className={`${mobileDetailOpen ? 'flex' : 'hidden'} admin-v2-comm-canvas relative min-h-[38rem] min-w-0 flex-1 flex-col 2xl:flex 2xl:min-h-0`}>
+        {!detail ? (
+          <AdminIconButton type="button" onClick={() => setMobileDetailOpen(false)} title="Back to Inbox" className="absolute left-3 top-3 z-10 h-9 min-h-9 w-9 basis-9 2xl:hidden">
+            <ArrowLeft className="h-4 w-4" />
+          </AdminIconButton>
+        ) : null}
+        {detailLoading && !detail ? <div className="flex flex-1 items-center justify-center text-sm text-[var(--admin-page-muted)]"><LoaderCircle className="mr-2 h-5 w-5 animate-spin" />Loading message...</div> : null}
+        {!detailLoading && !detail ? <div className="flex flex-1 flex-col items-center justify-center text-sm text-[var(--admin-page-muted)]"><Mail className="mb-3 h-8 w-8" />Select an Inbox message.</div> : null}
         {detail ? (
           <>
-            <header className="flex shrink-0 items-start gap-3 border-b border-white/[0.08] p-3 sm:p-4">
-              <button type="button" onClick={() => setMobileDetailOpen(false)} title="Back to Inbox" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 text-slate-300 xl:hidden"><ArrowLeft className="h-4 w-4" /></button>
+            <header className="flex shrink-0 items-start gap-3 border-b border-[var(--admin-line)] p-3 sm:p-4">
+              <AdminIconButton type="button" onClick={() => setMobileDetailOpen(false)} title="Back to Inbox" className="h-9 min-h-9 w-9 basis-9 2xl:hidden"><ArrowLeft className="h-4 w-4" /></AdminIconButton>
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold text-white">{detail.message.subject || '(No subject)'}</h2>
-                <p className="mt-1 truncate text-xs text-slate-500">{detail.message.from_display_name || detail.message.from_email || 'Unknown sender'} · {formatDate(detail.message.created_at)}</p>
-                <p className="mt-1 truncate text-[10px] text-slate-600">To {detail.message.route_address}</p>
+                <h2 className="truncate text-sm font-bold text-[var(--admin-page-ink)]">{detail.message.subject || '(No subject)'}</h2>
+                <p className="mt-1 truncate text-xs text-[var(--admin-page-muted)]">{detail.message.from_display_name || detail.message.from_email || 'Unknown sender'} / {formatDate(detail.message.created_at)}</p>
+                <p className="mt-1 truncate text-[10px] text-[var(--admin-page-muted)]">To {detail.message.route_address}</p>
               </div>
-              <button type="button" onClick={() => void patchMessageState(detail.message.inbound_email_id, detail.message.admin_read_at ? 'mark_unread' : 'mark_read')} disabled={actionPending} title={detail.message.admin_read_at ? 'Mark unread' : 'Mark read'} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-slate-300 disabled:opacity-50">{detail.message.admin_read_at ? <Mail className="h-4 w-4" /> : <MailOpen className="h-4 w-4" />}</button>
-              <button type="button" onClick={() => void patchMessageState(detail.message.inbound_email_id, detail.message.archived_at ? 'restore' : 'archive')} disabled={actionPending} title={detail.message.archived_at ? 'Restore' : 'Archive'} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-slate-300 disabled:opacity-50">{detail.message.archived_at ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}</button>
+              <AdminIconButton type="button" onClick={() => void patchMessageState(detail.message.inbound_email_id, detail.message.admin_read_at ? 'mark_unread' : 'mark_read')} disabled={actionPending} title={detail.message.admin_read_at ? 'Mark unread' : 'Mark read'} className="h-9 min-h-9 w-9 basis-9">{detail.message.admin_read_at ? <Mail className="h-4 w-4" /> : <MailOpen className="h-4 w-4" />}</AdminIconButton>
+              <AdminIconButton type="button" onClick={() => void patchMessageState(detail.message.inbound_email_id, detail.message.archived_at ? 'restore' : 'archive')} disabled={actionPending} title={detail.message.archived_at ? 'Restore' : 'Archive'} className="h-9 min-h-9 w-9 basis-9">{detail.message.archived_at ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}</AdminIconButton>
             </header>
-            {detailError ? <div role="alert" className="border-b border-rose-400/15 bg-rose-400/[0.07] px-4 py-2 text-xs text-rose-200">{detailError}</div> : null}
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+            {detailError ? <div role="alert" className="border-b border-[color-mix(in_srgb,var(--admin-crit)_40%,transparent)] bg-[color-mix(in_srgb,var(--admin-crit)_12%,var(--admin-panel))] px-4 py-2 text-xs font-semibold text-[color-mix(in_srgb,var(--admin-crit)_75%,var(--admin-ink))]">{detailError}</div> : null}
+            <div className="admin-v2-comm-scroll min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
               {detail.message.processing_status !== 'processed' ? (
-                <div className="rounded-xl border border-rose-400/20 bg-rose-400/[0.07] p-4 text-sm text-rose-100">
+                <div className="rounded-xl border border-[color-mix(in_srgb,var(--admin-crit)_38%,transparent)] bg-[color-mix(in_srgb,var(--admin-crit)_10%,var(--admin-card))] p-4 text-sm text-[color-mix(in_srgb,var(--admin-crit)_78%,var(--admin-ink))]">
                   <div className="flex items-center gap-2 font-bold"><CircleAlert className="h-4 w-4" />Message processing is incomplete</div>
-                  <p className="mt-2 text-xs leading-5 text-rose-200/75">{detail.message.last_error || 'The message can be reclaimed from its durable envelope.'}</p>
-                  <button type="button" onClick={() => void retryProcessing()} disabled={actionPending} className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-rose-200 px-3 text-xs font-bold text-rose-950 disabled:opacity-50"><RefreshCw className="h-3.5 w-3.5" />Retry processing</button>
+                  <p className="mt-2 text-xs leading-5 text-[var(--admin-page-muted)]">{detail.message.last_error || 'The message can be reclaimed from its durable envelope.'}</p>
+                  <AdminButton type="button" onClick={() => void retryProcessing()} disabled={actionPending} tone="danger" className="mt-3 h-9 min-h-9 px-3 text-xs"><RefreshCw className="h-3.5 w-3.5" />Retry processing</AdminButton>
                 </div>
               ) : (
-                <article className="whitespace-pre-wrap text-sm leading-7 text-slate-200">{detail.message.body_text || '(Empty message body)'}</article>
+                <div className="max-w-2xl rounded-2xl border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4">
+                  <article className="whitespace-pre-wrap text-sm leading-7 text-[var(--admin-page-ink)]">{detail.message.body_text || '(Empty message body)'}</article>
+                </div>
               )}
               {detail.message.attachment_count > 0 || detail.message.attachment_error ? (
                 <InboundAttachmentList
@@ -405,24 +431,52 @@ export function GeneralInbox() {
                 />
               ) : null}
               {detail.replies.map((reply) => (
-                <div key={reply.reply_id} className="ml-auto max-w-2xl rounded-xl border border-sky-300/15 bg-sky-300/[0.07] p-4">
-                  <div className="flex items-center justify-between gap-3 text-[10px] text-slate-500"><span>{reply.from_email}</span><span className={reply.delivery_status === 'failed' ? 'text-rose-300' : ''}>{reply.delivery_status}</span></div>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-200">{reply.body_text}</p>
-                  {reply.delivery_error ? <p className="mt-2 text-xs text-rose-300">{reply.delivery_error}</p> : null}
+                <div key={reply.reply_id} className="ml-auto max-w-2xl rounded-2xl border border-[color-mix(in_srgb,var(--admin-accent-dp)_32%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_15%,var(--admin-card))] p-4">
+                  <div className="flex items-center justify-between gap-3 text-[10px] text-[var(--admin-page-muted)]"><span>{reply.from_email}</span><span className={reply.delivery_status === 'failed' ? 'font-semibold text-[var(--admin-crit)]' : ''}>{reply.delivery_status}</span></div>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--admin-page-ink)]">{reply.body_text}</p>
+                  {reply.delivery_error ? <p className="mt-2 text-xs text-[var(--admin-crit)]">{reply.delivery_error}</p> : null}
                 </div>
               ))}
             </div>
-            <footer className="shrink-0 border-t border-white/[0.08] bg-slate-950/55 p-3 sm:p-4">
+            <footer className="shrink-0 border-t border-[var(--admin-line)] bg-[var(--admin-panel-2)] p-3 sm:p-4">
               {detail.message.processing_status !== 'processed' || !detail.message.from_email ? (
-                <p className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 py-3 text-xs text-slate-500">A safe sender and completed processing are required before replying.</p>
+                <p className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel)] px-4 py-3 text-xs text-[var(--admin-page-muted)]">A safe sender and completed processing are required before replying.</p>
+              ) : !composerExpanded ? (
+                <button
+                  type="button"
+                  onClick={() => setComposerExpanded(true)}
+                  className="flex w-full items-center gap-2.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-4 py-2.5 text-left text-sm transition hover:border-[var(--admin-accent-dp)]"
+                >
+                  <Reply className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" />
+                  <span className={`flex-1 truncate ${draft.trim() ? 'text-[var(--admin-page-ink)]' : 'text-[var(--admin-page-muted)]'}`}>
+                    {draft.trim() ? draft.trim() : 'Write a reply...'}
+                  </span>
+                  {draft.trim() ? (
+                    <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_20%,transparent)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[color-mix(in_srgb,var(--admin-accent-dp)_88%,var(--admin-ink))]">
+                      Draft
+                    </span>
+                  ) : null}
+                </button>
               ) : (
                 <>
-                  <label className="block"><span className="sr-only">Reply</span><textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} maxLength={20000} placeholder="Write a reply..." className="w-full resize-none rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-amber-300/60" /></label>
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <p className="text-[10px] text-slate-600">From and Reply-To are selected by the server.</p>
-                    <button type="button" onClick={() => void sendReply()} disabled={sending || !draft.trim()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-amber-400 px-4 text-xs font-bold text-slate-950 disabled:opacity-50">{sending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Send</button>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Reply</p>
+                    <button
+                      type="button"
+                      onClick={() => setComposerExpanded(false)}
+                      aria-label="Collapse reply"
+                      title="Collapse"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)]"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
                   </div>
-                  {sendError ? <p role="alert" className="mt-2 text-xs text-rose-300">{sendError}</p> : null}
+                  <label className="block"><span className="sr-only">Reply</span><textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); void sendReply() } }} rows={3} maxLength={20000} placeholder="Write a reply..." className="w-full resize-none rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-3 py-2.5 text-sm text-[var(--admin-page-ink)] outline-none transition placeholder:text-[var(--admin-page-muted)] focus:border-[var(--admin-accent-dp)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--admin-accent)_30%,transparent)]" /></label>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <p className="text-[10px] text-[var(--admin-page-muted)]">Ctrl/Cmd + Enter to send / From and Reply-To are selected by the server.</p>
+                    <AdminButton type="button" onClick={() => void sendReply()} disabled={sending || !draft.trim()} tone="primary" className="h-9 min-h-9 px-4 text-xs">{sending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Send</AdminButton>
+                  </div>
+                  {sendError ? <p role="alert" className="mt-2 text-xs text-[var(--admin-crit)]">{sendError}</p> : null}
                 </>
               )}
             </footer>

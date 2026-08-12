@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Archive, Eye, EyeOff, Pencil } from 'lucide-react'
+import { AdminIconButton, AdminNotice } from '@/components/admin/AdminUi'
 import {
   isBlogPost,
   type BlogPost,
@@ -10,10 +11,10 @@ import {
 
 function statusBadge(status: BlogPostStatus) {
   const classes = {
-    published: 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20',
-    draft: 'bg-slate-500/12 text-slate-300 border-slate-400/20',
-    hidden: 'bg-amber-500/12 text-amber-300 border-amber-400/20',
-    archived: 'bg-zinc-500/14 text-zinc-300 border-zinc-400/20',
+    published: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    draft: 'border-slate-200 bg-slate-100 text-slate-600',
+    hidden: 'border-amber-200 bg-amber-50 text-amber-700',
+    archived: 'border-zinc-200 bg-zinc-100 text-zinc-600',
   }
   return classes[status]
 }
@@ -85,7 +86,7 @@ export function AnnouncementListItem({
   }
 
   return (
-    <article className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+    <article className="rounded-lg border border-slate-200 bg-white/62 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span
@@ -93,25 +94,25 @@ export function AnnouncementListItem({
           >
             {displayPost.status}
           </span>
-          <h3 className="mt-2 break-words text-lg font-bold text-white">
+          <h3 className="mt-2 break-words text-base font-semibold text-[var(--admin-page-ink)]">
             {displayPost.title}
           </h3>
-          <p className="mt-1 line-clamp-2 text-sm text-slate-400">
+          <p className="mt-1 line-clamp-2 text-sm text-[var(--admin-page-muted)]">
             {displayPost.body || 'No body text'}
           </p>
         </div>
-        <button
+        <AdminIconButton
           type="button"
           onClick={() => onEdit(displayPost)}
           disabled={Boolean(pendingStatus)}
-          className="rounded-full bg-white/10 p-2 text-slate-300 hover:bg-amber-400/16 hover:text-amber-200 disabled:cursor-wait disabled:opacity-50"
+          tone="quiet"
           aria-label="Edit announcement"
         >
           <Pencil className="h-4 w-4" />
-        </button>
+        </AdminIconButton>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--admin-page-muted)]">
         <span>{displayPost.image_storage_paths.length} images</span>
         <span>{displayPost.links.length} links</span>
         <span>{displayPost.like_count ?? 0} likes</span>
@@ -124,7 +125,7 @@ export function AnnouncementListItem({
           activeStatus={displayPost.status}
           pendingStatus={pendingStatus}
           icon={<Eye className="h-3.5 w-3.5" />}
-          className="bg-emerald-500/12 text-emerald-300 hover:bg-emerald-500/18"
+          className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
           onClick={changeStatus}
         />
         <StatusButton
@@ -133,7 +134,7 @@ export function AnnouncementListItem({
           activeStatus={displayPost.status}
           pendingStatus={pendingStatus}
           icon={<EyeOff className="h-3.5 w-3.5" />}
-          className="bg-amber-500/12 text-amber-300 hover:bg-amber-500/18"
+          className="border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
           onClick={changeStatus}
         />
         <StatusButton
@@ -142,18 +143,19 @@ export function AnnouncementListItem({
           activeStatus={displayPost.status}
           pendingStatus={pendingStatus}
           icon={<Archive className="h-3.5 w-3.5" />}
-          className="bg-slate-500/14 text-slate-300 hover:bg-slate-500/20"
+          className="border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200"
           onClick={changeStatus}
         />
       </div>
 
       {notice ? (
-        <p
+        <AdminNotice
           role={notice.tone === 'error' ? 'alert' : 'status'}
-          className={`mt-3 text-xs ${notice.tone === 'error' ? 'text-rose-300' : 'text-emerald-300'}`}
+          tone={notice.tone === 'error' ? 'danger' : 'success'}
+          className="mt-3 text-xs"
         >
           {notice.text}
-        </p>
+        </AdminNotice>
       ) : null}
     </article>
   )
@@ -183,7 +185,7 @@ function StatusButton({
       onClick={() => void onClick(status)}
       disabled={Boolean(pendingStatus) || activeStatus === status}
       aria-pressed={activeStatus === status}
-      className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex min-h-8 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {icon}
       {isPending ? 'Saving...' : label}

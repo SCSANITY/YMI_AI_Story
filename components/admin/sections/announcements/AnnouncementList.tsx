@@ -1,5 +1,11 @@
 import { AnnouncementListItem } from '@/components/admin/sections/announcements/AnnouncementListItem'
 import type { BlogPost } from '@/components/admin/sections/announcements/types'
+import {
+  AdminButton,
+  AdminEmptyState,
+  AdminNotice,
+  AdminPanel,
+} from '@/components/admin/AdminUi'
 
 export function AnnouncementList({
   posts,
@@ -23,28 +29,26 @@ export function AnnouncementList({
   onStatusCommitted: (post: BlogPost) => void
 }) {
   return (
-    <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
+    <AdminPanel className="p-4 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
             All announcements
           </p>
-          <h2 className="mt-1 text-2xl font-bold text-white">Manage content</h2>
+          <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Manage content</h2>
         </div>
-        <button
+        <AdminButton
           type="button"
           onClick={onNew}
-          className="rounded-full bg-amber-400/12 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-400/18"
+          tone="primary"
+          className="min-h-9 px-3 text-xs"
         >
           New
-        </button>
+        </AdminButton>
       </div>
 
       {loadError ? (
-        <div
-          role="alert"
-          className="mb-3 flex flex-col gap-2 rounded-2xl bg-rose-500/10 p-3 text-sm text-rose-200"
-        >
+        <AdminNotice tone="danger" role="alert" className="mb-3 flex flex-col gap-2 text-sm">
           <span>{loadError}</span>
           <button
             type="button"
@@ -53,26 +57,23 @@ export function AnnouncementList({
           >
             Retry
           </button>
-        </div>
+        </AdminNotice>
       ) : notice ? (
-        <p
-          role="status"
-          className="mb-3 rounded-2xl bg-emerald-500/10 p-3 text-sm text-emerald-200"
-        >
+        <AdminNotice tone="success" role="status" className="mb-3 text-sm">
           {notice}
-        </p>
+        </AdminNotice>
       ) : null}
 
       {!hasLoaded && loading ? (
         <div className="space-y-3" role="status" aria-label="Loading announcements">
           {Array.from({ length: 3 }, (_, index) => (
-            <div key={index} className="h-40 animate-pulse rounded-2xl bg-white/[0.06]" />
+            <div key={index} className="h-40 animate-pulse rounded-lg bg-slate-100" />
           ))}
         </div>
       ) : posts.length === 0 ? (
-        <p className="rounded-2xl bg-white/[0.06] p-4 text-sm text-slate-400">
+        <AdminEmptyState className="p-4 text-sm">
           {loadError ? 'No cached announcement data is available.' : 'No announcements yet.'}
-        </p>
+        </AdminEmptyState>
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
@@ -85,6 +86,6 @@ export function AnnouncementList({
           ))}
         </div>
       )}
-    </section>
+    </AdminPanel>
   )
 }

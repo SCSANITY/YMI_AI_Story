@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import {
+  AdminButton,
+  AdminEmptyState,
+  AdminNotice,
+  AdminPanel,
+} from '@/components/admin/AdminUi'
 import { DiscountCreator } from '@/components/admin/sections/discounts/DiscountCreator'
 import { DiscountInstrumentCard } from '@/components/admin/sections/discounts/DiscountInstrumentCard'
 import {
@@ -83,39 +89,36 @@ export function DiscountManagementSection() {
     <div className="space-y-4">
       <DiscountCreator onCreated={handleCreated} />
 
-      <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
+      <AdminPanel className="p-5">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-300">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">
               Manage
             </p>
-            <h2 className="mt-1 text-xl font-bold text-white">Discount instruments</h2>
+            <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Discount instruments</h2>
           </div>
-          <button
+          <AdminButton
             type="button"
             onClick={() => void reloadDiscounts()}
             disabled={loading}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-slate-800 px-5 text-sm font-bold text-slate-100 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            tone="secondary"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
+          </AdminButton>
         </div>
 
         {loadError ? (
-          <div
-            role="alert"
-            className="mb-3 flex flex-col gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 sm:flex-row sm:items-center sm:justify-between"
-          >
+          <AdminNotice tone="danger" className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{loadError}</span>
             <button
               type="button"
               onClick={() => void reloadDiscounts()}
-              className="font-bold text-rose-100 underline decoration-rose-300/50 underline-offset-4"
+              className="font-bold underline underline-offset-4"
             >
               Retry
             </button>
-          </div>
+          </AdminNotice>
         ) : null}
 
         <div className="space-y-2">
@@ -123,13 +126,13 @@ export function DiscountManagementSection() {
             Array.from({ length: 3 }, (_, index) => (
               <div
                 key={index}
-                className="h-[74px] animate-pulse rounded-2xl border border-white/5 bg-slate-950/30"
+                className="admin-v2-data-row h-[74px] animate-pulse"
               />
             ))
           ) : discounts.length === 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4 text-sm text-slate-400">
+            <AdminEmptyState>
               {loadError ? 'No cached discount data is available.' : 'No discounts created yet.'}
-            </div>
+            </AdminEmptyState>
           ) : (
             discounts.map((row) => (
               <DiscountInstrumentCard
@@ -140,7 +143,7 @@ export function DiscountManagementSection() {
             ))
           )}
         </div>
-      </section>
+      </AdminPanel>
     </div>
   )
 }

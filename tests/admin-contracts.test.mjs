@@ -45,6 +45,9 @@ test('the protected Admin shell owns scoped loading and error boundaries', async
 test('desktop Admin scroll ownership stays lg-gated while mobile keeps document scroll', async () => {
   const shell = await read('components/admin/AdminShell.tsx')
   const sidebar = await read('components/admin/AdminSidebar.tsx')
+  const commandBar = await read('components/admin/AdminCommandBar.tsx')
+  const navigation = await read('components/admin/adminNavigation.ts')
+  const globals = await read('app/globals.css')
   const announcementWorkspace = await read(
     'components/admin/sections/announcements/AnnouncementWorkspace.tsx'
   )
@@ -52,17 +55,27 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
   assert.match(shell, /min-h-dvh[^"]*lg:h-dvh[^"]*lg:overflow-hidden/)
   assert.match(
     shell,
-    /<section className="[^"]*lg:h-dvh[^"]*lg:min-h-0[^"]*lg:overflow-y-auto/
+    /<section className="[^"]*lg:min-h-0[^"]*lg:flex-1[^"]*lg:overflow-y-auto/
   )
   assert.doesNotMatch(shell, /<main className="[^"]*\sh-dvh(?:\s|")/)
-  assert.match(sidebar, /hidden min-h-0 flex-col[^"]*lg:flex lg:h-dvh/)
+  assert.match(sidebar, /hidden min-h-0 flex-col[^"]*lg:flex lg:h-full/)
   assert.doesNotMatch(sidebar, /lg:sticky|lg:top-0/)
   assert.match(sidebar, /min-h-0 flex-1 overflow-y-auto/)
-  assert.match(sidebar, /mt-4 shrink-0 border-t/)
+  assert.match(sidebar, /mt-2 shrink-0/)
   assert.match(sidebar, /document\.body\.style\.overflow = ['"]hidden['"]/)
-  assert.match(announcementWorkspace, /xl:top-6/)
-  assert.match(announcementWorkspace, /calc\(100dvh-3rem\)/)
-  assert.doesNotMatch(announcementWorkspace, /calc\(100vh-/)
+  assert.match(shell, /ymi-admin-theme/)
+  // Identity is owned by the sidebar footer only; the command bar no longer duplicates it.
+  assert.match(shell, /<AdminCommandBar \/>/)
+  assert.match(shell, /<AdminSidebar adminName=\{adminName\} adminEmail=\{adminEmail\}/)
+  assert.doesNotMatch(commandBar, /adminName|adminEmail|admin-v2-identity/)
+  assert.match(sidebar, /getAdminNavigationGroups\(\)/)
+  assert.match(commandBar, /usePathname\(\)/)
+  assert.match(commandBar, /getAdminNavigationItem\(pathname\)/)
+  assert.match(navigation, /export const adminNavigationItems/)
+  assert.match(globals, /\.ymi-admin-theme/)
+  assert.match(globals, /\.admin-v2-workspace/)
+  assert.match(announcementWorkspace, /xl:sticky xl:top-0/)
+  assert.doesNotMatch(announcementWorkspace, /h-dvh|h-screen|calc\(100(?:d)?vh/)
 })
 
 test('every exported Admin API method performs its own authorization check', async () => {
@@ -249,7 +262,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(panel, /<FinalReviewStage/)
   assert.match(
     panel,
-    /min-h-0 xl:h-full xl:w-64 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
+    /min-h-0 xl:h-full xl:overflow-y-auto xl:overscroll-contain/
   )
   assert.match(
     panel,
@@ -300,7 +313,7 @@ test('Final Review preserves server authority and stale-response intent guards',
     /min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
   )
   assert.doesNotMatch(stage, /useFinalReviewStageDock|fixed z-30|stageDockMetrics/)
-  assert.match(finalsPage, /xl:h-\[calc\(100dvh-3rem\)\][^"]*xl:min-h-0 xl:flex-col/)
+  assert.match(finalsPage, /xl:h-full[^"]*xl:min-h-0 xl:flex-col/)
   assert.equal(
     finalReviewFiles.some((file) => file.endsWith('useFinalReviewStageDock.ts')),
     false,
@@ -336,26 +349,74 @@ test('Final Review preserves server authority and stale-response intent guards',
 
 test('Final Review responsive scroll behavior stays breakpoint-scoped', async () => {
   const panel = await read('components/admin/FinalReviewPanel.tsx')
+  const jobQueue = await read('components/admin/final-review/JobQueue.tsx')
+  const statCard = await read('components/admin/final-review/StatCard.tsx')
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
   const sidebar = await read('components/admin/AdminSidebar.tsx')
   const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
+  const globals = await read('app/globals.css')
 
-  assert.match(panel, /xl:flex-1 xl:flex-row xl:items-stretch xl:overflow-hidden/)
+  // Review workspace is now a modal opened from the queue; the queue owns the main
+  // column and the modal body keeps the desktop row layout + bounded overflow.
+  assert.match(panel, /min-h-0 xl:flex-1 xl:overflow-hidden/)
+  assert.match(panel, /xl:flex-row xl:items-stretch/)
   assert.match(
     panel,
-    /min-h-0 xl:h-full xl:w-64 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
+    /min-h-0 xl:h-full xl:overflow-y-auto xl:overscroll-contain/
   )
   assert.match(
     stage,
     /min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
   )
-  assert.match(finalsPage, /xl:h-\[calc\(100dvh-3rem\)\]/)
+  assert.match(finalsPage, /xl:h-full/)
   assert.match(panel, /lg:sticky lg:top-0 lg:z-10/)
   assert.doesNotMatch(panel, /className="sticky top-0 z-10/)
   assert.match(panel, /2xl:flex-row 2xl:items-center 2xl:justify-between/)
   assert.match(panel, /2xl:w-\[16rem\]/)
   assert.doesNotMatch(panel, /gap-3 lg:flex-row/)
   assert.doesNotMatch(panel, /p-0\.5 lg:w-\[16rem\]/)
+  assert.match(panel, /useState<FinalReviewQueueFilter>\(['"]all['"]\)/)
+  assert.match(panel, /filterFinalJobs\(jobs, queueFilter\)/)
+  assert.match(panel, /jobs=\{visibleJobs\}/)
+  assert.match(panel, /handleQueueFilterChange\(['"]pdf_review['"]\)/)
+  assert.match(panel, /handleQueueFilterChange\(['"]print_pending['"]\)/)
+  assert.match(panel, /handleQueueFilterChange\(['"]completed['"]\)/)
+  assert.doesNotMatch(panel, /onClick=\{\(\) => void releaseJob\(true\)\}/)
+  // Admin V3: the queue is the calm main view; selecting a job opens the review as a
+  // single-active modal that can be suspended (max 3 parked cards) or closed. Only the
+  // center review-canvas expand is retained; per-rail collapse chevrons were removed.
+  assert.match(panel, /const \[reviewFocus, setReviewFocus\] = useState\(false\)/)
+  assert.match(panel, /const \[isReviewOpen, setIsReviewOpen\] = useState\(false\)/)
+  assert.match(panel, /const showStage = !reviewFocus/)
+  assert.match(panel, /reviewFocus \? 'Exit expanded review canvas' : 'Expand review canvas'/)
+  assert.match(panel, /function GlassEdgeButton/)
+  // Review is modal-gated on a selected job; the queue drives it via openReview.
+  assert.match(panel, /isReviewOpen && selectedJob \?/)
+  assert.match(panel, /onSelectJob=\{openReview\}/)
+  assert.match(panel, /onClick=\{suspendReview\}/)
+  assert.match(panel, /onClick=\{closeReview\}/)
+  // Suspended parked reviews are capped at three; the fourth attempt is blocked with
+  // a notice (never a silent eviction) until the user frees a slot.
+  assert.match(panel, /const SUSPEND_LIMIT = 3/)
+  assert.match(panel, /suspended\.length >= SUSPEND_LIMIT/)
+  assert.match(panel, /Maximum of \$\{SUSPEND_LIMIT\} suspended previews reached/)
+  assert.match(panel, /suspendNotice/)
+  assert.doesNotMatch(panel, /const showQueue = /)
+  assert.doesNotMatch(panel, /overviewOpen|queueOpen|stageOpen/)
+  assert.doesNotMatch(panel, /Collapse queue overview|Collapse Job Queue|Collapse Release Stages/)
+  assert.match(panel, /admin-review-scrollbar/)
+  assert.match(globals, /\.admin-review-scrollbar::\-webkit-scrollbar-thumb/)
+  assert.doesNotMatch(panel, /onWheel|onScroll=/)
+  // Mobile stays a horizontal carousel; desktop is a vertical rail (legacy) or a
+  // responsive board grid (full-width main view) selected by the variant prop.
+  assert.match(jobQueue, /overflow-x-auto/)
+  assert.match(jobQueue, /xl:block xl:space-y-3 xl:overflow-visible/)
+  assert.match(jobQueue, /xl:grid xl:grid-cols-2 2xl:grid-cols-3/)
+  assert.match(jobQueue, /variant\?: 'rail' \| 'board'/)
+  assert.match(jobQueue, /w-\[min\(17rem,82vw\)\] shrink-0[^"]*xl:w-full/)
+  assert.match(statCard, /<button/)
+  assert.match(statCard, /aria-pressed=\{active\}/)
+  assert.match(finalsPage, /<h1 className="sr-only">Final Review<\/h1>/)
   assert.match(sidebar, /sticky top-0 z-40[^"]*lg:hidden/)
   assert.match(sidebar, /fixed inset-0 z-\[180\] lg:hidden/)
 })
@@ -540,4 +601,175 @@ test('Email Events keeps service-role reads server-side with scoped filter navig
   assert.match(panel, /No email events match the current filters/)
   assert.match(types, /normalizeEmailEventFilters/)
   assert.match(types, /options\.includes\(normalized\)/)
+})
+
+test('Admin V2 collection pages share presentation primitives without merging state owners', async () => {
+  const [ui, ordersPage, discountsPage, emailsPage, servicePage, orders, discounts, emails, service] =
+    await Promise.all([
+      read('components/admin/AdminUi.tsx'),
+      read('app/admin/(protected)/orders/page.tsx'),
+      read('app/admin/(protected)/discounts/page.tsx'),
+      read('app/admin/(protected)/emails/page.tsx'),
+      read('app/admin/(protected)/service/page.tsx'),
+      read('components/admin/sections/OrdersManagementSection.tsx'),
+      read('components/admin/sections/DiscountManagementSection.tsx'),
+      read('components/admin/sections/emails/EmailEventsPanel.tsx'),
+      read('components/admin/sections/ServiceControlSection.tsx'),
+    ])
+
+  for (const page of [ordersPage, discountsPage, emailsPage, servicePage]) {
+    assert.match(page, /AdminPage/)
+    assert.match(page, /AdminPageHeader/)
+    assert.doesNotMatch(page, /h-dvh|h-screen|calc\(100(?:d)?vh/)
+  }
+
+  assert.match(ui, /AdminPanel/)
+  assert.match(ui, /AdminButton/)
+  assert.match(ui, /AdminStatusBadge/)
+  assert.match(ui, /AdminNotice/)
+  assert.match(ui, /AdminEmptyState/)
+  assert.match(orders, /listRequestIntentRef/)
+  assert.match(discounts, /listRequestIntentRef/)
+  assert.match(emails, /isBrowserTranslated\(\)/)
+  assert.match(service, /CustomizeAccessControl[\s\S]*CreatorPromoControl/)
+})
+
+test('Admin V2 publishing workspaces share presentation primitives without changing publishing owners', async () => {
+  const [
+    ui,
+    legalPage,
+    announcementsPage,
+    legalSection,
+    legalEditor,
+    legalHistory,
+    announcements,
+    announcementWorkspace,
+  ] = await Promise.all([
+    read('components/admin/AdminUi.tsx'),
+    read('app/admin/(protected)/legal/page.tsx'),
+    read('app/admin/(protected)/announcements/page.tsx'),
+    read('components/admin/sections/LegalContentSection.tsx'),
+    read('components/admin/legal/LegalDocumentEditor.tsx'),
+    read('components/admin/legal/LegalRevisionHistory.tsx'),
+    read('components/admin/sections/AnnouncementsSection.tsx'),
+    read('components/admin/sections/announcements/AnnouncementWorkspace.tsx'),
+  ])
+
+  for (const page of [legalPage, announcementsPage]) {
+    assert.match(page, /AdminPage/)
+    assert.match(page, /AdminPageHeader/)
+    assert.doesNotMatch(page, /h-dvh|h-screen|calc\(100(?:d)?vh/)
+  }
+
+  assert.doesNotMatch(ui, /useState|useEffect|fetch\(/)
+  assert.match(legalSection, /listRequestIntentRef/)
+  assert.match(legalSection, /detailRequestIntentRef/)
+  assert.match(legalEditor, /expectedDraftVersion/)
+  assert.match(legalEditor, /basePublishedRevisionId/)
+  assert.match(legalHistory, /expectedCurrentPublishedRevisionId/)
+  assert.match(announcements, /listRequestIntentRef/)
+  assert.match(announcementWorkspace, /saveRequestIntentRef/)
+  assert.match(announcementWorkspace, /uploadRequestIntentRef/)
+  assert.match(announcementWorkspace, /uploadToSignedUrl/)
+  assert.doesNotMatch(announcementWorkspace, /h-dvh|h-screen|calc\(100(?:d)?vh/)
+})
+
+test('Admin V2 Final Review keeps the T3-026 workspace while preserving the release controller', async () => {
+  const [finalsPage, panel, queue, stage, pdfReview, printReview, globals] =
+    await Promise.all([
+      read('app/admin/(protected)/finals/page.tsx'),
+      read('components/admin/FinalReviewPanel.tsx'),
+      read('components/admin/final-review/JobQueue.tsx'),
+      read('components/admin/final-review/FinalReviewStage.tsx'),
+      read('components/admin/final-review/PdfVersionReview.tsx'),
+      read('components/admin/final-review/PrintVersionReview.tsx'),
+      read('app/globals.css'),
+    ])
+
+  assert.match(finalsPage, /AdminPage/)
+  assert.match(finalsPage, /xl:h-full[^\n]*xl:min-h-0/)
+  assert.match(panel, /admin-v2-panel/)
+  assert.match(panel, /admin-v2-review-canvas/)
+  assert.match(queue, /admin-v2-panel/)
+  assert.match(stage, /AdminPanel/)
+  assert.match(stage, /AdminButton/)
+  assert.match(globals, /\.admin-v2-review-canvas/)
+  // Single-scroll-owner contract: no nested viewport canvas in the Final Review page/panel.
+  // (Admin V3 redesign intentionally uses larger radii + warm gradient surfaces via tokens.)
+  assert.doesNotMatch(
+    finalsPage + panel + queue + stage + pdfReview + printReview,
+    /h-dvh|h-screen|calc\(100(?:d)?vh/
+  )
+
+  assert.match(panel, /jobsRequestIntentRef/)
+  assert.match(panel, /detailRequestIntentRef/)
+  assert.match(panel, /signedUrlRequestIntentRef/)
+  assert.match(panel, /reviewIntentRef/)
+  assert.match(panel, /uploadToSignedUrl/)
+  assert.match(panel, /expectedArtifactId/)
+  assert.match(panel, /onReleasePdf=\{\(\) => void releaseJob\(\)\}/)
+  assert.match(panel, /onReleasePrint=\{\(\) => void releasePrintVersion\(\)\}/)
+  assert.doesNotMatch(panel, /approve-all-release|approveAll\s*\?|releaseJob\(true\)/)
+})
+
+test('Admin V2 responsive and accessibility closure preserves keyboard and narrow-screen escape paths', async () => {
+  const [
+    a11y,
+    sidebar,
+    globals,
+    announcements,
+    legalEditor,
+    finalReview,
+    supportInbox,
+    supportQueue,
+    supportConversation,
+    supportContext,
+    generalInbox,
+  ] = await Promise.all([
+    read('components/admin/adminA11y.ts'),
+    read('components/admin/AdminSidebar.tsx'),
+    read('app/globals.css'),
+    read('components/admin/sections/AnnouncementsSection.tsx'),
+    read('components/admin/legal/LegalDocumentEditor.tsx'),
+    read('components/admin/FinalReviewPanel.tsx'),
+    read('components/admin/sections/support/SupportInbox.tsx'),
+    read('components/admin/sections/support/SupportTicketQueue.tsx'),
+    read('components/admin/sections/support/SupportConversation.tsx'),
+    read('components/admin/sections/support/SupportCustomerContext.tsx'),
+    read('components/admin/sections/inbox/GeneralInbox.tsx'),
+  ])
+
+  assert.match(a11y, /ArrowLeft/)
+  assert.match(a11y, /ArrowRight/)
+  assert.match(a11y, /Home/)
+  assert.match(a11y, /End/)
+  assert.match(a11y, /tabs\[nextIndex\]\?\.focus\(\)/)
+  assert.match(a11y, /tabs\[nextIndex\]\?\.click\(\)/)
+
+  assert.match(sidebar, /event\.key === ['"]Escape['"]/)
+  assert.match(sidebar, /event\.key !== ['"]Tab['"]/)
+  assert.match(sidebar, /aria-modal="true"/)
+  assert.match(sidebar, /mobileCloseRef\.current\?\.focus\(\)/)
+  assert.match(sidebar, /mobileTrigger\?\.focus\(\)/)
+  assert.match(sidebar, /document\.body\.style\.overflow = ['"]hidden['"]/)
+
+  for (const tabs of [announcements, legalEditor, finalReview, supportQueue, generalInbox]) {
+    assert.match(tabs, /role="tablist"/)
+    assert.match(tabs, /role="tab"/)
+    assert.match(tabs, /aria-selected=/)
+    assert.match(tabs, /aria-controls=/)
+    assert.match(tabs, /tabIndex=/)
+    assert.match(tabs, /handleAdminTabKeyDown/)
+  }
+
+  assert.match(globals, /prefers-reduced-motion:\s*reduce/)
+  assert.match(globals, /min-height:\s*2\.75rem\s*!important/)
+  assert.match(globals, /\[role='tab'\]:focus-visible/)
+
+  assert.match(supportInbox, /2xl:flex 2xl:h-full/)
+  assert.match(supportQueue, /2xl:w-\[22rem\]/)
+  assert.match(supportConversation, /2xl:hidden/g)
+  assert.match(supportContext, /2xl:w-72/)
+  assert.match(generalInbox, /2xl:w-\[22rem\]/)
+  assert.match(generalInbox, /2xl:hidden/)
 })

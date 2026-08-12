@@ -13,9 +13,9 @@ export function LegalDocumentPicker({ documents, selectedKey, onSelect }: Props)
   return (
     <aside
       aria-label="Legal documents"
-      className="min-w-0 rounded-lg border border-white/10 bg-slate-950/55 p-3"
+      className="admin-v2-panel min-w-0 p-3"
     >
-      <p className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+      <p className="px-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
         Documents
       </p>
       <div className="mt-3 space-y-1.5">
@@ -28,23 +28,23 @@ export function LegalDocumentPicker({ documents, selectedKey, onSelect }: Props)
               type="button"
               onClick={() => onSelect(document.documentKey)}
               aria-pressed={selected}
-              className={`w-full rounded-md border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
+              className={`w-full rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 ${
                 selected
-                  ? 'border-amber-300/50 bg-amber-300/10'
-                  : 'border-transparent hover:border-white/10 hover:bg-white/[0.05]'
+                  ? 'border-amber-300 bg-amber-50'
+                  : 'border-transparent hover:border-slate-200 hover:bg-white/70'
               }`}
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold text-white">
+                <span className="min-w-0 truncate text-sm font-semibold text-[var(--admin-page-ink)]">
                   {label.shortTitle}
                 </span>
                 {document.currentPublishedRevisionId ? (
-                  <CheckCircle2 aria-label="Published" className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <CheckCircle2 aria-label="Published" className="h-4 w-4 shrink-0 text-emerald-600" />
                 ) : (
-                  <FileClock aria-label="Not initialized" className="h-4 w-4 shrink-0 text-slate-500" />
+                  <FileClock aria-label="Not initialized" className="h-4 w-4 shrink-0 text-slate-400" />
                 )}
               </span>
-              <span className="mt-1 block text-[11px] text-slate-500">
+              <span className="mt-1 block text-[11px] text-[var(--admin-page-muted)]">
                 {document.currentRevisionNumber
                   ? `Live revision ${document.currentRevisionNumber}`
                   : 'Needs initialization'}

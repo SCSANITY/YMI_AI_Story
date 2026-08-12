@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Save, Undo2 } from 'lucide-react'
 import {
+  AdminButton,
+  AdminNotice,
+  AdminStatusBadge,
+  adminFieldClass,
+  adminLabelClass,
+} from '@/components/admin/AdminUi'
+import {
   areOrderDraftsEqual,
   createOrderDraft,
   isOrderRow,
@@ -150,48 +157,48 @@ export function OrderManagementCard({
     '-'
 
   return (
-    <article className="rounded-3xl border border-white/[0.08] bg-white/[0.04] p-4">
+    <article className="admin-v2-data-row p-4">
       <div className="grid gap-4 xl:grid-cols-[1.1fr_2fr_auto]">
         <div className="min-w-0 space-y-1 text-sm">
-          <p className="break-words text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
+          <p className="break-words text-xs font-bold uppercase tracking-[0.14em] text-[#8a6813]">
             {savedOrder.display_id || savedOrder.order_id}
           </p>
-          <p className="truncate font-semibold text-white">{savedOrder.email || '-'}</p>
-          <p className="text-xs text-slate-500">{formatDate(savedOrder.created_at)}</p>
+          <p className="truncate font-semibold text-[var(--admin-page-ink)]">{savedOrder.email || '-'}</p>
+          <p className="text-xs text-[var(--admin-page-muted)]">{formatDate(savedOrder.created_at)}</p>
           <div className="flex flex-wrap gap-2 pt-2 text-xs">
-            <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-slate-300">
+            <AdminStatusBadge tone="neutral">
               {statusLabel}
-            </span>
+            </AdminStatusBadge>
             {!isReadOnly && isDirty ? (
-              <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-amber-200">
+              <AdminStatusBadge tone="warning">
                 Unsaved changes
-              </span>
+              </AdminStatusBadge>
             ) : null}
           </div>
         </div>
 
         {isReadOnly ? (
-          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-300">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-lg border border-black/[0.08] bg-black/[0.025] p-4 text-sm text-[#4d524b]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
               Read-only order
             </p>
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               <p>
-                <span className="text-slate-500">Carrier:</span>{' '}
+                <span className="text-[var(--admin-page-muted)]">Carrier:</span>{' '}
                 {savedOrder.tracking_carrier || '-'}
               </p>
               <p>
-                <span className="text-slate-500">Tracking:</span>{' '}
+                <span className="text-[var(--admin-page-muted)]">Tracking:</span>{' '}
                 {savedOrder.tracking_number || '-'}
               </p>
               <p className="break-words md:col-span-2">
-                <span className="text-slate-500">Tracking URL:</span>{' '}
+                <span className="text-[var(--admin-page-muted)]">Tracking URL:</span>{' '}
                 {savedOrder.tracking_url ? (
                   <a
                     href={savedOrder.tracking_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-amber-300 underline"
+                    className="font-semibold text-[#72540d] underline"
                   >
                     {savedOrder.tracking_url}
                   </a>
@@ -200,7 +207,7 @@ export function OrderManagementCard({
                 )}
               </p>
               <p className="break-words md:col-span-2">
-                <span className="text-slate-500">Note:</span>{' '}
+                <span className="text-[var(--admin-page-muted)]">Note:</span>{' '}
                 {savedOrder.logistics_note || '-'}
               </p>
             </div>
@@ -210,12 +217,12 @@ export function OrderManagementCard({
             disabled={saving}
             className="grid gap-3 disabled:cursor-wait disabled:opacity-70 md:grid-cols-2"
           >
-            <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+            <label className={adminLabelClass}>
               Order status
               <select
                 value={draft.orderStatus}
                 onChange={(event) => updateDraft({ orderStatus: event.target.value })}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                className={adminFieldClass}
               >
                 {ORDER_STATUS_OPTIONS.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -224,39 +231,39 @@ export function OrderManagementCard({
                 ))}
               </select>
             </label>
-            <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+            <label className={adminLabelClass}>
               Carrier
               <input
                 value={draft.trackingCarrier}
                 onChange={(event) => updateDraft({ trackingCarrier: event.target.value })}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                className={adminFieldClass}
                 placeholder="DHL, FedEx, SF Express..."
               />
             </label>
-            <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+            <label className={adminLabelClass}>
               Tracking number
               <input
                 value={draft.trackingNumber}
                 onChange={(event) => updateDraft({ trackingNumber: event.target.value })}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                className={adminFieldClass}
                 placeholder="Tracking number"
               />
             </label>
-            <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+            <label className={adminLabelClass}>
               Tracking URL
               <input
                 value={draft.trackingUrl}
                 onChange={(event) => updateDraft({ trackingUrl: event.target.value })}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                className={adminFieldClass}
                 placeholder="https://..."
               />
             </label>
-            <label className="space-y-1.5 text-xs font-semibold text-slate-300 md:col-span-2">
+            <label className={`${adminLabelClass} md:col-span-2`}>
               Note
               <textarea
                 value={draft.logisticsNote}
                 onChange={(event) => updateDraft({ logisticsNote: event.target.value })}
-                className="min-h-20 w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+                className={`${adminFieldClass} min-h-20 py-2`}
                 placeholder="Customer-facing logistics note"
               />
             </label>
@@ -265,42 +272,39 @@ export function OrderManagementCard({
 
         {isReadOnly ? null : (
           <div className="flex items-end gap-2 xl:flex-col xl:justify-end">
-            <button
+            <AdminButton
               type="button"
               onClick={discardDraft}
               disabled={saving || !isDirty}
               title="Discard unsaved changes"
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-800 px-4 text-sm font-bold text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 xl:w-full"
+              tone="quiet"
+              className="flex-1 xl:w-full"
             >
               <Undo2 className="h-4 w-4" />
               Discard
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
               type="button"
               onClick={() => void saveLogistics()}
               disabled={saving || !isDirty}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-bold text-slate-950 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 xl:w-full"
+              tone="primary"
+              className="flex-1 xl:w-full"
             >
               <Save className="h-4 w-4" />
               {saving ? 'Saving...' : 'Save'}
-            </button>
+            </AdminButton>
           </div>
         )}
       </div>
 
       {notice ? (
-        <p
+        <AdminNotice
+          tone={notice.tone === 'error' ? 'danger' : notice.tone}
           role={notice.tone === 'error' ? 'alert' : 'status'}
-          className={`mt-3 text-sm ${
-            notice.tone === 'success'
-              ? 'text-emerald-300'
-              : notice.tone === 'warning'
-                ? 'text-amber-200'
-                : 'text-rose-300'
-          }`}
+          className="mt-3"
         >
           {notice.text}
-        </p>
+        </AdminNotice>
       ) : null}
     </article>
   )

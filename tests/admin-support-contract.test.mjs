@@ -11,8 +11,8 @@ async function read(relativePath, base = root) {
 }
 
 test('Support Admin remains a protected, independently scrolling conversation workspace', async () => {
-  const [sidebar, page, inbox, queue, conversation, context] = await Promise.all([
-    read('components/admin/AdminSidebar.tsx'),
+  const [navigation, page, inbox, queue, conversation, context] = await Promise.all([
+    read('components/admin/adminNavigation.ts'),
     read('app/admin/(protected)/support/page.tsx'),
     read('components/admin/sections/support/SupportInbox.tsx'),
     read('components/admin/sections/support/SupportTicketQueue.tsx'),
@@ -20,12 +20,19 @@ test('Support Admin remains a protected, independently scrolling conversation wo
     read('components/admin/sections/support/SupportCustomerContext.tsx'),
   ])
 
-  assert.match(sidebar, /Support Inbox/)
-  assert.match(sidebar, /\/admin\/support/)
-  assert.match(page, /xl:h-\[calc\(100dvh-3rem\)\]/)
+  assert.match(navigation, /Support Inbox/)
+  assert.match(navigation, /\/admin\/support/)
+  assert.match(page, /xl:h-full/)
+  assert.match(page, /AdminPage/)
+  assert.match(page, /AdminPageHeader/)
+  assert.doesNotMatch(page, /h-dvh|h-screen|calc\(100(?:d)?vh/)
   assert.match(inbox, /POLL_INTERVAL_MS = 15_000/)
   assert.match(inbox, /listIntentRef/)
   assert.match(inbox, /detailIntentRef/)
+  assert.match(inbox, /admin-v2-comm-workspace/)
+  assert.match(queue, /admin-v2-comm-queue/)
+  assert.match(conversation, /admin-v2-comm-canvas/)
+  assert.match(context, /admin-v2-comm-context/)
   assert.match(queue, /flex-1 overflow-y-auto overscroll-contain/)
   assert.match(conversation, /overflow-y-auto overscroll-contain/)
   assert.match(conversation, /const \[draft, setDraft\]/)
@@ -152,7 +159,7 @@ test('Support SQL migrates existing questions into messages and locks tables to 
 })
 
 test('General Inbox consumes recognized aliases through the canonical envelope', async () => {
-  const [sql, processor, listApi, detailApi, replyApi, page, workspace, sidebar, email] = await Promise.all([
+  const [sql, processor, listApi, detailApi, replyApi, page, workspace, navigation, email] = await Promise.all([
     read('sql_root_email_general_inbox.sql', templates),
     read('src/lib/inbound-email-processing.ts'),
     read('app/api/admin/inbox/messages/route.ts'),
@@ -160,7 +167,7 @@ test('General Inbox consumes recognized aliases through the canonical envelope',
     read('app/api/admin/inbox/messages/[inboundEmailId]/replies/route.ts'),
     read('app/admin/(protected)/inbox/page.tsx'),
     read('components/admin/sections/inbox/GeneralInbox.tsx'),
-    read('components/admin/AdminSidebar.tsx'),
+    read('components/admin/adminNavigation.ts'),
     read('src/lib/email.tsx'),
   ])
 
@@ -188,9 +195,15 @@ test('General Inbox consumes recognized aliases through the canonical envelope',
   assert.match(replyApi, /PENDING_STALE_MS/)
   assert.match(email, /general_inbox_reply:/)
   assert.match(page, /GeneralInbox/)
+  assert.match(page, /AdminPage/)
+  assert.match(page, /AdminPageHeader/)
+  assert.doesNotMatch(page, /h-dvh|h-screen|calc\(100(?:d)?vh/)
   assert.match(workspace, /Root mail/)
+  assert.match(workspace, /admin-v2-comm-workspace/)
+  assert.match(workspace, /admin-v2-comm-queue/)
+  assert.match(workspace, /admin-v2-comm-canvas/)
   assert.match(workspace, /From and Reply-To are selected by the server/)
-  assert.match(sidebar, /General Inbox/)
+  assert.match(navigation, /General Inbox/)
 })
 
 test('Inbound attachments are bounded, privately persisted, and Admin-downloaded only', async () => {

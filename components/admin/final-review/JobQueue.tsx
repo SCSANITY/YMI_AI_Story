@@ -4,30 +4,45 @@ import { statusClass } from './reviewUi'
 
 export function JobQueue({
   jobs,
+  totalJobs,
   selectedJobId,
   loadingJobs,
+  emptyLabel,
   onSelectJob,
+  variant = 'rail',
 }: {
   jobs: FinalJobSummary[]
+  totalJobs: number
   selectedJobId: string | null
   loadingJobs: boolean
+  emptyLabel: string
   onSelectJob: (jobId: string) => void
+  variant?: 'rail' | 'board'
 }) {
+  // rail = narrow vertical stack (legacy sidebar); board = responsive grid for the
+  // full-width main view. Mobile stays a horizontal carousel in both cases.
+  const listLayout =
+    variant === 'board'
+      ? 'xl:grid xl:grid-cols-2 2xl:grid-cols-3 xl:gap-4 xl:space-y-0 xl:overflow-visible xl:pb-0'
+      : 'xl:block xl:space-y-3 xl:overflow-visible xl:pb-0'
+
   return (
-    <aside className="rounded-[24px] border border-white/10 bg-slate-950/30 p-4">
+    <aside className="admin-v2-panel p-3 xl:p-4">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Jobs</p>
-          <h3 className="mt-1 text-lg font-bold text-white">Queue</h3>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h3 className="text-sm font-semibold text-[var(--admin-page-ink)] xl:text-base">Job Queue</h3>
+          <span className="text-[11px] text-[var(--admin-page-muted)]">
+            {jobs.length}/{totalJobs}
+          </span>
         </div>
-        {loadingJobs ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+        {loadingJobs ? <Loader2 className="h-4 w-4 animate-spin text-[var(--admin-muted)]" /> : null}
       </div>
 
-      <div className="mt-4 space-y-3">
+      <div className={`mt-3 flex gap-3 overflow-x-auto pb-1 ${listLayout}`}>
         {loadingJobs ? (
-          <div className="rounded-2xl bg-white/[0.05] p-4 text-sm text-slate-400">Loading jobs...</div>
+          <div className="w-full shrink-0 rounded-lg bg-slate-100 p-4 text-sm text-[var(--admin-muted)]">Loading jobs...</div>
         ) : jobs.length === 0 ? (
-          <div className="rounded-2xl bg-white/[0.05] p-4 text-sm text-slate-400">No final jobs yet.</div>
+          <div className="w-full shrink-0 rounded-lg bg-[var(--admin-panel-2)] p-4 text-sm text-[var(--admin-muted)]">{emptyLabel}</div>
         ) : (
           jobs.map((job) => {
             const isActive = job.final_job_id === selectedJobId
@@ -36,16 +51,16 @@ export function JobQueue({
                 key={job.final_job_id}
                 type="button"
                 onClick={() => onSelectJob(job.final_job_id)}
-                className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                className={`w-[min(17rem,82vw)] shrink-0 rounded-2xl border px-3.5 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] xl:w-full ${
                   isActive
-                    ? 'border-amber-300/40 bg-amber-400/10'
-                    : 'border-white/10 bg-white/[0.05] hover:bg-white/[0.08]'
+                    ? 'border-[color-mix(in_srgb,var(--admin-accent-dp)_45%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_13%,transparent)]'
+                    : 'border-[var(--admin-card-line)] bg-[var(--admin-card)] hover:border-[color-mix(in_srgb,var(--admin-ink)_16%,transparent)]'
                 }`}
               >
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
                   {job.orders?.display_id || job.order_id.slice(0, 8)}
                 </p>
-                <p className="mt-1 line-clamp-2 break-words text-sm font-semibold leading-5 text-white">
+                <p className="mt-1 line-clamp-2 break-words text-sm font-semibold leading-5 text-[var(--admin-page-ink)]">
                   {job.display_title}
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
@@ -56,7 +71,7 @@ export function JobQueue({
                     Print {job.print_status}
                   </span>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[var(--admin-page-muted)]">
                   <span>PDF {job.approved_pages}/{job.total_pages}</span>
                   <span>Print {job.print_status}</span>
                   <span>{job.release_mode}</span>

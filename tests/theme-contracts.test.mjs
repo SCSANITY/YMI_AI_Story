@@ -17,7 +17,16 @@ test('the public product theme stays explicitly light until a complete dark them
 
   assert.match(globals, /:root\s*\{[^}]*color-scheme:\s*only light;/s)
   assert.match(globals, /html\s*\{[^}]*background:\s*var\(--background\);/s)
-  assert.doesNotMatch(globals, /prefers-color-scheme:\s*dark/)
+  // Dark styling is permitted ONLY inside the scoped Admin console (.ymi-admin-theme).
+  // The public product theme (:root / html / body) must stay explicitly light.
+  const darkMedia = [...globals.matchAll(/@media\s*\([^)]*prefers-color-scheme:\s*dark[^)]*\)\s*\{/g)]
+  for (const match of darkMedia) {
+    const after = globals.slice(match.index + match[0].length).trimStart()
+    assert.ok(
+      after.startsWith('.ymi-admin-theme'),
+      'A prefers-color-scheme: dark block must be scoped to .ymi-admin-theme, never the public theme'
+    )
+  }
   assert.match(layout, /colorScheme:\s*['"]light['"]/)
   assert.match(layout, /themeColor:\s*['"]#ffffff['"]/)
   assert.match(layout, /<body className="[^"]*bg-white[^"]*text-gray-900/)

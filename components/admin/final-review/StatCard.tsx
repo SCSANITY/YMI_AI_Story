@@ -2,22 +2,38 @@ export function StatCard({
   label,
   value,
   tone,
+  active,
+  onSelect,
 }: {
   label: string
   value: number
-  tone: 'sky' | 'violet' | 'amber' | 'emerald'
+  tone: 'neutral' | 'sky' | 'amber' | 'emerald'
+  active: boolean
+  onSelect: () => void
 }) {
-  const toneClass = {
-    sky: 'from-sky-400/20 to-cyan-400/10 text-sky-100 border-sky-400/20',
-    violet: 'from-violet-400/20 to-fuchsia-400/10 text-violet-100 border-violet-400/20',
-    amber: 'from-amber-400/20 to-orange-400/10 text-amber-100 border-amber-400/20',
-    emerald: 'from-emerald-400/20 to-lime-400/10 text-emerald-100 border-emerald-400/20',
+  const gradient = {
+    neutral: 'linear-gradient(142deg,#e9dcc2,#d3c19f)',
+    sky: 'var(--admin-grad-peach)',
+    amber: 'var(--admin-grad-gold)',
+    emerald: 'var(--admin-grad-sage)',
   }[tone]
 
   return (
-    <div className={`rounded-[22px] border bg-gradient-to-br px-4 py-4 ${toneClass}`}>
-      <p className="text-xs font-bold uppercase tracking-[0.18em] opacity-80">{label}</p>
-      <p className="mt-2 text-3xl font-black">{value}</p>
-    </div>
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      style={{ background: gradient }}
+      className={`flex min-w-[8.5rem] flex-1 flex-col justify-between gap-2 rounded-2xl px-4 py-3 text-left text-[#2a2410] transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--admin-panel)] sm:min-w-0 ${
+        active
+          ? '-translate-y-0.5 opacity-100 [filter:saturate(1.08)] shadow-[0_16px_32px_-20px_rgba(120,80,20,0.45)]'
+          : 'opacity-[0.48] [filter:saturate(0.6)] hover:-translate-y-0.5 hover:opacity-80'
+      }`}
+    >
+      <span className="block text-[11px] font-bold uppercase leading-4 tracking-[0.1em] opacity-80">
+        {label}
+      </span>
+      <span className="block text-3xl font-black leading-none tabular-nums">{value}</span>
+    </button>
   )
 }

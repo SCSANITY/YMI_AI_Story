@@ -3,6 +3,7 @@
 import { RotateCcw } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { LegalDocumentState } from '@/lib/legal-publishing'
+import { AdminNotice, AdminStatusBadge } from '@/components/admin/AdminUi'
 import {
   ADMIN_SECONDARY_BUTTON_CLASS,
   formatAdminTimestamp,
@@ -58,20 +59,20 @@ export function LegalRevisionHistory({ state, onCommitted }: Props) {
   }
 
   return (
-    <aside className="min-w-0 rounded-lg border border-white/10 bg-slate-950/55 p-4">
+    <aside className="admin-v2-panel min-w-0 p-4">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
           Revision History
         </p>
-        <p className="mt-1 text-xs leading-5 text-slate-400">
+        <p className="mt-1 text-xs leading-5 text-[var(--admin-page-muted)]">
           Rollback republishes a prior snapshot as a new revision. History is never edited.
         </p>
       </div>
 
       {error ? (
-        <p role="alert" className="mt-3 rounded-md border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">
+        <AdminNotice tone="danger" role="alert" className="mt-3 text-xs">
           {error}
-        </p>
+        </AdminNotice>
       ) : null}
 
       <div className="mt-4 space-y-2">
@@ -82,33 +83,33 @@ export function LegalRevisionHistory({ state, onCommitted }: Props) {
           return (
             <article
               key={revision.revisionId}
-              className="rounded-md border border-white/[0.08] bg-white/[0.035] p-3"
+              className="rounded-lg border border-slate-200 bg-white/60 p-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-semibold text-[var(--admin-page-ink)]">
                     Revision {revision.revisionNumber}
                   </p>
-                  <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+                  <p className="mt-0.5 text-[10px] uppercase tracking-wide text-[var(--admin-page-muted)]">
                     {revision.content.en.version}
                   </p>
                 </div>
                 {isLive ? (
-                  <span className="rounded-full bg-emerald-400/15 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-emerald-300">
+                  <AdminStatusBadge tone="success" className="text-[9px] uppercase tracking-wide">
                     Live
-                  </span>
+                  </AdminStatusBadge>
                 ) : null}
               </div>
-              <dl className="mt-3 space-y-1 text-[11px] text-slate-400">
+              <dl className="mt-3 space-y-1 text-[11px] text-[var(--admin-page-muted)]">
                 <div className="flex justify-between gap-3">
                   <dt>Published</dt>
-                  <dd className="text-right text-slate-300">
+                  <dd className="text-right text-[var(--admin-page-ink)]">
                     {formatAdminTimestamp(revision.publishedAt)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt>Admin</dt>
-                  <dd className="font-mono text-slate-300">
+                  <dd className="font-mono text-[var(--admin-page-ink)]">
                     {shortAdminId(revision.publishedByCustomerId)}
                   </dd>
                 </div>
@@ -130,8 +131,8 @@ export function LegalRevisionHistory({ state, onCommitted }: Props) {
               ) : null}
 
               {isConfirming ? (
-                <div className="mt-3 rounded-md border border-amber-300/20 bg-amber-300/[0.07] p-2.5">
-                  <p className="text-[11px] leading-4 text-amber-100">
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                  <p className="text-[11px] leading-4 text-amber-900">
                     Publish this snapshot as the next live revision?
                   </p>
                   <div className="mt-2 flex gap-2">
@@ -139,7 +140,7 @@ export function LegalRevisionHistory({ state, onCommitted }: Props) {
                       type="button"
                       onClick={() => void rollback(revision.revisionId)}
                       disabled={Boolean(pendingRevisionId)}
-                      className="min-h-8 flex-1 rounded-md bg-amber-300 px-2 text-[11px] font-bold text-slate-950 disabled:opacity-50"
+                      className="admin-v2-button admin-v2-button--primary min-h-8 flex-1 px-2 text-[11px]"
                     >
                       {isPending ? 'Restoring...' : 'Confirm'}
                     </button>

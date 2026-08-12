@@ -3,7 +3,7 @@ import { CustomizeAccessControl } from '@/components/admin/sections/service/Cust
 
 export function ServiceControlSection() {
   return (
-    <div className="space-y-4">
+    <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
       <CustomizeAccessControl />
       <CreatorPromoControl />
     </div>

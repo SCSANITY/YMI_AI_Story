@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Save } from 'lucide-react'
 import {
+  AdminButton,
+  AdminNotice,
+  AdminPanel,
+  adminFieldClass,
+  adminLabelClass,
+} from '@/components/admin/AdminUi'
+import {
   isDiscountInstrumentRow,
   type DiscountFormState,
   type DiscountInstrumentRow,
@@ -103,36 +110,30 @@ export function DiscountCreator({
   }
 
   return (
-    <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl">
+    <AdminPanel className="p-5">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-300">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">
           Create
         </p>
-        <h2 className="mt-1 text-xl font-bold text-white">New discount</h2>
-        <p className="mt-1.5 max-w-xl text-sm leading-6 text-slate-400">
+        <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">New discount</h2>
+        <p className="mt-1.5 max-w-xl text-sm leading-6 text-[var(--admin-page-muted)]">
           Create admin promo codes or account vouchers. Free shipping is always a shipping
           discount.
         </p>
       </div>
 
       {error ? (
-        <div
-          role="alert"
-          className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
-        >
+          <AdminNotice tone="danger" className="mt-5">
           {error}
-        </div>
+        </AdminNotice>
       ) : message ? (
-        <div
-          role="status"
-          className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
-        >
+        <AdminNotice tone="success" className="mt-5">
           {message}
-        </div>
+        </AdminNotice>
       ) : null}
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
-        <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <label className={adminLabelClass}>
           Instrument
           <select
             value={form.instrumentType}
@@ -142,13 +143,13 @@ export function DiscountCreator({
                 instrumentType: event.target.value as DiscountFormState['instrumentType'],
               }))
             }
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+            className={adminFieldClass}
           >
             <option value="promo_code">Promo code</option>
             <option value="voucher">Voucher</option>
           </select>
         </label>
-        <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <label className={adminLabelClass}>
           Effect
           <select
             value={form.effectType}
@@ -158,36 +159,36 @@ export function DiscountCreator({
                 effectType: event.target.value as DiscountFormState['effectType'],
               }))
             }
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+            className={adminFieldClass}
           >
             <option value="free_shipping">Free shipping</option>
             <option value="fixed_amount">Fixed amount</option>
             <option value="percentage">Percentage</option>
           </select>
         </label>
-        <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <label className={adminLabelClass}>
           Name
           <input
             value={form.name}
             onChange={(event) =>
               setForm((current) => ({ ...current, name: event.target.value }))
             }
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold normal-case text-white outline-none focus:border-amber-300/70"
+            className={adminFieldClass}
           />
         </label>
         {form.instrumentType === 'promo_code' ? (
-          <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+          <label className={adminLabelClass}>
             Code
             <input
               value={form.code}
               onChange={(event) =>
                 setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))
               }
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+              className={adminFieldClass}
             />
           </label>
         ) : (
-          <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+          <label className={adminLabelClass}>
             Owner email
             <input
               type="email"
@@ -195,12 +196,12 @@ export function DiscountCreator({
               onChange={(event) =>
                 setForm((current) => ({ ...current, ownerEmail: event.target.value }))
               }
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold normal-case text-white outline-none focus:border-amber-300/70"
+              className={adminFieldClass}
             />
           </label>
         )}
         {form.effectType === 'fixed_amount' ? (
-          <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+          <label className={adminLabelClass}>
             Amount USD
             <input
               type="number"
@@ -210,12 +211,12 @@ export function DiscountCreator({
               onChange={(event) =>
                 setForm((current) => ({ ...current, amountUsd: Number(event.target.value) }))
               }
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+              className={adminFieldClass}
             />
           </label>
         ) : null}
         {form.effectType === 'percentage' ? (
-          <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+          <label className={adminLabelClass}>
             Percent
             <input
               type="number"
@@ -226,11 +227,11 @@ export function DiscountCreator({
               onChange={(event) =>
                 setForm((current) => ({ ...current, percent: Number(event.target.value) }))
               }
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+              className={adminFieldClass}
             />
           </label>
         ) : null}
-        <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <label className={adminLabelClass}>
           Max uses
           <input
             type="number"
@@ -239,10 +240,10 @@ export function DiscountCreator({
             onChange={(event) =>
               setForm((current) => ({ ...current, maxRedemptions: event.target.value }))
             }
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+            className={adminFieldClass}
           />
         </label>
-        <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <label className={adminLabelClass}>
           Per customer
           <input
             type="number"
@@ -254,10 +255,10 @@ export function DiscountCreator({
                 maxRedemptionsPerCustomer: event.target.value,
               }))
             }
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+            className={adminFieldClass}
           />
         </label>
-        <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        <label className={adminLabelClass}>
           Expires at
           <input
             type="datetime-local"
@@ -265,27 +266,27 @@ export function DiscountCreator({
             onChange={(event) =>
               setForm((current) => ({ ...current, expiresAt: event.target.value }))
             }
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm font-semibold text-white outline-none focus:border-amber-300/70"
+            className={adminFieldClass}
           />
         </label>
       </div>
 
-      <div className="mt-5 flex flex-col items-end gap-2 border-t border-white/[0.07] pt-5">
+      <div className="mt-5 flex flex-col items-end gap-2 border-t border-black/[0.07] pt-5">
         {validationError ? (
-          <p className="text-xs text-amber-200" role="status">
+          <p className="text-xs font-medium text-[#765a12]" role="status">
             {validationError}
           </p>
         ) : null}
-        <button
+        <AdminButton
           type="button"
           onClick={() => void createDiscount()}
           disabled={saving || Boolean(validationError)}
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-amber-400 px-5 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+          tone="primary"
         >
           <Save className="h-4 w-4" />
           {saving ? 'Creating...' : 'Create discount'}
-        </button>
+        </AdminButton>
       </div>
-    </section>
+    </AdminPanel>
   )
 }

@@ -1,11 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  CheckCircle2,
-  RefreshCw,
-  Send,
-} from 'lucide-react'
+import { Maximize2, Minimize2, Minus, RefreshCw, X } from 'lucide-react'
 import { FinalReviewStage } from '@/components/admin/final-review/FinalReviewStage'
 import { JobQueue } from '@/components/admin/final-review/JobQueue'
 import { PdfVersionReview } from '@/components/admin/final-review/PdfVersionReview'
@@ -13,6 +9,7 @@ import { PrintVersionReview } from '@/components/admin/final-review/PrintVersion
 import { pagePreviewUrl } from '@/components/admin/final-review/reviewUi'
 import { StatCard } from '@/components/admin/final-review/StatCard'
 import type {
+  FinalReviewQueueFilter,
   ReviewPendingAction,
   ReviewPendingState,
   ReviewVersion,
@@ -33,6 +30,8 @@ import {
   type ManualPrintArtifactClient,
 } from '@/lib/manual-print-artifact'
 import { supabase } from '@/lib/supabase'
+import { AdminIconButton, AdminNotice } from '@/components/admin/AdminUi'
+import { handleAdminTabKeyDown } from '@/components/admin/adminA11y'
 
 type ApiResponse<T> = { error?: string } & T
 type UploadTarget = { finalJobId: string; page: FinalJobPageRow }
@@ -77,6 +76,19 @@ function pickDefaultJob(jobs: FinalJobSummary[]) {
   return pending?.final_job_id ?? jobs[0]?.final_job_id ?? null
 }
 
+function jobMatchesQueueFilter(job: FinalJobSummary, filter: FinalReviewQueueFilter) {
+  if (filter === 'all') return true
+  if (filter === 'pdf_review') return job.review_status !== 'released'
+  if (filter === 'print_pending') {
+    return job.review_status === 'released' && job.print_status !== 'released'
+  }
+  return job.review_status === 'released' && job.print_status === 'released'
+}
+
+function filterFinalJobs(jobs: FinalJobSummary[], filter: FinalReviewQueueFilter) {
+  return jobs.filter((job) => jobMatchesQueueFilter(job, filter))
+}
+
 function derivePdfReviewStatus(approvedCount: number, totalPages: number) {
   if (totalPages > 0 && approvedCount >= totalPages) return 'approved'
   if (approvedCount > 0) return 'in_review'
@@ -85,6 +97,30 @@ function derivePdfReviewStatus(approvedCount: number, totalPages: number) {
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === 'AbortError'
+}
+
+function GlassEdgeButton({
+  label,
+  onClick,
+  children,
+  className = '',
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`z-20 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink-soft)] shadow-[0_8px_24px_-12px_rgba(74,58,26,0.4)] backdrop-blur-xl transition duration-200 hover:border-[var(--admin-accent-dp)] hover:bg-[var(--admin-card)] hover:text-[var(--admin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] xl:h-8 xl:w-8 ${className}`}
+    >
+      {children}
+    </button>
+  )
 }
 
 export function FinalReviewPanel() {
@@ -102,6 +138,14 @@ export function FinalReviewPanel() {
   const [uploadPendingByPage, setUploadPendingByPage] = useState<UploadPendingState>({})
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
   const [activeVersion, setActiveVersion] = useState<ReviewVersion>('pdf')
+  const [queueFilter, setQueueFilter] = useState<FinalReviewQueueFilter>('all')
+  const [reviewFocus, setReviewFocus] = useState(false)
+  const [isReviewOpen, setIsReviewOpen] = useState(false)
+  const [suspended, setSuspended] = useState<
+    Array<{ finalJobId: string; displayId: string; title: string }>
+  >([])
+  const [suspendNotice, setSuspendNotice] = useState<string | null>(null)
+  const SUSPEND_LIMIT = 3
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const printPackageInputRef = useRef<HTMLInputElement | null>(null)
   const reviewIntentRef = useRef<Record<string, string>>({})
@@ -115,11 +159,15 @@ export function FinalReviewPanel() {
   const signedUrlLastRefreshRef = useRef<Record<string, number>>({})
   const selectedJobIdRef = useRef(selectedJobId)
   selectedJobIdRef.current = selectedJobId
+  const queueFilterRef = useRef(queueFilter)
+  queueFilterRef.current = queueFilter
   const selectedJob = useMemo(
     () => jobs.find((job) => job.final_job_id === selectedJobId) ?? null,
     [jobs, selectedJobId]
   )
   const busyAction = selectedJobId ? busyActionByJob[selectedJobId] ?? null : null
+  const showOverview = !reviewFocus
+  const showStage = !reviewFocus
 
   const patchFinalJob = useCallback(
     (
@@ -251,6 +299,7 @@ export function FinalReviewPanel() {
       if (jobsRequestIntentRef.current !== requestIntent) return
 
       const nextJobs = Array.isArray(data.finalJobs) ? data.finalJobs : []
+      const visibleJobs = filterFinalJobs(nextJobs, queueFilterRef.current)
       setJobs(nextJobs)
       setError('')
 
@@ -258,11 +307,11 @@ export function FinalReviewPanel() {
         if (
           preserveSelection &&
           current &&
-          nextJobs.some((job) => job.final_job_id === current)
+          visibleJobs.some((job) => job.final_job_id === current)
         ) {
           return current
         }
-        return pickDefaultJob(nextJobs)
+        return pickDefaultJob(visibleJobs)
       })
     } catch (loadError) {
       if (isAbortError(loadError) || jobsRequestIntentRef.current !== requestIntent) return
@@ -450,6 +499,22 @@ export function FinalReviewPanel() {
     setSelectedJobId(finalJobId)
   }, [])
 
+  const handleQueueFilterChange = useCallback(
+    (nextFilter: FinalReviewQueueFilter) => {
+      const visibleJobs = filterFinalJobs(jobs, nextFilter)
+      queueFilterRef.current = nextFilter
+      setQueueFilter(nextFilter)
+      setUploadTarget(null)
+      setSelectedJobId((current) => {
+        if (current && visibleJobs.some((job) => job.final_job_id === current)) {
+          return current
+        }
+        return pickDefaultJob(visibleJobs)
+      })
+    },
+    [jobs]
+  )
+
   const reconcileOffscreenFailure = useCallback(
     (finalJobId: string) => {
       if (selectedJobIdRef.current !== finalJobId) {
@@ -622,23 +687,20 @@ export function FinalReviewPanel() {
     }
   }
 
-  const releaseJob = async (approveAll = false) => {
+  const releaseJob = async () => {
     if (!selectedJobId) return
     const finalJobId = selectedJobId
-    const action = approveAll ? 'approve-all-release' : 'release'
-    const endpoint = approveAll
-      ? `/api/admin/final-jobs/${finalJobId}/approve-all-release`
-      : `/api/admin/final-jobs/${finalJobId}/release`
+    const action = 'release'
 
     setJobBusyAction(finalJobId, action)
     setError('')
     setMessage('')
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(`/api/admin/final-jobs/${finalJobId}/release`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ releaseMode: approveAll ? 'job_auto' : 'manual' }),
+        body: JSON.stringify({ releaseMode: 'manual' }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<ReleaseResponse>
       if (!response.ok) {
@@ -990,137 +1052,320 @@ export function FinalReviewPanel() {
         ? 'The current printer PDF is not in a verified state.'
         : 'Release and lock this verified printer PDF.'
 
-  const needsPdfReviewCount = jobs.filter((job) => job.review_status !== 'released').length
-  const printPendingCount = jobs.filter(
-    (job) => job.review_status === 'released' && job.print_status !== 'released'
-  ).length
-  const fullyCompletedCount = jobs.filter(
-    (job) => job.review_status === 'released' && job.print_status === 'released'
-  ).length
+  const queueCounts = useMemo(
+    () => ({
+      pdf_review: jobs.filter((job) => jobMatchesQueueFilter(job, 'pdf_review')).length,
+      print_pending: jobs.filter((job) => jobMatchesQueueFilter(job, 'print_pending')).length,
+      completed: jobs.filter((job) => jobMatchesQueueFilter(job, 'completed')).length,
+    }),
+    [jobs]
+  )
+  const visibleJobs = useMemo(() => filterFinalJobs(jobs, queueFilter), [jobs, queueFilter])
+
+  useEffect(() => {
+    const selectionIsVisible =
+      selectedJobId !== null &&
+      visibleJobs.some((job) => job.final_job_id === selectedJobId)
+    if (selectionIsVisible || (selectedJobId === null && visibleJobs.length === 0)) return
+
+    setUploadTarget(null)
+    setSelectedJobId(pickDefaultJob(visibleJobs))
+  }, [selectedJobId, visibleJobs])
+
+  // Queue-first workspace: selecting a job opens the review as a modal; it can be
+  // suspended to a parked card (max 3) or closed. Single active detail only — the
+  // existing selection/intent/CAS controller is untouched; suspended cards are
+  // lightweight references that re-open (and re-load) their job on click.
+  const openReview = useCallback(
+    (finalJobId: string) => {
+      handleSelectJob(finalJobId)
+      setIsReviewOpen(true)
+      setSuspendNotice(null)
+      setSuspended((current) => current.filter((card) => card.finalJobId !== finalJobId))
+    },
+    [handleSelectJob]
+  )
+  const closeReview = useCallback(() => {
+    setIsReviewOpen(false)
+    setReviewFocus(false)
+    setSuspendNotice(null)
+  }, [])
+  const suspendReview = useCallback(() => {
+    if (!selectedJob) return
+    const card = {
+      finalJobId: selectedJob.final_job_id,
+      displayId: selectedJob.orders?.display_id || selectedJob.order_id,
+      title: selectedJob.display_title,
+    }
+    const alreadyParked = suspended.some((c) => c.finalJobId === card.finalJobId)
+    if (!alreadyParked && suspended.length >= SUSPEND_LIMIT) {
+      // Never silently evict a parked review — make the user free a slot first.
+      setSuspendNotice(
+        `Maximum of ${SUSPEND_LIMIT} suspended previews reached. Please close at least one suspended preview before suspending another.`
+      )
+      return
+    }
+    setSuspended((current) => [...current.filter((c) => c.finalJobId !== card.finalJobId), card])
+    setIsReviewOpen(false)
+    setReviewFocus(false)
+    setSuspendNotice(null)
+  }, [selectedJob, suspended])
+  const dismissSuspended = useCallback((finalJobId: string) => {
+    setSuspended((current) => current.filter((card) => card.finalJobId !== finalJobId))
+    setSuspendNotice(null)
+  }, [])
 
   return (
     <>
     <div className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
-    <section className="rounded-[26px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl xl:shrink-0">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">Final review</p>
-          <h2 className="mt-1 text-2xl font-bold text-white">PDF version and print version approvals</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            Approve the customer PDF first, then upload the manually prepared printer PDF in a separate stage.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={
-              loadingJobs ||
-              isDetailLoading ||
-              busyAction !== null ||
-              hasReviewPending ||
-              hasUploadPending
-            }
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+    {!reviewFocus ? (
+      <div className={`relative xl:shrink-0 ${showOverview ? 'pb-1' : 'h-8'}`}>
+      {showOverview ? (
+      <section className="admin-v2-panel relative p-2.5">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="flex shrink-0 items-baseline gap-2 pr-12 lg:block lg:w-32 lg:pr-0">
+            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--admin-page-ink)]">
+              Queue Overview
+            </h2>
+            <span className="text-[10px] text-[var(--admin-page-muted)]">
+              {visibleJobs.length}/{jobs.length} shown
+            </span>
+          </div>
+
+          <div
+            role="group"
+            className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 lg:pb-0"
+            aria-label="Filter final review jobs by status"
           >
-            <RefreshCw className={`h-4 w-4 ${loadingJobs || isDetailLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => void releaseJob(true)}
-            disabled={
-              pdfReleased ||
-              !readyToRelease ||
-              busyAction !== null ||
-              hasReviewPending ||
-              hasUploadPending
-            }
-            title={releaseDisabledReason}
-            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed ${
-              pdfReleased
-                ? 'border border-white/10 bg-white/[0.05] text-slate-400'
-                : 'bg-gradient-to-r from-emerald-400 to-lime-300 text-slate-950 shadow-lg shadow-emerald-950/20 disabled:opacity-60'
-            }`}
-          >
-            {pdfReleased ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            {pdfReleased ? 'Released' : 'Approve all & Release'}
-          </button>
-        </div>
-      </div>
+            <StatCard
+              label="All Jobs"
+              value={jobs.length}
+              tone="neutral"
+              active={queueFilter === 'all'}
+              onSelect={() => handleQueueFilterChange('all')}
+            />
+            <StatCard
+              label="Needs PDF Review"
+              value={queueCounts.pdf_review}
+              tone="sky"
+              active={queueFilter === 'pdf_review'}
+              onSelect={() => handleQueueFilterChange('pdf_review')}
+            />
+            <StatCard
+              label="Print Pending"
+              value={queueCounts.print_pending}
+              tone="amber"
+              active={queueFilter === 'print_pending'}
+              onSelect={() => handleQueueFilterChange('print_pending')}
+            />
+            <StatCard
+              label="Fully Completed"
+              value={queueCounts.completed}
+              tone="emerald"
+              active={queueFilter === 'completed'}
+              onSelect={() => handleQueueFilterChange('completed')}
+            />
+          </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        <StatCard label="Needs PDF Review" value={needsPdfReviewCount} tone="sky" />
-        <StatCard label="Print Pending" value={printPendingCount} tone="amber" />
-        <StatCard label="Fully Completed" value={fullyCompletedCount} tone="emerald" />
-      </div>
-
-      {error ? (
-        <div className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          {error}
+          <div className="absolute right-2.5 top-2.5 flex shrink-0 items-center justify-end lg:static">
+            <AdminIconButton
+              type="button"
+              aria-label="Refresh final jobs"
+              title="Refresh final jobs"
+              onClick={() => void refresh()}
+              disabled={
+                loadingJobs ||
+                isDetailLoading ||
+                busyAction !== null ||
+                hasReviewPending ||
+                hasUploadPending
+              }
+              tone="quiet"
+              className="h-8 min-h-8 w-8 flex-[0_0_2rem]"
+            >
+              <RefreshCw className={`h-4 w-4 ${loadingJobs || isDetailLoading ? 'animate-spin' : ''}`} />
+            </AdminIconButton>
+          </div>
         </div>
+      </section>
       ) : null}
-      {message ? (
-        <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          {message}
-        </div>
-      ) : null}
-    </section>
+      </div>
+    ) : null}
 
-      <div className="mt-6 flex min-h-0 flex-col gap-5 xl:flex-1 xl:flex-row xl:items-stretch xl:overflow-hidden">
+    {error ? (
+      <AdminNotice tone="danger" role="alert" className="mt-2 text-sm">
+        {error}
+      </AdminNotice>
+    ) : null}
+    {message ? (
+      <AdminNotice tone="success" role="status" className="mt-2 text-sm">
+        {message}
+      </AdminNotice>
+    ) : null}
 
-        {/* Job Queue owns its scroll inside the bounded desktop workspace. */}
-        <div className="min-h-0 xl:h-full xl:w-64 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain">
+      {/* Queue is the calm main view; selecting a job opens its review as a modal. */}
+      <div className={`${showOverview || error || message ? 'mt-3' : ''} min-h-0 xl:flex-1 xl:overflow-hidden`}>
+        <div className="min-h-0 xl:h-full xl:overflow-y-auto xl:overscroll-contain">
           <JobQueue
-            jobs={jobs}
-            selectedJobId={selectedJobId}
+            jobs={visibleJobs}
+            totalJobs={jobs.length}
+            selectedJobId={isReviewOpen ? selectedJobId : null}
             loadingJobs={loadingJobs}
-            onSelectJob={handleSelectJob}
+            emptyLabel={jobs.length === 0 ? 'No final jobs yet.' : 'No jobs match this status.'}
+            onSelectJob={openReview}
+            variant="board"
           />
         </div>
+      </div>
+    </div>
+
+      {/* Suspended reviews park here (max 3); click to re-open, X to dismiss. */}
+      {suspended.length ? (
+        <div className="pointer-events-none fixed bottom-4 right-4 z-[120] flex w-[min(20rem,calc(100vw-2rem))] flex-col gap-2">
+          {suspended.map((card) => (
+            <div key={card.finalJobId} className="admin-v2-panel pointer-events-auto flex items-center gap-2 p-2 shadow-xl">
+              <button
+                type="button"
+                onClick={() => openReview(card.finalJobId)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--admin-accent)] text-[11px] font-black text-[var(--admin-accent-ink)]">
+                  {card.displayId.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-bold text-[var(--admin-page-ink)]">{card.displayId}</span>
+                  <span className="block truncate text-[11px] text-[var(--admin-page-muted)]">{card.title}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => dismissSuspended(card.finalJobId)}
+                aria-label="Close suspended review"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Review workspace modal (single active job) */}
+      {isReviewOpen && selectedJob ? (
+        <div
+          className="fixed inset-0 z-[130] flex items-stretch justify-center bg-[color-mix(in_srgb,var(--admin-ink)_40%,transparent)] p-2 backdrop-blur-sm sm:p-4 lg:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Final review workspace"
+        >
+          <div className={`admin-app relative flex min-h-0 w-full flex-col overflow-hidden ${reviewFocus ? '' : 'max-w-[1240px]'}`}>
+            <div className="flex shrink-0 items-center justify-end gap-2 border-b border-[var(--admin-line)] px-3 py-2">
+              <button
+                type="button"
+                onClick={suspendReview}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 text-xs font-bold text-[var(--admin-ink-soft)] transition hover:text-[var(--admin-ink)]"
+              >
+                <Minus className="h-4 w-4" /> Suspend
+              </button>
+              <button
+                type="button"
+                onClick={closeReview}
+                aria-label="Close review"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink-soft)] transition hover:text-[var(--admin-ink)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {suspendNotice ? (
+              <div
+                role="alert"
+                className="flex shrink-0 items-start gap-2 border-b border-[color-mix(in_srgb,var(--admin-crit)_40%,transparent)] bg-[color-mix(in_srgb,var(--admin-crit)_12%,var(--admin-panel))] px-3.5 py-2.5 text-xs font-semibold text-[color-mix(in_srgb,var(--admin-crit)_75%,var(--admin-ink))]"
+              >
+                <span className="flex-1 leading-5">{suspendNotice}</span>
+                <button
+                  type="button"
+                  onClick={() => setSuspendNotice(null)}
+                  aria-label="Dismiss notice"
+                  className="-mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md hover:bg-[color-mix(in_srgb,var(--admin-crit)_18%,transparent)]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : null}
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-2.5 sm:p-3 xl:flex-row xl:items-stretch">
 
         {/* ── Center panel: version review ── */}
-        <section className="min-h-0 min-w-0 flex-1 overflow-x-clip rounded-[24px] border border-white/10 bg-white/[0.06] xl:h-full xl:overflow-y-auto xl:overscroll-contain">
+        <section className="admin-v2-review-canvas admin-review-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip rounded-lg xl:h-full xl:overflow-y-auto xl:overscroll-contain">
           {/* Sticky version header */}
-          <div className="border-b border-white/10 bg-[#0c1322]/95 px-4 pb-4 pt-4 backdrop-blur-xl lg:sticky lg:top-0 lg:z-10">
-            <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <div className="border-b border-[var(--admin-line)] bg-[var(--admin-panel)]/92 px-3.5 py-3 backdrop-blur-xl lg:sticky lg:top-0 lg:z-10">
+            <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">
-                  {activeVersion === 'pdf' ? 'PDF Review' : 'Print Review'}
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-accent)]">
+                  {reviewFocus
+                    ? 'Review Focus'
+                    : activeVersion === 'pdf'
+                      ? 'PDF Review'
+                      : 'Print Review'}
                 </p>
-                <h3 className="mt-0.5 truncate text-lg font-bold text-white">
+                <h3 className="mt-0.5 truncate text-lg font-bold text-[var(--admin-ink)]">
                   {selectedJob?.orders?.display_id || selectedJob?.order_id || 'Select a final job'}
                   </h3>
                 {selectedJob ? (
-                  <p className="mt-0.5 truncate text-xs text-slate-400">
+                  <p className="mt-0.5 truncate text-xs text-[var(--admin-muted)]">
                     {selectedJob.display_title} · PDF {approvedPageCount}/{totalPageCount} approved
                   </p>
                 ) : null}
               </div>
-              <div className="flex w-full shrink-0 rounded-xl border border-white/10 bg-slate-950/50 p-0.5 2xl:w-[16rem]">
-                <button
-                  type="button"
-                  onClick={() => setActiveVersion('pdf')}
-                  className={`flex-1 rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
-                    activeVersion === 'pdf' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-white/10'
-                  }`}
+              <div className="flex w-full shrink-0 items-center gap-2 2xl:w-auto">
+                <div className="flex min-w-0 flex-1 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-0.5 2xl:w-[16rem] 2xl:flex-none" role="tablist" aria-label="Final review version">
+                  <button
+                    id="final-pdf-tab"
+                    type="button"
+                    role="tab"
+                    aria-selected={activeVersion === 'pdf'}
+                    aria-controls="final-review-version-panel"
+                    tabIndex={activeVersion === 'pdf' ? 0 : -1}
+                    onKeyDown={handleAdminTabKeyDown}
+                    onClick={() => setActiveVersion('pdf')}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                      activeVersion === 'pdf' ? 'bg-[var(--admin-accent)] text-[var(--admin-accent-ink)] shadow-sm' : 'text-[var(--admin-muted)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_6%,transparent)]'
+                    }`}
+                  >
+                    PDF
+                  </button>
+                  <button
+                    id="final-print-tab"
+                    type="button"
+                    role="tab"
+                    aria-selected={activeVersion === 'print'}
+                    aria-controls="final-review-version-panel"
+                    tabIndex={activeVersion === 'print' ? 0 : -1}
+                    onKeyDown={handleAdminTabKeyDown}
+                    onClick={() => setActiveVersion('print')}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                      activeVersion === 'print' ? 'bg-[var(--admin-accent)] text-[var(--admin-accent-ink)] shadow-sm' : 'text-[var(--admin-muted)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_6%,transparent)]'
+                    }`}
+                  >
+                    Print
+                  </button>
+                </div>
+
+                <GlassEdgeButton
+                  label={reviewFocus ? 'Exit expanded review canvas' : 'Expand review canvas'}
+                  onClick={() => setReviewFocus((current) => !current)}
                 >
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveVersion('print')}
-                  className={`flex-1 rounded-[10px] px-3 py-1.5 text-xs font-bold transition ${
-                    activeVersion === 'print' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-white/10'
-                  }`}
-                >
-                  Print
-                </button>
+                  {reviewFocus ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </GlassEdgeButton>
               </div>
             </div>
           </div>
 
-          <div className="p-4">
+          <div
+            id="final-review-version-panel"
+            role="tabpanel"
+            aria-labelledby={activeVersion === 'pdf' ? 'final-pdf-tab' : 'final-print-tab'}
+            className="p-4"
+          >
             {activeVersion === 'pdf' ? (
               <PdfVersionReview
                 key={selectedJobId ?? 'no-final-job'}
@@ -1157,25 +1402,37 @@ export function FinalReviewPanel() {
           </div>
         </section>
 
-        <FinalReviewStage
-          detail={activeDetail}
-          approvedPageCount={approvedPageCount}
-          totalPageCount={totalPageCount}
-          pdfReleased={pdfReleased}
-          readyToRelease={readyToRelease}
-          hasReviewPending={hasReviewPending}
-          hasUploadPending={hasUploadPending}
-          printArtifactReady={printArtifact?.status === 'verified'}
-          printReleased={printReleased}
-          printReadyToRelease={printReadyToRelease}
-          busyAction={busyAction}
-          releaseDisabledReason={releaseDisabledReason}
-          printDisabledReason={printDisabledReason}
-          onReleasePdf={() => void releaseJob(false)}
-          onReleasePrint={() => void releasePrintVersion()}
-        />
-      </div>
-      </div>
+        {!reviewFocus ? (
+          <div
+            className={`relative min-h-0 xl:h-full xl:shrink-0 ${
+              showStage ? 'pt-3 xl:w-80 xl:pt-0' : 'h-8 xl:w-8'
+            }`}
+          >
+          {showStage ? (
+            <FinalReviewStage
+              detail={activeDetail}
+              approvedPageCount={approvedPageCount}
+              totalPageCount={totalPageCount}
+              pdfReleased={pdfReleased}
+              readyToRelease={readyToRelease}
+              hasReviewPending={hasReviewPending}
+              hasUploadPending={hasUploadPending}
+              printArtifactReady={printArtifact?.status === 'verified'}
+              printReleased={printReleased}
+              printReadyToRelease={printReadyToRelease}
+              busyAction={busyAction}
+              releaseDisabledReason={releaseDisabledReason}
+              printDisabledReason={printDisabledReason}
+              onReleasePdf={() => void releaseJob()}
+              onReleasePrint={() => void releasePrintVersion()}
+            />
+          ) : null}
+          </div>
+        ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <input
         ref={fileInputRef}

@@ -95,13 +95,13 @@ export function DiscountInstrumentCard({
       : displayInstrument.owner_email
 
   return (
-    <article className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3">
+    <article className="admin-v2-data-row px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="break-words text-sm font-bold text-white">
+          <div className="break-words text-sm font-bold text-[var(--admin-page-ink)]">
             {offer?.name || 'YMI Discount'} | {identity || 'Unassigned'}
           </div>
-          <div className="mt-1 break-words text-xs text-slate-400">
+          <div className="mt-1 break-words text-xs text-[var(--admin-page-muted)]">
             {describeEffect(displayInstrument)} | {offer?.stacking_group || 'discount'} | reserved{' '}
             {displayInstrument.reserved_count} | paid {displayInstrument.paid_count}
           </div>
@@ -111,10 +111,10 @@ export function DiscountInstrumentCard({
           onClick={() => void toggleDiscount()}
           disabled={saving}
           aria-pressed={displayInstrument.is_active}
-          className={`inline-flex h-9 shrink-0 items-center justify-center rounded-full px-4 text-xs font-bold transition disabled:cursor-wait disabled:opacity-70 ${
+          className={`inline-flex min-h-9 shrink-0 items-center justify-center rounded-full border px-4 text-xs font-bold transition disabled:cursor-wait disabled:opacity-70 ${
             displayInstrument.is_active
-              ? 'bg-emerald-500 text-white hover:bg-emerald-400'
-              : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+              ? 'border-[#b9dec8] bg-[#e7f5ec] text-[#237044] hover:bg-[#dcefe4]'
+              : 'border-[#d9ddd6] bg-[#f1f3ef] text-[#646960] hover:bg-white'
           }`}
         >
           {saving
@@ -127,7 +127,7 @@ export function DiscountInstrumentCard({
         </button>
       </div>
       {error ? (
-        <p role="alert" className="mt-2 text-xs leading-5 text-rose-200">
+        <p role="alert" className="mt-2 text-xs leading-5 text-[#963535]">
           {error}
         </p>
       ) : null}

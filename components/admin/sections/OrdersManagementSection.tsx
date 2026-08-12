@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import {
+  AdminButton,
+  AdminEmptyState,
+  AdminNotice,
+  AdminPanel,
+  adminFieldClass,
+  adminLabelClass,
+} from '@/components/admin/AdminUi'
 import { OrderManagementCard } from '@/components/admin/sections/orders/OrderManagementCard'
 import {
   isOrderRow,
@@ -73,16 +81,16 @@ export function OrdersManagementSection() {
   }, [])
 
   return (
-    <section className="space-y-5">
-      <div className="rounded-3xl border border-white/[0.08] bg-white/[0.04] p-4">
+    <section className="space-y-4">
+      <AdminPanel className="p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-          <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+          <label className={adminLabelClass}>
             Order category
             <select
               value={orderGroup}
               onChange={(event) => setOrderGroup(event.target.value as OrderGroup)}
               disabled={loading}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white disabled:cursor-wait disabled:opacity-70"
+              className={adminFieldClass}
             >
               {ORDER_GROUP_OPTIONS.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -92,47 +100,45 @@ export function OrdersManagementSection() {
             </select>
           </label>
           <div className="flex items-end">
-            <button
+            <AdminButton
               type="button"
               onClick={() => void loadOrders(orderGroup, false)}
               disabled={loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60"
+              tone="primary"
+              className="w-full"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
+            </AdminButton>
           </div>
         </div>
         {loadError ? (
-          <div
-            role="alert"
-            className="mt-3 flex flex-col gap-2 text-sm text-rose-300 sm:flex-row sm:items-center sm:justify-between"
-          >
+          <AdminNotice tone="danger" className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span>{loadError}</span>
             <button
               type="button"
               onClick={() => void loadOrders(orderGroup, false)}
-              className="font-bold underline decoration-rose-300/50 underline-offset-4"
+              className="font-bold underline underline-offset-4"
             >
               Retry
             </button>
-          </div>
+          </AdminNotice>
         ) : null}
-      </div>
+      </AdminPanel>
 
       {!hasLoaded && loading ? (
         <div className="space-y-4" role="status" aria-label="Loading orders">
           {Array.from({ length: 3 }, (_, index) => (
             <div
               key={index}
-              className="h-48 animate-pulse rounded-3xl border border-white/[0.08] bg-white/[0.04]"
+              className="admin-v2-data-row h-48 animate-pulse"
             />
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div className="rounded-3xl border border-white/[0.08] bg-white/[0.04] p-5 text-sm text-slate-400">
+        <AdminEmptyState>
           {loadError ? 'No cached order data is available.' : 'No orders found.'}
-        </div>
+        </AdminEmptyState>
       ) : (
         <div className="space-y-4">
           {orders.map((order) => (

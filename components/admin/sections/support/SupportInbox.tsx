@@ -260,8 +260,8 @@ export function SupportInbox() {
   )
 
   return (
-    <div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.035] xl:flex xl:h-full">
-      <div className={`${mobileDetailOpen ? 'hidden' : 'contents'} xl:contents`}>
+    <div className="admin-v2-comm-workspace min-h-0 min-w-0 flex-1 2xl:flex 2xl:h-full">
+      <div className={`${mobileDetailOpen ? 'hidden' : 'contents'} 2xl:contents`}>
         <SupportTicketQueue
           tickets={visibleTickets}
           selectedTicketId={selectedTicketId}
@@ -279,7 +279,7 @@ export function SupportInbox() {
         />
       </div>
 
-      <div className={`${mobileDetailOpen ? 'contents' : 'hidden'} min-h-0 min-w-0 flex-1 xl:contents`}>
+      <div className={`${mobileDetailOpen ? 'contents' : 'hidden'} min-h-0 min-w-0 flex-1 2xl:contents`}>
         <SupportConversation
           detail={detail}
           loading={detailLoading}

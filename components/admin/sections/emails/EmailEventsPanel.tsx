@@ -3,6 +3,17 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Activity, CircleAlert, CircleCheck, MailCheck, RefreshCw, RotateCcw } from 'lucide-react'
+import {
+  AdminButton,
+  AdminEmptyState,
+  AdminIconButton,
+  AdminNotice,
+  AdminPanel,
+  AdminStatusBadge,
+  adminFieldClass,
+  adminLabelClass,
+  type AdminStatusTone,
+} from '@/components/admin/AdminUi'
 import { isBrowserTranslated } from '@/lib/browser-translation'
 import {
   areEmailEventFiltersEqual,
@@ -25,13 +36,11 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
-function statusClass(status: string) {
-  if (status === 'sent') return 'bg-emerald-400/15 text-emerald-200 ring-emerald-400/30'
-  if (status === 'failed') return 'bg-rose-400/15 text-rose-200 ring-rose-400/30'
-  if (status === 'external_observed') {
-    return 'bg-sky-400/15 text-sky-200 ring-sky-400/30'
-  }
-  return 'bg-amber-400/15 text-amber-200 ring-amber-400/30'
+function statusTone(status: string): AdminStatusTone {
+  if (status === 'sent' || status === 'delivered') return 'success'
+  if (['failed', 'bounced', 'complained', 'suppressed'].includes(status)) return 'danger'
+  if (status === 'external_observed') return 'info'
+  return 'warning'
 }
 
 function formatOption(value: string) {
@@ -115,7 +124,7 @@ export function EmailEventsPanel({
           event.preventDefault()
           if (isDirty) navigateToFilters(draftFilters)
         }}
-        className="grid gap-3 rounded-3xl border border-white/[0.08] bg-white/[0.04] p-4 md:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_auto]"
+        className="admin-v2-panel grid gap-3 p-4 md:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_auto]"
       >
         <FilterSelect
           label="Status"
@@ -155,56 +164,55 @@ export function EmailEventsPanel({
         />
 
         <div className="flex items-end gap-2 md:col-span-3 xl:col-span-1">
-          <button
+          <AdminIconButton
             type="button"
             onClick={resetFilters}
             disabled={isPending || (!isDirty && filters.status === 'all' && filters.provider === 'all' && filters.emailKey === 'all')}
             title="Reset filters"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RotateCcw className="h-4 w-4" />
-          </button>
-          <button
+          </AdminIconButton>
+          <AdminButton
             type="submit"
             disabled={isPending || !isDirty}
-            className="h-10 flex-1 rounded-2xl bg-amber-400 px-4 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            tone="primary"
+            className="flex-1"
           >
             {isPending ? 'Loading...' : 'Apply Filters'}
-          </button>
-          <button
+          </AdminButton>
+          <AdminIconButton
             type="button"
             onClick={refreshEvents}
             disabled={isPending}
             title="Refresh events"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-slate-200 transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
-          </button>
+          </AdminIconButton>
         </div>
       </form>
 
       <section
         aria-busy={isPending}
-        className={`overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.04] transition-opacity ${
+        className={`admin-v2-panel overflow-hidden transition-opacity ${
           isPending ? 'opacity-60' : 'opacity-100'
         }`}
       >
         {loadError ? (
-          <div role="alert" className="flex flex-col gap-3 p-5 text-sm text-rose-200">
+          <AdminNotice tone="danger" className="m-4 flex flex-col gap-3">
             <span>Failed to load email events: {loadError}</span>
             <button
               type="button"
               onClick={refreshEvents}
               disabled={isPending}
-              className="w-fit font-bold underline decoration-rose-300/50 underline-offset-4"
+              className="w-fit font-bold underline underline-offset-4"
             >
               Retry
             </button>
-          </div>
+          </AdminNotice>
         ) : events.length === 0 ? (
-          <div className="p-5 text-sm text-slate-400">
+          <AdminEmptyState className="m-4">
             No email events match the current filters.
-          </div>
+          </AdminEmptyState>
         ) : (
           <>
             <div className="space-y-3 p-3 lg:hidden">
@@ -219,7 +227,7 @@ export function EmailEventsPanel({
         )}
       </section>
 
-      <p className="text-xs text-slate-500" aria-live="polite">
+      <p className="text-xs text-[var(--admin-page-muted)]" aria-live="polite">
         {isPending
           ? 'Refreshing email events...'
           : `Showing ${events.length} event${events.length === 1 ? '' : 's'}, newest first (maximum 100).`}
@@ -282,17 +290,17 @@ function ResendOperationsPanel({
       </div>
 
       {loadError ? (
-        <div role="alert" className="flex items-start gap-2 rounded-2xl border border-rose-300/20 bg-rose-300/[0.07] p-3 text-xs leading-5 text-rose-200">
+        <AdminNotice tone="danger" className="flex items-start gap-2">
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /> Operations metrics failed to load: {loadError}
-        </div>
+        </AdminNotice>
       ) : alerts.length > 0 ? (
-        <div role="alert" className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-3 text-xs leading-5 text-amber-100">
+        <AdminNotice tone="warning">
           {alerts.map((alert) => <p key={alert}>{alert}</p>)}
-        </div>
+        </AdminNotice>
       ) : (
-        <div className="flex items-center gap-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.06] p-3 text-xs text-emerald-100">
+        <AdminNotice tone="success" className="flex items-center gap-2">
           <CircleCheck className="h-4 w-4" /> No Resend quota or processing alert is currently active.
-        </div>
+        </AdminNotice>
       )}
     </section>
   )
@@ -312,14 +320,14 @@ function OperationsMetric({
   warning: boolean
 }) {
   return (
-    <div className={`rounded-2xl border p-4 ${warning ? 'border-amber-300/25 bg-amber-300/[0.07]' : 'border-white/[0.08] bg-white/[0.04]'}`}>
+    <AdminPanel className={`p-4 ${warning ? 'border-[#ead28d] bg-[#fff7db]' : ''}`}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
-        <Icon className={`h-4 w-4 ${warning ? 'text-amber-200' : 'text-slate-500'}`} />
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">{label}</p>
+        <Icon className={`h-4 w-4 ${warning ? 'text-[#856516]' : 'text-[var(--admin-page-muted)]'}`} />
       </div>
-      <p className="mt-2 text-2xl font-black text-white">{value}</p>
-      <p className="mt-1 text-[10px] text-slate-500">{detail}</p>
-    </div>
+      <p className="mt-2 text-2xl font-black text-[var(--admin-page-ink)]">{value}</p>
+      <p className="mt-1 text-[10px] text-[var(--admin-page-muted)]">{detail}</p>
+    </AdminPanel>
   )
 }
 
@@ -337,13 +345,13 @@ function FilterSelect({
   onChange: (value: string) => void
 }) {
   return (
-    <label className="space-y-1.5 text-xs font-semibold text-slate-300">
+    <label className={adminLabelClass}>
       {label}
       <select
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white disabled:cursor-wait disabled:opacity-70"
+        className={adminFieldClass}
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -357,11 +365,11 @@ function FilterSelect({
 
 function EmailEventCard({ event }: { event: EmailEventRow }) {
   return (
-    <article className="rounded-2xl border border-white/[0.08] bg-slate-950/35 p-4">
+    <article className="admin-v2-data-row p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="break-words font-semibold text-white">{formatOption(event.email_key)}</p>
-          <p className="mt-1 break-words text-xs text-slate-500">
+          <p className="break-words font-semibold text-[var(--admin-page-ink)]">{formatOption(event.email_key)}</p>
+          <p className="mt-1 break-words text-xs text-[var(--admin-page-muted)]">
             {event.subject || 'No subject'}
           </p>
         </div>
@@ -377,7 +385,7 @@ function EmailEventCard({ event }: { event: EmailEventRow }) {
         <EventDetail label="Final job" value={event.final_job_id || '-'} breakWords />
       </dl>
       {event.error_message ? (
-        <p className="mt-4 break-words rounded-xl bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">
+        <p className="mt-4 break-words rounded-lg bg-[#fce9e9] p-3 text-xs leading-5 text-[#963535]">
           {event.error_message}
         </p>
       ) : null}
@@ -387,8 +395,8 @@ function EmailEventCard({ event }: { event: EmailEventRow }) {
 
 function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
   return (
-    <table className="min-w-full divide-y divide-white/[0.08] text-left text-sm">
-      <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.16em] text-slate-500">
+    <table className="min-w-full divide-y divide-black/[0.07] text-left text-sm">
+      <thead className="bg-black/[0.025] text-xs uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
         <tr>
           <th className="px-4 py-3">Created</th>
           <th className="px-4 py-3">Type</th>
@@ -400,36 +408,36 @@ function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
           <th className="px-4 py-3">Error</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-white/[0.06]">
+      <tbody className="divide-y divide-black/[0.06]">
         {events.map((event) => (
-          <tr key={event.email_event_id} className="text-slate-300">
-            <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
+          <tr key={event.email_event_id} className="text-[#4d524b] hover:bg-white/50">
+            <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--admin-page-muted)]">
               {formatDate(event.created_at)}
             </td>
             <td className="px-4 py-3">
-              <p className="font-semibold text-white">{formatOption(event.email_key)}</p>
+              <p className="font-semibold text-[var(--admin-page-ink)]">{formatOption(event.email_key)}</p>
               {event.subject ? (
-                <p className="mt-1 max-w-[260px] truncate text-xs text-slate-500">
+                <p className="mt-1 max-w-[260px] truncate text-xs text-[var(--admin-page-muted)]">
                   {event.subject}
                 </p>
               ) : null}
             </td>
-            <td className="px-4 py-3 text-slate-400">{formatOption(event.provider)}</td>
+            <td className="px-4 py-3 text-[#5f645c]">{formatOption(event.provider)}</td>
             <td className="px-4 py-3">
               <StatusBadge status={event.status} />
             </td>
             <td className="px-4 py-3">
-              {event.provider_delivery_status ? <StatusBadge status={event.provider_delivery_status} /> : <span className="text-slate-600">-</span>}
+              {event.provider_delivery_status ? <StatusBadge status={event.provider_delivery_status} /> : <span className="text-[var(--admin-page-muted)]">-</span>}
             </td>
-            <td className="max-w-[240px] break-all px-4 py-3 text-slate-400">
+            <td className="max-w-[240px] break-all px-4 py-3 text-[#5f645c]">
               {event.to_email || '-'}
             </td>
-            <td className="max-w-[280px] break-all px-4 py-3 text-xs text-slate-500">
+            <td className="max-w-[280px] break-all px-4 py-3 text-xs text-[var(--admin-page-muted)]">
               {event.order_id ? <p>Order: {event.order_id}</p> : null}
               {event.final_job_id ? <p>Final: {event.final_job_id}</p> : null}
               {!event.order_id && !event.final_job_id ? '-' : null}
             </td>
-            <td className="max-w-[320px] break-words px-4 py-3 text-xs text-rose-200">
+            <td className="max-w-[320px] break-words px-4 py-3 text-xs text-[#963535]">
               {event.error_message || '-'}
             </td>
           </tr>
@@ -441,11 +449,9 @@ function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span
-      className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${statusClass(status)}`}
-    >
+    <AdminStatusBadge tone={statusTone(status)}>
       {formatOption(status)}
-    </span>
+    </AdminStatusBadge>
   )
 }
 
@@ -460,8 +466,8 @@ function EventDetail({
 }) {
   return (
     <div>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className={`mt-1 text-slate-300 ${breakWords ? 'break-all' : ''}`}>{value}</dd>
+      <dt className="text-[var(--admin-page-muted)]">{label}</dt>
+      <dd className={`mt-1 text-[#4d524b] ${breakWords ? 'break-all' : ''}`}>{value}</dd>
     </div>
   )
 }

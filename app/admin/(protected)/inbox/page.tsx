@@ -1,23 +1,17 @@
 import { GeneralInbox } from '@/components/admin/sections/inbox/GeneralInbox'
+import { AdminPage, AdminPageHeader, AdminStatusBadge } from '@/components/admin/AdminUi'
 
 export default function AdminGeneralInboxPage() {
   return (
-    <div className="xl:flex xl:h-[calc(100dvh-3rem)] xl:min-h-0 xl:flex-col">
-      <header className="mb-5 xl:shrink-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">YMI Admin</p>
-        <div className="mt-0.5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-white">General Inbox</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Review recognized root-domain mail that is not a verified Support thread.
-            </p>
-          </div>
-          <p className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[10px] text-slate-500">
-            Operational minimum surface
-          </p>
-        </div>
-      </header>
+    <AdminPage className="space-y-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0">
+      <AdminPageHeader
+        eyebrow="Root-domain mail"
+        title="General Inbox"
+        description="Review recognized root-domain mail that is not part of a verified Support thread."
+        action={<AdminStatusBadge tone="neutral">Operational inbox</AdminStatusBadge>}
+      />
+      <div className="h-4 shrink-0" />
       <GeneralInbox />
-    </div>
+    </AdminPage>
   )
 }

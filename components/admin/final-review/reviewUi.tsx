@@ -6,20 +6,20 @@ export function statusClass(status: string) {
     case 'completed':
     case 'released':
     case 'approved':
-      return 'bg-emerald-500/15 text-emerald-200 border-emerald-400/25'
+      return 'border-[rgba(79,157,107,0.34)] bg-[rgba(79,157,107,0.14)] text-[#3f8f5c]'
     case 'review_pending':
     case 'pending_review':
     case 'queued':
-      return 'bg-sky-500/15 text-sky-200 border-sky-400/25'
+      return 'border-[rgba(92,124,156,0.32)] bg-[rgba(92,124,156,0.13)] text-[#5c7c9c]'
     case 'needs_fix':
-      return 'bg-amber-500/15 text-amber-200 border-amber-400/25'
+      return 'border-[rgba(207,154,52,0.36)] bg-[rgba(207,154,52,0.15)] text-[#b98526]'
     case 'rerunning':
     case 'processing':
-      return 'bg-violet-500/15 text-violet-200 border-violet-400/25'
+      return 'border-[rgba(140,110,180,0.32)] bg-[rgba(140,110,180,0.13)] text-[#8069a8]'
     case 'failed':
-      return 'bg-rose-500/15 text-rose-200 border-rose-400/25'
+      return 'border-[rgba(201,96,75,0.34)] bg-[rgba(201,96,75,0.14)] text-[#c0604b]'
     default:
-      return 'bg-white/10 text-slate-200 border-white/15'
+      return 'border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-muted)]'
   }
 }
 
@@ -57,7 +57,7 @@ export function PageFileLinks({
           rel="noreferrer"
           aria-disabled={!url}
           title="View full"
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.07] text-slate-100 hover:bg-white/[0.12] ${
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] ${
             url ? '' : 'pointer-events-none opacity-50'
           }`}
         >
@@ -68,7 +68,7 @@ export function PageFileLinks({
           download={`final-page-${String(pageNumber).padStart(2, '0')}.png`}
           aria-disabled={!url}
           title="Download"
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.07] text-slate-100 hover:bg-white/[0.12] ${
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] ${
             url ? '' : 'pointer-events-none opacity-50'
           }`}
         >
@@ -85,7 +85,7 @@ export function PageFileLinks({
         target="_blank"
         rel="noreferrer"
         aria-disabled={!url}
-        className={`inline-flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-bold text-slate-100 hover:bg-white/[0.1] ${
+        className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-2 text-xs font-bold text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_7%,transparent)] ${
           url ? '' : 'pointer-events-none opacity-50'
         }`}
       >
@@ -96,7 +96,7 @@ export function PageFileLinks({
         href={url ?? undefined}
         download={`final-page-${String(pageNumber).padStart(2, '0')}.png`}
         aria-disabled={!url}
-        className={`inline-flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-bold text-slate-100 hover:bg-white/[0.1] ${
+        className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-2 text-xs font-bold text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_7%,transparent)] ${
           url ? '' : 'pointer-events-none opacity-50'
         }`}
       >

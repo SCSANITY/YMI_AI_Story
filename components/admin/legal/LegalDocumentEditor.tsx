@@ -3,6 +3,8 @@
 import { Eye, FilePenLine, Plus, RefreshCw, Save, Send, Trash2 } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import type { LegalSection, LegalTextItem } from '@/lib/footer-legal-content'
+import { AdminButton, AdminNotice } from '@/components/admin/AdminUi'
+import { handleAdminTabKeyDown } from '@/components/admin/adminA11y'
 import {
   getLegalPublishReadiness,
   type LegalDocumentState,
@@ -49,15 +51,15 @@ function ItemEditor({
   onRemove: () => void
 }) {
   return (
-    <div className="rounded-md border border-white/[0.08] bg-slate-950/45 p-3">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--admin-page-muted)]">
           {groupLabel} {itemIndex + 1}
         </p>
         <button
           type="button"
           onClick={onRemove}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-rose-400/10 hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
           aria-label={`Remove ${groupLabel.toLowerCase()} ${itemIndex + 1}`}
           title="Remove item"
         >
@@ -65,8 +67,8 @@ function ItemEditor({
         </button>
       </div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        <label className="text-[11px] font-semibold text-slate-400">
-          Label <span className="font-normal text-slate-600">(optional)</span>
+        <label className="text-[11px] font-semibold text-[var(--admin-page-muted)]">
+          Label <span className="font-normal text-slate-400">(optional)</span>
           <input
             value={item.label ?? ''}
             onChange={(event) => onChange('label', event.target.value)}
@@ -74,8 +76,8 @@ function ItemEditor({
             placeholder="Strict Purpose Limitation:"
           />
         </label>
-        <label className="text-[11px] font-semibold text-slate-400">
-          HTTPS link <span className="font-normal text-slate-600">(optional)</span>
+        <label className="text-[11px] font-semibold text-[var(--admin-page-muted)]">
+          HTTPS link <span className="font-normal text-slate-400">(optional)</span>
           <input
             type="url"
             value={item.href ?? ''}
@@ -85,7 +87,7 @@ function ItemEditor({
           />
         </label>
       </div>
-      <label className="mt-2 block text-[11px] font-semibold text-slate-400">
+      <label className="mt-2 block text-[11px] font-semibold text-[var(--admin-page-muted)]">
         Text
         <textarea
           value={item.text}
@@ -254,36 +256,48 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
   }
 
   return (
-    <section className="min-w-0 rounded-lg border border-white/10 bg-slate-950/55">
-      <header className="border-b border-white/10 p-4 sm:p-5">
+    <section className="admin-v2-panel min-w-0 overflow-hidden">
+      <header className="border-b border-slate-200 p-4 sm:p-5">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
               English · Atomic revision
             </p>
-            <h2 className="mt-1 truncate text-xl font-bold text-white">{label.title}</h2>
-            <p className="mt-1 text-xs text-slate-400">
+            <h2 className="mt-1 truncate text-xl font-semibold text-[var(--admin-page-ink)]">{label.title}</h2>
+            <p className="mt-1 text-xs text-[var(--admin-page-muted)]">
               {state.draft
                 ? `Draft revision ${state.draft.revisionNumber} · save ${state.draft.draftVersion}`
                 : `Editing from live revision ${state.currentPublished?.revisionNumber}`}
             </p>
           </div>
-          <div className="flex shrink-0 rounded-md border border-white/10 bg-slate-950 p-1">
+          <div className="flex shrink-0 rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Legal document workspace">
             <button
+              id="legal-edit-tab"
               type="button"
+              role="tab"
+              aria-selected={mode === 'edit'}
+              aria-controls="legal-document-panel"
+              tabIndex={mode === 'edit' ? 0 : -1}
+              onKeyDown={handleAdminTabKeyDown}
               onClick={() => setMode('edit')}
               className={`inline-flex min-h-9 items-center gap-2 rounded px-3 text-xs font-semibold ${
-                mode === 'edit' ? 'bg-white/10 text-white' : 'text-slate-400'
+                mode === 'edit' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
               }`}
             >
               <FilePenLine aria-hidden="true" className="h-3.5 w-3.5" />
               Edit
             </button>
             <button
+              id="legal-preview-tab"
               type="button"
+              role="tab"
+              aria-selected={mode === 'preview'}
+              aria-controls="legal-document-panel"
+              tabIndex={mode === 'preview' ? 0 : -1}
+              onKeyDown={handleAdminTabKeyDown}
               onClick={() => setMode('preview')}
               className={`inline-flex min-h-9 items-center gap-2 rounded px-3 text-xs font-semibold ${
-                mode === 'preview' ? 'bg-white/10 text-white' : 'text-slate-400'
+                mode === 'preview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
               }`}
             >
               <Eye aria-hidden="true" className="h-3.5 w-3.5" />
@@ -293,9 +307,14 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
         </div>
       </header>
 
-      <div className="p-4 sm:p-5">
+      <div
+        id="legal-document-panel"
+        role="tabpanel"
+        aria-labelledby={mode === 'edit' ? 'legal-edit-tab' : 'legal-preview-tab'}
+        className="p-4 sm:p-5"
+      >
         {error ? (
-          <div role="alert" className="mb-4 flex flex-col gap-3 rounded-md border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-100 sm:flex-row sm:items-center sm:justify-between">
+          <AdminNotice tone="danger" role="alert" className="mb-4 flex flex-col gap-3 text-xs sm:flex-row sm:items-center sm:justify-between">
             <span>{error}</span>
             <button
               type="button"
@@ -305,12 +324,12 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
               <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
               Reload server state
             </button>
-          </div>
+          </AdminNotice>
         ) : null}
         {success ? (
-          <p role="status" className="mb-4 rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-200">
+          <AdminNotice tone="success" role="status" className="mb-4 text-xs">
             {success}
-          </p>
+          </AdminNotice>
         ) : null}
 
         {mode === 'preview' ? (
@@ -318,7 +337,7 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-slate-400">
+              <label className="text-xs font-semibold text-[var(--admin-page-muted)]">
                 Effective date
                 <input
                   type="date"
@@ -332,7 +351,7 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
                   className={`${ADMIN_FIELD_CLASS} mt-1.5`}
                 />
               </label>
-              <label className="text-xs font-semibold text-slate-400">
+              <label className="text-xs font-semibold text-[var(--admin-page-muted)]">
                 Version label
                 <input
                   value={content.en.version}
@@ -351,10 +370,10 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
             {content.en.sections.map((section, sectionIndex) => (
               <article
                 key={sectionIndex}
-                className="rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:p-4"
+                className="rounded-lg border border-slate-200 bg-white/55 p-3 sm:p-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-200">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">
                     Section {sectionIndex + 1}
                   </p>
                   <button
@@ -365,15 +384,15 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
                         sections: english.sections.filter((_, index) => index !== sectionIndex),
                       }))
                     }
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-rose-400/10 hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
                     aria-label={`Remove section ${sectionIndex + 1}`}
                     title="Remove section"
                   >
                     <Trash2 aria-hidden="true" className="h-4 w-4" />
                   </button>
                 </div>
-                <label className="mt-3 block text-[11px] font-semibold text-slate-400">
-                  Section title <span className="font-normal text-slate-600">(optional)</span>
+                <label className="mt-3 block text-[11px] font-semibold text-[var(--admin-page-muted)]">
+                  Section title <span className="font-normal text-slate-400">(optional)</span>
                   <input
                     value={section.title ?? ''}
                     onChange={(event) =>
@@ -389,7 +408,7 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
 
                 <div className="mt-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--admin-page-muted)]">
                       Paragraphs
                     </p>
                     <button
@@ -427,7 +446,7 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
 
                 <div className="mt-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--admin-page-muted)]">
                       Bullets
                     </p>
                     <button
@@ -474,28 +493,29 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
         )}
       </div>
 
-      <footer className="sticky bottom-0 z-10 border-t border-white/10 bg-slate-950/95 p-4 backdrop-blur-xl sm:p-5">
+      <footer className="sticky bottom-0 z-10 border-t border-slate-200 bg-white/92 p-4 backdrop-blur-xl sm:p-5">
         <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div>
-            <p className="text-xs font-semibold text-white">
+            <p className="text-xs font-semibold text-[var(--admin-page-ink)]">
               {dirty ? 'Unsaved draft changes' : state.draft ? 'Draft saved' : 'Live copy loaded'}
             </p>
-            <p className="mt-0.5 text-[11px] text-slate-500">
+            <p className="mt-0.5 text-[11px] text-[var(--admin-page-muted)]">
               Draft saves never alter customer-facing policy text.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button
+            <AdminButton
               type="button"
               onClick={() => void saveDraft()}
               disabled={!dirty || Boolean(pendingAction)}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-amber-300/40 bg-amber-300/10 px-4 text-xs font-bold text-amber-100 transition-colors hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+              tone="secondary"
+              className="text-xs"
             >
               <Save aria-hidden="true" className="h-4 w-4" />
               {pendingAction === 'save' ? 'Saving...' : 'Save Draft'}
-            </button>
+            </AdminButton>
             {!confirmPublish ? (
-              <button
+              <AdminButton
                 type="button"
                 onClick={() => setConfirmPublish(true)}
                 disabled={
@@ -509,18 +529,19 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
                     ? 'Publish saved draft'
                     : publishReadiness.reason
                 }
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-amber-300 px-4 text-xs font-black text-slate-950 transition-colors hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                tone="primary"
+                className="text-xs"
               >
                 <Send aria-hidden="true" className="h-4 w-4" />
                 Publish Draft
-              </button>
+              </AdminButton>
             ) : (
-              <div className="flex gap-2 rounded-md border border-amber-300/25 bg-amber-300/[0.08] p-1.5">
+              <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-1.5">
                 <button
                   type="button"
                   onClick={() => void publishDraft()}
                   disabled={Boolean(pendingAction)}
-                  className="min-h-9 rounded bg-amber-300 px-3 text-xs font-black text-slate-950 disabled:opacity-50"
+                  className="admin-v2-button admin-v2-button--primary min-h-9 px-3 text-xs"
                 >
                   {pendingAction === 'publish' ? 'Publishing...' : 'Confirm Publish'}
                 </button>

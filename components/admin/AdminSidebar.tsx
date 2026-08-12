@@ -3,37 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { Menu, X } from 'lucide-react'
 import {
-  BarChart3,
-  BookMarked,
-  FileText as FileTextIcon,
-  LayoutDashboard,
-  Mail,
-  Mails,
-  MessagesSquare,
-  Menu,
-  Megaphone,
-  PackageCheck,
-  ScrollText,
-  TicketPercent,
-  ToggleLeft,
-  X,
-} from 'lucide-react'
-
-const navItems = [
-  { label: 'Final Review', icon: FileTextIcon, href: '/admin/finals' },
-  { label: 'Legal Content', icon: ScrollText, href: '/admin/legal' },
-  { label: 'Announcements', icon: Megaphone, href: '/admin/announcements' },
-  { label: 'Discounts', icon: TicketPercent, href: '/admin/discounts' },
-  { label: 'Emails', icon: Mail, href: '/admin/emails' },
-  { label: 'Support Inbox', icon: MessagesSquare, href: '/admin/support' },
-  { label: 'General Inbox', icon: Mails, href: '/admin/inbox' },
-  { label: 'Orders', icon: PackageCheck, href: '/admin/orders' },
-  { label: 'Service Control', icon: ToggleLeft, href: '/admin/service' },
-  { label: 'Analytics', icon: BarChart3, href: '/admin/analytics', soon: true },
-  { label: 'Banner Manager', icon: LayoutDashboard, href: '/admin/banner', soon: true },
-  { label: 'Catalog', icon: BookMarked, href: '/admin/catalog', soon: true },
-]
+  getAdminNavigationGroups,
+  getAdminNavigationItem,
+} from '@/components/admin/adminNavigation'
 
 type Props = {
   adminName: string
@@ -42,13 +16,15 @@ type Props = {
 
 function AdminIdentity({ adminName, adminEmail }: Props) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.04] px-3 py-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400/25 text-sm font-bold text-amber-100">
+    <div className="admin-v2-nav-identity flex min-w-0 items-center gap-3 px-3 py-2.5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-sm font-black text-[var(--admin-accent-ink)]">
         {adminName[0]?.toUpperCase() ?? 'A'}
       </div>
       <div className="min-w-0">
-        <p className="truncate text-xs font-semibold text-white">{adminName}</p>
-        {adminEmail ? <p className="truncate text-[10px] text-slate-500">{adminEmail}</p> : null}
+        <p className="truncate text-xs font-semibold text-[var(--admin-ink)]">{adminName}</p>
+        {adminEmail ? (
+          <p className="truncate text-[10px] text-[var(--admin-muted)]">{adminEmail}</p>
+        ) : null}
       </div>
     </div>
   )
@@ -61,41 +37,41 @@ function AdminNavigationLinks({
   pathname: string
   onNavigate?: () => void
 }) {
+  const groups = useMemo(() => getAdminNavigationGroups(), [])
   return (
-    <nav aria-label="Admin sections" className="space-y-1">
-      {navItems.map((item) => {
-        const Icon = item.icon
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive ? 'page' : undefined}
-            onClick={onNavigate}
-            className={`flex min-h-10 w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
-              isActive
-                ? 'bg-amber-400 text-slate-950'
-                : item.soon
-                  ? 'text-slate-500 hover:bg-white/[0.05] hover:text-slate-400'
-                  : 'text-slate-200 hover:bg-white/[0.08]'
-            }`}
-          >
-            <Icon
-              aria-hidden="true"
-              className={`h-4 w-4 shrink-0 ${
-                isActive ? '' : item.soon ? 'text-slate-600' : 'text-slate-400'
-              }`}
-            />
-            <span className="min-w-0 truncate">{item.label}</span>
-            {item.soon ? (
-              <span className="ml-auto shrink-0 rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] uppercase tracking-wide text-slate-600">
-                Soon
-              </span>
-            ) : null}
-          </Link>
-        )
-      })}
+    <nav aria-label="Admin sections" className="space-y-4">
+      {groups.map((section) => (
+        <div key={section.group} className="space-y-1">
+          <p className="admin-v3-group py-1">{section.group}</p>
+          {section.items.map((item) => {
+            const Icon = item.icon
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? 'page' : undefined}
+                onClick={onNavigate}
+                className={`admin-v2-nav-link flex min-h-9 w-full min-w-0 items-center gap-2.5 px-2.5 py-2 text-left text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)] ${
+                  isActive
+                    ? 'admin-v2-nav-link--active'
+                    : item.soon
+                      ? 'text-[var(--admin-muted)] opacity-70'
+                      : ''
+                }`}
+              >
+                <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 truncate">{item.label}</span>
+                {item.soon ? (
+                  <span className="ml-auto shrink-0 rounded-full bg-[var(--admin-panel-2)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
+                    Soon
+                  </span>
+                ) : null}
+              </Link>
+            )
+          })}
+        </div>
+      ))}
     </nav>
   )
 }
@@ -106,10 +82,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
   const mobileTriggerRef = useRef<HTMLButtonElement>(null)
   const mobileDrawerRef = useRef<HTMLElement>(null)
   const mobileCloseRef = useRef<HTMLButtonElement>(null)
-  const currentItem = useMemo(
-    () => navItems.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`)),
-    [pathname]
-  )
+  const currentItem = useMemo(() => getAdminNavigationItem(pathname), [pathname])
 
   useEffect(() => {
     if (!isMobileOpen) return
@@ -122,7 +95,6 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
         return
       }
       if (event.key !== 'Tab') return
-
       const focusable = mobileDrawerRef.current?.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
       )
@@ -148,20 +120,20 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl lg:hidden">
+      <header className="admin-v2-mobilebar sticky top-0 z-40 pt-[env(safe-area-inset-top)] lg:hidden">
         <div className="flex min-h-16 min-w-0 items-center gap-3 px-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-sm font-black text-slate-950">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--admin-ink)] text-sm font-black text-[var(--admin-panel)]">
             Y
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">YMI Admin</p>
-            <p className="truncate text-sm font-semibold text-white">{currentItem?.label || 'Dashboard'}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">YMI Operations</p>
+            <p className="truncate text-sm font-semibold text-[var(--admin-ink)]">{currentItem?.label || 'Console'}</p>
           </div>
           <button
             ref={mobileTriggerRef}
             type="button"
             onClick={() => setIsMobileOpen(true)}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-slate-100 transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+            className="admin-v2-mobile-menu inline-flex h-10 w-10 shrink-0 items-center justify-center text-[var(--admin-ink)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)]"
             aria-label="Open Admin navigation"
             aria-expanded={isMobileOpen}
             aria-controls="admin-mobile-navigation"
@@ -172,22 +144,22 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
         </div>
       </header>
 
-      <aside className="hidden min-h-0 flex-col border-r border-white/10 bg-slate-950/80 p-5 backdrop-blur-2xl lg:flex lg:h-dvh">
-        <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.04] p-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-base font-black text-slate-950">
+      <aside className="admin-v2-sidebar hidden min-h-0 flex-col gap-1 p-3 lg:flex lg:h-full">
+        <div className="admin-v2-brand flex items-center gap-3 p-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--admin-ink)] text-base font-black text-[var(--admin-panel)]">
             Y
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold">YMI Admin</p>
-            <p className="text-xs text-slate-500">Internal dashboard</p>
+            <p className="truncate text-sm font-bold text-[var(--admin-ink)]">YMI Operations</p>
+            <p className="text-xs text-[var(--admin-muted)]">Internal console</p>
           </div>
         </div>
 
-        <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
+        <div className="admin-v2-nav-scroll mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
           <AdminNavigationLinks pathname={pathname} />
         </div>
 
-        <div className="mt-4 shrink-0 border-t border-white/[0.08] pt-4">
+        <div className="mt-2 shrink-0">
           <AdminIdentity adminName={adminName} adminEmail={adminEmail} />
         </div>
       </aside>
@@ -196,7 +168,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
         <div className="fixed inset-0 z-[180] lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm"
             onClick={() => setIsMobileOpen(false)}
             aria-label="Close Admin navigation"
           />
@@ -206,21 +178,21 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
             role="dialog"
             aria-modal="true"
             aria-label="Admin navigation"
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2.5rem))] flex-col border-r border-white/10 bg-slate-950 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-[max(env(safe-area-inset-top),1rem)] shadow-2xl"
+            className="admin-v2-drawer absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2.5rem))] flex-col px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-[max(env(safe-area-inset-top),1rem)]"
           >
-            <div className="flex min-w-0 items-center gap-3 border-b border-white/[0.08] pb-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-base font-black text-slate-950">
+            <div className="flex min-w-0 items-center gap-3 border-b border-[var(--admin-side-line)] pb-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--admin-ink)] text-base font-black text-[var(--admin-panel)]">
                 Y
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-white">YMI Admin</p>
-                <p className="text-xs text-slate-500">Internal dashboard</p>
+                <p className="truncate text-sm font-bold text-[var(--admin-ink)]">YMI Operations</p>
+                <p className="text-xs text-[var(--admin-muted)]">Internal console</p>
               </div>
               <button
                 ref={mobileCloseRef}
                 type="button"
                 onClick={() => setIsMobileOpen(false)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--admin-card-line)] text-[var(--admin-ink-soft)] transition hover:text-[var(--admin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)]"
                 aria-label="Close Admin navigation"
                 title="Close navigation"
               >
@@ -232,7 +204,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
               <AdminNavigationLinks pathname={pathname} onNavigate={() => setIsMobileOpen(false)} />
             </div>
 
-            <div className="mt-4 border-t border-white/[0.08] pt-4">
+            <div className="mt-4 border-t border-[var(--admin-side-line)] pt-4">
               <AdminIdentity adminName={adminName} adminEmail={adminEmail} />
             </div>
           </aside>

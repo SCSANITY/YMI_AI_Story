@@ -1,4 +1,5 @@
 import { EmailEventsPanel } from '@/components/admin/sections/emails/EmailEventsPanel'
+import { AdminPage, AdminPageHeader } from '@/components/admin/AdminUi'
 import {
   normalizeEmailEventFilters,
   type EmailEventRow,
@@ -131,17 +132,12 @@ export default async function AdminEmailsPage({
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">
-          Operations
-        </p>
-        <h1 className="mt-0.5 text-2xl font-bold text-white">Email Events</h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-400">
-          Read-only log for YMI managed emails and external email observations. Stripe
-          and Supabase Auth entries show observed triggers, not local delivery status.
-        </p>
-      </header>
+    <AdminPage className="space-y-5">
+      <AdminPageHeader
+        eyebrow="Communications health"
+        title="Email Events"
+        description="Read-only log for YMI managed emails and external observations. Stripe and Supabase Auth entries represent observed triggers, not local delivery status."
+      />
 
       <EmailEventsPanel
         key={`${filters.status}:${filters.provider}:${filters.emailKey}`}
@@ -151,6 +147,6 @@ export default async function AdminEmailsPage({
         operations={operations}
         operationsError={operationsError}
       />
-    </div>
+    </AdminPage>
   )
 }

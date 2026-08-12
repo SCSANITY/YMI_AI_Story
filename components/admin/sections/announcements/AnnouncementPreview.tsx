@@ -17,7 +17,7 @@ export function AnnouncementPreview({ form }: { form: AnnouncementForm }) {
   const links = normalizeAnnouncementLinks(form.links)
 
   return (
-    <article className="rounded-[24px] border border-slate-200 bg-white p-5 text-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
+    <article className="rounded-lg border border-slate-200 bg-white p-5 text-slate-900 shadow-[0_14px_34px_rgba(15,23,42,0.09)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-600">
@@ -42,7 +42,7 @@ export function AnnouncementPreview({ form }: { form: AnnouncementForm }) {
           {images.map((url, index) => (
             <div
               key={`${url}-${index}`}
-              className="aspect-square overflow-hidden rounded-xl bg-amber-50"
+              className="aspect-square overflow-hidden rounded-lg bg-amber-50"
             >
               {/* Signed private URLs and local blob previews should bypass image optimization. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
