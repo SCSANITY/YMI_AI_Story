@@ -7,8 +7,8 @@ import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPage
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { BOOKS } from '@/data/books'
-import { parseTemplateAmount } from '@/lib/book-catalog'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import { packagePriceRowsToPricing } from '@/lib/package-pricing'
 import {
   buildReaderBookDisplay,
   getReaderSpreadUrls,
@@ -16,7 +16,7 @@ import {
   type SignedReaderPage,
 } from '@/lib/reader-page-contract'
 import { useI18n } from '@/lib/useI18n'
-import type { Book, PersonalizationData, StoryLanguage } from '@/types'
+import type { Book, BookPackagePricing, PersonalizationData, StoryLanguage } from '@/types'
 
 const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
@@ -27,10 +27,13 @@ type ReaderTemplate = {
   name?: string | null
   description?: string | null
   story_type?: string | null
-  price_cents?: number | null
-  compare_at_price_cents?: number | null
-  discount_percent?: number | null
-  is_discount?: boolean | null
+  package_prices?: Array<{
+    package_type?: string | null
+    list_price_usd?: number | null
+    sale_price_usd?: number | null
+    display_discount_percent?: number | null
+    row_version?: number | null
+  }> | null
 }
 
 type ReaderCreation = {
@@ -82,12 +85,19 @@ function getSnapshotParts(snapshotValue: unknown) {
 function buildCartContext(creation: ReaderCreation): { book: Book; personalization: PersonalizationData } {
   const fallbackBook = BOOKS.find((book) => book.bookID === creation.templateId)
   const { snapshot, textOverrides } = getSnapshotParts(creation.customizeSnapshot)
-  const basePrice = parseTemplateAmount(creation.template?.price_cents) ?? fallbackBook?.price ?? 0
-  const compareAtPrice = parseTemplateAmount(creation.template?.compare_at_price_cents) ?? fallbackBook?.compareAtPrice ?? null
-  const discountPercent = Number(creation.template?.discount_percent ?? fallbackBook?.discountPercent ?? 0)
   const childName = textOverrides.child_name ?? textOverrides.childName ?? ''
   const childAge = textOverrides.child_age ?? textOverrides.childAge ?? textOverrides.age ?? ''
   const bookType = normalizeBookType(textOverrides.book_type ?? snapshot.bookType)
+  let packagePricing: BookPackagePricing | undefined
+  try {
+    packagePricing = packagePriceRowsToPricing(creation.template?.package_prices)
+  } catch {
+    // The server-authoritative add-to-cart path still resolves the live database price.
+  }
+  const packagePrice = packagePricing?.[bookType === 'digital' || bookType === 'supreme' ? bookType : 'basic']
+  const basePrice = packagePrice?.effectivePriceUsd ?? 0
+  const compareAtPrice = packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd
+  const discountPercent = packagePrice?.discountPercent ?? 0
   const coverUrl = creation.coverUrl || ''
 
   return {
@@ -102,13 +112,14 @@ function buildCartContext(creation: ReaderCreation): { book: Book; personalizati
       price: basePrice,
       compareAtPrice,
       discountPercent: Number.isFinite(discountPercent) && discountPercent > 0 ? discountPercent : null,
+      packagePricing,
       coverUrl,
       showcaseImages: coverUrl ? [coverUrl] : [],
       description: creation.template?.description || fallbackBook?.description || '',
       category: fallbackBook?.category || 'Adventure',
       ageRange: fallbackBook?.ageRange || '3-5',
       gender: fallbackBook?.gender || 'Neutral',
-      isDiscount: Boolean(creation.template?.is_discount ?? fallbackBook?.isDiscount),
+      isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
     },
     personalization: {
       childName: String(childName),

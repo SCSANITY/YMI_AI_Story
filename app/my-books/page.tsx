@@ -9,7 +9,11 @@ import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
 import { useI18n } from '@/lib/useI18n'
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
-import { parseTemplateAmount } from '@/lib/book-catalog'
+import {
+  packagePriceRowsToPricing,
+  resolveBookPackageTypeFromSnapshot,
+} from '@/lib/package-pricing'
+import type { BookPackagePrice } from '@/types'
 import { MyBooksGrid } from './MyBooksGrid'
 import { PurchasedBooksGrid } from './PurchasedBooksGrid'
 import { MyBooksShelfSwitcher } from './MyBooksShelfSwitcher'
@@ -38,45 +42,54 @@ const resolveCover = (row: CreationItem) => {
   return data?.publicUrl ?? raw
 }
 
-const resolveTemplatePrice = (item: CreationItem, fallbackBook?: Book) => {
-  const priceFromTemplate = parseTemplateAmount(item.templates?.price_cents)
-  if (priceFromTemplate !== null) return priceFromTemplate
-  return fallbackBook?.price || 0
+const resolveTemplatePackagePrice = (item: CreationItem): BookPackagePrice | null => {
+  try {
+    const packageType = resolveBookPackageTypeFromSnapshot(item.customize_snapshot) ?? 'basic'
+    return packagePriceRowsToPricing(item.templates?.package_prices)[packageType]
+  } catch {
+    return null
+  }
 }
 
-const resolveTemplateCompareAtPrice = (item: CreationItem, fallbackBook?: Book, price = 0) => {
-  const compareFromTemplate = parseTemplateAmount(item.templates?.compare_at_price_cents)
-  if (compareFromTemplate !== null) return compareFromTemplate
-  if (fallbackBook?.compareAtPrice) return fallbackBook.compareAtPrice
-  return item.templates?.is_discount ? price * 2 : null
+const resolveTemplatePrice = (item: CreationItem) =>
+  resolveTemplatePackagePrice(item)?.effectivePriceUsd ?? 0
+
+const resolveTemplateCompareAtPrice = (item: CreationItem) => {
+  const packagePrice = resolveTemplatePackagePrice(item)
+  return packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd
 }
 
-const resolveTemplateDiscountPercent = (item: CreationItem, fallbackBook?: Book, price = 0, compareAtPrice: number | null = null) => {
-  const percentFromTemplate = Number(item.templates?.discount_percent ?? 0)
-  if (Number.isFinite(percentFromTemplate) && percentFromTemplate > 0) return Math.round(percentFromTemplate)
-  if (fallbackBook?.discountPercent) return fallbackBook.discountPercent
-  if (compareAtPrice && compareAtPrice > price) return Math.round((1 - price / compareAtPrice) * 100)
-  return item.templates?.is_discount ? 50 : null
-}
+const resolveTemplateDiscountPercent = (item: CreationItem) =>
+  resolveTemplatePackagePrice(item)?.discountPercent ?? null
 
 const toPersonalization = (item: CreationItem): PersonalizationData => {
-  const snapshot: any = item.customize_snapshot ?? {}
-  const textOverrides: any = snapshot.textOverrides ?? snapshot.text_overrides ?? {}
+  const snapshot = item.customize_snapshot ?? {}
+  const textOverridesValue = snapshot.textOverrides ?? snapshot.text_overrides
+  const textOverrides = textOverridesValue && typeof textOverridesValue === 'object' && !Array.isArray(textOverridesValue)
+    ? textOverridesValue as Record<string, unknown>
+    : {}
   const childName = textOverrides.child_name ?? textOverrides.childName ?? ''
   const childAge = textOverrides.child_age ?? textOverrides.childAge ?? textOverrides.age ?? ''
   const language = textOverrides.language ?? 'English'
-  const bookType = textOverrides.book_type ?? snapshot.bookType ?? 'basic'
+  const rawBookType = String(textOverrides.book_type ?? snapshot.bookType ?? 'basic')
+  const bookType: PersonalizationData['bookType'] = ['digital', 'basic', 'premium', 'supreme'].includes(rawBookType)
+    ? rawBookType as PersonalizationData['bookType']
+    : 'basic'
+  const paramsValue = snapshot.params
+  const params = paramsValue && typeof paramsValue === 'object' && !Array.isArray(paramsValue)
+    ? paramsValue as Record<string, unknown>
+    : undefined
 
   return {
     childName: String(childName),
     childAge: String(childAge),
     language: normalizeLanguage(language),
     dedication: '',
-    storagePath: snapshot.storagePath ?? undefined,
-    previewJobId: item.preview_job_id ?? snapshot.previewJobId ?? undefined,
+    storagePath: typeof snapshot.storagePath === 'string' ? snapshot.storagePath : undefined,
+    previewJobId: item.preview_job_id ?? (typeof snapshot.previewJobId === 'string' ? snapshot.previewJobId : undefined),
     creationId: item.creation_id,
     textOverrides,
-    params: snapshot.params ?? undefined,
+    params,
     bookType,
   }
 }
@@ -145,20 +158,21 @@ export default function MyBooksPage() {
     setPendingAction({ creationId: item.creation_id, action: 'add' })
     const coverUrl = resolveCover(item)
     const fallbackBook = BOOKS.find((b) => b.bookID === item.template_id)
+    const packagePrice = resolveTemplatePackagePrice(item)
     const book: Book = {
       bookID: item.template_id,
       title: item.templates?.name || fallbackBook?.title || item.template_id,
       author: fallbackBook?.author || 'YMI',
-      price: resolveTemplatePrice(item, fallbackBook),
-      compareAtPrice: resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook)),
-      discountPercent: resolveTemplateDiscountPercent(item, fallbackBook, resolveTemplatePrice(item, fallbackBook), resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook))),
+      price: packagePrice?.effectivePriceUsd ?? 0,
+      compareAtPrice: packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd,
+      discountPercent: packagePrice?.discountPercent ?? null,
       coverUrl,
       showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
       description: item.templates?.description || fallbackBook?.description || '',
       category: fallbackBook?.category || 'Adventure',
       ageRange: fallbackBook?.ageRange || '3-5',
       gender: fallbackBook?.gender || 'Neutral',
-      isDiscount: Boolean(item.templates?.is_discount ?? fallbackBook?.isDiscount),
+      isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
     }
     const personalization = toPersonalization(item)
     try {
@@ -171,36 +185,6 @@ export default function MyBooksPage() {
   const handleBuyNow = async (item: CreationItem) => {
     if (pendingAction) return
     setPendingAction({ creationId: item.creation_id, action: 'buy' })
-    const coverUrl = resolveCover(item)
-    const fallbackBook = BOOKS.find((b) => b.bookID === item.template_id)
-    const book: Book = {
-      bookID: item.template_id,
-      title: item.templates?.name || fallbackBook?.title || item.template_id,
-      author: fallbackBook?.author || 'YMI',
-      price: resolveTemplatePrice(item, fallbackBook),
-      compareAtPrice: resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook)),
-      discountPercent: resolveTemplateDiscountPercent(item, fallbackBook, resolveTemplatePrice(item, fallbackBook), resolveTemplateCompareAtPrice(item, fallbackBook, resolveTemplatePrice(item, fallbackBook))),
-      coverUrl,
-      showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
-      description: item.templates?.description || fallbackBook?.description || '',
-      category: fallbackBook?.category || 'Adventure',
-      ageRange: fallbackBook?.ageRange || '3-5',
-      gender: fallbackBook?.gender || 'Neutral',
-      isDiscount: Boolean(item.templates?.is_discount ?? fallbackBook?.isDiscount),
-    }
-    const personalization = toPersonalization(item)
-    const mapProductType = (bookType?: PersonalizationData['bookType']) => {
-      if (bookType === 'digital') return 'ebook'
-      if (bookType === 'premium') return 'audio'
-      return 'physical'
-    }
-    const priceAtPurchase =
-      personalization.bookType === 'premium'
-        ? book.price + 20
-        : personalization.bookType === 'supreme'
-        ? book.price + 50
-        : book.price
-
     try {
       const response = await fetch('/api/orders/start', {
         method: 'POST',
@@ -211,9 +195,7 @@ export default function MyBooksPage() {
           items: [
             {
               creationId: item.creation_id,
-              productType: mapProductType(personalization.bookType),
               quantity: 1,
-              priceAtPurchase,
             },
           ],
         }),

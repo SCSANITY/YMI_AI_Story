@@ -109,6 +109,7 @@ function CheckoutPageContent() {
     prepareCheckout,
     addToCheckout,
     hydrateCheckoutItems,
+    reconcileCartItemPrices,
     removeFromCheckout,
     removeOrderedItems,
     clearCheckout,
@@ -1032,7 +1033,6 @@ function CheckoutPageContent() {
           id: item.id,
           bookID: item.bookID,
           quantity: item.quantity ?? 1,
-          priceAtPurchase: item.priceAtPurchase ?? item.book.price,
           personalization: item.personalization ?? null,
         })),
       };
@@ -1094,7 +1094,6 @@ function CheckoutPageContent() {
       items: items.map((item) => ({
         id: item.id,
         quantity: item.quantity ?? 1,
-        priceAtPurchase: item.priceAtPurchase ?? item.book.price,
       })),
     };
 
@@ -1180,13 +1179,7 @@ function CheckoutPageContent() {
         items: selected.map(item => ({
           cartItemId: item.id,
           creationId: item.creationId ?? item.personalization?.creationId ?? null,
-          productType: item.personalization?.bookType === 'digital'
-            ? 'ebook'
-            : item.personalization?.bookType === 'premium'
-            ? 'audio'
-            : 'physical',
           quantity: item.quantity ?? 1,
-          priceAtPurchase: item.priceAtPurchase ?? item.book.price,
         })),
       };
 
@@ -1198,12 +1191,15 @@ function CheckoutPageContent() {
     });
     if (!response.ok) return false;
     const data = await response.json();
+    if (Array.isArray(data?.items)) {
+      reconcileCartItemPrices(data.items);
+    }
     if (data?.orderId && !orderId) {
       setOrderId(data.orderId);
     }
     setCheckoutStarted(true);
     return true;
-  }, [user?.customerId, orderId, checkoutContactEmail]);
+  }, [user?.customerId, orderId, checkoutContactEmail, reconcileCartItemPrices]);
 
   const handleRemoveCheckoutItem = useCallback(async (itemId: string) => {
     const removedItem = items.find(item => item.id === itemId);

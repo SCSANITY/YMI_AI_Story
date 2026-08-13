@@ -1,10 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { BOOKS } from '@/data/books'
-import { staticBookToCatalogBook, type CatalogBook } from '@/lib/book-catalog'
-
-const FALLBACK_BOOKS = BOOKS.map(staticBookToCatalogBook)
+import type { CatalogBook } from '@/lib/book-catalog'
 
 let cachedCatalog: { books: CatalogBook[]; loadedAt: number } | null = null
 let catalogRequest: Promise<CatalogBook[]> | null = null
@@ -53,7 +50,6 @@ export function useBookCatalog() {
       } catch (loadError) {
         if (!isMounted) return
         setError(loadError instanceof Error ? loadError.message : 'Failed to load templates')
-        setBooks(FALLBACK_BOOKS)
       } finally {
         if (isMounted) {
           setIsLoading(false)

@@ -121,10 +121,14 @@ export async function GET(
             cover_image_path,
             normalized_cover_image_path,
             story_type,
-            price_cents,
-            compare_at_price_cents,
-            discount_percent,
-            is_discount
+            package_prices:template_package_prices(
+              package_type,
+              list_price_usd,
+              sale_price_usd,
+              display_discount_percent,
+              row_version,
+              updated_at
+            )
           )
         `
       )

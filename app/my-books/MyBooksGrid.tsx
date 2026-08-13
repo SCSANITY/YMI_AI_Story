@@ -3,9 +3,8 @@
 import { ShoppingCart, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { BookCardCover } from '@/components/BookCardCover'
-import { BOOKS } from '@/data/books'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
-import type { Book, DisplayCurrency } from '@/types'
+import type { DisplayCurrency } from '@/types'
 import type { CreationItem } from './myBooksTypes'
 
 type MyBooksGridProps = {
@@ -16,14 +15,9 @@ type MyBooksGridProps = {
   pendingAction: { creationId: string; action: 'add' | 'buy' | 'delete' } | null
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string
   resolveCover: (item: CreationItem) => string
-  resolveTemplatePrice: (item: CreationItem, fallbackBook?: Book) => number
-  resolveTemplateCompareAtPrice: (item: CreationItem, fallbackBook?: Book, price?: number) => number | null
-  resolveTemplateDiscountPercent: (
-    item: CreationItem,
-    fallbackBook?: Book,
-    price?: number,
-    compareAtPrice?: number | null
-  ) => number | null
+  resolveTemplatePrice: (item: CreationItem) => number
+  resolveTemplateCompareAtPrice: (item: CreationItem) => number | null
+  resolveTemplateDiscountPercent: (item: CreationItem) => number | null
   buildPreviewHref: (item: CreationItem) => string
   onPreview: (item: CreationItem) => void
   onPrefetchPreview: (href: string) => void
@@ -53,13 +47,12 @@ export function MyBooksGrid({
   return (
     <div className={gridClass}>
       {items.map((item) => {
-        const fallbackBook = BOOKS.find((book) => book.bookID === item.template_id)
-        const price = resolveTemplatePrice(item, fallbackBook)
+        const price = resolveTemplatePrice(item)
         const priceLabel = formatDisplayCurrency(price, displayCurrency)
-        const compareAtPrice = resolveTemplateCompareAtPrice(item, fallbackBook, price)
+        const compareAtPrice = resolveTemplateCompareAtPrice(item)
         const compareAtLabel = compareAtPrice && compareAtPrice > price ? formatDisplayCurrency(compareAtPrice, displayCurrency) : null
-        const discountPercent = resolveTemplateDiscountPercent(item, fallbackBook, price, compareAtPrice)
-        const isDiscounted = Boolean((item.templates?.is_discount || compareAtLabel) && discountPercent && discountPercent > 0)
+        const discountPercent = resolveTemplateDiscountPercent(item)
+        const isDiscounted = Boolean(compareAtLabel && discountPercent && discountPercent > 0)
         const previewHref = buildPreviewHref(item)
         const isPreviewPending = pendingCustomizeHref === previewHref
         const activeAction = pendingAction?.creationId === item.creation_id ? pendingAction.action : null

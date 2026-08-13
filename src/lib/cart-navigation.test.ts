@@ -40,10 +40,10 @@ test('resolver rebuilds the Preview path from validated fields after reload or c
   assert.equal(resolvePreviewCartReturnPath(new URLSearchParams(validSearch)), expectedPreviewPath)
 })
 
-test('direct Cart and incomplete Preview origins fall back safely', () => {
+test('direct Cart and incomplete Preview origins defer to ordinary browser Back', () => {
   assert.equal(resolvePreviewCartReturnPath(''), null)
   assert.equal(resolvePreviewCartReturnPath('?from=preview'), null)
-  assert.deepEqual(resolveCartBackNavigation('', false), { href: '/', method: 'push' })
+  assert.deepEqual(resolveCartBackNavigation('', false), { href: '/', method: 'history' })
 })
 
 test('resolver rejects malformed, duplicated and path-shaped fields', () => {
@@ -67,6 +67,6 @@ test('normal Preview Back replaces Cart while translated Back performs a full na
   })
 })
 
-test('translated direct Cart fallback also avoids SPA navigation', () => {
-  assert.deepEqual(resolveCartBackNavigation('', true), { href: '/', method: 'assign' })
+test('translated direct Cart also defers to the guarded ordinary Back behavior', () => {
+  assert.deepEqual(resolveCartBackNavigation('', true), { href: '/', method: 'history' })
 })

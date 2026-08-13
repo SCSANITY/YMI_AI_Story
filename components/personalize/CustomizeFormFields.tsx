@@ -94,6 +94,7 @@ type CustomizeFormFieldsProps = {
     basic: string[]
     supreme: string[]
   }
+  packagePriceLabels?: Partial<Record<'digital' | 'basic' | 'supreme', string>>
   onBookTypeChange: (value: PersonalizeBookType) => void
   requiresVoiceSample: boolean
   voicePanelRef: RefObject<HTMLDivElement | null>
@@ -132,6 +133,7 @@ function CustomizeFormFieldsComponent({
   bookType,
   packageLabels,
   includedItems,
+  packagePriceLabels,
   onBookTypeChange,
   requiresVoiceSample,
   voicePanelRef,
@@ -182,6 +184,7 @@ function CustomizeFormFieldsComponent({
         value={bookType}
         labels={packageLabels}
         includedItems={includedItems}
+        priceLabels={packagePriceLabels}
         onChange={onBookTypeChange}
       />
 

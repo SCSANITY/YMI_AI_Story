@@ -22,9 +22,12 @@ export type CreationItem = {
     cover_image_path?: string
     normalized_cover_image_path?: string
     story_type?: string
-    price_cents?: number | null
-    compare_at_price_cents?: number | null
-    discount_percent?: number | null
-    is_discount?: boolean | null
+    package_prices?: Array<{
+      package_type?: string | null
+      list_price_usd?: number | null
+      sale_price_usd?: number | null
+      display_discount_percent?: number | null
+      row_version?: number | null
+    }> | null
   }
 }

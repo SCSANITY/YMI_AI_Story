@@ -37,7 +37,7 @@ export const adminNavigationItems: AdminNavigationItem[] = [
   { label: 'Legal Content', shortLabel: 'Legal', icon: ScrollText, href: '/admin/legal', group: 'System' },
   { label: 'Analytics', shortLabel: 'Analytics', icon: BarChart3, href: '/admin/analytics', group: 'System', soon: true },
   { label: 'Banner Manager', shortLabel: 'Banner', icon: LayoutDashboard, href: '/admin/banner', group: 'System', soon: true },
-  { label: 'Catalog', shortLabel: 'Catalog', icon: BookMarked, href: '/admin/catalog', group: 'System', soon: true },
+  { label: 'Catalog Pricing', shortLabel: 'Catalog', icon: BookMarked, href: '/admin/catalog', group: 'Growth' },
 ]
 
 export const ADMIN_NAVIGATION_GROUPS: AdminNavigationGroup[] = [

@@ -4,7 +4,7 @@ import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
 import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData, type DisplayCurrency } from '@/types';
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
-import { AGE_GROUP_LABELS, formatStoryTypeLabel, normalizeAgeGroup, parseStoryTypes, parseTemplateAmount, templateStorageUrl } from '@/lib/book-catalog';
+import { templateRowToBook } from '@/lib/book-catalog';
 import {
   resolveChildNameFromCustomization,
   resolvePersonalizedBookTitle,
@@ -103,55 +103,12 @@ const migrateLegacyLanguageToCurrency = (value: unknown): DisplayCurrency => {
   return 'USD';
 };
 
-const templateRelationToBook = (templateId: string, template: any, fallbackBook?: Book, price = 0): Book => {
-  const storyTypes = parseStoryTypes(template?.story_type || fallbackBook?.category);
-  const ageGroup = normalizeAgeGroup(template?.age_group || fallbackBook?.ageGroup);
-  const coverUrl = templateStorageUrl(template?.normalized_cover_image_path || template?.cover_image_path) || fallbackBook?.coverUrl || '';
-  const showcaseImages = Array.isArray(template?.showcase_image_paths)
-    ? template.showcase_image_paths.map(templateStorageUrl).filter(Boolean)
-    : fallbackBook?.showcaseImages || (coverUrl ? [coverUrl] : []);
-  const templatePrice = parseTemplateAmount(template?.price_cents);
-  const resolvedPrice = templatePrice ?? fallbackBook?.price ?? price;
-  const compareAtAmount = parseTemplateAmount(template?.compare_at_price_cents);
-  const compareAtPrice =
-    fallbackBook?.compareAtPrice ??
-    compareAtAmount;
-  const isDiscount = Boolean(template?.is_discount ?? fallbackBook?.isDiscount);
-  const discountPercentValue = Number(template?.discount_percent ?? 0);
-  const discountPercent =
-    fallbackBook?.discountPercent ??
-    (Number.isFinite(discountPercentValue) && discountPercentValue > 0
-      ? Math.round(discountPercentValue)
-      : compareAtPrice && compareAtPrice > resolvedPrice
-      ? Math.round((1 - resolvedPrice / compareAtPrice) * 100)
-      : isDiscount
-      ? 50
-      : null);
-
-  return {
-    bookID: templateId,
-    title: template?.name || fallbackBook?.title || templateId,
-    author: fallbackBook?.author || 'YMI',
-    price: resolvedPrice,
-    compareAtPrice: compareAtPrice ?? (isDiscount ? resolvedPrice * 2 : null),
-    discountPercent,
-    coverUrl,
-    showcaseImages,
-    description: template?.description || fallbackBook?.description || '',
-    category: storyTypes[0] || fallbackBook?.category || 'Story',
-    storyTypes,
-    storyTypeLabel: formatStoryTypeLabel(storyTypes, fallbackBook?.category || 'Story'),
-    ageGroup,
-    ageLabel: AGE_GROUP_LABELS[ageGroup],
-    ageRange: AGE_GROUP_LABELS[ageGroup],
-    gender: template?.target_gender || fallbackBook?.gender || 'Neutral',
-    homeSections: Array.isArray(template?.home_sections) ? template.home_sections : fallbackBook?.homeSections || [],
-    isBrandNew: Boolean(template?.is_brand_new ?? fallbackBook?.isBrandNew),
-    isForBoys: Boolean(template?.is_for_boys ?? fallbackBook?.isForBoys),
-    isForGirls: Boolean(template?.is_for_girls ?? fallbackBook?.isForGirls),
-    isDiscount,
-    displayOrder: typeof template?.display_order === 'number' ? template.display_order : fallbackBook?.displayOrder ?? null,
-  };
+const catalogTemplateToBook = (templateId: string, template: any): Book | null => {
+  try {
+    return templateRowToBook({ ...template, template_id: templateId });
+  } catch {
+    return null;
+  }
 };
 
 export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -263,7 +220,19 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         cover_image_path: row.preview_cover_url || '',
         normalized_cover_image_path: row.preview_cover_url || '',
       };
-      const baseBook = templateRelationToBook(templateId, template, fallbackBook, Number(row.price_at_purchase ?? 0) || 0);
+      const catalogBook = catalogTemplateToBook(templateId, template);
+      const baseBook: Book = catalogBook ?? {
+        bookID: templateId,
+        title: template?.name || fallbackBook?.title || templateId,
+        author: fallbackBook?.author || 'YMI',
+        price: Number(row.price_at_purchase ?? 0) || 0,
+        coverUrl: row.preview_cover_url || fallbackBook?.coverUrl || '',
+        showcaseImages: row.preview_cover_url ? [row.preview_cover_url] : fallbackBook?.showcaseImages || [],
+        description: template?.description || fallbackBook?.description || '',
+        category: fallbackBook?.category || 'Story',
+        ageRange: fallbackBook?.ageRange || 'Ages 2+',
+        gender: fallbackBook?.gender || 'Neutral',
+      };
       const displayTitle = resolvePersonalizedBookTitle({
         templateId,
         templateName: creation.templates?.name,
@@ -331,7 +300,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (!templateId) return null;
 
         const fallbackBook = BOOKS.find((b) => b.bookID === templateId);
-        return templateRelationToBook(templateId, template, fallbackBook, fallbackBook?.price ?? 0);
+        return catalogTemplateToBook(templateId, template);
       })
       .filter((book: Book | null): book is Book => Boolean(book));
   }, []);
@@ -710,19 +679,6 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setResumeData(null);
       }
 
-      const mapProductType = (bookType?: PersonalizationData['bookType']) => {
-        if (bookType === 'digital') return 'ebook'
-        if (bookType === 'premium') return 'audio'
-        return 'physical'
-      }
-
-      const priceAtPurchase =
-        personalization?.bookType === 'premium'
-          ? book.price + 20
-          : personalization?.bookType === 'supreme'
-          ? book.price + 50
-          : book.price
-
       const displayTitle = resolvePersonalizedBookTitle({
         templateId: book.bookID,
         templateName: book.title,
@@ -746,9 +702,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       const payload = {
         creationId,
-        productType: mapProductType(personalization?.bookType),
         quantity: 1,
-        priceAtPurchase,
         customerId: user?.customerId ?? null,
         status: 'cart',
       }
@@ -764,14 +718,18 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             cartItemId: existingItem.id,
             quantity: nextQuantity,
             status: 'cart',
-            priceAtPurchase,
-            creationId,
             customerId: user?.customerId ?? null,
           }),
         })
 
         if (!response.ok) {
           console.error('Order update failed')
+          return null
+        }
+        const data = await response.json()
+        const priceAtPurchase = Number(data?.priceAtPurchase)
+        if (!Number.isFinite(priceAtPurchase) || priceAtPurchase <= 0) {
+          console.error('Order update returned an invalid authoritative price')
           return null
         }
 
@@ -805,14 +763,18 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             cartItemId: resumeData.id,
             quantity: resumeQuantity,
             status: 'cart',
-            priceAtPurchase,
-            creationId,
             customerId: user?.customerId ?? null,
           }),
         })
 
         if (!response.ok) {
           console.error('Order update failed')
+          return null
+        }
+        const data = await response.json()
+        const priceAtPurchase = Number(data?.priceAtPurchase)
+        if (!Number.isFinite(priceAtPurchase) || priceAtPurchase <= 0) {
+          console.error('Order update returned an invalid authoritative price')
           return null
         }
 
@@ -861,6 +823,11 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       const data = await response.json()
       const cartItemId = data.cartItemId as string
+      const priceAtPurchase = Number(data?.priceAtPurchase)
+      if (!cartItemId || !Number.isFinite(priceAtPurchase) || priceAtPurchase <= 0) {
+        console.error('Order create returned an invalid authoritative price')
+        return null
+      }
       const nextPersonalization: PersonalizationData = personalization
         ? ({ ...personalization, creationId } as PersonalizationData)
         : {
@@ -926,7 +893,13 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         restoreCart();
         return false;
       }
-      return response.ok;
+      const data = await response.json().catch(() => null)
+      const authoritativePrice = Number(data?.priceAtPurchase)
+      if (Number.isFinite(authoritativePrice) && authoritativePrice > 0) {
+        setCart(prev => prev.map(item => item.id === itemId ? { ...item, priceAtPurchase: authoritativePrice } : item))
+        setCheckoutItems(prev => prev.map(item => item.id === itemId ? { ...item, priceAtPurchase: authoritativePrice } : item))
+      }
+      return true;
     } catch (error) {
       console.error('Order quantity update failed:', error)
       restoreCart();
@@ -947,6 +920,14 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         quantity: safeQuantity,
         customerId: user?.customerId ?? null,
       }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error('Order quantity update failed')
+      const data = await response.json().catch(() => null)
+      const authoritativePrice = Number(data?.priceAtPurchase)
+      if (Number.isFinite(authoritativePrice) && authoritativePrice > 0) {
+        setCart(prev => prev.map(item => item.id === itemId ? { ...item, priceAtPurchase: authoritativePrice } : item))
+        setCheckoutItems(prev => prev.map(item => item.id === itemId ? { ...item, priceAtPurchase: authoritativePrice } : item))
+      }
     }).catch((error) => {
       console.error('Order quantity update failed:', error)
     });
@@ -1019,6 +1000,22 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const hydrateCheckoutItems = useCallback((rawItems: any[]) => {
     setCheckoutItems(mapCartItems(rawItems));
   }, [mapCartItems]);
+
+  const reconcileCartItemPrices = useCallback((pricedItems: Array<{ cartItemId: string; priceAtPurchase: number }>) => {
+    const prices = new Map(
+      pricedItems
+        .filter((item) => item?.cartItemId && Number.isFinite(item.priceAtPurchase) && item.priceAtPurchase > 0)
+        .map((item) => [item.cartItemId, item.priceAtPurchase])
+    )
+    if (!prices.size) return
+
+    const applyPrices = (items: CartItem[]) => items.map((item) => {
+      const priceAtPurchase = prices.get(item.id)
+      return priceAtPurchase ? { ...item, priceAtPurchase } : item
+    })
+    setCart(applyPrices)
+    setCheckoutItems(applyPrices)
+  }, [])
 
   const removeFromCheckout = useCallback((itemId: string) => {
     setCheckoutItems(prev => prev.filter(item => item.id !== itemId));
@@ -1151,6 +1148,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     prepareCheckout,
     addToCheckout,
     hydrateCheckoutItems,
+    reconcileCartItemPrices,
     removeFromCheckout,
     clearCheckout,
     restoreCheckout,
@@ -1193,6 +1191,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     prepareCheckout,
     addToCheckout,
     hydrateCheckoutItems,
+    reconcileCartItemPrices,
     removeFromCheckout,
     clearCheckout,
     restoreCheckout,

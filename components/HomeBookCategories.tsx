@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Book } from '@/types'
+import { Book, type HomeBookSectionKey } from '@/types'
 import { BookCard } from '@/components/BookCard'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
@@ -15,9 +15,8 @@ import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
 type HomeBookCategory = {
   titleKey: string
   descriptionKey: string
-  sectionId: string
+  sectionId: HomeBookSectionKey
   bookListGender?: 'Boy' | 'Girl'
-  fallbackBookIds: string[]
   afterBanner?: {
     src: string
     mobileSrc?: string
@@ -33,7 +32,6 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     titleKey: 'homeBooks.category.brandNew',
     descriptionKey: 'homeBooks.category.brandNewDescription',
     sectionId: 'brand_new',
-    fallbackBookIds: ['Planet_story', 'Seed_story', 'Music_story', 'Adventure_story'],
     afterBanner: {
       src: '/banners/optimized/workflow-desktop.webp',
       mobileSrc: '/banners/optimized/workflow-mobile.webp',
@@ -48,7 +46,6 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     descriptionKey: 'homeBooks.category.forBoysDescription',
     sectionId: 'for_boys',
     bookListGender: 'Boy',
-    fallbackBookIds: ['Planet_story', 'Noah_story', 'Space_story', 'Scientist_story'],
     afterBanner: {
       src: '/banners/optimized/swapface-desktop.webp',
       mobileSrc: '/banners/optimized/swapface-mobile.webp',
@@ -63,29 +60,22 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     descriptionKey: 'homeBooks.category.forGirlsDescription',
     sectionId: 'for_girls',
     bookListGender: 'Girl',
-    fallbackBookIds: ['Adventure_story', 'Sister_story', 'Birthday_story', 'Seed_story'],
   },
   {
     titleKey: 'homeBooks.category.inDiscount',
     descriptionKey: 'homeBooks.category.inDiscountDescription',
     sectionId: 'in_discount',
-    fallbackBookIds: ['Music_story', 'Explorer_story', 'Planet_story', 'Seed_story'],
   },
 ]
 
 function getCategoryBooks(allBooks: Book[], category: HomeBookCategory): Book[] {
-  const explicitBooks = allBooks.filter((book) => book.homeSections?.includes(category.sectionId))
-  const fallbackById = new Map(allBooks.map((book) => [book.bookID, book]))
-  const fallbackBooks = category.fallbackBookIds
-    .map((bookId) => fallbackById.get(bookId))
-    .filter((book): book is Book => Boolean(book))
-  const combined = [...explicitBooks, ...fallbackBooks, ...allBooks]
-  const seen = new Set<string>()
-  return combined.filter((book) => {
-    if (seen.has(book.bookID)) return false
-    seen.add(book.bookID)
-    return true
-  }).slice(0, 4)
+  return allBooks
+    .filter((book) => book.homePlacementPositions?.[category.sectionId] !== undefined)
+    .sort((left, right) => (
+      (left.homePlacementPositions?.[category.sectionId] ?? 99)
+      - (right.homePlacementPositions?.[category.sectionId] ?? 99)
+    ))
+    .slice(0, 4)
 }
 
 function CategoryBanner({ banner }: { banner: NonNullable<HomeBookCategory['afterBanner']> }) {

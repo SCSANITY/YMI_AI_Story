@@ -114,19 +114,21 @@ export async function POST(request: Request) {
       .eq('anon_session_id', anonSessionId)
   }
 
-  const { data: cartItemTypes, error: cartItemTypesError } = await supabaseAdmin
+  const { data: authoritativeCartItems, error: cartItemTypesError } = await supabaseAdmin
     .from('cart_items')
-    .select('cart_item_id, product_type')
+    .select('cart_item_id, product_type, quantity, price_at_purchase, creations:creations(template_id, customize_snapshot)')
     .in('cart_item_id', cartItemIds)
+    .eq('customer_id', customerId)
+    .eq('status', 'ordered')
 
-  if (cartItemTypesError) {
+  if (cartItemTypesError || !authoritativeCartItems || authoritativeCartItems.length !== cartItemIds.length) {
     return NextResponse.json({ error: 'Failed to load cart item types' }, { status: 500 })
   }
 
   const hasOnlyEbookItems =
-    (cartItemTypes?.length ?? 0) === cartItemIds.length &&
+    authoritativeCartItems.length === cartItemIds.length &&
     cartItemIds.length > 0 &&
-    (cartItemTypes ?? []).every((item) => item.product_type === 'ebook')
+    authoritativeCartItems.every((item) => item.product_type === 'ebook')
   const requiresShipping = !hasOnlyEbookItems
   const requestedShippingRateSnapshot = body?.shippingRateSnapshot ?? null
   const requestedShippingAddress = body?.shippingAddress ?? {}
@@ -207,8 +209,8 @@ export async function POST(request: Request) {
     .eq('order_id', orderId)
     .maybeSingle()
 
-  const totalAmountUsd = items.reduce((sum: number, item: any) => {
-    const price = Number(item.priceAtPurchase ?? 0)
+  const totalAmountUsd = authoritativeCartItems.reduce((sum: number, item: any) => {
+    const price = Number(item.price_at_purchase ?? 0)
     const quantity = Number(item.quantity ?? 1)
     return sum + price * quantity
   }, 0)
@@ -237,7 +239,12 @@ export async function POST(request: Request) {
       amount: totalAmount,
       currency: checkoutCurrency,
       cartItemIds,
-      receiptItems: items,
+      receiptItems: authoritativeCartItems.map((item: any) => ({
+        id: item.cart_item_id,
+        bookID: item.creations?.template_id,
+        quantity: Number(item.quantity ?? 1),
+        priceAtPurchase: Number(item.price_at_purchase ?? 0),
+      })),
     })
     await markOrderDiscountsPaid(orderId)
     return NextResponse.json(result)

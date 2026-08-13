@@ -6,6 +6,10 @@ import {
   requireCheckoutOrderAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
+import {
+  loadAuthoritativeCreationPackagePrice,
+  packagePricingStoreErrorResponse,
+} from '@/lib/package-pricing-store'
 
 const FIRST_REMINDER_MINUTES = Number(
   process.env.UNPAID_REMINDER_FIRST_MINUTES ?? process.env.UNPAID_REMINDER_MINUTES ?? 1
@@ -40,26 +44,14 @@ export async function POST(request: Request) {
     const cartItemId = item?.cartItemId || item?.cart_item_id || item?.id || null
     if (cartItemId) return false
     const creationId = item?.creationId || item?.creation_id || null
-    const productType = item?.productType
-    return !creationId || !productType
+    return !creationId
   })
 
   if (missingCreation) {
-    return NextResponse.json({ error: 'Missing creationId or productType' }, { status: 400 })
+    return NextResponse.json({ error: 'Missing creationId' }, { status: 400 })
   }
 
   let orderId = incomingOrderId as string | null
-
-  if (orderId) {
-    try {
-      const order = await requireCheckoutOrderAccess(orderId, owner, { requireUnpaid: true })
-      orderId = order.order_id
-    } catch (error) {
-      const response = checkoutOwnerErrorResponse(error)
-      if (response) return response
-      throw error
-    }
-  }
 
   if (!orderId) {
     const existingIds = items
@@ -79,6 +71,76 @@ export async function POST(request: Request) {
         orderId = existing.order_id
       }
     }
+  }
+
+  // Inferred order IDs are subject to the same unpaid ownership gate as explicit IDs.
+  if (orderId) {
+    try {
+      const order = await requireCheckoutOrderAccess(orderId, owner, { requireUnpaid: true })
+      orderId = order.order_id
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+  }
+
+  const resolvedItems: Array<{
+    cartItemId: string | null
+    creationId: string
+    quantity: number
+    pricing: Awaited<ReturnType<typeof loadAuthoritativeCreationPackagePrice>>
+  }> = []
+
+  // Resolve every selected package before creating an unpaid order, so invalid
+  // pricing cannot leave an empty order behind.
+  for (const item of items) {
+    const cartItemId = item?.cartItemId || item?.cart_item_id || item?.id || null
+    let creationId = item?.creationId || item?.creation_id || null
+
+    if (cartItemId) {
+      const { data: existingItem, error: existingItemError } = await supabaseAdmin
+        .from('cart_items')
+        .select('cart_item_id, creation_id, order_id, payment_id')
+        .eq('cart_item_id', cartItemId)
+        .eq('owner_type', filter.owner_type)
+        .eq(filter.column, filter.value)
+        .maybeSingle()
+
+      if (existingItemError || !existingItem?.cart_item_id || !existingItem.creation_id) {
+        return NextResponse.json({ error: 'Cart item not found' }, { status: 404 })
+      }
+      if (existingItem.payment_id) {
+        return NextResponse.json({ error: 'Paid cart items cannot be reused' }, { status: 409 })
+      }
+      if (existingItem.order_id && existingItem.order_id !== orderId) {
+        return NextResponse.json({ error: 'Cart item belongs to another order' }, { status: 409 })
+      }
+      creationId = existingItem.creation_id
+    }
+
+    if (!creationId) {
+      return NextResponse.json({ error: 'Missing creationId' }, { status: 400 })
+    }
+
+    let pricing
+    try {
+      pricing = await loadAuthoritativeCreationPackagePrice({
+        creationId: String(creationId),
+        owner,
+      })
+    } catch (error) {
+      const response = packagePricingStoreErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+
+    resolvedItems.push({
+      cartItemId,
+      creationId: String(creationId),
+      quantity: item?.quantity ?? 1,
+      pricing,
+    })
   }
 
   if (!orderId) {
@@ -147,11 +209,16 @@ export async function POST(request: Request) {
   }
 
   const cartItemIds: string[] = []
+  const pricedItems: Array<{
+    cartItemId: string
+    packageType: string
+    productType: string
+    priceAtPurchase: number
+    packagePriceVersion: number
+  }> = []
 
-  for (const item of items) {
-    const cartItemId = item?.cartItemId || item?.cart_item_id || item?.id || null
-    const creationId = item?.creationId || item?.creation_id || null
-    const productType = item?.productType
+  for (const item of resolvedItems) {
+    const { cartItemId, creationId, quantity, pricing } = item
 
     if (cartItemId) {
       const { data: updated, error: updateError } = await supabaseAdmin
@@ -162,8 +229,11 @@ export async function POST(request: Request) {
           customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
           status: 'ordered',
           order_id: orderId,
-          quantity: item?.quantity ?? 1,
-          price_at_purchase: item?.priceAtPurchase ?? null,
+          quantity,
+          product_type: pricing.productType,
+          package_type: pricing.packageType,
+          package_price_version: pricing.packagePriceVersion,
+          price_at_purchase: pricing.priceAtPurchase,
           updated_at: new Date().toISOString(),
         })
         .eq('cart_item_id', cartItemId)
@@ -175,11 +245,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Failed to update cart item' }, { status: 500 })
       }
       cartItemIds.push(cartItemId)
+      pricedItems.push({
+        cartItemId,
+        packageType: pricing.packageType,
+        productType: pricing.productType,
+        priceAtPurchase: pricing.priceAtPurchase,
+        packagePriceVersion: pricing.packagePriceVersion,
+      })
       continue
-    }
-
-    if (!creationId || !productType) {
-      return NextResponse.json({ error: 'Missing creationId or productType' }, { status: 400 })
     }
 
     const { data: cartItem, error: insertError } = await supabaseAdmin
@@ -189,11 +262,13 @@ export async function POST(request: Request) {
         anon_session_id: owner.ownerType === 'anon' ? owner.anonSessionId : null,
         customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
         creation_id: creationId,
-        product_type: productType,
+        product_type: pricing.productType,
+        package_type: pricing.packageType,
+        package_price_version: pricing.packagePriceVersion,
         status: 'ordered',
         order_id: orderId,
-        quantity: item?.quantity ?? 1,
-        price_at_purchase: item?.priceAtPurchase ?? null,
+        quantity,
+        price_at_purchase: pricing.priceAtPurchase,
       })
       .select('cart_item_id')
       .single()
@@ -203,7 +278,14 @@ export async function POST(request: Request) {
     }
 
     cartItemIds.push(cartItem.cart_item_id)
+    pricedItems.push({
+      cartItemId: cartItem.cart_item_id,
+      packageType: pricing.packageType,
+      productType: pricing.productType,
+      priceAtPurchase: pricing.priceAtPurchase,
+      packagePriceVersion: pricing.packagePriceVersion,
+    })
   }
 
-  return NextResponse.json({ cartItemIds, orderId })
+  return NextResponse.json({ cartItemIds, orderId, items: pricedItems })
 }

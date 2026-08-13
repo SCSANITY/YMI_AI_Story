@@ -11,7 +11,7 @@ type PreviewCartOrigin = {
 
 export type CartBackNavigation = {
   href: string
-  method: 'assign' | 'push' | 'replace'
+  method: 'assign' | 'history' | 'replace'
 }
 
 function normalizeBookId(value: unknown) {
@@ -75,9 +75,8 @@ export function resolveCartBackNavigation(
   browserTranslated: boolean
 ): CartBackNavigation {
   const returnPath = resolvePreviewCartReturnPath(search)
-  const href = returnPath ?? '/'
-  if (browserTranslated) return { href, method: 'assign' }
-  return returnPath
-    ? { href, method: 'replace' }
-    : { href, method: 'push' }
+  if (!returnPath) return { href: '/', method: 'history' }
+  return browserTranslated
+    ? { href: returnPath, method: 'assign' }
+    : { href: returnPath, method: 'replace' }
 }

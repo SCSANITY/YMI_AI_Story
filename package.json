@@ -13,6 +13,7 @@
     "guest-order:tests": "tsx --test tests/guest-order-continuity-contract.test.mjs src/lib/purchase-ownership-recovery.test.ts components/emails/OrderAccessNotice.test.tsx",
     "legal:tests": "tsx --test src/lib/legal-publishing.test.ts src/lib/published-legal-content.test.ts",
     "tracking:tests": "tsx --test src/lib/tracking-policy.test.ts",
+    "pricing:tests": "tsx --test src/lib/package-pricing.test.ts tests/package-pricing-authority-contract.test.mjs",
     "support:tests": "tsx --test src/lib/support-ticket.test.ts src/lib/support-inbound.test.ts src/lib/inbound-email-routing.test.ts src/lib/general-inbox.test.ts src/lib/inbound-email-attachments.test.ts src/lib/resend-webhook-policy.test.ts components/emails/SupportReplyEmail.test.tsx components/emails/GeneralInboxReplyEmail.test.tsx tests/admin-support-contract.test.mjs",
     "final-release:tests": "tsx --test src/lib/finalReleaseContract.test.ts src/lib/structuredFinalPdf.test.ts src/lib/finalPdfRelease.test.ts tests/structured-final-pdf-contract.test.mjs",
     "preview-pages:tests": "tsx --test src/lib/preview-page-contract.test.ts",

@@ -24,7 +24,18 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
         customize_snapshot,
         preview_job_id,
         created_at,
-        templates:templates (*)
+        templates:templates (
+          *,
+          package_prices:template_package_prices(
+            package_type,
+            list_price_usd,
+            sale_price_usd,
+            display_discount_percent,
+            row_version,
+            updated_at
+          ),
+          home_placements:template_home_placements(section_key,position)
+        )
       `
     )
     .eq('creation_id', creationId)

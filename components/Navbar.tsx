@@ -18,6 +18,10 @@ import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
 import { isBrowserTranslated } from '@/lib/browser-translation'
 import { resolveCartBackNavigation } from '@/lib/cart-navigation'
+import {
+  getPreviousBrowserHistoryUrl,
+  resolveBrowserBackAction,
+} from '@/lib/browser-back-navigation'
 import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { MiniCart } from '@/components/cart/MiniCart'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
@@ -50,6 +54,7 @@ export const Navbar: React.FC = () => {
   const [cartOpenPath, setCartOpenPath] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const [pendingRoute, setPendingRoute] = useState<string | null>(null)
+  const [isBackNavigating, setBackNavigating] = useState(false)
 
   const userRef = useRef<HTMLDivElement>(null)
   const cartButtonRef = useRef<HTMLButtonElement>(null)
@@ -80,6 +85,7 @@ export const Navbar: React.FC = () => {
 
   useEffect(() => {
     setPendingRoute(null)
+    setBackNavigating(false)
   }, [pathname])
 
   const navigateToRoute = useCallback((path: string) => {
@@ -221,12 +227,34 @@ export const Navbar: React.FC = () => {
     navigateToRoute('/cart')
   }, [navigateToRoute])
 
+  const handleDefaultBackClick = useCallback(() => {
+    if (pendingRoute || isBackNavigating) return
+    setBackNavigating(true)
+    const action = resolveBrowserBackAction({
+      browserTranslated: isBrowserTranslated(),
+      historyLength: window.history.length,
+      previousHistoryUrl: getPreviousBrowserHistoryUrl(),
+    })
+    if (action.method === 'history') {
+      const handleBackTraversal = () => setBackNavigating(false)
+      window.addEventListener('popstate', handleBackTraversal, { once: true })
+      window.history.back()
+      return
+    }
+    window.location.assign(action.href)
+  }, [isBackNavigating, pendingRoute])
+
   const handleCartBackClick = useCallback(() => {
-    if (pendingRoute) return
+    if (pendingRoute || isBackNavigating) return
     const navigation = resolveCartBackNavigation(
       window.location.search,
       isBrowserTranslated()
     )
+    if (navigation.method === 'history') {
+      handleDefaultBackClick()
+      return
+    }
+    setBackNavigating(true)
     setPendingRoute(navigation.href)
     if (navigation.method === 'assign') {
       navigateWithDocumentReload(navigation.href)
@@ -236,8 +264,7 @@ export const Navbar: React.FC = () => {
       router.replace(navigation.href)
       return
     }
-    router.push(navigation.href)
-  }, [navigateWithDocumentReload, pendingRoute, router])
+  }, [handleDefaultBackClick, isBackNavigating, navigateWithDocumentReload, pendingRoute, router])
 
   if (isPersonalizeRoute) return null
 
@@ -257,12 +284,17 @@ export const Navbar: React.FC = () => {
                 className="mr-2 rounded-full p-1 hover:bg-gray-100"
                 aria-label={t('common.back')}
               >
-                {pendingRoute ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
+                {isBackNavigating ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
               </button>
             ) : (
-              <Link href="/" onClick={(event) => handlePlainLinkClick(event, '/')} className="mr-2 rounded-full p-1 hover:bg-gray-100">
-                {pendingRoute === '/' ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
-              </Link>
+              <button
+                type="button"
+                onClick={handleDefaultBackClick}
+                className="mr-2 rounded-full p-1 hover:bg-gray-100"
+                aria-label={t('common.back')}
+              >
+                {isBackNavigating ? <Loader2 className="h-5 w-5 animate-spin text-amber-600" /> : <ArrowLeft className="h-5 w-5 text-gray-600" />}
+              </button>
             )
           )}
 

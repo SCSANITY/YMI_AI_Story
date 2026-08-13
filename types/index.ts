@@ -14,6 +14,22 @@ export type MagicAttribute = {
   percent: number;
 }
 
+export type BookPackageType = 'digital' | 'basic' | 'supreme';
+export type HomeBookSectionKey = 'brand_new' | 'for_boys' | 'for_girls' | 'in_discount';
+
+export type BookPackagePrice = {
+  packageType: BookPackageType;
+  listPriceUsd: number;
+  salePriceUsd: number | null;
+  effectivePriceUsd: number;
+  displayDiscountPercent: number | null;
+  computedDiscountPercent: number | null;
+  discountPercent: number | null;
+  version: number;
+};
+
+export type BookPackagePricing = Record<BookPackageType, BookPackagePrice>;
+
 export type TemplateFinalPreviewPage = {
   pageIndex: number;
   url: string;
@@ -30,6 +46,8 @@ export interface Book {
   price: number;
   compareAtPrice?: number | null;
   discountPercent?: number | null;
+  packagePricing?: BookPackagePricing;
+  catalogDisplayPackageType?: BookPackageType;
   coverUrl: string;
   showcaseImages: string[];
   finalPreviewImages?: string[];
@@ -45,6 +63,7 @@ export interface Book {
   ageGroup?: string;
   ageLabel?: string;
   homeSections?: string[];
+  homePlacementPositions?: Partial<Record<HomeBookSectionKey, number>>;
   isBrandNew?: boolean;
   isForBoys?: boolean;
   isForGirls?: boolean;
@@ -194,6 +213,7 @@ export interface GlobalContextType {
   prepareCheckout: (items: CartItem[]) => void;
   addToCheckout: (items: CartItem[]) => void;
   hydrateCheckoutItems: (items: any[]) => void;
+  reconcileCartItemPrices: (items: Array<{ cartItemId: string; priceAtPurchase: number }>) => void;
   restoreCheckout: (items: CartItem[]) => void;
   removeFromCheckout: (itemId: string) => void;
   clearCheckout: () => void;

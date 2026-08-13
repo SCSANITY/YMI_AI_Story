@@ -9,7 +9,7 @@ import { parseTemplateFinalPreviewPages } from '@/lib/template-final-preview'
 
 const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.webp$/i
 const FINAL_PREVIEW_IMAGE_PATTERN = /^page_(\d+)\.png$/i
-const TEMPLATE_DETAIL_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400'
+const TEMPLATE_DETAIL_CACHE_CONTROL = 'public, max-age=0, s-maxage=60'
 
 type ProductImageEntry = {
   name: string
@@ -134,7 +134,7 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
 
   const { data, error } = await supabaseAdmin
     .from('templates')
-    .select('*')
+    .select('*, package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at), home_placements:template_home_placements(section_key,position)')
     .eq('template_id', templateId)
     .eq('is_active', true)
     .maybeSingle()
@@ -156,7 +156,13 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
         })
       )
     : null
-  const template = row ? templateRowToBook(row) : null
+  let template = null
+  try {
+    template = row ? templateRowToBook(row) : null
+  } catch (pricingError) {
+    console.error('[template-detail] invalid package pricing contract', pricingError)
+    return NextResponse.json({ error: 'Template pricing is not configured' }, { status: 503 })
+  }
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 })
   }

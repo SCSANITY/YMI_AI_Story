@@ -50,6 +50,9 @@ export function BookCard({
     (compareAtPrice ? Math.round((1 - book.price / compareAtPrice) * 100) : null)
   const isDiscounted = Boolean((book.isDiscount || compareAtPrice) && discountPercent && discountPercent > 0)
   const isComingSoon = Boolean(book.isComingSoon)
+  const packageLabel = book.catalogDisplayPackageType
+    ? t(`bookList.package.${book.catalogDisplayPackageType}`)
+    : null
 
   return (
     <div
@@ -120,6 +123,7 @@ export function BookCard({
             {isDiscounted ? (
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                  {packageLabel ? <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-amber-700/70 md:text-xs">{packageLabel}</span> : null}
                   {priceLabel}
                 </span>
                 {compareAtLabel ? (
@@ -131,6 +135,7 @@ export function BookCard({
             ) : (
               <div className="flex flex-wrap items-baseline">
                 <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                  {packageLabel ? <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-amber-700/70 md:text-xs">{packageLabel}</span> : null}
                   {priceLabel}
                 </span>
               </div>

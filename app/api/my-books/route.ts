@@ -56,7 +56,7 @@ async function loadCreationsWithArchive(owner: Owner) {
     customize_snapshot,
     preview_job_id,
     created_at,
-    templates:templates (*)
+    templates:templates (*, package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at))
   `
 
   const archiveSelect = `
@@ -67,7 +67,7 @@ async function loadCreationsWithArchive(owner: Owner) {
     created_at,
     is_archived,
     deleted_at,
-    templates:templates (*)
+    templates:templates (*, package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at))
   `
 
   const primaryQuery = buildOwnerScopedQuery(

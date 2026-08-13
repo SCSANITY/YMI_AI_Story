@@ -8,6 +8,10 @@ import {
 } from '@/lib/checkout-owner'
 import { filterActiveCartItems } from '@/lib/cart-lifecycle'
 import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
+import {
+  loadAuthoritativeCreationPackagePrice,
+  packagePricingStoreErrorResponse,
+} from '@/lib/package-pricing-store'
 
 const CART_CACHE_CONTROL = 'private, no-store, max-age=0'
 
@@ -65,6 +69,8 @@ export async function GET(request: Request) {
         creation_id,
         quantity,
         price_at_purchase,
+        package_type,
+        package_price_version,
         status,
         order_id,
         creations:creations (
@@ -72,7 +78,18 @@ export async function GET(request: Request) {
           template_id,
           customize_snapshot,
           preview_job_id,
-          templates:templates (*)
+          templates:templates (
+            *,
+            package_prices:template_package_prices(
+              package_type,
+              list_price_usd,
+              sale_price_usd,
+              display_discount_percent,
+              row_version,
+              updated_at
+            ),
+            home_placements:template_home_placements(section_key,position)
+          )
         )
       `
     )
@@ -156,11 +173,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = await request.json()
   const creationId = body?.creationId ?? body?.creation_id
-  const productType = body?.productType
   const status = body?.status ?? 'draft'
 
-  if (!creationId || !productType) {
-    return NextResponse.json({ error: 'Missing creationId or productType' }, { status: 400 })
+  if (!creationId) {
+    return NextResponse.json({ error: 'Missing creationId' }, { status: 400 })
   }
 
   let owner
@@ -186,6 +202,15 @@ export async function POST(request: Request) {
     }
   }
 
+  let pricing
+  try {
+    pricing = await loadAuthoritativeCreationPackagePrice({ creationId: String(creationId), owner })
+  } catch (error) {
+    const response = packagePricingStoreErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+
   const { data: cartItem, error } = await supabaseAdmin
     .from('cart_items')
     .insert({
@@ -193,10 +218,12 @@ export async function POST(request: Request) {
       anon_session_id: owner.ownerType === 'anon' ? owner.anonSessionId : null,
       customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
       creation_id: creationId,
-      product_type: productType,
+      product_type: pricing.productType,
+      package_type: pricing.packageType,
+      package_price_version: pricing.packagePriceVersion,
       status,
       quantity: body?.quantity ?? 1,
-      price_at_purchase: body?.priceAtPurchase ?? null,
+      price_at_purchase: pricing.priceAtPurchase,
       order_id: body?.orderId ?? null,
     })
     .select('cart_item_id')
@@ -228,13 +255,18 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ cartItemId: cartItem.cart_item_id })
+  return NextResponse.json({
+    cartItemId: cartItem.cart_item_id,
+    packageType: pricing.packageType,
+    productType: pricing.productType,
+    priceAtPurchase: pricing.priceAtPurchase,
+    packagePriceVersion: pricing.packagePriceVersion,
+  })
 }
 
 export async function PATCH(request: Request) {
   const body = await request.json()
   const cartItemId = body?.cartItemId ?? body?.cart_item_id
-  const creationId = body?.creationId ?? body?.creation_id
   let owner
   try {
     owner = (await resolveCheckoutOwner(request, {
@@ -263,10 +295,55 @@ export async function PATCH(request: Request) {
     }
   }
 
+
+  const { data: existingItem, error: existingItemError } = await supabaseAdmin
+    .from('cart_items')
+    .select('cart_item_id, creation_id, order_id, payment_id')
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
+    .eq('cart_item_id', cartItemId)
+    .maybeSingle()
+
+  if (existingItemError) {
+    return NextResponse.json({ error: 'Failed to load cart item' }, { status: 500 })
+  }
+  if (!existingItem?.cart_item_id || !existingItem.creation_id) {
+    return NextResponse.json({ error: 'Cart item not found' }, { status: 404 })
+  }
+  if (existingItem.payment_id) {
+    return NextResponse.json({ error: 'Paid cart items cannot be changed' }, { status: 409 })
+  }
+  if (body?.orderId && existingItem.order_id && String(body.orderId) !== String(existingItem.order_id)) {
+    return NextResponse.json({ error: 'Cart item belongs to another order' }, { status: 409 })
+  }
+  if (existingItem.order_id) {
+    try {
+      await requireCheckoutOrderAccess(String(existingItem.order_id), owner, { requireUnpaid: true })
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+  }
+
+  let pricing
+  try {
+    pricing = await loadAuthoritativeCreationPackagePrice({
+      creationId: String(existingItem.creation_id),
+      owner,
+    })
+  } catch (error) {
+    const response = packagePricingStoreErrorResponse(error)
+    if (response) return response
+    throw error
+  }
+
   const updatePayload = {
-    product_type: body?.productType ?? undefined,
+    product_type: pricing.productType,
+    package_type: pricing.packageType,
+    package_price_version: pricing.packagePriceVersion,
     quantity: body?.quantity ?? undefined,
-    price_at_purchase: body?.priceAtPurchase ?? undefined,
+    price_at_purchase: pricing.priceAtPurchase,
     status: body?.status ?? undefined,
     order_id: body?.orderId ?? undefined,
     updated_at: new Date().toISOString(),
@@ -287,11 +364,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Cart item not found' }, { status: 404 })
   }
 
-  if (creationId) {
+  if (existingItem.creation_id) {
     const { data: creation } = await supabaseAdmin
       .from('creations')
       .select('preview_job_id')
-      .eq('creation_id', creationId)
+      .eq('creation_id', existingItem.creation_id)
       .maybeSingle()
 
     if (creation?.preview_job_id) {
@@ -306,7 +383,14 @@ export async function PATCH(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, cartItemId: updated.cart_item_id })
+  return NextResponse.json({
+    ok: true,
+    cartItemId: updated.cart_item_id,
+    packageType: pricing.packageType,
+    productType: pricing.productType,
+    priceAtPurchase: pricing.priceAtPurchase,
+    packagePriceVersion: pricing.packagePriceVersion,
+  })
 }
 
 export async function DELETE(request: Request) {

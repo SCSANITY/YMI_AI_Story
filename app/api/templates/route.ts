@@ -16,20 +16,15 @@ const TEMPLATE_LIST_COLUMNS = [
   'is_active',
   'age_group',
   'display_order',
-  'price_cents',
-  'compare_at_price_cents',
-  'discount_percent',
   'target_gender',
-  'home_sections',
-  'is_brand_new',
-  'is_for_boys',
-  'is_for_girls',
-  'is_discount',
+  'catalog_display_package_type',
   'is_coming_soon',
   'magic_attributes',
+  'package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at)',
+  'home_placements:template_home_placements(section_key,position)',
 ].join(',')
 
-const TEMPLATE_CATALOG_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400'
+const TEMPLATE_CATALOG_CACHE_CONTROL = 'public, max-age=0, s-maxage=60'
 
 export async function GET() {
   const { data, error } = await supabaseAdmin
@@ -42,7 +37,14 @@ export async function GET() {
   }
 
   const rows = (data ?? []) as TemplateCatalogRow[]
-  const response = NextResponse.json({ templates: templateRowsToBooks(rows) })
+  const templates = templateRowsToBooks(rows, (row, pricingError) => {
+    console.error('[template-catalog] skipped template with invalid package pricing', {
+      templateId: row.template_id,
+      error: pricingError,
+    })
+  })
+
+  const response = NextResponse.json({ templates })
   response.headers.set('Cache-Control', TEMPLATE_CATALOG_CACHE_CONTROL)
   return response
 }

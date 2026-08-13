@@ -41,6 +41,7 @@ import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPage
 import { CustomizeFormCard } from '@/components/personalize/CustomizeFormCard';
 import { StoryShowcaseCard } from '@/components/personalize/StoryShowcaseCard';
 import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayout';
+import { getBookPackagePrice } from '@/lib/package-pricing';
 import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGallery';
 import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
@@ -692,13 +693,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, []);
 
   // --- Calculations ---
-  const currentPrice = book
-    ? bookType === 'premium'
-      ? book.price + 20
-      : bookType === 'supreme'
-      ? book.price + 50
-      : book.price
-    : 0;
+  const currentPackagePrice = book ? getBookPackagePrice(book, bookType) : null;
+  const currentPrice = currentPackagePrice?.effectivePriceUsd ?? 0;
   const isSupreme = bookType === 'supreme';
   const requiresVoiceSample = bookType === 'supreme';
   const isMobile = windowWidth < 768;
@@ -2445,13 +2441,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               : ensuredCreationId
               ? cart.find(item => item.creationId === ensuredCreationId)
               : undefined
-            const productType =
-              personalization.bookType === 'digital'
-                ? 'ebook'
-                : personalization.bookType === 'premium'
-                ? 'audio'
-                : 'physical'
-
             const quantity = existingItem?.quantity ?? 1
             const payload = {
               customerId: user?.customerId ?? null,
@@ -2459,14 +2448,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                 {
                   cartItemId: existingItem?.id ?? null,
                   creationId: ensuredCreationId ?? null,
-                  productType,
                   quantity,
-                  priceAtPurchase:
-                    personalization.bookType === 'premium'
-                      ? resolvedBook.price + 20
-                      : personalization.bookType === 'supreme'
-                      ? resolvedBook.price + 50
-                      : resolvedBook.price,
                 },
               ],
             }
@@ -2485,14 +2467,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             const data = await response.json()
             const cartItemId = Array.isArray(data?.cartItemIds) ? data.cartItemIds[0] : existingItem?.id
             const orderId = typeof data?.orderId === 'string' ? data.orderId : null
-            const checkoutItem = existingItem ?? {
+            const authoritativeItem = Array.isArray(data?.items) ? data.items[0] : null
+            const authoritativePrice = Number(authoritativeItem?.priceAtPurchase)
+            if (!Number.isFinite(authoritativePrice) || authoritativePrice <= 0) return
+            const checkoutItem = existingItem ? {
+              ...existingItem,
+              priceAtPurchase: authoritativePrice,
+            } : {
               id: cartItemId,
               bookID: resolvedBook.bookID,
               quantity,
               book: resolvedBook,
               personalization,
               savedStep: flowStep,
-              priceAtPurchase: payload.items[0].priceAtPurchase,
+              priceAtPurchase: authoritativePrice,
               creationId: ensuredCreationId ?? undefined,
             }
 
@@ -3083,8 +3071,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         cartButtonRef={cartIconRef}
         labels={{
           back: t('common.back'),
-          myOrders: t('navbar.myOrders'),
-          logOut: t('navbar.logOut'),
           logIn: t('navbar.logIn'),
         }}
         onBack={handleBack}
@@ -3099,7 +3085,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
               })
             : '/cart'
         )}
-        onOrdersClick={() => void navigateAwayFromPreview('/orders')}
+        onNavigate={(path) => void navigateAwayFromPreview(path)}
         onLoginClick={() => openLoginModal()}
         onLogoutClick={() => void logoutFromPreview()}
       />
@@ -3155,6 +3141,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <CustomizeFormCard
                           title={t('personalize.customize')}
                           priceLabel={formatDisplayCurrency(currentPrice, displayCurrency)}
+                          compareAtPriceLabel={currentPackagePrice?.salePriceUsd !== null && currentPackagePrice?.salePriceUsd !== undefined
+                            ? formatDisplayCurrency(currentPackagePrice.listPriceUsd, displayCurrency)
+                            : null}
+                          discountPercent={currentPackagePrice?.discountPercent ?? null}
                           footer={
                             <GeneratePreviewAction
                               isFormReady={isFormReady}
@@ -3258,6 +3248,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                           t('personalize.included.supreme7'),
                         ],
                       }}
+                      packagePriceLabels={book ? {
+                        digital: formatDisplayCurrency(getBookPackagePrice(book, 'digital').effectivePriceUsd, displayCurrency),
+                        basic: formatDisplayCurrency(getBookPackagePrice(book, 'basic').effectivePriceUsd, displayCurrency),
+                        supreme: formatDisplayCurrency(getBookPackagePrice(book, 'supreme').effectivePriceUsd, displayCurrency),
+                      } : undefined}
                       onBookTypeChange={setBookType}
                       requiresVoiceSample={requiresVoiceSample}
                       voicePanelRef={voicePanelRef}

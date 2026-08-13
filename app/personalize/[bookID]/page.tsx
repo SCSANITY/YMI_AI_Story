@@ -28,8 +28,7 @@ export async function generateMetadata({
   const baseDescription =
     String(book?.description || '').trim() ||
     `Create a personalized YMI Story picture book where your child becomes the hero.`
-  const priceSuffix = typeof book?.price === 'number' ? ` Starting at $${book.price.toFixed(2)}.` : ''
-  const description = clampDescription(`${baseDescription}${priceSuffix}`)
+  const description = clampDescription(baseDescription)
 
   return {
     ...publicPageMetadata({

@@ -1,4 +1,10 @@
-import type { Book, MagicAttribute, TemplateFinalPreviewPage } from '@/types'
+import type { Book, HomeBookSectionKey, MagicAttribute, TemplateFinalPreviewPage } from '@/types'
+import {
+  getCatalogDisplayPrice,
+  normalizeBookPackageType,
+  packagePriceRowsToPricing,
+  type TemplatePackagePriceRow,
+} from '@/lib/package-pricing'
 
 export type AgeGroup = 'ages_2_plus' | 'ages_6_plus'
 
@@ -26,20 +32,15 @@ export type TemplateCatalogRow = {
   is_active?: boolean | null
   age_group?: string | null
   display_order?: number | null
-  price_cents?: number | null
-  compare_at_price_cents?: number | null
-  discount_percent?: number | null
   target_gender?: string | null
-  home_sections?: string[] | null
-  is_brand_new?: boolean | null
-  is_for_boys?: boolean | null
-  is_for_girls?: boolean | null
-  is_discount?: boolean | null
+  catalog_display_package_type?: string | null
   is_coming_soon?: boolean | null
   showcase_image_paths?: string[] | null
   final_preview_paths?: string[] | null
   final_preview_pages?: TemplateFinalPreviewPage[] | null
   magic_attributes?: unknown
+  package_prices?: TemplatePackagePriceRow[] | null
+  home_placements?: Array<{ section_key?: unknown; position?: unknown }> | null
 }
 
 export type CatalogBook = Book & {
@@ -119,22 +120,6 @@ function normalizeStringArray(value: unknown): string[] {
     : []
 }
 
-export function parseTemplateAmount(value: unknown): number | null {
-  const raw = String(value ?? '').trim()
-  if (!raw) return null
-
-  const amount = Number(raw)
-  if (!Number.isFinite(amount) || amount <= 0) return null
-  return amount
-}
-
-function resolveDiscountPercent(price: number, compareAtPrice: number | null, explicitPercent: unknown): number | null {
-  const percent = Number(explicitPercent ?? 0)
-  if (Number.isFinite(percent) && percent > 0) return Math.round(percent)
-  if (!compareAtPrice || compareAtPrice <= price) return null
-  return Math.round((1 - price / compareAtPrice) * 100)
-}
-
 function clampPercent(value: unknown): number {
   if (value === null || value === undefined || value === '') return 80
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value).replace('%', '').trim())
@@ -160,6 +145,24 @@ function normalizeMagicAttributes(value: unknown): MagicAttribute[] {
     .slice(0, 4)
 }
 
+const HOME_SECTION_KEYS: HomeBookSectionKey[] = ['brand_new', 'for_boys', 'for_girls', 'in_discount']
+
+function normalizeHomePlacementPositions(value: unknown): Partial<Record<HomeBookSectionKey, number>> {
+  if (!Array.isArray(value)) return {}
+  const positions: Partial<Record<HomeBookSectionKey, number>> = {}
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const record = entry as Record<string, unknown>
+    const sectionKey = String(record.section_key ?? '').trim() as HomeBookSectionKey
+    const position = Number(record.position)
+    if (!HOME_SECTION_KEYS.includes(sectionKey) || !Number.isSafeInteger(position) || position < 1 || position > 4) continue
+    positions[sectionKey] = position
+  }
+
+  return positions
+}
+
 export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const templateId = String(row.template_id ?? '').trim()
   if (!templateId) return null
@@ -181,22 +184,19 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const magicAttributes = normalizeMagicAttributes(row.magic_attributes)
 
   const fallbackShowcaseImages = coverUrl ? [coverUrl] : []
-  const homeSections = new Set(normalizeStringArray(row.home_sections))
-  const isBrandNew = Boolean(row.is_brand_new) || homeSections.has('brand_new')
-  const isForBoys = Boolean(row.is_for_boys) || homeSections.has('for_boys')
-  const isForGirls = Boolean(row.is_for_girls) || homeSections.has('for_girls')
-  const isDiscount = Boolean(row.is_discount) || homeSections.has('in_discount')
+  const homePlacementPositions = normalizeHomePlacementPositions(row.home_placements)
+  const homeSections = Object.keys(homePlacementPositions) as HomeBookSectionKey[]
+  const isBrandNew = homePlacementPositions.brand_new !== undefined
+  const isForBoys = homePlacementPositions.for_boys !== undefined
+  const isForGirls = homePlacementPositions.for_girls !== undefined
   const isComingSoon = Boolean(row.is_coming_soon)
-  const price = parseTemplateAmount(row.price_cents) ?? 24.99
-  const compareAtPrice = parseTemplateAmount(row.compare_at_price_cents) ?? (isDiscount ? price * 2 : null)
-  const discountPercent = isDiscount
-    ? resolveDiscountPercent(price, compareAtPrice, row.discount_percent) ?? 50
-    : null
-
-  if (isBrandNew) homeSections.add('brand_new')
-  if (isForBoys) homeSections.add('for_boys')
-  if (isForGirls) homeSections.add('for_girls')
-  if (isDiscount) homeSections.add('in_discount')
+  const packagePricing = packagePriceRowsToPricing(row.package_prices)
+  const catalogDisplayPackageType = normalizeBookPackageType(row.catalog_display_package_type) ?? 'digital'
+  const displayPrice = getCatalogDisplayPrice(packagePricing, catalogDisplayPackageType)
+  const price = displayPrice.effectivePriceUsd
+  const compareAtPrice = displayPrice.salePriceUsd === null ? null : displayPrice.listPriceUsd
+  const discountPercent = displayPrice.discountPercent
+  const isDiscount = displayPrice.salePriceUsd !== null
 
   return {
     bookID: templateId,
@@ -206,6 +206,8 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     price,
     compareAtPrice,
     discountPercent,
+    packagePricing,
+    catalogDisplayPackageType,
     coverUrl,
     normalizedCoverUrl: normalizedCoverUrl || undefined,
     showcaseImages: showcaseImages.length ? showcaseImages : fallbackShowcaseImages,
@@ -220,7 +222,8 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     ageLabel: AGE_GROUP_LABELS[ageGroup],
     ageRange: AGE_GROUP_LABELS[ageGroup],
     gender: normalizeTargetAudience(row.target_gender),
-    homeSections: Array.from(homeSections),
+    homeSections,
+    homePlacementPositions,
     isBrandNew,
     isForBoys,
     isForGirls,
@@ -241,31 +244,21 @@ export function sortCatalogBooks(books: CatalogBook[]): CatalogBook[] {
   })
 }
 
-export function templateRowsToBooks(rows: TemplateCatalogRow[] | null | undefined): CatalogBook[] {
-  return sortCatalogBooks((rows ?? []).map(templateRowToBook).filter((book): book is CatalogBook => Boolean(book)))
-}
+export function templateRowsToBooks(
+  rows: TemplateCatalogRow[] | null | undefined,
+  onInvalidRow?: (row: TemplateCatalogRow, error: unknown) => void
+): CatalogBook[] {
+  const books: CatalogBook[] = []
 
-export function staticBookToCatalogBook(book: Book, index = 0): CatalogBook {
-  const storyTypes = parseStoryTypes(book.category)
-  const ageGroup = book.ageRange === '6-8' || book.ageRange === '9-12' ? 'ages_6_plus' : 'ages_2_plus'
-
-  return {
-    ...book,
-    templateId: book.bookID,
-    storyTypes,
-    storyTypeLabel: formatStoryTypeLabel(storyTypes, book.category || 'Story'),
-    ageGroup,
-    ageLabel: AGE_GROUP_LABELS[ageGroup],
-    homeSections: index < 4 ? ['brand_new'] : [],
-    isBrandNew: index < 4,
-    isForBoys: false,
-    isForGirls: false,
-    isDiscount: false,
-    isComingSoon: Boolean(book.isComingSoon),
-    displayOrder: index,
-    createdAt: '',
-    finalPreviewImages: book.finalPreviewImages ?? [],
-    finalPreviewPages: book.finalPreviewPages ?? [],
-    magicAttributes: book.magicAttributes ?? [],
+  for (const row of rows ?? []) {
+    try {
+      const book = templateRowToBook(row)
+      if (book) books.push(book)
+    } catch (error) {
+      if (!onInvalidRow) throw error
+      onInvalidRow(row, error)
+    }
   }
+
+  return sortCatalogBooks(books)
 }

@@ -1,11 +1,21 @@
 'use client'
 
-import React, { memo, useCallback, useState } from 'react'
-import { ChevronLeft, LogOut, Package, ShoppingCart } from 'lucide-react'
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
+import { usePathname } from 'next/navigation'
+import { ChevronLeft, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { MiniCart } from '@/components/cart/MiniCart'
+import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
+import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
+import { useI18n } from '@/lib/useI18n'
 import type { CartItem, DisplayCurrency, User } from '@/types'
+
+const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then((module) => module.MyRewardsModal), {
+  ssr: false,
+  loading: () => null,
+})
 
 type PersonalizeHeaderProps = {
   title: string
@@ -16,8 +26,6 @@ type PersonalizeHeaderProps = {
   isCartHydrated: boolean
   labels: {
     back: string
-    myOrders: string
-    logOut: string
     logIn: string
   }
   cartButtonRef: React.RefObject<HTMLButtonElement | null>
@@ -25,7 +33,7 @@ type PersonalizeHeaderProps = {
   onViewCart: () => void
   onUpdateCartQuantity: (itemId: string, quantity: number) => Promise<boolean>
   onRemoveCartItem: (itemId: string) => Promise<boolean>
-  onOrdersClick: () => void
+  onNavigate: (path: string) => void
   onLoginClick: () => void
   onLogoutClick: () => void
 }
@@ -43,12 +51,40 @@ function PersonalizeHeaderComponent({
   onViewCart,
   onUpdateCartQuantity,
   onRemoveCartItem,
-  onOrdersClick,
+  onNavigate,
   onLoginClick,
   onLogoutClick,
 }: PersonalizeHeaderProps) {
+  const pathname = usePathname()
+  const { t } = useI18n()
   const [isUserMenuOpen, setUserMenuOpen] = useState(false)
   const [isCartOpen, setCartOpen] = useState(false)
+  const [isRewardsOpen, setRewardsOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+  const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
+    customerId: user?.customerId,
+    pathname,
+  })
+
+  useEffect(() => {
+    if (!isUserMenuOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setUserMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isUserMenuOpen])
 
   const dismissCart = useCallback((restoreFocus: boolean) => {
     setCartOpen(false)
@@ -67,12 +103,6 @@ function PersonalizeHeaderComponent({
     onViewCart()
   }
 
-  const handleOrdersClick = () => {
-    setCartOpen(false)
-    setUserMenuOpen(false)
-    onOrdersClick()
-  }
-
   const handleLogoutClick = () => {
     setCartOpen(false)
     setUserMenuOpen(false)
@@ -80,7 +110,10 @@ function PersonalizeHeaderComponent({
   }
 
   return (
-    <header className={`sticky top-0 ${isUserMenuOpen || isCartOpen ? 'z-[150]' : 'z-50'} border-b border-white/60 bg-white/72 shadow-[0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(16,24,40,0.06)] backdrop-blur-2xl`}>
+    <header
+      className="sticky top-0 border-b border-white/60 bg-white/72 shadow-[0_1px_0_rgba(255,255,255,0.8),0_4px_20px_rgba(16,24,40,0.06)] backdrop-blur-2xl"
+      style={{ zIndex: isUserMenuOpen || isCartOpen ? 150 : 50 }}
+    >
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <button onClick={onBack} className="flex items-center gap-2 text-gray-600 transition-colors hover:text-amber-600">
           <ChevronLeft className="h-5 w-5" />
@@ -124,34 +157,38 @@ function PersonalizeHeaderComponent({
             />
           ) : null}
 
-          <div className="relative">
+          <div className="relative" ref={userMenuRef}>
             {user ? (
-              <div className="flex items-center">
-                <button onClick={() => { setCartOpen(false); setUserMenuOpen((value) => !value) }} className="flex items-center gap-2 focus:outline-none">
-                  <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full border border-gray-200 object-cover" />
-                </button>
-                {isUserMenuOpen && (
-                  <div className="absolute right-0 top-full z-[160] mt-2 w-56 rounded-md border border-gray-100 bg-white py-1 shadow-lg">
-                    <div className="border-b border-gray-50 px-4 py-2">
-                      <p className="text-sm font-semibold text-gray-900">{user.name}</p>
-                    </div>
-                    <button onClick={handleOrdersClick} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                      <Package className="h-4 w-4" />
-                      {labels.myOrders}
-                    </button>
-                    <button onClick={handleLogoutClick} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
-                      <LogOut className="h-4 w-4" />
-                      {labels.logOut}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <NavbarUserMenu
+                user={user}
+                isOpen={isUserMenuOpen}
+                totalNewCount={totalNewCount}
+                newCounts={newCounts}
+                t={t}
+                onToggle={() => {
+                  setCartOpen(false)
+                  setUserMenuOpen((value) => !value)
+                }}
+                onClose={() => setUserMenuOpen(false)}
+                onNavigate={onNavigate}
+                onOpenRewards={() => setRewardsOpen(true)}
+                onLogout={handleLogoutClick}
+                onMarkModuleSeen={markModuleSeen}
+              />
             ) : (
               <Button onClick={() => { setCartOpen(false); onLoginClick() }} size="sm">{labels.logIn}</Button>
             )}
           </div>
         </div>
       </div>
+
+      {isRewardsOpen ? (
+        <MyRewardsModal
+          open={isRewardsOpen}
+          user={user}
+          onClose={() => setRewardsOpen(false)}
+        />
+      ) : null}
     </header>
   )
 }

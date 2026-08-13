@@ -22,6 +22,7 @@ type BookPackageSelectorProps = {
     basic: string[]
     supreme: string[]
   }
+  priceLabels?: Partial<Record<'digital' | 'basic' | 'supreme', string>>
   onChange: (value: PersonalizeBookType) => void
 }
 
@@ -43,7 +44,7 @@ const PACKAGE_OPTIONS = [
   },
 ]
 
-function BookPackageSelectorComponent({ value, labels, includedItems, onChange }: BookPackageSelectorProps) {
+function BookPackageSelectorComponent({ value, labels, includedItems, priceLabels, onChange }: BookPackageSelectorProps) {
   const [isIncludedOpen, setIncludedOpen] = useState(false)
   const items = useMemo(() => {
     if (value === 'basic' || value === 'supreme') {
@@ -70,7 +71,14 @@ function BookPackageSelectorComponent({ value, labels, includedItems, onChange }
                   : 'border border-white/55 bg-white/50 backdrop-blur-sm hover:bg-white/75 hover:border-white/70'
               }`}
             >
-              <div className="text-sm font-semibold text-gray-900">{labels[option.titleKey]}</div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-sm font-semibold text-gray-900">{labels[option.titleKey]}</div>
+                {priceLabels?.[option.value as 'digital' | 'basic' | 'supreme'] ? (
+                  <div className="shrink-0 text-xs font-bold text-amber-700">
+                    {priceLabels[option.value as 'digital' | 'basic' | 'supreme']}
+                  </div>
+                ) : null}
+              </div>
               <div className="text-[11px] text-gray-400 mt-0.5">{labels[option.subtitleKey]}</div>
             </button>
           )
