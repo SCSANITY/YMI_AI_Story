@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 35, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 39, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -151,6 +151,7 @@ test('active and placeholder Admin pages remain explicitly separated', async () 
     ['support', 'SupportInbox'],
     ['inbox', 'GeneralInbox'],
     ['catalog', 'CatalogPricingManager'],
+    ['partnerships', 'KolPartnershipWorkspace'],
   ])
   const placeholderPages = ['analytics', 'banner']
 
@@ -508,24 +509,18 @@ test('Final Review derives personalized job titles and keeps queue status rows s
   assert.doesNotMatch(panel, /\{selectedJob\.template_id\}/)
 })
 
-test('Service Control keeps independent islands and fails visibly on Admin reads', async () => {
+test('Service Control owns only the live Customize access control', async () => {
   const section = await read('components/admin/sections/ServiceControlSection.tsx')
   const customizeControl = await read(
     'components/admin/sections/service/CustomizeAccessControl.tsx'
   )
-  const promoControl = await read('components/admin/sections/service/CreatorPromoControl.tsx')
   const customizeApi = await read('app/api/admin/customize-access/route.ts')
-  const promoApi = await read('app/api/admin/creator-promo-config/route.ts')
 
   assert.match(section, /<CustomizeAccessControl\s*\/>/)
-  assert.match(section, /<CreatorPromoControl\s*\/>/)
+  assert.doesNotMatch(section, /CreatorPromo/)
   assert.match(customizeControl, /requestIntentRef/)
   assert.match(customizeControl, /setSettings\(previous\)/)
-  assert.match(promoControl, /requestIntentRef/)
-  assert.match(promoControl, /savedConfig/)
-  assert.match(promoControl, /draftConfig/)
   assert.match(customizeApi, /failOnError:\s*true/)
-  assert.match(promoApi, /if\s*\(error\)\s*throw error/)
 })
 
 test('Discounts keeps create, list, and row mutations in independent state islands', async () => {
@@ -663,7 +658,8 @@ test('Admin V2 collection pages share presentation primitives without merging st
   assert.match(orders, /listRequestIntentRef/)
   assert.match(discounts, /listRequestIntentRef/)
   assert.match(emails, /isBrowserTranslated\(\)/)
-  assert.match(service, /CustomizeAccessControl[\s\S]*CreatorPromoControl/)
+  assert.match(service, /CustomizeAccessControl/)
+  assert.doesNotMatch(service, /CreatorPromoControl/)
 })
 
 test('Admin V2 publishing workspaces share presentation primitives without changing publishing owners', async () => {

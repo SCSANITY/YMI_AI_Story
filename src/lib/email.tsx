@@ -18,6 +18,10 @@ import {
   buildGeneralInboxReplyEmailText,
   GeneralInboxReplyEmail,
 } from '@/components/emails/GeneralInboxReplyEmail'
+import {
+  buildKolPartnershipEmailText,
+  KolPartnershipEmail,
+} from '@/components/emails/KolPartnershipEmail'
 import type { GeneralInboxSenderKey } from '@/lib/general-inbox'
 import {
   markEmailEventFailed,
@@ -107,6 +111,17 @@ function getSender(envName: string): string {
     )
   }
   return sender.normalizedValue
+}
+
+export function getKolPartnershipSenderAddress(): string {
+  const rawValue = process.env.EMAIL_FROM_COLLABORATION?.trim() || ''
+  const normalizedValue = normalizeSenderValue(rawValue)
+  if (!rawValue || !isValidSender(normalizedValue)) {
+    throw new Error(
+      '[email] EMAIL_FROM_COLLABORATION must be configured as email@example.com or Name <email@example.com>.'
+    )
+  }
+  return normalizedValue
 }
 
 async function sendEmail({
@@ -493,6 +508,74 @@ export async function sendSupportReplyEmail(params: SendSupportReplyEmailParams)
     skipped: emailResult.skipped,
     emailEventId: emailResult.event?.email_event_id ?? null,
     providerMessageId: response?.data?.id || response?.id || emailResult.event?.resend_message_id || null,
+  }
+}
+
+type SendKolPartnershipEmailParams = {
+  to: string
+  customerId: string | null
+  recipientName?: string | null
+  leadId: string
+  leadCode: string
+  messageId: string
+  messageBody: string
+  replyTo: string
+  subject: string
+  inReplyTo?: string | null
+  references?: string | null
+}
+
+export async function sendKolPartnershipEmail(params: SendKolPartnershipEmailParams) {
+  const headers: Record<string, string> = {}
+  if (params.inReplyTo) headers['In-Reply-To'] = params.inReplyTo
+  if (params.references) headers.References = params.references
+
+  const emailResult = await sendManagedEmail({
+    emailKey: 'kol_partnership_reply',
+    idempotencyKey: `kol_partnership_reply:${params.messageId}`,
+    to: params.to,
+    from: getKolPartnershipSenderAddress(),
+    fromEnvName: 'EMAIL_FROM_COLLABORATION',
+    replyTo: params.replyTo,
+    headers,
+    subject: params.subject,
+    customerId: params.customerId,
+    context: {
+      kolLeadId: params.leadId,
+      kolLeadCode: params.leadCode,
+      kolMessageId: params.messageId,
+      replyToDomain: params.replyTo.split('@').pop() || null,
+    },
+    retryFailed: true,
+    retryPendingAfterMs: 2 * 60 * 1000,
+    react: (
+      <KolPartnershipEmail
+        recipientName={params.recipientName}
+        messageBody={params.messageBody}
+        leadCode={params.leadCode}
+      />
+    ),
+    text: buildKolPartnershipEmailText({
+      recipientName: params.recipientName,
+      messageBody: params.messageBody,
+      leadCode: params.leadCode,
+    }),
+  })
+
+  const response = emailResult.response as
+    | { data?: { id?: string | null } | null; id?: string | null }
+    | null
+    | undefined
+
+  if (emailResult.skipped && emailResult.event?.status !== 'sent') {
+    throw new Error('Partnership email is still pending and cannot be reconciled yet')
+  }
+
+  return {
+    skipped: emailResult.skipped,
+    emailEventId: emailResult.event?.email_event_id ?? null,
+    providerMessageId:
+      response?.data?.id || response?.id || emailResult.event?.resend_message_id || null,
   }
 }
 

@@ -1,2 +1,0 @@
-export const CREATOR_PROMO_DISCOUNT_USD = 5
-export const CREATOR_PROMO_FIRST_ORDER_ONLY = false

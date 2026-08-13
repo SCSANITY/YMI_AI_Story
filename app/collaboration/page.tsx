@@ -2,25 +2,22 @@
 
 import { useMemo } from 'react'
 import Image from 'next/image'
-import { Sparkles } from 'lucide-react'
+import { LockKeyhole, Sparkles } from 'lucide-react'
 import { CollaborationLeadFormSection } from './CollaborationLeadFormSection'
-import { CreatorPromoSection } from './CreatorPromoSection'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
 import { useBookCatalog } from '@/components/useBookCatalog'
 import { isSupabaseStorageImage } from '@/lib/storage-images'
 
 export default function CollaborationPage() {
-  const { user, openLoginModal } = useGlobalContext()
+  const { user, isAuthResolved, openLoginModal } = useGlobalContext()
   const { t } = useI18n()
   const { books } = useBookCatalog()
 
   const posterBooks = useMemo(() => [...books, ...books], [books])
 
-  return (
-    <div className="page-surface min-h-screen">
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 md:px-8 md:py-14">
-        <section className="glass-panel overflow-hidden rounded-[2rem] px-6 py-8 md:px-10 md:py-10">
+  const poster = (
+    <section className="glass-panel overflow-hidden rounded-[2rem] px-6 py-8 md:px-10 md:py-10">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="flex flex-col gap-3">
               <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/75 bg-white/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-600 shadow-sm">
@@ -102,10 +99,76 @@ export default function CollaborationPage() {
               </p>
             </div>
           </div>
-        </section>
+    </section>
+  )
 
-        <CreatorPromoSection user={user} openLoginModal={openLoginModal} />
-        <CollaborationLeadFormSection user={user} />
+  return (
+    <div className="page-surface min-h-screen">
+      <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 md:px-8 md:py-14">
+        {isAuthResolved && user ? (
+          <>
+            {poster}
+            <CollaborationLeadFormSection user={user} />
+          </>
+        ) : (
+          <div className="relative min-w-0 overflow-hidden rounded-[2rem]">
+            <h1 className="sr-only">{t('collaboration.title')}</h1>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none select-none space-y-6 blur-[5px] saturate-50"
+            >
+              {poster}
+              <div className="glass-panel min-h-[520px] rounded-[2rem] px-8 py-10">
+                <div className="h-4 w-28 rounded-full bg-amber-200/80" />
+                <div className="mt-5 h-9 w-72 max-w-full rounded-xl bg-slate-200/80" />
+                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                  {Array.from({ length: 8 }).map((_, index) => (
+                    <div key={index} className="h-12 rounded-xl border border-white/70 bg-white/70" />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute inset-0 z-10 flex min-w-0 items-start justify-center bg-white/35 pt-20 backdrop-blur-[2px] md:pt-32">
+              <div className="glass-panel sticky top-24 w-[calc(100%_-_2rem)] min-w-0 max-w-md rounded-[1.75rem] border border-white/85 px-6 py-7 text-center shadow-[0_24px_70px_rgba(91,60,28,0.2)] md:px-8 md:py-9">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                  <LockKeyhole className="h-7 w-7" />
+                </div>
+                {isAuthResolved ? (
+                  <>
+                    <h2 className="mt-5 font-title text-2xl text-slate-900">
+                      {t('collaboration.loginRequiredTitle')}
+                    </h2>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      {t('collaboration.loginRequiredDescription')}
+                    </p>
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => openLoginModal('login')}
+                        className="glass-action-btn glass-action-btn--brand h-11 rounded-full px-5 text-sm font-semibold"
+                      >
+                        {t('navbar.logIn')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openLoginModal('signup')}
+                        className="glass-action-btn h-11 rounded-full px-5 text-sm font-semibold text-slate-700"
+                      >
+                        {t('login.signUp')}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-5" role="status">
+                    <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600" />
+                    <p className="mt-4 text-sm text-slate-500">{t('collaboration.checkingAccount')}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

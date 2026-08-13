@@ -2,6 +2,7 @@ import {
   BarChart3,
   BookMarked,
   FileText,
+  Handshake,
   LayoutDashboard,
   Mail,
   Mails,
@@ -23,6 +24,7 @@ export type AdminNavigationItem = {
   href: string
   group: AdminNavigationGroup
   soon?: boolean
+  attention?: 'kol-partnerships'
 }
 
 export const adminNavigationItems: AdminNavigationItem[] = [
@@ -30,6 +32,7 @@ export const adminNavigationItems: AdminNavigationItem[] = [
   { label: 'Orders', shortLabel: 'Orders', icon: PackageCheck, href: '/admin/orders', group: 'Review' },
   { label: 'Support Inbox', shortLabel: 'Support', icon: MessagesSquare, href: '/admin/support', group: 'Communication' },
   { label: 'General Inbox', shortLabel: 'Inbox', icon: Mails, href: '/admin/inbox', group: 'Communication' },
+  { label: 'KOL Partnerships', shortLabel: 'Partners', icon: Handshake, href: '/admin/partnerships', group: 'Growth', attention: 'kol-partnerships' },
   { label: 'Discounts', shortLabel: 'Discounts', icon: TicketPercent, href: '/admin/discounts', group: 'Growth' },
   { label: 'Email Events', shortLabel: 'Emails', icon: Mail, href: '/admin/emails', group: 'Growth' },
   { label: 'Announcements', shortLabel: 'News', icon: Megaphone, href: '/admin/announcements', group: 'Growth' },

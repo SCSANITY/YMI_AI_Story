@@ -9,6 +9,11 @@ import {
 } from '@/lib/support-inbound'
 import type { InboundRecipientRoute, InboundRouteKind } from '@/lib/inbound-email-routing'
 import {
+  classifyKolPartnershipSender,
+  matchesKolPartnershipReplyToken,
+  parseKolPartnershipReplyAddress,
+} from '@/lib/kol-partnership-email'
+import {
   getSupportInboundDomain,
   normalizeSupportEmail,
   parseSupportReplyAddress,
@@ -300,6 +305,109 @@ async function routeTicketReply(envelope: InboundEnvelopeRow) {
   return ticket.question_id as string
 }
 
+async function loadExistingKolInboundMessage(envelope: InboundEnvelopeRow) {
+  const providerResult = await supabaseAdmin
+    .from('kol_collaboration_messages')
+    .select('message_id, lead_id')
+    .eq('provider_email_id', envelope.provider_email_id)
+    .maybeSingle()
+  if (providerResult.error) throw new Error(providerResult.error.message)
+  if (providerResult.data) return providerResult.data
+  if (!envelope.internet_message_id) return null
+
+  const internetResult = await supabaseAdmin
+    .from('kol_collaboration_messages')
+    .select('message_id, lead_id')
+    .eq('internet_message_id', envelope.internet_message_id)
+    .maybeSingle()
+  if (internetResult.error) throw new Error(internetResult.error.message)
+  return internetResult.data
+}
+
+async function routeKolReply(envelope: InboundEnvelopeRow) {
+  const routedAddress = envelope.route_address
+    ? parseKolPartnershipReplyAddress(envelope.route_address, getSupportInboundDomain())
+    : null
+  if (!routedAddress) {
+    await rejectEnvelope(envelope, 'kol_identity_invalid')
+    return undefined
+  }
+
+  const { data: lead, error: leadError } = await supabaseAdmin
+    .from('kol_collaboration_leads')
+    .select('lead_id, customer_id, nickname, account_email_snapshot, contact_email, reply_token')
+    .eq('lead_code', routedAddress.leadCode)
+    .maybeSingle()
+  if (leadError) throw new Error(leadError.message)
+  if (
+    !lead ||
+    !matchesKolPartnershipReplyToken(lead.reply_token, routedAddress.replyToken)
+  ) {
+    await rejectEnvelope(envelope, 'kol_identity_not_found')
+    return undefined
+  }
+
+  const senderEmail = normalizeSupportEmail(envelope.from_email)
+  if (!senderEmail) {
+    await rejectEnvelope(envelope, 'kol_sender_invalid')
+    return undefined
+  }
+  if (!envelope.body_text && envelope.attachment_count === 0) {
+    await rejectEnvelope(envelope, 'empty_kol_reply')
+    return undefined
+  }
+
+  const customerResult = lead.customer_id
+    ? await supabaseAdmin
+        .from('customers')
+        .select('email')
+        .eq('customer_id', lead.customer_id)
+        .maybeSingle()
+    : { data: null, error: null }
+  if (customerResult.error) throw new Error(customerResult.error.message)
+
+  const associationState = classifyKolPartnershipSender(
+    senderEmail,
+    [customerResult.data?.email, lead.account_email_snapshot, lead.contact_email]
+  )
+  if (!associationState) {
+    await rejectEnvelope(envelope, 'kol_sender_invalid')
+    return undefined
+  }
+  const messageBody = envelope.body_text || '[Attachment-only email]'
+
+  const { error: messageError } = await supabaseAdmin
+    .from('kol_collaboration_messages')
+    .insert({
+      lead_id: lead.lead_id,
+      direction: 'applicant',
+      source: 'email_inbound',
+      association_state: associationState,
+      body_text: messageBody,
+      sender_email: senderEmail,
+      sender_display_name: envelope.from_display_name || lead.nickname,
+      delivery_status: 'received',
+      provider_email_id: envelope.provider_email_id,
+      internet_message_id: envelope.internet_message_id,
+      in_reply_to: envelope.in_reply_to,
+      references_header: envelope.references_header,
+      attachment_count: envelope.attachment_count,
+      inbound_email_id: envelope.inbound_email_id,
+    })
+
+  if (messageError?.code === '23505') {
+    const existing = await loadExistingKolInboundMessage(envelope)
+    if (existing?.lead_id !== lead.lead_id) {
+      throw new Error('Inbound KOL message idempotency conflict')
+    }
+  } else if (messageError) {
+    throw new Error(messageError.message)
+  }
+
+  await markRouteApplied(envelope, null)
+  return { leadId: lead.lead_id as string, associationState }
+}
+
 const DIRECT_SUPPORT_REJECTION_REASONS = new Set([
   'support_email_invalid',
   'support_question_invalid',
@@ -400,6 +508,19 @@ export async function processInboundEmailEnvelope(providerEmailId: string) {
       await processInboundEmailAttachments(envelope, resend)
       await finishEnvelope(envelope, questionId)
       return { processed: true, reason: 'ticket_reply' as const }
+    }
+
+    if (envelope.route_kind === 'kol_reply') {
+      const routed = await routeKolReply(envelope)
+      if (!routed) return { processed: true, reason: 'kol_reply_rejected' as const }
+      await processInboundEmailAttachments(envelope, resend)
+      await finishEnvelope(envelope, null)
+      return {
+        processed: true,
+        reason: routed.associationState === 'confirmed'
+          ? ('kol_reply_confirmed' as const)
+          : ('kol_reply_quarantined' as const),
+      }
     }
 
     if (envelope.route_kind === 'support_direct') {

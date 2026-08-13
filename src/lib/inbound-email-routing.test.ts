@@ -5,6 +5,8 @@ import { classifyInboundRecipients, GENERAL_INBOUND_LOCAL_PARTS } from './inboun
 const DOMAIN = 'ymistory.com'
 const TOKEN_A = '0123456789abcdef01234567'
 const TOKEN_B = 'abcdef0123456789abcdef01'
+const KOL_TOKEN_A = '0123456789abcdef0123456789abcdef'
+const KOL_TOKEN_B = 'abcdef0123456789abcdef0123456789'
 
 test('routes one opaque ticket identity ahead of copied general recipients', () => {
   const route = classifyInboundRecipients(
@@ -33,6 +35,34 @@ test('rejects multiple distinct ticket identities without fetching content', () 
   assert.equal(route.kind, 'rejected_ambiguous')
   assert.equal(route.address, null)
   assert.equal(route.shouldLoadContent, false)
+})
+
+test('routes one opaque KOL identity and rejects cross-namespace ambiguity', () => {
+  const route = classifyInboundRecipients(
+    [`collab-a1b2c3d4e5-${KOL_TOKEN_A}@ymistory.com`],
+    DOMAIN
+  )
+  assert.equal(route.kind, 'kol_reply')
+  assert.deepEqual(route.kolIdentity, {
+    leadCode: 'A1B2C3D4E5',
+    replyToken: KOL_TOKEN_A,
+  })
+  assert.equal(route.shouldLoadContent, true)
+
+  for (const recipients of [
+    [
+      `ticket-a1b2c3d4e5-${TOKEN_A}@ymistory.com`,
+      `collab-a1b2c3d4e5-${KOL_TOKEN_A}@ymistory.com`,
+    ],
+    [
+      `collab-a1b2c3d4e5-${KOL_TOKEN_A}@ymistory.com`,
+      `collab-f6e7d8c9b0-${KOL_TOKEN_B}@ymistory.com`,
+    ],
+  ]) {
+    const ambiguous = classifyInboundRecipients(recipients, DOMAIN)
+    assert.equal(ambiguous.kind, 'rejected_ambiguous')
+    assert.equal(ambiguous.shouldLoadContent, false)
+  }
 })
 
 test('routes direct support and operational aliases explicitly', () => {

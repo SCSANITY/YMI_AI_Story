@@ -11,6 +11,7 @@
     "admin-final-pages:tests": "tsx --test src/lib/admin-final-page-read-model.test.ts src/lib/admin-final-review-workspace.test.ts src/lib/admin-approved-source-export.test.ts src/lib/admin-approved-source-export-client.test.ts src/lib/final-review-mutation-contract.test.ts src/lib/manual-print-artifact.test.ts src/lib/reader-page-contract.test.ts tests/admin-final-review-mutations-contract.test.mjs tests/admin-final-image-loading-contract.test.mjs tests/admin-approved-source-export-contract.test.mjs tests/admin-manual-print-contract.test.mjs",
     "cart:contracts": "node --test tests/cart-title-contract.test.mjs",
     "guest-order:tests": "tsx --test tests/guest-order-continuity-contract.test.mjs src/lib/purchase-ownership-recovery.test.ts components/emails/OrderAccessNotice.test.tsx",
+    "kol:tests": "tsx --test src/lib/kol-partnership-email.test.ts tests/kol-partnership-*.test.mjs",
     "legal:tests": "tsx --test src/lib/legal-publishing.test.ts src/lib/published-legal-content.test.ts",
     "tracking:tests": "tsx --test src/lib/tracking-policy.test.ts",
     "pricing:tests": "tsx --test src/lib/package-pricing.test.ts tests/package-pricing-authority-contract.test.mjs",

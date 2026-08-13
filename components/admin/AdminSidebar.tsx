@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -9,6 +9,7 @@ import {
   getAdminNavigationGroups,
   getAdminNavigationItem,
 } from '@/components/admin/adminNavigation'
+import { ADMIN_KOL_ATTENTION_REFRESH_EVENT } from '@/lib/kol-partnerships'
 
 type Props = {
   adminName: string
@@ -34,9 +35,11 @@ function AdminIdentity({ adminName, adminEmail }: Props) {
 function AdminNavigationLinks({
   pathname,
   onNavigate,
+  kolAttentionCount,
 }: {
   pathname: string
   onNavigate?: () => void
+  kolAttentionCount: number
 }) {
   const groups = useMemo(() => getAdminNavigationGroups(), [])
   return (
@@ -63,6 +66,14 @@ function AdminNavigationLinks({
               >
                 <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
                 <span className="min-w-0 truncate">{item.label}</span>
+                {item.attention === 'kol-partnerships' && kolAttentionCount > 0 ? (
+                  <span
+                    className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] px-1.5 py-0.5 text-[9px] font-black text-[var(--admin-accent-ink)]"
+                    aria-label={`${kolAttentionCount} partnership applications need attention`}
+                  >
+                    {kolAttentionCount > 99 ? '99+' : kolAttentionCount}
+                  </span>
+                ) : null}
                 {item.soon ? (
                   <span className="ml-auto shrink-0 rounded-full bg-[var(--admin-panel-2)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--admin-muted)]">
                     Soon
@@ -83,7 +94,39 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
   const mobileTriggerRef = useRef<HTMLButtonElement>(null)
   const mobileDrawerRef = useRef<HTMLElement>(null)
   const mobileCloseRef = useRef<HTMLButtonElement>(null)
+  const attentionIntentRef = useRef(0)
+  const [kolAttentionCount, setKolAttentionCount] = useState(0)
   const currentItem = useMemo(() => getAdminNavigationItem(pathname), [pathname])
+
+  const loadKolAttentionCount = useCallback(async () => {
+    const intent = ++attentionIntentRef.current
+    try {
+      const response = await fetch('/api/admin/kol-partnerships?view=attention_count', {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || attentionIntentRef.current !== intent) return
+      const count = Number(data?.attentionCount)
+      if (Number.isSafeInteger(count) && count >= 0) setKolAttentionCount(count)
+    } catch {
+      // Keep the last known badge until focus/poll retries.
+    }
+  }, [])
+
+  useEffect(() => {
+    const refresh = () => void loadKolAttentionCount()
+    refresh()
+    const timer = window.setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    window.addEventListener(ADMIN_KOL_ATTENTION_REFRESH_EVENT, refresh)
+    return () => {
+      attentionIntentRef.current += 1
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener(ADMIN_KOL_ATTENTION_REFRESH_EVENT, refresh)
+    }
+  }, [loadKolAttentionCount])
 
   useEffect(() => {
     if (!isMobileOpen) return
@@ -139,13 +182,16 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
             ref={mobileTriggerRef}
             type="button"
             onClick={() => setIsMobileOpen(true)}
-            className="admin-v2-mobile-menu inline-flex h-10 w-10 shrink-0 items-center justify-center text-[var(--admin-ink)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)]"
+            className="admin-v2-mobile-menu relative inline-flex h-10 w-10 shrink-0 items-center justify-center text-[var(--admin-ink)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)]"
             aria-label="Open Admin navigation"
             aria-expanded={isMobileOpen}
             aria-controls="admin-mobile-navigation"
             title="Open navigation"
           >
             <Menu aria-hidden="true" className="h-5 w-5" />
+            {kolAttentionCount > 0 ? (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--admin-accent-dp)]" aria-hidden="true" />
+            ) : null}
           </button>
         </div>
       </header>
@@ -167,7 +213,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
         </div>
 
         <div className="admin-v2-nav-scroll mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
-          <AdminNavigationLinks pathname={pathname} />
+          <AdminNavigationLinks pathname={pathname} kolAttentionCount={kolAttentionCount} />
         </div>
 
         <div className="mt-2 shrink-0">
@@ -217,7 +263,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
             </div>
 
             <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
-              <AdminNavigationLinks pathname={pathname} onNavigate={() => setIsMobileOpen(false)} />
+              <AdminNavigationLinks pathname={pathname} onNavigate={() => setIsMobileOpen(false)} kolAttentionCount={kolAttentionCount} />
             </div>
 
             <div className="mt-4 border-t border-[var(--admin-side-line)] pt-4">

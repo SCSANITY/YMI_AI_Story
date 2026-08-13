@@ -23,11 +23,25 @@ export async function GET(
 
   const { data: attachment, error } = await supabaseAdmin
     .from('inbound_email_attachments')
-    .select('safe_filename, served_content_type, storage_bucket, storage_path, status')
+    .select('inbound_email_id, safe_filename, served_content_type, storage_bucket, storage_path, status')
     .eq('attachment_id', attachmentId)
     .maybeSingle()
   if (error) return jsonNoStore({ error: error.message }, 500)
   if (!attachment) return jsonNoStore({ error: 'Attachment not found' }, 404)
+
+  const { data: kolMessage, error: kolMessageError } = await supabaseAdmin
+    .from('kol_collaboration_messages')
+    .select('association_state')
+    .eq('inbound_email_id', attachment.inbound_email_id)
+    .maybeSingle()
+  if (kolMessageError) return jsonNoStore({ error: 'Unable to verify attachment access' }, 500)
+  if (kolMessage && kolMessage.association_state !== 'confirmed') {
+    return jsonNoStore(
+      { error: 'Confirm this partnership sender before downloading attachments' },
+      409
+    )
+  }
+
   if (
     attachment.status !== 'stored' ||
     attachment.storage_bucket !== INBOUND_ATTACHMENT_BUCKET ||

@@ -3,6 +3,7 @@ import {
   normalizeSupportEmail,
   parseSupportReplyAddress,
 } from '@/lib/support-ticket'
+import { parseKolPartnershipReplyAddress } from '@/lib/kol-partnership-email'
 
 export const GENERAL_INBOUND_LOCAL_PARTS = [
   'admin',
@@ -19,6 +20,7 @@ const OPERATIONAL_SUPPORT_LOCAL_PARTS = ['orders', 'delivery'] as const
 
 export type InboundRouteKind =
   | 'ticket_reply'
+  | 'kol_reply'
   | 'support_direct'
   | 'operational_support'
   | 'general'
@@ -31,6 +33,7 @@ export type InboundRecipientRoute = {
   normalizedAddresses: string[]
   shouldLoadContent: boolean
   ticketIdentity: { ticketCode: string; replyToken: string } | null
+  kolIdentity: { leadCode: string; replyToken: string } | null
 }
 
 function unique(values: string[]) {
@@ -68,14 +71,34 @@ export function classifyInboundRecipients(
       ({ identity }) => `${identity.ticketCode.toUpperCase()}:${identity.replyToken.toLowerCase()}`
     )
   )
+  const kolCandidates = domainAddresses
+    .map((address) => ({ address, identity: parseKolPartnershipReplyAddress(address, domain) }))
+    .filter(
+      (
+        candidate
+      ): candidate is {
+        address: string
+        identity: { leadCode: string; replyToken: string }
+      } => Boolean(candidate.identity)
+    )
+  const distinctKolLeads = unique(
+    kolCandidates.map(
+      ({ identity }) => `${identity.leadCode.toUpperCase()}:${identity.replyToken.toLowerCase()}`
+    )
+  )
 
-  if (distinctTickets.length > 1) {
+  if (
+    distinctTickets.length > 1 ||
+    distinctKolLeads.length > 1 ||
+    (distinctTickets.length > 0 && distinctKolLeads.length > 0)
+  ) {
     return {
       kind: 'rejected_ambiguous',
       address: null,
       normalizedAddresses,
       shouldLoadContent: false,
       ticketIdentity: null,
+      kolIdentity: null,
     }
   }
 
@@ -86,6 +109,18 @@ export function classifyInboundRecipients(
       normalizedAddresses,
       shouldLoadContent: true,
       ticketIdentity: ticketCandidates[0].identity,
+      kolIdentity: null,
+    }
+  }
+
+  if (kolCandidates[0]) {
+    return {
+      kind: 'kol_reply',
+      address: kolCandidates[0].address,
+      normalizedAddresses,
+      shouldLoadContent: true,
+      ticketIdentity: null,
+      kolIdentity: kolCandidates[0].identity,
     }
   }
 
@@ -97,6 +132,7 @@ export function classifyInboundRecipients(
       normalizedAddresses,
       shouldLoadContent: true,
       ticketIdentity: null,
+      kolIdentity: null,
     }
   }
 
@@ -112,6 +148,7 @@ export function classifyInboundRecipients(
       normalizedAddresses,
       shouldLoadContent: true,
       ticketIdentity: null,
+      kolIdentity: null,
     }
   }
 
@@ -127,6 +164,7 @@ export function classifyInboundRecipients(
       normalizedAddresses,
       shouldLoadContent: true,
       ticketIdentity: null,
+      kolIdentity: null,
     }
   }
 
@@ -136,5 +174,6 @@ export function classifyInboundRecipients(
     normalizedAddresses,
     shouldLoadContent: false,
     ticketIdentity: null,
+    kolIdentity: null,
   }
 }

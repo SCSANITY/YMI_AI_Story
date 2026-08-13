@@ -102,6 +102,20 @@ export async function POST(request: Request) {
 
   const anonSessionId = getCookieValue(request.headers.get('cookie') || '', COOKIE_NAME)
 
+  const { error: kolOwnershipError } = await supabaseAdmin.rpc(
+    'claim_kol_collaboration_leads_for_customer',
+    {
+      p_customer_id: customer.customer_id,
+      p_account_email: email,
+    }
+  )
+  if (kolOwnershipError) {
+    console.warn('[kol-partnership] lead ownership recovery failed; continuing customer merge', {
+      customerId: customer.customer_id,
+      message: kolOwnershipError.message,
+    })
+  }
+
   try {
     await recoverPurchasedCreationOwnership(
       customer.customer_id,

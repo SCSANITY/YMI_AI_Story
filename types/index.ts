@@ -152,18 +152,16 @@ export type DisplayCurrency =
   | 'KRW'
   | 'CNY';
 
-export type CollaborationLeadGender =
-  | 'female'
-  | 'male'
-  | 'non_binary'
-  | 'prefer_not_to_say';
-
 export interface CollaborationLeadForm {
   nickname: string;
-  gender: CollaborationLeadGender | '';
-  email: string;
+  contact_email: string;
   phone: string;
   whatsapp_or_wechat: string;
+  country_region: string;
+  primary_market: string;
+  audience_size: string;
+  content_focus: string;
+  website_url: string;
   instagram: string;
   tiktok: string;
   youtube: string;

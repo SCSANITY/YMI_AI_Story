@@ -66,6 +66,7 @@ export async function GET() {
         )
       `
     )
+    .neq('source', 'collaboration')
     .order('created_at', { ascending: false })
     .limit(100)
 
@@ -81,6 +82,20 @@ export async function POST(request: Request) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json().catch(() => ({}))
+  const requestedSource = String(body.source ?? 'admin').trim().toLowerCase()
+  if (requestedSource !== 'admin') {
+    return NextResponse.json(
+      { error: 'Specialized discount sources require their dedicated Admin workflow' },
+      { status: 400 }
+    )
+  }
+  if (body.collaborationLeadId != null || body.collaboration_lead_id != null) {
+    return NextResponse.json(
+      { error: 'Partnership Codes require the KOL Partnerships workflow' },
+      { status: 400 }
+    )
+  }
+
   const effectType = String(body.effectType || body.effect_type || '').trim()
   const instrumentType = String(body.instrumentType || body.instrument_type || '').trim()
 
@@ -136,7 +151,7 @@ export async function POST(request: Request) {
     .insert({
       offer_id: offer.offer_id,
       instrument_type: instrumentType,
-      source: String(body.source || 'admin'),
+      source: 'admin',
       code: instrumentType === 'promo_code' ? code : null,
       owner_customer_id: body.ownerCustomerId || body.owner_customer_id || null,
       owner_email: ownerEmail,
@@ -206,6 +221,23 @@ export async function PATCH(request: Request) {
   }
 
   if (offerId) {
+    const { data: specializedInstrument, error: specializedLookupError } = await supabaseAdmin
+      .from('discount_instruments')
+      .select('instrument_id')
+      .eq('offer_id', offerId)
+      .eq('source', 'collaboration')
+      .limit(1)
+      .maybeSingle()
+    if (specializedLookupError) {
+      return NextResponse.json({ error: specializedLookupError.message }, { status: 500 })
+    }
+    if (specializedInstrument) {
+      return NextResponse.json(
+        { error: 'Partnership Codes require the KOL Partnerships workflow' },
+        { status: 400 }
+      )
+    }
+
     const { data, error } = await supabaseAdmin
       .from('discount_offers')
       .update({ is_active: isActive, updated_at: new Date().toISOString() })
@@ -221,6 +253,7 @@ export async function PATCH(request: Request) {
     .from('discount_instruments')
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
     .eq('instrument_id', instrumentId)
+    .neq('source', 'collaboration')
     .select('instrument_id, is_active')
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
