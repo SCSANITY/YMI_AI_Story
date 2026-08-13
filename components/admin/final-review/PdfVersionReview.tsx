@@ -116,7 +116,7 @@ export function PdfVersionReview(props: Props) {
         <input
           value={reviewNote}
           onChange={(event) => setReviewNote(event.target.value)}
-          className="min-w-0 flex-1 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-2 text-xs text-[var(--admin-ink)] outline-none placeholder:text-[var(--admin-muted)] focus:border-[color-mix(in_srgb,var(--admin-accent-dp)_55%,transparent)]"
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-2 text-xs text-[var(--admin-ink)] outline-none placeholder:text-[var(--admin-muted)] focus:border-[color-mix(in_srgb,var(--admin-accent-dp)_55%,transparent)]"
           placeholder="Review note (optional, used for needs-fix and replacements)"
         />
         <div className="flex shrink-0 items-center gap-2">
@@ -128,7 +128,7 @@ export function PdfVersionReview(props: Props) {
             onClick={() => void approveAllPages()}
             disabled={approvableCount === 0 || busyAction !== null || uploadPendingCount > 0}
             title="Approve all ready pages in this job without releasing the PDF."
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-300/20 bg-emerald-300/15 px-3 text-xs font-bold text-[var(--admin-good)] transition hover:bg-emerald-300/25 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-emerald-300/20 bg-emerald-300/15 px-3 text-xs font-bold text-[var(--admin-good)] transition hover:bg-emerald-300/25 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Approve all
@@ -450,7 +450,7 @@ function ApprovedSourceExportToolbar({
             type="button"
             onClick={() => currentItem && onDownloadCurrent(currentItem.page.page_index)}
             disabled={!currentExportable || busy !== null}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 text-xs font-bold text-[var(--admin-ink)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 text-xs font-bold text-[var(--admin-ink)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-9"
           >
             {busy === 'single' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             Current page
@@ -459,7 +459,7 @@ function ApprovedSourceExportToolbar({
             type="button"
             onClick={onToggleAll}
             disabled={approvedCount === 0 || busy !== null}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 text-xs font-bold text-[var(--admin-ink)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 text-xs font-bold text-[var(--admin-ink)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-9"
           >
             {allApprovedSelected ? 'Clear selection' : 'Select all'}
           </button>
@@ -467,7 +467,7 @@ function ApprovedSourceExportToolbar({
             type="button"
             onClick={onDownloadZip}
             disabled={selectedPageIndices.length < 2 || busy !== null}
-            className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--admin-accent-dp)_32%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_18%,transparent)] px-3 text-xs font-bold text-[var(--admin-accent-ink)] transition hover:bg-[color-mix(in_srgb,var(--admin-accent)_28%,transparent)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--admin-accent-dp)_32%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_18%,transparent)] px-3 text-xs font-bold text-[var(--admin-accent-ink)] transition hover:bg-[color-mix(in_srgb,var(--admin-accent)_28%,transparent)] disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-9"
           >
             {busy === 'zip' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
             Download ZIP ({selectedPageIndices.length})
@@ -585,7 +585,7 @@ function ReviewActionButton({
     rerun: 'border-violet-300/20 bg-violet-300/15 text-violet-100 hover:bg-violet-300/25',
   }[tone]
   return (
-    <button type="button" onClick={onClick} disabled={disabled} title={title || label} aria-label={title || label} className={`inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-45 ${toneClass}`}>
+    <button type="button" onClick={onClick} disabled={disabled} title={title || label} aria-label={title || label} className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-9 ${toneClass}`}>
       {icon}
       <span className="truncate">{label}</span>
     </button>

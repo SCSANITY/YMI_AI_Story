@@ -232,7 +232,7 @@ export function SupportConversation({
                 onClick={() => setComposerExpanded(false)}
                 aria-label="Collapse reply"
                 title="Collapse"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)]"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] sm:h-8 sm:w-8"
               >
                 <ChevronDown className="h-4 w-4" />
               </button>

@@ -116,7 +116,7 @@ function GlassEdgeButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`z-20 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink-soft)] shadow-[0_8px_24px_-12px_rgba(74,58,26,0.4)] backdrop-blur-xl transition duration-200 hover:border-[var(--admin-accent-dp)] hover:bg-[var(--admin-card)] hover:text-[var(--admin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] xl:h-8 xl:w-8 ${className}`}
+      className={`z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink-soft)] shadow-[0_8px_24px_-12px_rgba(74,58,26,0.4)] backdrop-blur-xl transition duration-200 hover:border-[var(--admin-accent-dp)] hover:bg-[var(--admin-card)] hover:text-[var(--admin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] xl:h-8 xl:w-8 ${className}`}
     >
       {children}
     </button>
@@ -1263,7 +1263,7 @@ export function FinalReviewPanel() {
               <button
                 type="button"
                 onClick={suspendReview}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 text-xs font-bold text-[var(--admin-ink-soft)] transition hover:text-[var(--admin-ink)]"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 text-xs font-bold text-[var(--admin-ink-soft)] transition hover:text-[var(--admin-ink)] sm:min-h-9"
               >
                 <Minus className="h-4 w-4" /> Suspend
               </button>
@@ -1271,7 +1271,7 @@ export function FinalReviewPanel() {
                 type="button"
                 onClick={closeReview}
                 aria-label="Close review"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink-soft)] transition hover:text-[var(--admin-ink)]"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink-soft)] transition hover:text-[var(--admin-ink)] sm:h-9 sm:w-9"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1292,10 +1292,10 @@ export function FinalReviewPanel() {
                 </button>
               </div>
             ) : null}
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-2.5 sm:p-3 xl:flex-row xl:items-stretch">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-3 xl:flex xl:flex-row xl:items-stretch xl:gap-3 xl:overflow-hidden">
 
         {/* ── Center panel: version review ── */}
-        <section className="admin-v2-review-canvas admin-review-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip rounded-lg xl:h-full xl:overflow-y-auto xl:overscroll-contain">
+        <section className="admin-v2-review-canvas admin-review-scrollbar min-w-0 overflow-x-clip rounded-lg xl:h-full xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
           {/* Sticky version header */}
           <div className="border-b border-[var(--admin-line)] bg-[var(--admin-panel)]/92 px-3.5 py-3 backdrop-blur-xl lg:sticky lg:top-0 lg:z-10">
             <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">

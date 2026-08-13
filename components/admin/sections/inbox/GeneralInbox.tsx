@@ -466,15 +466,15 @@ export function GeneralInbox() {
                       onClick={() => setComposerExpanded(false)}
                       aria-label="Collapse reply"
                       title="Collapse"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)]"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] sm:h-8 sm:w-8"
                     >
                       <ChevronDown className="h-4 w-4" />
                     </button>
                   </div>
                   <label className="block"><span className="sr-only">Reply</span><textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); void sendReply() } }} rows={3} maxLength={20000} placeholder="Write a reply..." className="w-full resize-none rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-3 py-2.5 text-sm text-[var(--admin-page-ink)] outline-none transition placeholder:text-[var(--admin-page-muted)] focus:border-[var(--admin-accent-dp)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--admin-accent)_30%,transparent)]" /></label>
-                  <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-[10px] text-[var(--admin-page-muted)]">Ctrl/Cmd + Enter to send / From and Reply-To are selected by the server.</p>
-                    <AdminButton type="button" onClick={() => void sendReply()} disabled={sending || !draft.trim()} tone="primary" className="h-9 min-h-9 px-4 text-xs">{sending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Send</AdminButton>
+                    <AdminButton type="button" onClick={() => void sendReply()} disabled={sending || !draft.trim()} tone="primary" className="w-full px-4 text-xs sm:w-auto">{sending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Send</AdminButton>
                   </div>
                   {sendError ? <p role="alert" className="mt-2 text-xs text-[var(--admin-crit)]">{sendError}</p> : null}
                 </>

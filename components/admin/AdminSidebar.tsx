@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
@@ -122,11 +123,16 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
     <>
       <header className="admin-v2-mobilebar sticky top-0 z-40 pt-[env(safe-area-inset-top)] lg:hidden">
         <div className="flex min-h-16 min-w-0 items-center gap-3 px-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--admin-ink)] text-sm font-black text-[var(--admin-panel)]">
-            Y
-          </div>
+          <Image
+            src="/logo.webp"
+            alt="YMI Story"
+            width={512}
+            height={436}
+            priority
+            className="h-9 w-auto shrink-0"
+          />
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">YMI Operations</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">Operations</p>
             <p className="truncate text-sm font-semibold text-[var(--admin-ink)]">{currentItem?.label || 'Console'}</p>
           </div>
           <button
@@ -146,11 +152,16 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
 
       <aside className="admin-v2-sidebar hidden min-h-0 flex-col gap-1 p-3 lg:flex lg:h-full">
         <div className="admin-v2-brand flex items-center gap-3 p-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--admin-ink)] text-base font-black text-[var(--admin-panel)]">
-            Y
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-[var(--admin-ink)]">YMI Operations</p>
+          <Image
+            src="/logo.webp"
+            alt="YMI Story"
+            width={512}
+            height={436}
+            priority
+            className="h-10 w-auto shrink-0"
+          />
+          <div className="min-w-0 border-l border-[var(--admin-side-line)] pl-3">
+            <p className="truncate text-sm font-bold text-[var(--admin-ink)]">Operations</p>
             <p className="text-xs text-[var(--admin-muted)]">Internal console</p>
           </div>
         </div>
@@ -181,11 +192,16 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
             className="admin-v2-drawer absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2.5rem))] flex-col px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-[max(env(safe-area-inset-top),1rem)]"
           >
             <div className="flex min-w-0 items-center gap-3 border-b border-[var(--admin-side-line)] pb-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--admin-ink)] text-base font-black text-[var(--admin-panel)]">
-                Y
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-[var(--admin-ink)]">YMI Operations</p>
+              <Image
+                src="/logo.webp"
+                alt="YMI Story"
+                width={512}
+                height={436}
+                priority
+                className="h-11 w-auto shrink-0"
+              />
+              <div className="min-w-0 flex-1 border-l border-[var(--admin-side-line)] pl-3">
+                <p className="truncate text-sm font-bold text-[var(--admin-ink)]">Operations</p>
                 <p className="text-xs text-[var(--admin-muted)]">Internal console</p>
               </div>
               <button

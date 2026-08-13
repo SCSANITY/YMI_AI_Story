@@ -32,6 +32,29 @@ test('the protected Admin layout remains the page-level authorization gate', asy
   assert.match(source, /<AdminShell/)
 })
 
+test('Admin login keeps role authority while presenting the production console identity', async () => {
+  const [page, client, layout] = await Promise.all([
+    read('app/admin/login/page.tsx'),
+    read('components/admin/AdminLoginClient.tsx'),
+    read('app/admin/layout.tsx'),
+  ])
+
+  assert.match(page, /await\s+requireAdminCustomer\s*\(\s*\)/)
+  assert.match(page, /await\s+getAuthenticatedCustomer\s*\(\s*\)/)
+  assert.match(page, /redirect\(['"]\/admin\/finals['"]\)/)
+  assert.match(client, /loginAction\(formData\)/)
+  assert.match(client, /signInWithOAuth/)
+  assert.match(client, /next=\$\{encodeURIComponent\(['"]\/admin['"]\)\}/)
+  assert.match(client, /autoComplete="current-password"/)
+  assert.match(client, /aria-label=\{showPassword \? ['"]Hide password['"] : ['"]Show password['"]\}/)
+  assert.match(client, /src="\/logo\.webp"/)
+  assert.match(page, /src="\/logo\.webp"/)
+  assert.match(client, />Operations</)
+  assert.doesNotMatch(client, /Admin V1|reserved for the next phases/i)
+  assert.match(layout, /index:\s*false/)
+  assert.match(layout, /follow:\s*false/)
+})
+
 test('the protected Admin shell owns scoped loading and error boundaries', async () => {
   const loading = await read('app/admin/(protected)/loading.tsx')
   const errorBoundary = await read('app/admin/(protected)/error.tsx')
@@ -63,6 +86,8 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
   assert.match(sidebar, /min-h-0 flex-1 overflow-y-auto/)
   assert.match(sidebar, /mt-2 shrink-0/)
   assert.match(sidebar, /document\.body\.style\.overflow = ['"]hidden['"]/)
+  assert.match(sidebar, /src="\/logo\.webp"/)
+  assert.doesNotMatch(sidebar, />\s*Y\s*</)
   assert.match(shell, /ymi-admin-theme/)
   // Identity is owned by the sidebar footer only; the command bar no longer duplicates it.
   assert.match(shell, /<AdminCommandBar \/>/)
@@ -267,7 +292,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   )
   assert.match(
     panel,
-    /min-h-0 min-w-0 flex-1 overflow-x-clip[^"]*xl:h-full xl:overflow-y-auto xl:overscroll-contain/
+    /min-w-0 overflow-x-clip[^"]*xl:h-full xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain/
   )
   assert.doesNotMatch(
     panel,
@@ -353,13 +378,16 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   const jobQueue = await read('components/admin/final-review/JobQueue.tsx')
   const statCard = await read('components/admin/final-review/StatCard.tsx')
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
+  const pdfReview = await read('components/admin/final-review/PdfVersionReview.tsx')
+  const generalInbox = await read('components/admin/sections/inbox/GeneralInbox.tsx')
   const sidebar = await read('components/admin/AdminSidebar.tsx')
   const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
   const globals = await read('app/globals.css')
 
-  // Review workspace is now a modal opened from the queue; the queue owns the main
-  // column and the modal body keeps the desktop row layout + bounded overflow.
+  // Mobile/tablet owns one vertical review scroll so every page and release action
+  // remains reachable. XL restores the bounded, independently scrolling columns.
   assert.match(panel, /min-h-0 xl:flex-1 xl:overflow-hidden/)
+  assert.match(panel, /min-h-0 flex-1 overflow-y-auto overscroll-contain/)
   assert.match(panel, /xl:flex-row xl:items-stretch/)
   assert.match(
     panel,
@@ -376,6 +404,9 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.match(panel, /2xl:w-\[16rem\]/)
   assert.doesNotMatch(panel, /gap-3 lg:flex-row/)
   assert.doesNotMatch(panel, /p-0\.5 lg:w-\[16rem\]/)
+  assert.match(pdfReview, /min-h-11[^\"]*sm:min-h-9/)
+  assert.match(generalInbox, /mt-2 flex flex-col gap-3 sm:flex-row/)
+  assert.match(generalInbox, /className="w-full px-4 text-xs sm:w-auto"/)
   assert.match(panel, /useState<FinalReviewQueueFilter>\(['"]all['"]\)/)
   assert.match(panel, /filterFinalJobs\(jobs, queueFilter\)/)
   assert.match(panel, /jobs=\{visibleJobs\}/)

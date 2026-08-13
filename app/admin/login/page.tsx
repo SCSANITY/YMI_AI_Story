@@ -1,5 +1,8 @@
 import { getAuthenticatedCustomer, requireAdminCustomer } from '@/lib/adminAuth'
 import { AdminLoginClient } from '@/components/admin/AdminLoginClient'
+import Image from 'next/image'
+import Link from 'next/link'
+import { ArrowLeft, ShieldX } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
 /**
@@ -18,19 +21,34 @@ export default async function AdminLoginPage() {
   const customer = await getAuthenticatedCustomer()
   if (customer) {
     return (
-      <main className="min-h-screen bg-[#0b1120] px-4 py-10 text-white">
-        <section className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-xl items-center">
-          <div className="w-full rounded-[32px] border border-white/10 bg-white/[0.06] p-8 text-center shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.28em] text-amber-300">Admin</p>
-            <h1 className="mt-4 text-3xl font-bold">Access denied</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-300">
-              This account is signed in but is not marked as an admin account.
-              Ask an administrator to set{' '}
-              <span className="font-semibold text-white">{customer.email}</span> to{' '}
-              <span className="font-mono text-amber-300">role = admin</span>.
+      <main className="ymi-admin-theme min-h-dvh overflow-x-clip p-2 text-[var(--admin-ink)] sm:p-3 lg:p-4">
+        <div className="mx-auto flex min-h-[calc(100dvh-1rem)] max-w-3xl items-center sm:min-h-[calc(100dvh-1.5rem)] lg:min-h-[calc(100dvh-2rem)]">
+          <section className="admin-app w-full px-5 py-9 text-center sm:px-10 sm:py-12">
+            <Image
+              src="/logo.webp"
+              alt="YMI Story"
+              width={512}
+              height={436}
+              priority
+              className="mx-auto mb-6 h-16 w-auto"
+            />
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
+              <ShieldX aria-hidden="true" className="h-7 w-7" />
+            </div>
+            <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--admin-muted)]">YMI Operations</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-[-0.025em] text-[var(--admin-ink)] sm:text-4xl">Admin access required</h1>
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-[var(--admin-muted)]">
+              <span className="font-semibold text-[var(--admin-ink)]">{customer.email}</span> is signed in, but this account is not authorized for the operations console. Contact a YMI Story administrator if you believe this is an error.
             </p>
-          </div>
-        </section>
+            <Link
+              href="/"
+              className="mt-8 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-5 text-sm font-semibold text-[var(--admin-ink)] transition hover:bg-[var(--admin-panel-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)]"
+            >
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+              Return to YMI Story
+            </Link>
+          </section>
+        </div>
       </main>
     )
   }
