@@ -13,6 +13,7 @@ import type {
   ReviewPendingAction,
   ReviewPendingState,
   ReviewVersion,
+  UploadErrorState,
   UploadPendingKind,
   UploadPendingState,
 } from '@/components/admin/final-review/types'
@@ -136,7 +137,7 @@ export function FinalReviewPanel() {
   const [reviewNote, setReviewNote] = useState('')
   const [reviewPendingByPage, setReviewPendingByPage] = useState<ReviewPendingState>({})
   const [uploadPendingByPage, setUploadPendingByPage] = useState<UploadPendingState>({})
-  const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null)
+  const [uploadErrorByPage, setUploadErrorByPage] = useState<UploadErrorState>({})
   const [activeVersion, setActiveVersion] = useState<ReviewVersion>('pdf')
   const [queueFilter, setQueueFilter] = useState<FinalReviewQueueFilter>('all')
   const [reviewFocus, setReviewFocus] = useState(false)
@@ -147,6 +148,7 @@ export function FinalReviewPanel() {
   const [suspendNotice, setSuspendNotice] = useState<string | null>(null)
   const SUSPEND_LIMIT = 3
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const uploadTargetRef = useRef<UploadTarget | null>(null)
   const printPackageInputRef = useRef<HTMLInputElement | null>(null)
   const reviewIntentRef = useRef<Record<string, string>>({})
   const jobsRequestIntentRef = useRef(0)
@@ -249,6 +251,16 @@ export function FinalReviewPanel() {
     },
     []
   )
+
+  const setPageUploadError = useCallback((pageId: string, message: string | null) => {
+    setUploadErrorByPage((current) => {
+      if (message) return { ...current, [pageId]: message }
+      if (!current[pageId]) return current
+      const next = { ...current }
+      delete next[pageId]
+      return next
+    })
+  }, [])
 
   const setJobBusyAction = useCallback((finalJobId: string, action: string) => {
     setBusyActionByJob((current) => ({ ...current, [finalJobId]: action }))
@@ -495,7 +507,7 @@ export function FinalReviewPanel() {
   }, [loadDetail, loadJobs])
 
   const handleSelectJob = useCallback((finalJobId: string) => {
-    setUploadTarget(null)
+    uploadTargetRef.current = null
     setSelectedJobId(finalJobId)
   }, [])
 
@@ -504,7 +516,7 @@ export function FinalReviewPanel() {
       const visibleJobs = filterFinalJobs(jobs, nextFilter)
       queueFilterRef.current = nextFilter
       setQueueFilter(nextFilter)
-      setUploadTarget(null)
+      uploadTargetRef.current = null
       setSelectedJobId((current) => {
         if (current && visibleJobs.some((job) => job.final_job_id === current)) {
           return current
@@ -726,19 +738,20 @@ export function FinalReviewPanel() {
     }
   }
 
-  const uploadReplacement = async (file: File) => {
-    if (!uploadTarget) return
-    const { finalJobId, page: targetPage } = uploadTarget
+  const uploadReplacement = async (file: File, target: UploadTarget) => {
+    const { finalJobId, page: targetPage } = target
     const previous = { ...targetPage }
     const localUrl = URL.createObjectURL(file)
     const reviewIntentId = createReviewIntentId()
-    setUploadTarget(null)
     setPageReviewPending(targetPage.final_job_page_id, 'approve', reviewIntentId)
     setPageUploadPending(targetPage.final_job_page_id, 'replacement')
+    setPageUploadError(targetPage.final_job_page_id, null)
     setError('')
     setMessage('')
     patchPage(finalJobId, targetPage.final_job_page_id, {
       status: 'approved',
+      has_manual_output: true,
+      has_approved_output: true,
       manual_url: localUrl,
       approved_url: localUrl,
       approved_source: 'manual',
@@ -791,10 +804,12 @@ export function FinalReviewPanel() {
       setMessage(`Replacement uploaded for ${getFinalReviewPageLabel(targetPage, targetPage.page_index)}.`)
     } catch (actionError) {
       if (reviewIntentRef.current[targetPage.final_job_page_id] === reviewIntentId) {
+        const uploadError =
+          actionError instanceof Error ? actionError.message : 'Failed to upload replacement image'
         patchPage(finalJobId, targetPage.final_job_page_id, previous)
         reconcileOffscreenFailure(finalJobId)
         URL.revokeObjectURL(localUrl)
-        setError(actionError instanceof Error ? actionError.message : 'Failed to upload replacement image')
+        setPageUploadError(targetPage.final_job_page_id, uploadError)
       }
     } finally {
       clearPageReviewPending(targetPage.final_job_page_id, reviewIntentId)
@@ -1013,6 +1028,15 @@ export function FinalReviewPanel() {
       ) as UploadPendingState,
     [pages, uploadPendingByPage]
   )
+  const currentUploadErrorByPage = useMemo(
+    () =>
+      Object.fromEntries(
+        pages
+          .map((page) => [page.final_job_page_id, uploadErrorByPage[page.final_job_page_id]] as const)
+          .filter((entry) => Boolean(entry[1]))
+      ) as UploadErrorState,
+    [pages, uploadErrorByPage]
+  )
   const readyToRelease = pages.length > 0 && pages.every((page) => page.status === 'approved')
   const approvedPageCount = pages.filter((page) => page.status === 'approved').length
   const totalPageCount = activeDetail?.finalJob.total_pages ?? pages.length
@@ -1068,7 +1092,7 @@ export function FinalReviewPanel() {
       visibleJobs.some((job) => job.final_job_id === selectedJobId)
     if (selectionIsVisible || (selectedJobId === null && visibleJobs.length === 0)) return
 
-    setUploadTarget(null)
+    uploadTargetRef.current = null
     setSelectedJobId(pickDefaultJob(visibleJobs))
   }, [selectedJobId, visibleJobs])
 
@@ -1378,13 +1402,14 @@ export function FinalReviewPanel() {
                 busyAction={busyAction}
                 reviewPendingByPage={currentReviewPendingByPage}
                 uploadPendingByPage={currentUploadPendingByPage}
+                uploadErrorByPage={currentUploadErrorByPage}
                 approvePage={approvePage}
                 markNeedsFix={markNeedsFix}
                 approveAllPages={approveAllPages}
                 exportApprovedSources={exportApprovedSources}
                 openReplacementPicker={(page) => {
                   if (!selectedJobId) return
-                  setUploadTarget({ finalJobId: selectedJobId, page })
+                  uploadTargetRef.current = { finalJobId: selectedJobId, page: { ...page } }
                   fileInputRef.current?.click()
                 }}
                 onImageLoadError={requestSignedUrlRefresh}
@@ -1441,9 +1466,11 @@ export function FinalReviewPanel() {
         className="sr-only"
         onChange={(event) => {
           const file = event.target.files?.[0]
+          const target = uploadTargetRef.current
+          uploadTargetRef.current = null
           event.currentTarget.value = ''
-          if (!file) return
-          void uploadReplacement(file)
+          if (!file || !target) return
+          void uploadReplacement(file, target)
         }}
       />
 

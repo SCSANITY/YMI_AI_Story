@@ -39,6 +39,10 @@ export function pagePreviewUrl(page: FinalJobPageRow) {
   return page.approved_url || page.manual_url || page.ai_url || null
 }
 
+export function isEmptyFinalPageSlot(page: FinalJobPageRow) {
+  return !page.has_ai_output && !page.has_manual_output && !page.has_approved_output
+}
+
 export function PageFileLinks({
   url,
   pageNumber,

@@ -209,7 +209,8 @@ export async function refreshFinalJobApprovalState(finalJobId: string) {
     .from('final_job_pages')
     .select('final_job_page_id', { count: 'exact', head: true })
     .eq('final_job_id', finalJobId)
-    .eq('status', 'approved')
+    .in('status', ['approved', 'replaced'])
+    .not('approved_output_path', 'is', null)
 
   const approvedCount = count ?? 0
   const totalPages = Number(finalJob?.total_pages ?? 0)
@@ -222,6 +223,7 @@ export async function refreshFinalJobApprovalState(finalJobId: string) {
       approved_pages: approvedCount,
       review_status: reviewStatus,
       status: 'review_pending',
+      ...(reviewStatus === 'approved' ? { error_message: null } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('final_job_id', finalJobId)
@@ -402,6 +404,7 @@ export async function releaseFinalJob(params: {
         pdf_path: pdfPath,
         released_at: now,
         print_status: 'pending',
+        error_message: null,
         updated_at: now,
       })
       .eq('final_job_id', finalJobId)

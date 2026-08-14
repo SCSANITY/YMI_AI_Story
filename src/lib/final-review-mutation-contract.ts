@@ -1,9 +1,13 @@
-import { parseFinalPageMetadataContract } from '@/lib/final-page-metadata'
+import {
+  parseFinalPageMetadataContract,
+  type FinalPageRole,
+} from '@/lib/final-page-metadata'
 
 export type FinalReviewMutationPage = {
   page_index: number
   output_order: number
   storage_page_number: number
+  role: FinalPageRole | null
 }
 
 export type FinalReviewMutationPlan = {
@@ -17,6 +21,25 @@ export class FinalReviewMutationContractError extends Error {
     super(message)
     this.name = 'FinalReviewMutationContractError'
   }
+}
+
+const STANDARD_REPLACEMENT_PAGE_STATUSES = [
+  'pending_review',
+  'approved',
+  'replaced',
+  'needs_fix',
+] as const
+
+const INACTIVE_FINAL_JOB_STATUSES = new Set(['failed', 'needs_fix', 'review_pending'])
+
+export function canUploadIntoEmptyFinalPage(finalJobStatus: string): boolean {
+  return INACTIVE_FINAL_JOB_STATUSES.has(finalJobStatus)
+}
+
+export function getFinalReplacementClaimablePageStatuses(finalJobStatus: string): string[] {
+  return canUploadIntoEmptyFinalPage(finalJobStatus)
+    ? [...STANDARD_REPLACEMENT_PAGE_STATUSES, 'queued', 'failed']
+    : [...STANDARD_REPLACEMENT_PAGE_STATUSES]
 }
 
 export function buildFinalReviewMutationPlan(args: {
@@ -47,10 +70,11 @@ export function buildFinalReviewMutationPlan(args: {
     )
   }
   const pages = contract.schemaVersion === 2
-    ? contract.pages.map((page) => ({
+      ? contract.pages.map((page) => ({
         page_index: page.page_index,
         output_order: page.output_order,
         storage_page_number: page.output_order + 1,
+        role: page.role,
       }))
     : [...args.reviewPageIndices]
         .sort((a, b) => a - b)
@@ -58,6 +82,7 @@ export function buildFinalReviewMutationPlan(args: {
           page_index: pageIndex,
           output_order: outputOrder,
           storage_page_number: outputOrder + 1,
+          role: null,
         }))
 
   return {

@@ -3,6 +3,8 @@ import { describe, it } from 'node:test'
 
 import {
   buildFinalReviewMutationPlan,
+  canUploadIntoEmptyFinalPage,
+  getFinalReplacementClaimablePageStatuses,
   getFinalPageManualRevisionPath,
   resolveFinalReviewMutationPage,
 } from './final-review-mutation-contract'
@@ -56,5 +58,21 @@ describe('Final Review mutation contract', () => {
       getFinalPageManualRevisionPath('order-1', 4, 'A0000000-0000-4000-8000-000000000001'),
       'orders/order-1/final/pages/manual/page_04_a0000000-0000-4000-8000-000000000001.png'
     )
+  })
+
+  it('allows empty-slot uploads only after automatic Final processing has stopped', () => {
+    for (const status of ['failed', 'needs_fix', 'review_pending']) {
+      assert.equal(canUploadIntoEmptyFinalPage(status), true)
+      assert.deepEqual(
+        getFinalReplacementClaimablePageStatuses(status).slice(-2),
+        ['queued', 'failed']
+      )
+    }
+
+    for (const status of ['queued', 'processing', 'releasing', 'completed']) {
+      assert.equal(canUploadIntoEmptyFinalPage(status), false)
+      assert.equal(getFinalReplacementClaimablePageStatuses(status).includes('queued'), false)
+      assert.equal(getFinalReplacementClaimablePageStatuses(status).includes('failed'), false)
+    }
   })
 })

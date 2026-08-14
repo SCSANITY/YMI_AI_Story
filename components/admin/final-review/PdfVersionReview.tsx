@@ -19,14 +19,15 @@ import {
   buildFinalReviewWorkspace,
   type FinalReviewPageItem,
 } from '@/lib/admin-final-review-workspace'
+import { canUploadIntoEmptyFinalPage } from '@/lib/final-review-mutation-contract'
 import {
   FullResolutionImage,
   getPageImageSource,
   getThumbCacheKey,
   ThumbnailImage,
 } from './thumbnail'
-import { PageFileLinks, pagePreviewUrl, statusClass } from './reviewUi'
-import type { ReviewPendingState, UploadPendingState } from './types'
+import { isEmptyFinalPageSlot, PageFileLinks, pagePreviewUrl, statusClass } from './reviewUi'
+import type { ReviewPendingState, UploadErrorState, UploadPendingState } from './types'
 
 type Props = {
   pages: FinalJobPageRow[]
@@ -38,6 +39,7 @@ type Props = {
   busyAction: string | null
   reviewPendingByPage: ReviewPendingState
   uploadPendingByPage: UploadPendingState
+  uploadErrorByPage: UploadErrorState
   approvePage: (page: FinalJobPageRow) => Promise<void>
   markNeedsFix: (page: FinalJobPageRow) => Promise<void>
   approveAllPages: () => Promise<void>
@@ -57,6 +59,7 @@ export function PdfVersionReview(props: Props) {
     busyAction,
     reviewPendingByPage,
     uploadPendingByPage,
+    uploadErrorByPage,
     approvePage,
     markNeedsFix,
     approveAllPages,
@@ -82,6 +85,10 @@ export function PdfVersionReview(props: Props) {
   ).length
   const reviewPendingCount = Object.keys(reviewPendingByPage).length
   const uploadPendingCount = Object.keys(uploadPendingByPage).length
+  const emptySlotCount = pages.filter(isEmptyFinalPageSlot).length
+  const emptySlotUploadAllowed = Boolean(
+    selectedJob && canUploadIntoEmptyFinalPage(selectedJob.status)
+  )
   const exportableItems = workspace.items.filter(
     (item) => item.page.has_approved_output && ['approved', 'replaced'].includes(item.page.status)
   )
@@ -136,6 +143,25 @@ export function PdfVersionReview(props: Props) {
         </div>
       </div>
 
+      {emptySlotCount > 0 ? (
+        <section
+          role="status"
+          className="mb-4 flex items-start gap-3 rounded-lg border border-[color-mix(in_srgb,var(--admin-accent-dp)_30%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_14%,transparent)] px-3.5 py-3"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-accent-dp)]" />
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-[var(--admin-ink)]">
+              {emptySlotCount} page {emptySlotCount === 1 ? 'image is' : 'images are'} still required
+            </p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--admin-muted)]">
+              {emptySlotUploadAllowed
+                ? 'Each empty page has its own Upload page action. PDF Release remains locked until every page has a real approved image.'
+                : 'Automatic Final processing still owns these slots. Refresh after processing stops before uploading a manual page.'}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       {pages.length ? (
         <ApprovedSourceExportToolbar
           currentItem={selectedItem}
@@ -171,9 +197,11 @@ export function PdfVersionReview(props: Props) {
             busyAction={busyAction}
             reviewPendingByPage={reviewPendingByPage}
             uploadPendingByPage={uploadPendingByPage}
+            uploadErrorByPage={uploadErrorByPage}
             approvePage={approvePage}
             markNeedsFix={markNeedsFix}
             openReplacementPicker={openReplacementPicker}
+            emptySlotUploadAllowed={emptySlotUploadAllowed}
             onImageLoadError={onImageLoadError}
           />
         ) : (
@@ -186,9 +214,11 @@ export function PdfVersionReview(props: Props) {
                 busyAction={busyAction}
                 reviewPendingByPage={reviewPendingByPage}
                 uploadPendingByPage={uploadPendingByPage}
+                uploadError={uploadErrorByPage[item.page.final_job_page_id]}
                 approvePage={approvePage}
                 markNeedsFix={markNeedsFix}
                 openReplacementPicker={openReplacementPicker}
+                emptySlotUploadAllowed={emptySlotUploadAllowed}
                 onImageLoadError={onImageLoadError}
               />
             ))}
@@ -213,9 +243,11 @@ function V2PdfWorkspace({
   busyAction,
   reviewPendingByPage,
   uploadPendingByPage,
+  uploadErrorByPage,
   approvePage,
   markNeedsFix,
   openReplacementPicker,
+  emptySlotUploadAllowed,
   onImageLoadError,
 }: {
   items: FinalReviewPageItem[]
@@ -227,9 +259,11 @@ function V2PdfWorkspace({
   busyAction: string | null
   reviewPendingByPage: ReviewPendingState
   uploadPendingByPage: UploadPendingState
+  uploadErrorByPage: UploadErrorState
   approvePage: (page: FinalJobPageRow) => Promise<void>
   markNeedsFix: (page: FinalJobPageRow) => Promise<void>
   openReplacementPicker: (page: FinalJobPageRow) => void
+  emptySlotUploadAllowed: boolean
   onImageLoadError: () => void
 }) {
   const selectedItem =
@@ -238,6 +272,8 @@ function V2PdfWorkspace({
   const previewUrl = pagePreviewUrl(page)
   const reviewPending = reviewPendingByPage[page.final_job_page_id]
   const uploadPending = uploadPendingByPage[page.final_job_page_id]
+  const uploadError = uploadErrorByPage[page.final_job_page_id]
+  const emptySlot = isEmptyFinalPageSlot(page)
 
   return (
     <div className="mt-4 space-y-5">
@@ -265,9 +301,28 @@ function V2PdfWorkspace({
                 />
               </a>
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-[var(--admin-muted)]">No preview yet</div>
+              <div className="flex h-full items-center justify-center p-6 text-center">
+                <div className="max-w-sm">
+                  <UploadCloud className="mx-auto h-8 w-8 text-[var(--admin-accent-dp)]" />
+                  <p className="mt-3 text-sm font-bold text-[var(--admin-ink)]">
+                    {emptySlot ? 'Page image required' : 'Preview unavailable'}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--admin-muted)]">
+                    {emptySlot
+                      ? page.error_message || 'Upload a completed page image before PDF Release.'
+                      : 'Refresh the signed image URL before reviewing this page.'}
+                  </p>
+                </div>
+              </div>
             )}
+            <UploadErrorOverlay message={uploadError} />
           </div>
+
+          {page.error_message && !emptySlot ? (
+            <p className="mx-auto mt-2 w-full max-w-[34rem] rounded-lg border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs text-rose-200">
+              {page.error_message}
+            </p>
+          ) : null}
 
           <div className="mt-4 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
             <PageFileLinks url={previewUrl} pageNumber={selectedItem.downloadNumber} compact />
@@ -283,7 +338,7 @@ function V2PdfWorkspace({
                 label="Needs fix"
                 icon={reviewPending?.action === 'needs_fix' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />}
                 tone="warn"
-                disabled={Boolean(uploadPending)}
+                disabled={emptySlot || Boolean(uploadPending)}
                 onClick={() => void markNeedsFix(page)}
               />
               <ReviewActionButton
@@ -294,9 +349,9 @@ function V2PdfWorkspace({
                 disabled
               />
               <ReviewActionButton
-                label="Replace"
+                label={emptySlot ? 'Upload page' : 'Replace'}
                 icon={uploadPending === 'replacement' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-                disabled={busyAction !== null || Boolean(uploadPending)}
+                disabled={busyAction !== null || Boolean(uploadPending) || (emptySlot && !emptySlotUploadAllowed)}
                 onClick={() => openReplacementPicker(page)}
               />
             </div>
@@ -311,7 +366,7 @@ function V2PdfWorkspace({
               <h4 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">{group.label}</h4>
               <span className="text-[10px] text-[var(--admin-muted)]">{group.items.length} pages</span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {group.items.map((item) => (
                 <V2PageNavigatorButton
                   key={item.page.final_job_page_id}
@@ -324,6 +379,14 @@ function V2PdfWorkspace({
                     !['approved', 'replaced'].includes(item.page.status)
                   }
                   onToggleExport={() => onToggleExportPage(item.page.page_index)}
+                  busyAction={busyAction}
+                  reviewPending={reviewPendingByPage[item.page.final_job_page_id]}
+                  uploadPending={uploadPendingByPage[item.page.final_job_page_id]}
+                  uploadError={uploadErrorByPage[item.page.final_job_page_id]}
+                  approvePage={approvePage}
+                  markNeedsFix={markNeedsFix}
+                  openReplacementPicker={openReplacementPicker}
+                  emptySlotUploadAllowed={emptySlotUploadAllowed}
                   onImageLoadError={onImageLoadError}
                 />
               ))}
@@ -342,6 +405,14 @@ function V2PageNavigatorButton({
   exportSelected,
   exportDisabled,
   onToggleExport,
+  busyAction,
+  reviewPending,
+  uploadPending,
+  uploadError,
+  approvePage,
+  markNeedsFix,
+  openReplacementPicker,
+  emptySlotUploadAllowed,
   onImageLoadError,
 }: {
   item: FinalReviewPageItem
@@ -350,45 +421,98 @@ function V2PageNavigatorButton({
   exportSelected: boolean
   exportDisabled: boolean
   onToggleExport: () => void
+  busyAction: string | null
+  reviewPending: ReviewPendingState[string] | undefined
+  uploadPending: UploadPendingState[string] | undefined
+  uploadError: string | undefined
+  approvePage: (page: FinalJobPageRow) => Promise<void>
+  markNeedsFix: (page: FinalJobPageRow) => Promise<void>
+  openReplacementPicker: (page: FinalJobPageRow) => void
+  emptySlotUploadAllowed: boolean
   onImageLoadError: () => void
 }) {
   const previewUrl = pagePreviewUrl(item.page)
   const sourceKind = getPageImageSource(item.page)
   const cacheKey = sourceKind === 'none' ? null : getThumbCacheKey(item.page, sourceKind)
+  const emptySlot = isEmptyFinalPageSlot(item.page)
+  const selectAndRun = (action: () => void) => {
+    onSelect()
+    action()
+  }
   return (
-    <div className="relative min-w-0">
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`w-full min-w-0 rounded-lg border p-2 text-left transition ${
+    <article className={`relative min-w-0 rounded-lg border p-2 transition ${
         selected
           ? 'border-[color-mix(in_srgb,var(--admin-accent-dp)_55%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_15%,transparent)]'
           : 'border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] hover:border-[color-mix(in_srgb,var(--admin-ink)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_5%,transparent)]'
-      }`}
-    >
-      <div className="relative aspect-square overflow-hidden rounded-lg bg-[var(--admin-panel-2)]">
-        <ThumbnailImage
-          sourceUrl={previewUrl}
-          cacheKey={cacheKey}
-          alt={`${item.primaryLabel} thumbnail`}
-          onError={onImageLoadError}
-          className="h-full w-full object-contain"
-        />
+      }`}>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className="w-full min-w-0 text-left"
+      >
+        <div className="relative aspect-square overflow-hidden rounded-lg bg-[var(--admin-panel-2)]">
+          {emptySlot ? (
+            <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 px-2 text-center text-[10px] font-bold text-[var(--admin-accent-dp)]">
+              <UploadCloud className="h-5 w-5" />
+              Upload required
+            </span>
+          ) : (
+            <ThumbnailImage
+              sourceUrl={previewUrl}
+              cacheKey={cacheKey}
+              alt={`${item.primaryLabel} thumbnail`}
+              onError={onImageLoadError}
+              className="h-full w-full object-contain"
+            />
+          )}
+          <UploadErrorOverlay message={uploadError} compact />
+        </div>
+        <div className="mt-2 flex min-w-0 items-center justify-between gap-1.5">
+          <span className="truncate text-[11px] font-bold text-[var(--admin-ink)]">{item.shortLabel}</span>
+          <span className={`h-2 w-2 shrink-0 rounded-full ${
+            item.page.status === 'approved'
+              ? 'bg-emerald-300'
+              : item.page.status === 'needs_fix'
+                ? 'bg-[var(--admin-accent)]'
+                : item.page.status === 'failed'
+                  ? 'bg-rose-300'
+                  : 'bg-sky-300'
+          }`} aria-label={item.page.status} />
+        </div>
+      </button>
+      <div className="mt-2 space-y-2 border-t border-[var(--admin-card-line)] pt-2">
+        <PageFileLinks url={previewUrl} pageNumber={item.downloadNumber} compact />
+        <div className="grid grid-cols-2 gap-1.5">
+          <ReviewActionButton
+            label="Approve"
+            icon={reviewPending?.action === 'approve' || reviewPending?.action === 'approve_all' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            tone="approve"
+            disabled={!previewUrl || Boolean(uploadPending)}
+            onClick={() => selectAndRun(() => void approvePage(item.page))}
+          />
+          <ReviewActionButton
+            label="Needs fix"
+            icon={reviewPending?.action === 'needs_fix' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />}
+            tone="warn"
+            disabled={emptySlot || Boolean(uploadPending)}
+            onClick={() => selectAndRun(() => void markNeedsFix(item.page))}
+          />
+          <ReviewActionButton
+            label="Rerun"
+            title="Rerun with random seed is coming later. Current fixed-seed rerun is disabled."
+            icon={<RotateCcw className="h-3.5 w-3.5" />}
+            tone="rerun"
+            disabled
+          />
+          <ReviewActionButton
+            label={emptySlot ? 'Upload page' : 'Replace'}
+            icon={uploadPending === 'replacement' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+            disabled={busyAction !== null || Boolean(uploadPending) || (emptySlot && !emptySlotUploadAllowed)}
+            onClick={() => selectAndRun(() => openReplacementPicker(item.page))}
+          />
+        </div>
       </div>
-      <div className="mt-2 flex min-w-0 items-center justify-between gap-1.5">
-        <span className="truncate text-[11px] font-bold text-[var(--admin-ink)]">{item.shortLabel}</span>
-        <span className={`h-2 w-2 shrink-0 rounded-full ${
-          item.page.status === 'approved'
-            ? 'bg-emerald-300'
-            : item.page.status === 'needs_fix'
-              ? 'bg-[var(--admin-accent)]'
-              : item.page.status === 'failed'
-                ? 'bg-rose-300'
-                : 'bg-sky-300'
-        }`} aria-label={item.page.status} />
-      </div>
-    </button>
       <label
         title={exportDisabled ? 'Approve this page before export' : 'Select approved source for ZIP export'}
         className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg border backdrop-blur-sm ${
@@ -407,7 +531,7 @@ function V2PageNavigatorButton({
           aria-label={`Select ${item.primaryLabel} for approved source export`}
         />
       </label>
-    </div>
+    </article>
   )
 }
 
@@ -485,9 +609,11 @@ function LegacyPdfPageCard({
   busyAction,
   reviewPendingByPage,
   uploadPendingByPage,
+  uploadError,
   approvePage,
   markNeedsFix,
   openReplacementPicker,
+  emptySlotUploadAllowed,
   onImageLoadError,
 }: {
   item: FinalReviewPageItem
@@ -495,19 +621,23 @@ function LegacyPdfPageCard({
   busyAction: string | null
   reviewPendingByPage: ReviewPendingState
   uploadPendingByPage: UploadPendingState
+  uploadError: string | undefined
   approvePage: (page: FinalJobPageRow) => Promise<void>
   markNeedsFix: (page: FinalJobPageRow) => Promise<void>
   openReplacementPicker: (page: FinalJobPageRow) => void
+  emptySlotUploadAllowed: boolean
   onImageLoadError: () => void
 }) {
   const page = item.page
   const previewUrl = pagePreviewUrl(page)
   const reviewPending = reviewPendingByPage[page.final_job_page_id]
   const uploadPending = uploadPendingByPage[page.final_job_page_id]
+  const emptySlot = isEmptyFinalPageSlot(page)
   return (
     <article className="grid gap-3 overflow-hidden rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-3 sm:grid-cols-[8rem_minmax(0,1fr)] lg:grid-cols-[10rem_minmax(0,1fr)]">
-      <div className="overflow-hidden rounded-lg border border-[var(--admin-card-line)]">
+      <div className="relative overflow-hidden rounded-lg border border-[var(--admin-card-line)]">
         <PageThumb item={item} eager={index < 6} onImageLoadError={onImageLoadError} />
+        <UploadErrorOverlay message={uploadError} compact />
       </div>
       <div className="flex min-w-0 flex-col justify-between gap-3">
         <div className="flex items-start justify-between gap-2">
@@ -525,13 +655,38 @@ function LegacyPdfPageCard({
           <PageFileLinks url={previewUrl} pageNumber={item.downloadNumber} compact />
           <div className="grid grid-cols-2 gap-1.5">
             <ReviewActionButton label="Approve" icon={reviewPending?.action === 'approve' || reviewPending?.action === 'approve_all' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} tone="approve" disabled={!previewUrl || Boolean(uploadPending)} onClick={() => void approvePage(page)} />
-            <ReviewActionButton label="Needs fix" icon={reviewPending?.action === 'needs_fix' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />} tone="warn" disabled={Boolean(uploadPending)} onClick={() => void markNeedsFix(page)} />
+            <ReviewActionButton label="Needs fix" icon={reviewPending?.action === 'needs_fix' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />} tone="warn" disabled={emptySlot || Boolean(uploadPending)} onClick={() => void markNeedsFix(page)} />
             <ReviewActionButton label="Rerun" title="Rerun with random seed is coming later. Current fixed-seed rerun is disabled." icon={<RotateCcw className="h-3.5 w-3.5" />} tone="rerun" disabled />
-            <ReviewActionButton label="Replace" icon={uploadPending === 'replacement' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />} disabled={busyAction !== null || Boolean(uploadPending)} onClick={() => openReplacementPicker(page)} />
+            <ReviewActionButton label={emptySlot ? 'Upload page' : 'Replace'} icon={uploadPending === 'replacement' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />} disabled={busyAction !== null || Boolean(uploadPending) || (emptySlot && !emptySlotUploadAllowed)} onClick={() => openReplacementPicker(page)} />
           </div>
         </div>
       </div>
     </article>
+  )
+}
+
+function UploadErrorOverlay({ message, compact = false }: { message?: string; compact?: boolean }) {
+  if (!message) return null
+  return (
+    <div
+      role="alert"
+      title={message}
+      className={`absolute inset-x-2 bottom-2 z-10 rounded-lg border border-rose-300/45 bg-rose-950/90 text-rose-50 shadow-lg backdrop-blur-md ${
+        compact ? 'px-2 py-1.5' : 'px-3 py-2.5'
+      }`}
+    >
+      <div className="flex items-start gap-1.5">
+        <AlertCircle className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} mt-0.5 shrink-0`} />
+        <div className="min-w-0">
+          <p className={`${compact ? 'text-[9px]' : 'text-xs'} font-bold uppercase tracking-wide`}>
+            Upload rejected
+          </p>
+          <p className={`${compact ? 'max-h-10 text-[9px]' : 'max-h-20 text-xs'} mt-0.5 overflow-hidden leading-snug`}>
+            {message}
+          </p>
+        </div>
+      </div>
+    </div>
   )
 }
 

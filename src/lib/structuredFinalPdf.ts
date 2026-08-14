@@ -5,13 +5,17 @@ import {
   parseFinalPageMetadataContract,
   type FinalPageMetadata,
 } from '@/lib/final-page-metadata'
+import {
+  DEFAULT_FINAL_SOURCE_MIN_EDGE,
+  inspectFinalSourceImage,
+  isApproximatelySquareFinalSource,
+} from '@/lib/final-source-image'
 
 const DEFAULT_MAX_IMAGE_EDGE = 1800
 const DEFAULT_JPEG_QUALITY = 82
 const DEFAULT_MAX_PDF_BYTES = 50 * 1024 * 1024
-const DEFAULT_MIN_SOURCE_EDGE = 512
+const DEFAULT_MIN_SOURCE_EDGE = DEFAULT_FINAL_SOURCE_MIN_EDGE
 export const DEFAULT_INTERIOR_GUTTER = 24
-const SQUARE_TOLERANCE = 0.02
 
 export type StructuredFinalPdfInteriorSpread = {
   spreadIndex: number
@@ -129,35 +133,14 @@ export function buildStructuredFinalPdfPlan(args: {
   }
 }
 
-function orientedDimensions(metadata: Awaited<ReturnType<sharp.Sharp['metadata']>>) {
-  const width = Number(metadata.width || 0)
-  const height = Number(metadata.height || 0)
-  const swapsAxes = metadata.orientation != null && metadata.orientation >= 5 && metadata.orientation <= 8
-  return swapsAxes ? { width: height, height: width } : { width, height }
-}
-
 async function inspectSource(buffer: Buffer, label: string, minSourceEdge: number) {
-  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
-    throw new StructuredFinalPdfError(`${label} has no image bytes`)
-  }
-  let metadata
   try {
-    metadata = await sharp(buffer, { failOn: 'error' }).metadata()
-  } catch {
-    throw new StructuredFinalPdfError(`${label} is not a readable image`)
+    return await inspectFinalSourceImage({ buffer, label, minSourceEdge })
+  } catch (error) {
+    throw new StructuredFinalPdfError(
+      error instanceof Error ? error.message : `${label} is not a readable image`
+    )
   }
-  const dimensions = orientedDimensions(metadata)
-  if (!dimensions.width || !dimensions.height) {
-    throw new StructuredFinalPdfError(`${label} has invalid dimensions`)
-  }
-  if (Math.min(dimensions.width, dimensions.height) < minSourceEdge) {
-    throw new StructuredFinalPdfError(`${label} is below the minimum ${minSourceEdge}px source edge`)
-  }
-  return dimensions
-}
-
-function isApproximatelySquare(width: number, height: number) {
-  return Math.abs(width - height) / Math.max(width, height) <= SQUARE_TOLERANCE
 }
 
 export async function composeFinalCoverSpread(args: {
@@ -170,8 +153,8 @@ export async function composeFinalCoverSpread(args: {
   const back = await inspectSource(args.backBuffer, 'Final back cover', args.minSourceEdge)
   const front = await inspectSource(args.frontBuffer, 'Final front cover', args.minSourceEdge)
   if (
-    !isApproximatelySquare(back.width, back.height) ||
-    !isApproximatelySquare(front.width, front.height)
+    !isApproximatelySquareFinalSource(back) ||
+    !isApproximatelySquareFinalSource(front)
   ) {
     throw new StructuredFinalPdfError(
       `Final cover halves must each be approximately square (back=${back.width}x${back.height}; front=${front.width}x${front.height})`
@@ -249,7 +232,7 @@ async function normalizeInteriorPage(args: {
   minSourceEdge: number
 }) {
   const source = await inspectSource(args.buffer, args.label, args.minSourceEdge)
-  if (!isApproximatelySquare(source.width, source.height)) {
+  if (!isApproximatelySquareFinalSource(source)) {
     throw new StructuredFinalPdfError(`${args.label} must be square`)
   }
   if (

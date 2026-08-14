@@ -2,12 +2,64 @@ import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   FinalReviewMutationContractError,
+  getFinalReplacementClaimablePageStatuses,
   getFinalPageManualRevisionPath,
   resolveFinalReviewMutationPage,
+  type FinalReviewMutationPlan,
 } from '@/lib/final-review-mutation-contract'
 import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
+import {
+  FinalSourceImageError,
+  inspectFinalSourceImage,
+  isApproximatelySquareFinalSource,
+  prepareFinalReplacementImage,
+  type FinalSourceDimensions,
+} from '@/lib/final-source-image'
 import { refreshFinalJobApprovalState } from '@/lib/finalReview'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+
+async function loadInteriorGeometryReference(args: {
+  finalJobId: string
+  targetPageIndex: number
+  plan: FinalReviewMutationPlan
+}): Promise<FinalSourceDimensions | null> {
+  if (args.plan.schema_version !== 2) return null
+
+  const interiorIndices = new Set(
+    args.plan.pages
+      .filter((page) => page.role === 'final_interior' && page.page_index !== args.targetPageIndex)
+      .map((page) => page.page_index)
+  )
+  const { data: pages, error } = await supabaseAdmin
+    .from('final_job_pages')
+    .select('page_index, approved_output_path, manual_output_path, ai_output_path')
+    .eq('final_job_id', args.finalJobId)
+  if (error) {
+    throw new Error(error.message || 'Failed to load Final interior geometry reference')
+  }
+
+  for (const page of pages || []) {
+    if (!interiorIndices.has(Number(page.page_index))) continue
+    const path = page.approved_output_path || page.manual_output_path || page.ai_output_path
+    if (!path) continue
+
+    const { data, error: downloadError } = await supabaseAdmin.storage.from('raw-private').download(path)
+    if (downloadError || !data) continue
+    try {
+      const source = await inspectFinalSourceImage({
+        buffer: Buffer.from(await data.arrayBuffer()),
+        label: 'Existing Final interior reference',
+      })
+      if (isApproximatelySquareFinalSource(source)) {
+        return { width: source.width, height: source.height }
+      }
+    } catch {
+      // Try the next real output. Release remains the final authority for older invalid assets.
+    }
+  }
+
+  return null
+}
 
 export async function POST(
   request: Request,
@@ -37,7 +89,7 @@ export async function POST(
 
   const { data: finalJob } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, total_pages')
+    .select('final_job_id, job_id, order_id, status, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (!finalJob?.order_id) {
@@ -54,14 +106,18 @@ export async function POST(
     return NextResponse.json({ error: 'Final page not found' }, { status: 404 })
   }
 
+  let mutationPlan: FinalReviewMutationPlan
   let storagePageNumber: number
+  let targetRole: FinalReviewMutationPlan['pages'][number]['role']
   try {
-    const plan = await loadFinalReviewMutationPlan({
+    mutationPlan = await loadFinalReviewMutationPlan({
       finalJobId,
       jobId: finalJob.job_id,
       totalPages: Number(finalJob.total_pages),
     })
-    storagePageNumber = resolveFinalReviewMutationPage(plan, pageIndex).storage_page_number
+    const targetPage = resolveFinalReviewMutationPage(mutationPlan, pageIndex)
+    storagePageNumber = targetPage.storage_page_number
+    targetRole = targetPage.role
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to resolve Final page contract' },
@@ -99,6 +155,26 @@ export async function POST(
     })
   }
 
+  let fileBuffer: Buffer
+  try {
+    const rawBuffer = Buffer.from(await fileValue.arrayBuffer())
+    const expectedInteriorSource = targetRole === 'final_interior'
+      ? await loadInteriorGeometryReference({ finalJobId, targetPageIndex: pageIndex, plan: mutationPlan })
+      : null
+    const prepared = await prepareFinalReplacementImage({
+      buffer: rawBuffer,
+      label: `Final page ${pageIndex}`,
+      structured: mutationPlan.schema_version === 2,
+      expectedInteriorSource,
+    })
+    fileBuffer = prepared.buffer
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Invalid replacement image' },
+      { status: error instanceof FinalSourceImageError ? 400 : 500 }
+    )
+  }
+
   const now = new Date().toISOString()
   const { data: intentPage, error: intentError } = await supabaseAdmin
     .from('final_job_pages')
@@ -109,7 +185,7 @@ export async function POST(
       updated_at: now,
     })
     .eq('final_job_page_id', page.final_job_page_id)
-    .in('status', ['pending_review', 'approved', 'replaced', 'needs_fix'])
+    .in('status', getFinalReplacementClaimablePageStatuses(String(finalJob.status)))
     .select('final_job_page_id')
     .maybeSingle()
 
@@ -120,11 +196,8 @@ export async function POST(
     return NextResponse.json({ ok: true, superseded: true })
   }
 
-  const fileBuffer = Buffer.from(await fileValue.arrayBuffer())
-  const contentType = fileValue.type || 'image/png'
-
   const { error: manualUploadError } = await supabaseAdmin.storage.from('raw-private').upload(manualPath, fileBuffer, {
-    contentType,
+    contentType: 'image/png',
     upsert: false,
   })
   if (manualUploadError) {

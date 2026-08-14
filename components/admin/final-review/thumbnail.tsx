@@ -132,6 +132,7 @@ function useAdminThumbnail(
   cacheKey: string | null,
   enabled: boolean
 ): ThumbState {
+  const isLocalObjectUrl = Boolean(enabled && sourceUrl?.startsWith('blob:'))
   const cachedUrl = cacheKey ? memoryThumbCache.get(cacheKey) ?? null : null
   const [state, setState] = useState<ThumbState>({
     key: null,
@@ -142,7 +143,7 @@ function useAdminThumbnail(
 
   useEffect(() => {
     let cancelled = false
-    if (!enabled || !sourceUrl || !cacheKey || cachedUrl) return
+    if (!enabled || !sourceUrl || !cacheKey || cachedUrl || isLocalObjectUrl) return
 
     void (async () => {
       try {
@@ -159,7 +160,11 @@ function useAdminThumbnail(
     return () => {
       cancelled = true
     }
-  }, [cacheKey, cachedUrl, enabled, sourceUrl])
+  }, [cacheKey, cachedUrl, enabled, isLocalObjectUrl, sourceUrl])
+
+  if (isLocalObjectUrl) {
+    return { key: cacheKey, sourceUrl, status: 'ready', url: sourceUrl }
+  }
 
   if (!enabled || !sourceUrl || !cacheKey) {
     return { key: cacheKey, sourceUrl, status: 'idle', url: null }

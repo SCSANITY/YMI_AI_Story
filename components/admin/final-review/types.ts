@@ -7,3 +7,4 @@ export type ReviewPendingState = Record<
 >
 export type UploadPendingKind = 'replacement'
 export type UploadPendingState = Record<string, UploadPendingKind>
+export type UploadErrorState = Record<string, string>
