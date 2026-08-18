@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { processInboundEmailBacklog } from '@/lib/inbound-email-processing'
 import { processResendDeliveryEventBacklog } from '@/lib/resend-webhook-events'
+import { matchesSecret } from '@/lib/secret-compare'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -12,8 +13,8 @@ function isAuthorized(request: Request) {
   const authorization = request.headers.get('authorization')?.trim()
 
   return Boolean(
-    (internalSecret && providedInternalSecret === internalSecret) ||
-      (cronSecret && authorization === `Bearer ${cronSecret}`)
+    matchesSecret(providedInternalSecret, internalSecret) ||
+      (cronSecret && matchesSecret(authorization, `Bearer ${cronSecret}`))
   )
 }
 

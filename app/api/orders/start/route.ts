@@ -10,6 +10,7 @@ import {
   loadAuthoritativeCreationPackagePrice,
   packagePricingStoreErrorResponse,
 } from '@/lib/package-pricing-store'
+import { parseCartItemQuantity } from '@/lib/cart-quantity'
 
 const FIRST_REMINDER_MINUTES = Number(
   process.env.UNPAID_REMINDER_FIRST_MINUTES ?? process.env.UNPAID_REMINDER_MINUTES ?? 1
@@ -135,10 +136,17 @@ export async function POST(request: Request) {
       throw error
     }
 
+    let quantity: number
+    try {
+      quantity = parseCartItemQuantity(item?.quantity)
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid quantity' }, { status: 400 })
+    }
+
     resolvedItems.push({
       cartItemId,
       creationId: String(creationId),
-      quantity: item?.quantity ?? 1,
+      quantity,
       pricing,
     })
   }

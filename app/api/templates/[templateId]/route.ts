@@ -21,10 +21,6 @@ type OrderedImageEntry = {
   order: number
 }
 
-function isProductImageEntry(value: ProductImageEntry | null): value is ProductImageEntry {
-  return value !== null
-}
-
 function isOrderedImageEntry(value: OrderedImageEntry | null): value is OrderedImageEntry {
   return value !== null
 }

@@ -13,7 +13,7 @@ import {
 
 test('redacts every known dynamic route and strips complete query strings', () => {
   assert.equal(redactTrackingPath('/my-books/creation-secret?view=reader'), '/my-books')
-  assert.equal(redactTrackingPath('/orders/order-secret/review?session_id=secret'), '/orders')
+  assert.equal(redactTrackingPath('/orders/order-secret?session_id=secret'), '/orders')
   assert.equal(redactTrackingPath('/support/order-secret?email=secret'), '/support')
   assert.equal(redactTrackingPath('/share/preview/token-secret?x=1'), '/share/preview')
   assert.equal(redactTrackingPath('/invite/invite-secret'), '/invite')

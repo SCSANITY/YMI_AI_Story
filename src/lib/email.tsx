@@ -24,6 +24,10 @@ import {
 } from '@/components/emails/KolPartnershipEmail'
 import type { GeneralInboxSenderKey } from '@/lib/general-inbox'
 import {
+  buildNewsletterConfirmationText,
+  NewsletterConfirmationEmail,
+} from '@/components/emails/NewsletterConfirmationEmail'
+import {
   markEmailEventFailed,
   markEmailEventSent,
   prepareEmailEvent,
@@ -257,6 +261,18 @@ export async function sendOtpEmail(to: string, code: string, verificationId: str
     subject: 'Your checkout verification code',
     react: <OtpEmail code={code} />,
     text: buildOtpEmailText(code),
+  })
+}
+
+export async function sendNewsletterConfirmationEmail(to: string, confirmUrl: string, tokenId: string) {
+  return sendManagedEmail({
+    emailKey: 'newsletter_confirmation',
+    idempotencyKey: `newsletter_confirmation:${tokenId}`,
+    to,
+    fromEnvName: 'EMAIL_FROM',
+    subject: 'Confirm your YMI Story newsletter subscription',
+    react: <NewsletterConfirmationEmail confirmUrl={confirmUrl} />,
+    text: buildNewsletterConfirmationText(confirmUrl),
   })
 }
 

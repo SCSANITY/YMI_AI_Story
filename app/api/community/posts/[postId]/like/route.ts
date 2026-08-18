@@ -1,22 +1,29 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
-async function resolveActor(customerId?: string | null) {
-  if (customerId) {
+async function resolveActor(request: Request, expectedCustomerId?: string | null) {
+  const owner = await resolveCheckoutOwner(request, {
+    expectedCustomerId,
+    createAnonIfMissing: true,
+  })
+  if (!owner) throw new Error('Unable to resolve owner')
+  if (owner.ownerType === 'customer') {
     return {
       owner_type: 'customer',
-      customer_id: customerId,
+      customer_id: owner.customerId,
       anon_session_id: null,
-      actor_key: `customer:${customerId}`,
+      actor_key: `customer:${owner.customerId}`,
     }
   }
-  const anonSessionId = await getOrCreateAnonSession()
   return {
     owner_type: 'anon',
     customer_id: null,
-    anon_session_id: anonSessionId,
-    actor_key: `anon:${anonSessionId}`,
+    anon_session_id: owner.anonSessionId,
+    actor_key: `anon:${owner.anonSessionId}`,
   }
 }
 
@@ -26,7 +33,12 @@ export async function POST(
 ) {
   const { postId } = await Promise.resolve(context.params)
   const body = await request.json().catch(() => ({}))
-  const actor = await resolveActor(typeof body?.customerId === 'string' ? body.customerId : null)
+  let actor
+  try {
+    actor = await resolveActor(request, typeof body?.customerId === 'string' ? body.customerId : null)
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
 
   const { data: existing } = await supabaseAdmin
     .from('community_post_likes')

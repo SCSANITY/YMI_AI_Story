@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { isFinalJobReleased } from '@/lib/final-job-release'
 import {
   FinalReviewMutationContractError,
   resolveFinalReviewMutationPage,
@@ -33,11 +34,14 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, total_pages')
+    .select('final_job_id, job_id, order_id, review_status, released_at, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob?.order_id) {
     return NextResponse.json({ error: finalJobError?.message || 'Final job not found' }, { status: 404 })
+  }
+  if (isFinalJobReleased(finalJob)) {
+    return NextResponse.json({ error: 'Released Final jobs cannot be modified' }, { status: 409 })
   }
 
   const { data: pages, error: pagesError } = await supabaseAdmin

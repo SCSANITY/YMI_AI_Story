@@ -1,9 +1,13 @@
 import { randomBytes } from 'crypto'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
 import { buildAbsoluteUrl } from '@/lib/site-url'
 import { resolveCoverAssetFromPreviewJob } from '@/lib/share-preview'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 function createShareToken() {
   return randomBytes(12).toString('hex')
@@ -13,31 +17,28 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const creationId = String(body?.creationId || '').trim()
-    const customerId = body?.customerId ? String(body.customerId) : null
+    const expectedCustomerId = body?.customerId ? String(body.customerId) : null
 
     if (!creationId) {
       return NextResponse.json({ error: 'Missing creationId' }, { status: 400 })
     }
 
-    const anonSessionId = customerId ? null : await getOrCreateAnonSession()
+    const owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId,
+      createAnonIfMissing: true,
+    })
+    if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
+    const filter = ownerFilter(owner)
     const { data: creation, error: creationError } = await supabaseAdmin
       .from('creations')
       .select('creation_id, owner_type, anon_session_id, customer_id, template_id, preview_job_id')
       .eq('creation_id', creationId)
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
       .maybeSingle()
 
     if (creationError || !creation?.creation_id) {
       return NextResponse.json({ error: 'Creation not found' }, { status: 404 })
-    }
-
-    const isOwned =
-      (customerId && creation.customer_id === customerId) ||
-      (!customerId &&
-        creation.owner_type === 'anon' &&
-        creation.anon_session_id === anonSessionId)
-
-    if (!isOwned) {
-      return NextResponse.json({ error: 'Creation does not belong to current session' }, { status: 403 })
     }
 
     if (!creation.preview_job_id) {
@@ -80,8 +81,8 @@ export async function POST(request: Request) {
           creation_id: creationId,
           preview_job_id: creation.preview_job_id,
           owner_type: creation.owner_type,
-          anon_session_id: anonSessionId,
-          customer_id: customerId,
+          anon_session_id: owner.ownerType === 'anon' ? owner.anonSessionId : null,
+          customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
           template_id: creation.template_id,
           share_token: shareToken,
           cover_bucket: coverAsset.bucket,
@@ -102,6 +103,8 @@ export async function POST(request: Request) {
       imageUrl: buildAbsoluteUrl(`/share/preview/${shareToken}/image`),
     })
   } catch (error: any) {
+    const ownerErrorResponse = checkoutOwnerErrorResponse(error)
+    if (ownerErrorResponse) return ownerErrorResponse
     return NextResponse.json(
       { error: error?.message || 'Failed to create preview share link' },
       { status: 500 }

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  resolveCheckoutOwner,
+  type CheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const FAVOURITES_CACHE_CONTROL = 'private, no-store, max-age=0'
-
-type OwnerContext =
-  | { ownerType: 'customer'; customerId: string }
-  | { ownerType: 'anon'; anonSessionId: string }
 
 function privateJson(body: unknown) {
   const response = NextResponse.json(body)
@@ -14,42 +14,18 @@ function privateJson(body: unknown) {
   return response
 }
 
-function getCookieValue(cookies: string, name: string) {
-  const entry = cookies
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-  return entry ? entry.split('=')[1] : null
-}
-
-async function resolveOwner(
-  request: Request,
-  customerId: string | null,
-  createAnonIfMissing: boolean
-): Promise<OwnerContext | null> {
-  if (customerId) {
-    return { ownerType: 'customer', customerId }
-  }
-
-  if (createAnonIfMissing) {
-    const anonSessionId = await getOrCreateAnonSession()
-    return { ownerType: 'anon', anonSessionId }
-  }
-
-  const cookies = request.headers.get('cookie') || ''
-  const anonSessionId = getCookieValue(cookies, 'ymi_anon_session')
-  if (!anonSessionId) return null
-  return { ownerType: 'anon', anonSessionId }
-}
-
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-  const owner = await resolveOwner(request, customerId, false)
-
-  if (!owner) {
-    return privateJson({ items: [] })
+  let owner: CheckoutOwner | null
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+      optional: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
   }
+  if (!owner) return privateJson({ items: [] })
 
   let query = supabaseAdmin
     .from('favourites')
@@ -91,16 +67,21 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = await request.json()
   const templateId = body?.templateId ?? body?.template_id
-  const customerId = body?.customerId ?? null
 
   if (!templateId || typeof templateId !== 'string') {
     return NextResponse.json({ error: 'templateId is required' }, { status: 400 })
   }
 
-  const owner = await resolveOwner(request, customerId, true)
-  if (!owner) {
-    return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 400 })
+  let owner: CheckoutOwner | null
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
   }
+  if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
 
   let lookup = supabaseAdmin
     .from('favourites')
@@ -131,22 +112,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ isFavorite: false })
   }
 
-  const insertRow =
-    owner.ownerType === 'customer'
-      ? {
+  const { error: insertError } = owner.ownerType === 'customer'
+    ? await supabaseAdmin.from('favourites').insert({
           owner_type: 'customer',
           customer_id: owner.customerId,
           anon_session_id: null,
           template_id: templateId,
-        }
-      : {
+        })
+    : await supabaseAdmin.from('favourites').insert({
           owner_type: 'anon',
           anon_session_id: owner.anonSessionId,
           customer_id: null,
           template_id: templateId,
-        }
-
-  const { error: insertError } = await supabaseAdmin.from('favourites').insert(insertRow)
+        })
 
   if (insertError) {
     return NextResponse.json(

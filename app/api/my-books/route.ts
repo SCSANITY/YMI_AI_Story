@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import { getEmptyPurchaseSummary, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+  type CheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const MY_BOOKS_CACHE_CONTROL = 'private, no-store, max-age=0'
-
-type Owner = {
-  ownerType: 'customer' | 'anon'
-  ownerId: string
-}
 
 type JobOutputAssets = {
   bucket?: string
@@ -16,31 +17,11 @@ type JobOutputAssets = {
   pdf_path?: string
 } | null
 
-function getCookieValue(cookies: string, name: string) {
-  const entry = cookies
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-  return entry ? entry.split('=')[1] : null
-}
-
-function resolveOwner(request: Request, customerId: string | null): Owner | null {
-  if (customerId) {
-    return { ownerType: 'customer', ownerId: customerId }
-  }
-  const cookies = request.headers.get('cookie') || ''
-  const anonSessionId = getCookieValue(cookies, 'ymi_anon_session')
-  if (!anonSessionId) return null
-  return { ownerType: 'anon', ownerId: anonSessionId }
-}
-
 // Supabase query builders have very deep generated types here; keep this helper dynamic.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildOwnerScopedQuery(query: any, owner: Owner): any {
-  if (owner.ownerType === 'customer') {
-    return query.eq('owner_type', 'customer').eq('customer_id', owner.ownerId)
-  }
-  return query.eq('owner_type', 'anon').eq('anon_session_id', owner.ownerId)
+function buildOwnerScopedQuery(query: any, owner: CheckoutOwner): any {
+  const filter = ownerFilter(owner)
+  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
 function privateJson(body: unknown) {
@@ -49,7 +30,7 @@ function privateJson(body: unknown) {
   return response
 }
 
-async function loadCreationsWithArchive(owner: Owner) {
+async function loadCreationsWithArchive(owner: CheckoutOwner) {
   const baseSelect = `
     creation_id,
     template_id,
@@ -90,12 +71,16 @@ async function loadCreationsWithArchive(owner: Owner) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-  const owner = resolveOwner(request, customerId)
-
-  if (!owner) {
-    return privateJson({ items: [] })
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+      optional: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
   }
+  if (!owner) return privateJson({ items: [] })
 
   const { data: items, error } = await loadCreationsWithArchive(owner)
   if (error) {
@@ -164,16 +149,20 @@ export async function GET(request: Request) {
 export async function DELETE(request: Request) {
   const body = await request.json()
   const creationId = body?.creationId ?? body?.creation_id
-  const customerId = body?.customerId ?? null
 
   if (!creationId) {
     return NextResponse.json({ error: 'Missing creationId' }, { status: 400 })
   }
 
-  const owner = resolveOwner(request, customerId)
-  if (!owner) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
   }
+  if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const scopedCreationQuery = buildOwnerScopedQuery(
     supabaseAdmin.from('creations').select('creation_id').eq('creation_id', creationId),

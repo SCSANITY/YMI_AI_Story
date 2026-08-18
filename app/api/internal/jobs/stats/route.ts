@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getJobQueueGuardConfig, getJobQueueStats } from '@/lib/jobQueue'
+import { matchesSecret } from '@/lib/secret-compare'
 
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
 const CRON_SECRET = process.env.CRON_SECRET
 
 function isAuthorized(request: Request): boolean {
   const internalSecret = request.headers.get('x-internal-secret')
-  if (INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) return true
+  if (matchesSecret(internalSecret, INTERNAL_SECRET)) return true
 
   const authHeader = request.headers.get('authorization') || ''
-  if (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`) return true
+  if (CRON_SECRET && matchesSecret(authHeader, `Bearer ${CRON_SECRET}`)) return true
 
   return false
 }

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
 import { checkJobQueueGuard } from '@/lib/jobQueue'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { getCustomizeAccessSettings } from '@/lib/customize-access-server'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 import {
   confirmPendingFaceAsset,
   loadOwnedFaceAsset,
@@ -13,7 +17,7 @@ import {
 const MAX_TEXT_PROFILES = 5
 const DEFAULT_STORY_LANGUAGE = 'English'
 
-function normalizeStoryLanguage(value) {
+function normalizeStoryLanguage() {
   return DEFAULT_STORY_LANGUAGE
 }
 
@@ -152,9 +156,19 @@ export async function POST(request) {
     )
   }
 
-  const ownerType = body?.customerId ? 'customer' : 'anon'
-  const anonSessionId = ownerType === 'anon' ? await getOrCreateAnonSession() : null
-  const ownerId = ownerType === 'customer' ? body?.customerId : anonSessionId
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
+  const ownerType = owner.ownerType
+  const ownerId = owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId
+  const anonSessionId = owner.ownerType === 'anon' ? owner.anonSessionId : null
 
   let asset
   if (pendingFaceAsset?.asset_id) {
@@ -221,7 +235,7 @@ export async function POST(request) {
       .rpc('create_preview_job', {
         p_owner_type: ownerType,
         p_anon_session_id: ownerType === 'anon' ? anonSessionId : null,
-        p_customer_id: ownerType === 'customer' ? body.customerId : null,
+        p_customer_id: ownerType === 'customer' ? owner.customerId : null,
         p_template_id: templateId,
         p_customize_snapshot: customizeSnapshot,
         p_face_source_path: rawFacePath,
@@ -272,24 +286,56 @@ export async function PATCH(request) {
     return NextResponse.json({ error: 'Missing jobId' }, { status: 400 })
   }
 
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const filter = ownerFilter(owner)
+
   const { data: job, error: jobError } = await supabaseAdmin
     .from('jobs')
     .select('input_snapshot')
     .eq('job_id', jobId)
-    .single()
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
+    .maybeSingle()
 
   if (jobError || !job) {
     return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   }
 
-  let resolvedFaceSourcePath = faceSourcePath
+  let resolvedFaceSourcePath = null
 
-  if (!resolvedFaceSourcePath && faceAssetId) {
+  if (faceAssetId) {
     const { data: asset, error: assetError } = await supabaseAdmin
       .from('user_assets')
       .select('storage_path')
       .eq('asset_id', faceAssetId)
-      .single()
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
+      .eq('asset_type', 'face_image')
+      .maybeSingle()
+
+    if (assetError || !asset?.storage_path) {
+      return NextResponse.json({ error: 'Face asset not found' }, { status: 404 })
+    }
+
+    resolvedFaceSourcePath = `raw-private/${asset.storage_path}`
+  } else if (faceSourcePath) {
+    const storagePath = String(faceSourcePath).replace(/^raw-private\//, '')
+    const { data: asset, error: assetError } = await supabaseAdmin
+      .from('user_assets')
+      .select('storage_path')
+      .eq('storage_path', storagePath)
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
+      .eq('asset_type', 'face_image')
+      .maybeSingle()
 
     if (assetError || !asset?.storage_path) {
       return NextResponse.json({ error: 'Face asset not found' }, { status: 404 })
@@ -323,6 +369,8 @@ export async function PATCH(request) {
       updated_at: new Date().toISOString(),
     })
     .eq('job_id', jobId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
 
   if (updateError) {
     return NextResponse.json({ error: 'Failed to update job' }, { status: 500 })

@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 export async function GET(request: Request, context: { params: Promise<{ creationId: string }> }) {
   const { creationId } = await context.params
@@ -10,10 +14,17 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
   }
 
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-
-  const ownerType = customerId ? 'customer' : 'anon'
-  const ownerId = ownerType === 'customer' ? customerId : await getOrCreateAnonSession()
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const filter = ownerFilter(owner)
 
   let query = supabaseAdmin
     .from('creations')
@@ -40,11 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
     )
     .eq('creation_id', creationId)
 
-  if (ownerType === 'customer') {
-    query = query.eq('owner_type', 'customer').eq('customer_id', ownerId)
-  } else {
-    query = query.eq('owner_type', 'anon').eq('anon_session_id', ownerId)
-  }
+  query = query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 
   const { data: creation, error } = await query.maybeSingle()
 

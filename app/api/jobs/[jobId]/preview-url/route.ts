@@ -5,6 +5,12 @@ import {
   type StoredPreviewPage,
 } from '@/lib/preview-page-contract'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+  type CheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -13,41 +19,13 @@ const NO_STORE_HEADERS = {
 const jsonNoStore = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
 
-type Owner = {
-  ownerType: 'customer' | 'anon'
-  ownerId: string
-}
-
-function getCookieValue(cookies: string, name: string) {
-  const entry = cookies
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-  return entry ? entry.split('=')[1] : null
-}
-
-function resolveOwner(request: Request): Owner | null {
-  const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-  if (customerId) {
-    return { ownerType: 'customer', ownerId: customerId }
-  }
-
-  const cookies = request.headers.get('cookie') || ''
-  const anonSessionId = getCookieValue(cookies, 'ymi_anon_session')
-  if (!anonSessionId) return null
-  return { ownerType: 'anon', ownerId: anonSessionId }
-}
-
 function buildOwnerScopedQuery(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query: any,
-  owner: Owner
+  owner: CheckoutOwner
 ) {
-  if (owner.ownerType === 'customer') {
-    return query.eq('owner_type', 'customer').eq('customer_id', owner.ownerId)
-  }
-  return query.eq('owner_type', 'anon').eq('anon_session_id', owner.ownerId)
+  const filter = ownerFilter(owner)
+  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
 export async function GET(
@@ -59,11 +37,20 @@ export async function GET(
   const pagesParam = url.searchParams.get('pages')
   const limitParam = url.searchParams.get('limit')
   const sizeParam = url.searchParams.get('size') || 'small'
-  const owner = resolveOwner(request)
-
-  if (!owner) {
-    return jsonNoStore({ error: 'Unauthorized' }, 401)
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+    })
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) {
+      response.headers.set('Cache-Control', NO_STORE_HEADERS['Cache-Control'])
+      return response
+    }
+    return jsonNoStore({ error: 'Failed to resolve owner' }, 500)
   }
+  if (!owner) return jsonNoStore({ error: 'Unauthorized' }, 401)
 
   const { data: job, error } = await buildOwnerScopedQuery(
     supabaseAdmin

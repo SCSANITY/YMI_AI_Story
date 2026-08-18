@@ -11,25 +11,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ verified: false }, { status: 400 })
   }
 
-  const now = new Date().toISOString()
-  const { data: otpRow, error } = await supabaseAdmin
-    .from('verification_codes')
-    .select('email, code, expires_at')
-    .eq('email', normalizedEmail)
-    .eq('code', normalizedCode)
-    .gt('expires_at', now)
-    .order('expires_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const { data: verified, error } = await supabaseAdmin.rpc('verify_guest_otp', {
+    p_email: normalizedEmail,
+    p_code: normalizedCode,
+  })
 
-  if (error || !otpRow) {
-    return NextResponse.json({ verified: false }, { status: 400 })
+  if (error) {
+    console.error('[otp] verification guard failed', error)
+    return NextResponse.json({ error: 'Unable to verify code' }, { status: 503 })
   }
 
-  await supabaseAdmin
-    .from('verification_codes')
-    .delete()
-    .eq('email', normalizedEmail)
+  if (verified !== true) {
+    return NextResponse.json({ verified: false }, { status: 400 })
+  }
 
   return NextResponse.json({ verified: true })
 }

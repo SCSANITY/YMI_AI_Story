@@ -1,4 +1,4 @@
-import sharp from 'sharp'
+import sharp, { type Metadata } from 'sharp'
 
 export const DEFAULT_FINAL_SOURCE_MIN_EDGE = 512
 export const FINAL_SOURCE_SQUARE_TOLERANCE = 0.02
@@ -17,7 +17,7 @@ export class FinalSourceImageError extends Error {
   }
 }
 
-function orientedDimensions(metadata: Awaited<ReturnType<sharp.Sharp['metadata']>>): FinalSourceDimensions {
+function orientedDimensions(metadata: Metadata): FinalSourceDimensions {
   const width = Number(metadata.width || 0)
   const height = Number(metadata.height || 0)
   const swapsAxes = metadata.orientation != null && metadata.orientation >= 5 && metadata.orientation <= 8

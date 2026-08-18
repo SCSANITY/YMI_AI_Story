@@ -19,12 +19,11 @@ type OrdersListProps = {
   onOpenOrder: (orderId: string) => void
   onContinuePayment: (orderId: string) => void
   onDeletePending: (orderId: string) => void
-  onReview: (orderId: string) => void
 }
 
 type PendingOrderAction = {
   orderId: string
-  action: 'open' | 'continue' | 'delete' | 'review'
+  action: 'open' | 'continue' | 'delete'
 } | null
 
 export function OrdersList({
@@ -34,7 +33,6 @@ export function OrdersList({
   onOpenOrder,
   onContinuePayment,
   onDeletePending,
-  onReview,
 }: OrdersListProps) {
   if (orders.length === 0) {
     return (
@@ -122,7 +120,7 @@ export function OrdersList({
                   </Button>
                 </>
               )}
-              {isShippingCard && (
+              {(isShippingCard || isFinishedCard) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -132,18 +130,6 @@ export function OrdersList({
                 >
                   {activeAction === 'open' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {t('orders.viewDetails')}
-                </Button>
-              )}
-              {isFinishedCard && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-full"
-                  disabled={hasPendingAction}
-                  onClick={() => onReview(order.order_id)}
-                >
-                  {activeAction === 'review' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {t('orders.rateReview')}
                 </Button>
               )}
               {(isShippingCard || isFinishedCard) && <ChevronRight className="h-4 w-4 text-gray-400" />}

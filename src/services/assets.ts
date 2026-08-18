@@ -22,6 +22,7 @@ export type PendingUserAssetUpload = {
   role: 'face' | 'text' | 'voice' | 'avatar'
   original_name: string
   content_type: string
+  size_bytes: number
 }
 
 const FACE_UPLOAD_MAX_EDGE = 1400
@@ -659,6 +660,7 @@ export async function uploadUserAsset(
       customerId: customerId ?? null,
       file_name: uploadFile.name,
       content_type: uploadFile.type || 'application/octet-stream',
+      size_bytes: uploadFile.size,
     }),
     credentials: 'include',
   })
@@ -707,6 +709,7 @@ export async function uploadUserAsset(
       role,
       original_name: options?.originalName ?? file.name,
       content_type: uploadFile.type || 'application/octet-stream',
+      size_bytes: uploadFile.size,
     }
   }
 
@@ -722,6 +725,7 @@ export async function uploadUserAsset(
       customerId: customerId ?? null,
       original_name: options?.originalName ?? file.name,
       content_type: uploadFile.type || 'application/octet-stream',
+      size_bytes: uploadFile.size,
     }),
   })
 

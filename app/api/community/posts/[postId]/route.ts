@@ -1,14 +1,22 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const MAX_POST_IMAGES = 9
 
 async function actorKeyFor(request: Request) {
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-  if (customerId) return `customer:${customerId}`
-  return `anon:${await getOrCreateAnonSession()}`
+  const owner = await resolveCheckoutOwner(request, {
+    expectedCustomerId: url.searchParams.get('customerId'),
+    createAnonIfMissing: true,
+  })
+  if (!owner) throw new Error('Unable to resolve owner')
+  return owner.ownerType === 'customer'
+    ? `customer:${owner.customerId}`
+    : `anon:${owner.anonSessionId}`
 }
 
 async function signImages(storagePaths: string[]) {
@@ -27,7 +35,12 @@ export async function GET(
   context: { params: Promise<{ postId: string }> | { postId: string } }
 ) {
   const { postId } = await Promise.resolve(context.params)
-  const actorKey = await actorKeyFor(request)
+  let actorKey
+  try {
+    actorKey = await actorKeyFor(request)
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
 
   const { data: post, error } = await supabaseAdmin
     .from('community_posts')

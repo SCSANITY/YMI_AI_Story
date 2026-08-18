@@ -1,35 +1,33 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-const COOKIE_NAME = 'ymi_anon_session'
-
-function getCookieValue(cookies: string, name: string) {
-  const entry = cookies
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-  return entry ? entry.split('=')[1] : null
-}
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
+import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-
-  const cookies = request.headers.get('cookie') || ''
-  const anonSessionId = getCookieValue(cookies, COOKIE_NAME)
-
-  const ownerType = customerId ? 'customer' : 'anon'
-  const ownerId = customerId || anonSessionId
-
-  if (!ownerId) {
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+      optional: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) {
     return NextResponse.json({ faces: [], profiles: [], voices: [] })
   }
+  const filter = ownerFilter(owner)
 
   const { data: assets, error } = await supabaseAdmin
     .from('user_assets')
     .select('asset_id, asset_type, storage_path, metadata, created_at')
-    .eq('owner_type', ownerType)
-    .eq(ownerType === 'customer' ? 'customer_id' : 'anon_session_id', ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .order('created_at', { ascending: false })
 
   if (error || !assets) {
@@ -45,7 +43,7 @@ export async function GET(request: Request) {
       if (!face.storage_path) return { ...face, signed_url: null }
       const { data: signed } = await supabaseAdmin.storage
         .from('raw-private')
-        .createSignedUrl(face.storage_path, 60 * 60 * 24)
+        .createSignedUrl(face.storage_path, USER_ASSET_SIGN_TTL_SECONDS)
       return { ...face, signed_url: signed?.signedUrl ?? null }
     })
   )
@@ -55,7 +53,7 @@ export async function GET(request: Request) {
       if (!voice.storage_path) return { ...voice, signed_url: null }
       const { data: signed } = await supabaseAdmin.storage
         .from('raw-private')
-        .createSignedUrl(voice.storage_path, 60 * 60 * 24)
+        .createSignedUrl(voice.storage_path, USER_ASSET_SIGN_TTL_SECONDS)
       return { ...voice, signed_url: signed?.signedUrl ?? null }
     })
   )
@@ -66,29 +64,28 @@ export async function GET(request: Request) {
 export async function DELETE(request: Request) {
   const body = await request.json().catch(() => ({}))
   const assetId = body?.asset_id || body?.assetId
-  const customerId = body?.customerId || null
 
   if (!assetId) {
     return NextResponse.json({ error: 'Missing asset_id' }, { status: 400 })
   }
 
-  const cookies = request.headers.get('cookie') || ''
-  const anonSessionId = getCookieValue(cookies, COOKIE_NAME)
-  const ownerType = customerId ? 'customer' : 'anon'
-  const ownerId = customerId || anonSessionId
-
-  if (!ownerId) {
-    return NextResponse.json({ error: 'Missing owner context' }, { status: 401 })
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
   }
-
-  const ownerColumn = ownerType === 'customer' ? 'customer_id' : 'anon_session_id'
+  if (!owner) return NextResponse.json({ error: 'Missing owner context' }, { status: 401 })
+  const filter = ownerFilter(owner)
 
   const { data: asset, error: assetError } = await supabaseAdmin
     .from('user_assets')
     .select('asset_id, storage_path, asset_type')
     .eq('asset_id', assetId)
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .single()
 
   if (assetError || !asset) {

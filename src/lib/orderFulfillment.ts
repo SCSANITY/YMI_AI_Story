@@ -13,7 +13,7 @@ type StoryLanguage = 'English'
 
 const DEFAULT_STORY_LANGUAGE: StoryLanguage = 'English'
 
-function normalizeStoryLanguage(value: unknown): StoryLanguage {
+function normalizeStoryLanguage(): StoryLanguage {
   return DEFAULT_STORY_LANGUAGE
 }
 
@@ -80,7 +80,7 @@ type FinalizeOrderInput = {
   shippingRateSnapshot?: Record<string, unknown> | null
   shippingMethod?: string | null
   shippingZoneCode?: string | null
-  provider: 'demo' | 'stripe'
+  provider: 'stripe'
   providerRef?: string | null
   amount?: number | null
   currency?: string
@@ -771,7 +771,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         creation_id: item.creation_id,
         template_id: creation.template_id,
         job_type: 'final',
-        story_language: normalizeStoryLanguage(finalTextOverrides?.language),
+        story_language: normalizeStoryLanguage(),
         selected_book_type: mapBookTypeToDisplay(
           creation?.customize_snapshot?.textOverrides?.book_type ??
             creation?.customize_snapshot?.text_overrides?.book_type ??

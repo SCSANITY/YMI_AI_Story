@@ -6,7 +6,6 @@ import { Search, Filter, X } from 'lucide-react';
 import { Button } from './Button';
 import { useI18n } from '@/lib/useI18n';
 import { BookCard } from '@/components/BookCard';
-import { useBookDisplayData } from '@/components/useBookDisplayData';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import {
   AGE_GROUP_OPTIONS,
@@ -104,7 +103,6 @@ export const BookList: React.FC<BookListProps> = ({ initialGenderQuery = null })
   const { toggleFavorite, favorites } = useGlobalContext();
   const { t } = useI18n();
   const { books, hasResolved: hasCatalogResolved } = useBookCatalog();
-  const { ratingMap } = useBookDisplayData();
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
 
   // Filter States
@@ -410,7 +408,6 @@ const handlePersonalize = (bookID: string) => {
                         title={book.title}
                         storyType={book.storyTypeLabel || book.category}
                         description={book.description}
-                        rating={ratingMap[book.bookID]}
                         priority={index < 4}
                         suppressHover={suppressCardHover}
                         isNavigating={pendingCustomizeHref === getPersonalizeHref(book.bookID)}

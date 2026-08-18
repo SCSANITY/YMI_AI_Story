@@ -1628,7 +1628,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
     const loadTemplateInfo = async () => {
       const response = await fetch(`/api/templates/${encodeURIComponent(bookID)}`, {
-        credentials: 'omit',
+        credentials: 'same-origin',
       });
       const data = await response.json().catch(() => ({}));
 

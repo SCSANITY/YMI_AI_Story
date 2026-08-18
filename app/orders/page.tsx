@@ -17,7 +17,7 @@ import type { OrderSummary, OrderTab } from './ordersTypes';
 
 type PendingOrderAction = {
   orderId: string;
-  action: 'open' | 'continue' | 'delete' | 'review';
+  action: 'open' | 'continue' | 'delete';
 } | null;
 
 const getOrderTab = (status?: string | null): OrderTab => {
@@ -164,12 +164,6 @@ export default function OrdersPage() {
     router.push(`/checkout?orderId=${encodeURIComponent(orderId)}`);
   };
 
-  const handleReview = (orderId: string) => {
-    if (pendingAction) return;
-    setPendingAction({ orderId, action: 'review' });
-    router.push(`/orders/${orderId}/review`);
-  };
-
   return (
     <div className="page-surface min-h-screen">
     <div className="max-w-6xl mx-auto px-4 md:px-8 pt-24 pb-16">
@@ -254,7 +248,6 @@ export default function OrdersPage() {
             onOpenOrder={handleOpenOrder}
             onContinuePayment={handleContinuePayment}
             onDeletePending={(orderId) => void handleDeletePending(orderId)}
-            onReview={handleReview}
           />
         </>
       )}

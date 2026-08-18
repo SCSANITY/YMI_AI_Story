@@ -53,17 +53,6 @@ export interface OrderRow {
   created_at?: string
 }
 
-export interface OrderReviewRow {
-  review_id: string
-  order_id: string
-  customer_id?: string | null
-  template_id: string
-  rating: number
-  comment?: string | null
-  created_at?: string
-  updated_at?: string
-}
-
 export interface VerificationCodeRow {
   verification_id: string
   email: string

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 
 async function signAvatarUrl(storagePath: string | null) {
   if (!storagePath) return null
 
   const { data: signed } = await supabaseAdmin.storage
     .from('raw-private')
-    .createSignedUrl(storagePath, 60 * 60 * 24)
+    .createSignedUrl(storagePath, USER_ASSET_SIGN_TTL_SECONDS)
 
   return signed?.signedUrl ?? null
 }

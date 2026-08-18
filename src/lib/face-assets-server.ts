@@ -1,5 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { isValidUserAssetStoragePath } from '@/lib/userAssetsStorage'
+import {
+  isValidUserAssetStoragePath,
+  validateStoredUserAssetMetadata,
+} from '@/lib/userAssetsStorage'
 
 const MAX_FACE_IMAGES = 8
 
@@ -15,6 +18,7 @@ export type PendingFaceAsset = {
   role: 'face'
   original_name: string | null
   content_type: string | null
+  size_bytes: number
 }
 
 export type ConfirmedFaceAsset = {
@@ -77,8 +81,16 @@ export function normalizePendingFaceAsset(raw: unknown): PendingFaceAsset | null
       : typeof value.contentType === 'string'
         ? value.contentType
         : null
+  const sizeBytes = Number(value.size_bytes ?? value.sizeBytes)
 
-  if (!assetId || !storagePath || assetType !== 'face_image' || role !== 'face') {
+  if (
+    !assetId ||
+    !storagePath ||
+    assetType !== 'face_image' ||
+    role !== 'face' ||
+    !Number.isInteger(sizeBytes) ||
+    sizeBytes <= 0
+  ) {
     return null
   }
   if (!isValidUserAssetStoragePath(storagePath, assetId)) return null
@@ -90,6 +102,7 @@ export function normalizePendingFaceAsset(raw: unknown): PendingFaceAsset | null
     role: 'face',
     original_name: originalName,
     content_type: contentType,
+    size_bytes: sizeBytes,
   }
 }
 
@@ -141,6 +154,30 @@ export async function confirmPendingFaceAsset(
     }
   }
 
+  try {
+    const { data: info, error: infoError } = await supabaseAdmin.storage
+      .from('raw-private')
+      .info(pendingFaceAsset.storage_path)
+    if (infoError || !info) throw new Error('Uploaded face image was not found')
+    validateStoredUserAssetMetadata(
+      'face_image',
+      {
+        contentType: pendingFaceAsset.content_type,
+        sizeBytes: pendingFaceAsset.size_bytes,
+      },
+      info
+    )
+  } catch (error) {
+    await supabaseAdmin.storage
+      .from('raw-private')
+      .remove([pendingFaceAsset.storage_path])
+      .catch(() => undefined)
+    throw new FaceAssetServerError(
+      error instanceof Error ? error.message : 'Uploaded face image failed verification',
+      409
+    )
+  }
+
   const ownerKey = ownerColumn(owner)
   const { data: asset, error: assetError } = await supabaseAdmin
     .from('user_assets')
@@ -157,6 +194,7 @@ export async function confirmPendingFaceAsset(
         created_for: 'preview',
         source: 'upload',
         content_type: pendingFaceAsset.content_type,
+        size_bytes: pendingFaceAsset.size_bytes,
       },
     })
     .select('asset_id, storage_path')
@@ -175,7 +213,7 @@ export async function confirmPendingFaceAsset(
 
   const { data: assets } = await supabaseAdmin
     .from('user_assets')
-    .select('asset_id')
+    .select('asset_id, storage_path')
     .eq('owner_type', owner.ownerType)
     .eq(ownerKey, owner.ownerId)
     .eq('asset_type', 'face_image')
@@ -187,6 +225,11 @@ export async function confirmPendingFaceAsset(
       .map((row) => row.asset_id)
     if (toRemove.length) {
       await supabaseAdmin.from('user_assets').delete().in('asset_id', toRemove)
+      const paths = assets
+        .slice(0, assets.length - MAX_FACE_IMAGES)
+        .map((row) => row.storage_path)
+        .filter((value): value is string => Boolean(value))
+      if (paths.length) await supabaseAdmin.storage.from('raw-private').remove(paths)
     }
   }
 

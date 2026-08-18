@@ -6,6 +6,7 @@ import { markOrderDiscountsPaid } from '@/lib/discounts'
 import { recordExternalEmailObserved } from '@/lib/emailEvents'
 import { resolveShippingAddress } from '@/lib/shipping-address'
 import { fromMinorUnit, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
+import { requireMatchingCheckoutSession } from '@/lib/checkout-session-lock'
 
 export const runtime = 'nodejs'
 
@@ -78,6 +79,7 @@ export async function POST(request: Request) {
     const providerRef =
       (typeof session.payment_intent === 'string' ? session.payment_intent : null) || session.id
 
+    await requireMatchingCheckoutSession(orderId, session.id, session.metadata?.checkout_fingerprint)
     const result = await finalizeOrderPayment({
       orderId,
       customerId,

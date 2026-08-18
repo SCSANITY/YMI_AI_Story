@@ -3,6 +3,8 @@ import { createServerSupabase } from '@/lib/supabaseServer'
 import { getOrCreateAnonSession } from '@/lib/session'
 
 const ANON_COOKIE_NAME = 'ymi_anon_session'
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const DISPLAY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 
 export type CheckoutOwner =
   | {
@@ -28,6 +30,13 @@ export class CheckoutOwnerError extends Error {
     this.name = 'CheckoutOwnerError'
     this.status = status
   }
+}
+
+export function parseOrderReference(value: unknown) {
+  const normalized = String(value ?? '').trim()
+  if (UUID_PATTERN.test(normalized)) return { column: 'order_id' as const, value: normalized }
+  if (DISPLAY_ID_PATTERN.test(normalized)) return { column: 'display_id' as const, value: normalized }
+  throw new CheckoutOwnerError('Invalid order reference', 400)
 }
 
 function getCookieValue(request: Request, name: string) {
@@ -128,8 +137,8 @@ export async function resolveCheckoutOwner(
 
 export function ownerFilter(owner: CheckoutOwner) {
   return owner.ownerType === 'customer'
-    ? { owner_type: 'customer', column: 'customer_id', value: owner.customerId }
-    : { owner_type: 'anon', column: 'anon_session_id', value: owner.anonSessionId }
+    ? { owner_type: 'customer', column: 'customer_id', value: owner.customerId } as const
+    : { owner_type: 'anon', column: 'anon_session_id', value: owner.anonSessionId } as const
 }
 
 export function ownerJson(owner: CheckoutOwner | null) {
@@ -147,10 +156,11 @@ export async function requireCheckoutOrderAccess(
     requireUnpaid?: boolean
   }
 ) {
+  const reference = parseOrderReference(orderIdOrDisplayId)
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
-    .select('order_id, display_id, order_status, payment_id, customer_id, email')
-    .or(`order_id.eq.${orderIdOrDisplayId},display_id.eq.${orderIdOrDisplayId}`)
+    .select('order_id, display_id, order_status, payment_id, customer_id, email, checkout_session_id')
+    .eq(reference.column, reference.value)
     .maybeSingle()
 
   if (orderError) {

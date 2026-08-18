@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Lock, CheckCircle2, ChevronLeft } from 'lucide-react';
+import { Lock, ChevronLeft } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Button } from '@/components/Button';
 import { AddressFormSection } from './AddressFormSection';
@@ -13,7 +13,6 @@ import { CheckoutSummaryPanel } from './CheckoutSummaryPanel';
 import { CurrencyPicker } from './CurrencyPicker';
 import { DiscountSection } from './DiscountSection';
 import { MobilePaymentBar, PaymentActions } from './PaymentActions';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useI18n } from '@/lib/useI18n';
 import {
   CheckoutCurrency,
@@ -35,7 +34,7 @@ const CheckoutPolicyModal = dynamic(
   { ssr: false, loading: () => null }
 );
 
-type CheckoutStep = 'address' | 'payment' | 'success';
+type CheckoutStep = 'address' | 'payment';
 type CheckoutIdentityMode = 'guest' | 'auth';
 type ShippingMethodCode = 'standard' | 'speedy';
 type CheckoutPolicyModal = 'shipping' | 'refund' | 'safety' | 'impact' | null;
@@ -111,8 +110,6 @@ function CheckoutPageContent() {
     hydrateCheckoutItems,
     reconcileCartItemPrices,
     removeFromCheckout,
-    removeOrderedItems,
-    clearCheckout,
     openLoginModal,
     checkoutEmail,
     setCheckoutEmail,
@@ -136,7 +133,6 @@ function CheckoutPageContent() {
 
   const [step, setStep] = useState<CheckoutStep>('address');
   const [orderId, setOrderId] = useState<string | null>(null);
-  const [completedOrder, setCompletedOrder] = useState<{ id: string; displayId?: string; total: number; email?: string } | null>(null);
   const selectedCurrency = toChargeCurrency(displayCurrency);
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
   const [selectedRewardVoucherId, setSelectedRewardVoucherId] = useState<string | null>(null);
@@ -684,7 +680,6 @@ function CheckoutPageContent() {
       case 'address':
         return 1;
       case 'payment':
-      case 'success':
         return 2;
       default:
         return 1;
@@ -1015,61 +1010,6 @@ function CheckoutPageContent() {
     shippingAmountUsd,
   ]);
 
-  const finalizeOrder = async (mode: 'guest' | 'auth') => {
-    setIsPlacingOrder(true);
-    try {
-      const payload = {
-        orderId,
-        email: checkoutContactEmail,
-        paymentMethod: 'card',
-        isGuest: mode === 'guest',
-        currency: selectedCurrency,
-        shippingAddress: checkoutShippingContext.shippingAddress,
-        shippingAmountUsd: checkoutShippingContext.shippingAmountUsd,
-        shippingMethod: checkoutShippingContext.shippingMethod,
-        shippingZoneCode: checkoutShippingContext.shippingZoneCode,
-        shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
-        items: items.map(item => ({
-          id: item.id,
-          bookID: item.bookID,
-          quantity: item.quantity ?? 1,
-          personalization: item.personalization ?? null,
-        })),
-      };
-
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = response.ok ? await response.json() : null;
-      if (!response.ok) {
-        const errorMessage = data?.error || t('checkout.placeOrderError');
-        setFormError(errorMessage);
-        return;
-      }
-      const newOrderId = data?.orderId || orderId || data?.paymentId || `ord_${Date.now().toString(36)}`;
-      const displayId = data?.displayId ?? null;
-
-      removeOrderedItems(items.map(item => item.id));
-      setCompletedOrder({ id: newOrderId, displayId: displayId ?? undefined, total: orderTotalUsd, email: checkoutContactEmail });
-      setOrderId(null);
-      clearCheckout();
-      setCheckoutStarted(false);
-      checkoutInitRef.current = false;
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem('ymi_checkout_form');
-        window.localStorage.removeItem('ymi_discount_code');
-      }
-      setStep('success');
-    } catch {
-      setFormError(t('checkout.placeOrderError'));
-    } finally {
-      isPlacingOrderRef.current = false;
-      setIsPlacingOrder(false);
-    }
-  };
-
   const startStripeHostedCheckout = async (mode: 'guest' | 'auth') => {
     if (!orderId) {
       setFormError(t('checkout.orderNotReadyError'));
@@ -1155,11 +1095,12 @@ function CheckoutPageContent() {
     const effectiveIdentityMode: 'guest' | 'auth' = skipIdentityVerification ? 'auth' : (identityMode as 'guest' | 'auth');
 
     isPlacingOrderRef.current = true;
-    if (stripeCheckoutEnabled) {
-      void startStripeHostedCheckout(effectiveIdentityMode);
-    } else {
-      void finalizeOrder(effectiveIdentityMode);
+    if (!stripeCheckoutEnabled) {
+      setFormError(t('checkout.stripeStartError'));
+      isPlacingOrderRef.current = false;
+      return;
     }
+    void startStripeHostedCheckout(effectiveIdentityMode);
   };
 
   const handleMobilePaymentAction = useCallback(() => {
@@ -1542,7 +1483,6 @@ function CheckoutPageContent() {
           formattedDiscount={formattedDiscount}
           formattedShippingDiscount={formattedShippingDiscount}
           formattedTotal={formattedTotal}
-          stripeCheckoutEnabled={stripeCheckoutEnabled}
           t={t}
         />
       </div>
@@ -1586,49 +1526,6 @@ function CheckoutPageContent() {
         />
       ) : null}
 
-      <AnimatePresence>
-        {step === 'success' && completedOrder && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-6"
-          >
-            <motion.div
-              initial={{ scale: 0.96, opacity: 0, y: 10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.98, opacity: 0, y: 6 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="max-w-2xl w-full text-center bg-white rounded-[32px] border border-amber-100 shadow-2xl p-10 relative overflow-hidden"
-            >
-              <div className="absolute -top-12 -right-12 w-40 h-40 bg-amber-200/40 rounded-full blur-2xl" />
-              <div className="absolute -bottom-16 -left-12 w-44 h-44 bg-orange-200/40 rounded-full blur-2xl" />
-
-              <div className="relative z-10 space-y-6">
-                <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center shadow-inner">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-title text-gray-900">{t('checkout.successTitle')}</h1>
-                  <p className="text-gray-600 mt-2">{t('checkout.successDescription')}</p>
-                </div>
-                <div className="text-sm font-semibold text-gray-900 bg-amber-50 border border-amber-100 rounded-full px-4 py-2 inline-flex items-center gap-2">
-                  <span>{t('checkout.orderIdLabel')}:</span>
-                  <span className="font-mono tabular-nums tracking-wide">{completedOrder.displayId ?? completedOrder.id}</span>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-                  <Button size="lg" className="rounded-full px-8" onClick={() => router.push(`/orders/${completedOrder.id}`)}>
-                    {t('checkout.trackOrder')}
-                  </Button>
-                  <Button size="lg" variant="outline" className="rounded-full px-8" onClick={() => router.push('/')}>
-                    {t('common.backToHome')}
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

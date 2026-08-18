@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendOrderDeliveryEmail } from '@/lib/email'
+import { matchesSecret } from '@/lib/secret-compare'
 
 // Legacy/non-review final delivery path.
 // Current production delivery goes through Admin final review release in src/lib/finalReview.ts.
@@ -12,7 +13,7 @@ const DELIVERY_PREVIEW_QUALITY = Number.parseInt(process.env.DELIVERY_PREVIEW_QU
 
 export async function POST(request: Request) {
   const secret = request.headers.get('x-internal-secret')
-  if (!INTERNAL_SECRET || secret !== INTERNAL_SECRET) {
+  if (!matchesSecret(secret, INTERNAL_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -7,6 +7,7 @@ import {
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
 import { filterActiveCartItems } from '@/lib/cart-lifecycle'
+import { parseCartItemQuantity } from '@/lib/cart-quantity'
 import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
 import {
   loadAuthoritativeCreationPackagePrice,
@@ -174,6 +175,7 @@ export async function POST(request: Request) {
   const body = await request.json()
   const creationId = body?.creationId ?? body?.creation_id
   const status = body?.status ?? 'draft'
+  let quantity: number
 
   if (!creationId) {
     return NextResponse.json({ error: 'Missing creationId' }, { status: 400 })
@@ -201,6 +203,11 @@ export async function POST(request: Request) {
       throw error
     }
   }
+  try {
+    quantity = parseCartItemQuantity(body?.quantity)
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid quantity' }, { status: 400 })
+  }
 
   let pricing
   try {
@@ -222,7 +229,7 @@ export async function POST(request: Request) {
       package_type: pricing.packageType,
       package_price_version: pricing.packagePriceVersion,
       status,
-      quantity: body?.quantity ?? 1,
+      quantity,
       price_at_purchase: pricing.priceAtPurchase,
       order_id: body?.orderId ?? null,
     })
@@ -267,6 +274,14 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const body = await request.json()
   const cartItemId = body?.cartItemId ?? body?.cart_item_id
+  let quantity: number | undefined
+  if (body?.quantity !== undefined) {
+    try {
+      quantity = parseCartItemQuantity(body.quantity)
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid quantity' }, { status: 400 })
+    }
+  }
   let owner
   try {
     owner = (await resolveCheckoutOwner(request, {
@@ -342,7 +357,7 @@ export async function PATCH(request: Request) {
     product_type: pricing.productType,
     package_type: pricing.packageType,
     package_price_version: pricing.packagePriceVersion,
-    quantity: body?.quantity ?? undefined,
+    quantity,
     price_at_purchase: pricing.priceAtPurchase,
     status: body?.status ?? undefined,
     order_id: body?.orderId ?? undefined,
@@ -416,15 +431,47 @@ export async function DELETE(request: Request) {
   }
   const filter = ownerFilter(owner)
 
-  const { error } = await supabaseAdmin
+  const { data: existingItem, error: existingItemError } = await supabaseAdmin
+    .from('cart_items')
+    .select('cart_item_id, status, order_id, payment_id')
+    .eq('cart_item_id', cartItemId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
+    .maybeSingle()
+
+  if (existingItemError) {
+    return NextResponse.json({ error: 'Failed to load cart item' }, { status: 500 })
+  }
+  if (!existingItem?.cart_item_id) {
+    return NextResponse.json({ error: 'Cart item not found' }, { status: 404 })
+  }
+  if (existingItem.payment_id) {
+    return NextResponse.json({ error: 'Paid cart items cannot be deleted' }, { status: 409 })
+  }
+  if (existingItem.order_id || existingItem.status !== 'cart') {
+    return NextResponse.json(
+      { error: 'Checkout items must be returned to the cart before deletion' },
+      { status: 409 }
+    )
+  }
+
+  const { data: deleted, error } = await supabaseAdmin
     .from('cart_items')
     .delete()
     .eq('cart_item_id', cartItemId)
     .eq('owner_type', filter.owner_type)
     .eq(filter.column, filter.value)
+    .eq('status', 'cart')
+    .is('order_id', null)
+    .is('payment_id', null)
+    .select('cart_item_id')
+    .maybeSingle()
 
   if (error) {
     return NextResponse.json({ error: 'Failed to cancel cart item' }, { status: 500 })
+  }
+  if (!deleted?.cart_item_id) {
+    return NextResponse.json({ error: 'Cart item changed before deletion' }, { status: 409 })
   }
 
   return NextResponse.json({ ok: true })

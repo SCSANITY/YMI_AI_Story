@@ -5,7 +5,6 @@ import { Heart, Sparkles } from 'lucide-react'
 import { Book } from '@/types'
 import { BookCardCover } from '@/components/BookCardCover'
 import { useI18n } from '@/lib/useI18n'
-import type { BookRatingSummary } from '@/components/useBookDisplayData'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
 
@@ -16,7 +15,6 @@ type BookCardProps = {
   title: string
   storyType: string
   description: string
-  rating?: BookRatingSummary
   suppressHover?: boolean
   priority?: boolean
   isNavigating?: boolean
@@ -32,7 +30,6 @@ export function BookCard({
   title,
   storyType,
   description,
-  rating,
   suppressHover = false,
   priority = false,
   isNavigating = false,
@@ -61,6 +58,14 @@ export function BookCard({
       onClick={isComingSoon ? undefined : onClick}
       onPointerEnter={isComingSoon ? undefined : onPrefetch}
       onFocus={isComingSoon ? undefined : onPrefetch}
+      onKeyDown={isComingSoon ? undefined : (event) => {
+        if (event.target !== event.currentTarget || event.key !== 'Enter') return
+        event.preventDefault()
+        onClick()
+      }}
+      role={isComingSoon ? undefined : 'link'}
+      tabIndex={isComingSoon ? undefined : 0}
+      aria-label={isComingSoon ? undefined : title}
       aria-disabled={isComingSoon}
       aria-busy={isNavigating || undefined}
     >
@@ -74,10 +79,14 @@ export function BookCard({
         isMuted={isComingSoon}
       >
         <button
+          type="button"
           onClick={onFavoriteClick}
+          aria-label={t(isFavorite ? 'favorites.removeBook' : 'favorites.addBook', { title })}
+          aria-pressed={isFavorite}
           className="absolute right-3 top-7 z-20 rounded-full bg-white/90 p-1.5 shadow-sm backdrop-blur-sm transition-all hover:bg-white active:scale-90 md:right-8 md:top-10 md:p-2 md:opacity-0 md:translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
         >
           <Heart
+            aria-hidden="true"
             className={`h-4 w-4 transition-colors md:h-5 md:w-5 ${
               isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400 hover:text-gray-600'
             }`}
@@ -135,11 +144,6 @@ export function BookCard({
                 </span>
               </div>
             )}
-            {rating?.count ? (
-              <div className="mt-1 text-[10px] font-semibold text-amber-700 md:text-xs">
-                {t('bookList.rating')} {rating.average.toFixed(1)} ({rating.count})
-              </div>
-            ) : null}
           </div>
           <div className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 md:px-3 md:text-sm ${
             isComingSoon

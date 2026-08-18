@@ -23,17 +23,18 @@ test('cart and order-start derive package and price from the owned creation', as
 })
 
 test('paid rows stay immutable while unpaid checkout receives authoritative item prices', async () => {
-  const [cartRoute, orderStart, ordersRoute] = await Promise.all([
+  const [cartRoute, orderStart, checkoutSession] = await Promise.all([
     read('app/api/cart/route.ts'),
     read('app/api/orders/start/route.ts'),
-    read('app/api/orders/route.ts'),
+    read('app/api/checkout/session/route.ts'),
   ])
 
   assert.match(cartRoute, /Paid cart items cannot be changed/)
   assert.match(cartRoute, /requireCheckoutOrderAccess\(String\(existingItem\.order_id\), owner, \{ requireUnpaid: true \}\)/)
   assert.match(orderStart, /items: pricedItems/)
-  assert.match(ordersRoute, /authoritativeCartItems\.reduce/)
-  assert.match(ordersRoute, /price_at_purchase/)
+  assert.match(checkoutSession, /price_at_purchase/)
+  assert.match(checkoutSession, /allocateProductDiscountToLineItems/)
+  assert.doesNotMatch(checkoutSession, /body\?\.priceAtPurchase/)
 })
 
 test('Admin Catalog pricing is admin-only and uses row-version CAS', async () => {

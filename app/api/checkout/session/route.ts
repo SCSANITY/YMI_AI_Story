@@ -20,18 +20,26 @@ import {
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import { calculateShippingQuote } from '@/lib/shipping-quote-server'
+import {
+  clearOrderCheckoutSessionLock,
+  createOrderCheckoutFingerprint,
+} from '@/lib/checkout-session-lock'
+import { getSiteUrl } from '@/lib/site-url'
 
-type SessionItemInput = {
-  id?: string
-  cartItemId?: string
-}
-
-function getBaseUrl(request: Request) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL
-  if (siteUrl) return siteUrl.replace(/\/+$/, '')
-  const origin = request.headers.get('origin')
-  if (origin) return origin.replace(/\/+$/, '')
-  return new URL(request.url).origin.replace(/\/+$/, '')
+function checkoutSessionMatchesSiteOrigin(
+  session: { success_url?: string | null; cancel_url?: string | null },
+  siteUrl: string
+) {
+  try {
+    const expectedOrigin = new URL(siteUrl).origin
+    return (
+      new URL(session.success_url || '').origin === expectedOrigin &&
+      new URL(session.cancel_url || '').origin === expectedOrigin
+    )
+  } catch {
+    return false
+  }
 }
 
 export async function POST(request: Request) {
@@ -44,19 +52,14 @@ export async function POST(request: Request) {
     const orderId = String(body?.orderId || '').trim()
     const email = String(body?.email || '').trim().toLowerCase()
     let shippingAddress = body?.shippingAddress ?? {}
-    let shippingAmountUsd = Math.max(0, Number(body?.shippingAmountUsd ?? 0))
-    let shippingRateSnapshot = body?.shippingRateSnapshot ?? null
-    let shippingMethod = body?.shippingMethod ? String(body.shippingMethod) : shippingRateSnapshot?.methodCode ?? null
-    let shippingZoneCode = body?.shippingZoneCode ? String(body.shippingZoneCode) : shippingRateSnapshot?.zoneCode ?? null
+    let shippingAmountUsd = 0
+    let shippingRateSnapshot: Record<string, unknown> | null = null
+    let shippingMethod: string | null = null
+    let shippingZoneCode: string | null = null
+    const requestedShippingMethod = String(body?.shippingMethod || '').trim() || null
     const billingAddress = body?.billingAddress ?? null
     const isGuest = Boolean(body?.isGuest)
     const currency = normalizeCheckoutCurrency(body?.currency) as CheckoutCurrency
-    const rawItems = Array.isArray(body?.items) ? (body.items as SessionItemInput[]) : []
-    const selectedCartItemIds = rawItems
-      .map((item) => item?.id || item?.cartItemId || '')
-      .map((id) => String(id).trim())
-      .filter((id) => id.length > 0)
-
     if (!orderId || !email) {
       return NextResponse.json({ error: 'Missing orderId or email' }, { status: 400 })
     }
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('order_id, order_status, discount_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
+      .select('order_id, order_status, checkout_session_id, discount_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
       .eq('order_id', orderId)
       .maybeSingle()
     if (orderError || !order?.order_id) {
@@ -82,7 +85,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Order is no longer payable' }, { status: 400 })
     }
 
-    let cartItemTypesQuery = supabaseAdmin
+    const stripe = getStripeServer()
+    const baseUrl = getSiteUrl(request.url)
+    if (order.checkout_session_id) {
+      const existingSession = await stripe.checkout.sessions.retrieve(order.checkout_session_id)
+      if (
+        existingSession.status === 'open' &&
+        existingSession.url &&
+        checkoutSessionMatchesSiteOrigin(existingSession, baseUrl)
+      ) {
+        return NextResponse.json({
+          ok: true,
+          orderId,
+          sessionId: existingSession.id,
+          url: existingSession.url,
+          reused: true,
+        })
+      }
+      if (existingSession.status === 'complete') {
+        return NextResponse.json({ error: 'Order payment is already being processed' }, { status: 409 })
+      }
+      if (existingSession.status === 'open') {
+        await stripe.checkout.sessions.expire(existingSession.id)
+      }
+      await clearOrderCheckoutSessionLock(orderId, existingSession.id)
+    }
+
+    const cartItemTypesQuery = supabaseAdmin
       .from('cart_items')
       .select('cart_item_id, product_type')
       .eq('order_id', orderId)
@@ -90,19 +119,12 @@ export async function POST(request: Request) {
       .eq('owner_type', filter.owner_type)
       .eq(filter.column, filter.value)
 
-    if (selectedCartItemIds.length > 0) {
-      cartItemTypesQuery = cartItemTypesQuery.in('cart_item_id', selectedCartItemIds)
-    }
-
     const { data: cartItemTypes, error: cartItemTypesError } = await cartItemTypesQuery
     if (cartItemTypesError || !cartItemTypes || cartItemTypes.length === 0) {
       return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
     }
 
-    const selectedRowsComplete =
-      selectedCartItemIds.length === 0 || cartItemTypes.length === selectedCartItemIds.length
     const hasOnlyEbookItems =
-      selectedRowsComplete &&
       cartItemTypes.every((item) => item.product_type === 'ebook')
 
     if (hasOnlyEbookItems) {
@@ -111,6 +133,29 @@ export async function POST(request: Request) {
       shippingRateSnapshot = null
       shippingMethod = null
       shippingZoneCode = null
+    } else {
+      const authoritativeQuote = await calculateShippingQuote(shippingAddress)
+      if (!authoritativeQuote.available) {
+        return NextResponse.json(
+          { error: authoritativeQuote.message || 'Shipping is not available for this destination.' },
+          { status: 400 }
+        )
+      }
+
+      const selectedShippingOption = requestedShippingMethod
+        ? authoritativeQuote.options.find((option) => option.methodCode === requestedShippingMethod)
+        : authoritativeQuote.options.find(
+            (option) => option.methodCode === authoritativeQuote.selectedMethod
+          )
+
+      if (!selectedShippingOption) {
+        return NextResponse.json({ error: 'The selected shipping method is not available.' }, { status: 400 })
+      }
+
+      shippingAmountUsd = selectedShippingOption.amountUsd
+      shippingRateSnapshot = selectedShippingOption.snapshot
+      shippingMethod = selectedShippingOption.methodCode
+      shippingZoneCode = String(selectedShippingOption.snapshot.zoneCode || '').trim() || null
     }
 
     const { error: orderUpdateError } = await supabaseAdmin
@@ -144,7 +189,7 @@ export async function POST(request: Request) {
 
     const discountSummary = await getOrderDiscountSummary(orderId)
 
-    let cartItemsQuery = supabaseAdmin
+    const cartItemsQuery = supabaseAdmin
       .from('cart_items')
       .select(
         `
@@ -162,10 +207,6 @@ export async function POST(request: Request) {
       .eq('status', 'ordered')
       .eq('owner_type', filter.owner_type)
       .eq(filter.column, filter.value)
-
-    if (selectedCartItemIds.length > 0) {
-      cartItemsQuery = cartItemsQuery.in('cart_item_id', selectedCartItemIds)
-    }
 
     const { data: cartItems, error: cartItemsError } = await cartItemsQuery
     if (cartItemsError || !cartItems || cartItems.length === 0) {
@@ -243,8 +284,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Zero-total checkout is not supported yet' }, { status: 400 })
     }
 
-    const baseUrl = getBaseUrl(request)
-    const stripe = getStripeServer()
+    const checkoutFingerprint = await createOrderCheckoutFingerprint(orderId)
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -252,7 +292,8 @@ export async function POST(request: Request) {
       customer_email: email,
       line_items: lineItems,
       success_url: `${baseUrl}/checkout/success?orderId=${encodeURIComponent(orderId)}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/checkout?orderId=${encodeURIComponent(orderId)}&step=payment`,
+      cancel_url: `${baseUrl}/api/checkout/session/cancel?orderId=${encodeURIComponent(orderId)}`,
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
       metadata: {
         order_id: orderId,
         customer_id: customerId ?? '',
@@ -264,6 +305,7 @@ export async function POST(request: Request) {
         discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
         shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
         shipping_amount_usd: String(shippingAmountUsd || 0),
+        checkout_fingerprint: checkoutFingerprint,
       },
       payment_intent_data: {
         metadata: {
@@ -277,6 +319,42 @@ export async function POST(request: Request) {
         },
       },
     })
+
+    const { data: lockedOrder, error: lockError } = await supabaseAdmin
+      .from('orders')
+      .update({
+        checkout_session_id: session.id,
+        checkout_session_locked_at: new Date().toISOString(),
+      })
+      .eq('order_id', orderId)
+      .eq('order_status', 'unpaid')
+      .is('checkout_session_id', null)
+      .select('order_id')
+      .maybeSingle()
+
+    if (lockError || !lockedOrder?.order_id) {
+      await stripe.checkout.sessions.expire(session.id).catch(() => undefined)
+      return NextResponse.json(
+        { error: 'Checkout changed while payment was starting. Please try again.' },
+        { status: 409 }
+      )
+    }
+
+    try {
+      const lockedFingerprint = await createOrderCheckoutFingerprint(orderId)
+      if (lockedFingerprint !== checkoutFingerprint) {
+        await stripe.checkout.sessions.expire(session.id).catch(() => undefined)
+        await clearOrderCheckoutSessionLock(orderId, session.id)
+        return NextResponse.json(
+          { error: 'Checkout changed while payment was starting. Please review and try again.' },
+          { status: 409 }
+        )
+      }
+    } catch (snapshotError) {
+      await stripe.checkout.sessions.expire(session.id).catch(() => undefined)
+      await clearOrderCheckoutSessionLock(orderId, session.id).catch(() => undefined)
+      throw snapshotError
+    }
 
     try {
       await recordExternalEmailObserved({

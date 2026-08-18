@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendOtpEmail } from '@/lib/email'
@@ -10,7 +11,7 @@ import {
 } from '@/lib/guest-otp'
 
 function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  return randomInt(100000, 1000000).toString()
 }
 
 export async function POST(request: Request) {
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
     .from('verification_codes')
     .delete()
     .eq('email', normalizedEmail)
-    .neq('code', code)
+    .neq('verification_id', verification.verification_id)
 
   return NextResponse.json({
     sent: true,

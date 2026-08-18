@@ -299,7 +299,11 @@ export const Navbar: React.FC = () => {
           )}
 
           <button
+            type="button"
             className={`md:hidden p-2 -ml-2 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-600'}`}
+            aria-label={t(isMobileMenuOpen ? 'common.close' : 'common.openMenu')}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="navbar-mobile-navigation"
             onClick={() => {
               setCartOpenPath(null)
               setMobileMenuOpen(!isMobileMenuOpen)
@@ -522,7 +526,7 @@ export const Navbar: React.FC = () => {
       ) : null}
 
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
+        <div id="navbar-mobile-navigation" className="md:hidden bg-white/55 backdrop-blur-2xl backdrop-saturate-150 px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] border-t border-white/40 animate-in slide-in-from-top-2">
           {isHomePage ? (
             <button onClick={() => { handleHomeClick(); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{t('navbar.home')}</button>
           ) : (

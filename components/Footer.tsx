@@ -596,7 +596,7 @@ export const Footer: React.FC = () => {
               <h3 className="text-base font-semibold text-gray-900">{t('footer.subscribeTitle')}</h3>
               <p className="text-gray-600">{t('footer.subscribeDescription')}</p>
               <NewsletterSignup t={t} />
-              <div className="flex flex-wrap items-center gap-2 pt-2 text-gray-400">
+              <div className="flex flex-wrap items-center gap-2 pt-2 text-gray-600">
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">AMEX</span>
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">Klarna</span>
                 <span className="rounded-md border border-gray-200 px-2 py-1 text-xs">PayPal</span>
@@ -617,7 +617,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="border-t border-amber-100/60">
-          <div className="container mx-auto flex flex-col items-center justify-center gap-2 px-4 py-4 text-sm text-gray-400 sm:flex-row">
+          <div className="container mx-auto flex flex-col items-center justify-center gap-2 px-4 py-4 text-sm text-gray-600 sm:flex-row">
             <span>{t('footer.copyright')}</span>
           </div>
         </div>

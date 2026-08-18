@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const MAX_ADDRESSES = 5
 
@@ -55,16 +59,23 @@ function normalizeAddress(raw: unknown): AddressMetadata | null {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-  const ownerType: 'anon' | 'customer' = customerId ? 'customer' : 'anon'
-  const ownerId = customerId ? String(customerId) : await getOrCreateAnonSession()
-  const ownerColumn = ownerType === 'customer' ? 'customer_id' : 'anon_session_id'
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ addresses: [] })
+  const filter = ownerFilter(owner)
 
   const { data: addresses, error } = await supabaseAdmin
     .from('user_assets')
     .select('asset_id, metadata, created_at')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .eq('asset_type', 'shipping_address')
     .order('created_at', { ascending: false })
     .limit(MAX_ADDRESSES)
@@ -78,22 +89,29 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const body = await request.json()
-  const customerId = body?.customerId ?? null
   const address = normalizeAddress(body?.address ?? body)
 
   if (!address) {
     return NextResponse.json({ saved: false, reason: 'missing_fields' }, { status: 400 })
   }
 
-  const ownerType: 'anon' | 'customer' = customerId ? 'customer' : 'anon'
-  const ownerId = customerId ? String(customerId) : await getOrCreateAnonSession()
-  const ownerColumn = ownerType === 'customer' ? 'customer_id' : 'anon_session_id'
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
+  const filter = ownerFilter(owner)
 
   const { data: existingAssets } = await supabaseAdmin
     .from('user_assets')
     .select('asset_id, metadata')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .eq('asset_type', 'shipping_address')
     .order('created_at', { ascending: false })
 
@@ -117,8 +135,8 @@ export async function POST(request: Request) {
     const { error: insertError } = await supabaseAdmin
       .from('user_assets')
       .insert({
-        owner_type: ownerType,
-        [ownerColumn]: ownerId,
+        owner_type: filter.owner_type,
+        [filter.column]: filter.value,
         asset_type: 'shipping_address',
         storage_path: null,
         metadata: address,
@@ -131,8 +149,8 @@ export async function POST(request: Request) {
   const { data: assets } = await supabaseAdmin
     .from('user_assets')
     .select('asset_id')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .eq('asset_type', 'shipping_address')
     .order('created_at', { ascending: true })
 

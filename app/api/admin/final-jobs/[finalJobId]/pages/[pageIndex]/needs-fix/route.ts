@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { isFinalJobReleased } from '@/lib/final-job-release'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function POST(
@@ -15,6 +16,18 @@ export async function POST(
   const pageIndex = Number(rawPageIndex)
   if (!Number.isInteger(pageIndex) || pageIndex < 0) {
     return NextResponse.json({ error: 'Invalid page index' }, { status: 400 })
+  }
+
+  const { data: finalJob } = await supabaseAdmin
+    .from('final_jobs')
+    .select('final_job_id, review_status, released_at')
+    .eq('final_job_id', finalJobId)
+    .maybeSingle()
+  if (!finalJob?.final_job_id) {
+    return NextResponse.json({ error: 'Final job not found' }, { status: 404 })
+  }
+  if (isFinalJobReleased(finalJob)) {
+    return NextResponse.json({ error: 'Released Final jobs cannot be modified' }, { status: 409 })
   }
 
   const body = await request.json().catch(() => ({}))

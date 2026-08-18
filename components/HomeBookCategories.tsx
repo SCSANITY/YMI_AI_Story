@@ -8,7 +8,6 @@ import { Book, type HomeBookSectionKey } from '@/types'
 import { BookCard } from '@/components/BookCard'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { useI18n } from '@/lib/useI18n'
-import { useBookDisplayData } from '@/components/useBookDisplayData'
 import { useBookCatalog } from '@/components/useBookCatalog'
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
 
@@ -109,7 +108,6 @@ export function HomeBookCategories() {
   const { t } = useI18n()
   const { favorites, toggleFavorite } = useGlobalContext()
   const { books: catalogBooks } = useBookCatalog()
-  const { ratingMap } = useBookDisplayData()
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
   const [isBooksRoutePending, setBooksRoutePending] = useState(false)
 
@@ -182,7 +180,6 @@ export function HomeBookCategories() {
                       title={book.title}
                       storyType={book.storyTypeLabel || book.category}
                       description={book.description}
-                      rating={ratingMap[book.bookID]}
                       isNavigating={pendingCustomizeHref === getPersonalizeHref(book.bookID)}
                       onClick={() => handlePersonalize(book.bookID)}
                       onPrefetch={() => prefetchCustomizeHref(getPersonalizeHref(book.bookID))}

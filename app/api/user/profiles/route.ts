@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const MAX_TEXT_PROFILES = 5
 
@@ -77,18 +81,23 @@ async function saveTextProfile({
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-
-  const ownerType = customerId ? 'customer' : 'anon'
-  const ownerId = customerId ? customerId : await getOrCreateAnonSession()
-
-  const ownerColumn = ownerType === 'customer' ? 'customer_id' : 'anon_session_id'
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ profiles: [] })
+  const filter = ownerFilter(owner)
 
   const { data: profiles, error } = await supabaseAdmin
     .from('user_assets')
     .select('asset_id, metadata, created_at')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .eq('asset_type', 'text_profile')
     .order('created_at', { ascending: false })
     .limit(MAX_TEXT_PROFILES)
@@ -102,7 +111,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const body = await request.json()
-  const customerId = body?.customerId ?? null
   const childName = body?.child_name ?? body?.childName
   const rawAge = body?.child_age ?? body?.age
   const gender = body?.gender
@@ -116,12 +124,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ saved: false, reason: 'invalid_age' }, { status: 400 })
   }
 
-  const ownerType: 'anon' | 'customer' = customerId ? 'customer' : 'anon'
-  const ownerId = customerId ? String(customerId) : await getOrCreateAnonSession()
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
+  const filter = ownerFilter(owner)
 
   const result = await saveTextProfile({
-    ownerType,
-    ownerId,
+    ownerType: filter.owner_type,
+    ownerId: filter.value,
     metadata: {
       child_name: String(childName),
       age: ageNumber,
@@ -137,19 +154,25 @@ export async function DELETE(request: Request) {
   const assetId = body?.asset_id || body?.assetId
   const field = body?.field || body?.type
   const value = body?.value
-  const customerId = body?.customerId ?? null
-
-  const ownerType: 'anon' | 'customer' = customerId ? 'customer' : 'anon'
-  const ownerId = customerId ? String(customerId) : await getOrCreateAnonSession()
-  const ownerColumn = ownerType === 'customer' ? 'customer_id' : 'anon_session_id'
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: body?.customerId ?? null,
+      createAnonIfMissing: true,
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
+  const filter = ownerFilter(owner)
 
   if (assetId) {
     const { data: asset, error: assetError } = await supabaseAdmin
       .from('user_assets')
       .select('asset_id')
       .eq('asset_id', assetId)
-      .eq('owner_type', ownerType)
-      .eq(ownerColumn, ownerId)
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
       .eq('asset_type', 'text_profile')
       .single()
 
@@ -181,8 +204,8 @@ export async function DELETE(request: Request) {
   const { data: assets, error: assetsError } = await supabaseAdmin
     .from('user_assets')
     .select('asset_id, metadata')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
+    .eq('owner_type', filter.owner_type)
+    .eq(filter.column, filter.value)
     .eq('asset_type', 'text_profile')
 
   if (assetsError || !assets) {

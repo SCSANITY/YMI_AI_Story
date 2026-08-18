@@ -15,7 +15,6 @@ type CheckoutSummaryPanelProps = {
   formattedDiscount: string;
   formattedShippingDiscount: string;
   formattedTotal: string;
-  stripeCheckoutEnabled: boolean;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
 };
 
@@ -32,7 +31,6 @@ export function CheckoutSummaryPanel({
   formattedDiscount,
   formattedShippingDiscount,
   formattedTotal,
-  stripeCheckoutEnabled,
   t,
 }: CheckoutSummaryPanelProps) {
   const shippingLabel =
@@ -90,7 +88,7 @@ export function CheckoutSummaryPanel({
         </div>
       </div>
       <p className="text-xs text-gray-500 mt-3">
-        {stripeCheckoutEnabled ? t('checkout.poweredByStripe') : t('checkout.demoMode')}
+        {t('checkout.poweredByStripe')}
       </p>
     </div>
   );

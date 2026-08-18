@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getOrCreateAnonSession } from '@/lib/session'
+import {
+  checkoutOwnerErrorResponse,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const MAX_POST_IMAGES = 9
 
@@ -24,24 +27,27 @@ type CommunityPostRow = {
   created_at: string
 }
 
-async function resolveOwner(customerId?: string | null): Promise<OwnerContext> {
-  if (customerId) {
+async function resolveOwner(request: Request, expectedCustomerId?: string | null): Promise<OwnerContext> {
+  const owner = await resolveCheckoutOwner(request, {
+    expectedCustomerId,
+    createAnonIfMissing: true,
+  })
+  if (!owner) throw new Error('Unable to resolve owner')
+  if (owner.ownerType === 'customer') {
     return {
       ownerType: 'customer',
-      ownerId: customerId,
-      customerId,
+      ownerId: owner.customerId,
+      customerId: owner.customerId,
       anonSessionId: null,
-      actorKey: `customer:${customerId}`,
+      actorKey: `customer:${owner.customerId}`,
     }
   }
-
-  const anonSessionId = await getOrCreateAnonSession()
   return {
     ownerType: 'anon',
-    ownerId: anonSessionId,
+    ownerId: owner.anonSessionId,
     customerId: null,
-    anonSessionId,
-    actorKey: `anon:${anonSessionId}`,
+    anonSessionId: owner.anonSessionId,
+    actorKey: `anon:${owner.anonSessionId}`,
   }
 }
 
@@ -78,8 +84,12 @@ async function withSignedImages(posts: CommunityPostRow[], actorKey: string) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-  const owner = await resolveOwner(customerId)
+  let owner
+  try {
+    owner = await resolveOwner(request, url.searchParams.get('customerId'))
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
 
   const { data, error } = await supabaseAdmin
     .from('community_posts')

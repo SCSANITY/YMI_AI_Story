@@ -1,26 +1,30 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-function getCookieValue(cookies: string, name: string) {
-  const entry = cookies
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-  return entry ? entry.split('=')[1] : null
-}
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+} from '@/lib/checkout-owner'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const jobId = url.searchParams.get('jobId')
   const creationId = url.searchParams.get('creationId')
-  const customerId = url.searchParams.get('customerId')
-
-  const cookies = request.headers.get('cookie') || ''
-  const anonSessionId = getCookieValue(cookies, 'ymi_anon_session')
 
   if (!jobId && !creationId) {
     return NextResponse.json({ error: 'Missing jobId or creationId' }, { status: 400 })
   }
+
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+    })
+  } catch (error) {
+    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+  }
+  if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const filter = ownerFilter(owner)
 
   let query = supabaseAdmin
     .from('creations')
@@ -33,11 +37,7 @@ export async function GET(request: Request) {
     query = query.eq('creation_id', creationId)
   }
 
-  if (customerId) {
-    query = query.eq('owner_type', 'customer').eq('customer_id', customerId)
-  } else if (anonSessionId) {
-    query = query.eq('owner_type', 'anon').eq('anon_session_id', anonSessionId)
-  }
+  query = query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 
   const { data, error } = await query.maybeSingle()
 

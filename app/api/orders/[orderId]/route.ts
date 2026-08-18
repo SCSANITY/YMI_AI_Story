@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { releaseOrderDiscount } from '@/lib/discounts'
 import {
   checkoutOwnerErrorResponse,
+  parseOrderReference,
   requireCheckoutOrderAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
@@ -42,6 +43,14 @@ export async function GET(
   if (!rawOrderId) {
     return NextResponse.json({ error: 'Missing orderId' }, { status: 400 })
   }
+  let orderReference
+  try {
+    orderReference = parseOrderReference(rawOrderId)
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
 
   const url = new URL(request.url)
   const sessionId = url.searchParams.get('session_id') || url.searchParams.get('sessionId')
@@ -79,7 +88,7 @@ export async function GET(
     .select(
       'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, discount_amount_usd, shipping_discount_amount_usd, shipping_amount_usd, tracking_number, tracking_carrier, tracking_url, logistics_note, shipped_at, delivered_at, logistics_updated_at, created_at'
     )
-    .or(`order_id.eq.${rawOrderId},display_id.eq.${rawOrderId}`)
+    .eq(orderReference.column, orderReference.value)
     .maybeSingle()
 
   if (orderError || !order?.order_id) {
@@ -232,6 +241,14 @@ export async function DELETE(
   if (!rawOrderId) {
     return NextResponse.json({ error: 'Missing orderId' }, { status: 400 })
   }
+  let orderReference
+  try {
+    orderReference = parseOrderReference(rawOrderId)
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) return response
+    throw error
+  }
 
   let body: { customerId?: string | null } = {}
   try {
@@ -256,7 +273,7 @@ export async function DELETE(
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
     .select('order_id, display_id, order_status, payment_id, customer_id')
-    .or(`order_id.eq.${rawOrderId},display_id.eq.${rawOrderId}`)
+    .eq(orderReference.column, orderReference.value)
     .maybeSingle()
 
   if (orderError || !order?.order_id) {

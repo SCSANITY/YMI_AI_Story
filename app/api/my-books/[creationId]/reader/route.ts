@@ -3,14 +3,15 @@ import { getEmptyPurchaseSummary, isFinalJobReleased, loadPurchaseSummaryByCreat
 import { buildReleasedReaderContract, type ReleasedReaderContract } from '@/lib/reader-page-contract'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
+import {
+  checkoutOwnerErrorResponse,
+  ownerFilter,
+  resolveCheckoutOwner,
+  type CheckoutOwner,
+} from '@/lib/checkout-owner'
 
 const MY_BOOK_READER_CACHE_CONTROL = 'private, no-store, max-age=0'
 const STORAGE_BUCKET = 'raw-private'
-
-type Owner = {
-  ownerType: 'customer' | 'anon'
-  ownerId: string
-}
 
 type FinalJobRow = {
   final_job_id: string
@@ -48,31 +49,11 @@ function privateJson(body: unknown, init?: ResponseInit) {
   return response
 }
 
-function getCookieValue(cookies: string, name: string) {
-  const entry = cookies
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-  return entry ? entry.split('=')[1] : null
-}
-
-function resolveOwner(request: Request, customerId: string | null): Owner | null {
-  if (customerId) {
-    return { ownerType: 'customer', ownerId: customerId }
-  }
-  const cookies = request.headers.get('cookie') || ''
-  const anonSessionId = getCookieValue(cookies, 'ymi_anon_session')
-  if (!anonSessionId) return null
-  return { ownerType: 'anon', ownerId: anonSessionId }
-}
-
 // Supabase query builders have very deep generated types here; keep this helper dynamic.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildOwnerScopedQuery(query: any, owner: Owner): any {
-  if (owner.ownerType === 'customer') {
-    return query.eq('owner_type', 'customer').eq('customer_id', owner.ownerId)
-  }
-  return query.eq('owner_type', 'anon').eq('anon_session_id', owner.ownerId)
+function buildOwnerScopedQuery(query: any, owner: CheckoutOwner): any {
+  const filter = ownerFilter(owner)
+  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
 function pickLatestFinalJob(finalJobs: FinalJobRow[]) {
@@ -98,11 +79,20 @@ export async function GET(
   }
 
   const url = new URL(request.url)
-  const customerId = url.searchParams.get('customerId')
-  const owner = resolveOwner(request, customerId)
-  if (!owner) {
-    return privateJson({ error: 'Reader access requires the current session' }, { status: 401 })
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, {
+      expectedCustomerId: url.searchParams.get('customerId'),
+    })
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error)
+    if (response) {
+      response.headers.set('Cache-Control', MY_BOOK_READER_CACHE_CONTROL)
+      return response
+    }
+    return privateJson({ error: 'Failed to resolve owner' }, { status: 500 })
   }
+  if (!owner) return privateJson({ error: 'Reader access requires the current session' }, { status: 401 })
 
   const scopedCreationQuery = buildOwnerScopedQuery(
     supabaseAdmin
