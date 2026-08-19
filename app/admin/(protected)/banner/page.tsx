@@ -7,7 +7,7 @@ export default function BannerPage() {
       <AdminPageHeader
         eyebrow="Publishing"
         title="Homepage Banners"
-        description="Preview and publish independent Desktop and Mobile artwork across the three fixed Home positions."
+        description="Manage the three Banner positions on Home."
       />
       <HomepageBannerManager />
     </AdminPage>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeftRight,
+  ChevronDown,
   Eye,
   EyeOff,
   ImageUp,
@@ -15,12 +16,12 @@ import {
 import { supabase } from '@/lib/supabase'
 import {
   HOMEPAGE_BANNER_SLOT_KEYS,
-  type AdminHomepageBannerAsset,
   type AdminHomepageBannerSlot,
   type HomepageBannerSlotKey,
 } from '@/lib/homepage-banners-core'
 import {
   AdminButton,
+  AdminIconButton,
   AdminNotice,
   AdminPanel,
   AdminStatusBadge,
@@ -30,19 +31,10 @@ import {
 
 type Viewport = 'desktop' | 'mobile'
 
-const SLOT_LABELS: Record<HomepageBannerSlotKey, { title: string; description: string }> = {
-  after_hero: {
-    title: 'After Hero',
-    description: 'The first full-width banner below the opening experience.',
-  },
-  after_for_boys: {
-    title: 'After For Boys',
-    description: 'Placed between the For Boys and For Girls collections.',
-  },
-  after_in_discount: {
-    title: 'After In Discount',
-    description: 'The final banner before the footer.',
-  },
+const SLOT_LABELS: Record<HomepageBannerSlotKey, string> = {
+  after_hero: 'After Hero',
+  after_for_boys: 'After For Boys',
+  after_in_discount: 'After In Discount',
 }
 
 function isAdminBannerSlot(value: unknown): value is AdminHomepageBannerSlot {
@@ -78,13 +70,6 @@ function snapshot(slot: AdminHomepageBannerSlot) {
   })
 }
 
-function qualityWarnings(asset: AdminHomepageBannerAsset, viewport: Viewport) {
-  const recommendedWidth = viewport === 'desktop' ? 1920 : 1080
-  return asset.width < recommendedWidth
-    ? [`Below the recommended ${recommendedWidth}px ${viewport} width.`]
-    : []
-}
-
 async function readImageDimensions(file: File) {
   if ('createImageBitmap' in window) {
     const bitmap = await createImageBitmap(file)
@@ -106,88 +91,31 @@ async function readImageDimensions(file: File) {
   }
 }
 
-function AssetEditor({
-  viewport,
-  asset,
-  uploading,
-  onUpload,
-}: {
-  viewport: Viewport
-  asset: AdminHomepageBannerAsset
-  uploading: boolean
-  onUpload: (file: File) => void
-}) {
-  const Icon = viewport === 'desktop' ? Monitor : Smartphone
-  const recommended = viewport === 'desktop' ? '1920px+ wide' : '1080px+ wide'
-  const inputId = `homepage-banner-${viewport}-upload`
-  const warnings = qualityWarnings(asset, viewport)
-
-  return (
-    <div className="rounded-xl bg-[var(--admin-page-soft)] p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-[var(--admin-accent-dp)] shadow-sm">
-            <Icon className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-bold capitalize text-[var(--admin-page-ink)]">{viewport}</p>
-            <p className="mt-0.5 text-xs text-[var(--admin-page-muted)]">Recommended: {recommended}</p>
-          </div>
-        </div>
-        <label
-          htmlFor={inputId}
-          className={`admin-v2-button admin-v2-button--secondary cursor-pointer ${uploading ? 'pointer-events-none opacity-60' : ''}`}
-        >
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
-          Replace
-        </label>
-        <input
-          id={inputId}
-          type="file"
-          accept="image/webp,image/png,image/jpeg"
-          className="sr-only"
-          disabled={uploading}
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.currentTarget.value = ''
-            if (file) onUpload(file)
-          }}
-        />
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-        <AdminStatusBadge tone="neutral">{asset.width} x {asset.height}</AdminStatusBadge>
-        <AdminStatusBadge tone="neutral">{(asset.width / asset.height).toFixed(2)}:1</AdminStatusBadge>
-        <AdminStatusBadge tone={asset.source === 'storage' ? 'success' : 'info'}>
-          {asset.source === 'storage' ? 'Uploaded asset' : 'Built-in asset'}
-        </AdminStatusBadge>
-      </div>
-      {warnings.map((warning) => (
-        <p key={warning} className="mt-2 text-xs font-semibold text-amber-700">{warning}</p>
-      ))}
-    </div>
-  )
-}
-
 function BannerPreview({
   slot,
   viewport,
   onViewportChange,
+  uploading,
+  onUpload,
 }: {
   slot: AdminHomepageBannerSlot
   viewport: Viewport
   onViewportChange: (viewport: Viewport) => void
+  uploading: boolean
+  onUpload: (file: File) => void
 }) {
   const asset = slot[viewport]
+  const recommendedWidth = viewport === 'desktop' ? 1920 : 1080
+  const inputId = `homepage-banner-${slot.slotKey}-${viewport}-upload`
+
   return (
     <AdminPanel className="overflow-hidden p-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
-        <div>
-          <p className="text-sm font-bold text-[var(--admin-page-ink)]">Published-output preview</p>
-          <p className="mt-0.5 text-xs text-[var(--admin-page-muted)]">
-            Uses this viewport&apos;s own image ratio with no frame on Home.
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-page-line)] px-4 py-3 sm:px-5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Preview</p>
+          <p className="mt-1 truncate text-sm font-bold text-[var(--admin-page-ink)]">{slot.displayName}</p>
         </div>
-        <div className="flex rounded-lg bg-[var(--admin-page-soft)] p-1" role="tablist" aria-label="Banner preview viewport">
+        <div className="flex rounded-lg bg-[var(--admin-page-soft)] p-1" role="tablist" aria-label="Preview size">
           {(['desktop', 'mobile'] as Viewport[]).map((candidate) => {
             const Icon = candidate === 'desktop' ? Monitor : Smartphone
             return (
@@ -221,6 +149,36 @@ function BannerPreview({
             <img src={asset.src} alt={slot.altText} className="block h-full w-full object-cover" />
           </div>
         </div>
+      </div>
+      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <AdminStatusBadge tone="neutral">{asset.width} x {asset.height}</AdminStatusBadge>
+          <AdminStatusBadge tone={asset.source === 'storage' ? 'success' : 'info'}>
+            {asset.source === 'storage' ? 'Uploaded' : 'Default'}
+          </AdminStatusBadge>
+          {asset.width < recommendedWidth ? (
+            <span className="text-xs font-semibold text-amber-700">Recommend {recommendedWidth}px+</span>
+          ) : null}
+        </div>
+        <label
+          htmlFor={inputId}
+          className={`admin-v2-button admin-v2-button--secondary shrink-0 cursor-pointer ${uploading ? 'pointer-events-none opacity-60' : ''}`}
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
+          Replace {viewport}
+        </label>
+        <input
+          id={inputId}
+          type="file"
+          accept="image/webp,image/png,image/jpeg"
+          className="sr-only"
+          disabled={uploading}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.currentTarget.value = ''
+            if (file) onUpload(file)
+          }}
+        />
       </div>
     </AdminPanel>
   )
@@ -439,133 +397,139 @@ export function HomepageBannerManager() {
     <div className="space-y-4">
       {feedback ? <AdminNotice tone={feedback.tone}>{feedback.text}</AdminNotice> : null}
 
-      <div className="grid gap-3 lg:grid-cols-3" role="tablist" aria-label="Homepage Banner positions">
-        {HOMEPAGE_BANNER_SLOT_KEYS.map((slotKey) => {
-          const slot = slots.find((candidate) => candidate.slotKey === slotKey)
-          const selected = selectedSlotKey === slotKey
-          return (
-            <button
-              key={slotKey}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => {
-                setSelectedSlotKey(slotKey)
-                setSwapTarget(HOMEPAGE_BANNER_SLOT_KEYS.find((key) => key !== slotKey) ?? 'after_hero')
-                setFeedback(null)
-              }}
-              className={`min-w-0 rounded-xl p-4 text-left transition ${
-                selected
-                  ? 'bg-[var(--admin-page-ink)] text-white shadow-lg'
-                  : 'admin-v2-panel hover:-translate-y-0.5'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${selected ? 'text-white/55' : 'text-[var(--admin-page-muted)]'}`}>
-                    {SLOT_LABELS[slotKey].title}
-                  </p>
-                  <p className={`mt-2 truncate text-sm font-bold ${selected ? 'text-white' : 'text-[var(--admin-page-ink)]'}`}>
-                    {slot?.displayName || 'Unavailable'}
-                  </p>
-                </div>
-                {slot?.isVisible ? <Eye className="h-4 w-4 shrink-0" /> : <EyeOff className="h-4 w-4 shrink-0" />}
-              </div>
-              <p className={`mt-2 text-xs leading-5 ${selected ? 'text-white/65' : 'text-[var(--admin-page-muted)]'}`}>
-                {SLOT_LABELS[slotKey].description}
-              </p>
-            </button>
-          )
-        })}
-      </div>
+      <AdminPanel className="flex min-w-0 items-center gap-2 p-2">
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto" role="tablist" aria-label="Homepage Banner positions">
+          {HOMEPAGE_BANNER_SLOT_KEYS.map((slotKey) => {
+            const slot = slots.find((candidate) => candidate.slotKey === slotKey)
+            const original = baseline.find((candidate) => candidate.slotKey === slotKey)
+            const selected = selectedSlotKey === slotKey
+            const dirty = Boolean(slot && (!original || snapshot(slot) !== snapshot(original)))
+            return (
+              <button
+                key={slotKey}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls="homepage-banner-editor"
+                onClick={() => {
+                  setSelectedSlotKey(slotKey)
+                  setSwapTarget(HOMEPAGE_BANNER_SLOT_KEYS.find((key) => key !== slotKey) ?? 'after_hero')
+                  setFeedback(null)
+                }}
+                className={`min-w-[11.5rem] flex-1 rounded-lg px-3 py-2.5 text-left transition ${
+                  selected
+                    ? 'bg-[var(--admin-page-ink)] text-white'
+                    : 'bg-[var(--admin-page-soft)] text-[var(--admin-page-ink)] hover:bg-white'
+                }`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className={`block text-[9px] font-bold uppercase tracking-[0.14em] ${selected ? 'text-white/55' : 'text-[var(--admin-page-muted)]'}`}>
+                      {SLOT_LABELS[slotKey]}
+                    </span>
+                    <span className="mt-1 block truncate text-xs font-bold">{slot?.displayName || 'Unavailable'}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {dirty ? <span className="h-2 w-2 rounded-full bg-amber-400" title="Unpublished changes" /> : null}
+                    {slot?.isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <AdminIconButton
+          aria-label="Refresh Homepage banners"
+          title="Refresh"
+          disabled={loading}
+          onClick={() => void loadSlots()}
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </AdminIconButton>
+      </AdminPanel>
 
       {!selectedSlot ? (
         <AdminNotice tone="danger">The selected Banner slot could not be loaded.</AdminNotice>
       ) : (
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(19rem,0.72fr)_minmax(0,1.28fr)] xl:items-start">
-          <AdminPanel className="space-y-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
-                  {SLOT_LABELS[selectedSlot.slotKey].title}
+        <div
+          id="homepage-banner-editor"
+          role="tabpanel"
+          className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)] 2xl:items-start"
+        >
+          <BannerPreview
+            slot={selectedSlot}
+            viewport={previewViewport}
+            onViewportChange={setPreviewViewport}
+            uploading={uploading[previewViewport]}
+            onUpload={(file) => void handleUpload(previewViewport, file)}
+          />
+
+          <AdminPanel className="min-w-0 space-y-4 overflow-hidden p-4 sm:p-5">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">
+                  {SLOT_LABELS[selectedSlot.slotKey]}
                 </p>
-                <h2 className="mt-1 text-xl font-bold text-[var(--admin-page-ink)]">Banner settings</h2>
+                <h2 className="mt-1 truncate text-lg font-bold text-[var(--admin-page-ink)]">Publish settings</h2>
               </div>
-              <AdminStatusBadge tone={selectedSlot.isVisible ? 'success' : 'warning'}>
-                {selectedSlot.isVisible ? 'Visible' : 'Hidden'}
+              <AdminStatusBadge className="shrink-0" tone={isDirty ? 'warning' : selectedSlot.isVisible ? 'success' : 'neutral'}>
+                {isDirty ? 'Draft' : selectedSlot.isVisible ? 'Live' : 'Hidden'}
               </AdminStatusBadge>
             </div>
-
-            <label className={adminLabelClass}>
-              Internal name
-              <input
-                className={adminFieldClass}
-                value={selectedSlot.displayName}
-                maxLength={120}
-                onChange={(event) => updateSelected((slot) => ({ ...slot, displayName: event.target.value }))}
-              />
-            </label>
-            <label className={adminLabelClass}>
-              Alternative text
-              <textarea
-                className={`${adminFieldClass} min-h-24 py-2.5`}
-                value={selectedSlot.altText}
-                maxLength={240}
-                onChange={(event) => updateSelected((slot) => ({ ...slot, altText: event.target.value }))}
-              />
-            </label>
-            <label className={adminLabelClass}>
-              Internal destination
-              <input
-                className={adminFieldClass}
-                value={selectedSlot.href}
-                placeholder="/books"
-                onChange={(event) => updateSelected((slot) => ({ ...slot, href: event.target.value }))}
-              />
-            </label>
 
             <button
               type="button"
               role="switch"
               aria-checked={selectedSlot.isVisible}
               onClick={() => updateSelected((slot) => ({ ...slot, isVisible: !slot.isVisible }))}
-              className="flex w-full items-center justify-between gap-4 rounded-xl bg-[var(--admin-page-soft)] px-4 py-3 text-left"
+              className="flex min-w-0 w-full items-center justify-between gap-4 overflow-hidden rounded-lg bg-[var(--admin-page-soft)] px-3 py-2.5 text-left"
             >
-              <span>
-                <span className="block text-sm font-bold text-[var(--admin-page-ink)]">Show on Home</span>
-                <span className="mt-0.5 block text-xs text-[var(--admin-page-muted)]">Hidden slots leave no empty spacer.</span>
-              </span>
-              <span className={`relative h-6 w-11 rounded-full transition ${selectedSlot.isVisible ? 'bg-[var(--admin-accent-dp)]' : 'bg-slate-300'}`}>
+              <span className="text-sm font-bold text-[var(--admin-page-ink)]">Show on Home</span>
+              <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${selectedSlot.isVisible ? 'bg-[var(--admin-accent-dp)]' : 'bg-slate-300'}`}>
                 <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${selectedSlot.isVisible ? 'left-6' : 'left-1'}`} />
               </span>
             </button>
 
-            <div className="space-y-3">
-              <AssetEditor
-                viewport="desktop"
-                asset={selectedSlot.desktop}
-                uploading={uploading.desktop}
-                onUpload={(file) => void handleUpload('desktop', file)}
+            <label className={`${adminLabelClass} min-w-0`}>
+              Banner name
+              <input
+                className={`${adminFieldClass} min-w-0 max-w-full`}
+                value={selectedSlot.displayName}
+                maxLength={120}
+                onChange={(event) => updateSelected((slot) => ({ ...slot, displayName: event.target.value }))}
               />
-              <AssetEditor
-                viewport="mobile"
-                asset={selectedSlot.mobile}
-                uploading={uploading.mobile}
-                onUpload={(file) => void handleUpload('mobile', file)}
+            </label>
+            <label className={`${adminLabelClass} min-w-0`}>
+              Click destination
+              <input
+                className={`${adminFieldClass} min-w-0 max-w-full`}
+                value={selectedSlot.href}
+                placeholder="/books"
+                onChange={(event) => updateSelected((slot) => ({ ...slot, href: event.target.value }))}
               />
-            </div>
+            </label>
+            <label className={`${adminLabelClass} min-w-0`}>
+              Image description
+              <textarea
+                className={`${adminFieldClass} min-h-20 min-w-0 max-w-full py-2.5`}
+                value={selectedSlot.altText}
+                maxLength={240}
+                onChange={(event) => updateSelected((slot) => ({ ...slot, altText: event.target.value }))}
+              />
+            </label>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="grid min-w-0 grid-cols-1 gap-2 pt-1 sm:grid-cols-2 2xl:grid-cols-1">
               <AdminButton
                 tone="primary"
-                className="flex-1"
+                className="w-full min-w-0"
                 disabled={!isDirty || publishing || uploading.desktop || uploading.mobile}
                 onClick={() => void publish()}
               >
                 {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Publish changes
+                Publish
               </AdminButton>
               <AdminButton
+                className="w-full min-w-0"
                 disabled={!isDirty || publishing}
                 onClick={() => {
                   if (!selectedBaseline) return
@@ -573,27 +537,29 @@ export function HomepageBannerManager() {
                   setFeedback(null)
                 }}
               >
-                Reset draft
+                Reset
               </AdminButton>
             </div>
 
-            <div className="border-t border-[var(--admin-page-line)] pt-5">
-              <p className="text-sm font-bold text-[var(--admin-page-ink)]">Swap complete Banner positions</p>
-              <p className="mt-1 text-xs leading-5 text-[var(--admin-page-muted)]">
-                Desktop, Mobile, text, link, and visibility move together in one publish transaction.
-              </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <details className="group min-w-0 border-t border-[var(--admin-page-line)] pt-3">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-[var(--admin-page-ink)] [&::-webkit-details-marker]:hidden">
+                Swap position
+                <ChevronDown className="h-4 w-4 text-[var(--admin-page-muted)] transition group-open:rotate-180" />
+              </summary>
+              <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] 2xl:grid-cols-1">
                 <select
-                  className={`${adminFieldClass} mt-0 flex-1`}
+                  aria-label="Swap with position"
+                  className={`${adminFieldClass} mt-0 min-w-0 max-w-full`}
                   value={swapTarget}
                   onChange={(event) => setSwapTarget(event.target.value as HomepageBannerSlotKey)}
                 >
                   {HOMEPAGE_BANNER_SLOT_KEYS.filter((key) => key !== selectedSlot.slotKey).map((key) => (
-                    <option key={key} value={key}>{SLOT_LABELS[key].title}</option>
+                    <option key={key} value={key}>{SLOT_LABELS[key]}</option>
                   ))}
                 </select>
                 <AdminButton
                   tone="dark"
+                  className="w-full min-w-0 sm:w-auto 2xl:w-full"
                   disabled={hasAnyDirty || swapping || swapTarget === selectedSlot.slotKey}
                   onClick={() => void swap()}
                 >
@@ -602,28 +568,12 @@ export function HomepageBannerManager() {
                 </AdminButton>
               </div>
               {hasAnyDirty ? (
-                <p className="mt-2 text-xs font-semibold text-amber-700">Publish or reset all drafts before swapping positions.</p>
+                <p className="mt-2 text-xs font-semibold text-amber-700">Publish or reset drafts before swapping.</p>
               ) : null}
-            </div>
+            </details>
           </AdminPanel>
-
-          <div className="space-y-4 xl:sticky xl:top-4">
-            <BannerPreview slot={selectedSlot} viewport={previewViewport} onViewportChange={setPreviewViewport} />
-            {selectedSlot.warnings.length > 0 ? (
-              <AdminNotice tone="warning">
-                {selectedSlot.warnings.join(' ')} These are quality recommendations, not publishing blockers.
-              </AdminNotice>
-            ) : null}
-          </div>
         </div>
       )}
-
-      <div className="flex justify-end">
-        <AdminButton disabled={loading} onClick={() => void loadSlots()}>
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </AdminButton>
-      </div>
     </div>
   )
 }
