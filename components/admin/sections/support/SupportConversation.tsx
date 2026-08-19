@@ -303,7 +303,7 @@ function MessageBubble({
   // (avatar + sender + role + time) and the body below. Admin messages carry a subtle
   // accent tint so "our team" reads apart from the customer without chat-bubble sides.
   return (
-    <article className="overflow-hidden rounded-2xl border border-[var(--admin-card-line)] bg-[var(--admin-card)] shadow-[0_12px_30px_-24px_rgba(74,58,26,0.55)]">
+    <article className={`admin-v2-message-card overflow-hidden ${isAdmin ? 'admin-v2-message-card--outbound' : ''}`}>
       <header
         className={`flex items-center gap-3 border-b border-[var(--admin-line)] px-4 py-2.5 ${
           isAdmin ? 'bg-[color-mix(in_srgb,var(--admin-accent)_13%,var(--admin-card))]' : 'bg-[var(--admin-panel-2)]'

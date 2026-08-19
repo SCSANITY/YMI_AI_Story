@@ -24,6 +24,7 @@ import {
   adminFieldClass,
   adminLabelClass,
 } from '@/components/admin/AdminUi'
+import { handleAdminTabKeyDown } from '@/components/admin/adminA11y'
 import {
   KOL_OPEN_STATUSES,
   KOL_PARTNERSHIP_STATUSES,
@@ -40,6 +41,14 @@ type MutationAction =
   | { action: 'assign_self' }
   | { action: 'unassign' }
   | { action: 'save_notes'; internalNotes: string }
+
+type KolDetailView = 'conversation' | 'application' | 'partnership'
+
+const DETAIL_VIEWS: Array<[KolDetailView, string]> = [
+  ['conversation', 'Conversation'],
+  ['application', 'Application'],
+  ['partnership', 'Partnership'],
+]
 
 export function KolLeadDetail({
   detail,
@@ -66,6 +75,7 @@ export function KolLeadDetail({
   const [assignmentPending, setAssignmentPending] = useState(false)
   const [notesPending, setNotesPending] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [activeView, setActiveView] = useState<KolDetailView>('conversation')
   const leadId = detail?.lead.lead_id ?? null
   const activeLeadIdRef = useRef<string | null>(null)
   const notesDirtyRef = useRef(false)
@@ -79,6 +89,7 @@ export function KolLeadDetail({
     setNotesDraft(nextNotes)
     setSavedNotes(nextNotes)
     setActionError('')
+    setActiveView('conversation')
   }, [detail?.lead.internal_notes, leadId])
 
   useEffect(() => {
@@ -193,9 +204,56 @@ export function KolLeadDetail({
         </div>
       ) : null}
 
+      <nav className="admin-v2-comm-toolbar shrink-0 border-b border-[var(--admin-line)] px-3 py-2 sm:px-4" aria-label="Partnership workspace views">
+        <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Partnership workspace">
+          {DETAIL_VIEWS.map(([view, label]) => (
+            <button
+              key={view}
+              id={`kol-detail-${view}-tab`}
+              type="button"
+              role="tab"
+              aria-selected={activeView === view}
+              aria-controls={`kol-detail-${view}-panel`}
+              tabIndex={activeView === view ? 0 : -1}
+              onKeyDown={handleAdminTabKeyDown}
+              onClick={() => setActiveView(view)}
+              className={`admin-v2-comm-tab shrink-0 px-3 py-2 text-xs font-bold transition ${
+                activeView === view ? 'admin-v2-comm-tab--active' : ''
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <div className="admin-v2-comm-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
-          <div className="min-w-0 space-y-4">
+        <section
+          id="kol-detail-conversation-panel"
+          role="tabpanel"
+          aria-labelledby="kol-detail-conversation-tab"
+          hidden={activeView !== 'conversation'}
+          className="min-w-0"
+        >
+          <KolPartnershipConversation
+            lead={lead}
+            messages={messages}
+            quarantinedMessages={quarantinedMessages}
+            attachments={attachments}
+            onSend={onSendMessage}
+            onReviewSender={onReviewSender}
+          />
+        </section>
+
+        <section
+          id="kol-detail-application-panel"
+          role="tabpanel"
+          aria-labelledby="kol-detail-application-tab"
+          hidden={activeView !== 'application'}
+          className="min-w-0"
+        >
+          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
+            <div className="min-w-0 space-y-4">
             <section className="admin-v2-data-row p-4 sm:p-5">
               <SectionTitle icon={ClipboardCheck} title="Application profile" />
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -223,26 +281,39 @@ export function KolLeadDetail({
                 <Fact label="Xiaohongshu" value={lead.xiaohongshu} breakWords />
               </div>
             </section>
+            </div>
+            <aside className="min-w-0">
+              <section className="admin-v2-data-row p-4">
+                <h3 className="text-sm font-bold text-[var(--admin-page-ink)]">Account and contact</h3>
+                <div className="mt-4 space-y-3">
+                  <Fact label="Account" value={applicant?.display_name || 'No display name'} />
+                  <Fact label="Account email" value={applicant?.email || lead.account_email_snapshot} breakWords />
+                  <Fact label="Partnership email" value={lead.contact_email} breakWords />
+                  <Fact label="Phone" value={lead.phone} breakWords />
+                  <Fact label="WhatsApp / WeChat" value={lead.whatsapp_or_wechat} breakWords />
+                </div>
+              </section>
+            </aside>
+          </div>
+        </section>
 
-            <KolPartnershipConversation
-              lead={lead}
-              messages={messages}
-              quarantinedMessages={quarantinedMessages}
-              attachments={attachments}
-              onSend={onSendMessage}
-              onReviewSender={onReviewSender}
-            />
-
+        <section
+          id="kol-detail-partnership-panel"
+          role="tabpanel"
+          aria-labelledby="kol-detail-partnership-tab"
+          hidden={activeView !== 'partnership'}
+          className="min-w-0"
+        >
+          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
             <KolPartnershipCodePanel
               leadId={lead.lead_id}
               leadStatus={lead.review_status}
               initialCodes={codes}
             />
-          </div>
 
-          <aside className="min-w-0 space-y-4">
-            <section className="admin-v2-data-row p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Review controls</p>
+            <aside className="min-w-0 space-y-4">
+              <section className="admin-v2-data-row p-4">
+              <h3 className="text-sm font-bold text-[var(--admin-page-ink)]">Review controls</h3>
               <label className={`${adminLabelClass} mt-4`}>
                 Application status
                 <select
@@ -290,17 +361,6 @@ export function KolLeadDetail({
             </section>
 
             <section className="admin-v2-data-row p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Account and contact</p>
-              <div className="mt-4 space-y-3">
-                <Fact label="Account" value={applicant?.display_name || 'No display name'} />
-                <Fact label="Account email" value={applicant?.email || lead.account_email_snapshot} breakWords />
-                <Fact label="Partnership email" value={lead.contact_email} breakWords />
-                <Fact label="Phone" value={lead.phone} breakWords />
-                <Fact label="WhatsApp / WeChat" value={lead.whatsapp_or_wechat} breakWords />
-              </div>
-            </section>
-
-            <section className="admin-v2-data-row p-4">
               <label className={adminLabelClass} htmlFor="kol-internal-notes">Internal notes</label>
               <textarea
                 id="kol-internal-notes"
@@ -323,8 +383,9 @@ export function KolLeadDetail({
             </section>
 
             {actionError ? <AdminNotice tone="danger">{actionError}</AdminNotice> : null}
-          </aside>
-        </div>
+            </aside>
+          </div>
+        </section>
       </div>
     </section>
   )
@@ -344,7 +405,7 @@ function SectionTitle({ icon: Icon, title }: { icon: typeof Handshake; title: st
 function Fact({ label, value, icon: Icon, breakWords = false }: { label: string; value: string | null | undefined; icon?: typeof Handshake; breakWords?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--admin-page-muted)]">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--admin-page-muted)]">
         {Icon ? <Icon className="h-3.5 w-3.5" /> : null}{label}
       </p>
       <p className={`mt-1 text-sm leading-6 text-[#4d524b] ${breakWords ? 'break-all' : 'break-words'}`}>{value || '-'}</p>
@@ -355,7 +416,7 @@ function Fact({ label, value, icon: Icon, breakWords = false }: { label: string;
 function LongFact({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--admin-page-muted)]">{label}</p>
+      <p className="text-xs font-semibold text-[var(--admin-page-muted)]">{label}</p>
       <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[#4d524b]">{value || '-'}</p>
     </div>
   )

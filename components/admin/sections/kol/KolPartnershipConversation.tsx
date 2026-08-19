@@ -141,7 +141,7 @@ export function KolPartnershipConversation({
               )
               const pending = reviewingMessageId === message.message_id
               return (
-                <article key={message.message_id} className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] p-4">
+                <article key={message.message_id} className="admin-v2-message-card p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="break-all text-sm font-black text-[var(--admin-page-ink)]">{message.sender_email}</p>
@@ -206,10 +206,10 @@ export function KolPartnershipConversation({
           messages.map((message) => (
             <article
               key={message.message_id}
-              className={`rounded-lg border p-4 ${
+              className={`admin-v2-message-card p-4 ${
                 message.direction === 'admin'
-                  ? 'border-[color-mix(in_srgb,var(--admin-accent)_42%,var(--admin-card-line))] bg-[color-mix(in_srgb,var(--admin-accent)_8%,var(--admin-card))]'
-                  : 'border-[var(--admin-card-line)] bg-[var(--admin-panel-2)]'
+                  ? 'admin-v2-message-card--outbound'
+                  : ''
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-2">

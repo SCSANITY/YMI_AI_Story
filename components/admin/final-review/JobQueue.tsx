@@ -51,27 +51,37 @@ export function JobQueue({
                 key={job.final_job_id}
                 type="button"
                 onClick={() => onSelectJob(job.final_job_id)}
-                className={`w-[min(17rem,82vw)] shrink-0 rounded-2xl border px-3.5 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] xl:w-full ${
+                className={`admin-v2-glass-card admin-v2-glass-card--interactive w-[min(17rem,82vw)] shrink-0 px-3.5 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] xl:w-full ${
                   isActive
-                    ? 'border-[color-mix(in_srgb,var(--admin-accent-dp)_45%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_13%,transparent)]'
-                    : 'border-[var(--admin-card-line)] bg-[var(--admin-card)] hover:border-[color-mix(in_srgb,var(--admin-ink)_16%,transparent)]'
+                    ? 'admin-v2-glass-card--selected'
+                    : ''
                 }`}
               >
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
-                  {job.orders?.display_id || job.order_id.slice(0, 8)}
-                </p>
-                <p className="mt-1 line-clamp-2 break-words text-sm font-semibold leading-5 text-[var(--admin-page-ink)]">
-                  {job.display_title}
-                </p>
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[11px] font-semibold text-[var(--admin-page-muted)]">
+                      {job.orders?.display_id || job.order_id.slice(0, 8)}
+                    </p>
+                    <p className="mt-1 line-clamp-2 break-words text-[15px] font-bold leading-5 text-[var(--admin-page-ink)]">
+                      {job.display_title}
+                    </p>
+                  </div>
+                  <span
+                    aria-hidden="true"
+                    className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                      isActive ? 'bg-[var(--admin-accent-dp)] shadow-[0_0_0_4px_rgba(223,168,28,0.14)]' : 'bg-[var(--admin-card-line)]'
+                    }`}
+                  />
+                </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold uppercase leading-4 tracking-wide ${statusClass(job.review_status)}`}>
+                  <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold leading-4 ${statusClass(job.review_status)}`}>
                     PDF {job.review_status}
                   </span>
-                  <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold uppercase leading-4 tracking-wide ${statusClass(job.print_status)}`}>
+                  <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold leading-4 ${statusClass(job.print_status)}`}>
                     Print {job.print_status}
                   </span>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[var(--admin-page-muted)]">
+                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[color-mix(in_srgb,var(--admin-card-line)_68%,transparent)] pt-2.5 text-[11px] font-medium text-[var(--admin-page-muted)]">
                   <span>PDF {job.approved_pages}/{job.total_pages}</span>
                   <span>Print {job.print_status}</span>
                   <span>{job.release_mode}</span>

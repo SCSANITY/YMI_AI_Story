@@ -43,8 +43,11 @@ test('Admin login keeps role authority while presenting the production console i
   assert.match(page, /await\s+getAuthenticatedCustomer\s*\(\s*\)/)
   assert.match(page, /redirect\(['"]\/admin\/finals['"]\)/)
   assert.match(client, /loginAction\(formData\)/)
+  assert.match(client, /window\.location\.assign\(ADMIN_LANDING_PATH\)/)
+  assert.doesNotMatch(client, /router\.(?:push|replace)\(['"]\/admin/)
   assert.match(client, /signInWithOAuth/)
-  assert.match(client, /next=\$\{encodeURIComponent\(['"]\/admin['"]\)\}/)
+  assert.match(client, /const ADMIN_LANDING_PATH = ['"]\/admin\/finals['"]/)
+  assert.match(client, /next=\$\{encodeURIComponent\(ADMIN_LANDING_PATH\)\}/)
   assert.match(client, /autoComplete="current-password"/)
   assert.match(client, /aria-label=\{showPassword \? ['"]Hide password['"] : ['"]Show password['"]\}/)
   assert.match(client, /src="\/logo\.webp"/)
@@ -801,4 +804,37 @@ test('Admin V2 responsive and accessibility closure preserves keyboard and narro
   assert.match(supportContext, /2xl:w-72/)
   assert.match(generalInbox, /2xl:w-\[22rem\]/)
   assert.match(generalInbox, /2xl:hidden/)
+})
+
+test('Admin typography, glass cards, and communication views share one presentation contract', async () => {
+  const [globals, adminUi, jobQueue, supportConversation, generalInbox, kolDetail, kolConversation] = await Promise.all([
+    read('app/globals.css'),
+    read('components/admin/AdminUi.tsx'),
+    read('components/admin/final-review/JobQueue.tsx'),
+    read('components/admin/sections/support/SupportConversation.tsx'),
+    read('components/admin/sections/inbox/GeneralInbox.tsx'),
+    read('components/admin/sections/kol/KolLeadDetail.tsx'),
+    read('components/admin/sections/kol/KolPartnershipConversation.tsx'),
+  ])
+
+  assert.match(globals, /\.ymi-admin-theme \*[\s\S]*letter-spacing:\s*0\s*!important/)
+  assert.doesNotMatch(adminUi, /adminLabelClass[\s\S]{0,120}tracking-|adminLabelClass[\s\S]{0,120}uppercase/)
+  assert.match(globals, /\.admin-v2-glass-card\s*\{/)
+  assert.match(globals, /\.admin-v2-glass-card--selected\s*\{/)
+  assert.match(globals, /\.admin-v2-message-card\s*\{/)
+  assert.match(jobQueue, /admin-v2-glass-card admin-v2-glass-card--interactive/)
+  assert.match(jobQueue, /admin-v2-glass-card--selected/)
+
+  for (const conversation of [supportConversation, generalInbox, kolConversation]) {
+    assert.match(conversation, /admin-v2-message-card/)
+  }
+
+  assert.match(kolDetail, /type KolDetailView = 'conversation' \| 'application' \| 'partnership'/)
+  assert.match(kolDetail, /role="tablist"/)
+  assert.match(kolDetail, /handleAdminTabKeyDown/)
+  assert.match(kolDetail, /hidden=\{activeView !== 'conversation'\}/)
+  assert.match(kolDetail, /hidden=\{activeView !== 'application'\}/)
+  assert.match(kolDetail, /hidden=\{activeView !== 'partnership'\}/)
+  assert.equal((kolDetail.match(/<KolPartnershipConversation/g) || []).length, 1)
+  assert.equal((kolDetail.match(/<KolPartnershipCodePanel/g) || []).length, 1)
 })

@@ -2,7 +2,6 @@
 
 import React, { useState, useTransition } from 'react'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
   BookOpenCheck,
@@ -23,8 +22,9 @@ const OPERATION_AREAS = [
   { icon: MessagesSquare, label: 'Customer communications' },
 ]
 
+const ADMIN_LANDING_PATH = '/admin/finals'
+
 export function AdminLoginClient() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -50,7 +50,9 @@ export function AdminLoginClient() {
         return
       }
       setInfo('Access confirmed. Opening the operations console...')
-      router.push('/admin/finals')
+      // Reload so the protected server layout reads the session cookie written by the action.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign(ADMIN_LANDING_PATH)
     })
   }
 
@@ -59,7 +61,7 @@ export function AdminLoginClient() {
     setError('')
     setInfo('Redirecting to Google...')
     setIsGooglePending(true)
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent('/admin')}`
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(ADMIN_LANDING_PATH)}`
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo },

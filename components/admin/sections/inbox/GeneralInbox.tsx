@@ -420,7 +420,7 @@ export function GeneralInbox() {
                   <AdminButton type="button" onClick={() => void retryProcessing()} disabled={actionPending} tone="danger" className="mt-3 h-9 min-h-9 px-3 text-xs"><RefreshCw className="h-3.5 w-3.5" />Retry processing</AdminButton>
                 </div>
               ) : (
-                <div className="max-w-2xl rounded-2xl border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4">
+                <div className="admin-v2-message-card max-w-2xl p-4">
                   <article className="whitespace-pre-wrap text-sm leading-7 text-[var(--admin-page-ink)]">{detail.message.body_text || '(Empty message body)'}</article>
                 </div>
               )}
@@ -431,7 +431,7 @@ export function GeneralInbox() {
                 />
               ) : null}
               {detail.replies.map((reply) => (
-                <div key={reply.reply_id} className="ml-auto max-w-2xl rounded-2xl border border-[color-mix(in_srgb,var(--admin-accent-dp)_32%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_15%,var(--admin-card))] p-4">
+                <div key={reply.reply_id} className="admin-v2-message-card admin-v2-message-card--outbound ml-auto max-w-2xl p-4">
                   <div className="flex items-center justify-between gap-3 text-[10px] text-[var(--admin-page-muted)]"><span>{reply.from_email}</span><span className={reply.delivery_status === 'failed' ? 'font-semibold text-[var(--admin-crit)]' : ''}>{reply.delivery_status}</span></div>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--admin-page-ink)]">{reply.body_text}</p>
                   {reply.delivery_error ? <p className="mt-2 text-xs text-[var(--admin-crit)]">{reply.delivery_error}</p> : null}

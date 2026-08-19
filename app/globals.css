@@ -409,6 +409,12 @@ html[lang='zh-TW'] .font-serif {
   background-attachment: fixed;
 }
 
+/* Admin hierarchy uses scale, weight, color, and spacing instead of stretched type. */
+.ymi-admin-theme,
+.ymi-admin-theme * {
+  letter-spacing: 0 !important;
+}
+
 @media (prefers-color-scheme: dark) {
   .ymi-admin-theme:not([data-admin-theme='light']) {
     --admin-ink: #f1ead9;
@@ -457,7 +463,7 @@ html[lang='zh-TW'] .font-serif {
   overflow: hidden;
 }
 .admin-v3-group {
-  font-size: 10px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase;
+  font-size: 11px; font-weight: 700; text-transform: none;
   color: var(--admin-muted); padding: 0 0.625rem;
 }
 .admin-v3-health {
@@ -593,6 +599,38 @@ html[lang='zh-TW'] .font-serif {
   border-radius: var(--admin-r-lg);
   background: var(--admin-card);
   box-shadow: var(--admin-card-sh);
+}
+
+.admin-v2-glass-card {
+  border: 1px solid color-mix(in srgb, var(--admin-card-line) 76%, rgba(255, 255, 255, 0.72));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--admin-card) 78%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 18px 38px -28px rgba(74, 58, 26, 0.54);
+  -webkit-backdrop-filter: blur(14px) saturate(118%);
+  backdrop-filter: blur(14px) saturate(118%);
+}
+
+.admin-v2-glass-card--interactive {
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.admin-v2-glass-card--interactive:hover {
+  border-color: color-mix(in srgb, var(--admin-accent-dp) 34%, var(--admin-card-line));
+  background: color-mix(in srgb, var(--admin-card) 90%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 20px 42px -27px rgba(74, 58, 26, 0.62);
+}
+
+.admin-v2-glass-card--selected {
+  border-color: color-mix(in srgb, var(--admin-accent-dp) 52%, var(--admin-card-line));
+  background: color-mix(in srgb, var(--admin-accent) 15%, var(--admin-card));
+  box-shadow:
+    inset 3px 0 0 var(--admin-accent-dp),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66),
+    0 20px 44px -27px rgba(103, 73, 13, 0.68);
 }
 
 .admin-v2-review-canvas {
@@ -735,9 +773,12 @@ html[lang='zh-TW'] .font-serif {
 }
 
 .admin-v2-data-row {
-  border: 1px solid rgba(62, 66, 59, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid color-mix(in srgb, var(--admin-card-line) 72%, rgba(255, 255, 255, 0.65));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--admin-card) 76%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  -webkit-backdrop-filter: blur(12px) saturate(115%);
+  backdrop-filter: blur(12px) saturate(115%);
 }
 
 .admin-v2-comm-workspace {
@@ -746,42 +787,51 @@ html[lang='zh-TW'] .font-serif {
   overflow: hidden;
   border: 1px solid var(--admin-card-line);
   border-radius: var(--admin-r-lg);
-  background: var(--admin-card);
-  box-shadow: var(--admin-card-sh);
+  background: color-mix(in srgb, var(--admin-card) 72%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    var(--admin-card-sh);
+  -webkit-backdrop-filter: blur(18px) saturate(118%);
+  backdrop-filter: blur(18px) saturate(118%);
 }
 
 .admin-v2-comm-queue,
 .admin-v2-comm-context {
-  background: var(--admin-panel-2);
+  background: color-mix(in srgb, var(--admin-panel-2) 76%, transparent);
   color: var(--admin-page-ink);
 }
 
 .admin-v2-comm-canvas {
-  background: var(--admin-panel);
+  background: color-mix(in srgb, var(--admin-panel) 88%, transparent);
   color: var(--admin-page-ink);
 }
 
 .admin-v2-comm-toolbar {
   border-color: rgba(62, 66, 59, 0.11);
-  background: rgba(255, 255, 255, 0.52);
+  background: color-mix(in srgb, var(--admin-card) 62%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(118%);
+  backdrop-filter: blur(14px) saturate(118%);
 }
 
 .admin-v2-comm-item {
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.54);
+  border: 1px solid color-mix(in srgb, var(--admin-card-line) 62%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--admin-card) 67%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
   color: var(--admin-page-ink);
+  -webkit-backdrop-filter: blur(11px) saturate(114%);
+  backdrop-filter: blur(11px) saturate(114%);
 }
 
 .admin-v2-comm-item:hover {
-  border-color: rgba(62, 66, 59, 0.12);
-  background: rgba(255, 255, 255, 0.88);
+  border-color: color-mix(in srgb, var(--admin-accent-dp) 28%, var(--admin-card-line));
+  background: color-mix(in srgb, var(--admin-card) 88%, transparent);
 }
 
 .admin-v2-comm-item--selected {
-  border-color: rgba(168, 123, 18, 0.38);
-  background: rgba(245, 202, 85, 0.18);
-  box-shadow: inset 3px 0 0 #d8aa32;
+  border-color: color-mix(in srgb, var(--admin-accent-dp) 52%, var(--admin-card-line));
+  background: color-mix(in srgb, var(--admin-accent) 16%, var(--admin-card));
+  box-shadow: inset 3px 0 0 var(--admin-accent-dp), 0 15px 30px -28px rgba(74, 58, 26, 0.78);
 }
 
 .admin-v2-comm-tab {
@@ -795,6 +845,22 @@ html[lang='zh-TW'] .font-serif {
   border-color: rgba(120, 86, 8, 0.16);
   background: var(--admin-accent);
   color: var(--admin-accent-ink);
+}
+
+.admin-v2-message-card {
+  border: 1px solid color-mix(in srgb, var(--admin-card-line) 72%, rgba(255, 255, 255, 0.65));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--admin-card) 82%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 16px 34px -28px rgba(74, 58, 26, 0.58);
+  -webkit-backdrop-filter: blur(12px) saturate(116%);
+  backdrop-filter: blur(12px) saturate(116%);
+}
+
+.admin-v2-message-card--outbound {
+  border-color: color-mix(in srgb, var(--admin-accent-dp) 34%, var(--admin-card-line));
+  background: color-mix(in srgb, var(--admin-accent) 13%, var(--admin-card));
 }
 
 .ymi-admin-theme [role='tab']:focus-visible,

@@ -12,7 +12,7 @@ export const adminFieldClass =
   'admin-v2-field mt-2 w-full rounded-lg px-3 text-sm outline-none disabled:cursor-wait disabled:opacity-60'
 
 export const adminLabelClass =
-  'block text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]'
+  'block text-xs font-semibold text-[var(--admin-page-muted)]'
 
 export function AdminPage({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={classes('admin-v2-page', className)} {...props} />
@@ -37,10 +37,10 @@ export function AdminPageHeader({
           className="mt-1 hidden h-12 w-1.5 shrink-0 rounded-full bg-gradient-to-b from-[var(--admin-accent)] to-[var(--admin-accent-dp)] sm:block"
         />
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--admin-page-muted)]">
+          <p className="text-xs font-semibold text-[var(--admin-accent-dp)]">
             {eyebrow}
           </p>
-          <h1 className="mt-1.5 text-2xl font-bold tracking-[-0.01em] text-[var(--admin-page-ink)] sm:text-[1.85rem]">
+          <h1 className="mt-1.5 text-2xl font-bold text-[var(--admin-page-ink)] sm:text-[1.85rem]">
             {title}
           </h1>
           {description ? (
