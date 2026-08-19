@@ -39,7 +39,7 @@ export const adminNavigationItems: AdminNavigationItem[] = [
   { label: 'Service Control', shortLabel: 'Services', icon: ToggleLeft, href: '/admin/service', group: 'System' },
   { label: 'Legal Content', shortLabel: 'Legal', icon: ScrollText, href: '/admin/legal', group: 'System' },
   { label: 'Analytics', shortLabel: 'Analytics', icon: BarChart3, href: '/admin/analytics', group: 'System', soon: true },
-  { label: 'Banner Manager', shortLabel: 'Banner', icon: LayoutDashboard, href: '/admin/banner', group: 'System', soon: true },
+  { label: 'Banner Manager', shortLabel: 'Banner', icon: LayoutDashboard, href: '/admin/banner', group: 'System' },
   { label: 'Catalog Pricing', shortLabel: 'Catalog', icon: BookMarked, href: '/admin/catalog', group: 'Growth' },
 ]
 

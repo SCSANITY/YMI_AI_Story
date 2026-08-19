@@ -1,12 +1,16 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Book, type HomeBookSectionKey } from '@/types'
 import { BookCard } from '@/components/BookCard'
+import { HomePosterBanner } from '@/components/HomePosterBanner'
 import { useGlobalContext } from '@/contexts/GlobalContext'
+import type {
+  HomepageBannerSlotKey,
+  PublishedHomepageBanner,
+} from '@/lib/homepage-banners-core'
 import { useI18n } from '@/lib/useI18n'
 import { useBookCatalog } from '@/components/useBookCatalog'
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
@@ -16,14 +20,10 @@ type HomeBookCategory = {
   descriptionKey: string
   sectionId: HomeBookSectionKey
   bookListGender?: 'Boy' | 'Girl'
-  afterBanner?: {
-    src: string
-    mobileSrc?: string
-    alt: string
-    width: number
-    height: number
-    aspectClassName: string
-  }
+}
+
+type HomeBookCategoriesProps = {
+  banners: Partial<Record<HomepageBannerSlotKey, PublishedHomepageBanner>>
 }
 
 const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
@@ -31,28 +31,12 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
     titleKey: 'homeBooks.category.brandNew',
     descriptionKey: 'homeBooks.category.brandNewDescription',
     sectionId: 'brand_new',
-    afterBanner: {
-      src: '/banners/optimized/workflow-desktop.webp',
-      mobileSrc: '/banners/optimized/workflow-mobile.webp',
-      alt: 'YMI Story workflow banner',
-      width: 6000,
-      height: 3000,
-      aspectClassName: 'aspect-[2/1]',
-    },
   },
   {
     titleKey: 'homeBooks.category.forBoys',
     descriptionKey: 'homeBooks.category.forBoysDescription',
     sectionId: 'for_boys',
     bookListGender: 'Boy',
-    afterBanner: {
-      src: '/banners/optimized/swapface-desktop.webp',
-      mobileSrc: '/banners/optimized/swapface-mobile.webp',
-      alt: 'YMI Story face swap banner',
-      width: 6000,
-      height: 2700,
-      aspectClassName: 'aspect-[6000/2700]',
-    },
   },
   {
     titleKey: 'homeBooks.category.forGirls',
@@ -77,33 +61,7 @@ function getCategoryBooks(allBooks: Book[], category: HomeBookCategory): Book[] 
     .slice(0, 4)
 }
 
-function CategoryBanner({ banner }: { banner: NonNullable<HomeBookCategory['afterBanner']> }) {
-  return (
-    <div className="relative left-1/2 mt-10 mb-0 w-screen -translate-x-1/2 overflow-hidden md:mt-14">
-      <div className={`relative w-full overflow-hidden shadow-[0_18px_50px_rgba(251,146,60,0.12)] ${banner.aspectClassName}`}>
-        <picture className="block h-full w-full">
-          {banner.mobileSrc ? <source media="(max-width: 767px)" srcSet={banner.mobileSrc} /> : null}
-          <img
-            src={banner.src}
-            alt={banner.alt}
-            width={banner.width}
-            height={banner.height}
-            loading="lazy"
-            decoding="async"
-            className="block h-full w-full object-cover"
-          />
-        </picture>
-        <Link
-          href="/books"
-          aria-label="Explore all YMI Story books"
-          className="absolute inset-0 block cursor-pointer bg-transparent focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-        />
-      </div>
-    </div>
-  )
-}
-
-export function HomeBookCategories() {
+export function HomeBookCategories({ banners }: HomeBookCategoriesProps) {
   const router = useRouter()
   const { t } = useI18n()
   const { favorites, toggleFavorite } = useGlobalContext()
@@ -147,6 +105,11 @@ export function HomeBookCategories() {
         <div className="space-y-14 md:space-y-20">
           {HOME_BOOK_CATEGORIES.map((category) => {
             const books = getCategoryBooks(catalogBooks, category)
+            const categoryBanner = category.sectionId === 'for_boys'
+              ? banners.after_for_boys
+              : category.sectionId === 'in_discount'
+                ? banners.after_in_discount
+                : undefined
 
             return (
               <div key={category.titleKey}>
@@ -191,7 +154,11 @@ export function HomeBookCategories() {
                   ))}
                 </div>
 
-                {category.afterBanner ? <CategoryBanner banner={category.afterBanner} /> : null}
+                {categoryBanner ? (
+                  <div className="relative left-1/2 mt-10 mb-0 w-screen -translate-x-1/2 md:mt-14">
+                    <HomePosterBanner banner={categoryBanner} />
+                  </div>
+                ) : null}
               </div>
             )
           })}
