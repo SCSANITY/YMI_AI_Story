@@ -1,11 +1,9 @@
 import {
-  CheckCircle2,
   Download,
   FileCheck2,
   FileUp,
   Loader2,
   Lock,
-  ShieldCheck,
 } from 'lucide-react'
 import type { ManualPrintArtifactClient } from '@/lib/manual-print-artifact'
 import { formatDate } from './reviewUi'
@@ -40,16 +38,6 @@ export function PrintVersionReview({
 
   return (
     <div className="mt-4 space-y-4">
-      <div className={`rounded-lg border p-4 text-sm leading-6 ${
-        pdfReleased
-          ? 'border-[color-mix(in_srgb,var(--admin-accent-dp)_28%,transparent)] bg-[color-mix(in_srgb,var(--admin-accent)_13%,transparent)] text-[var(--admin-accent-ink)]'
-          : 'border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-muted)]'
-      }`}>
-        {pdfReleased
-          ? 'Export the approved source images from PDF Review, prepare the printer-ready PDF offline, then upload the complete file here.'
-          : 'Print handoff is locked until the customer PDF has been released.'}
-      </div>
-
       <section className="overflow-hidden rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)]">
         <div className="border-b border-[var(--admin-card-line)] px-5 py-4">
           <div className="flex items-start gap-3">
@@ -65,9 +53,6 @@ export function PrintVersionReview({
               <h4 className="mt-1 text-lg font-bold text-[var(--admin-ink)]">
                 {artifact ? 'Verified printer PDF' : 'Awaiting printer PDF'}
               </h4>
-              <p className="mt-1 text-sm leading-6 text-[var(--admin-muted)]">
-                This private file is separate from the lower-resolution customer viewing PDF.
-              </p>
             </div>
           </div>
         </div>
@@ -104,13 +89,6 @@ export function PrintVersionReview({
                 Replace before release
               </button>
             </div>
-
-            <div className="flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--admin-good)_30%,transparent)] bg-[color-mix(in_srgb,var(--admin-good)_12%,transparent)] px-3 py-2.5 text-xs leading-5 text-[var(--admin-good)]">
-              {printReleased ? <Lock className="mt-0.5 h-4 w-4 shrink-0" /> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />}
-              {printReleased
-                ? 'Print Release locked this exact revision. Upload and replacement are disabled.'
-                : 'The server verified the stored MIME type, byte count, and PDF signature. Print Release will lock this exact revision.'}
-            </div>
           </div>
         ) : (
           <div className="space-y-4 p-5">
@@ -119,9 +97,7 @@ export function PrintVersionReview({
                 <>
                   <FileUp className="mx-auto h-7 w-7 text-[var(--admin-accent-dp)]" />
                   <p className="mt-3 text-sm font-bold text-[var(--admin-ink)]">Upload one complete printer-ready PDF</p>
-                  <p className="mx-auto mt-2 max-w-lg text-xs leading-5 text-[var(--admin-muted)]">
-                    PDF only, up to 250 MiB. The upload goes directly to private Storage and is verified before it can be released.
-                  </p>
+                  <p className="mt-2 text-xs text-[var(--admin-muted)]">PDF · max 250 MiB</p>
                 </>
               ) : (
                 <>
@@ -142,11 +118,6 @@ export function PrintVersionReview({
           </div>
         )}
       </section>
-
-      <div className="flex items-start gap-2 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-4 py-3 text-xs leading-5 text-[var(--admin-muted)]">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-muted)]" />
-        Print Release records the operational handoff only. It does not rebuild the file, run the Worker, replace the customer PDF, or send another customer email.
-      </div>
     </div>
   )
 }

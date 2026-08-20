@@ -124,7 +124,7 @@ export function PdfVersionReview(props: Props) {
           value={reviewNote}
           onChange={(event) => setReviewNote(event.target.value)}
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-2 text-xs text-[var(--admin-ink)] outline-none placeholder:text-[var(--admin-muted)] focus:border-[color-mix(in_srgb,var(--admin-accent-dp)_55%,transparent)]"
-          placeholder="Review note (optional, used for needs-fix and replacements)"
+          placeholder="Review note (optional)"
         />
         <div className="flex shrink-0 items-center gap-2">
           {reviewPendingCount > 0 ? (
@@ -155,8 +155,8 @@ export function PdfVersionReview(props: Props) {
             </p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--admin-muted)]">
               {emptySlotUploadAllowed
-                ? 'Each empty page has its own Upload page action. PDF Release remains locked until every page has a real approved image.'
-                : 'Automatic Final processing still owns these slots. Refresh after processing stops before uploading a manual page.'}
+                ? 'Upload missing pages before PDF Release.'
+                : 'Waiting for Final processing.'}
             </p>
           </div>
         </section>
@@ -309,8 +309,8 @@ function V2PdfWorkspace({
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-[var(--admin-muted)]">
                     {emptySlot
-                      ? page.error_message || 'Upload a completed page image before PDF Release.'
-                      : 'Refresh the signed image URL before reviewing this page.'}
+                      ? page.error_message || 'Upload before PDF Release.'
+                      : 'Refresh the image URL.'}
                   </p>
                 </div>
               </div>

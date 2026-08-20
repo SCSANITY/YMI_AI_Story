@@ -18,7 +18,6 @@ import {
 import {
   AdminButton,
   AdminEmptyState,
-  AdminIconButton,
   AdminNotice,
   AdminStatusBadge,
   adminFieldClass,
@@ -49,6 +48,20 @@ const DETAIL_VIEWS: Array<[KolDetailView, string]> = [
   ['application', 'Application'],
   ['partnership', 'Partnership'],
 ]
+
+function BackToApplicationsButton({ onBack }: { onBack: () => void }) {
+  return (
+    <AdminButton
+      type="button"
+      tone="quiet"
+      onClick={onBack}
+      className="w-fit gap-2 px-3 text-xs 2xl:hidden"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Applications
+    </AdminButton>
+  )
+}
 
 export function KolLeadDetail({
   detail,
@@ -101,38 +114,38 @@ export function KolLeadDetail({
 
   if (loading && !detail) {
     return (
-      <section className="admin-v2-comm-canvas relative flex min-h-[34rem] min-w-0 flex-1 items-center justify-center text-sm text-[var(--admin-page-muted)]">
-        <AdminIconButton type="button" onClick={onBack} title="Back to partnership list" className="absolute left-3 top-3 h-9 min-h-9 w-9 basis-9 2xl:hidden">
-          <ArrowLeft className="h-4 w-4" />
-        </AdminIconButton>
-        <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> Loading application...
+      <section className="admin-v2-comm-canvas flex min-h-[34rem] min-w-0 flex-1 flex-col p-3 text-sm text-[var(--admin-page-muted)]">
+        <BackToApplicationsButton onBack={onBack} />
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <LoaderCircle className="mr-2 h-5 w-5 animate-spin" /> Loading application...
+        </div>
       </section>
     )
   }
 
   if (loadError && !detail) {
     return (
-      <section className="admin-v2-comm-canvas relative flex min-h-[34rem] min-w-0 flex-1 flex-col items-center justify-center px-6 text-center">
-        <AdminIconButton type="button" onClick={onBack} title="Back to partnership list" className="absolute left-3 top-3 h-9 min-h-9 w-9 basis-9 2xl:hidden">
-          <ArrowLeft className="h-4 w-4" />
-        </AdminIconButton>
-        <CircleAlert className="mb-3 h-7 w-7 text-[var(--admin-crit)]" />
-        <p className="text-sm text-[var(--admin-crit)]">{loadError}</p>
-        <button type="button" onClick={onReload} className="mt-4 text-sm font-bold text-[var(--admin-accent-dp)] underline underline-offset-4">
-          Retry
-        </button>
+      <section className="admin-v2-comm-canvas flex min-h-[34rem] min-w-0 flex-1 flex-col p-3">
+        <BackToApplicationsButton onBack={onBack} />
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3 text-center">
+          <CircleAlert className="mb-3 h-7 w-7 text-[var(--admin-crit)]" />
+          <p className="text-sm text-[var(--admin-crit)]">{loadError}</p>
+          <button type="button" onClick={onReload} className="mt-4 text-sm font-bold text-[var(--admin-accent-dp)] underline underline-offset-4">
+            Retry
+          </button>
+        </div>
       </section>
     )
   }
 
   if (!detail) {
     return (
-      <AdminEmptyState className="admin-v2-comm-canvas flex min-h-[34rem] min-w-0 flex-1 flex-col items-center justify-center border-0 px-6 text-center">
-        <AdminIconButton type="button" onClick={onBack} title="Back to partnership list" className="absolute left-3 top-3 h-9 min-h-9 w-9 basis-9 2xl:hidden">
-          <ArrowLeft className="h-4 w-4" />
-        </AdminIconButton>
-        <Handshake className="mb-3 h-8 w-8" />
-        Select a partnership application to review its profile.
+      <AdminEmptyState className="admin-v2-comm-canvas flex min-h-[34rem] min-w-0 flex-1 flex-col border-0 p-3 text-center">
+        <BackToApplicationsButton onBack={onBack} />
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3">
+          <Handshake className="mb-3 h-8 w-8" />
+          Select a partnership application to review its profile.
+        </div>
       </AdminEmptyState>
     )
   }
@@ -178,9 +191,7 @@ export function KolLeadDetail({
   return (
     <section className="admin-v2-comm-canvas flex min-h-[40rem] min-w-0 flex-1 flex-col 2xl:h-full 2xl:min-h-0">
       <header className="flex shrink-0 items-start gap-3 border-b border-[var(--admin-line)] bg-[var(--admin-panel-2)] p-3 sm:p-4">
-        <AdminIconButton type="button" onClick={onBack} title="Back to partnership list" className="h-9 min-h-9 w-9 basis-9 2xl:hidden">
-          <ArrowLeft className="h-4 w-4" />
-        </AdminIconButton>
+        <BackToApplicationsButton onBack={onBack} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="truncate text-base font-bold text-[var(--admin-page-ink)]">{lead.nickname}</h2>

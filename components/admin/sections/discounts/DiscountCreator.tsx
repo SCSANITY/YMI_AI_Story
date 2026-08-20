@@ -116,10 +116,6 @@ export function DiscountCreator({
           Create
         </p>
         <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">New discount</h2>
-        <p className="mt-1.5 max-w-xl text-sm leading-6 text-[var(--admin-page-muted)]">
-          Create admin promo codes or account vouchers. Free shipping is always a shipping
-          discount.
-        </p>
       </div>
 
       {error ? (

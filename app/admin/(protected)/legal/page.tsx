@@ -7,7 +7,6 @@ export default function LegalContentPage() {
       <AdminPageHeader
         eyebrow="Publishing"
         title="Legal Content"
-        description="Prepare, preview, publish, and restore revisioned policy content."
       />
       <LegalContentSection />
     </AdminPage>

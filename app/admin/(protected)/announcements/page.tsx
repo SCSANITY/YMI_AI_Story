@@ -7,7 +7,6 @@ export default function AnnouncementsPage() {
       <AdminPageHeader
         eyebrow="Publishing"
         title="Announcements"
-        description="Create, preview, publish, and manage customer-facing updates."
       />
       <AnnouncementsSection />
     </AdminPage>

@@ -7,7 +7,6 @@ export default function AdminPartnershipsPage() {
       <AdminPageHeader
         eyebrow="Growth"
         title="KOL Partnerships"
-        description="Review account-owned creator applications, qualification state, assignment, and internal notes."
         action={<AdminStatusBadge tone="info">Auto-refresh: 30 seconds</AdminStatusBadge>}
       />
       <div className="h-4 shrink-0" />

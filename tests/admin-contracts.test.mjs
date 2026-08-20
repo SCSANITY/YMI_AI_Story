@@ -71,7 +71,6 @@ test('the protected Admin shell owns scoped loading and error boundaries', async
 test('desktop Admin scroll ownership stays lg-gated while mobile keeps document scroll', async () => {
   const shell = await read('components/admin/AdminShell.tsx')
   const sidebar = await read('components/admin/AdminSidebar.tsx')
-  const commandBar = await read('components/admin/AdminCommandBar.tsx')
   const navigation = await read('components/admin/adminNavigation.ts')
   const globals = await read('app/globals.css')
   const announcementWorkspace = await read(
@@ -91,14 +90,12 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
   assert.match(sidebar, /document\.body\.style\.overflow = ['"]hidden['"]/)
   assert.match(sidebar, /src="\/logo\.webp"/)
   assert.doesNotMatch(sidebar, />\s*Y\s*</)
+  assert.doesNotMatch(sidebar, /currentItem\?\.label|getAdminNavigationItem/)
   assert.match(shell, /ymi-admin-theme/)
-  // Identity is owned by the sidebar footer only; the command bar no longer duplicates it.
-  assert.match(shell, /<AdminCommandBar \/>/)
+  // Route identity is owned by each page header; the shell adds no duplicate title row.
+  assert.doesNotMatch(shell, /AdminCommandBar|YMI Operations/)
   assert.match(shell, /<AdminSidebar adminName=\{adminName\} adminEmail=\{adminEmail\}/)
-  assert.doesNotMatch(commandBar, /adminName|adminEmail|admin-v2-identity/)
   assert.match(sidebar, /getAdminNavigationGroups\(\)/)
-  assert.match(commandBar, /usePathname\(\)/)
-  assert.match(commandBar, /getAdminNavigationItem\(pathname\)/)
   assert.match(navigation, /export const adminNavigationItems/)
   assert.match(globals, /\.ymi-admin-theme/)
   assert.match(globals, /\.admin-v2-workspace/)
@@ -108,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 42, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 44, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -284,7 +281,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(panel, /detailAbortControllerRef/)
   assert.match(panel, /signal:\s*controller\.signal/)
   assert.match(panel, /detailRequestIntentRef\.current\s*!==\s*requestIntent/)
-  assert.match(panel, /fetch\(['"]\/api\/admin\/final-jobs/)
+  assert.match(panel, /fetch\(`\/api\/admin\/final-jobs/)
   assert.doesNotMatch(panel, /supabaseAdmin/)
   assert.match(panel, /<JobQueue/)
   assert.match(panel, /<PdfVersionReview/)
@@ -385,6 +382,7 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
   const pdfReview = await read('components/admin/final-review/PdfVersionReview.tsx')
   const generalInbox = await read('components/admin/sections/inbox/GeneralInbox.tsx')
+  const emailThread = await read('components/admin/email/AdminEmailThread.tsx')
   const sidebar = await read('components/admin/AdminSidebar.tsx')
   const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
   const globals = await read('app/globals.css')
@@ -410,8 +408,9 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.doesNotMatch(panel, /gap-3 lg:flex-row/)
   assert.doesNotMatch(panel, /p-0\.5 lg:w-\[16rem\]/)
   assert.match(pdfReview, /min-h-11[^\"]*sm:min-h-9/)
-  assert.match(generalInbox, /mt-2 flex flex-col gap-3 sm:flex-row/)
-  assert.match(generalInbox, /className="w-full px-4 text-xs sm:w-auto"/)
+  assert.match(generalInbox, /AdminEmailComposer/)
+  assert.match(emailThread, /mt-2 flex flex-col gap-2 sm:flex-row/)
+  assert.match(emailThread, /className="w-full sm:w-auto"/)
   assert.match(panel, /useState<FinalReviewQueueFilter>\(['"]all['"]\)/)
   assert.match(panel, /filterFinalJobs\(jobs, queueFilter\)/)
   assert.match(panel, /jobs=\{visibleJobs\}/)
@@ -450,10 +449,10 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.match(jobQueue, /xl:block xl:space-y-3 xl:overflow-visible/)
   assert.match(jobQueue, /xl:grid xl:grid-cols-2 2xl:grid-cols-3/)
   assert.match(jobQueue, /variant\?: 'rail' \| 'board'/)
-  assert.match(jobQueue, /w-\[min\(17rem,82vw\)\] shrink-0[^"]*xl:w-full/)
+  assert.match(jobQueue, /w-\[min\(18rem,84vw\)\] shrink-0[^"]*xl:w-full/)
   assert.match(statCard, /<button/)
   assert.match(statCard, /aria-pressed=\{active\}/)
-  assert.match(finalsPage, /<h1 className="sr-only">Final Review<\/h1>/)
+  assert.match(finalsPage, /<AdminPageHeader eyebrow="Review" title="Final Review" \/>/)
   assert.match(sidebar, /sticky top-0 z-40[^"]*lg:hidden/)
   assert.match(sidebar, /fixed inset-0 z-\[180\] lg:hidden/)
 })
@@ -576,6 +575,69 @@ test('Orders keeps drafts row-scoped and reconciles logistics side effects from 
   assert.match(logisticsApi, /sendLogisticsUpdateEmail/)
   assert.match(logisticsApi, /persisted:\s*true/)
   assert.match(logisticsApi, /order:\s*updatedOrder/)
+})
+
+test('Orders keeps production linkage read-only while supporting exact Final Review navigation', async () => {
+  const section = await read('components/admin/sections/OrdersManagementSection.tsx')
+  const card = await read('components/admin/sections/orders/OrderManagementCard.tsx')
+  const snapshot = await read('components/admin/sections/orders/OrderProductionSnapshot.tsx')
+  const linkedOrdersButton = await read('components/admin/final-review/LinkedOrdersButton.tsx')
+  const floatingDialog = await read('components/admin/AdminFloatingDialog.tsx')
+  const anchoredPopover = await read('components/admin/AdminAnchoredPopover.tsx')
+  const finalsPage = await read('app/admin/(protected)/finals/page.tsx')
+  const finalReviewPanel = await read('components/admin/FinalReviewPanel.tsx')
+  const snapshotApi = await read('app/api/admin/orders/[orderId]/production/route.ts')
+  const linkedOrdersApi = await read('app/api/admin/final-jobs/[finalJobId]/linked-orders/route.ts')
+  const ordersApi = await read('app/api/admin/orders/route.ts')
+  const readModel = await read('src/lib/admin-orders.ts')
+
+  assert.match(section, /useState<OrderGroup>\(['"]active['"]\)/)
+  assert.match(section, /Search order, customer, or email/)
+  assert.match(section, /filtersOpen/)
+  assert.match(section, /Load more/)
+  assert.match(section, /expandedOrderId/)
+  assert.match(section, /focusedOrderId/)
+  assert.match(card, /production_progress/)
+  assert.match(card, /OrderProductionSnapshot/)
+  assert.match(card, /AdminFloatingDialog/)
+  assert.match(card, /backdrop="blur"/)
+  assert.match(card, /placement="center"/)
+  assert.match(card, /productionSnapshotMode/)
+  assert.match(card, /aria-expanded=\{expanded\}/)
+  assert.match(card, /admin-v2-order-bubble/)
+  assert.match(snapshot, /\/admin\/finals\?job=/)
+  assert.match(snapshot, /&version=\$\{mode\}/)
+  assert.match(snapshot, /mode:\s*['"]pdf['"]\s*\|\s*['"]print['"]/)
+  assert.match(snapshot, /AdminFloatingDialog/)
+  assert.doesNotMatch(snapshot, /approve-all-pages|release-print|upload-replacement|method:\s*['"](?:POST|PATCH|DELETE)['"]/)
+  assert.match(snapshotApi, /\.from\(['"]cart_items['"]\)/)
+  assert.match(snapshotApi, /\.from\(['"]final_job_pages['"]\)/)
+  assert.match(snapshotApi, /createSignedUrls/)
+  assert.doesNotMatch(snapshotApi, /\.update\(|\.insert\(|\.delete\(/)
+  assert.match(linkedOrdersApi, /\.from\(['"]final_jobs['"]\)/)
+  assert.match(linkedOrdersApi, /\.select\(['"]job_id['"]\)/)
+  assert.match(linkedOrdersApi, /\.eq\(['"]final_job_id['"],\s*finalJob\.job_id\)/)
+  assert.match(linkedOrdersApi, /\.from\(['"]cart_items['"]\)/)
+  assert.match(linkedOrdersButton, /AdminAnchoredPopover/)
+  assert.match(linkedOrdersButton, /admin-v2-glass-card/)
+  assert.match(anchoredPopover, /createPortal/)
+  assert.match(anchoredPopover, /getBoundingClientRect/)
+  assert.match(floatingDialog, /createPortal/)
+  assert.match(floatingDialog, /admin-v2-floating-layer fixed inset-0/)
+  assert.match(floatingDialog, /admin-v2-floating-dialog pointer-events-auto/)
+  assert.match(floatingDialog, /window\.getComputedStyle\(source\)/)
+  assert.doesNotMatch(floatingDialog, /className=\{`ymi-admin-theme/)
+  assert.match(floatingDialog, /aria-modal=\{backdrop === ['"]blur['"]/)
+  assert.match(finalsPage, /requestedVersion === ['"]print['"] \? ['"]print['"] : ['"]pdf['"]/)
+  assert.match(finalReviewPanel, /useState<ReviewVersion>\(initialVersion\)/)
+  assert.match(ordersApi, /select\(ORDER_SELECT, \{ count: ['"]exact['"] \}\)/)
+  assert.match(ordersApi, /\.range\(rangeStart, rangeEnd\)/)
+  assert.match(ordersApi, /\.select\(['"]cart_item_id, order_id, final_job_id, product_type, package_type, quantity['"]\)/)
+  assert.match(ordersApi, /aggregateAdminOrderProgress/)
+  assert.match(ordersApi, /\.in\(['"]job_id['"],\s*Array\.from\(linkedGenerationJobIds\)\)/)
+  assert.match(snapshotApi, /\.in\(['"]job_id['"],\s*linkedGenerationJobIds\)/)
+  assert.match(readModel, /ADMIN_ORDER_VIEW_STATUSES/)
+  assert.match(readModel, /isFinalJobReleased/)
 })
 
 test('Announcements separates list, status rows, and the editor upload workspace', async () => {
@@ -722,7 +784,8 @@ test('Admin V2 Final Review keeps the T3-026 workspace while preserving the rele
   assert.match(finalsPage, /xl:h-full[^\n]*xl:min-h-0/)
   assert.match(panel, /admin-v2-panel/)
   assert.match(panel, /admin-v2-review-canvas/)
-  assert.match(queue, /admin-v2-panel/)
+  assert.match(queue, /admin-v2-job-bubble/)
+  assert.doesNotMatch(queue, /<aside className="admin-v2-panel/)
   assert.match(stage, /AdminPanel/)
   assert.match(stage, /AdminButton/)
   assert.match(globals, /\.admin-v2-review-canvas/)
@@ -807,10 +870,11 @@ test('Admin V2 responsive and accessibility closure preserves keyboard and narro
 })
 
 test('Admin typography, glass cards, and communication views share one presentation contract', async () => {
-  const [globals, adminUi, jobQueue, supportConversation, generalInbox, kolDetail, kolConversation] = await Promise.all([
+  const [globals, adminUi, jobQueue, emailThread, supportConversation, generalInbox, kolDetail, kolConversation] = await Promise.all([
     read('app/globals.css'),
     read('components/admin/AdminUi.tsx'),
     read('components/admin/final-review/JobQueue.tsx'),
+    read('components/admin/email/AdminEmailThread.tsx'),
     read('components/admin/sections/support/SupportConversation.tsx'),
     read('components/admin/sections/inbox/GeneralInbox.tsx'),
     read('components/admin/sections/kol/KolLeadDetail.tsx'),
@@ -822,12 +886,28 @@ test('Admin typography, glass cards, and communication views share one presentat
   assert.match(globals, /\.admin-v2-glass-card\s*\{/)
   assert.match(globals, /\.admin-v2-glass-card--selected\s*\{/)
   assert.match(globals, /\.admin-v2-message-card\s*\{/)
-  assert.match(jobQueue, /admin-v2-glass-card admin-v2-glass-card--interactive/)
-  assert.match(jobQueue, /admin-v2-glass-card--selected/)
+  assert.match(globals, /\.admin-v2-email-message--inbound\s*\{/)
+  assert.match(globals, /\.admin-v2-email-message--outbound\s*\{/)
+  assert.match(globals, /\.admin-v2-email-message--quarantine\s*\{/)
+  assert.match(jobQueue, /admin-v2-job-bubble admin-v2-job-bubble--interactive/)
+  assert.match(jobQueue, /admin-v2-job-bubble--selected/)
 
   for (const conversation of [supportConversation, generalInbox, kolConversation]) {
-    assert.match(conversation, /admin-v2-message-card/)
+    assert.match(conversation, /AdminEmailMessageCard/)
+    assert.match(conversation, /AdminEmailThread/)
+    assert.match(conversation, /AdminEmailComposer/)
   }
+
+  assert.match(emailThread, /data-email-direction=\{direction\}/)
+  assert.match(emailThread, /admin-v2-email-message--\$\{direction\}/)
+  assert.match(emailThread, /attachmentContent/)
+  assert.match(emailThread, /deliveryError/)
+  assert.doesNotMatch(emailThread, /fetch\(|useEffect|useState/)
+  assert.match(supportConversation, /requestIdRef\.current/)
+  assert.match(generalInbox, /\/api\/admin\/inbox\/messages\/\$\{selectedId\}\/replies/)
+  assert.match(kolConversation, /quarantinedMessages\.map/)
+  assert.match(kolConversation, /onReviewSender\(message\.message_id, 'confirm'\)/)
+  assert.match(kolConversation, /onReviewSender\(message\.message_id, 'reject'\)/)
 
   assert.match(kolDetail, /type KolDetailView = 'conversation' \| 'application' \| 'partnership'/)
   assert.match(kolDetail, /role="tablist"/)
@@ -837,4 +917,82 @@ test('Admin typography, glass cards, and communication views share one presentat
   assert.match(kolDetail, /hidden=\{activeView !== 'partnership'\}/)
   assert.equal((kolDetail.match(/<KolPartnershipConversation/g) || []).length, 1)
   assert.equal((kolDetail.match(/<KolPartnershipCodePanel/g) || []).length, 1)
+})
+
+test('Final Review queue renders independent warm glass job bubbles', async () => {
+  const [globals, jobQueue] = await Promise.all([
+    read('app/globals.css'),
+    read('components/admin/final-review/JobQueue.tsx'),
+  ])
+
+  assert.match(globals, /\.admin-v2-job-bubble\s*\{[\s\S]*backdrop-filter:\s*blur\(22px\)/)
+  assert.match(globals, /\.admin-v2-job-bubble--interactive:hover\s*\{[\s\S]*translateY\(-2px\)/)
+  assert.match(globals, /\.admin-v2-job-bubble--selected\s*\{/)
+  assert.match(jobQueue, /className="min-w-0 py-1"/)
+  assert.doesNotMatch(jobQueue, /<aside className="admin-v2-panel/)
+  assert.match(jobQueue, /admin-v2-job-bubble admin-v2-job-bubble--interactive/)
+  assert.match(jobQueue, /admin-v2-job-bubble--selected/)
+  assert.match(jobQueue, /Pages \{job\.approved_pages\}\/\{job\.total_pages\}/)
+  assert.doesNotMatch(jobQueue, /<span>Print \{job\.print_status\}<\/span>/)
+})
+
+test('Admin workspaces keep instructional copy out of operational surfaces', async () => {
+  const pagePaths = [
+    'app/admin/(protected)/analytics/page.tsx',
+    'app/admin/(protected)/announcements/page.tsx',
+    'app/admin/(protected)/banner/page.tsx',
+    'app/admin/(protected)/catalog/page.tsx',
+    'app/admin/(protected)/discounts/page.tsx',
+    'app/admin/(protected)/emails/page.tsx',
+    'app/admin/(protected)/finals/page.tsx',
+    'app/admin/(protected)/inbox/page.tsx',
+    'app/admin/(protected)/legal/page.tsx',
+    'app/admin/(protected)/orders/page.tsx',
+    'app/admin/(protected)/partnerships/page.tsx',
+    'app/admin/(protected)/service/page.tsx',
+    'app/admin/(protected)/support/page.tsx',
+  ]
+  const [pages, stage, pdfReview, printReview] = await Promise.all([
+    Promise.all(pagePaths.map(read)),
+    read('components/admin/final-review/FinalReviewStage.tsx'),
+    read('components/admin/final-review/PdfVersionReview.tsx'),
+    read('components/admin/final-review/PrintVersionReview.tsx'),
+  ])
+
+  for (const page of pages) assert.doesNotMatch(page, /description=/)
+  assert.doesNotMatch(stage, /description=|Customer-facing PDF approval|manually prepared, private printer PDF/)
+  assert.doesNotMatch(printReview, /goes directly to private Storage|records the operational handoff|separate from the lower-resolution/)
+  assert.match(pdfReview, /Upload missing pages before PDF Release/)
+  assert.match(pdfReview, /page\.error_message/)
+})
+
+test('every protected Admin page owns one content title and the shell owns none', async () => {
+  const pagePaths = [
+    'app/admin/(protected)/analytics/page.tsx',
+    'app/admin/(protected)/announcements/page.tsx',
+    'app/admin/(protected)/banner/page.tsx',
+    'app/admin/(protected)/catalog/page.tsx',
+    'app/admin/(protected)/discounts/page.tsx',
+    'app/admin/(protected)/emails/page.tsx',
+    'app/admin/(protected)/finals/page.tsx',
+    'app/admin/(protected)/inbox/page.tsx',
+    'app/admin/(protected)/legal/page.tsx',
+    'app/admin/(protected)/orders/page.tsx',
+    'app/admin/(protected)/partnerships/page.tsx',
+    'app/admin/(protected)/service/page.tsx',
+    'app/admin/(protected)/support/page.tsx',
+  ]
+  const [pages, shell, sidebar, globals] = await Promise.all([
+    Promise.all(pagePaths.map(read)),
+    read('components/admin/AdminShell.tsx'),
+    read('components/admin/AdminSidebar.tsx'),
+    read('app/globals.css'),
+  ])
+
+  for (const page of pages) {
+    assert.equal((page.match(/<AdminPageHeader\b/g) || []).length, 1)
+  }
+  assert.doesNotMatch(shell, /AdminCommandBar|YMI Operations/)
+  assert.doesNotMatch(sidebar, /currentItem\?\.label|getAdminNavigationItem/)
+  assert.doesNotMatch(globals, /\.admin-v2-commandbar\s*\{/)
 })

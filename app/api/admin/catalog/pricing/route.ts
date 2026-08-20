@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { invalidatePublicCatalogCache } from '@/lib/catalog-cache'
 import {
   normalizeBookPackageType,
   packagePriceRowsToPricing,
@@ -156,6 +157,8 @@ export async function PATCH(request: Request) {
   if (!updated) {
     return json({ error: 'This price changed in another session. Refresh and review the latest value.' }, 409)
   }
+
+  invalidatePublicCatalogCache()
 
   return json({
     templateId,

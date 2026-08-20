@@ -98,9 +98,6 @@ export function CustomizeAccessControl() {
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Access Control</p>
           <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Customize access</h2>
-          <p className="mt-1.5 max-w-md text-sm leading-6 text-[var(--admin-page-muted)]">
-            Block new Customize sessions during private beta windows.
-          </p>
         </div>
 
         {settings ? (
@@ -119,9 +116,6 @@ export function CustomizeAccessControl() {
               <span className={`h-2 w-2 rounded-full ${settings.enabled ? 'bg-[#3e8c5c]' : 'bg-[#8d928a]'}`} />
               {saving ? 'Saving...' : settings.enabled ? 'Open - Close access' : 'Closed - Open access'}
             </button>
-            <p className="text-[10px] text-[var(--admin-page-muted)]">
-              {settings.enabled ? 'Users can enter Customize.' : 'Users see the private beta notice.'}
-            </p>
           </div>
         ) : null}
       </div>

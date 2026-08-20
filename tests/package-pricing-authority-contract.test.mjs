@@ -94,6 +94,34 @@ test('catalog merchandising has one price source and explicit owner-curated Home
   assert.match(placementsRoute, /replace_template_home_section/)
 })
 
+test('Admin public-card package bulk apply reconciles every story and invalidates public catalog views', async () => {
+  const [manager, settingsRoute, pricingRoute, placementsRoute, cache, clientCatalog] = await Promise.all([
+    read('components/admin/CatalogPricingManager.tsx'),
+    read('app/api/admin/catalog/settings/route.ts'),
+    read('app/api/admin/catalog/pricing/route.ts'),
+    read('app/api/admin/catalog/home-placements/route.ts'),
+    read('src/lib/catalog-cache.ts'),
+    read('components/useBookCatalog.ts'),
+  ])
+
+  assert.match(settingsRoute, /if \(!applyToAll\) query = query\.eq\('template_id', templateId\)/)
+  assert.match(manager, /applyToAll \|\| updatedIds\.has\(template\.templateId\)/)
+  assert.match(manager, /All stories use \$\{displayPackageName\}/)
+  assert.match(manager, /Apply \$\{displayPackageName\} to all/)
+  assert.match(manager, /tone="primary"/)
+  assert.match(manager, /applyAllBlockingTemplates/)
+  assert.match(manager, /Add a \{displayPackageName\} sale price before applying to all/)
+
+  assert.match(cache, /revalidatePath\('\/'\)/)
+  assert.match(cache, /revalidatePath\('\/books'\)/)
+  assert.match(cache, /revalidatePath\('\/api\/templates'\)/)
+  assert.match(settingsRoute, /invalidatePublicCatalogCache\(\)/)
+  assert.match(pricingRoute, /invalidatePublicCatalogCache\(\)/)
+  assert.match(placementsRoute, /invalidatePublicCatalogCache\(\)/)
+  assert.match(clientCatalog, /export function invalidateBookCatalogClientCache\(\)/)
+  assert.match(clientCatalog, /\?refresh=\$\{catalogRefreshVersion\}/)
+})
+
 test('customer-facing saved books and Reader do not fall back to legacy template prices', async () => {
   const [myBooksPage, myBooksTypes, reader] = await Promise.all([
     read('app/my-books/page.tsx'),

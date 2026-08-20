@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { invalidatePublicCatalogCache } from '@/lib/catalog-cache'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { HomeBookSectionKey } from '@/types'
 
@@ -46,6 +47,8 @@ export async function PATCH(request: Request) {
     }
     return json({ error: error.message || 'Failed to update Home placements' }, 400)
   }
+
+  invalidatePublicCatalogCache()
 
   return json({ sectionKey, templateIds, version: Number(data) })
 }

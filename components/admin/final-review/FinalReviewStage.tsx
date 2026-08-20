@@ -1,6 +1,7 @@
 import { CheckCircle2, FileText, Loader2, Lock, PackageCheck, Send } from 'lucide-react'
 import type { FinalJobDetail } from '@/lib/finalReview'
 import { AdminButton, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminUi'
+import { LinkedOrdersButton } from '@/components/admin/final-review/LinkedOrdersButton'
 import { formatDate } from './reviewUi'
 
 export function FinalReviewStage({
@@ -39,6 +40,9 @@ export function FinalReviewStage({
   return (
     <div className="min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain">
       <aside className="space-y-4">
+        {detail?.finalJob.final_job_id ? (
+          <LinkedOrdersButton finalJobId={detail.finalJob.final_job_id} />
+        ) : null}
         <AdminPanel className="flex items-center gap-4 p-4">
           <div
             className="admin-v3-ring h-[92px] w-[92px] shrink-0"
@@ -69,7 +73,6 @@ export function FinalReviewStage({
           tone="emerald"
           status={detail?.finalJob.review_status ?? 'Not set'}
           progress={`${approvedPageCount} / ${totalPageCount} pages`}
-          description="Customer-facing PDF approval, PDF build, and delivery email."
         >
           <AdminButton
             type="button"
@@ -106,7 +109,6 @@ export function FinalReviewStage({
           tone="amber"
           status={detail?.finalJob.print_status ?? (pdfReleased ? 'pending' : 'locked')}
           progress={printReleased ? 'Artifact locked' : printArtifactReady ? '1 verified PDF' : 'Awaiting upload'}
-          description="A manually prepared, private printer PDF. This stage unlocks after customer PDF release."
         >
           <AdminButton
             type="button"
@@ -127,9 +129,6 @@ export function FinalReviewStage({
             )}
             {printReleased ? 'Print Released' : 'Release print version'}
           </AdminButton>
-          <p className="text-xs leading-6 text-[var(--admin-page-muted)]">
-            Release locks the verified upload. Shipping remains a separate logistics action.
-          </p>
         </StageCard>
       </aside>
     </div>
@@ -143,7 +142,6 @@ function StageCard({
   tone,
   status,
   progress,
-  description,
   children,
 }: {
   label: string
@@ -152,7 +150,6 @@ function StageCard({
   tone: 'emerald' | 'amber'
   status: string
   progress: string
-  description: string
   children: React.ReactNode
 }) {
   const toneClass =
@@ -176,9 +173,6 @@ function StageCard({
         <p>
           Status: <AdminStatusBadge className="ml-1 capitalize">{status}</AdminStatusBadge>
         </p>
-      </div>
-      <div className="mt-4 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4 text-sm text-[var(--admin-page-muted)]">
-        {description}
       </div>
       <div className="mt-4 space-y-3">{children}</div>
     </AdminPanel>

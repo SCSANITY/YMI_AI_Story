@@ -5,10 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
-import {
-  getAdminNavigationGroups,
-  getAdminNavigationItem,
-} from '@/components/admin/adminNavigation'
+import { getAdminNavigationGroups } from '@/components/admin/adminNavigation'
 import { ADMIN_KOL_ATTENTION_REFRESH_EVENT } from '@/lib/kol-partnerships'
 
 type Props = {
@@ -96,8 +93,6 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
   const mobileCloseRef = useRef<HTMLButtonElement>(null)
   const attentionIntentRef = useRef(0)
   const [kolAttentionCount, setKolAttentionCount] = useState(0)
-  const currentItem = useMemo(() => getAdminNavigationItem(pathname), [pathname])
-
   const loadKolAttentionCount = useCallback(async () => {
     const intent = ++attentionIntentRef.current
     try {
@@ -174,10 +169,7 @@ export function AdminSidebar({ adminName, adminEmail }: Props) {
             priority
             className="h-9 w-auto shrink-0"
           />
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">Operations</p>
-            <p className="truncate text-sm font-semibold text-[var(--admin-ink)]">{currentItem?.label || 'Console'}</p>
-          </div>
+          <div className="min-w-0 flex-1" />
           <button
             ref={mobileTriggerRef}
             type="button"

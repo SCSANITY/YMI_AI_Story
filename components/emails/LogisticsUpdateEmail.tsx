@@ -14,6 +14,7 @@ type LogisticsUpdateEmailProps = {
   trackingNumber?: string | null
   trackingUrl?: string | null
   note?: string | null
+  isTrackingUpdate?: boolean
   /** Personalized (face-swapped) cover of the ordered book */
   coverImageUrl?: string
 }
@@ -28,11 +29,19 @@ export function LogisticsUpdateEmail({
   trackingNumber,
   trackingUrl,
   note,
+  isTrackingUpdate = false,
   coverImageUrl,
 }: LogisticsUpdateEmailProps) {
   const label = displayId || orderId
   const copy =
-    status === 'production'
+    isTrackingUpdate
+      ? {
+          title: 'Your Shipping Details Were Updated',
+          subtitle: 'The tracking information for your YMI Story order has changed.',
+          preview: 'Updated tracking information is available for your YMI Story order.',
+          coverCaption: 'Your story is travelling\nto its new home.',
+        }
+      : status === 'production'
       ? {
           title: 'Your Book is Being Crafted ✦',
           subtitle: 'Your personalized YMI Story book has entered production.',
@@ -95,12 +104,9 @@ export function LogisticsUpdateEmail({
       </Section>
 
       {status === 'shipped' ? (
-        /* Track Shipment is the primary CTA for shipped orders. Until a logistics
-           carrier platform is integrated, it points to the order page (which shows
-           tracking info). Swap to `trackingUrl` once that integration exists. */
         <Section style={styles.ctaWrap}>
-          <Link href={orderUrl} style={emailButtons.primary}>
-            Track Shipment
+          <Link href={trackingUrl || orderUrl} style={emailButtons.primary}>
+            {trackingUrl ? 'Track Shipment' : 'View Order'}
           </Link>
         </Section>
       ) : (

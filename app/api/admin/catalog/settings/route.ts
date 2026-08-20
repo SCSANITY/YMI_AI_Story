@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { invalidatePublicCatalogCache } from '@/lib/catalog-cache'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -36,6 +37,8 @@ export async function PATCH(request: Request) {
     return json({ error: 'Failed to update catalog display package' }, 500)
   }
   if (!data?.length) return json({ error: 'Template not found' }, 404)
+
+  invalidatePublicCatalogCache()
 
   return json({
     templateIds: data.map((row) => String(row.template_id)),

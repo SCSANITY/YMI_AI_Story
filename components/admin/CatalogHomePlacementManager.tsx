@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Check, LoaderCircle } from 'lucide-react'
 import { AdminButton, AdminNotice, AdminPanel, adminFieldClass } from '@/components/admin/AdminUi'
+import { invalidateBookCatalogClientCache } from '@/components/useBookCatalog'
 import type { BookPackagePricing, BookPackageType, HomeBookSectionKey } from '@/types'
 
 export type CatalogPlacementTemplate = {
@@ -19,11 +20,11 @@ export type CatalogHomeSection = {
   templateIds: string[]
 }
 
-const SECTION_META: Array<{ key: HomeBookSectionKey; name: string; description: string }> = [
-  { key: 'brand_new', name: 'Brand New', description: 'New-release stories featured on Home.' },
-  { key: 'for_boys', name: 'For Boys', description: 'Owner-curated Home recommendations, independent of the Books filter.' },
-  { key: 'for_girls', name: 'For Girls', description: 'Owner-curated Home recommendations, independent of the Books filter.' },
-  { key: 'in_discount', name: 'In Discount', description: 'Only stories whose public display package has a sale can be placed here.' },
+const SECTION_META: Array<{ key: HomeBookSectionKey; name: string }> = [
+  { key: 'brand_new', name: 'Brand New' },
+  { key: 'for_boys', name: 'For Boys' },
+  { key: 'for_girls', name: 'For Girls' },
+  { key: 'in_discount', name: 'In Discount' },
 ]
 
 function normalizeSlots(templateIds: string[]) {
@@ -80,6 +81,7 @@ export function CatalogHomePlacementManager({
       const nextSection = { sectionKey, templateIds, version: data.version }
       setDrafts((current) => ({ ...current, [sectionKey]: normalizeSlots(templateIds) }))
       onSectionSaved(nextSection)
+      invalidateBookCatalogClientCache()
       setSuccess(`${SECTION_META.find((section) => section.key === sectionKey)?.name} placements updated.`)
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to update Home section')
@@ -93,7 +95,6 @@ export function CatalogHomePlacementManager({
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-accent)]">Home merchandising</p>
         <h2 className="mt-1 text-xl font-bold text-[var(--admin-page-ink)]">Four-slot story placements</h2>
-        <p className="mt-1 text-sm text-[var(--admin-page-muted)]">Each section is explicit and ordered. Empty slots stay empty; public pages use no hidden fallback list.</p>
       </div>
 
       {error ? <AdminNotice tone="danger" className="mt-4">{error}</AdminNotice> : null}
@@ -110,8 +111,7 @@ export function CatalogHomePlacementManager({
           return (
             <section key={section.key} className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4">
               <h3 className="font-bold text-[var(--admin-page-ink)]">{section.name}</h3>
-              <p className="mt-1 min-h-10 text-xs leading-5 text-[var(--admin-page-muted)]">{section.description}</p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {values.map((value, slotIndex) => (
                   <label key={slotIndex} className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
                     Slot {slotIndex + 1}

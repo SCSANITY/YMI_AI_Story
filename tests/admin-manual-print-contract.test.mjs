@@ -68,8 +68,9 @@ test('Print Release locks only the verified manual artifact', async () => {
   assert.doesNotMatch(releaseRoute, /\.from\(['"]orders['"]\)|sendOrder|sendEmail|jobs|Worker/)
   assert.doesNotMatch(panel, /upload-print-page|print_completed_pages\s*>?=/)
   assert.doesNotMatch(printReview, /final_job_pages|buildFinalReviewWorkspace|fetch\s*\(/)
-  assert.match(printReview, /separate from the lower-resolution customer viewing PDF/)
-  assert.match(printReview, /does not rebuild the file, run the Worker, replace the customer PDF, or send another customer email/)
+  assert.match(printReview, /artifact\.status === ['"]released['"] \? ['"]Released and locked['"]/)
+  assert.match(printReview, /disabled=\{!pdfReleased \|\| printReleased \|\| uploading\}/)
+  assert.match(printReview, /PDF · max 250 MiB/)
   await assert.rejects(
     access(new URL('app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-print-page/route.ts', appRoot))
   )

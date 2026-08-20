@@ -7,7 +7,6 @@ export default function ServicePage() {
       <AdminPageHeader
         eyebrow="Runtime controls"
         title="Service Control"
-        description="Operate customer access and collaboration promo settings as independent controls."
       />
       <div className="max-w-5xl">
         <ServiceControlSection />

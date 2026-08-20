@@ -235,9 +235,6 @@ export function KolPartnershipCodePanel({
             </span>
             <div>
               <h3 className="text-base font-bold text-[var(--admin-page-ink)]">Partnership Code</h3>
-              <p className="mt-0.5 text-xs text-[var(--admin-page-muted)]">
-                Lead-owned discount with preserved redemption history.
-              </p>
             </div>
           </div>
         </div>
@@ -289,14 +286,11 @@ export function KolPartnershipCodePanel({
 
       {leadStatus === 'partnered' && (!editableCode || rotationOpen) ? (
           <div className="mt-5 border-t border-[var(--admin-line)] pt-5">
-          <div className="mb-4 flex items-start gap-2 text-xs leading-5 text-[var(--admin-page-muted)]">
-            {rotationOpen && activeCode ? <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-warn)]" /> : null}
-            <span>
-              {rotationOpen && activeCode
-                ? 'Rotation permanently reserves the old Code string, retires that row for history, and activates the new Code in one transaction.'
-                : 'Issue a new Code after the partnership terms are agreed.'}
-            </span>
-          </div>
+          {rotationOpen && activeCode ? (
+            <div className="mb-4 flex items-center gap-2 text-xs font-semibold text-[var(--admin-warn)]">
+              <CircleAlert className="h-4 w-4 shrink-0" /> Old Code will be permanently retired.
+            </div>
+          ) : null}
           {rotationOpen && activeCode && activeCode.reserved_count > 0 ? (
             <AdminNotice tone="warning" className="mb-4">
               {activeCode.reserved_count} unpaid checkout{activeCode.reserved_count === 1 ? '' : 's'} currently reserve this Code. Rotation keeps those reservations valid while stopping new use of the old Code.

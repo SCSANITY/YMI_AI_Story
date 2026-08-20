@@ -177,12 +177,7 @@ export function LegalContentSection() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <AdminNotice className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-3xl text-xs leading-5">
-          Drafts and immutable revisions are managed here. Customer-facing legal
-          surfaces read only the current published revision, with the code-owned
-          policies retained as an emergency fallback.
-        </p>
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={() => void loadDocuments()}
@@ -192,7 +187,7 @@ export function LegalContentSection() {
           <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
           Refresh
         </button>
-      </AdminNotice>
+      </div>
 
       {error ? (
         <AdminNotice tone="danger" role="alert">
@@ -206,17 +201,12 @@ export function LegalContentSection() {
             <DatabaseZap aria-hidden="true" className="h-5 w-5" />
           </div>
           <h2 className="mt-4 text-lg font-semibold text-[var(--admin-page-ink)]">Initialize legal publishing</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--admin-page-muted)]">
-            Create the first immutable database revisions from the current live English
-            policies. Public legal surfaces will continue showing the same text through
-            the published-content store after initialization.
-          </p>
           <AdminButton
             type="button"
             onClick={() => void bootstrap()}
             disabled={bootstrapPending}
             tone="primary"
-            className="mt-5"
+            className="mt-4"
           >
             {bootstrapPending ? 'Initializing...' : 'Initialize from live policies'}
           </AdminButton>

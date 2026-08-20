@@ -428,10 +428,7 @@ export function AnnouncementWorkspace({
             Live Preview
           </p>
           <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Public Blog card</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--admin-page-muted)]">
-            This approximates how the announcement will appear on the public Blog page.
-          </p>
-          <div className="mt-5">
+          <div className="mt-4">
             <AnnouncementPreview form={form} />
           </div>
         </aside>

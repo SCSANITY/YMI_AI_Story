@@ -54,3 +54,22 @@ test('keeps the unpaid checkout-resume email outside the order-access promise', 
   assert.doesNotMatch(html, noticePattern)
   assert.doesNotMatch(html, new RegExp(ORDER_ACCESS_NOTICE_TEXT, 'i'))
 })
+
+test('shipped email links directly to a validated carrier URL and labels tracking-only updates', async () => {
+  const trackingUrl = 'https://carrier.example/track/123'
+  const html = await render(
+    <LogisticsUpdateEmail
+      orderId="order-1"
+      orderUrl="https://www.ymistory.com/orders/order-1"
+      status="shipped"
+      statusLabel="Shipped"
+      trackingUrl={trackingUrl}
+      trackingNumber="123"
+      isTrackingUpdate
+    />
+  )
+
+  assert.match(html, new RegExp(trackingUrl.replaceAll('/', '\\/')))
+  assert.match(html, /Shipping Details Were Updated/i)
+  assert.match(html, /Track Shipment/i)
+})

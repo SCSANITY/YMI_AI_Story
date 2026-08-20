@@ -1,3 +1,10 @@
+import {
+  ADMIN_ORDER_VIEW_OPTIONS,
+  READONLY_ADMIN_ORDER_VIEWS,
+  type AdminOrderProductionProgress,
+  type AdminOrderView,
+} from '@/lib/admin-orders'
+
 export const ORDER_STATUS_OPTIONS = [
   ['paid', 'Order Confirmed'],
   ['production', 'Printing'],
@@ -5,16 +12,11 @@ export const ORDER_STATUS_OPTIONS = [
   ['delivered', 'Delivered'],
 ] as const
 
-export const ORDER_GROUP_OPTIONS = [
-  ['production', 'Production Flow'],
-  ['unpaid', 'Pending Payment'],
-  ['cancelled', 'Cancelled'],
-  ['refunded', 'Refunded'],
-] as const
+export const ORDER_GROUP_OPTIONS = ADMIN_ORDER_VIEW_OPTIONS
 
-export type OrderGroup = (typeof ORDER_GROUP_OPTIONS)[number][0]
+export type OrderGroup = AdminOrderView
 
-export const READONLY_GROUPS = new Set<OrderGroup>(['unpaid', 'cancelled', 'refunded'])
+export const READONLY_GROUPS = READONLY_ADMIN_ORDER_VIEWS
 
 export type OrderRow = {
   order_id: string
@@ -23,6 +25,8 @@ export type OrderRow = {
   payment_id: string | null
   customer_id: string | null
   email: string | null
+  customer_display_name: string | null
+  customer_account_email: string | null
   created_at: string
   checkout_currency: string | null
   shipping_method: string | null
@@ -34,6 +38,7 @@ export type OrderRow = {
   shipped_at: string | null
   delivered_at: string | null
   logistics_updated_at: string | null
+  production_progress: AdminOrderProductionProgress
 }
 
 export type OrderDraft = {

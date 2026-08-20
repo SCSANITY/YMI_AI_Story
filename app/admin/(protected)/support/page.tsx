@@ -7,7 +7,6 @@ export default function AdminSupportPage() {
       <AdminPageHeader
         eyebrow="Customer care"
         title="Support Inbox"
-        description="Review customer questions and continue each verified support conversation by email."
         action={<AdminStatusBadge tone="info">Auto-refresh: 15 seconds</AdminStatusBadge>}
       />
       <div className="h-4 shrink-0" />

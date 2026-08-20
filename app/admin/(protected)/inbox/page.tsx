@@ -7,7 +7,6 @@ export default function AdminGeneralInboxPage() {
       <AdminPageHeader
         eyebrow="Root-domain mail"
         title="General Inbox"
-        description="Review recognized root-domain mail that is not part of a verified Support thread."
         action={<AdminStatusBadge tone="neutral">Operational inbox</AdminStatusBadge>}
       />
       <div className="h-4 shrink-0" />

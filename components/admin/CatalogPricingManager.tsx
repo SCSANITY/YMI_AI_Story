@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Check, LoaderCircle, RefreshCw, Search, Tag } from 'lucide-react'
+import { BookOpen, Check, Layers3, LoaderCircle, RefreshCw, Search, Tag } from 'lucide-react'
 import Image from 'next/image'
 import {
   AdminButton,
@@ -17,6 +17,7 @@ import {
   CatalogHomePlacementManager,
   type CatalogHomeSection,
 } from '@/components/admin/CatalogHomePlacementManager'
+import { invalidateBookCatalogClientCache } from '@/components/useBookCatalog'
 
 type CatalogTemplate = {
   templateId: string
@@ -36,11 +37,10 @@ type PriceDraft = {
 const PACKAGE_META: Array<{
   type: BookPackageType
   name: string
-  description: string
 }> = [
-  { type: 'digital', name: 'Cloud Explorer', description: 'Digital PDF edition' },
-  { type: 'basic', name: 'Classic Portrait', description: 'Personalized printed book' },
-  { type: 'supreme', name: 'Signature Voice', description: 'Printed book with voice experience' },
+  { type: 'digital', name: 'Cloud Explorer' },
+  { type: 'basic', name: 'Classic Portrait' },
+  { type: 'supreme', name: 'Signature Voice' },
 ]
 
 function draftFromPrice(price: BookPackagePrice): PriceDraft {
@@ -59,6 +59,10 @@ function pricingDrafts(template: CatalogTemplate) {
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+}
+
+function packageName(packageType: BookPackageType) {
+  return PACKAGE_META.find((item) => item.type === packageType)?.name ?? packageType
 }
 
 export function CatalogPricingManager() {
@@ -105,10 +109,21 @@ export function CatalogPricingManager() {
     && selectedIsInDiscount
     && selectedTemplate.packagePricing[displayPackageDraft].salePriceUsd === null
   )
-  const applyAllDisplayPackageBlocked = templates.some((template) =>
-    inDiscountTemplateIds.has(template.templateId)
-    && template.packagePricing[displayPackageDraft].salePriceUsd === null
+  const applyAllBlockingTemplates = useMemo(
+    () => templates.filter((template) =>
+      inDiscountTemplateIds.has(template.templateId)
+      && template.packagePricing[displayPackageDraft].salePriceUsd === null
+    ),
+    [displayPackageDraft, inDiscountTemplateIds, templates]
   )
+  const applyAllDisplayPackageBlocked = applyAllBlockingTemplates.length > 0
+  const allStoriesUseDisplayPackage = templates.length > 0 && templates.every(
+    (template) => template.catalogDisplayPackageType === displayPackageDraft
+  )
+  const displayPackageName = packageName(displayPackageDraft)
+  const blockingStorySummary = applyAllBlockingTemplates.length > 3
+    ? `${applyAllBlockingTemplates.slice(0, 3).map((template) => template.name).join(', ')} and ${applyAllBlockingTemplates.length - 3} more`
+    : applyAllBlockingTemplates.map((template) => template.name).join(', ')
 
   const load = useCallback(async () => {
     const intent = ++loadIntentRef.current
@@ -205,6 +220,7 @@ export function CatalogPricingManager() {
         setDrafts((current) => current ? { ...current, [packageType]: draftFromPrice(nextPrice) } : current)
         setSuccess(`${PACKAGE_META.find((item) => item.type === packageType)?.name} price updated.`)
       }
+      invalidateBookCatalogClientCache()
     } catch (saveError) {
       if (saveIntentRef.current[packageType] !== intent) return
       setError(saveError instanceof Error ? saveError.message : 'Failed to update package price')
@@ -217,6 +233,8 @@ export function CatalogPricingManager() {
 
   const saveDisplayPackage = async (applyToAll: boolean) => {
     if (!selectedTemplate || displayPackagePending) return
+    const targetPackage = displayPackageDraft
+    const targetPackageName = packageName(targetPackage)
     setDisplayPackagePending(true)
     setError(null)
     setSuccess(null)
@@ -227,7 +245,7 @@ export function CatalogPricingManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateId: selectedTemplate.templateId,
-          catalogDisplayPackageType: displayPackageDraft,
+          catalogDisplayPackageType: targetPackage,
           applyToAll,
         }),
       })
@@ -236,13 +254,15 @@ export function CatalogPricingManager() {
         throw new Error(data?.error || 'Failed to update public card package')
       }
       const updatedIds = new Set(data.templateIds.map(String))
-      setTemplates((current) => current.map((template) => updatedIds.has(template.templateId)
-        ? { ...template, catalogDisplayPackageType: displayPackageDraft }
-        : template
-      ))
+      setTemplates((current) => current.map((template) => (
+        applyToAll || updatedIds.has(template.templateId)
+          ? { ...template, catalogDisplayPackageType: targetPackage }
+          : template
+      )))
+      invalidateBookCatalogClientCache()
       setSuccess(applyToAll
-        ? `Public cards for all stories now show ${displayPackageDraft}.`
-        : `${selectedTemplate.name} now shows ${displayPackageDraft} on public cards.`
+        ? `All public story cards now show ${targetPackageName}.`
+        : `${selectedTemplate.name} now shows ${targetPackageName} on public cards.`
       )
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to update public card package')
@@ -333,7 +353,6 @@ export function CatalogPricingManager() {
                       {selectedTemplate.isActive ? 'Active' : 'Inactive'}
                     </AdminStatusBadge>
                   </div>
-                  <p className="mt-1 text-sm text-[var(--admin-page-muted)]">USD is the catalog source currency. Storefront currencies are converted at display and checkout.</p>
                 </div>
                 <AdminButton type="button" tone="quiet" onClick={() => void load()} disabled={loading || hasPendingWrite}>
                   <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -371,14 +390,37 @@ export function CatalogPricingManager() {
                     {displayPackagePending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     Save for this story
                   </AdminButton>
-                  <AdminButton type="button" tone="dark" disabled={displayPackagePending || applyAllDisplayPackageBlocked} onClick={() => void saveDisplayPackage(true)}>
-                    Apply to all stories
+                  <AdminButton
+                    type="button"
+                    tone="primary"
+                    disabled={displayPackagePending || applyAllDisplayPackageBlocked || allStoriesUseDisplayPackage}
+                    title={applyAllDisplayPackageBlocked
+                      ? `Add a ${displayPackageName} sale price to: ${blockingStorySummary}`
+                      : allStoriesUseDisplayPackage
+                        ? `Every story already uses ${displayPackageName}`
+                        : `Set every public story card to ${displayPackageName}`}
+                    onClick={() => void saveDisplayPackage(true)}
+                  >
+                    {displayPackagePending ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : allStoriesUseDisplayPackage ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Layers3 className="h-4 w-4" />
+                    )}
+                    {allStoriesUseDisplayPackage
+                      ? `All stories use ${displayPackageName}`
+                      : `Apply ${displayPackageName} to all`}
                   </AdminButton>
                 </div>
               </div>
-              {selectedDisplayPackageBlocked || applyAllDisplayPackageBlocked ? (
+              {applyAllDisplayPackageBlocked ? (
                 <p className="mt-2 text-xs font-semibold text-amber-700">
-                  Home In Discount stories can only display a package that currently has a sale price.
+                  Add a {displayPackageName} sale price before applying to all: {blockingStorySummary}.
+                </p>
+              ) : selectedDisplayPackageBlocked ? (
+                <p className="mt-2 text-xs font-semibold text-amber-700">
+                  This Home In Discount story needs a {displayPackageName} sale price before it can display that package.
                 </p>
               ) : null}
 
@@ -407,7 +449,6 @@ export function CatalogPricingManager() {
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-accent)]">{meta.type}</p>
                           <h3 className="mt-1 font-bold text-[var(--admin-page-ink)]">{meta.name}</h3>
-                          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">{meta.description}</p>
                         </div>
                         <Tag className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" />
                       </div>
@@ -482,10 +523,6 @@ export function CatalogPricingManager() {
                   )
                 })}
               </div>
-
-              <AdminNotice tone="info" className="mt-5">
-                Catalog sale prices are applied first. Promo codes and vouchers continue to apply afterward. Existing paid orders keep their stored purchase price.
-              </AdminNotice>
             </>
           ) : (
             <AdminEmptyState>Select a story to manage package pricing.</AdminEmptyState>

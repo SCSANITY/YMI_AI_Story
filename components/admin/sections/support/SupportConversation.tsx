@@ -4,17 +4,19 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   CircleAlert,
   LoaderCircle,
   LockKeyhole,
-  Paperclip,
   Reply,
   RotateCcw,
-  Send,
 } from 'lucide-react'
 import { InboundAttachmentList } from '@/components/admin/InboundAttachmentList'
 import { AdminButton, AdminIconButton, AdminStatusBadge } from '@/components/admin/AdminUi'
+import {
+  AdminEmailComposer,
+  AdminEmailMessageCard,
+  AdminEmailThread,
+} from '@/components/admin/email/AdminEmailThread'
 import type { InboundEmailAttachmentRow } from '@/lib/inbound-email-attachment-types'
 import type { SupportMessageRow, SupportTicketDetail } from '@/lib/support-types'
 
@@ -188,18 +190,20 @@ export function SupportConversation({
         </div>
       ) : null}
 
-      <div ref={scrollRef} className="admin-v2-comm-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-5 sm:px-5">
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.message_id}
-            message={message}
-            attachments={attachments.filter(
-              (attachment) =>
-                Boolean(message.provider_email_id) &&
-                attachment.provider_email_id === message.provider_email_id
-            )}
-          />
-        ))}
+      <div ref={scrollRef} className="admin-v2-comm-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-5 sm:px-5">
+        <AdminEmailThread>
+          {messages.map((message) => (
+            <MessageBubble
+              key={message.message_id}
+              message={message}
+              attachments={attachments.filter(
+                (attachment) =>
+                  Boolean(message.provider_email_id) &&
+                  attachment.provider_email_id === message.provider_email_id
+              )}
+            />
+          ))}
+        </AdminEmailThread>
       </div>
 
       <footer className="shrink-0 border-t border-[var(--admin-line)] bg-[var(--admin-panel-2)] p-3 sm:p-4">
@@ -207,73 +211,26 @@ export function SupportConversation({
           <div className="flex items-center justify-center gap-2 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel)] px-4 py-3 text-xs text-[var(--admin-page-muted)]">
             <LockKeyhole className="h-4 w-4" /> Reopen this ticket before sending another reply.
           </div>
-        ) : !composerExpanded ? (
-          <button
-            type="button"
-            onClick={() => setComposerExpanded(true)}
-            className="flex w-full items-center gap-2.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-4 py-2.5 text-left text-sm transition hover:border-[var(--admin-accent-dp)]"
-          >
-            <Reply className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" />
-            <span className={`flex-1 truncate ${draft.trim() ? 'text-[var(--admin-page-ink)]' : 'text-[var(--admin-page-muted)]'}`}>
-              {draft.trim() ? draft.trim() : 'Write a reply...'}
-            </span>
-            {draft.trim() ? (
-              <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_20%,transparent)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[color-mix(in_srgb,var(--admin-accent-dp)_88%,var(--admin-ink))]">
-                Draft
-              </span>
-            ) : null}
-          </button>
         ) : (
-          <>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Reply to customer</p>
-              <button
-                type="button"
-                onClick={() => setComposerExpanded(false)}
-                aria-label="Collapse reply"
-                title="Collapse"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] sm:h-8 sm:w-8"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </button>
-            </div>
-            <label className="block">
-              <span className="sr-only">Reply to customer</span>
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value)
-                  setSendError('')
-                  requestIdRef.current = crypto.randomUUID()
-                }}
-                onKeyDown={(event) => {
-                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                    event.preventDefault()
-                    void submitReply()
-                  }
-                }}
-                maxLength={8000}
-                placeholder="Write a reply..."
-                className="min-h-24 w-full resize-none rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-4 py-3 text-sm leading-6 text-[var(--admin-page-ink)] outline-none transition placeholder:text-[var(--admin-page-muted)] focus:border-[var(--admin-accent-dp)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--admin-accent)_30%,transparent)]"
-              />
-            </label>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[10px] text-[var(--admin-page-muted)]">Ctrl/Cmd + Enter to send / Replies continue by email</p>
-                {sendError ? <p role="alert" className="mt-1 text-xs text-[var(--admin-crit)]">{sendError}</p> : null}
-              </div>
-              <AdminButton
-                type="button"
-                onClick={() => void submitReply()}
-                disabled={sending || !draft.trim()}
-                tone="primary"
-              >
-                {sending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {sending ? 'Sending...' : sendError ? 'Retry send' : 'Send reply'}
-              </AdminButton>
-            </div>
-          </>
+          <AdminEmailComposer
+            expanded={composerExpanded}
+            onExpandedChange={setComposerExpanded}
+            value={draft}
+            onChange={(value) => {
+              setDraft(value)
+              setSendError('')
+              requestIdRef.current = crypto.randomUUID()
+            }}
+            onSubmit={() => void submitReply()}
+            sending={sending}
+            error={sendError}
+            textareaRef={textareaRef}
+            maxLength={8000}
+            placeholder="Write a reply..."
+            label="Reply to customer"
+            meta="Ctrl/Cmd + Enter to send / Replies continue by email"
+            submitLabel={sendError ? 'Retry send' : 'Send reply'}
+          />
         )}
       </footer>
     </section>
@@ -291,7 +248,6 @@ function MessageBubble({
   const senderName = isAdmin
     ? message.sender_display_name || 'YMI Story Support'
     : message.sender_display_name || 'Customer'
-  const initial = senderName.trim().charAt(0).toUpperCase() || (isAdmin ? 'S' : 'C')
   const sourceLabel =
     message.source === 'email_inbound'
       ? 'Email reply'
@@ -299,66 +255,41 @@ function MessageBubble({
         ? 'Website form'
         : 'Admin email'
 
-  // Outlook-style email thread: each message is a full-width card with a header row
-  // (avatar + sender + role + time) and the body below. Admin messages carry a subtle
-  // accent tint so "our team" reads apart from the customer without chat-bubble sides.
+  const statusLabel = isAdmin
+    ? message.delivery_status === 'failed'
+      ? 'Delivery failed'
+      : message.delivery_status === 'pending'
+        ? 'Sending'
+        : 'Sent'
+    : 'Received'
+  const statusTone = message.delivery_status === 'failed'
+    ? 'danger'
+    : message.delivery_status === 'pending'
+      ? 'warning'
+      : 'success'
+
   return (
-    <article className={`admin-v2-message-card overflow-hidden ${isAdmin ? 'admin-v2-message-card--outbound' : ''}`}>
-      <header
-        className={`flex items-center gap-3 border-b border-[var(--admin-line)] px-4 py-2.5 ${
-          isAdmin ? 'bg-[color-mix(in_srgb,var(--admin-accent)_13%,var(--admin-card))]' : 'bg-[var(--admin-panel-2)]'
-        }`}
-      >
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-            isAdmin
-              ? 'bg-[var(--admin-accent)] text-[var(--admin-accent-ink)]'
-              : 'bg-[color-mix(in_srgb,var(--admin-ink)_18%,var(--admin-card))] text-[var(--admin-ink)]'
-          }`}
-        >
-          {initial}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <p className="truncate text-sm font-bold text-[var(--admin-page-ink)]">{senderName}</p>
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${
-                isAdmin
-                  ? 'bg-[color-mix(in_srgb,var(--admin-accent-dp)_20%,transparent)] text-[color-mix(in_srgb,var(--admin-accent-dp)_88%,var(--admin-ink))]'
-                  : 'bg-[color-mix(in_srgb,var(--admin-ink)_10%,transparent)] text-[var(--admin-page-muted)]'
-              }`}
-            >
-              {isAdmin ? 'Support' : 'Customer'}
-            </span>
-          </div>
-          <time className="text-[10px] text-[var(--admin-page-muted)]">{formatDate(message.sent_at || message.created_at)}</time>
-        </div>
-        <span className="hidden shrink-0 text-[10px] text-[var(--admin-page-muted)] sm:inline">{sourceLabel}</span>
-      </header>
-      <div className="px-4 py-3.5">
-        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--admin-page-ink)]">{message.body_text}</p>
-        {message.attachment_count > 0 || message.attachment_error ? (
-          <div className="mt-3 border-t border-[var(--admin-line)] pt-3">
+    <AdminEmailMessageCard
+      direction={isAdmin ? 'outbound' : 'inbound'}
+      senderName={senderName}
+      senderEmail={message.sender_email}
+      roleLabel={isAdmin ? 'YMI Support' : 'Customer'}
+      timestamp={formatDate(message.sent_at || message.created_at)}
+      sourceLabel={sourceLabel}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      body={message.body_text}
+      deliveryError={message.delivery_error}
+      attachmentContent={
+        message.attachment_count > 0 || message.attachment_error ? (
+          <>
             <InboundAttachmentList
               attachments={attachments}
               envelopeError={message.attachment_error}
             />
-          </div>
-        ) : null}
-        {message.attachment_count > 0 || message.delivery_status === 'pending' || message.delivery_status === 'failed' ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] text-[var(--admin-page-muted)]">
-            {message.attachment_count > 0 ? (
-              <span className="inline-flex items-center gap-1">
-                <Paperclip className="h-3 w-3" /> {message.attachment_count} attachment(s)
-              </span>
-            ) : null}
-            {message.delivery_status === 'pending' ? <span className="font-semibold text-[var(--admin-warn)]">Sending...</span> : null}
-            {message.delivery_status === 'failed' ? (
-              <span className="font-semibold text-[var(--admin-crit)]" title={message.delivery_error || undefined}>Delivery failed</span>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </article>
+          </>
+        ) : undefined
+      }
+    />
   )
 }

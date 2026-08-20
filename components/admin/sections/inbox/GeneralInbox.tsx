@@ -4,19 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
   ArrowLeft,
-  ChevronDown,
   CircleAlert,
   Inbox,
   LoaderCircle,
   Mail,
   MailOpen,
   RefreshCw,
-  Reply,
   RotateCcw,
   Search,
-  Send,
 } from 'lucide-react'
 import { InboundAttachmentList } from '@/components/admin/InboundAttachmentList'
+import {
+  AdminEmailComposer,
+  AdminEmailMessageCard,
+  AdminEmailThread,
+} from '@/components/admin/email/AdminEmailThread'
 import {
   AdminButton,
   AdminEmptyState,
@@ -412,72 +414,72 @@ export function GeneralInbox() {
               <AdminIconButton type="button" onClick={() => void patchMessageState(detail.message.inbound_email_id, detail.message.archived_at ? 'restore' : 'archive')} disabled={actionPending} title={detail.message.archived_at ? 'Restore' : 'Archive'} className="h-9 min-h-9 w-9 basis-9">{detail.message.archived_at ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}</AdminIconButton>
             </header>
             {detailError ? <div role="alert" className="border-b border-[color-mix(in_srgb,var(--admin-crit)_40%,transparent)] bg-[color-mix(in_srgb,var(--admin-crit)_12%,var(--admin-panel))] px-4 py-2 text-xs font-semibold text-[color-mix(in_srgb,var(--admin-crit)_75%,var(--admin-ink))]">{detailError}</div> : null}
-            <div className="admin-v2-comm-scroll min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+            <div className="admin-v2-comm-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
               {detail.message.processing_status !== 'processed' ? (
                 <div className="rounded-xl border border-[color-mix(in_srgb,var(--admin-crit)_38%,transparent)] bg-[color-mix(in_srgb,var(--admin-crit)_10%,var(--admin-card))] p-4 text-sm text-[color-mix(in_srgb,var(--admin-crit)_78%,var(--admin-ink))]">
                   <div className="flex items-center gap-2 font-bold"><CircleAlert className="h-4 w-4" />Message processing is incomplete</div>
                   <p className="mt-2 text-xs leading-5 text-[var(--admin-page-muted)]">{detail.message.last_error || 'The message can be reclaimed from its durable envelope.'}</p>
                   <AdminButton type="button" onClick={() => void retryProcessing()} disabled={actionPending} tone="danger" className="mt-3 h-9 min-h-9 px-3 text-xs"><RefreshCw className="h-3.5 w-3.5" />Retry processing</AdminButton>
                 </div>
-              ) : (
-                <div className="admin-v2-message-card max-w-2xl p-4">
-                  <article className="whitespace-pre-wrap text-sm leading-7 text-[var(--admin-page-ink)]">{detail.message.body_text || '(Empty message body)'}</article>
-                </div>
-              )}
-              {detail.message.attachment_count > 0 || detail.message.attachment_error ? (
-                <InboundAttachmentList
-                  attachments={detail.attachments}
-                  envelopeError={detail.message.attachment_error}
-                />
               ) : null}
-              {detail.replies.map((reply) => (
-                <div key={reply.reply_id} className="admin-v2-message-card admin-v2-message-card--outbound ml-auto max-w-2xl p-4">
-                  <div className="flex items-center justify-between gap-3 text-[10px] text-[var(--admin-page-muted)]"><span>{reply.from_email}</span><span className={reply.delivery_status === 'failed' ? 'font-semibold text-[var(--admin-crit)]' : ''}>{reply.delivery_status}</span></div>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--admin-page-ink)]">{reply.body_text}</p>
-                  {reply.delivery_error ? <p className="mt-2 text-xs text-[var(--admin-crit)]">{reply.delivery_error}</p> : null}
-                </div>
-              ))}
+              <AdminEmailThread>
+                {detail.message.processing_status === 'processed' ? (
+                  <AdminEmailMessageCard
+                    direction="inbound"
+                    senderName={detail.message.from_display_name || detail.message.from_email || 'Unknown sender'}
+                    senderEmail={detail.message.from_email}
+                    roleLabel="External sender"
+                    timestamp={formatDate(detail.message.created_at)}
+                    sourceLabel={`To ${detail.message.route_address || 'YMI Story'}`}
+                    statusLabel="Received"
+                    statusTone="success"
+                    body={detail.message.body_text || '(Empty message body)'}
+                    attachmentContent={
+                      detail.message.attachment_count > 0 || detail.message.attachment_error ? (
+                        <InboundAttachmentList
+                          attachments={detail.attachments}
+                          envelopeError={detail.message.attachment_error}
+                        />
+                      ) : undefined
+                    }
+                  />
+                ) : null}
+                {detail.replies.map((reply) => (
+                  <AdminEmailMessageCard
+                    key={reply.reply_id}
+                    direction="outbound"
+                    senderName="YMI Story"
+                    senderEmail={reply.from_email}
+                    roleLabel="Admin reply"
+                    timestamp={formatDate(reply.sent_at || reply.created_at)}
+                    sourceLabel={`To ${reply.to_email}`}
+                    statusLabel={reply.delivery_status === 'failed' ? 'Delivery failed' : reply.delivery_status === 'pending' ? 'Sending' : 'Sent'}
+                    statusTone={reply.delivery_status === 'failed' ? 'danger' : reply.delivery_status === 'pending' ? 'warning' : 'success'}
+                    body={reply.body_text}
+                    deliveryError={reply.delivery_error}
+                  />
+                ))}
+              </AdminEmailThread>
             </div>
             <footer className="shrink-0 border-t border-[var(--admin-line)] bg-[var(--admin-panel-2)] p-3 sm:p-4">
               {detail.message.processing_status !== 'processed' || !detail.message.from_email ? (
                 <p className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel)] px-4 py-3 text-xs text-[var(--admin-page-muted)]">A safe sender and completed processing are required before replying.</p>
-              ) : !composerExpanded ? (
-                <button
-                  type="button"
-                  onClick={() => setComposerExpanded(true)}
-                  className="flex w-full items-center gap-2.5 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-4 py-2.5 text-left text-sm transition hover:border-[var(--admin-accent-dp)]"
-                >
-                  <Reply className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" />
-                  <span className={`flex-1 truncate ${draft.trim() ? 'text-[var(--admin-page-ink)]' : 'text-[var(--admin-page-muted)]'}`}>
-                    {draft.trim() ? draft.trim() : 'Write a reply...'}
-                  </span>
-                  {draft.trim() ? (
-                    <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_20%,transparent)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[color-mix(in_srgb,var(--admin-accent-dp)_88%,var(--admin-ink))]">
-                      Draft
-                    </span>
-                  ) : null}
-                </button>
               ) : (
-                <>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Reply</p>
-                    <button
-                      type="button"
-                      onClick={() => setComposerExpanded(false)}
-                      aria-label="Collapse reply"
-                      title="Collapse"
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] sm:h-8 sm:w-8"
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <label className="block"><span className="sr-only">Reply</span><textarea ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); void sendReply() } }} rows={3} maxLength={20000} placeholder="Write a reply..." className="w-full resize-none rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-3 py-2.5 text-sm text-[var(--admin-page-ink)] outline-none transition placeholder:text-[var(--admin-page-muted)] focus:border-[var(--admin-accent-dp)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--admin-accent)_30%,transparent)]" /></label>
-                  <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-[10px] text-[var(--admin-page-muted)]">Ctrl/Cmd + Enter to send / From and Reply-To are selected by the server.</p>
-                    <AdminButton type="button" onClick={() => void sendReply()} disabled={sending || !draft.trim()} tone="primary" className="w-full px-4 text-xs sm:w-auto">{sending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Send</AdminButton>
-                  </div>
-                  {sendError ? <p role="alert" className="mt-2 text-xs text-[var(--admin-crit)]">{sendError}</p> : null}
-                </>
+                <AdminEmailComposer
+                  expanded={composerExpanded}
+                  onExpandedChange={setComposerExpanded}
+                  value={draft}
+                  onChange={setDraft}
+                  onSubmit={() => void sendReply()}
+                  sending={sending}
+                  error={sendError}
+                  textareaRef={textareaRef}
+                  maxLength={20000}
+                  placeholder="Write a reply..."
+                  label="Reply"
+                  meta="Ctrl/Cmd + Enter to send / From and Reply-To are selected by the server"
+                  submitLabel="Send"
+                />
               )}
             </footer>
           </>

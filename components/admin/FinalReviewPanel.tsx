@@ -124,7 +124,13 @@ function GlassEdgeButton({
   )
 }
 
-export function FinalReviewPanel() {
+export function FinalReviewPanel({
+  initialFinalJobId = null,
+  initialVersion = 'pdf',
+}: {
+  initialFinalJobId?: string | null
+  initialVersion?: ReviewVersion
+}) {
   const [jobs, setJobs] = useState<FinalJobSummary[]>([])
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [detail, setDetail] = useState<FinalJobDetail | null>(null)
@@ -138,7 +144,7 @@ export function FinalReviewPanel() {
   const [reviewPendingByPage, setReviewPendingByPage] = useState<ReviewPendingState>({})
   const [uploadPendingByPage, setUploadPendingByPage] = useState<UploadPendingState>({})
   const [uploadErrorByPage, setUploadErrorByPage] = useState<UploadErrorState>({})
-  const [activeVersion, setActiveVersion] = useState<ReviewVersion>('pdf')
+  const [activeVersion, setActiveVersion] = useState<ReviewVersion>(initialVersion)
   const [queueFilter, setQueueFilter] = useState<FinalReviewQueueFilter>('all')
   const [reviewFocus, setReviewFocus] = useState(false)
   const [isReviewOpen, setIsReviewOpen] = useState(false)
@@ -159,6 +165,7 @@ export function FinalReviewPanel() {
   const signedUrlAbortControllerRef = useRef<AbortController | null>(null)
   const signedUrlRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const signedUrlLastRefreshRef = useRef<Record<string, number>>({})
+  const initialFinalJobIdRef = useRef(initialFinalJobId)
   const selectedJobIdRef = useRef(selectedJobId)
   selectedJobIdRef.current = selectedJobId
   const queueFilterRef = useRef(queueFilter)
@@ -297,7 +304,10 @@ export function FinalReviewPanel() {
     const requestIntent = ++jobsRequestIntentRef.current
     setLoadingJobs(true)
     try {
-      const response = await fetch('/api/admin/final-jobs', {
+      const focusedJobId = initialFinalJobIdRef.current
+      const params = new URLSearchParams()
+      if (focusedJobId) params.set('jobId', focusedJobId)
+      const response = await fetch(`/api/admin/final-jobs${params.size ? `?${params.toString()}` : ''}`, {
         credentials: 'include',
         cache: 'no-store',
         signal: controller.signal,
@@ -311,9 +321,20 @@ export function FinalReviewPanel() {
       if (jobsRequestIntentRef.current !== requestIntent) return
 
       const nextJobs = Array.isArray(data.finalJobs) ? data.finalJobs : []
+      const focusedJob = focusedJobId
+        ? nextJobs.find((job) => job.final_job_id === focusedJobId)
+        : null
       const visibleJobs = filterFinalJobs(nextJobs, queueFilterRef.current)
       setJobs(nextJobs)
       setError('')
+
+      if (focusedJob) {
+        initialFinalJobIdRef.current = null
+        setQueueFilter('all')
+        setSelectedJobId(focusedJob.final_job_id)
+        setIsReviewOpen(true)
+        return
+      }
 
       setSelectedJobId((current) => {
         if (

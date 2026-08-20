@@ -1,5 +1,5 @@
 import { CalendarClock, Mail, Package, UserRound } from 'lucide-react'
-import { AdminNotice, AdminStatusBadge } from '@/components/admin/AdminUi'
+import { AdminStatusBadge } from '@/components/admin/AdminUi'
 import type { SupportTicketDetail } from '@/lib/support-types'
 
 function formatDate(value: string | null) {
@@ -59,10 +59,6 @@ export function SupportCustomerContext({ detail }: { detail: SupportTicketDetail
           </div>
         )}
       </div>
-
-      <AdminNotice tone="info" className="mt-5 text-[10px]">
-        Email replies are communication only. Verify account and order facts before changing customer data.
-      </AdminNotice>
     </aside>
   )
 }

@@ -7,7 +7,6 @@ export default function CatalogPage() {
       <AdminPageHeader
         eyebrow="Commerce"
         title="Catalog Pricing"
-        description="Manage the USD list price and optional sale price for each customer-facing book package."
       />
       <CatalogPricingManager />
     </AdminPage>

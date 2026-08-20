@@ -37,7 +37,8 @@ test('Support Admin remains a protected, independently scrolling conversation wo
   assert.match(conversation, /overflow-y-auto overscroll-contain/)
   assert.match(conversation, /const \[draft, setDraft\]/)
   assert.match(conversation, /Reply directly|Replies continue by email/)
-  assert.match(context, /Email replies are communication only/)
+  assert.match(context, /Recent orders/)
+  assert.doesNotMatch(context, /fetch\(|onClick=|<button/)
 })
 
 test('Support APIs keep Admin authority server-side and expose no cached private data', async () => {

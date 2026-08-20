@@ -3,6 +3,12 @@ import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendLogisticsUpdateEmail } from '@/lib/email'
 import { loadOrderCoverUrl } from '@/lib/orderFulfillment'
+import {
+  haveLogisticsDetailsChanged,
+  normalizeOptionalLogisticsText,
+  normalizeTrackingUrl,
+  shouldSendLogisticsUpdateEmail,
+} from '@/lib/order-logistics'
 
 const MANAGED_ORDER_STATUSES = new Set([
   'paid',
@@ -16,11 +22,6 @@ const STATUS_LABELS: Record<string, string> = {
   production: 'Printing',
   shipped: 'Shipped',
   delivered: 'Delivered',
-}
-
-function normalizeOptionalString(value: unknown) {
-  const normalized = typeof value === 'string' ? value.trim() : ''
-  return normalized || null
 }
 
 export async function PATCH(
@@ -72,10 +73,27 @@ export async function PATCH(
 
   const statusChanged = previousStatus !== nextStatus
   const now = new Date().toISOString()
-  const trackingNumber = normalizeOptionalString(body?.trackingNumber ?? body?.tracking_number)
-  const trackingCarrier = normalizeOptionalString(body?.trackingCarrier ?? body?.tracking_carrier)
-  const trackingUrl = normalizeOptionalString(body?.trackingUrl ?? body?.tracking_url)
-  const note = normalizeOptionalString(body?.logisticsNote ?? body?.logistics_note ?? body?.note)
+  const trackingNumber = normalizeOptionalLogisticsText(body?.trackingNumber ?? body?.tracking_number)
+  const trackingCarrier = normalizeOptionalLogisticsText(body?.trackingCarrier ?? body?.tracking_carrier)
+  let trackingUrl: string | null
+  try {
+    trackingUrl = normalizeTrackingUrl(body?.trackingUrl ?? body?.tracking_url)
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Invalid tracking URL' },
+      { status: 400 }
+    )
+  }
+  const note = normalizeOptionalLogisticsText(body?.logisticsNote ?? body?.logistics_note ?? body?.note)
+  const trackingDetailsChanged = haveLogisticsDetailsChanged(
+    {
+      trackingNumber: normalizeOptionalLogisticsText(order.tracking_number),
+      trackingCarrier: normalizeOptionalLogisticsText(order.tracking_carrier),
+      trackingUrl: normalizeOptionalLogisticsText(order.tracking_url),
+      note: normalizeOptionalLogisticsText(order.logistics_note),
+    },
+    { trackingNumber, trackingCarrier, trackingUrl, note }
+  )
   const shippedAt = nextStatus === 'shipped' && !order.shipped_at ? now : order.shipped_at
   const deliveredAt = nextStatus === 'delivered' && !order.delivered_at ? now : order.delivered_at
 
@@ -155,7 +173,12 @@ export async function PATCH(
   let emailError: string | null = null
   let emailEventId: string | null = null
 
-  if (statusChanged && nextStatus !== 'paid' && order.email) {
+  if (shouldSendLogisticsUpdateEmail({
+    hasRecipient: Boolean(order.email),
+    nextStatus,
+    statusChanged,
+    trackingDetailsChanged,
+  }) && order.email) {
     const idempotencyKey = `logistics_update:${orderId}:${event.status_event_id}`
     try {
       const coverImageUrl = await loadOrderCoverUrl(orderId).catch(() => undefined)
@@ -170,6 +193,7 @@ export async function PATCH(
         trackingNumber,
         trackingUrl,
         note,
+        isTrackingUpdate: !statusChanged && trackingDetailsChanged,
         customerId: order.customer_id ?? null,
         coverImageUrl,
       })
@@ -201,6 +225,7 @@ export async function PATCH(
     previousStatus,
     orderStatus: nextStatus,
     statusChanged,
+    trackingDetailsChanged,
     emailStatus,
     emailError,
     order: updatedOrder,

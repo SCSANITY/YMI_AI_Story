@@ -499,9 +499,6 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
             <p className="text-xs font-semibold text-[var(--admin-page-ink)]">
               {dirty ? 'Unsaved draft changes' : state.draft ? 'Draft saved' : 'Live copy loaded'}
             </p>
-            <p className="mt-0.5 text-[11px] text-[var(--admin-page-muted)]">
-              Draft saves never alter customer-facing policy text.
-            </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <AdminButton

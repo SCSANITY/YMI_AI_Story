@@ -408,6 +408,7 @@ type SendLogisticsUpdateEmailParams = {
   trackingNumber?: string | null
   trackingUrl?: string | null
   note?: string | null
+  isTrackingUpdate?: boolean
   orderUrl?: string
   customerId?: string | null
   /** Face-swapped cover (long-lived signed URL); falls back to placeholder if absent */
@@ -417,7 +418,9 @@ type SendLogisticsUpdateEmailParams = {
 export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailParams) {
   const orderUrl = params.orderUrl || buildAbsoluteUrl(`/orders/${params.orderId}`) || ''
   const subject =
-    params.status === 'production'
+    params.isTrackingUpdate
+      ? `Updated tracking information - ${params.displayId || params.orderId}`
+      : params.status === 'production'
       ? `Your YMI Story book is being printed - ${params.displayId || params.orderId}`
       : params.status === 'delivered'
         ? `Your YMI Story order has been delivered - ${params.displayId || params.orderId}`
@@ -439,6 +442,7 @@ export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailP
       trackingCarrier: params.trackingCarrier ?? null,
       hasTrackingNumber: Boolean(params.trackingNumber),
       hasTrackingUrl: Boolean(params.trackingUrl),
+      isTrackingUpdate: Boolean(params.isTrackingUpdate),
       hasCoverImage: Boolean(params.coverImageUrl),
     },
     react: (
@@ -451,6 +455,7 @@ export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailP
         trackingNumber={params.trackingNumber}
         trackingUrl={params.trackingUrl}
         note={params.note}
+        isTrackingUpdate={params.isTrackingUpdate}
         orderUrl={orderUrl}
         coverImageUrl={params.coverImageUrl}
       />

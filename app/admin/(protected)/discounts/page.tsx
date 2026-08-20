@@ -7,7 +7,6 @@ export default function DiscountsPage() {
       <AdminPageHeader
         eyebrow="Commercial tools"
         title="Discounts"
-        description="Create and manage promo codes and account vouchers for checkout."
       />
       <div className="max-w-6xl">
         <DiscountManagementSection />

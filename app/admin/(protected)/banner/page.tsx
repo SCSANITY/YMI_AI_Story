@@ -7,7 +7,6 @@ export default function BannerPage() {
       <AdminPageHeader
         eyebrow="Publishing"
         title="Homepage Banners"
-        description="Manage the three Banner positions on Home."
       />
       <HomepageBannerManager />
     </AdminPage>

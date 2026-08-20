@@ -136,7 +136,6 @@ export default async function AdminEmailsPage({
       <AdminPageHeader
         eyebrow="Communications health"
         title="Email Events"
-        description="Read-only log for YMI managed emails and external observations. Stripe and Supabase Auth entries represent observed triggers, not local delivery status."
       />
 
       <EmailEventsPanel

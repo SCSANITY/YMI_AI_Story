@@ -56,9 +56,3 @@ export function getAdminNavigationGroups() {
     items: adminNavigationItems.filter((item) => item.group === group),
   })).filter((section) => section.items.length > 0)
 }
-
-export function getAdminNavigationItem(pathname: string) {
-  return adminNavigationItems.find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`)
-  )
-}

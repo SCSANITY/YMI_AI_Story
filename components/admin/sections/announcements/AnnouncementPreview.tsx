@@ -33,8 +33,7 @@ export function AnnouncementPreview({ form }: { form: AnnouncementForm }) {
       </div>
 
       <p className="mt-4 whitespace-pre-line text-sm leading-7 text-slate-600">
-        {form.body.trim() ||
-          'Write announcement content to preview how it will appear on the public Blog board.'}
+        {form.body.trim() || 'Announcement body'}
       </p>
 
       {images.length ? (
@@ -74,7 +73,6 @@ export function AnnouncementPreview({ form }: { form: AnnouncementForm }) {
         <span className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-600">
           0 likes
         </span>
-        <span className="text-xs text-slate-400">Public users can like this post.</span>
       </div>
     </article>
   )

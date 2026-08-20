@@ -63,6 +63,10 @@ test('KOL Admin keeps public profiles inert and Code management lead-scoped', as
   assert.doesNotMatch(detail, /href=\{lead\.(website_url|instagram|tiktok|youtube|xiaohongshu)/)
   assert.match(detail, /KolPartnershipConversation/)
   assert.match(detail, /KolPartnershipCodePanel/)
+  assert.match(detail, /function BackToApplicationsButton/)
+  assert.match(detail, />\s*Applications\s*<\/AdminButton>/)
+  assert.doesNotMatch(detail, /absolute left-3 top-3/)
+  assert.doesNotMatch(detail, /title="Back to partnership list"/)
   assert.match(workspace, /\/messages/)
   assert.doesNotMatch(serverProjection, /reply_token/)
   assert.match(workspace, /listIntentRef/)
@@ -72,7 +76,7 @@ test('KOL Admin keeps public profiles inert and Code management lead-scoped', as
   assert.match(codePanel, /leadStatus !== ['"]partnered['"]/)
   assert.match(codePanel, /requestIntentRef/)
   assert.match(codePanel, /leadIdRef/)
-  assert.match(codePanel, /Rotation permanently reserves the old Code string/)
+  assert.match(codePanel, /Old Code will be permanently retired/)
   assert.equal(
     [...codeRoute.matchAll(/await\s+requireAdminCustomer\s*\(\s*\)/g)].length,
     2,
