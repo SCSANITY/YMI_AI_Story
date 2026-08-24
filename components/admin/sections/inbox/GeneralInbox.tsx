@@ -2,8 +2,8 @@
 
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react'
 import {
-  Archive, ArrowLeft, FilePenLine, Forward, Inbox, LoaderCircle, Mail, MailOpen,
-  Paperclip, PenLine, RefreshCw, Reply, ReplyAll, RotateCcw, Search, Send,
+  Archive, ArrowLeft, Check, ChevronDown, FilePenLine, Forward, Inbox, LoaderCircle,
+  Mail, MailOpen, Paperclip, PenLine, Reply, ReplyAll, RotateCcw, Search, Send,
 } from 'lucide-react'
 import { GeneralMailComposer, type GeneralMailEditableDraft } from './GeneralMailComposer'
 import { GeneralMailDocumentView } from './GeneralMailRichText'
@@ -75,15 +75,18 @@ export function GeneralInbox() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
-  const [mobileColumn, setMobileColumn] = useState<'mailboxes' | 'threads' | 'reader'>('threads')
+  const [mobileColumn, setMobileColumn] = useState<'threads' | 'reader'>('threads')
+  const [mailboxMenuOpen, setMailboxMenuOpen] = useState(false)
   const [composer, setComposer] = useState<ComposerState | null>(null)
   const [actionPending, setActionPending] = useState(false)
   const listIntentRef = useRef(0)
   const detailIntentRef = useRef(0)
   const threadCountRef = useRef(0)
+  const mailboxMenuRef = useRef<HTMLDivElement>(null)
   const deferredSearch = useDeferredValue(search.trim())
 
   const currentMailbox = mailboxes.find((mailbox) => mailbox.mailboxKey === mailboxKey)
+  const currentMailboxDefinition = GENERAL_MAILBOX_DEFINITIONS.find((mailbox) => mailbox.key === mailboxKey)
   const mailboxAddress = currentMailbox?.address
     ?? `${GENERAL_MAILBOX_DEFINITIONS.find((mailbox) => mailbox.key === mailboxKey)?.localPart ?? mailboxKey}@ymistory.com`
 
@@ -167,6 +170,22 @@ export function GeneralInbox() {
   useEffect(() => {
     void loadMailboxes().catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Failed to load mailboxes'))
   }, [loadMailboxes])
+
+  useEffect(() => {
+    if (!mailboxMenuOpen) return
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (!mailboxMenuRef.current?.contains(event.target as Node)) setMailboxMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMailboxMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnPointerDown)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointerDown)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [mailboxMenuOpen])
 
   useEffect(() => {
     setThreads([])
@@ -258,36 +277,35 @@ export function GeneralInbox() {
 
   return (
     <div className="admin-v2-comm-workspace min-h-0 min-w-0 flex-1 xl:flex xl:h-full">
-      <aside className={`${mobileColumn === 'mailboxes' ? 'flex' : 'hidden'} admin-v2-comm-queue w-full shrink-0 flex-col border-b border-[var(--admin-line)] xl:flex xl:w-56 xl:border-b-0 xl:border-r`}>
-        <div className="admin-v2-comm-toolbar flex items-center gap-2 border-b p-3"><Mail className="h-4 w-4 text-[var(--admin-accent-dp)]" /><span className="text-sm font-bold text-[var(--admin-page-ink)]">Mailboxes</span></div>
-        <div className="admin-v2-comm-scroll min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-          {GENERAL_MAILBOX_DEFINITIONS.map((definition) => {
-            const mailbox = mailboxes.find((candidate) => candidate.mailboxKey === definition.key)
-            const active = mailboxKey === definition.key
-            return <button key={definition.key} type="button" onClick={() => { setMailboxKey(definition.key); setMobileColumn('threads') }} className={`admin-v2-comm-item flex w-full items-center gap-3 px-3 py-2.5 text-left ${active ? 'admin-v2-comm-item--selected' : ''}`}>
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_20%,var(--admin-card))] text-xs font-bold text-[var(--admin-page-ink)]">{definition.displayName.charAt(0)}</span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[var(--admin-page-ink)]">{definition.displayName}</span><span className="block truncate text-[10px] text-[var(--admin-page-muted)]">{mailbox?.address}</span></span>
-              {mailbox?.unread ? <span className="rounded-full bg-[var(--admin-accent)] px-2 py-0.5 text-[10px] font-bold text-[var(--admin-accent-ink)]">{mailbox.unread}</span> : null}
-            </button>
-          })}
-        </div>
-        <nav className="border-t border-[var(--admin-line)] p-2" aria-label="Mail folders">
-          {FOLDERS.map(({ key, label, icon: Icon }) => <button key={key} type="button" onClick={() => { setFolder(key); setMobileColumn('threads') }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${folder === key ? 'bg-[var(--admin-accent)] font-bold text-[var(--admin-accent-ink)]' : 'text-[var(--admin-page-muted)] hover:bg-[color-mix(in_srgb,var(--admin-card)_78%,transparent)]'}`}><Icon className="h-4 w-4" /><span className="flex-1 text-left">{label}</span><span className="text-xs">{currentMailbox?.[key] ?? 0}</span></button>)}
-        </nav>
-      </aside>
-
-      <aside className={`${mobileColumn === 'threads' ? 'flex' : 'hidden'} admin-v2-comm-queue min-h-0 w-full shrink-0 flex-col border-b border-[var(--admin-line)] xl:flex xl:w-[23rem] xl:border-b-0 xl:border-r`}>
+      <aside className={`${mobileColumn === 'threads' ? 'flex' : 'hidden'} admin-v2-comm-queue min-h-0 w-full shrink-0 flex-col border-b border-[var(--admin-line)] xl:flex xl:w-[25rem] xl:border-b-0 xl:border-r`}>
         <div className="admin-v2-comm-toolbar space-y-3 border-b p-3">
           <div className="flex items-center gap-2">
-            <AdminIconButton type="button" onClick={() => setMobileColumn('mailboxes')} title="Mailboxes" className="h-9 min-h-9 w-9 basis-9 xl:hidden"><ArrowLeft className="h-4 w-4" /></AdminIconButton>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-[var(--admin-page-ink)]">{mailboxAddress}</p><p className="text-[10px] text-[var(--admin-page-muted)]">{FOLDERS.find((item) => item.key === folder)?.label} / {threads.length} of {totalThreads}</p></div>
-            <AdminIconButton type="button" onClick={refreshWorkspace} title="Refresh" className="h-9 min-h-9 w-9 basis-9"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></AdminIconButton>
+            <div ref={mailboxMenuRef} className="relative min-w-0 flex-1">
+              <button type="button" aria-haspopup="menu" aria-expanded={mailboxMenuOpen} onClick={() => setMailboxMenuOpen((open) => !open)} className="admin-v2-comm-item flex h-11 w-full min-w-0 items-center gap-2 px-3 text-left">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_20%,var(--admin-card))] text-xs font-bold text-[var(--admin-page-ink)]">{currentMailboxDefinition?.displayName.charAt(0) ?? 'M'}</span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[var(--admin-page-ink)]">{currentMailboxDefinition?.displayName ?? 'Mailbox'}</span><span className="block truncate text-[10px] text-[var(--admin-page-muted)]">{mailboxAddress}</span></span>
+                {currentMailbox?.unread ? <span className="rounded-full bg-[var(--admin-accent)] px-2 py-0.5 text-[10px] font-bold text-[var(--admin-accent-ink)]">{currentMailbox.unread}</span> : null}
+                <ChevronDown className={`h-4 w-4 shrink-0 text-[var(--admin-page-muted)] transition-transform ${mailboxMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {mailboxMenuOpen ? <div role="menu" aria-label="Mailboxes" className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-50 space-y-1 rounded-xl border border-[var(--admin-card-line)] bg-[color-mix(in_srgb,var(--admin-card)_94%,transparent)] p-1.5 shadow-[var(--admin-card-sh)] backdrop-blur-xl">
+                {GENERAL_MAILBOX_DEFINITIONS.map((definition) => {
+                  const mailbox = mailboxes.find((candidate) => candidate.mailboxKey === definition.key)
+                  const active = mailboxKey === definition.key
+                  return <button key={definition.key} type="button" role="menuitemradio" aria-checked={active} onClick={() => { setMailboxKey(definition.key); setMailboxMenuOpen(false); setMobileColumn('threads') }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition ${active ? 'bg-[color-mix(in_srgb,var(--admin-accent)_18%,var(--admin-card))]' : 'hover:bg-[color-mix(in_srgb,var(--admin-card)_78%,transparent)]'}`}>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-[var(--admin-page-ink)]">{definition.displayName}</span><span className="block truncate text-[10px] text-[var(--admin-page-muted)]">{mailbox?.address}</span></span>
+                    {mailbox?.unread ? <span className="text-xs font-bold text-[var(--admin-accent-dp)]">{mailbox.unread}</span> : null}
+                    {active ? <Check className="h-4 w-4 text-[var(--admin-accent-dp)]" /> : null}
+                  </button>
+                })}
+              </div> : null}
+            </div>
             <AdminButton type="button" tone="primary" onClick={() => setComposer({ mode: 'new' })} className="px-3"><PenLine className="h-4 w-4" />New</AdminButton>
           </div>
-          <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--admin-page-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mail" className={`${adminFieldClass} mt-0 h-10 min-h-10 pl-9`} /></label>
-          <div className="flex gap-1 overflow-x-auto xl:hidden" role="tablist" aria-label="Mail folders">
-            {FOLDERS.map(({ key, label }) => <button key={key} type="button" role="tab" aria-selected={folder === key} aria-controls="general-mail-thread-list" tabIndex={folder === key ? 0 : -1} onKeyDown={handleAdminTabKeyDown} onClick={() => setFolder(key)} className={`admin-v2-comm-tab shrink-0 px-2.5 py-1.5 text-xs ${folder === key ? 'admin-v2-comm-tab--active' : ''}`}>{label}</button>)}
+          <div className="grid grid-cols-4 gap-1" role="tablist" aria-label="Mail folders">
+            {FOLDERS.map(({ key, label, icon: Icon }) => <button key={key} type="button" role="tab" aria-selected={folder === key} aria-controls="general-mail-thread-list" tabIndex={folder === key ? 0 : -1} onKeyDown={handleAdminTabKeyDown} onClick={() => setFolder(key)} className={`admin-v2-comm-tab min-w-0 px-1.5 py-2 text-[11px] ${folder === key ? 'admin-v2-comm-tab--active' : ''}`}><span className="flex items-center justify-center gap-1.5"><Icon className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{label}</span></span><span className="mt-0.5 block text-[9px] opacity-75">{currentMailbox?.[key] ?? 0}</span></button>)}
           </div>
+          <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--admin-page-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mail" className={`${adminFieldClass} mt-0 h-10 min-h-10 pl-9`} /></label>
+          <p className="text-[10px] text-[var(--admin-page-muted)]">{threads.length} of {totalThreads}</p>
         </div>
         <div id="general-mail-thread-list" className="admin-v2-comm-scroll min-h-0 max-h-[34rem] flex-1 overflow-y-auto p-2 xl:max-h-none">
           {error ? <AdminNotice tone="danger" className="m-2">{error}</AdminNotice> : null}

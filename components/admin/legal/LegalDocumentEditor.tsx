@@ -59,7 +59,7 @@ function ItemEditor({
         <button
           type="button"
           onClick={onRemove}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 lg:h-8 lg:w-8"
           aria-label={`Remove ${groupLabel.toLowerCase()} ${itemIndex + 1}`}
           title="Remove item"
         >
@@ -384,7 +384,7 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
                         sections: english.sections.filter((_, index) => index !== sectionIndex),
                       }))
                     }
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 lg:h-8 lg:w-8"
                     aria-label={`Remove section ${sectionIndex + 1}`}
                     title="Remove section"
                   >

@@ -323,7 +323,14 @@ export function GeneralMailComposer({
               <span key={attachment.attachment_id} className="inline-flex items-center gap-2 rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-3 py-1.5 text-xs text-[var(--admin-page-ink)]">
                 <Paperclip className="h-3.5 w-3.5" />
                 {attachment.original_filename || attachment.safe_filename}
-                <button type="button" onClick={() => void removeAttachment(attachment.attachment_id)} aria-label="Remove attachment"><X className="h-3.5 w-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={() => void removeAttachment(attachment.attachment_id)}
+                  aria-label="Remove attachment"
+                  className="-my-2 -mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-page-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] lg:-my-1 lg:-mr-1 lg:h-8 lg:w-8"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </span>
             ))}
           </div>

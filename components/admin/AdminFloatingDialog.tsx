@@ -156,7 +156,7 @@ export function AdminFloatingDialog({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="admin-v2-floating-dialog-close grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--admin-page-muted)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)]"
+            className="admin-v2-floating-dialog-close grid h-11 w-11 shrink-0 place-items-center rounded-full text-[var(--admin-page-muted)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] lg:h-9 lg:w-9"
           >
             <X className="h-4 w-4" />
           </button>

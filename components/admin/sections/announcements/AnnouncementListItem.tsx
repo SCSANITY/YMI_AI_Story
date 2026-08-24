@@ -185,7 +185,7 @@ function StatusButton({
       onClick={() => void onClick(status)}
       disabled={Boolean(pendingStatus) || activeStatus === status}
       aria-pressed={activeStatus === status}
-      className={`inline-flex min-h-8 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-8 ${className}`}
     >
       {icon}
       {isPending ? 'Saving...' : label}

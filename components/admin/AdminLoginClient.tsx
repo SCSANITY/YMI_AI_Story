@@ -191,7 +191,7 @@ export function AdminLoginClient() {
                       <button
                         type="button"
                         onClick={() => setShowPassword((current) => !current)}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--admin-muted)] transition hover:bg-[var(--admin-panel-2)] hover:text-[var(--admin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)]"
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--admin-muted)] transition hover:bg-[var(--admin-panel-2)] hover:text-[var(--admin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)] lg:h-8 lg:w-8"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                         aria-pressed={showPassword}
                         disabled={isBusy}

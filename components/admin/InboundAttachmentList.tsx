@@ -98,7 +98,7 @@ export function InboundAttachmentList({
                   type="button"
                   onClick={() => void download(attachment)}
                   disabled={downloadingId !== null}
-                  className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-3 text-xs font-bold text-[var(--admin-ink-soft)] transition hover:border-[var(--admin-accent-dp)] hover:bg-[var(--admin-panel-2)] hover:text-[var(--admin-ink)] disabled:opacity-50"
+                  className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-3 text-xs font-bold text-[var(--admin-ink-soft)] transition hover:border-[var(--admin-accent-dp)] hover:bg-[var(--admin-panel-2)] hover:text-[var(--admin-ink)] disabled:opacity-50 lg:h-9"
                 >
                   {downloadingId === attachment.attachment_id ? (
                     <LoaderCircle className="h-3.5 w-3.5 animate-spin" />

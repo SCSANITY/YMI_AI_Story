@@ -125,7 +125,7 @@ function BannerPreview({
                 role="tab"
                 aria-selected={viewport === candidate}
                 onClick={() => onViewportChange(candidate)}
-                className={`inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-xs font-bold capitalize transition ${
+                className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-xs font-bold capitalize transition lg:min-h-9 ${
                   viewport === candidate
                     ? 'bg-white text-[var(--admin-page-ink)] shadow-sm'
                     : 'text-[var(--admin-page-muted)] hover:text-[var(--admin-page-ink)]'

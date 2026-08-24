@@ -23,7 +23,7 @@ export function AdminShell({ adminName, adminEmail, children }: Props) {
       <div className="admin-app mx-auto grid min-h-[calc(100dvh-1.4rem)] w-full min-w-0 max-w-[1720px] lg:h-full lg:min-h-0 lg:grid-cols-[214px_minmax(0,1fr)]">
         <AdminSidebar adminName={adminName} adminEmail={adminEmail} />
         <div className="flex min-w-0 max-w-full flex-col lg:h-full lg:min-h-0">
-          <section className="admin-v2-workspace min-w-0 max-w-full px-4 pb-7 pt-4 sm:px-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-7 lg:py-6">
+          <section className="admin-v2-workspace min-w-0 max-w-full px-4 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-7 lg:py-6">
             <div className="min-h-0 min-w-0 max-w-full lg:h-full">{children}</div>
           </section>
         </div>

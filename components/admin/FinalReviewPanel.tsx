@@ -1286,7 +1286,7 @@ export function FinalReviewPanel({
                 type="button"
                 onClick={() => dismissSuspended(card.finalJobId)}
                 aria-label="Close suspended review"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)]"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] lg:h-8 lg:w-8"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1331,7 +1331,7 @@ export function FinalReviewPanel({
                   type="button"
                   onClick={() => setSuspendNotice(null)}
                   aria-label="Dismiss notice"
-                  className="-mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md hover:bg-[color-mix(in_srgb,var(--admin-crit)_18%,transparent)]"
+                  className="-my-2.5 -mr-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-[color-mix(in_srgb,var(--admin-crit)_18%,transparent)] lg:-my-1 lg:-mr-1 lg:h-7 lg:w-7"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ImagePlus, Plus, Save, UploadCloud } from 'lucide-react'
+import { ImagePlus, Plus, Save, UploadCloud, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import {
   AdminButton,
@@ -320,10 +320,10 @@ export function AnnouncementWorkspace({
                       type="button"
                       onClick={() => removeImage(index)}
                       disabled={uploading}
-                      className="absolute right-1 top-1 rounded-full bg-slate-950/70 px-2 py-0.5 text-xs text-white shadow hover:bg-red-500 disabled:cursor-wait disabled:opacity-50"
+                      className="absolute right-1 top-1 inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-950/70 text-white shadow hover:bg-red-500 disabled:cursor-wait disabled:opacity-50 lg:h-8 lg:w-8"
                       aria-label="Remove image"
                     >
-                      x
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
                 ))}

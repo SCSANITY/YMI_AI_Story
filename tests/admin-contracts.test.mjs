@@ -865,8 +865,48 @@ test('Admin V2 responsive and accessibility closure preserves keyboard and narro
   assert.match(supportQueue, /2xl:w-\[22rem\]/)
   assert.match(supportConversation, /2xl:hidden/g)
   assert.match(supportContext, /2xl:w-72/)
-  assert.match(generalInbox, /xl:w-\[23rem\]/)
+  assert.match(generalInbox, /xl:w-\[25rem\]/)
   assert.match(generalInbox, /xl:hidden/)
+  assert.match(generalInbox, /aria-haspopup="menu"/)
+  assert.match(generalInbox, /role="menuitemradio"/)
+  assert.doesNotMatch(generalInbox, /setMobileColumn\(['"]mailboxes['"]\)|RefreshCw/)
+})
+
+test('Admin mobile controls preserve touch targets and safe-area clearance', async () => {
+  const [
+    shell,
+    floatingDialog,
+    login,
+    richText,
+    composer,
+    finalReview,
+    reviewUi,
+    legalEditor,
+    attachments,
+    announcementItem,
+    announcementWorkspace,
+  ] = await Promise.all([
+    read('components/admin/AdminShell.tsx'),
+    read('components/admin/AdminFloatingDialog.tsx'),
+    read('components/admin/AdminLoginClient.tsx'),
+    read('components/admin/sections/inbox/GeneralMailRichText.tsx'),
+    read('components/admin/sections/inbox/GeneralMailComposer.tsx'),
+    read('components/admin/FinalReviewPanel.tsx'),
+    read('components/admin/final-review/reviewUi.tsx'),
+    read('components/admin/legal/LegalDocumentEditor.tsx'),
+    read('components/admin/InboundAttachmentList.tsx'),
+    read('components/admin/sections/announcements/AnnouncementListItem.tsx'),
+    read('components/admin/sections/announcements/AnnouncementWorkspace.tsx'),
+  ])
+
+  assert.match(shell, /pb-\[max\(1\.75rem,env\(safe-area-inset-bottom\)\)\]/)
+  for (const source of [floatingDialog, login, richText, composer, finalReview, reviewUi, legalEditor]) {
+    assert.match(source, /h-11 w-11/)
+  }
+  assert.match(attachments, /h-11[^"]*lg:h-9/)
+  assert.match(announcementItem, /min-h-11[^"]*lg:min-h-8/)
+  assert.match(announcementWorkspace, /aria-label="Remove image"/)
+  assert.match(announcementWorkspace, /h-11 w-11[^"]*lg:h-8 lg:w-8/)
 })
 
 test('Admin typography, glass cards, and communication views share one presentation contract', async () => {

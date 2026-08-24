@@ -61,7 +61,7 @@ export function PageFileLinks({
           rel="noreferrer"
           aria-disabled={!url}
           title="View full"
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] ${
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] lg:h-9 lg:w-9 ${
             url ? '' : 'pointer-events-none opacity-50'
           }`}
         >
@@ -72,7 +72,7 @@ export function PageFileLinks({
           download={`final-page-${String(pageNumber).padStart(2, '0')}.png`}
           aria-disabled={!url}
           title="Download"
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] ${
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] text-[var(--admin-ink)] hover:bg-[color-mix(in_srgb,var(--admin-ink)_8%,transparent)] lg:h-9 lg:w-9 ${
             url ? '' : 'pointer-events-none opacity-50'
           }`}
         >

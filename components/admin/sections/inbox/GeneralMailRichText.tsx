@@ -140,7 +140,7 @@ function ToolbarButton({ label, onClick, children }: { label: string; onClick: (
       aria-label={label}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-page-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--admin-accent-dp)]"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--admin-page-muted)] transition hover:bg-[color-mix(in_srgb,var(--admin-page-ink)_8%,transparent)] hover:text-[var(--admin-page-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--admin-accent-dp)] lg:h-9 lg:w-9"
     >
       {children}
     </button>
