@@ -1,6 +1,7 @@
+import { decodeEmailRouteToken } from '@/lib/email-route-token'
+
 const DEFAULT_INBOUND_DOMAIN = 'reply.ymistory.com'
-const TICKET_CODE_PATTERN = /^[A-F0-9]{10}$/
-const REPLY_TOKEN_PATTERN = /^[a-f0-9]{24}$/
+const REPLY_ALIAS_PATTERN = /^[23456789abcdefghjkmnpqrstuvwxyz]{12}$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export const SUPPORT_TICKET_STATUSES = [
@@ -43,23 +44,24 @@ export function getSupportInboundDomain(): string {
 }
 
 export function buildSupportReplyAddress(params: {
-  ticketCode: string
-  replyToken: string
+  replyAlias: string
   inboundDomain?: string
 }): string {
-  const ticketCode = params.ticketCode.trim().toUpperCase()
-  const replyToken = params.replyToken.trim().toLowerCase()
-  if (!TICKET_CODE_PATTERN.test(ticketCode) || !REPLY_TOKEN_PATTERN.test(replyToken)) {
-    throw new Error('Support ticket reply identity is invalid')
-  }
+  const replyAlias = normalizeEmailRouteAlias(params.replyAlias)
   const domain = params.inboundDomain?.trim().toLowerCase() || getSupportInboundDomain()
-  return `ticket-${ticketCode.toLowerCase()}-${replyToken}@${domain}`
+  return `case-${formatEmailRouteAlias(replyAlias)}@${domain}`
+}
+
+export type SupportReplyIdentity = {
+  ticketCode: string | null
+  replyAlias: string | null
+  replyToken: string | null
 }
 
 export function parseSupportReplyAddress(
   value: string,
   inboundDomain = getSupportInboundDomain()
-): { ticketCode: string; replyToken: string } | null {
+): SupportReplyIdentity | null {
   const email = normalizeSupportEmail(value)
   if (!email) return null
   const separatorIndex = email.lastIndexOf('@')
@@ -67,22 +69,49 @@ export function parseSupportReplyAddress(
   const domain = email.slice(separatorIndex + 1)
   if (domain !== inboundDomain.toLowerCase()) return null
 
-  const match = localPart.match(/^ticket-([a-f0-9]{10})-([a-f0-9]{24})$/)
-  if (!match) return null
+  const aliasMatch = localPart.match(
+    /^case-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})$/
+  )
+  if (aliasMatch) {
+    return {
+      ticketCode: null,
+      replyAlias: `${aliasMatch[1]}${aliasMatch[2]}${aliasMatch[3]}`,
+      replyToken: null,
+    }
+  }
+
+  const currentMatch = localPart.match(/^support\+([a-z2-7]{20})$/)
+  if (currentMatch) {
+    const replyToken = decodeEmailRouteToken(currentMatch[1], 24)
+    return replyToken ? { ticketCode: null, replyAlias: null, replyToken } : null
+  }
+
+  const legacyMatch = localPart.match(/^ticket-([a-f0-9]{10})-([a-f0-9]{24})$/)
+  if (!legacyMatch) return null
   return {
-    ticketCode: match[1].toUpperCase(),
-    replyToken: match[2],
+    ticketCode: legacyMatch[1].toUpperCase(),
+    replyAlias: null,
+    replyToken: legacyMatch[2],
   }
 }
 
-export function buildSupportThreadSubject(ticketCode: string): string {
-  const normalized = ticketCode.trim().toUpperCase()
-  if (!TICKET_CODE_PATTERN.test(normalized)) {
-    throw new Error('Support ticket code is invalid')
+export function normalizeEmailRouteAlias(value: string): string {
+  const normalized = value.trim().toLowerCase().replaceAll('-', '')
+  if (!REPLY_ALIAS_PATTERN.test(normalized)) {
+    throw new Error('Email reply alias is invalid')
   }
-  return `[YMI Support #${normalized}] Your support request`
+  return normalized
 }
 
-export function buildSupportReplySubject(ticketCode: string): string {
-  return `Re: ${buildSupportThreadSubject(ticketCode)}`
+export function formatEmailRouteAlias(value: string): string {
+  const normalized = normalizeEmailRouteAlias(value).toUpperCase()
+  return `${normalized.slice(0, 4)}-${normalized.slice(4, 8)}-${normalized.slice(8, 12)}`
+}
+
+export function buildSupportThreadSubject(replyAlias: string): string {
+  return `[YMI Support · Case ${formatEmailRouteAlias(replyAlias)}] Your support request`
+}
+
+export function buildSupportReplySubject(replyAlias: string): string {
+  return `Re: ${buildSupportThreadSubject(replyAlias)}`
 }

@@ -90,7 +90,7 @@ export async function POST(
 
   const { data: privateLead, error: privateLeadError } = await supabaseAdmin
     .from('kol_collaboration_leads')
-    .select('lead_id, lead_code, reply_token, customer_id, nickname, contact_email, review_status')
+    .select('lead_id, lead_code, reply_alias, customer_id, nickname, contact_email, review_status')
     .eq('lead_id', leadId)
     .maybeSingle()
 
@@ -110,8 +110,7 @@ export async function POST(
     senderEmail = normalizeSupportEmail(senderIdentity) || ''
     if (!senderEmail) throw new Error('Partnership sender email is invalid')
     replyAddress = buildKolPartnershipReplyAddress({
-      leadCode: privateLead.lead_code,
-      replyToken: privateLead.reply_token,
+      replyAlias: privateLead.reply_alias,
     })
   } catch (error) {
     return jsonNoStore(
@@ -226,8 +225,8 @@ export async function POST(
       messageBody,
       replyTo: replyAddress,
       subject: hasPriorAdminMessage
-        ? buildKolPartnershipReplySubject(privateLead.lead_code)
-        : buildKolPartnershipThreadSubject(privateLead.lead_code),
+        ? buildKolPartnershipReplySubject(privateLead.reply_alias)
+        : buildKolPartnershipThreadSubject(privateLead.reply_alias),
       inReplyTo,
       references,
     })

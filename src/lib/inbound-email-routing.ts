@@ -2,21 +2,18 @@ import {
   getSupportInboundDomain,
   normalizeSupportEmail,
   parseSupportReplyAddress,
+  type SupportReplyIdentity,
 } from '@/lib/support-ticket'
-import { parseKolPartnershipReplyAddress } from '@/lib/kol-partnership-email'
+import {
+  parseKolPartnershipReplyAddress,
+  type KolPartnershipReplyIdentity,
+} from '@/lib/kol-partnership-email'
+import {
+  GENERAL_INBOUND_LOCAL_PARTS,
+  GENERAL_OPERATIONAL_LOCAL_PARTS,
+} from '@/lib/general-inbox-mailboxes'
 
-export const GENERAL_INBOUND_LOCAL_PARTS = [
-  'admin',
-  'hello',
-  'security',
-  'postmaster',
-  'abuse',
-  'dmarc',
-  'noreply',
-  'no-reply',
-] as const
-
-const OPERATIONAL_SUPPORT_LOCAL_PARTS = ['orders', 'delivery'] as const
+export { GENERAL_INBOUND_LOCAL_PARTS } from '@/lib/general-inbox-mailboxes'
 
 export type InboundRouteKind =
   | 'ticket_reply'
@@ -32,8 +29,8 @@ export type InboundRecipientRoute = {
   address: string | null
   normalizedAddresses: string[]
   shouldLoadContent: boolean
-  ticketIdentity: { ticketCode: string; replyToken: string } | null
-  kolIdentity: { leadCode: string; replyToken: string } | null
+  ticketIdentity: SupportReplyIdentity | null
+  kolIdentity: KolPartnershipReplyIdentity | null
 }
 
 function unique(values: string[]) {
@@ -42,6 +39,12 @@ function unique(values: string[]) {
 
 function localPart(address: string) {
   return address.slice(0, address.lastIndexOf('@'))
+}
+
+function replyIdentityKey(identity: { replyAlias: string | null; replyToken: string | null }) {
+  if (identity.replyAlias) return `alias:${identity.replyAlias.toLowerCase()}`
+  if (identity.replyToken) return `token:${identity.replyToken.toLowerCase()}`
+  return 'invalid'
 }
 
 export function classifyInboundRecipients(
@@ -63,13 +66,11 @@ export function classifyInboundRecipients(
         candidate
       ): candidate is {
         address: string
-        identity: { ticketCode: string; replyToken: string }
+        identity: SupportReplyIdentity
       } => Boolean(candidate.identity)
     )
   const distinctTickets = unique(
-    ticketCandidates.map(
-      ({ identity }) => `${identity.ticketCode.toUpperCase()}:${identity.replyToken.toLowerCase()}`
-    )
+    ticketCandidates.map(({ identity }) => replyIdentityKey(identity))
   )
   const kolCandidates = domainAddresses
     .map((address) => ({ address, identity: parseKolPartnershipReplyAddress(address, domain) }))
@@ -78,13 +79,11 @@ export function classifyInboundRecipients(
         candidate
       ): candidate is {
         address: string
-        identity: { leadCode: string; replyToken: string }
+        identity: KolPartnershipReplyIdentity
       } => Boolean(candidate.identity)
     )
   const distinctKolLeads = unique(
-    kolCandidates.map(
-      ({ identity }) => `${identity.leadCode.toUpperCase()}:${identity.replyToken.toLowerCase()}`
-    )
+    kolCandidates.map(({ identity }) => replyIdentityKey(identity))
   )
 
   if (
@@ -137,8 +136,8 @@ export function classifyInboundRecipients(
   }
 
   const operationalAddress = domainAddresses.find((address) =>
-    OPERATIONAL_SUPPORT_LOCAL_PARTS.includes(
-      localPart(address) as (typeof OPERATIONAL_SUPPORT_LOCAL_PARTS)[number]
+    GENERAL_OPERATIONAL_LOCAL_PARTS.includes(
+      localPart(address) as (typeof GENERAL_OPERATIONAL_LOCAL_PARTS)[number]
     )
   )
   if (operationalAddress) {

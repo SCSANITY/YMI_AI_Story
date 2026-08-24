@@ -1,37 +1,31 @@
 import { timingSafeEqual } from 'node:crypto'
+import { decodeEmailRouteToken } from '@/lib/email-route-token'
 import { getSupportInboundDomain } from '@/lib/support-ticket'
-import { normalizeSupportEmail } from '@/lib/support-ticket'
-
-const LEAD_CODE_PATTERN = /^[A-F0-9]{10}$/
-const REPLY_TOKEN_PATTERN = /^[a-f0-9]{32}$/
-
-function normalizeLeadCode(value: string) {
-  const normalized = value.trim().toUpperCase()
-  if (!LEAD_CODE_PATTERN.test(normalized)) {
-    throw new Error('Partnership lead code is invalid')
-  }
-  return normalized
-}
+import {
+  formatEmailRouteAlias,
+  normalizeEmailRouteAlias,
+  normalizeSupportEmail,
+} from '@/lib/support-ticket'
 
 export function buildKolPartnershipReplyAddress(params: {
-  leadCode: string
-  replyToken: string
+  replyAlias: string
   inboundDomain?: string
 }) {
-  const leadCode = normalizeLeadCode(params.leadCode)
-  const replyToken = params.replyToken.trim().toLowerCase()
-  if (!REPLY_TOKEN_PATTERN.test(replyToken)) {
-    throw new Error('Partnership reply token is invalid')
-  }
-
+  const replyAlias = normalizeEmailRouteAlias(params.replyAlias)
   const domain = params.inboundDomain?.trim().toLowerCase() || getSupportInboundDomain()
-  return `collab-${leadCode.toLowerCase()}-${replyToken}@${domain}`
+  return `partner-${formatEmailRouteAlias(replyAlias)}@${domain}`
+}
+
+export type KolPartnershipReplyIdentity = {
+  leadCode: string | null
+  replyAlias: string | null
+  replyToken: string | null
 }
 
 export function parseKolPartnershipReplyAddress(
   value: string,
   inboundDomain = getSupportInboundDomain()
-): { leadCode: string; replyToken: string } | null {
+): KolPartnershipReplyIdentity | null {
   const email = normalizeSupportEmail(value)
   if (!email) return null
   const separatorIndex = email.lastIndexOf('@')
@@ -39,9 +33,30 @@ export function parseKolPartnershipReplyAddress(
   const domain = email.slice(separatorIndex + 1)
   if (domain !== inboundDomain.trim().toLowerCase()) return null
 
-  const match = localPart.match(/^collab-([a-f0-9]{10})-([a-f0-9]{32})$/)
-  if (!match) return null
-  return { leadCode: match[1].toUpperCase(), replyToken: match[2] }
+  const aliasMatch = localPart.match(
+    /^partner-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})$/
+  )
+  if (aliasMatch) {
+    return {
+      leadCode: null,
+      replyAlias: `${aliasMatch[1]}${aliasMatch[2]}${aliasMatch[3]}`,
+      replyToken: null,
+    }
+  }
+
+  const currentMatch = localPart.match(/^partners\+([a-z2-7]{26})$/)
+  if (currentMatch) {
+    const replyToken = decodeEmailRouteToken(currentMatch[1], 32)
+    return replyToken ? { leadCode: null, replyAlias: null, replyToken } : null
+  }
+
+  const legacyMatch = localPart.match(/^collab-([a-f0-9]{10})-([a-f0-9]{32})$/)
+  if (!legacyMatch) return null
+  return {
+    leadCode: legacyMatch[1].toUpperCase(),
+    replyAlias: null,
+    replyToken: legacyMatch[2],
+  }
 }
 
 export function matchesKolPartnershipReplyToken(expected: string, candidate: string) {
@@ -67,10 +82,10 @@ export function classifyKolPartnershipSender(
   return trusted.has(senderEmail) ? 'confirmed' : 'pending'
 }
 
-export function buildKolPartnershipThreadSubject(leadCode: string) {
-  return `[YMI Partnership #${normalizeLeadCode(leadCode)}] Collaboration conversation`
+export function buildKolPartnershipThreadSubject(replyAlias: string) {
+  return `[YMI Partnership · Partner ${formatEmailRouteAlias(replyAlias)}] Collaboration conversation`
 }
 
-export function buildKolPartnershipReplySubject(leadCode: string) {
-  return `Re: ${buildKolPartnershipThreadSubject(leadCode)}`
+export function buildKolPartnershipReplySubject(replyAlias: string) {
+  return `Re: ${buildKolPartnershipThreadSubject(replyAlias)}`
 }

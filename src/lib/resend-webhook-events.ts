@@ -3,6 +3,7 @@ import {
   isResendDeliveryEventType,
   type NormalizedResendWebhookEvent,
 } from '@/lib/resend-webhook-policy'
+import { reconcileGeneralMailDeliveryEvent } from '@/lib/general-mail-server'
 
 const PROCESSING_STALE_SECONDS = 120
 const PENDING_MATCH_RETRY_SECONDS = 30
@@ -104,13 +105,45 @@ export async function reconcileResendDeliveryEvent(
   })
   if (error) throw new Error(`Failed to reconcile Resend delivery event: ${error.message}`)
   const result = Array.isArray(data) ? data[0] : data
+  const emailEventId =
+    typeof result?.matched_email_event_id === 'string'
+      ? result.matched_email_event_id
+      : null
+  let generalMail = { matched: false, applied: false, messageId: null as string | null }
+  let workspaceRequired = false
+  if (emailEventId) {
+    const { data: emailEvent, error: emailEventError } = await supabaseAdmin
+      .from('email_events')
+      .select('email_key')
+      .eq('email_event_id', emailEventId)
+      .maybeSingle()
+    if (emailEventError) throw new Error(`Failed to inspect email event: ${emailEventError.message}`)
+    if (
+      emailEvent?.email_key === 'general_mail_message'
+      || emailEvent?.email_key === 'general_inbox_reply'
+    ) {
+      workspaceRequired = true
+      generalMail = await reconcileGeneralMailDeliveryEvent({
+        providerMessageId: event.providerEmailId,
+        internetMessageId: event.internetMessageId,
+        eventType: event.eventType,
+        eventCreatedAt: event.eventCreatedAt,
+        error: event.detail.reason || event.detail.message || null,
+      })
+      if (!generalMail.matched) {
+        await patchResendWebhookEvent(webhookEventId, {
+          processing_status: 'pending_match',
+          processing_started_at: null,
+          last_error: 'general_mail_workspace_message_not_matched',
+        })
+      }
+    }
+  }
   return {
-    matched: result?.matched === true,
+    matched: result?.matched === true && (!workspaceRequired || generalMail.matched),
     applied: result?.applied === true,
-    emailEventId:
-      typeof result?.matched_email_event_id === 'string'
-        ? result.matched_email_event_id
-        : null,
+    emailEventId,
+    generalMail,
   }
 }
 
@@ -155,6 +188,10 @@ export async function processResendDeliveryEventBacklog(limit = BACKLOG_LIMIT) {
       eventType: row.event_type,
       kind: 'delivery',
       providerEmailId: row.provider_email_id,
+      internetMessageId:
+        typeof row.event_detail?.message_id === 'string'
+          ? row.event_detail.message_id
+          : null,
       eventCreatedAt: row.event_created_at,
       detail: row.event_detail || {},
     }

@@ -18,6 +18,7 @@ import {
   normalizeSupportEmail,
   parseSupportReplyAddress,
 } from '@/lib/support-ticket'
+import { projectGeneralMailInbound } from '@/lib/general-mail-server'
 
 const PROCESSING_STALE_SECONDS = 120
 const BACKLOG_LIMIT = 20
@@ -250,12 +251,21 @@ async function routeTicketReply(envelope: InboundEnvelopeRow) {
     return undefined
   }
 
-  const { data: ticket, error: ticketError } = await supabaseAdmin
+  let ticketQuery = supabaseAdmin
     .from('support_questions')
-    .select('question_id, email, display_name')
-    .eq('ticket_code', routedAddress.ticketCode)
-    .eq('reply_token', routedAddress.replyToken)
-    .maybeSingle()
+    .select('question_id, ticket_code, email, display_name')
+  if (routedAddress.replyAlias) {
+    ticketQuery = ticketQuery.eq('reply_alias', routedAddress.replyAlias)
+  } else if (routedAddress.replyToken) {
+    ticketQuery = ticketQuery.eq('reply_token', routedAddress.replyToken)
+  } else {
+    await rejectEnvelope(envelope, 'ticket_identity_invalid')
+    return undefined
+  }
+  if (routedAddress.ticketCode) {
+    ticketQuery = ticketQuery.eq('ticket_code', routedAddress.ticketCode)
+  }
+  const { data: ticket, error: ticketError } = await ticketQuery.maybeSingle()
   if (ticketError) throw new Error(ticketError.message)
   if (!ticket) {
     await rejectEnvelope(envelope, 'ticket_identity_not_found')
@@ -333,15 +343,28 @@ async function routeKolReply(envelope: InboundEnvelopeRow) {
     return undefined
   }
 
-  const { data: lead, error: leadError } = await supabaseAdmin
+  let leadQuery = supabaseAdmin
     .from('kol_collaboration_leads')
-    .select('lead_id, customer_id, nickname, account_email_snapshot, contact_email, reply_token')
-    .eq('lead_code', routedAddress.leadCode)
-    .maybeSingle()
+    .select('lead_id, lead_code, customer_id, nickname, account_email_snapshot, contact_email, reply_alias, reply_token')
+  if (routedAddress.replyAlias) {
+    leadQuery = leadQuery.eq('reply_alias', routedAddress.replyAlias)
+  } else if (routedAddress.replyToken) {
+    leadQuery = leadQuery.eq('reply_token', routedAddress.replyToken)
+  } else {
+    await rejectEnvelope(envelope, 'kol_identity_invalid')
+    return undefined
+  }
+  if (routedAddress.leadCode) {
+    leadQuery = leadQuery.eq('lead_code', routedAddress.leadCode)
+  }
+  const { data: lead, error: leadError } = await leadQuery.maybeSingle()
   if (leadError) throw new Error(leadError.message)
   if (
     !lead ||
-    !matchesKolPartnershipReplyToken(lead.reply_token, routedAddress.replyToken)
+    (routedAddress.replyAlias
+      ? lead.reply_alias !== routedAddress.replyAlias
+      : !routedAddress.replyToken ||
+        !matchesKolPartnershipReplyToken(lead.reply_token, routedAddress.replyToken))
   ) {
     await rejectEnvelope(envelope, 'kol_identity_not_found')
     return undefined
@@ -534,6 +557,11 @@ export async function processInboundEmailEnvelope(providerEmailId: string) {
     if (envelope.route_kind === 'general' || envelope.route_kind === 'operational_support') {
       await routeGeneralInbox(envelope)
       await processInboundEmailAttachments(envelope, resend)
+      await projectGeneralMailInbound({
+        inboundEmailId: envelope.inbound_email_id,
+        inReplyTo: envelope.in_reply_to,
+        referencesHeader: envelope.references_header,
+      })
       await finishEnvelope(envelope, null)
       return { processed: true, reason: 'general_inbox' as const }
     }

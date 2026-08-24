@@ -114,8 +114,10 @@ test('S4a partnership email is Admin-only, idempotent, threaded, and delivery-ob
   assert.match(email, /retryFailed:\s*true/)
   assert.match(email, /KolPartnershipEmail/)
   assert.match(email, /buildKolPartnershipEmailText/)
-  assert.match(emailBoundary, /collab-\$\{leadCode\.toLowerCase\(\)\}-\$\{replyToken\}@\$\{domain\}/)
-  assert.match(emailBoundary, /\^\[a-f0-9\]\{32\}\$/)
+  assert.match(emailBoundary, /partner-\$\{formatEmailRouteAlias\(replyAlias\)\}@\$\{domain\}/)
+  assert.match(emailBoundary, /currentMatch = localPart\.match\(\/\^partners\\\+/)
+  assert.match(emailBoundary, /legacyMatch = localPart\.match\(\/\^collab-/)
+  assert.match(emailBoundary, /matchesKolPartnershipReplyToken/)
 
   assert.match(detailRoute, /loadAdminKolCorrespondence/)
   assert.match(conversation, /provider_delivery_status/)

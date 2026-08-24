@@ -95,8 +95,8 @@ async function main() {
     inboundEmailId,
     replyId,
     replyBody: `YMI M6 ${options.event} delivery probe. No reply is required.`,
-    replyTo: `support@${inboundDomain}`,
-    senderKey: 'support',
+    replyTo: `admin@${inboundDomain}`,
+    senderKey: 'admin',
     subject: `[YMI M6 ${options.runId}] ${options.event} delivery probe`,
   })
 

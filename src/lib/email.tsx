@@ -24,6 +24,12 @@ import {
 } from '@/components/emails/KolPartnershipEmail'
 import type { GeneralInboxSenderKey } from '@/lib/general-inbox'
 import {
+  getGeneralMailboxDefinition,
+  type GeneralMailboxKey,
+} from '@/lib/general-inbox-mailboxes'
+import { getGeneralMailPrimaryAddress } from '@/lib/general-mail'
+import { normalizeInternetMessageId } from '@/lib/support-inbound'
+import {
   buildNewsletterConfirmationText,
   NewsletterConfirmationEmail,
 } from '@/components/emails/NewsletterConfirmationEmail'
@@ -40,7 +46,9 @@ const resend = resendApiKey ? new Resend(resendApiKey) : null
 const defaultSenderFallback = 'YMI Story <hello@ymistory.com>'
 
 type SendEmailParams = {
-  to: string
+  to: string | string[]
+  cc?: string[]
+  bcc?: string[]
   subject: string
   react?: React.ReactElement
   text?: string
@@ -48,6 +56,11 @@ type SendEmailParams = {
   from?: string
   replyTo?: string
   headers?: Record<string, string>
+  attachments?: Array<{
+    content: Buffer
+    filename: string
+    contentType: string
+  }>
   idempotencyKey?: string
 }
 
@@ -107,6 +120,17 @@ function resolveSender(envName: string): SenderResolution {
   }
 }
 
+function resolveRequiredSender(envName: string): SenderResolution {
+  const rawValue = process.env[envName]?.trim() || ''
+  const normalized = normalizeSenderValue(rawValue)
+  return {
+    envName,
+    rawValue,
+    normalizedValue: normalized,
+    isValid: Boolean(rawValue) && isValidSender(normalized),
+  }
+}
+
 function getSender(envName: string): string {
   const sender = resolveSender(envName)
   if (!sender.isValid) {
@@ -130,6 +154,8 @@ export function getKolPartnershipSenderAddress(): string {
 
 async function sendEmail({
   to,
+  cc,
+  bcc,
   subject,
   react,
   text,
@@ -137,6 +163,7 @@ async function sendEmail({
   from,
   replyTo,
   headers,
+  attachments,
   idempotencyKey,
 }: SendEmailParams) {
   const resolvedFrom = from || getSender('EMAIL_FROM')
@@ -158,12 +185,15 @@ async function sendEmail({
     {
       from: resolvedFrom,
       to,
+      ...(cc?.length ? { cc } : {}),
+      ...(bcc?.length ? { bcc } : {}),
       subject,
       ...(react ? { react } : {}),
       ...(!react && html ? { html } : {}),
       ...(text ? { text } : {}),
       ...(replyTo ? { replyTo } : {}),
       ...(headers && Object.keys(headers).length ? { headers } : {}),
+      ...(attachments?.length ? { attachments } : {}),
     } as Parameters<typeof resend.emails.send>[0],
     idempotencyKey ? { idempotencyKey } : undefined
   )
@@ -216,7 +246,7 @@ async function sendManagedEmail(params: ManagedEmailParams) {
     emailKey: params.emailKey,
     provider: params.provider || 'resend',
     idempotencyKey: params.idempotencyKey,
-    toEmail: params.to,
+    toEmail: Array.isArray(params.to) ? params.to[0] ?? null : params.to,
     subject: params.subject,
     orderId: params.orderId ?? null,
     finalJobId: params.finalJobId ?? null,
@@ -600,16 +630,41 @@ export async function sendKolPartnershipEmail(params: SendKolPartnershipEmailPar
   }
 }
 
-const GENERAL_INBOX_SENDER_ENV: Record<GeneralInboxSenderKey, string> = {
-  default: 'EMAIL_FROM',
-  support: 'EMAIL_FROM_SUPPORT',
-  orders: 'EMAIL_FROM_ORDERS',
-  delivery: 'EMAIL_FROM_DELIVERY',
-  security: 'EMAIL_FROM_SECURITY',
+function getGeneralInboxSenderEnvName(senderKey: GeneralInboxSenderKey) {
+  const mailbox = getGeneralMailboxDefinition(senderKey)
+  if (!mailbox) throw new Error(`General Inbox mailbox is not configured: ${senderKey}`)
+  return mailbox.senderEnvName
 }
 
 export function getGeneralInboxSenderAddress(senderKey: GeneralInboxSenderKey): string {
-  return getSender(GENERAL_INBOX_SENDER_ENV[senderKey])
+  const envName = getGeneralInboxSenderEnvName(senderKey)
+  const sender = resolveRequiredSender(envName)
+  if (!sender.isValid) {
+    throw new Error(
+      `[email] ${envName} must be configured as email@example.com or Name <email@example.com>.`
+    )
+  }
+  return sender.normalizedValue
+}
+
+async function retrieveResendMessageMetadata(providerMessageId: string) {
+  if (!resend) return { internetMessageId: null, providerLastEvent: null }
+  try {
+    const retrieved = await resend.emails.get(providerMessageId)
+    if (retrieved.error || !retrieved.data) {
+      return { internetMessageId: null, providerLastEvent: null }
+    }
+    return {
+      internetMessageId: normalizeInternetMessageId(retrieved.data.message_id),
+      providerLastEvent: retrieved.data.last_event,
+    }
+  } catch (error) {
+    console.warn('[email] Resend message metadata lookup failed', {
+      providerMessageId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return { internetMessageId: null, providerLastEvent: null }
+  }
 }
 
 type SendGeneralInboxReplyEmailParams = {
@@ -634,7 +689,8 @@ export async function sendGeneralInboxReplyEmail(params: SendGeneralInboxReplyEm
     emailKey: 'general_inbox_reply',
     idempotencyKey: `general_inbox_reply:${params.replyId}`,
     to: params.to,
-    fromEnvName: GENERAL_INBOX_SENDER_ENV[params.senderKey],
+    from: getGeneralInboxSenderAddress(params.senderKey),
+    fromEnvName: getGeneralInboxSenderEnvName(params.senderKey),
     replyTo: params.replyTo,
     headers,
     subject: params.subject,
@@ -667,10 +723,90 @@ export async function sendGeneralInboxReplyEmail(params: SendGeneralInboxReplyEm
     throw new Error('General Inbox email is still pending and cannot be reconciled yet')
   }
 
+  const providerMessageId =
+    response?.data?.id || response?.id || emailResult.event?.resend_message_id || null
+  const metadata = providerMessageId
+    ? await retrieveResendMessageMetadata(providerMessageId)
+    : { internetMessageId: null, providerLastEvent: null }
+
   return {
     skipped: emailResult.skipped,
     emailEventId: emailResult.event?.email_event_id ?? null,
-    providerMessageId:
-      response?.data?.id || response?.id || emailResult.event?.resend_message_id || null,
+    providerMessageId,
+    internetMessageId: metadata.internetMessageId,
+    providerLastEvent: metadata.providerLastEvent,
+  }
+}
+
+type SendGeneralMailboxMessageParams = {
+  messageId: string
+  mailboxKey: GeneralMailboxKey
+  to: string[]
+  cc: string[]
+  bcc: string[]
+  subject: string
+  bodyText: string
+  bodyHtml: string
+  attachments: Array<{
+    content: Buffer
+    filename: string
+    contentType: string
+  }>
+  inReplyTo?: string | null
+  references?: string | null
+}
+
+export async function sendGeneralMailboxMessage(params: SendGeneralMailboxMessageParams) {
+  const headers: Record<string, string> = {}
+  if (params.inReplyTo) headers['In-Reply-To'] = params.inReplyTo
+  if (params.references) headers.References = params.references
+  const from = getGeneralInboxSenderAddress(params.mailboxKey)
+  const replyTo = getGeneralMailPrimaryAddress(params.mailboxKey)
+
+  const emailResult = await sendManagedEmail({
+    emailKey: 'general_mail_message',
+    idempotencyKey: `general_mail_message:${params.messageId}`,
+    to: params.to,
+    cc: params.cc,
+    bcc: params.bcc,
+    from,
+    fromEnvName: getGeneralInboxSenderEnvName(params.mailboxKey),
+    replyTo,
+    headers,
+    subject: params.subject,
+    text: params.bodyText,
+    html: params.bodyHtml,
+    attachments: params.attachments,
+    context: {
+      generalMailMessageId: params.messageId,
+      mailboxKey: params.mailboxKey,
+      toCount: params.to.length,
+      ccCount: params.cc.length,
+      bccCount: params.bcc.length,
+      attachmentCount: params.attachments.length,
+    },
+    retryFailed: true,
+    retryPendingAfterMs: 2 * 60 * 1000,
+  })
+
+  if (emailResult.skipped && emailResult.event?.status !== 'sent') {
+    throw new Error('General mail is still pending and cannot be reconciled yet')
+  }
+  const response = emailResult.response as
+    | { data?: { id?: string | null } | null; id?: string | null }
+    | null
+    | undefined
+  const providerMessageId =
+    response?.data?.id || response?.id || emailResult.event?.resend_message_id || null
+  if (!providerMessageId) throw new Error('General mail provider id is unavailable')
+
+  const metadata = await retrieveResendMessageMetadata(providerMessageId)
+
+  return {
+    skipped: emailResult.skipped,
+    emailEventId: emailResult.event?.email_event_id ?? null,
+    providerMessageId,
+    internetMessageId: metadata.internetMessageId,
+    providerLastEvent: metadata.providerLastEvent,
   }
 }

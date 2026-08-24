@@ -15,6 +15,7 @@ export type NormalizedResendWebhookEvent = {
   eventType: string
   kind: ResendWebhookEventKind
   providerEmailId: string | null
+  internetMessageId: string | null
   eventCreatedAt: string
   detail: Record<string, string>
 }
@@ -77,12 +78,17 @@ export function normalizeResendWebhookEvent(
     : {}
   const rawProviderEmailId = boundedString(data.email_id, 500)
   const providerEmailId = rawProviderEmailId || null
+  const rawInternetMessageId = boundedString(data.message_id, 998)
+  const internetMessageId = /^<[^<>\s]+>$/.test(rawInternetMessageId)
+    ? rawInternetMessageId
+    : null
 
   if (eventType === 'email.received') {
     return {
       eventType,
       kind: 'received',
       providerEmailId,
+      internetMessageId,
       eventCreatedAt,
       detail: {},
     }
@@ -94,8 +100,12 @@ export function normalizeResendWebhookEvent(
       eventType,
       kind: 'delivery',
       providerEmailId,
+      internetMessageId,
       eventCreatedAt,
-      detail: normalizeDeliveryDetail(eventType, data),
+      detail: {
+        ...normalizeDeliveryDetail(eventType, data),
+        ...(internetMessageId ? { message_id: internetMessageId } : {}),
+      },
     }
   }
 
@@ -103,6 +113,7 @@ export function normalizeResendWebhookEvent(
     eventType,
     kind: 'ignored',
     providerEmailId: eventType.startsWith('email.') ? providerEmailId : null,
+    internetMessageId: eventType.startsWith('email.') ? internetMessageId : null,
     eventCreatedAt,
     detail: {},
   }

@@ -1,7 +1,11 @@
 import { classifyInboundRecipients } from '@/lib/inbound-email-routing'
+import {
+  resolveGeneralMailboxFromLocalPart,
+  type GeneralMailboxKey,
+} from '@/lib/general-inbox-mailboxes'
 import { getSupportInboundDomain, normalizeSupportEmail, normalizeSupportMessage } from '@/lib/support-ticket'
 
-export type GeneralInboxSenderKey = 'default' | 'support' | 'orders' | 'delivery' | 'security'
+export type GeneralInboxSenderKey = GeneralMailboxKey
 
 export function buildGeneralInboxReplySubject(value: unknown): string {
   const subject = String(value ?? '')
@@ -26,16 +30,8 @@ export function resolveGeneralInboxReplyIdentity(routeAddress: string | null): {
   if (route.kind !== 'general' && route.kind !== 'operational_support') return null
 
   const localPart = normalized.slice(0, normalized.lastIndexOf('@'))
-  const senderKey: GeneralInboxSenderKey =
-    localPart === 'orders'
-      ? 'orders'
-      : localPart === 'delivery'
-        ? 'delivery'
-        : ['security', 'postmaster', 'abuse', 'dmarc'].includes(localPart)
-          ? 'security'
-          : localPart === 'hello'
-            ? 'default'
-            : 'support'
+  const mailbox = resolveGeneralMailboxFromLocalPart(localPart)
+  if (!mailbox) return null
 
-  return { replyTo: normalized, senderKey }
+  return { replyTo: normalized, senderKey: mailbox.key }
 }

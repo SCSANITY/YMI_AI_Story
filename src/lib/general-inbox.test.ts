@@ -16,8 +16,15 @@ test('General Inbox reply identity is server-derived from recognized aliases', (
     })
     assert.deepEqual(resolveGeneralInboxReplyIdentity('abuse@ymistory.com'), {
       replyTo: 'abuse@ymistory.com',
-      senderKey: 'security',
+      senderKey: 'admin',
     })
+    assert.deepEqual(resolveGeneralInboxReplyIdentity('hello@ymistory.com'), {
+      replyTo: 'hello@ymistory.com',
+      senderKey: 'hello',
+    })
+    assert.equal(resolveGeneralInboxReplyIdentity('dmarc@ymistory.com'), null)
+    assert.equal(resolveGeneralInboxReplyIdentity('noreply@ymistory.com'), null)
+    assert.equal(resolveGeneralInboxReplyIdentity('no-reply@ymistory.com'), null)
     assert.equal(resolveGeneralInboxReplyIdentity('unknown@ymistory.com'), null)
     assert.equal(resolveGeneralInboxReplyIdentity('admin@attacker.example'), null)
   } finally {

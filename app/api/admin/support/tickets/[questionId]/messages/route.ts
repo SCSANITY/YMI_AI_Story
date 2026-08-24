@@ -54,7 +54,7 @@ export async function POST(
 
   const { data: ticket, error: ticketError } = await supabaseAdmin
     .from('support_questions')
-    .select('question_id, ticket_code, reply_token, customer_id, email, display_name, question')
+    .select('question_id, ticket_code, reply_alias, customer_id, email, display_name, question')
     .eq('question_id', questionId)
     .maybeSingle()
 
@@ -148,8 +148,7 @@ export async function POST(
     (candidate) => candidate.direction === 'admin' && candidate.delivery_status === 'sent'
   )
   const replyAddress = buildSupportReplyAddress({
-    ticketCode: ticket.ticket_code,
-    replyToken: ticket.reply_token,
+    replyAlias: ticket.reply_alias,
   })
 
   try {
@@ -163,8 +162,8 @@ export async function POST(
       replyBody,
       replyTo: replyAddress,
       subject: hasPriorAdminReply
-        ? buildSupportReplySubject(ticket.ticket_code)
-        : buildSupportThreadSubject(ticket.ticket_code),
+        ? buildSupportReplySubject(ticket.reply_alias)
+        : buildSupportThreadSubject(ticket.reply_alias),
       originalQuestion: hasPriorAdminReply ? null : ticket.question,
       inReplyTo,
       references,

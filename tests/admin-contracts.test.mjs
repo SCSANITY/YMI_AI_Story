@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 44, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 54, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -408,7 +408,7 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.doesNotMatch(panel, /gap-3 lg:flex-row/)
   assert.doesNotMatch(panel, /p-0\.5 lg:w-\[16rem\]/)
   assert.match(pdfReview, /min-h-11[^\"]*sm:min-h-9/)
-  assert.match(generalInbox, /AdminEmailComposer/)
+  assert.match(generalInbox, /GeneralMailComposer/)
   assert.match(emailThread, /mt-2 flex flex-col gap-2 sm:flex-row/)
   assert.match(emailThread, /className="w-full sm:w-auto"/)
   assert.match(panel, /useState<FinalReviewQueueFilter>\(['"]all['"]\)/)
@@ -865,8 +865,8 @@ test('Admin V2 responsive and accessibility closure preserves keyboard and narro
   assert.match(supportQueue, /2xl:w-\[22rem\]/)
   assert.match(supportConversation, /2xl:hidden/g)
   assert.match(supportContext, /2xl:w-72/)
-  assert.match(generalInbox, /2xl:w-\[22rem\]/)
-  assert.match(generalInbox, /2xl:hidden/)
+  assert.match(generalInbox, /xl:w-\[23rem\]/)
+  assert.match(generalInbox, /xl:hidden/)
 })
 
 test('Admin typography, glass cards, and communication views share one presentation contract', async () => {
@@ -892,11 +892,14 @@ test('Admin typography, glass cards, and communication views share one presentat
   assert.match(jobQueue, /admin-v2-job-bubble admin-v2-job-bubble--interactive/)
   assert.match(jobQueue, /admin-v2-job-bubble--selected/)
 
-  for (const conversation of [supportConversation, generalInbox, kolConversation]) {
+  for (const conversation of [supportConversation, kolConversation]) {
     assert.match(conversation, /AdminEmailMessageCard/)
     assert.match(conversation, /AdminEmailThread/)
     assert.match(conversation, /AdminEmailComposer/)
   }
+  assert.match(generalInbox, /AdminEmailMessageCard/)
+  assert.match(generalInbox, /AdminEmailThread/)
+  assert.match(generalInbox, /GeneralMailComposer/)
 
   assert.match(emailThread, /data-email-direction=\{direction\}/)
   assert.match(emailThread, /admin-v2-email-message--\$\{direction\}/)
@@ -904,7 +907,8 @@ test('Admin typography, glass cards, and communication views share one presentat
   assert.match(emailThread, /deliveryError/)
   assert.doesNotMatch(emailThread, /fetch\(|useEffect|useState/)
   assert.match(supportConversation, /requestIdRef\.current/)
-  assert.match(generalInbox, /\/api\/admin\/inbox\/messages\/\$\{selectedId\}\/replies/)
+  assert.match(generalInbox, /\/api\/admin\/mail\/threads\/\$\{threadId\}/)
+  assert.doesNotMatch(generalInbox, /\/api\/admin\/inbox\/messages\/.*\/replies/)
   assert.match(kolConversation, /quarantinedMessages\.map/)
   assert.match(kolConversation, /onReviewSender\(message\.message_id, 'confirm'\)/)
   assert.match(kolConversation, /onReviewSender\(message\.message_id, 'reject'\)/)

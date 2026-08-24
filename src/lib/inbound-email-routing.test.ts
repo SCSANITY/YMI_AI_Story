@@ -1,34 +1,38 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { classifyInboundRecipients, GENERAL_INBOUND_LOCAL_PARTS } from './inbound-email-routing'
+import { buildKolPartnershipReplyAddress } from './kol-partnership-email'
+import { buildSupportReplyAddress } from './support-ticket'
 
 const DOMAIN = 'ymistory.com'
-const TOKEN_A = '0123456789abcdef01234567'
-const TOKEN_B = 'abcdef0123456789abcdef01'
-const KOL_TOKEN_A = '0123456789abcdef0123456789abcdef'
-const KOL_TOKEN_B = 'abcdef0123456789abcdef0123456789'
+const ALIAS_A = '2345abcdefgh'
+const ALIAS_B = 'jkmpqrstvwxy'
 
 test('routes one opaque ticket identity ahead of copied general recipients', () => {
+  const replyAddress = buildSupportReplyAddress({ replyAlias: ALIAS_A, inboundDomain: DOMAIN })
   const route = classifyInboundRecipients(
     [
-      `YMI Support <ticket-a1b2c3d4e5-${TOKEN_A}@ymistory.com>`,
+      `YMI Support <${replyAddress}>`,
       'admin@ymistory.com',
     ],
     DOMAIN
   )
 
   assert.equal(route.kind, 'ticket_reply')
-  assert.equal(route.address, `ticket-a1b2c3d4e5-${TOKEN_A}@ymistory.com`)
-  assert.deepEqual(route.ticketIdentity, { ticketCode: 'A1B2C3D4E5', replyToken: TOKEN_A })
+  assert.equal(route.address, replyAddress.toLowerCase())
+  assert.deepEqual(route.ticketIdentity, {
+    ticketCode: null,
+    replyAlias: ALIAS_A,
+    replyToken: null,
+  })
   assert.equal(route.shouldLoadContent, true)
 })
 
 test('rejects multiple distinct ticket identities without fetching content', () => {
+  const firstAddress = buildSupportReplyAddress({ replyAlias: ALIAS_A, inboundDomain: DOMAIN })
+  const secondAddress = buildSupportReplyAddress({ replyAlias: ALIAS_B, inboundDomain: DOMAIN })
   const route = classifyInboundRecipients(
-    [
-      `ticket-a1b2c3d4e5-${TOKEN_A}@ymistory.com`,
-      `ticket-f6e7d8c9b0-${TOKEN_B}@ymistory.com`,
-    ],
+    [firstAddress, secondAddress],
     DOMAIN
   )
 
@@ -38,26 +42,24 @@ test('rejects multiple distinct ticket identities without fetching content', () 
 })
 
 test('routes one opaque KOL identity and rejects cross-namespace ambiguity', () => {
+  const kolAddressA = buildKolPartnershipReplyAddress({ replyAlias: ALIAS_A, inboundDomain: DOMAIN })
+  const kolAddressB = buildKolPartnershipReplyAddress({ replyAlias: ALIAS_B, inboundDomain: DOMAIN })
+  const supportAddress = buildSupportReplyAddress({ replyAlias: ALIAS_A, inboundDomain: DOMAIN })
   const route = classifyInboundRecipients(
-    [`collab-a1b2c3d4e5-${KOL_TOKEN_A}@ymistory.com`],
+    [kolAddressA],
     DOMAIN
   )
   assert.equal(route.kind, 'kol_reply')
   assert.deepEqual(route.kolIdentity, {
-    leadCode: 'A1B2C3D4E5',
-    replyToken: KOL_TOKEN_A,
+    leadCode: null,
+    replyAlias: ALIAS_A,
+    replyToken: null,
   })
   assert.equal(route.shouldLoadContent, true)
 
   for (const recipients of [
-    [
-      `ticket-a1b2c3d4e5-${TOKEN_A}@ymistory.com`,
-      `collab-a1b2c3d4e5-${KOL_TOKEN_A}@ymistory.com`,
-    ],
-    [
-      `collab-a1b2c3d4e5-${KOL_TOKEN_A}@ymistory.com`,
-      `collab-f6e7d8c9b0-${KOL_TOKEN_B}@ymistory.com`,
-    ],
+    [supportAddress, kolAddressA],
+    [kolAddressA, kolAddressB],
   ]) {
     const ambiguous = classifyInboundRecipients(recipients, DOMAIN)
     assert.equal(ambiguous.kind, 'rejected_ambiguous')
@@ -76,6 +78,14 @@ test('routes every frozen general local part to the general inbox contract', () 
     const route = classifyInboundRecipients([`${value}@ymistory.com`], DOMAIN)
     assert.equal(route.kind, 'general', value)
     assert.equal(route.shouldLoadContent, true, value)
+  }
+})
+
+test('rejects retired general aliases without loading message content', () => {
+  for (const value of ['dmarc', 'noreply', 'no-reply']) {
+    const route = classifyInboundRecipients([`${value}@ymistory.com`], DOMAIN)
+    assert.equal(route.kind, 'rejected_unknown', value)
+    assert.equal(route.shouldLoadContent, false, value)
   }
 })
 
