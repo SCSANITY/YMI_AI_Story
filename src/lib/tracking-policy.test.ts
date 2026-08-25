@@ -18,6 +18,9 @@ test('redacts every known dynamic route and strips complete query strings', () =
   assert.equal(redactTrackingPath('/share/preview/token-secret?x=1'), '/share/preview')
   assert.equal(redactTrackingPath('/invite/invite-secret'), '/invite')
   assert.equal(redactTrackingPath('/personalize/Food_story?child=Mia'), '/personalize')
+  assert.equal(redactTrackingPath('/share/preview'), '/share/preview')
+  assert.equal(redactTrackingPath('/invite'), '/invite')
+  assert.equal(redactTrackingPath('/personalize'), '/personalize')
   assert.equal(
     redactTrackingPath('https://www.ymistory.com/checkout/success?orderId=secret&session_id=secret'),
     '/checkout/success',
