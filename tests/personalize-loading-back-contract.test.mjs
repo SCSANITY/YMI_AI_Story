@@ -11,6 +11,10 @@ test('loading Back returns through the preview cancellation and draft-preservati
   const overlay = read('components/personalize/LoadingPreviewOverlay.tsx')
 
   assert.match(overlay, /onBack: \(\) => void/)
+  assert.match(overlay, /import \{ createPortal \} from 'react-dom'/)
+  assert.match(overlay, /return createPortal\(/)
+  assert.match(overlay, /z-\[160\]/)
+  assert.match(overlay, /document\.body/)
   assert.match(overlay, /type="button"[\s\S]*?onClick=\{onBack\}/)
   assert.match(overlay, /aria-label=\{labels\.back\}/)
 

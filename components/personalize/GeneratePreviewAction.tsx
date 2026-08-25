@@ -12,9 +12,6 @@ type GeneratePreviewActionProps = {
   labels: {
     dataConsentRequired: string
     required: string
-    marketingConsentOptional: string
-    manageMarketingPreferences: string
-    privacyUsageNote: string
     photoPreparing: string
     photoNeedsFix: string
     dataConsentRequiredShort: string
@@ -23,7 +20,6 @@ type GeneratePreviewActionProps = {
     comingSoon: string
   }
   onGenerate: (consent: { dataGeneration: boolean }) => void
-  onOpenMarketingPreferences: () => void
 }
 
 function GeneratePreviewActionComponent({
@@ -34,7 +30,6 @@ function GeneratePreviewActionComponent({
   previewError,
   labels,
   onGenerate,
-  onOpenMarketingPreferences,
 }: GeneratePreviewActionProps) {
   const [isDataGenerationConsentChecked, setIsDataGenerationConsentChecked] = useState(false)
 
@@ -84,23 +79,6 @@ function GeneratePreviewActionComponent({
             <span className="font-semibold text-gray-900">{labels.dataConsentRequired}</span>
           </span>
         </label>
-        <div className="border-t border-amber-100/70 pt-3">
-          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <span className="min-w-0 text-xs font-medium leading-5 text-gray-700 sm:text-sm">
-              {labels.marketingConsentOptional}
-            </span>
-            <button
-              type="button"
-              onClick={onOpenMarketingPreferences}
-              className="shrink-0 rounded-full border border-amber-200 bg-white px-4 py-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
-            >
-              {labels.manageMarketingPreferences}
-            </button>
-          </div>
-          <p className="mt-2 text-[11px] leading-5 text-gray-400 sm:text-xs">
-            {labels.privacyUsageNote}
-          </p>
-        </div>
       </div>
       <button
         onClick={handleGenerate}

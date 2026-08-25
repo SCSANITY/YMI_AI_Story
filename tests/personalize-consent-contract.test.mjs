@@ -8,7 +8,7 @@ async function read(relativePath) {
   return readFile(new URL(relativePath, root), 'utf8')
 }
 
-test('Customize keeps generation consent affirmative and delegates marketing to Cookie Settings', async () => {
+test('Customize keeps only affirmative generation consent and no duplicate marketing authority', async () => {
   const [action, page, messages, jobsRoute] = await Promise.all([
     read('components/personalize/GeneratePreviewAction.tsx'),
     read('components/PersonalizePage.tsx'),
@@ -20,18 +20,15 @@ test('Customize keeps generation consent affirmative and delegates marketing to 
   assert.doesNotMatch(action, /isMarketingConsentChecked/)
   assert.match(action, /aria-required="true"/)
   assert.match(action, /labels\.required/)
-  assert.match(action, /labels\.privacyUsageNote/)
   assert.match(action, /dataGeneration:\s*isDataGenerationConsentChecked/)
-  assert.match(action, /onOpenMarketingPreferences/)
+  assert.doesNotMatch(action, /marketing|Cookie Settings|onOpenMarketingPreferences/)
   assert.doesNotMatch(action, /text-amber-600">\*</)
 
   assert.match(page, /required:\s*t\('personalize\.requiredLabel'\)/)
-  assert.match(page, /privacyUsageNote:\s*t\('personalize\.privacyUsageNote'\)/)
-  assert.match(page, /onOpenMarketingPreferences=\{openCookieSettings\}/)
+  assert.doesNotMatch(page, /openCookieSettings|marketingConsentOptional|manageMarketingPreferences|privacyUsageNote/)
   assert.doesNotMatch(page, /marketing-consent-v1/)
   assert.doesNotMatch(page, /consentRecordedAt/)
-  assert.match(messages, /sharing limited site activity with Meta/)
-  assert.match(messages, /analytics, performance optimization, and relevant recommendations/)
+  assert.doesNotMatch(messages, /personalize\.(marketingConsentOptionalLabel|manageMarketingPreferences|privacyUsageNote)/)
 
   assert.match(jobsRoute, /CONTENT_GENERATION_CONSENT_VERSIONS = new Set\(\['content-generation-consent-v1'\]\)/)
   assert.match(jobsRoute, /contentGeneration\.accepted !== true/)

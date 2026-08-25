@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react'
 import dynamic from 'next/dynamic'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, Info, Sparkles } from 'lucide-react'
 
 const MiniGame = dynamic(() => import('@/components/MiniGame').then((module) => module.MiniGame), {
@@ -37,8 +38,8 @@ function LoadingPreviewOverlayComponent({
 }: LoadingPreviewOverlayProps) {
   if (!show) return null
 
-  return (
-    <div className="fixed inset-0 z-[60] flex animate-in flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-amber-50/97 via-white/97 to-orange-50/97 p-5 fade-in duration-200 sm:p-8">
+  return createPortal(
+    <div className="fixed inset-0 z-[160] flex animate-in flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-amber-50/97 via-white/97 to-orange-50/97 p-5 fade-in duration-200 sm:p-8">
       <button
         type="button"
         onClick={onBack}
@@ -78,7 +79,8 @@ function LoadingPreviewOverlayComponent({
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

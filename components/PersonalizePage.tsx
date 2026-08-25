@@ -21,7 +21,6 @@ import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStag
 import { isUuid } from '@/lib/validators';
 import { useI18n } from '@/lib/useI18n';
 import { formatDisplayCurrency } from '@/lib/locale-pricing';
-import { openCookieSettings } from '@/lib/cookie-consent';
 import { isBrowserTranslated } from '@/lib/browser-translation';
 import { buildPreviewCartHref } from '@/lib/cart-navigation';
 import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants';
@@ -3150,9 +3149,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                               labels={{
                                 dataConsentRequired: t('personalize.dataConsentRequiredLabel'),
                                 required: t('personalize.requiredLabel'),
-                                marketingConsentOptional: t('personalize.marketingConsentOptionalLabel'),
-                                manageMarketingPreferences: t('personalize.manageMarketingPreferences'),
-                                privacyUsageNote: t('personalize.privacyUsageNote'),
                                 photoPreparing: t('personalize.photoPreparing'),
                                 photoNeedsFix: t('personalize.photoNeedsFix'),
                                 dataConsentRequiredShort: t('personalize.dataConsentRequiredShort'),
@@ -3161,7 +3157,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 comingSoon: t('personalize.comingSoon'),
                               }}
                               onGenerate={handleGeneratePreviewAction}
-                              onOpenMarketingPreferences={openCookieSettings}
                             />
                           }
                         >
