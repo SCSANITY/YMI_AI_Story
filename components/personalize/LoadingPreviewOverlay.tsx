@@ -2,7 +2,7 @@
 
 import React, { memo } from 'react'
 import dynamic from 'next/dynamic'
-import { Info, Sparkles } from 'lucide-react'
+import { ChevronLeft, Info, Sparkles } from 'lucide-react'
 
 const MiniGame = dynamic(() => import('@/components/MiniGame').then((module) => module.MiniGame), {
   ssr: false,
@@ -19,10 +19,12 @@ type LoadingPreviewOverlayProps = {
   progress: number
   countdownSeconds: number
   labels: {
+    back: string
     estimatedWait: string
     almostThere: string
     didYouKnow: string
   }
+  onBack: () => void
 }
 
 function LoadingPreviewOverlayComponent({
@@ -31,11 +33,22 @@ function LoadingPreviewOverlayComponent({
   progress,
   countdownSeconds,
   labels,
+  onBack,
 }: LoadingPreviewOverlayProps) {
   if (!show) return null
 
   return (
     <div className="fixed inset-0 z-[60] flex animate-in flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-amber-50/97 via-white/97 to-orange-50/97 p-5 fade-in duration-200 sm:p-8">
+      <button
+        type="button"
+        onClick={onBack}
+        className="absolute left-4 top-4 z-20 inline-flex min-h-11 items-center gap-2 rounded-full border border-white/80 bg-white/75 px-4 text-sm font-semibold text-gray-700 shadow-[0_8px_24px_rgba(148,93,34,0.12)] backdrop-blur-xl transition-colors hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 sm:left-6 sm:top-5"
+        aria-label={labels.back}
+      >
+        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+        <span>{labels.back}</span>
+      </button>
+
       <div className="relative z-10 flex w-full max-w-5xl flex-col items-center text-center">
         <div className="relative mb-1 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-100 bg-white/80 shadow-[0_12px_26px_rgba(217,119,6,0.12)]">
           <Sparkles className="h-8 w-8 text-amber-500" />

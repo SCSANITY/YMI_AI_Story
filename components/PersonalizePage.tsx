@@ -21,6 +21,7 @@ import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStag
 import { isUuid } from '@/lib/validators';
 import { useI18n } from '@/lib/useI18n';
 import { formatDisplayCurrency } from '@/lib/locale-pricing';
+import { openCookieSettings } from '@/lib/cookie-consent';
 import { isBrowserTranslated } from '@/lib/browser-translation';
 import { buildPreviewCartHref } from '@/lib/cart-navigation';
 import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants';
@@ -310,7 +311,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const facePrepareStatusRef = useRef<FacePrepareStatus>(facePrepareStatus);
   const facePrepareErrorRef = useRef<string | null>(facePrepareError);
   const dataGenerationConsentRef = useRef(false);
-  const marketingConsentRef = useRef(false);
 
   useEffect(() => {
     photoRef.current = photo;
@@ -357,7 +357,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
   const [showAddToCartConfirm, setShowAddToCartConfirm] = useState(false);
-  const pendingGenerateConsentRef = useRef<{ dataGeneration: boolean; marketing: boolean } | null>(null);
+  const pendingGenerateConsentRef = useRef<{ dataGeneration: boolean } | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
@@ -1296,7 +1296,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         const currentFacePrepareStatus = facePrepareStatusRef.current
         const currentFacePrepareError = facePrepareErrorRef.current
         const hasDataGenerationConsent = dataGenerationConsentRef.current
-        const hasMarketingConsent = marketingConsentRef.current
         const currentName = nameRef.current
         const currentAge = ageRef.current
 
@@ -1370,18 +1369,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           throw new Error('Missing face asset for preview')
         }
 
-        const consentRecordedAt = new Date().toISOString()
         const generationConsentParams = {
           consent: {
             content_generation: {
-              accepted: true,
-              accepted_at: consentRecordedAt,
+              accepted: hasDataGenerationConsent,
               version: 'content-generation-consent-v1',
-            },
-            marketing: {
-              accepted: hasMarketingConsent,
-              accepted_at: hasMarketingConsent ? consentRecordedAt : null,
-              version: 'marketing-consent-v1',
             },
           },
         }
@@ -2075,6 +2067,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       startForm,
     ]
   );
+
+  const handleLoadingBack = useCallback(() => {
+    void requestPreviewCancellation();
+  }, [requestPreviewCancellation]);
 
   useEffect(() => {
     if (stage !== 'GENERATING') return;
@@ -2967,15 +2963,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return parsedAge !== null && parsedAge < minimumRecommendedAge;
   }, [minimumRecommendedAge]);
 
-  const startGeneratePreview = useCallback((consent: { dataGeneration: boolean; marketing: boolean }) => {
+  const startGeneratePreview = useCallback((consent: { dataGeneration: boolean }) => {
     dataGenerationConsentRef.current = consent.dataGeneration;
-    marketingConsentRef.current = consent.marketing;
     setName(nameRef.current);
     setAge(ageRef.current);
     primaryAction();
   }, [primaryAction, setAge, setName]);
 
-  const handleGeneratePreviewAction = useCallback((consent: { dataGeneration: boolean; marketing: boolean }) => {
+  const handleGeneratePreviewAction = useCallback((consent: { dataGeneration: boolean }) => {
     if (isAgeBelowRecommendedRange(ageRef.current)) {
       pendingGenerateConsentRef.current = consent;
       setShowAgeRangeConfirm(true);
@@ -3154,7 +3149,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                               previewError={previewError}
                               labels={{
                                 dataConsentRequired: t('personalize.dataConsentRequiredLabel'),
+                                required: t('personalize.requiredLabel'),
                                 marketingConsentOptional: t('personalize.marketingConsentOptionalLabel'),
+                                manageMarketingPreferences: t('personalize.manageMarketingPreferences'),
+                                privacyUsageNote: t('personalize.privacyUsageNote'),
                                 photoPreparing: t('personalize.photoPreparing'),
                                 photoNeedsFix: t('personalize.photoNeedsFix'),
                                 dataConsentRequiredShort: t('personalize.dataConsentRequiredShort'),
@@ -3163,6 +3161,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 comingSoon: t('personalize.comingSoon'),
                               }}
                               onGenerate={handleGeneratePreviewAction}
+                              onOpenMarketingPreferences={openCookieSettings}
                             />
                           }
                         >
@@ -3372,10 +3371,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           progress={progress}
           countdownSeconds={loadingCountdownSeconds}
           labels={{
+            back: t('common.back'),
             estimatedWait: t('personalize.estimatedWait', { seconds: loadingCountdownSeconds }),
             almostThere: t('personalize.almostThere'),
             didYouKnow: t('personalize.didYouKnow'),
           }}
+          onBack={handleLoadingBack}
         />
       </main>
     </div>

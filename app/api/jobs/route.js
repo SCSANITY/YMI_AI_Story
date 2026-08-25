@@ -16,6 +16,28 @@ import {
 
 const MAX_TEXT_PROFILES = 5
 const DEFAULT_STORY_LANGUAGE = 'English'
+const CONTENT_GENERATION_CONSENT_VERSIONS = new Set(['content-generation-consent-v1'])
+
+function validateAndStampPreviewConsent(params) {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return null
+  const contentGeneration = params?.consent?.content_generation
+  if (!contentGeneration || typeof contentGeneration !== 'object' || Array.isArray(contentGeneration)) {
+    return null
+  }
+  if (contentGeneration.accepted !== true) return null
+  if (!CONTENT_GENERATION_CONSENT_VERSIONS.has(contentGeneration.version)) return null
+
+  return {
+    ...params,
+    consent: {
+      content_generation: {
+        accepted: true,
+        accepted_at: new Date().toISOString(),
+        version: contentGeneration.version,
+      },
+    },
+  }
+}
 
 function normalizeStoryLanguage() {
   return DEFAULT_STORY_LANGUAGE
@@ -125,9 +147,14 @@ export async function POST(request) {
   const pendingFaceAsset = normalizePendingFaceAsset(body?.pending_face_asset || body?.pendingFaceAsset)
   const textOverrides = body?.text_overrides || body?.textOverrides || null
   const params = body?.params || null
+  const validatedParams = validateAndStampPreviewConsent(params)
 
   if (!templateId || (!faceAssetId && !pendingFaceAsset?.asset_id)) {
     return NextResponse.json({ error: 'Missing template_id or face_asset_id' }, { status: 400 })
+  }
+
+  if (!validatedParams) {
+    return NextResponse.json({ error: 'Valid content-generation consent is required' }, { status: 400 })
   }
 
   const customizeAccess = await getCustomizeAccessSettings()
@@ -226,7 +253,7 @@ export async function POST(request) {
   const customizeSnapshot = {
     storagePath: asset.storage_path ?? null,
     textOverrides: effectiveTextOverrides,
-    params: params ?? null,
+    params: validatedParams,
     previewJobId: null,
   }
 
@@ -241,7 +268,7 @@ export async function POST(request) {
         p_face_source_path: rawFacePath,
         p_config_url: configUrl,
         p_text_overrides: effectiveTextOverrides,
-        p_params: params,
+        p_params: validatedParams,
         p_story_language: storyLanguage,
         p_selected_book_type: selectedBookType,
       })

@@ -11,7 +11,10 @@ type GeneratePreviewActionProps = {
   previewError: string | null
   labels: {
     dataConsentRequired: string
+    required: string
     marketingConsentOptional: string
+    manageMarketingPreferences: string
+    privacyUsageNote: string
     photoPreparing: string
     photoNeedsFix: string
     dataConsentRequiredShort: string
@@ -19,7 +22,8 @@ type GeneratePreviewActionProps = {
     completeDetails: string
     comingSoon: string
   }
-  onGenerate: (consent: { dataGeneration: boolean; marketing: boolean }) => void
+  onGenerate: (consent: { dataGeneration: boolean }) => void
+  onOpenMarketingPreferences: () => void
 }
 
 function GeneratePreviewActionComponent({
@@ -30,9 +34,9 @@ function GeneratePreviewActionComponent({
   previewError,
   labels,
   onGenerate,
+  onOpenMarketingPreferences,
 }: GeneratePreviewActionProps) {
   const [isDataGenerationConsentChecked, setIsDataGenerationConsentChecked] = useState(false)
-  const [isMarketingConsentChecked, setIsMarketingConsentChecked] = useState(false)
 
   const isFormValid = isFormReady && isDataGenerationConsentChecked
   const buttonLabel = useMemo(() => {
@@ -57,9 +61,8 @@ function GeneratePreviewActionComponent({
   const handleGenerate = useCallback(() => {
     onGenerate({
       dataGeneration: isDataGenerationConsentChecked,
-      marketing: isMarketingConsentChecked,
     })
-  }, [isDataGenerationConsentChecked, isMarketingConsentChecked, onGenerate])
+  }, [isDataGenerationConsentChecked, onGenerate])
 
   const isDisabled = !isFormValid || isSupreme
 
@@ -71,22 +74,33 @@ function GeneratePreviewActionComponent({
             type="checkbox"
             checked={isDataGenerationConsentChecked}
             onChange={(event) => setIsDataGenerationConsentChecked(event.target.checked)}
+            aria-required="true"
             className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
           />
-          <span>
+          <span className="min-w-0">
+            <span className="mr-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 sm:text-xs">
+              {labels.required}
+            </span>
             <span className="font-semibold text-gray-900">{labels.dataConsentRequired}</span>
-            <span className="ml-1 text-amber-600">*</span>
           </span>
         </label>
-        <label className="flex cursor-pointer items-start gap-3 text-xs font-medium leading-5 text-gray-700 sm:text-sm">
-          <input
-            type="checkbox"
-            checked={isMarketingConsentChecked}
-            onChange={(event) => setIsMarketingConsentChecked(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
-          />
-          <span>{labels.marketingConsentOptional}</span>
-        </label>
+        <div className="border-t border-amber-100/70 pt-3">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <span className="min-w-0 text-xs font-medium leading-5 text-gray-700 sm:text-sm">
+              {labels.marketingConsentOptional}
+            </span>
+            <button
+              type="button"
+              onClick={onOpenMarketingPreferences}
+              className="shrink-0 rounded-full border border-amber-200 bg-white px-4 py-2 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+            >
+              {labels.manageMarketingPreferences}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] leading-5 text-gray-400 sm:text-xs">
+            {labels.privacyUsageNote}
+          </p>
+        </div>
       </div>
       <button
         onClick={handleGenerate}
