@@ -29,7 +29,20 @@ test('checkout and purchase events use authoritative order states without raw id
   assert.match(checkout, /const checkoutValue = convertUsdToCurrency\(total, selectedCurrency\)/)
   assert.match(checkout, /Number\.isFinite\(checkoutValue\) && checkoutValue >= 0/)
   assert.match(checkout, /hasCheckoutValue \? \{ currency: selectedCurrency, value: checkoutValue \} : \{\}/)
-  assert.match(success, /normalizedStatus === 'paid'[\s\S]*emitYmiPurchaseEvent\(\{[\s\S]*orderId: paidOrderId/)
+  assert.match(success, /isPurchaseTrackingStatus\(order\?\.order_status\)[\s\S]*emitYmiPurchaseEvent\(\{[\s\S]*orderId: paidOrderId/)
+  assert.match(success, /window\.localStorage\.getItem\(storageKey\)/)
+  assert.match(success, /window\.sessionStorage\.getItem\(storageKey\)/)
+  assert.match(success, /window\.localStorage\.setItem\(storageKey, '1'\)/)
   assert.doesNotMatch(success, /emitYmiTrackingEvent\('purchase'/)
   assert.doesNotMatch(success, /transaction_id:\s*paidOrderId/)
+})
+
+test('Meta Purchase uses the privacy-safe transaction surrogate as its event ID', async () => {
+  const frame = await read('components/tracking/MetaPixelFrame.tsx')
+
+  assert.match(
+    frame,
+    /event\.name === 'purchase' && event\.payload\.transaction_id[\s\S]*eventID: event\.payload\.transaction_id/,
+  )
+  assert.doesNotMatch(frame, /eventID:\s*(?:orderId|paidOrderId|order\.order_id)/)
 })

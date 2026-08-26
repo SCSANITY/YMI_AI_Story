@@ -130,11 +130,19 @@ export function MetaPixelFrame() {
         const metaEventName = event ? META_EVENT_NAMES[event.name] : null
         if (!event || !metaEventName) return
 
-        window.fbq('trackSingle', pixelId, metaEventName, {
+        const eventPayload = {
           ...event.payload,
           page_path: message.page_path,
           page_title: message.page_title,
-        })
+        }
+        if (event.name === 'purchase' && event.payload.transaction_id) {
+          // The privacy-safe surrogate is stable across retries and future browser/server delivery.
+          window.fbq('trackSingle', pixelId, metaEventName, eventPayload, {
+            eventID: event.payload.transaction_id,
+          })
+          return
+        }
+        window.fbq('trackSingle', pixelId, metaEventName, eventPayload)
       }
     }
 

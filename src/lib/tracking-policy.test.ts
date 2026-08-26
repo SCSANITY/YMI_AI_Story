@@ -11,6 +11,7 @@ import {
   resolveTrackingFormat,
   resolveTrackingActivation,
   sanitizeTrackingEvent,
+  isPurchaseTrackingStatus,
 } from './tracking-policy'
 
 test('redacts every known dynamic route and strips complete query strings', () => {
@@ -98,6 +99,16 @@ test('creates a deterministic non-reversible transaction surrogate', async () =>
   assert.match(first ?? '', /^ymi_[a-f0-9]{32}$/)
   assert.equal(first, second)
   assert.notEqual(first, 'raw-order-id')
+})
+
+test('permits Purchase only after payment remains valid', () => {
+  for (const status of ['paid', 'production', 'processing', 'shipped', 'delivered']) {
+    assert.equal(isPurchaseTrackingStatus(status), true, `${status} should permit Purchase`)
+  }
+
+  for (const status of ['unpaid', 'cancelled', 'refunded', 'failed', '', null, undefined]) {
+    assert.equal(isPurchaseTrackingStatus(status), false, `${String(status)} should block Purchase`)
+  }
 })
 
 test('derives only coarse commerce facts from cart items', () => {

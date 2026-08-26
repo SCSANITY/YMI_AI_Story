@@ -7,7 +7,11 @@ import { resolveCheckoutSuccessAccountPromptEmail } from '@/lib/checkout-success
 import { shouldShowCheckoutSuccessDeliveryNote } from '@/lib/checkout-success-delivery-note'
 import { useI18n } from '@/lib/useI18n'
 import { normalizeOrderStatus } from '@/lib/order-status'
-import { countTrackingItems, emitYmiPurchaseEvent } from '@/lib/tracking-policy'
+import {
+  countTrackingItems,
+  emitYmiPurchaseEvent,
+  isPurchaseTrackingStatus,
+} from '@/lib/tracking-policy'
 import { CheckoutSuccessCard, type CheckoutSuccessOrder } from './CheckoutSuccessCard'
 
 function CheckoutSuccessPageContent() {
@@ -152,12 +156,7 @@ function CheckoutSuccessPageContent() {
   }, [order?.order_id, order?.order_status, orderId, refreshCart])
 
   useEffect(() => {
-    const normalizedStatus = normalizeOrderStatus(order?.order_status)
-    const paymentConfirmed =
-      normalizedStatus === 'paid' ||
-      normalizedStatus === 'production' ||
-      normalizedStatus === 'shipped' ||
-      normalizedStatus === 'delivered'
+    const paymentConfirmed = isPurchaseTrackingStatus(order?.order_status)
     const paidOrderId = order?.order_id || ''
     if (!paymentConfirmed || !paidOrderId || purchaseTrackingInFlightRef.current.has(paidOrderId)) {
       return
@@ -165,7 +164,12 @@ function CheckoutSuccessPageContent() {
 
     const storageKey = `ymi_tracking_purchase_v1:${paidOrderId}`
     try {
-      if (window.sessionStorage.getItem(storageKey) === '1') return
+      if (
+        window.localStorage.getItem(storageKey) === '1' ||
+        window.sessionStorage.getItem(storageKey) === '1'
+      ) {
+        return
+      }
     } catch {
       // The in-memory guard still prevents duplicate effects in this page instance.
     }
@@ -192,9 +196,9 @@ function CheckoutSuccessPageContent() {
         return
       }
       try {
-        window.sessionStorage.setItem(storageKey, '1')
+        window.localStorage.setItem(storageKey, '1')
       } catch {
-        // Session storage is a reload guard, not a delivery dependency.
+        // Local storage is a cross-session replay guard, not a delivery dependency.
       }
     }).catch(() => {
       purchaseTrackingInFlightRef.current.delete(paidOrderId)

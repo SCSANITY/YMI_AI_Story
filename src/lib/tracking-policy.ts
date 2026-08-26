@@ -1,3 +1,5 @@
+import { isPaidLikeOrderStatus } from '@/lib/order-status'
+
 export const YMI_TRACKING_EVENT = 'ymi:tracking-event'
 
 export type TrackingVendor = 'google-analytics' | 'meta'
@@ -254,6 +256,10 @@ export function countTrackingItems(items: TrackingCommerceItem[]): number | unde
   }
 
   return total > 0 && total <= 100 ? total : undefined
+}
+
+export function isPurchaseTrackingStatus(status: unknown): boolean {
+  return isPaidLikeOrderStatus(status)
 }
 
 export function resolveTrackingFormat(
