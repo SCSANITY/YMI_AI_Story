@@ -29,6 +29,7 @@ import {
   emitYmiTrackingEvent,
   resolveTrackingFormat,
 } from '@/lib/tracking-policy';
+import { removeCheckoutPaymentResumeStep } from '@/lib/checkout-step-navigation';
 
 const CheckoutIdentityModal = dynamic(
   () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
@@ -171,6 +172,7 @@ function CheckoutPageContent() {
   const [isIdentityRequesting, setIsIdentityRequesting] = useState(false);
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const checkoutInitRef = useRef(false);
+  const checkoutPaymentResumeAppliedRef = useRef(false);
   const trackedCheckoutOrderIdsRef = useRef<Set<string>>(new Set());
   const shippingDiscountRefreshKeyRef = useRef('');
   const isPlacingOrderRef = useRef(false);
@@ -421,9 +423,15 @@ function CheckoutPageContent() {
   }, [queryOrderId, orderId]);
 
   useEffect(() => {
-    if (queryStep !== 'payment') return;
+    if (queryStep !== 'payment') {
+      checkoutPaymentResumeAppliedRef.current = false;
+      return;
+    }
+    if (checkoutPaymentResumeAppliedRef.current) return;
     if (step !== 'address') return;
     if (!queryOrderId && items.length === 0) return;
+
+    checkoutPaymentResumeAppliedRef.current = true;
 
     if (queryIdentityVerified) {
       setIdentityVerified(true);
@@ -702,6 +710,17 @@ function CheckoutPageContent() {
     switch (step) {
       case 'payment':
         if (requiresShipping) {
+          if (typeof window !== 'undefined') {
+            const nextHref = removeCheckoutPaymentResumeStep({
+              pathname: window.location.pathname,
+              search: window.location.search,
+              hash: window.location.hash,
+            });
+            if (nextHref) {
+              checkoutPaymentResumeAppliedRef.current = true;
+              window.history.replaceState(window.history.state, '', nextHref);
+            }
+          }
           setStep('address');
         }
         break;
