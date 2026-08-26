@@ -2,27 +2,84 @@
 
 import React from 'react'
 import { Button } from '@/components/Button'
-import { Sparkles } from 'lucide-react'
-import { motion } from 'framer-motion'
+import {
+  BookOpenCheck,
+  Eye,
+  Globe2,
+  Heart,
+  Palette,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useI18n } from '@/lib/useI18n'
 import { useRouter } from 'next/navigation'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const MARQUEE_ITEM_KEYS = [
-  'hero.marquee.artisticallyIntegrated',
-  'hero.marquee.mindfulGrowthStory',
-  'hero.marquee.lifetimeKeepsake',
-  'hero.marquee.premiumHardcoverPrint',
-  'hero.marquee.shipsWorldwide',
-  'hero.marquee.previewReady',
-] as const
+const HERO_FACTS: ReadonlyArray<{
+  icon: LucideIcon
+  bubbleClass: string
+  positionClass: string
+  floatDelay: number
+  labelKey:
+    | 'hero.facts.artisticallyIntegrated'
+    | 'hero.facts.mindfulGrowthStory'
+    | 'hero.facts.lifetimeKeepsake'
+    | 'hero.facts.premiumHardcoverPrint'
+    | 'hero.facts.shipsWorldwide'
+    | 'hero.facts.previewReady'
+}> = [
+  {
+    icon: Palette,
+    labelKey: 'hero.facts.artisticallyIntegrated',
+    bubbleClass: 'rounded-[2.2rem_1.25rem_1.8rem_1.35rem] bg-rose-50/30',
+    positionClass: 'lg:-translate-y-1 lg:-rotate-1 lg:w-[10.5rem]',
+    floatDelay: 0,
+  },
+  {
+    icon: Heart,
+    labelKey: 'hero.facts.mindfulGrowthStory',
+    bubbleClass: 'rounded-[1.3rem_2.15rem_1.35rem_1.9rem] bg-amber-50/30',
+    positionClass: 'lg:translate-y-2 lg:rotate-[0.8deg] lg:w-[10.75rem]',
+    floatDelay: 0.45,
+  },
+  {
+    icon: Sparkles,
+    labelKey: 'hero.facts.lifetimeKeepsake',
+    bubbleClass: 'rounded-[1.8rem_1.2rem_2.2rem_1.45rem] bg-violet-50/25',
+    positionClass: 'lg:-translate-y-2 lg:rotate-1 lg:w-[10.25rem]',
+    floatDelay: 0.9,
+  },
+  {
+    icon: BookOpenCheck,
+    labelKey: 'hero.facts.premiumHardcoverPrint',
+    bubbleClass: 'rounded-[1.2rem_2.15rem_1.65rem_1.35rem] bg-orange-50/30',
+    positionClass: 'lg:translate-y-1 lg:-rotate-[0.7deg] lg:w-[11.25rem]',
+    floatDelay: 0.25,
+  },
+  {
+    icon: Globe2,
+    labelKey: 'hero.facts.shipsWorldwide',
+    bubbleClass: 'rounded-[2.1rem_1.35rem_1.25rem_1.8rem] bg-emerald-50/25',
+    positionClass: 'lg:-translate-y-1 lg:rotate-[0.7deg] lg:w-[12rem]',
+    floatDelay: 0.7,
+  },
+  {
+    icon: Eye,
+    labelKey: 'hero.facts.previewReady',
+    bubbleClass: 'rounded-[1.35rem_1.9rem_2.15rem_1.2rem] bg-sky-50/25',
+    positionClass: 'lg:translate-y-2 lg:-rotate-1 lg:w-[10.75rem]',
+    floatDelay: 1.1,
+  },
+]
 
 // ── Hero ──────────────────────────────────────────────────────────────────────
 
 export const Hero: React.FC = () => {
   const { t } = useI18n()
   const router = useRouter()
+  const prefersReducedMotion = useReducedMotion()
 
   const goToBooks = () => router.push('/books')
 
@@ -78,8 +135,8 @@ export const Hero: React.FC = () => {
 
           {/* ── Lower-third text zone ───────────────────────────────────── */}
           <div
-            className="flex flex-col items-center text-center px-5 sm:px-8"
-            style={{ paddingBottom: 'clamp(32px, 4.5vh, 60px)' }}
+            className="flex flex-col items-center px-4 text-center sm:px-8"
+            style={{ paddingBottom: 'clamp(22px, 3vh, 40px)' }}
           >
             {/* Headline — original full-width treatment, kept by owner preference.
                 Structure is a single h1 with two animated spans (the two stacked h1
@@ -133,26 +190,69 @@ export const Hero: React.FC = () => {
               </motion.div>
             </motion.div>
 
+            <motion.ul
+              aria-label="YMI Story product highlights"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.52, duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-5 flex w-full max-w-6xl flex-wrap items-center justify-center gap-2.5 text-left sm:mt-6 sm:gap-3 lg:flex-nowrap lg:gap-2.5"
+            >
+              {HERO_FACTS.map(
+                ({ icon: Icon, labelKey, bubbleClass, positionClass, floatDelay }, index) => {
+                  const direction = index % 2 === 0 ? 1 : -1
+
+                  return (
+                    <li
+                      key={labelKey}
+                      className={`z-0 w-[calc(50%-0.32rem)] hover:z-20 sm:w-[calc(33.333%-0.5rem)] lg:shrink-0 ${positionClass}`}
+                    >
+                      <motion.div
+                        animate={prefersReducedMotion
+                          ? { x: 0, y: 0, rotate: 0 }
+                          : {
+                              x: [0, 3.5 * direction, -2.5 * direction, 2 * direction, 0],
+                              y: [0, -11, 3, 8, 0],
+                              rotate: [0, 1.3 * direction, -0.85 * direction, 0.65 * direction, 0],
+                            }}
+                        whileHover={{
+                          y: prefersReducedMotion ? 0 : -13,
+                          scale: 1.045,
+                          rotate: 0,
+                          transition: { duration: 0.13, ease: 'easeOut' },
+                        }}
+                        whileTap={{
+                          y: prefersReducedMotion ? 0 : -10,
+                          scale: 1.035,
+                          rotate: 0,
+                          transition: { duration: 0.1, ease: 'easeOut' },
+                        }}
+                        transition={{
+                          delay: floatDelay,
+                          duration: 3.8 + (index % 3) * 0.45,
+                          ease: 'easeInOut',
+                          repeat: prefersReducedMotion ? 0 : Infinity,
+                        }}
+                        className={`group relative z-0 flex min-h-[4.2rem] items-center gap-2.5 overflow-hidden border border-white/70 px-3 py-2.5 shadow-[0_12px_30px_rgba(98,58,30,0.11),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-150 hover:z-20 hover:border-white hover:bg-white/65 hover:shadow-[0_20px_44px_rgba(98,58,30,0.2),inset_0_1px_0_rgba(255,255,255,0.92)] sm:min-h-[4.6rem] sm:px-4 ${bubbleClass}`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="absolute left-[18%] top-1.5 h-1.5 w-8 rounded-full bg-white/55 blur-[0.5px]"
+                        />
+                        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[55%_45%_52%_48%] border border-white/80 bg-white/38 text-amber-700 shadow-[0_5px_14px_rgba(141,78,24,0.12)] backdrop-blur-md">
+                          <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={1.7} />
+                        </span>
+                        <span className="relative text-[11px] font-semibold leading-snug text-[#493322] sm:text-xs">
+                          {t(labelKey)}
+                        </span>
+                      </motion.div>
+                    </li>
+                  )
+                },
+              )}
+            </motion.ul>
+
           </div>
         </div>
-      </div>
-
-      {/* ── Marquee — picks up right after video fades to cream ────────────── */}
-      <div className="relative z-20 w-full overflow-hidden border-y border-amber-100/60 bg-[rgba(255,249,242,1)] py-2.5 sm:py-3">
-        <motion.div
-          className="flex gap-0 whitespace-nowrap"
-          animate={{ x: ['0%', '-50%'] }}
-          transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}
-        >
-          {[...MARQUEE_ITEM_KEYS, ...MARQUEE_ITEM_KEYS].map((itemKey, i) => (
-            <span key={i} className="flex items-center shrink-0">
-              <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500 px-5 sm:px-6">
-                {t(itemKey)}
-              </span>
-              <span className="text-amber-400 text-sm shrink-0">✦</span>
-            </span>
-          ))}
-        </motion.div>
       </div>
 
     </div>
