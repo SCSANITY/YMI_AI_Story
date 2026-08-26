@@ -261,6 +261,7 @@ export function GeneralInbox() {
         threadId: data.draft?.thread_id,
         existingDraft: data.draft,
       })
+      setMobileColumn('reader')
     } catch (draftError) {
       setError(draftError instanceof Error ? draftError.message : 'Failed to load draft')
     } finally {
@@ -274,14 +275,23 @@ export function GeneralInbox() {
     void Promise.all([loadMailboxes(), loadThreads(true)])
     if (selectedThreadId) void loadDetail(selectedThreadId, true)
   }
+  const openComposer = (next: ComposerState) => {
+    setMailboxMenuOpen(false)
+    setComposer(next)
+    setMobileColumn('reader')
+  }
+  const closeComposer = () => {
+    setComposer(null)
+    setMobileColumn(detail ? 'reader' : 'threads')
+  }
 
   return (
     <div className="admin-v2-comm-workspace min-h-0 min-w-0 flex-1 xl:flex xl:h-full">
-      <aside className={`${mobileColumn === 'threads' ? 'flex' : 'hidden'} admin-v2-comm-queue min-h-0 w-full shrink-0 flex-col border-b border-[var(--admin-line)] xl:flex xl:w-[25rem] xl:border-b-0 xl:border-r`}>
+      <aside className={`${!composer && mobileColumn === 'threads' ? 'flex' : 'hidden'} admin-v2-comm-queue min-h-0 w-full shrink-0 flex-col border-b border-[var(--admin-line)] xl:flex xl:w-[25rem] xl:border-b-0 xl:border-r`}>
         <div className="admin-v2-comm-toolbar space-y-3 border-b p-3">
           <div className="flex items-center gap-2">
             <div ref={mailboxMenuRef} className="relative min-w-0 flex-1">
-              <button type="button" aria-haspopup="menu" aria-expanded={mailboxMenuOpen} onClick={() => setMailboxMenuOpen((open) => !open)} className="admin-v2-comm-item flex h-11 w-full min-w-0 items-center gap-2 px-3 text-left">
+              <button type="button" aria-haspopup="menu" aria-expanded={mailboxMenuOpen} disabled={Boolean(composer)} onClick={() => setMailboxMenuOpen((open) => !open)} className="admin-v2-comm-item flex h-11 w-full min-w-0 items-center gap-2 px-3 text-left disabled:cursor-default disabled:opacity-60">
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_20%,var(--admin-card))] text-xs font-bold text-[var(--admin-page-ink)]">{currentMailboxDefinition?.displayName.charAt(0) ?? 'M'}</span>
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[var(--admin-page-ink)]">{currentMailboxDefinition?.displayName ?? 'Mailbox'}</span><span className="block truncate text-[10px] text-[var(--admin-page-muted)]">{mailboxAddress}</span></span>
                 {currentMailbox?.unread ? <span className="rounded-full bg-[var(--admin-accent)] px-2 py-0.5 text-[10px] font-bold text-[var(--admin-accent-ink)]">{currentMailbox.unread}</span> : null}
@@ -299,10 +309,10 @@ export function GeneralInbox() {
                 })}
               </div> : null}
             </div>
-            <AdminButton type="button" tone="primary" onClick={() => setComposer({ mode: 'new' })} className="px-3"><PenLine className="h-4 w-4" />New</AdminButton>
+            <AdminButton type="button" tone="primary" onClick={() => openComposer({ mode: 'new' })} disabled={Boolean(composer)} className="px-3"><PenLine className="h-4 w-4" />New</AdminButton>
           </div>
           <div className="grid grid-cols-4 gap-1" role="tablist" aria-label="Mail folders">
-            {FOLDERS.map(({ key, label, icon: Icon }) => <button key={key} type="button" role="tab" aria-selected={folder === key} aria-controls="general-mail-thread-list" tabIndex={folder === key ? 0 : -1} onKeyDown={handleAdminTabKeyDown} onClick={() => setFolder(key)} className={`admin-v2-comm-tab min-w-0 px-1.5 py-2 text-[11px] ${folder === key ? 'admin-v2-comm-tab--active' : ''}`}><span className="flex items-center justify-center gap-1.5"><Icon className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{label}</span></span><span className="mt-0.5 block text-[9px] opacity-75">{currentMailbox?.[key] ?? 0}</span></button>)}
+            {FOLDERS.map(({ key, label, icon: Icon }) => <button key={key} type="button" role="tab" aria-selected={folder === key} aria-controls="general-mail-thread-list" tabIndex={folder === key ? 0 : -1} onKeyDown={handleAdminTabKeyDown} onClick={() => setFolder(key)} disabled={Boolean(composer)} className={`admin-v2-comm-tab min-w-0 px-1.5 py-2 text-[11px] disabled:cursor-default disabled:opacity-60 ${folder === key ? 'admin-v2-comm-tab--active' : ''}`}><span className="flex items-center justify-center gap-1.5"><Icon className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{label}</span></span><span className="mt-0.5 block text-[9px] opacity-75">{currentMailbox?.[key] ?? 0}</span></button>)}
           </div>
           <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--admin-page-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mail" className={`${adminFieldClass} mt-0 h-10 min-h-10 pl-9`} /></label>
           <p className="text-[10px] text-[var(--admin-page-muted)]">{threads.length} of {totalThreads}</p>
@@ -313,7 +323,7 @@ export function GeneralInbox() {
           <div className="space-y-1.5">{threads.map((thread) => {
             const selected = thread.threadId === selectedThreadId
             const unread = thread.lastInboundAt && !thread.adminReadAt && !thread.archivedAt
-            return <button key={thread.threadId} type="button" onClick={() => { setSelectedThreadId(thread.threadId); setMobileColumn('reader') }} className={`admin-v2-comm-item w-full p-3 text-left ${selected ? 'admin-v2-comm-item--selected' : ''}`}>
+            return <button key={thread.threadId} type="button" disabled={Boolean(composer)} onClick={() => { setSelectedThreadId(thread.threadId); setMobileColumn('reader') }} className={`admin-v2-comm-item w-full p-3 text-left disabled:cursor-default ${selected ? 'admin-v2-comm-item--selected' : ''}`}>
               <div className="flex items-start justify-between gap-3"><p className={`truncate text-sm text-[var(--admin-page-ink)] ${unread ? 'font-bold' : 'font-semibold'}`}>{thread.latestDirection === 'inbound' ? displayAddress(thread.latestFrom) : thread.latestTo.map(displayAddress).join(', ')}</p><time className="shrink-0 text-[10px] text-[var(--admin-page-muted)]">{formatDate(thread.latestMessageAt, true)}</time></div>
               <p className={`mt-1 truncate text-xs text-[var(--admin-page-ink)] ${unread ? 'font-bold' : ''}`}>{thread.subject}</p>
               <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--admin-page-muted)]">{thread.preview || thread.latestState}</p>
@@ -324,8 +334,15 @@ export function GeneralInbox() {
         </div>
       </aside>
 
-      <section className={`${mobileColumn === 'reader' ? 'flex' : 'hidden'} admin-v2-comm-canvas min-h-[38rem] min-w-0 flex-1 flex-col xl:flex xl:min-h-0`}>
-        {detail ? <>
+      <section className={`${composer || mobileColumn === 'reader' ? 'flex' : 'hidden'} admin-v2-comm-canvas min-h-[38rem] min-w-0 flex-1 flex-col xl:flex xl:min-h-0`}>
+        {composer ? <GeneralMailComposer
+          key={`${composer.mode}:${composer.existingDraft?.message_id ?? composer.threadId ?? 'new'}`}
+          mailboxKey={composer.existingDraft?.mailbox_key ?? mailboxKey}
+          mailboxAddress={mailboxAddress}
+          {...composer}
+          onClose={closeComposer}
+          onCommitted={refreshWorkspace}
+        /> : detail ? <>
           <header className="flex shrink-0 items-start gap-2 border-b border-[var(--admin-line)] p-3 sm:p-4">
             <AdminIconButton type="button" onClick={() => setMobileColumn('threads')} title="Back to messages" className="h-9 min-h-9 w-9 basis-9 xl:hidden"><ArrowLeft className="h-4 w-4" /></AdminIconButton>
             <div className="min-w-0 flex-1"><h2 className="truncate text-base font-bold text-[var(--admin-page-ink)]">{detail.subject}</h2><p className="mt-1 text-xs text-[var(--admin-page-muted)]">{detail.messages.length} message{detail.messages.length === 1 ? '' : 's'} / {mailboxAddress}</p></div>
@@ -340,14 +357,13 @@ export function GeneralInbox() {
             footer={message.state === 'draft' || message.state === 'failed' ? <AdminButton type="button" onClick={() => void openDraft(message.messageId)} disabled={actionPending}><FilePenLine className="h-4 w-4" />Edit draft</AdminButton> : null}
           />)}</AdminEmailThread></div>
           <footer className="flex shrink-0 flex-wrap gap-2 border-t border-[var(--admin-line)] p-3 sm:p-4">
-            <AdminButton type="button" onClick={() => setComposer({ mode: 'reply', threadId: detail.threadId, initialTo: latestInbound ? [latestInbound.from] : [], initialSubject: detail.subject })} disabled={!latestInbound}><Reply className="h-4 w-4" />Reply</AdminButton>
-            <AdminButton type="button" onClick={() => setComposer({ mode: 'reply_all', threadId: detail.threadId, initialTo: latestInbound ? [latestInbound.from] : [], initialCc: latestInbound?.cc ?? [], initialSubject: detail.subject })} disabled={!latestInbound}><ReplyAll className="h-4 w-4" />Reply all</AdminButton>
-            <AdminButton type="button" onClick={() => setComposer({ mode: 'forward', initialSubject: `Fwd: ${detail.subject.replace(/^fwd:\s*/i, '')}`, initialBody: latestMessage ? `\n\n---------- Forwarded message ----------\nFrom: ${latestMessage.from}\nDate: ${formatDate(latestMessage.occurredAt)}\nSubject: ${latestMessage.subject}\nTo: ${latestMessage.to.join(', ')}\n\n${latestMessage.bodyText}` : '' })} disabled={!latestMessage}><Forward className="h-4 w-4" />Forward</AdminButton>
+            <AdminButton type="button" onClick={() => openComposer({ mode: 'reply', threadId: detail.threadId, initialTo: latestInbound ? [latestInbound.from] : [], initialSubject: detail.subject })} disabled={!latestInbound}><Reply className="h-4 w-4" />Reply</AdminButton>
+            <AdminButton type="button" onClick={() => openComposer({ mode: 'reply_all', threadId: detail.threadId, initialTo: latestInbound ? [latestInbound.from] : [], initialCc: latestInbound?.cc ?? [], initialSubject: detail.subject })} disabled={!latestInbound}><ReplyAll className="h-4 w-4" />Reply all</AdminButton>
+            <AdminButton type="button" onClick={() => openComposer({ mode: 'forward', initialSubject: `Fwd: ${detail.subject.replace(/^fwd:\s*/i, '')}`, initialBody: latestMessage ? `\n\n---------- Forwarded message ----------\nFrom: ${latestMessage.from}\nDate: ${formatDate(latestMessage.occurredAt)}\nSubject: ${latestMessage.subject}\nTo: ${latestMessage.to.join(', ')}\n\n${latestMessage.bodyText}` : '' })} disabled={!latestMessage}><Forward className="h-4 w-4" />Forward</AdminButton>
           </footer>
         </> : detailLoading ? <div className="flex flex-1 items-center justify-center text-sm text-[var(--admin-page-muted)]"><LoaderCircle className="mr-2 h-5 w-5 animate-spin" />Loading conversation...</div> : <div className="flex flex-1 flex-col items-center justify-center text-sm text-[var(--admin-page-muted)]"><Mail className="mb-3 h-8 w-8" />Select a conversation.</div>}
       </section>
 
-      {composer ? <GeneralMailComposer key={`${composer.mode}:${composer.existingDraft?.message_id ?? composer.threadId ?? 'new'}`} mailboxKey={composer.existingDraft?.mailbox_key ?? mailboxKey} mailboxAddress={mailboxAddress} {...composer} onClose={() => setComposer(null)} onCommitted={refreshWorkspace} /> : null}
     </div>
   )
 }
