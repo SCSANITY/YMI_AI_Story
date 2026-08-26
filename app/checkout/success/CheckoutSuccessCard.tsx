@@ -14,6 +14,8 @@ export type CheckoutSuccessOrder = {
   display_total?: number | null;
   display_currency?: CheckoutCurrency;
   email?: string | null;
+  item_count?: number | null;
+  items?: Array<{ quantity?: number | null }>;
 };
 
 type CheckoutSuccessCardProps = {

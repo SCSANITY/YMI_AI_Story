@@ -4,9 +4,11 @@ import {
   PageViewDeduper,
   buildSafePageView,
   buildTrackingCookieDeletionStrings,
+  countTrackingItems,
   createLocalNavigationKey,
   createTransactionSurrogate,
   redactTrackingPath,
+  resolveTrackingFormat,
   resolveTrackingActivation,
   sanitizeTrackingEvent,
 } from './tracking-policy'
@@ -96,6 +98,14 @@ test('creates a deterministic non-reversible transaction surrogate', async () =>
   assert.match(first ?? '', /^ymi_[a-f0-9]{32}$/)
   assert.equal(first, second)
   assert.notEqual(first, 'raw-order-id')
+})
+
+test('derives only coarse commerce facts from cart items', () => {
+  assert.equal(countTrackingItems([{ quantity: 2 }, { quantity: 1 }]), 3)
+  assert.equal(countTrackingItems([{ quantity: 0 }]), undefined)
+  assert.equal(resolveTrackingFormat([{ bookType: 'digital' }]), 'pdf')
+  assert.equal(resolveTrackingFormat([{ bookType: 'basic' }, { bookType: 'supreme' }]), 'physical')
+  assert.equal(resolveTrackingFormat([{ bookType: 'digital' }, { bookType: 'basic' }]), undefined)
 })
 
 test('deduplicates StrictMode repeats while allowing a new committed navigation', () => {

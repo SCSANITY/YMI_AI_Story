@@ -31,6 +31,11 @@ import {
 
 type Gtag = (...args: unknown[]) => void
 
+type PendingConsentTrackingEvent = {
+  event: SafeTrackingEvent
+  page: SafePageView
+}
+
 declare global {
   interface Window {
     dataLayer?: unknown[][]
@@ -40,6 +45,7 @@ declare global {
 
 const GOOGLE_SCRIPT_ID = 'ymi-google-tag-script'
 const GOOGLE_SCRIPT_BASE = 'https://www.googletagmanager.com/gtag/js'
+const MAX_PENDING_CONSENT_EVENTS = 20
 
 let googleScriptPromise: Promise<void> | null = null
 let googleQueueInitialized = false
@@ -202,6 +208,7 @@ export function ConsentGatedTagAdapter() {
   const pageRef = useRef<SafePageView | null>(null)
   const deduperRef = useRef(new PageViewDeduper())
   const pendingMetaEventsRef = useRef<MetaFrameParentMessage[]>([])
+  const pendingConsentEventsRef = useRef<PendingConsentTrackingEvent[]>([])
 
   const navigationKey = useMemo(
     () => createLocalNavigationKey(pathname, queryString),
@@ -255,6 +262,36 @@ export function ConsentGatedTagAdapter() {
     return true
   }, [isMetaFrameReady])
 
+  const dispatchTrackingEvent = useCallback((
+    event: SafeTrackingEvent,
+    page: SafePageView,
+    currentConsent: CookieConsentPreferences,
+  ) => {
+    const currentActivation = resolveTrackingActivation(currentConsent, {
+      ga4: Boolean(TRACKING_CONFIG.ga4MeasurementId),
+      googleAds: Boolean(TRACKING_CONFIG.googleAdsId),
+      meta: Boolean(TRACKING_CONFIG.metaPixelId),
+    })
+
+    if (currentActivation.googleAnalytics) {
+      void prepareGoogle(currentConsent)
+        .then((ready) => {
+          if (ready) sendGoogleEvent(event, page)
+        })
+        .catch(() => null)
+    }
+
+    if (currentActivation.meta) {
+      const message: MetaFrameParentMessage = {
+        type: META_FRAME_EVENT_MESSAGE,
+        event,
+        page_path: page.page_path,
+        page_title: page.page_title,
+      }
+      if (!postToMetaFrame(message)) pendingMetaEventsRef.current.push(message)
+    }
+  }, [postToMetaFrame])
+
   useEffect(() => {
     const handleMetaReady = (event: MessageEvent<MetaFrameReadyMessage>) => {
       if (
@@ -292,6 +329,15 @@ export function ConsentGatedTagAdapter() {
     }
 
   }, [consent])
+
+  useEffect(() => {
+    if (!consent) return
+
+    const pendingConsentEvents = pendingConsentEventsRef.current.splice(0)
+    for (const pending of pendingConsentEvents) {
+      dispatchTrackingEvent(pending.event, pending.page, consent)
+    }
+  }, [consent, dispatchTrackingEvent])
 
   useEffect(() => {
     if (!consent || !isMetaFrameReady) return
@@ -347,36 +393,22 @@ export function ConsentGatedTagAdapter() {
       const event = sanitizeTrackingEvent(detail?.name, detail?.payload)
       const currentConsent = consentRef.current
       const currentPage = pageRef.current
-      if (!event || !currentConsent || !currentPage) return
+      if (!event || !currentPage) return
 
-      const currentActivation = resolveTrackingActivation(currentConsent, {
-        ga4: Boolean(TRACKING_CONFIG.ga4MeasurementId),
-        googleAds: Boolean(TRACKING_CONFIG.googleAdsId),
-        meta: Boolean(TRACKING_CONFIG.metaPixelId),
-      })
-
-      if (currentActivation.googleAnalytics) {
-        void prepareGoogle(currentConsent)
-          .then((ready) => {
-            if (ready) sendGoogleEvent(event, currentPage)
-          })
-          .catch(() => null)
-      }
-
-      if (currentActivation.meta) {
-        const message: MetaFrameParentMessage = {
-          type: META_FRAME_EVENT_MESSAGE,
-          event,
-          page_path: currentPage.page_path,
-          page_title: currentPage.page_title,
+      if (!currentConsent) {
+        if (pendingConsentEventsRef.current.length >= MAX_PENDING_CONSENT_EVENTS) {
+          pendingConsentEventsRef.current.shift()
         }
-        if (!postToMetaFrame(message)) pendingMetaEventsRef.current.push(message)
+        pendingConsentEventsRef.current.push({ event, page: currentPage })
+        return
       }
+
+      dispatchTrackingEvent(event, currentPage, currentConsent)
     }
 
     window.addEventListener(YMI_TRACKING_EVENT, handleTrackingEvent)
     return () => window.removeEventListener(YMI_TRACKING_EVENT, handleTrackingEvent)
-  }, [postToMetaFrame])
+  }, [dispatchTrackingEvent])
 
   if (!hasMetaStarted) return null
 

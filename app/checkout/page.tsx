@@ -16,6 +16,7 @@ import { MobilePaymentBar, PaymentActions } from './PaymentActions';
 import { useI18n } from '@/lib/useI18n';
 import {
   CheckoutCurrency,
+  convertUsdToCurrency,
   formatCurrencyAmount,
   toChargeCurrency,
 } from '@/lib/locale-pricing';
@@ -23,6 +24,11 @@ import { fetchPublishedLegalContentSnapshot } from '@/lib/published-legal-conten
 import type { PublishedLegalContentSnapshot } from '@/lib/published-legal-content-core';
 import { canEnterCustomize } from '@/lib/customize-access-client';
 import type { CartItem } from '@/types';
+import {
+  countTrackingItems,
+  emitYmiTrackingEvent,
+  resolveTrackingFormat,
+} from '@/lib/tracking-policy';
 
 const CheckoutIdentityModal = dynamic(
   () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
@@ -165,6 +171,7 @@ function CheckoutPageContent() {
   const [isIdentityRequesting, setIsIdentityRequesting] = useState(false);
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const checkoutInitRef = useRef(false);
+  const trackedCheckoutOrderIdsRef = useRef<Set<string>>(new Set());
   const shippingDiscountRefreshKeyRef = useRef('');
   const isPlacingOrderRef = useRef(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -1228,6 +1235,28 @@ function CheckoutPageContent() {
       }
     })();
   }, [items, checkoutStarted, orderId, startCheckoutForItems]);
+
+  useEffect(() => {
+    if (!checkoutStarted || !orderId || items.length === 0) return;
+    if (trackedCheckoutOrderIdsRef.current.has(orderId)) return;
+
+    const trackingItems = items.map((item) => ({
+      quantity: item.quantity ?? 1,
+      bookType: item.personalization?.bookType,
+    }));
+    const itemCount = countTrackingItems(trackingItems);
+    const format = resolveTrackingFormat(trackingItems);
+    const checkoutValue = convertUsdToCurrency(total, selectedCurrency);
+    const hasCheckoutValue = Number.isFinite(checkoutValue) && checkoutValue >= 0;
+    const payload = {
+      ...(itemCount ? { item_count: itemCount } : {}),
+      ...(format ? { format } : {}),
+      ...(hasCheckoutValue ? { currency: selectedCurrency, value: checkoutValue } : {}),
+    };
+
+    trackedCheckoutOrderIdsRef.current.add(orderId);
+    emitYmiTrackingEvent('begin_checkout', payload);
+  }, [checkoutStarted, items, orderId, selectedCurrency, total]);
 
   const isPaymentStep = step === 'payment';
   const shouldShowMobilePaymentBar = isPaymentStep;

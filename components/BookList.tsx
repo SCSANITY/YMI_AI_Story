@@ -15,6 +15,7 @@ import {
   parseStoryTypes,
 } from '@/lib/book-catalog';
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
+import { emitYmiTrackingEvent } from '@/lib/tracking-policy';
 
 const FILTER_BAR_TOP_OFFSET = 72;
 
@@ -102,7 +103,7 @@ export const BookList: React.FC<BookListProps> = ({ initialGenderQuery = null })
   const initialGender = normalizeGenderQueryValue(initialGenderQuery);
   const { toggleFavorite, favorites } = useGlobalContext();
   const { t } = useI18n();
-  const { books, hasResolved: hasCatalogResolved } = useBookCatalog();
+  const { books, hasResolved: hasCatalogResolved, error: catalogError } = useBookCatalog();
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
 
   // Filter States
@@ -123,6 +124,13 @@ export const BookList: React.FC<BookListProps> = ({ initialGenderQuery = null })
     top: FILTER_BAR_TOP_OFFSET,
     width: 0,
   });
+  const catalogViewTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasCatalogResolved || catalogError || catalogViewTrackedRef.current) return;
+    catalogViewTrackedRef.current = true;
+    emitYmiTrackingEvent('view_catalog');
+  }, [catalogError, hasCatalogResolved]);
   
 
   // Derive unique options from active templates.

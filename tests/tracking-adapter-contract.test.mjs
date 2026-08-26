@@ -32,6 +32,16 @@ test('consent remains unresolved until the current stored version is positively 
   assert.match(consent, /dispatchEvent\(new CustomEvent<CookieConsentPreferences>/)
 })
 
+test('funnel events wait in memory for consent resolution and are then flushed or discarded', async () => {
+  const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
+
+  assert.match(adapter, /pendingConsentEventsRef = useRef<PendingConsentTrackingEvent\[]>\(\[]\)/)
+  assert.match(adapter, /if \(!currentConsent\) \{[\s\S]*pendingConsentEventsRef\.current\.push\(\{ event, page: currentPage \}\)[\s\S]*return/)
+  assert.match(adapter, /if \(!consent\) return[\s\S]*pendingConsentEventsRef\.current\.splice\(0\)[\s\S]*dispatchTrackingEvent\(pending\.event, pending\.page, consent\)/)
+  assert.match(adapter, /MAX_PENDING_CONSENT_EVENTS = 20/)
+  assert.doesNotMatch(adapter, /if \(!event \|\| !currentConsent \|\| !currentPage\) return/)
+})
+
 test('Google disables automatic page views and receives only explicit safe page metadata', async () => {
   const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
   const policy = await read('src/lib/tracking-policy.ts')

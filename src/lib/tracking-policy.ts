@@ -18,6 +18,11 @@ export type TrackingEventPayload = {
   transaction_id?: string
 }
 
+type TrackingCommerceItem = {
+  quantity?: unknown
+  bookType?: unknown
+}
+
 export type SafeTrackingEvent = {
   name: AllowedTrackingEventName
   payload: TrackingEventPayload
@@ -236,6 +241,34 @@ export function sanitizeTrackingEvent(
   if (eventName === 'purchase' && !payload.transaction_id) return null
 
   return { name: eventName, payload }
+}
+
+export function countTrackingItems(items: TrackingCommerceItem[]): number | undefined {
+  if (!Array.isArray(items) || items.length === 0) return undefined
+
+  let total = 0
+  for (const item of items) {
+    const quantity = item?.quantity ?? 1
+    if (!Number.isInteger(quantity) || Number(quantity) <= 0) return undefined
+    total += Number(quantity)
+  }
+
+  return total > 0 && total <= 100 ? total : undefined
+}
+
+export function resolveTrackingFormat(
+  items: TrackingCommerceItem[],
+): TrackingEventPayload['format'] | undefined {
+  if (!Array.isArray(items) || items.length === 0) return undefined
+
+  const formats = new Set<'pdf' | 'physical'>()
+  for (const item of items) {
+    const bookType = String(item?.bookType ?? '').trim().toLowerCase()
+    if (!bookType) return undefined
+    formats.add(bookType === 'digital' ? 'pdf' : 'physical')
+  }
+
+  return formats.size === 1 ? formats.values().next().value : undefined
 }
 
 export async function createTransactionSurrogate(rawOrderId: string): Promise<string | null> {

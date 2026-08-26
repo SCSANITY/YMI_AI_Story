@@ -58,6 +58,7 @@ import {
   resolvePreviewDisplayAssets,
   type PreviewDisplayAssets,
 } from '@/lib/preview-book-presentation';
+import { emitYmiTrackingEvent, resolveTrackingFormat } from '@/lib/tracking-policy';
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
 
@@ -310,6 +311,20 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const facePrepareStatusRef = useRef<FacePrepareStatus>(facePrepareStatus);
   const facePrepareErrorRef = useRef<string | null>(facePrepareError);
   const dataGenerationConsentRef = useRef(false);
+  const personalizationStartTrackedRef = useRef(false);
+  const previewReadyTrackedJobIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!book || viewMode === 'preview' || stage !== 'FORM' || personalizationStartTrackedRef.current) return;
+    personalizationStartTrackedRef.current = true;
+    emitYmiTrackingEvent('start_personalization');
+  }, [book, stage, viewMode]);
+
+  const trackPreviewReady = useCallback((jobId: string) => {
+    if (!jobId || previewReadyTrackedJobIdsRef.current.has(jobId)) return;
+    previewReadyTrackedJobIdsRef.current.add(jobId);
+    emitYmiTrackingEvent('preview_ready');
+  }, []);
 
   useEffect(() => {
     photoRef.current = photo;
@@ -1458,7 +1473,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             try {
               const previewAssets = await loadAllReadyPreviewAssets(created.jobId)
               if (!isActive) return
-              applyPreviewDisplayAssets(previewAssets)
+              if (applyPreviewDisplayAssets(previewAssets)) {
+                trackPreviewReady(created.jobId)
+              }
             } catch {
               if (!isActive) return
               setPreviewError('Preview is ready but images failed to load. Please refresh.')
@@ -1475,15 +1492,17 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             if (partialPreviewAssets?.coverUrl) {
               partialPreviewShown = true
               if (!isActive) return
-              applyPreviewDisplayAssets(partialPreviewAssets)
-              replacePreviewUrl(created.creationId, created.jobId)
-              setProgress(100)
-              markGenerateTiming('partial_preview_ready', {
-                jobId: created.jobId,
-                pages: partialPreviewAssets.urls.length,
-              })
-              finishGenerating()
-              return
+              if (applyPreviewDisplayAssets(partialPreviewAssets)) {
+                trackPreviewReady(created.jobId)
+                replacePreviewUrl(created.creationId, created.jobId)
+                setProgress(100)
+                markGenerateTiming('partial_preview_ready', {
+                  jobId: created.jobId,
+                  pages: partialPreviewAssets.urls.length,
+                })
+                finishGenerating()
+                return
+              }
             }
           }
 
@@ -1524,7 +1543,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType, trackPreviewReady]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -2344,6 +2363,13 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         undefined,
         previewUrl || previewPages[0] || undefined
     )
+
+    if (item) {
+      const format = resolveTrackingFormat([
+        { bookType: item.personalization?.bookType ?? bookType },
+      ]);
+      emitYmiTrackingEvent('add_to_cart', format ? { format } : {});
+    }
 
     return item ?? null;
     }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, flowStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample, commitSelectedPreviewForExit]);
