@@ -736,6 +736,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const updatedItem: CartItem = {
           ...existingItem,
           book: previewCoverUrl ? bookWithPreview : existingItem.book,
+          coverStatus: previewCoverUrl ? 'ready' : existingItem.coverStatus ?? 'pending',
           personalization: personalization
             ? ({ ...existingItem.personalization, ...personalization, creationId } as PersonalizationData)
             : ({ ...existingItem.personalization, creationId } as PersonalizationData),
@@ -781,6 +782,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const updatedItem: CartItem = {
           ...resumeData,
           book: previewCoverUrl ? bookWithPreview : resumeData.book,
+          coverStatus: previewCoverUrl ? 'ready' : resumeData.coverStatus ?? 'pending',
           personalization: personalization
             ? ({ ...resumeData.personalization, ...personalization, creationId } as PersonalizationData)
             : ({ ...resumeData.personalization, creationId } as PersonalizationData),
@@ -843,6 +845,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         bookID: book.bookID,
         quantity: 1,
         book: bookWithPreview,
+        coverStatus: previewCoverUrl ? 'ready' : 'pending',
         personalization: nextPersonalization,
         savedStep: step,
         priceAtPurchase,

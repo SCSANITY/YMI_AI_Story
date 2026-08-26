@@ -7,6 +7,10 @@ import { Button } from '@/components/Button'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
 import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title'
+import {
+  resolveCartItemPreviewCover,
+  resolveCartItemPreviewCoverStatus,
+} from '@/lib/cart-cover'
 import { useI18n } from '@/lib/useI18n'
 import type { CartItem, DisplayCurrency } from '@/types'
 
@@ -211,8 +215,8 @@ function MiniCartComponent({
               <div key={item.id} className="flex gap-3 border-b border-slate-100 py-3 last:border-b-0">
                 <OrderCoverImage
                   cartItemId={item.id}
-                  src={item.book.coverUrl}
-                  status={item.coverStatus}
+                  src={resolveCartItemPreviewCover(item)}
+                  status={resolveCartItemPreviewCoverStatus(item)}
                   alt={displayTitle}
                   sizes="48px"
                   className="h-16 w-12 shrink-0 rounded-md"

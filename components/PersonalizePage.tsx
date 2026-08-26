@@ -2491,14 +2491,24 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
             const authoritativeItem = Array.isArray(data?.items) ? data.items[0] : null
             const authoritativePrice = Number(authoritativeItem?.priceAtPurchase)
             if (!Number.isFinite(authoritativePrice) || authoritativePrice <= 0) return
+            const checkoutPreviewCoverUrl = String(
+              previewUrl || previewPages[0] || ''
+            ).trim()
+            const checkoutBook = {
+              ...(existingItem?.book ?? resolvedBook),
+              coverUrl: checkoutPreviewCoverUrl,
+            }
             const checkoutItem = existingItem ? {
               ...existingItem,
+              book: checkoutBook,
+              coverStatus: checkoutPreviewCoverUrl ? 'ready' as const : 'pending' as const,
               priceAtPurchase: authoritativePrice,
             } : {
               id: cartItemId,
               bookID: resolvedBook.bookID,
               quantity,
-              book: resolvedBook,
+              book: checkoutBook,
+              coverStatus: checkoutPreviewCoverUrl ? 'ready' as const : 'pending' as const,
               personalization,
               savedStep: flowStep,
               priceAtPurchase: authoritativePrice,
@@ -2513,7 +2523,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, commitSelectedPreviewForExit]);
+    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, creationId, creationIdParam, resolveCreationId, flowStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, commitSelectedPreviewForExit, previewPages, previewUrl]);
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;

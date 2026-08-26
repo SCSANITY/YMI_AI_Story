@@ -30,6 +30,10 @@ import {
   resolveTrackingFormat,
 } from '@/lib/tracking-policy';
 import { removeCheckoutPaymentResumeStep } from '@/lib/checkout-step-navigation';
+import {
+  resolveCartItemPreviewCover,
+  resolveCartItemPreviewCoverStatus,
+} from '@/lib/cart-cover';
 
 const CheckoutIdentityModal = dynamic(
   () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
@@ -179,13 +183,8 @@ function CheckoutPageContent() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const stripeCheckoutEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
   const skipIdentityVerification = Boolean(user?.email);
-  const resolveCheckoutItemCoverUrl = useCallback((item: (typeof items)[number]) => {
-    const itemCoverUrl = String(item.book?.coverUrl || '').trim();
-    return itemCoverUrl || null;
-  }, []);
-  const resolveCheckoutItemCoverStatus = useCallback((item: (typeof items)[number]) => {
-    return item.coverStatus ?? (resolveCheckoutItemCoverUrl(item) ? 'ready' : 'pending');
-  }, [resolveCheckoutItemCoverUrl]);
+  const resolveCheckoutItemCoverUrl = resolveCartItemPreviewCover;
+  const resolveCheckoutItemCoverStatus = resolveCartItemPreviewCoverStatus;
 
   useEffect(() => {
     if (!openPolicyModal) return;

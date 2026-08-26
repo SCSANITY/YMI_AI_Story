@@ -6,6 +6,10 @@ import { Button } from '@/components/Button';
 import OrderCoverImage from '@/components/OrderCoverImage';
 import { formatDisplayCurrency } from '@/lib/locale-pricing';
 import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title';
+import {
+  resolveCartItemPreviewCover,
+  resolveCartItemPreviewCoverStatus,
+} from '@/lib/cart-cover';
 import type { CartItem, DisplayCurrency } from '@/types';
 
 type CartItemsListProps = {
@@ -89,8 +93,8 @@ const CartItemCard = memo(function CartItemCard({
         <span className="relative block h-28 w-20 sm:h-32 sm:w-24 overflow-hidden rounded-xl bg-amber-50 shadow-sm">
           <OrderCoverImage
             cartItemId={item.id}
-            src={item.book.coverUrl}
-            status={item.coverStatus}
+            src={resolveCartItemPreviewCover(item)}
+            status={resolveCartItemPreviewCoverStatus(item)}
             alt={displayTitle}
             sizes="(max-width: 640px) 80px, 96px"
             className="h-full w-full"
