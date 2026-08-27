@@ -1,4 +1,9 @@
-export const SIGNATURE_VOICE_CONSENT_VERSION = 'signature-voice-consent-v1'
+export const SIGNATURE_VOICE_ADULT_CONSENT_VERSION = 'signature-voice-consent-v1'
+export const SIGNATURE_VOICE_CONSENT_VERSION = 'signature-voice-consent-v2'
+export const SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS = [
+  SIGNATURE_VOICE_ADULT_CONSENT_VERSION,
+  SIGNATURE_VOICE_CONSENT_VERSION,
+] as const
 export const SIGNATURE_VOICE_MIN_SAMPLE_SECONDS = 10
 export const SIGNATURE_VOICE_MAX_SAMPLE_SECONDS = 20
 
@@ -16,11 +21,17 @@ export const SIGNATURE_VOICE_SUBJECT_RELATIONSHIPS = [
 export type SignatureVoiceSubjectRelationship =
   (typeof SIGNATURE_VOICE_SUBJECT_RELATIONSHIPS)[number]
 
+export const SIGNATURE_VOICE_SPEAKER_KINDS = ['current_child', 'adult'] as const
+export type SignatureVoiceSpeakerKind = (typeof SIGNATURE_VOICE_SPEAKER_KINDS)[number]
+
+export type SignatureVoiceCaptureAuthorization = {
+  accepted: true
+  version: typeof SIGNATURE_VOICE_CONSENT_VERSION
+  speakerKind: SignatureVoiceSpeakerKind
+}
+
 export type SignatureVoiceBindingRequest = {
   assetId: string
-  consentVersion: typeof SIGNATURE_VOICE_CONSENT_VERSION
-  subjectName: string
-  subjectRelationship: SignatureVoiceSubjectRelationship
 }
 
 type VoiceBindingCreation = {
@@ -61,43 +72,41 @@ export function parseSignatureVoiceBindingRequest(value: unknown): SignatureVoic
     throw new SignatureVoiceContractError('Signature Voice binding is required')
   }
   const binding = value as Record<string, unknown>
-  if (!hasExactKeys(binding, ['asset_id', 'consent', 'subject_name', 'subject_relationship'])) {
+  if (!hasExactKeys(binding, ['asset_id'])) {
     throw new SignatureVoiceContractError('Signature Voice binding fields are invalid')
-  }
-
-  const consent = binding.consent
-  if (!consent || typeof consent !== 'object' || Array.isArray(consent)) {
-    throw new SignatureVoiceContractError('Signature Voice consent is required')
-  }
-  const consentRecord = consent as Record<string, unknown>
-  if (!hasExactKeys(consentRecord, ['accepted', 'version'])) {
-    throw new SignatureVoiceContractError('Signature Voice consent fields are invalid')
-  }
-  if (
-    consentRecord.accepted !== true
-    || consentRecord.version !== SIGNATURE_VOICE_CONSENT_VERSION
-  ) {
-    throw new SignatureVoiceContractError('Signature Voice consent is missing or unsupported')
   }
 
   const assetId = requiredString(binding.asset_id)
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assetId)) {
     throw new SignatureVoiceContractError('Signature Voice asset ID is invalid')
   }
-  const subjectName = requiredString(binding.subject_name)
-  if (!subjectName || subjectName.length > 120) {
-    throw new SignatureVoiceContractError('Signature Voice subject declaration is invalid')
-  }
-  const subjectRelationship = requiredString(binding.subject_relationship)
-  if (!SIGNATURE_VOICE_SUBJECT_RELATIONSHIPS.includes(subjectRelationship as SignatureVoiceSubjectRelationship)) {
-    throw new SignatureVoiceContractError('Signature Voice subject relationship is invalid')
-  }
+  return { assetId }
+}
 
+export function parseSignatureVoiceCaptureAuthorization(
+  value: unknown
+): SignatureVoiceCaptureAuthorization {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new SignatureVoiceContractError('Signature Voice authorization is required')
+  }
+  const authorization = value as Record<string, unknown>
+  if (!hasExactKeys(authorization, ['accepted', 'speaker_kind', 'version'])) {
+    throw new SignatureVoiceContractError('Signature Voice authorization fields are invalid')
+  }
+  if (
+    authorization.accepted !== true
+    || authorization.version !== SIGNATURE_VOICE_CONSENT_VERSION
+  ) {
+    throw new SignatureVoiceContractError('Signature Voice authorization is missing or unsupported')
+  }
+  const speakerKind = requiredString(authorization.speaker_kind)
+  if (!SIGNATURE_VOICE_SPEAKER_KINDS.includes(speakerKind as SignatureVoiceSpeakerKind)) {
+    throw new SignatureVoiceContractError('Signature Voice narrator is invalid')
+  }
   return {
-    assetId,
-    consentVersion: SIGNATURE_VOICE_CONSENT_VERSION,
-    subjectName,
-    subjectRelationship: subjectRelationship as SignatureVoiceSubjectRelationship,
+    accepted: true,
+    version: SIGNATURE_VOICE_CONSENT_VERSION,
+    speakerKind: speakerKind as SignatureVoiceSpeakerKind,
   }
 }
 
@@ -132,7 +141,9 @@ export function assertSignatureVoicePurchaseBinding(
     throw new SignatureVoiceContractError('Signature Voice recording duration is invalid')
   }
 
-  if (requiredString(creation.voice_consent_version) !== SIGNATURE_VOICE_CONSENT_VERSION) {
+  if (!SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS.includes(
+    requiredString(creation.voice_consent_version) as (typeof SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS)[number]
+  )) {
     throw new SignatureVoiceContractError('Signature Voice consent is missing or unsupported')
   }
 

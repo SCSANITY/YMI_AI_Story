@@ -65,7 +65,7 @@ test('the new disclosure version re-prompts users and names providers in Cookie 
   assert.match(messages, /Allows Google Ads measurement and Meta Pixel/)
   assert.match(messages, /They stay off unless you allow them/)
   assert.match(legalDocuments, /effectiveDate: 'August 27, 2026'/)
-  assert.match(legalDocuments, /version: '2026-08-27'/)
+  assert.match(legalDocuments, /version: '2026-08-27-v2'/)
   assert.match(publishedLoader, /privacy: 'August 27, 2026'/)
   assert.match(footer, /publishedLegalContent\?\.footerEffectiveDates/)
 })

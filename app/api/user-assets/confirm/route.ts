@@ -20,6 +20,17 @@ export const runtime = 'nodejs'
 
 const MAX_FACE_IMAGES = 8
 
+type ConfirmedSignatureVoiceAsset = {
+  out_asset_id: string
+  out_owner_type: string
+  out_anon_session_id: string | null
+  out_customer_id: string | null
+  out_asset_type: string
+  out_storage_path: string
+  out_metadata: Record<string, unknown>
+  out_created_at: string
+}
+
 function normalizeClientVoiceQuality(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const quality = value as Record<string, unknown>
@@ -48,6 +59,7 @@ export async function POST(request: Request) {
   const originalName = body?.original_name || body?.originalName || null
   const contentType = body?.content_type || body?.contentType || null
   const sizeBytes = body?.size_bytes ?? body?.sizeBytes
+  const voiceAuthorizationId = body?.voice_authorization_id || body?.voiceAuthorizationId || null
   const clientMetadata = body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
     ? body.metadata
     : null
@@ -130,32 +142,70 @@ export async function POST(request: Request) {
     )
   }
 
-  const { data: asset, error: assetError } = await supabaseAdmin
-    .from('user_assets')
-    .insert({
-      asset_id: assetId,
-      owner_type: filter.owner_type,
-      anon_session_id: owner.ownerType === 'anon' ? anonSessionId : null,
-      customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
-      asset_type: assetType,
-      storage_path: storagePath,
-      metadata: {
-        role,
-        original_name: originalName,
-        created_for: createdFor,
-        source,
-        content_type: verifiedUpload.contentType,
-        size_bytes: verifiedUpload.sizeBytes,
-        ...(verifiedVoiceDuration !== null
-          ? {
-              duration_seconds: verifiedVoiceDuration,
-              client_quality: normalizeClientVoiceQuality(clientMetadata?.quality),
-            }
-          : {}),
-      },
-    })
-    .select()
-    .single()
+  const verifiedMetadata = {
+    role,
+    original_name: originalName,
+    created_for: createdFor,
+    source,
+    content_type: verifiedUpload.contentType,
+    size_bytes: verifiedUpload.sizeBytes,
+    ...(verifiedVoiceDuration !== null
+      ? {
+          duration_seconds: verifiedVoiceDuration,
+          client_quality: normalizeClientVoiceQuality(clientMetadata?.quality),
+        }
+      : {}),
+  }
+
+  let asset: Record<string, unknown> | null = null
+  let assetError: { message?: string } | null = null
+  if (assetType === 'voice_sample') {
+    if (!voiceAuthorizationId || typeof voiceAuthorizationId !== 'string') {
+      await supabaseAdmin.storage.from('raw-private').remove([storagePath]).catch(() => undefined)
+      return NextResponse.json({ error: 'Signature Voice authorization is required' }, { status: 400 })
+    }
+    const confirmation = await supabaseAdmin
+      .rpc('confirm_signature_voice_capture', {
+        p_authorization_id: voiceAuthorizationId,
+        p_asset_id: assetId,
+        p_owner_type: filter.owner_type,
+        p_anon_session_id: owner.ownerType === 'anon' ? anonSessionId : null,
+        p_customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
+        p_storage_path: storagePath,
+        p_metadata: verifiedMetadata,
+      })
+      .single()
+    assetError = confirmation.error
+    const confirmedAsset = confirmation.data as ConfirmedSignatureVoiceAsset | null
+    if (confirmedAsset) {
+      asset = {
+        asset_id: confirmedAsset.out_asset_id,
+        owner_type: confirmedAsset.out_owner_type,
+        anon_session_id: confirmedAsset.out_anon_session_id,
+        customer_id: confirmedAsset.out_customer_id,
+        asset_type: confirmedAsset.out_asset_type,
+        storage_path: confirmedAsset.out_storage_path,
+        metadata: confirmedAsset.out_metadata,
+        created_at: confirmedAsset.out_created_at,
+      }
+    }
+  } else {
+    const confirmation = await supabaseAdmin
+      .from('user_assets')
+      .insert({
+        asset_id: assetId,
+        owner_type: filter.owner_type,
+        anon_session_id: owner.ownerType === 'anon' ? anonSessionId : null,
+        customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
+        asset_type: assetType,
+        storage_path: storagePath,
+        metadata: verifiedMetadata,
+      })
+      .select()
+      .single()
+    asset = confirmation.data
+    assetError = confirmation.error
+  }
 
   if (assetError || !asset) {
     return NextResponse.json({ error: 'Failed to record asset' }, { status: 500 })

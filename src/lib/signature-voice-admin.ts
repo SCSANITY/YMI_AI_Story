@@ -163,7 +163,7 @@ export function parseSignatureVoiceTriageRequest(value: unknown) {
   const technicalStatus = triageStatus(input.technicalStatus, 'Technical status')
   const adultDeclarationStatus = triageStatus(
     input.adultDeclarationStatus,
-    'Adult declaration status'
+    'Authorization review status'
   )
   const expectedUpdatedAt = input.expectedUpdatedAt === null
     ? null
@@ -179,7 +179,7 @@ export function parseSignatureVoiceTriageRequest(value: unknown) {
     adultDeclarationReason: optionalReason(
       input.adultDeclarationReason,
       adultDeclarationStatus,
-      'Adult declaration reason'
+      'Authorization review reason'
     ),
   }
 }

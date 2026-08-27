@@ -231,7 +231,25 @@ export async function POST(request) {
       ) {
         throw new SignatureVoiceContractError('Signature Voice recording duration is invalid')
       }
-      voiceBinding = { ...requestedBinding, durationSeconds }
+      const { data: voiceAuthorization, error: voiceAuthorizationError } = await supabaseAdmin
+        .from('signature_voice_capture_authorizations')
+        .select('authorization_id, consent_version, speaker_kind, accepted_at, confirmed_at')
+        .eq('confirmed_asset_id', requestedBinding.assetId)
+        .eq('owner_type', voiceOwnerFilter.owner_type)
+        .eq(voiceOwnerFilter.column, voiceOwnerFilter.value)
+        .eq('consent_version', 'signature-voice-consent-v2')
+        .not('confirmed_at', 'is', null)
+        .maybeSingle()
+
+      if (voiceAuthorizationError || !voiceAuthorization?.authorization_id) {
+        throw new SignatureVoiceContractError(
+          'Please save this recording again after accepting the Signature Voice authorization'
+        )
+      }
+      voiceBinding = {
+        assetId: requestedBinding.assetId,
+        authorizationId: voiceAuthorization.authorization_id,
+      }
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : 'Signature Voice binding is invalid' },
@@ -320,10 +338,11 @@ export async function POST(request) {
         p_story_language: storyLanguage,
         p_selected_book_type: selectedBookType,
         p_voice_asset_id: voiceBinding?.assetId ?? null,
-        p_voice_sample_duration_seconds: voiceBinding?.durationSeconds ?? null,
-        p_voice_consent_version: voiceBinding?.consentVersion ?? null,
-        p_voice_subject_name: voiceBinding?.subjectName ?? null,
-        p_voice_subject_relationship: voiceBinding?.subjectRelationship ?? null,
+        p_voice_sample_duration_seconds: null,
+        p_voice_consent_version: null,
+        p_voice_subject_name: null,
+        p_voice_subject_relationship: null,
+        p_voice_authorization_id: voiceBinding?.authorizationId ?? null,
       })
       .single(),
     saveTextProfile({

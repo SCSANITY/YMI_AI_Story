@@ -1,7 +1,6 @@
 import { isUuid } from '@/lib/validators'
 import type { PendingUserAssetUpload } from '@/services/assets'
 import { parseSignedPreviewAssets, type SignedPreviewAssets } from '@/lib/preview-page-contract'
-import type { SignatureVoiceSubjectRelationship } from '@/lib/signature-voice'
 
 export interface JobRecord {
   job_id: string
@@ -37,12 +36,6 @@ export type CreatePreviewVariantResult = {
 
 export type CreatePreviewVoiceBinding = {
   assetId: string
-  consent: {
-    accepted: true
-    version: 'signature-voice-consent-v1'
-  }
-  subjectName: string
-  subjectRelationship: SignatureVoiceSubjectRelationship
 }
 
 export type CommitPreviewVariantInput = {
@@ -127,9 +120,6 @@ export async function createPreviewJob(
       voice_binding: voiceBinding
         ? {
             asset_id: voiceBinding.assetId,
-            consent: voiceBinding.consent,
-            subject_name: voiceBinding.subjectName,
-            subject_relationship: voiceBinding.subjectRelationship,
           }
         : null,
     }),

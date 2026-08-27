@@ -57,10 +57,13 @@ export async function GET(request: Request) {
   const voices = assetRows.filter((row) => {
     if (row.asset_type !== 'voice_sample' || !row.storage_path) return false
     if (!row.metadata || typeof row.metadata !== 'object' || Array.isArray(row.metadata)) return false
-    const duration = Number((row.metadata as Record<string, unknown>).duration_seconds)
+    const metadata = row.metadata as Record<string, unknown>
+    const duration = Number(metadata.duration_seconds)
     return Number.isFinite(duration)
       && duration >= SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
       && duration <= SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
+      && metadata.consent_version === 'signature-voice-consent-v2'
+      && (metadata.speaker_kind === 'current_child' || metadata.speaker_kind === 'adult')
   }).slice(0, 5)
 
   const facesWithUrls = await Promise.all(

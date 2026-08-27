@@ -8,6 +8,7 @@ import { ChildDetailsFields, type RecentProfileItem } from '@/components/persona
 import { StoryLanguageSelector } from '@/components/personalize/StoryLanguageSelector'
 import { BookPackageSelector, type PersonalizeBookType } from '@/components/personalize/BookPackageSelector'
 import type { StoryLanguage } from '@/types'
+import type { SignatureVoiceSpeakerKind } from '@/lib/signature-voice'
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed'
 
@@ -17,6 +18,7 @@ type VoiceUploadResult = {
   signedUrl?: string | null
   playbackUrl?: string | null
   durationSeconds: number
+  speakerKind: SignatureVoiceSpeakerKind
 }
 
 const VoiceRecorderPanel = dynamic(
@@ -100,6 +102,8 @@ type CustomizeFormFieldsProps = {
   requiresVoiceSample: boolean
   voicePanelRef: RefObject<HTMLDivElement | null>
   voiceCustomerId?: string
+  voiceChildName: string
+  voiceSpeakerKind?: SignatureVoiceSpeakerKind | null
   voiceAssetId: string | null
   voiceStoragePath: string | null
   voicePlaybackUrl: string | null
@@ -141,6 +145,8 @@ function CustomizeFormFieldsComponent({
   requiresVoiceSample,
   voicePanelRef,
   voiceCustomerId,
+  voiceChildName,
+  voiceSpeakerKind,
   voiceAssetId,
   voiceStoragePath,
   voicePlaybackUrl,
@@ -197,6 +203,8 @@ function CustomizeFormFieldsComponent({
         <div ref={voicePanelRef}>
           <VoiceRecorderPanel
             customerId={voiceCustomerId}
+            childName={voiceChildName}
+            existingSpeakerKind={voiceSpeakerKind}
             existingAssetId={voiceAssetId}
             existingStoragePath={voiceStoragePath}
             existingSignedUrl={voicePlaybackUrl}

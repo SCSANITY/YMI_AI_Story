@@ -12,11 +12,20 @@ import {
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
 import { resolveGuestOtpClientIp } from '@/lib/guest-otp'
+import {
+  parseSignatureVoiceCaptureAuthorization,
+  SignatureVoiceContractError,
+} from '@/lib/signature-voice'
 
 const ROLE_BY_ASSET_TYPE: Record<UploadableUserAssetType, string> = {
   face_image: 'face',
   voice_sample: 'voice',
   profile_avatar: 'avatar',
+}
+
+type SignatureVoiceAuthorizationReservation = {
+  out_authorization_id: string
+  out_accepted_at: string
 }
 
 function rateLimitKey(scope: string, value: string, secret: string) {
@@ -49,6 +58,7 @@ export async function POST(request: Request) {
   const fileName = body?.file_name || body?.fileName
   const contentType = body?.content_type || body?.contentType || 'application/octet-stream'
   const sizeBytes = body?.size_bytes ?? body?.sizeBytes
+  let voiceAuthorization: ReturnType<typeof parseSignatureVoiceCaptureAuthorization> | null = null
 
   if (!assetType || typeof assetType !== 'string') {
     return NextResponse.json({ error: 'Asset type is required' }, { status: 400 })
@@ -64,6 +74,16 @@ export async function POST(request: Request) {
   }
   if (ROLE_BY_ASSET_TYPE[assetType] !== role) {
     return NextResponse.json({ error: 'Upload role does not match asset type' }, { status: 400 })
+  }
+  if (assetType === 'voice_sample') {
+    try {
+      voiceAuthorization = parseSignatureVoiceCaptureAuthorization(body?.voice_authorization)
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Signature Voice authorization is invalid' },
+        { status: error instanceof SignatureVoiceContractError ? 400 : 500 }
+      )
+    }
   }
   let upload
   try {
@@ -129,11 +149,40 @@ export async function POST(request: Request) {
     extension,
   })
 
+  let voiceAuthorizationId: string | null = null
+  if (voiceAuthorization) {
+    const { data: authorizationData, error: authorizationError } = await supabaseAdmin
+      .rpc('reserve_signature_voice_capture_authorization', {
+        p_owner_type: filter.owner_type,
+        p_anon_session_id: owner.ownerType === 'anon' ? owner.anonSessionId : null,
+        p_customer_id: owner.ownerType === 'customer' ? owner.customerId : null,
+        p_asset_id: assetId,
+        p_storage_path: storagePath,
+        p_consent_version: voiceAuthorization.version,
+        p_speaker_kind: voiceAuthorization.speakerKind,
+      })
+      .single()
+
+    const authorization = authorizationData as SignatureVoiceAuthorizationReservation | null
+    if (authorizationError || !authorization?.out_authorization_id) {
+      console.error('[uploads] Signature Voice authorization reservation failed', authorizationError)
+      return NextResponse.json({ error: 'Unable to record Signature Voice authorization' }, { status: 503 })
+    }
+    voiceAuthorizationId = String(authorization.out_authorization_id)
+  }
+
   const { data: signed, error: signedError } = await supabaseAdmin.storage
     .from('raw-private')
     .createSignedUploadUrl(storagePath)
 
   if (signedError || !signed) {
+    if (voiceAuthorizationId) {
+      await supabaseAdmin
+        .from('signature_voice_capture_authorizations')
+        .delete()
+        .eq('authorization_id', voiceAuthorizationId)
+        .is('confirmed_at', null)
+    }
     return NextResponse.json({ error: 'Failed to create signed upload URL' }, { status: 500 })
   }
 
@@ -144,5 +193,6 @@ export async function POST(request: Request) {
     signed_url: signed.signedUrl,
     token: signed.token,
     max_size_bytes: upload.maxBytes,
+    voice_authorization_id: voiceAuthorizationId,
   })
 }

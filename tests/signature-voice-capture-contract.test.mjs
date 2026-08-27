@@ -5,30 +5,82 @@ import test from 'node:test'
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const readTemplateSql = (path) => readFile(new URL(`../../Template_folder/${path}`, import.meta.url), 'utf8')
 
-test('S2 opens Signature Voice Preview only after playback, declaration and separate consent', async () => {
-  const [action, recorder, page, jobsClient] = await Promise.all([
+test('S7 authorizes child or adult capture before upload and sends only the asset to Preview', async () => {
+  const [action, recorder, page, jobsClient, uploadRoute, confirmRoute, cleanupServer, sql] = await Promise.all([
     read('components/personalize/GeneratePreviewAction.tsx'),
     read('components/personalize/VoiceRecorderPanel.tsx'),
     read('components/PersonalizePage.tsx'),
     read('src/services/jobs.ts'),
+    read('app/api/upload-url/route.ts'),
+    read('app/api/user-assets/confirm/route.ts'),
+    read('src/lib/user-asset-cleanup-server.ts'),
+    readTemplateSql('sql_signature_voice_consent_v2.sql'),
   ])
 
   assert.doesNotMatch(action, /Coming Soon|isDisabled\s*=\s*!isFormValid\s*\|\|\s*isSupreme/)
-  assert.match(action, /isVoiceReady[\s\S]*isVoiceConsentChecked[\s\S]*voiceSubjectName\.trim\(\)[\s\S]*voiceSubjectRelationship/)
-  assert.match(action, /SIGNATURE_VOICE_CONSENT_VERSION/)
-  assert.match(action, /href="\/privacy"/)
+  assert.doesNotMatch(action, /voiceSubjectName|voiceSubjectRelationship|SIGNATURE_VOICE_CONSENT_VERSION/)
+  assert.match(recorder, /SIGNATURE_VOICE_CONSENT_VERSION/)
+  assert.match(recorder, /'current_child'[\s\S]*'adult'/)
+  assert.match(recorder, /if \(!isAuthorizationAccepted\)[\s\S]*authorizationRequired/)
+  assert.match(recorder, /voiceAuthorization:[\s\S]*accepted: true[\s\S]*speakerKind/)
+  assert.match(recorder, /href="\/privacy"/)
   assert.match(recorder, /addEventListener\('ended', handleEnded\)/)
   assert.match(recorder, /if \(!playbackCompleted\)[\s\S]*statusPlaybackRequired/)
   assert.match(recorder, /analyzeVoiceSampleBlob/)
-  assert.match(page, /signatureVoiceGenerateConsentRef\.current/)
-  assert.match(page, /bookType === 'supreme'[\s\S]*voiceAssetId[\s\S]*isVoiceReadyForPreview/)
+  assert.doesNotMatch(page, /signatureVoiceGenerateConsentRef/)
+  assert.match(page, /bookType === 'supreme'[\s\S]*!voiceAssetId \|\| !isVoiceReadyForPreview/)
 
   const requestBody = jobsClient.match(/voice_binding: voiceBinding[\s\S]*?\n\s*: null,/)?.[0] ?? ''
   assert.match(requestBody, /asset_id:/)
-  assert.match(requestBody, /consent:/)
-  assert.match(requestBody, /subject_name:/)
-  assert.match(requestBody, /subject_relationship:/)
-  assert.doesNotMatch(requestBody, /accepted_at|duration_seconds|storage_path/)
+  assert.doesNotMatch(requestBody, /consent:|subject_name:|subject_relationship:|accepted_at|duration_seconds|storage_path/)
+
+  const parseAt = uploadRoute.indexOf('parseSignatureVoiceCaptureAuthorization')
+  const signedUploadAt = uploadRoute.indexOf('createSignedUploadUrl')
+  assert.ok(parseAt >= 0 && signedUploadAt > parseAt, 'authorization must be parsed before upload credentials are issued')
+  assert.match(uploadRoute, /reserve_signature_voice_capture_authorization/)
+  assert.match(uploadRoute, /p_storage_path: storagePath/)
+  assert.match(confirmRoute, /confirm_signature_voice_capture/)
+  assert.match(sql, /accepted_at timestamptz not null default clock_timestamp\(\)/)
+  assert.match(sql, /reserved_storage_path text not null unique/)
+  assert.match(sql, /v_authorization\.reserved_storage_path is distinct from p_storage_path/)
+  assert.match(sql, /speaker_kind in \('current_child', 'adult'\)/)
+  assert.match(sql, /v_voice_subject_name := nullif\(btrim\(coalesce\(p_text_overrides ->> 'child_name'/)
+  assert.match(sql, /v_voice_subject_name := 'Adult narrator'/)
+  assert.match(sql, /signature-voice-consent-v1[\s\S]*signature_voice_binding_invalid/)
+  assert.match(sql, /create or replace function public\.enqueue_stale_signature_voice_capture_uploads/)
+  assert.match(sql, /capture_auth\.confirmed_at is null[\s\S]*capture_auth\.created_at < p_cutoff/)
+  assert.match(sql, /insert into public\.user_asset_cleanup_outbox[\s\S]*delete from public\.signature_voice_capture_authorizations/)
+  assert.match(cleanupServer, /enqueue_stale_signature_voice_capture_uploads/)
+  assert.match(cleanupServer, /Date\.now\(\) - DAY_MS/)
+})
+
+test('S7 consent migration remains safe to execute from the SQL Editor', async () => {
+  const sql = await readTemplateSql('sql_signature_voice_consent_v2.sql')
+
+  assert.doesNotMatch(sql, /&(?:#x?[0-9a-f]+|[a-z]+);/i)
+  assert.doesNotMatch(sql, /\bauthorization\s*\./i)
+  assert.match(
+    sql,
+    /select\s+capture_auth\.authorization_id,[\s\S]*capture_auth\.created_at\s+into v_authorization/,
+  )
+})
+
+test('S7C discloses synthetic voice creation and retention before child or adult capture', async () => {
+  const [messages, privacy, legalDocuments, workspace] = await Promise.all([
+    read('src/lib/i18n-messages.ts'),
+    read('src/lib/footer-legal-content.ts'),
+    read('src/lib/legal-documents.ts'),
+    read('components/admin/sections/orders/SignatureVoiceWorkspace.tsx'),
+  ])
+
+  assert.match(messages, /authorizationChild[\s\S]*synthetic version of this child's voice[\s\S]*retention schedule[\s\S]*never used to train models/)
+  assert.match(messages, /authorizationAdult[\s\S]*synthetic version of my voice[\s\S]*retention schedule[\s\S]*never used to train models/)
+  assert.match(privacy, /same retention schedule applies whether the narrator is the child in the book or an adult/)
+  assert.match(privacy, /access limited to authorized personnel/)
+  assert.match(privacy, /cannot remotely erase narration already loaded onto and delivered inside a physical book/)
+  assert.match(legalDocuments, /version: '2026-08-27-v2'/)
+  assert.match(workspace, /Authorization review/)
+  assert.doesNotMatch(workspace, /Adult declaration check|Adult check/)
 })
 
 test('S2 verifies real private audio bytes and derives duration on the server', async () => {

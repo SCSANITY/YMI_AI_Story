@@ -40,7 +40,7 @@ const privacyEn: LegalSection[] = [
       },
     ],
     bullets: [
-      { label: 'Voice Data:', text: 'Audio samples you provide for AI voice generation and related processing.' },
+      { label: 'Voice Data:', text: 'Short child or adult audio samples provided for Signature Voice, the synthetic voice representations created from them, and the generated narration used in the personalized physical book.' },
       { label: 'Visual Data:', text: 'Uploaded child photos and profile images used for personalization and account display.' },
       { label: 'Account Information:', text: 'Name, email address, shipping details, and profile settings.' },
       {
@@ -57,7 +57,7 @@ const privacyEn: LegalSection[] = [
       },
       {
         label: 'Strict Purpose Limitation:',
-        text: 'We only process your uploaded photos and audio to create the specific personalized content you request.',
+        text: 'We only process uploaded photos and audio to create, fulfil, support, replace, or re-fulfil the specific personalized product you request. Signature Voice processing may create a synthetic version of the authorized child or adult voice for that book\'s narration.',
       },
       {
         label: 'No Model Training:',
@@ -75,7 +75,7 @@ const privacyEn: LegalSection[] = [
     bullets: [
       { label: 'Encryption:', text: 'Uploads are protected during transfer, and stored assets are kept in secured infrastructure.' },
       { label: 'Retention:', text: 'We keep uploaded assets and generated content only as long as needed for personalization, fulfillment, support, and reasonable operational needs.' },
-      { label: 'Access Control:', text: 'Access is restricted to authorized systems and service functions that require the data to operate.' },
+      { label: 'Access Control:', text: 'Access is restricted to authorized staff, systems, and service providers that require the data to produce, fulfil, support, replace, or re-fulfil the requested product.' },
     ],
   },
   {
@@ -83,6 +83,10 @@ const privacyEn: LegalSection[] = [
     paragraphs: [
       {
         text: 'YMI products are intended to be ordered and managed by parents or guardians. By uploading a child\'s image or related materials, you confirm that you are authorized to provide that data for personalization and fulfillment.',
+      },
+      {
+        label: 'Child Voice Authorization:',
+        text: 'A child may provide the short Signature Voice recording only when an adult confirms that they are the child\'s parent or legal guardian and authorizes creation of the synthetic narration for that child\'s book.',
       },
       {
         label: 'No Child Marketing:',
@@ -161,7 +165,10 @@ const privacyEn: LegalSection[] = [
     title: '7. Voice Data Retention',
     paragraphs: [
       {
-        text: 'Signature Voice uses a short adult voice sample and generated narration only to produce, support, replace, and re-fulfil the personalized product covered by your consent. The following operational retention periods apply unless a legal hold, active dispute, fraud review, or other binding obligation requires a limited extension.',
+        text: 'Signature Voice uses a short authorized child or adult voice sample to create a synthetic voice and generated narration only for the personalized physical book covered by your consent. The same retention schedule applies whether the narrator is the child in the book or an adult. Processing may be performed manually and with authorized service providers, with access limited to authorized personnel. The following operational retention periods apply unless a legal hold, active dispute, fraud review, or other binding obligation requires a limited extension.',
+      },
+      {
+        text: 'Eligible deletion requests remove platform copies when legal and operational holds no longer apply. Deleting YMI Story\'s platform copies cannot remotely erase narration already loaded onto and delivered inside a physical book.',
       },
     ],
     bullets: [

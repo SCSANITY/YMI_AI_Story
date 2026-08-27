@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Mic, Square, Play, Pause, RotateCcw, Upload, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { uploadUserAsset } from '@/services/assets'
@@ -10,8 +11,10 @@ import {
   type VoiceSampleQualityResult,
 } from '@/lib/voice-sample-quality'
 import {
+  SIGNATURE_VOICE_CONSENT_VERSION,
   SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
   SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
+  type SignatureVoiceSpeakerKind,
 } from '@/lib/signature-voice'
 
 type RecorderPhase = 'idle' | 'recording' | 'analyzing' | 'recorded' | 'uploading' | 'uploaded' | 'error'
@@ -22,10 +25,13 @@ type UploadResult = {
   signedUrl?: string | null
   playbackUrl?: string | null
   durationSeconds: number
+  speakerKind: SignatureVoiceSpeakerKind
 }
 
 type VoiceRecorderPanelProps = {
   customerId?: string
+  childName: string
+  existingSpeakerKind?: SignatureVoiceSpeakerKind | null
   existingAssetId?: string | null
   existingStoragePath?: string | null
   existingSignedUrl?: string | null
@@ -82,6 +88,8 @@ async function deleteVoiceAsset(assetId: string, customerId?: string) {
 
 export function VoiceRecorderPanel({
   customerId,
+  childName,
+  existingSpeakerKind,
   existingAssetId,
   existingStoragePath,
   existingSignedUrl,
@@ -100,6 +108,10 @@ export function VoiceRecorderPanel({
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackCompleted, setPlaybackCompleted] = useState(false)
   const [qualityResult, setQualityResult] = useState<VoiceSampleQualityResult | null>(null)
+  const [speakerKind, setSpeakerKind] = useState<SignatureVoiceSpeakerKind>(
+    existingSpeakerKind ?? 'current_child'
+  )
+  const [isAuthorizationAccepted, setIsAuthorizationAccepted] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -127,6 +139,7 @@ export function VoiceRecorderPanel({
     && Boolean(recordedBlob)
     && qualityResult?.accepted === true
     && playbackCompleted
+    && isAuthorizationAccepted
   const showPlayback = Boolean(playbackUrl)
   const showReset = Boolean(recordedBlob || existingAssetId || seconds > 0)
 
@@ -307,6 +320,10 @@ export function VoiceRecorderPanel({
       setLocalError(t('voiceRecorder.statusPlaybackRequired'))
       return
     }
+    if (!isAuthorizationAccepted) {
+      setLocalError(t('voiceRecorder.authorizationRequired'))
+      return
+    }
 
     try {
       setPhase('uploading')
@@ -323,6 +340,11 @@ export function VoiceRecorderPanel({
         metadata: {
           quality: qualityResult.metrics,
         },
+        voiceAuthorization: {
+          accepted: true,
+          version: SIGNATURE_VOICE_CONSENT_VERSION,
+          speakerKind,
+        },
       })
       const verifiedDuration = Number(asset.metadata?.duration_seconds)
       justUploadedAssetIdRef.current = asset.asset_id
@@ -333,6 +355,7 @@ export function VoiceRecorderPanel({
         signedUrl: null,
         playbackUrl: asset.playback_url ?? null,
         durationSeconds: Number.isFinite(verifiedDuration) ? verifiedDuration : seconds,
+        speakerKind,
       })
       onReadinessChange?.(true)
 
@@ -345,7 +368,7 @@ export function VoiceRecorderPanel({
       setPhase('error')
       setLocalError(t('voiceRecorder.errorUploadFailed'))
     }
-  }, [customerId, existingAssetId, onClearValidation, onReadinessChange, onUploadComplete, playbackCompleted, qualityResult, recordedBlob, seconds, t])
+  }, [customerId, existingAssetId, isAuthorizationAccepted, onClearValidation, onReadinessChange, onUploadComplete, playbackCompleted, qualityResult, recordedBlob, seconds, speakerKind, t])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -378,6 +401,13 @@ export function VoiceRecorderPanel({
     setPlaybackCompleted(false)
     onReadinessChange?.(false)
   }, [existingAssetId, existingDurationSeconds, onReadinessChange])
+
+  useEffect(() => {
+    if (!existingSpeakerKind) return
+    // The parent may restore a persisted voice asset after the recorder mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSpeakerKind(existingSpeakerKind)
+  }, [existingSpeakerKind])
 
   useEffect(() => {
     return () => {
@@ -421,6 +451,59 @@ export function VoiceRecorderPanel({
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">{t('voiceRecorder.promptIntro')}</div>
           <p className="text-sm font-semibold leading-7 text-slate-800">{PROMPT_TEXT}</p>
         </div>
+
+        <section className="rounded-3xl border border-orange-100/90 bg-white/78 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.96)]">
+          <div className="text-sm font-bold text-slate-900">{t('voiceRecorder.speakerTitle')}</div>
+          <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label={t('voiceRecorder.speakerTitle')}>
+            {([
+              ['current_child', t('voiceRecorder.speakerChild', { name: childName.trim() || t('voiceRecorder.speakerChildFallback') })],
+              ['adult', t('voiceRecorder.speakerAdult')],
+            ] as const).map(([value, label]) => {
+              const selected = speakerKind === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    setSpeakerKind(value)
+                    setIsAuthorizationAccepted(false)
+                    setLocalError(null)
+                  }}
+                  className={`min-h-11 rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                    selected
+                      ? 'border-orange-300 bg-orange-50 text-orange-800 shadow-sm'
+                      : 'border-slate-200 bg-white/80 text-slate-600 hover:border-orange-200 hover:text-slate-900'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200/80 bg-white/86 p-3 text-xs leading-5 text-slate-700 sm:text-sm">
+            <input
+              type="checkbox"
+              aria-required="true"
+              checked={isAuthorizationAccepted}
+              onChange={(event) => {
+                setIsAuthorizationAccepted(event.target.checked)
+                if (event.target.checked) setLocalError(null)
+              }}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-orange-500 focus:ring-orange-400"
+            />
+            <span>
+              {speakerKind === 'current_child'
+                ? t('voiceRecorder.authorizationChild')
+                : t('voiceRecorder.authorizationAdult')}{' '}
+              <Link href="/privacy" target="_blank" className="font-semibold text-orange-700 underline underline-offset-2">
+                {t('personalize.privacyPolicy')}
+              </Link>
+            </span>
+          </label>
+        </section>
 
         <div className="rounded-3xl border border-white/80 bg-white/86 p-4 shadow-[0_12px_26px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.94)]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

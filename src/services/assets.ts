@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { Detection, FaceDetector } from '@mediapipe/tasks-vision'
+import type { SignatureVoiceCaptureAuthorization } from '@/lib/signature-voice'
 
 export type AssetType = 'face_image' | 'text_profile' | 'voice_sample' | 'profile_avatar'
 
@@ -623,6 +624,7 @@ type UploadUserAssetOptions = {
   originalName?: string
   onTiming?: (label: string, details?: Record<string, unknown>) => void
   metadata?: Record<string, unknown>
+  voiceAuthorization?: SignatureVoiceCaptureAuthorization
 }
 
 export async function uploadUserAsset(
@@ -654,6 +656,10 @@ export async function uploadUserAsset(
       ? await prepareFaceImage(file)
       : file
 
+  if (type === 'voice_sample' && !options?.voiceAuthorization) {
+    throw new Error('Signature Voice authorization is required before upload')
+  }
+
   const response = await fetch('/api/upload-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -664,6 +670,15 @@ export async function uploadUserAsset(
       file_name: uploadFile.name,
       content_type: uploadFile.type || 'application/octet-stream',
       size_bytes: uploadFile.size,
+      ...(type === 'voice_sample'
+        ? {
+            voice_authorization: {
+              accepted: options?.voiceAuthorization?.accepted,
+              version: options?.voiceAuthorization?.version,
+              speaker_kind: options?.voiceAuthorization?.speakerKind,
+            },
+          }
+        : {}),
     }),
     credentials: 'include',
   })
@@ -677,8 +692,9 @@ export async function uploadUserAsset(
   const storagePath = uploadSpec?.storage_path
   const token = uploadSpec?.token
   const assetId = uploadSpec?.asset_id
+  const voiceAuthorizationId = uploadSpec?.voice_authorization_id
 
-  if (!storagePath || !token || !assetId) {
+  if (!storagePath || !token || !assetId || (type === 'voice_sample' && !voiceAuthorizationId)) {
     throw new Error('Upload spec is incomplete')
   }
 
@@ -730,6 +746,7 @@ export async function uploadUserAsset(
       content_type: uploadFile.type || 'application/octet-stream',
       size_bytes: uploadFile.size,
       metadata: options?.metadata ?? null,
+      voice_authorization_id: voiceAuthorizationId ?? null,
     }),
   })
 

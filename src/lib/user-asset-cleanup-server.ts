@@ -17,6 +17,12 @@ export async function processUserAssetCleanup(params?: {
   const limit = Math.min(Math.max(params?.limit ?? 50, 1), 200)
   const cutoff = new Date(Date.now() - orphanAgeDays * DAY_MS).toISOString()
 
+  const { data: staleCaptureUploadsEnqueued, error: staleCaptureEnqueueError } = await supabaseAdmin.rpc(
+    'enqueue_stale_signature_voice_capture_uploads',
+    { p_cutoff: new Date(Date.now() - DAY_MS).toISOString(), p_limit: limit }
+  )
+  if (staleCaptureEnqueueError) throw new Error(staleCaptureEnqueueError.message)
+
   const { data: enqueued, error: enqueueError } = await supabaseAdmin.rpc(
     'enqueue_expired_unbound_voice_assets',
     { p_cutoff: cutoff, p_limit: limit }
@@ -86,6 +92,7 @@ export async function processUserAssetCleanup(params?: {
   }
 
   return {
+    staleCaptureUploadsEnqueued: Number(staleCaptureUploadsEnqueued ?? 0),
     orphanAssetsEnqueued: Number(enqueued ?? 0),
     replacementUploadsEnqueued: Number(replacementUploadsEnqueued ?? 0),
     narrationUploadsEnqueued: Number(narrationUploadsEnqueued ?? 0),

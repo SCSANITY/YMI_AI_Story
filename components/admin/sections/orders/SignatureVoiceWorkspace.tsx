@@ -110,14 +110,14 @@ function TriageEditor({
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || !data?.workspace) {
-        throw new Error(data?.error || 'Failed to save Signature Voice triage')
+        throw new Error(data?.error || 'Failed to save Signature Voice source review')
       }
       onWorkspace(data.workspace as Workspace)
-      setFeedback({ tone: 'success', text: 'Triage saved.' })
+      setFeedback({ tone: 'success', text: 'Source review saved.' })
     } catch (error) {
       setFeedback({
         tone: 'danger',
-        text: error instanceof Error ? error.message : 'Failed to save Signature Voice triage',
+        text: error instanceof Error ? error.message : 'Failed to save Signature Voice source review',
       })
     } finally {
       setSaving(false)
@@ -128,7 +128,7 @@ function TriageEditor({
     <div className="rounded-xl border border-[color-mix(in_srgb,var(--admin-card-line)_72%,transparent)] bg-[color-mix(in_srgb,var(--admin-card)_48%,transparent)] p-4">
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-[var(--admin-accent-dp)]" />
-        <h4 className="text-sm font-bold text-[var(--admin-page-ink)]">Source triage</h4>
+        <h4 className="text-sm font-bold text-[var(--admin-page-ink)]">Source review</h4>
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div>
@@ -156,7 +156,7 @@ function TriageEditor({
         </div>
         <div>
           <label className={adminLabelClass}>
-            Adult declaration check
+            Authorization review
             <select
               className={adminFieldClass}
               value={adultStatus}
@@ -167,7 +167,7 @@ function TriageEditor({
           </label>
           {adultStatus === 'rejected' ? (
             <label className={`${adminLabelClass} mt-3`}>
-              Mismatch reason
+              Authorization issue
               <textarea
                 className={`${adminFieldClass} min-h-20 py-2`}
                 value={adultReason}
@@ -186,7 +186,7 @@ function TriageEditor({
         ) : null}
         <AdminButton type="button" tone="primary" disabled={saving} onClick={() => void save()}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {saving ? 'Saving...' : 'Save triage'}
+          {saving ? 'Saving...' : 'Save review'}
         </AdminButton>
       </div>
     </div>
@@ -736,7 +736,7 @@ function VoiceItem({
               Technical {item.triage.technicalStatus}
             </AdminStatusBadge>
             <AdminStatusBadge tone={triageTone(item.triage.adultDeclarationStatus)}>
-              Adult check {item.triage.adultDeclarationStatus}
+              Authorization {item.triage.adultDeclarationStatus}
             </AdminStatusBadge>
           </div>
           <h3 className="mt-2 text-base font-bold text-[var(--admin-page-ink)]">{item.title}</h3>
