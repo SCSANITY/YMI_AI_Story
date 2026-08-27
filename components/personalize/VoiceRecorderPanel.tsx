@@ -5,13 +5,22 @@ import { Mic, Square, Play, Pause, RotateCcw, Upload, AlertCircle, ShieldCheck, 
 import { Button } from '@/components/Button'
 import { uploadUserAsset } from '@/services/assets'
 import { useI18n } from '@/lib/useI18n'
+import {
+  analyzeVoiceSampleBlob,
+  type VoiceSampleQualityResult,
+} from '@/lib/voice-sample-quality'
+import {
+  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
+  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
+} from '@/lib/signature-voice'
 
-type RecorderPhase = 'idle' | 'recording' | 'recorded' | 'uploading' | 'uploaded' | 'error'
+type RecorderPhase = 'idle' | 'recording' | 'analyzing' | 'recorded' | 'uploading' | 'uploaded' | 'error'
 
 type UploadResult = {
   assetId: string
   storagePath: string
   signedUrl?: string | null
+  playbackUrl?: string | null
   durationSeconds: number
 }
 
@@ -20,16 +29,18 @@ type VoiceRecorderPanelProps = {
   existingAssetId?: string | null
   existingStoragePath?: string | null
   existingSignedUrl?: string | null
+  existingDurationSeconds?: number | null
   validationError?: string | null
   onUploadComplete: (result: UploadResult) => void
+  onReadinessChange?: (ready: boolean) => void
   onClearValidation?: () => void
 }
 
 const PROMPT_TEXT =
   'Tonight, we begin a magical story made just for you. Every page is filled with love, wonder, courage, and gentle dreams, and my voice will always be here to guide you through each adventure.'
 
-const MIN_SECONDS = 10
-const MAX_SECONDS = 20
+const MIN_SECONDS = SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
+const MAX_SECONDS = SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
 
 function getPreferredMimeType() {
   if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') return ''
@@ -45,7 +56,7 @@ function getFileExtension(mimeType: string) {
 }
 
 function formatTimer(seconds: number) {
-  const safe = Math.max(0, seconds)
+  const safe = Math.max(0, Math.floor(seconds))
   const mins = Math.floor(safe / 60)
   const secs = safe % 60
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
@@ -62,9 +73,11 @@ async function deleteVoiceAsset(assetId: string, customerId?: string) {
     }),
   })
 
+  if (response.status === 409) return 'bound' as const
   if (!response.ok) {
     throw new Error('Failed to delete previous voice sample')
   }
+  return 'deleted' as const
 }
 
 export function VoiceRecorderPanel({
@@ -72,17 +85,21 @@ export function VoiceRecorderPanel({
   existingAssetId,
   existingStoragePath,
   existingSignedUrl,
+  existingDurationSeconds,
   validationError,
   onUploadComplete,
+  onReadinessChange,
   onClearValidation,
 }: VoiceRecorderPanelProps) {
   const { t } = useI18n()
   const [phase, setPhase] = useState<RecorderPhase>(existingAssetId ? 'uploaded' : 'idle')
-  const [seconds, setSeconds] = useState(0)
+  const [seconds, setSeconds] = useState(() => Math.max(0, Number(existingDurationSeconds) || 0))
   const [localError, setLocalError] = useState<string | null>(null)
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [playbackCompleted, setPlaybackCompleted] = useState(false)
+  const [qualityResult, setQualityResult] = useState<VoiceSampleQualityResult | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -90,6 +107,8 @@ export function VoiceRecorderPanel({
   const timerRef = useRef<number | null>(null)
   const startAtRef = useRef<number>(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const previousExistingAssetIdRef = useRef(existingAssetId)
+  const justUploadedAssetIdRef = useRef<string | null>(null)
 
   const playbackUrl = recordedUrl || existingSignedUrl || null
   const combinedError = validationError || localError
@@ -101,7 +120,13 @@ export function VoiceRecorderPanel({
         : !existingAssetId && phase === 'uploaded'
           ? 'idle'
           : phase
-  const canSaveRecording = effectivePhase === 'recorded' && seconds >= MIN_SECONDS && Boolean(recordedBlob)
+  const canSaveRecording =
+    effectivePhase === 'recorded'
+    && seconds >= MIN_SECONDS
+    && seconds <= MAX_SECONDS
+    && Boolean(recordedBlob)
+    && qualityResult?.accepted === true
+    && playbackCompleted
   const showPlayback = Boolean(playbackUrl)
   const showReset = Boolean(recordedBlob || existingAssetId || seconds > 0)
 
@@ -113,9 +138,11 @@ export function VoiceRecorderPanel({
           max: formatTimer(MAX_SECONDS),
         })
       case 'recorded':
-        return seconds >= MIN_SECONDS
-          ? t('voiceRecorder.statusRecorded', { seconds: formatTimer(seconds) })
-          : t('voiceRecorder.statusMinSeconds', { seconds: MIN_SECONDS })
+        if (qualityResult?.blockingCode) return t(`voiceRecorder.quality.${qualityResult.blockingCode}`)
+        if (!playbackCompleted) return t('voiceRecorder.statusPlaybackRequired')
+        return t('voiceRecorder.statusRecorded', { seconds: formatTimer(seconds) })
+      case 'analyzing':
+        return t('voiceRecorder.statusAnalyzing')
       case 'uploading':
         return t('voiceRecorder.statusUploading')
       case 'uploaded':
@@ -125,7 +152,7 @@ export function VoiceRecorderPanel({
       default:
         return t('voiceRecorder.statusIdle', { min: MIN_SECONDS, max: MAX_SECONDS })
     }
-  }, [combinedError, effectivePhase, existingStoragePath, recordedBlob, seconds, t])
+  }, [combinedError, effectivePhase, existingStoragePath, playbackCompleted, qualityResult, recordedBlob, seconds, t])
 
   const stopTracks = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -148,7 +175,10 @@ export function VoiceRecorderPanel({
     setSeconds(0)
     setLocalError(null)
     setIsPlaying(false)
-  }, [recordedUrl])
+    setPlaybackCompleted(false)
+    setQualityResult(null)
+    onReadinessChange?.(false)
+  }, [onReadinessChange, recordedUrl])
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -192,9 +222,6 @@ export function VoiceRecorderPanel({
       recorder.onstop = () => {
         clearTimer()
         stopTracks()
-        const durationSeconds = Math.max(1, Math.round((Date.now() - startAtRef.current) / 1000))
-        setSeconds(durationSeconds)
-
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' })
         if (!blob.size) {
           setPhase('error')
@@ -205,18 +232,32 @@ export function VoiceRecorderPanel({
         const url = URL.createObjectURL(blob)
         setRecordedBlob(blob)
         setRecordedUrl(url)
-        setPhase('recorded')
-
-        if (durationSeconds < MIN_SECONDS) {
-          setLocalError(t('voiceRecorder.errorMinSeconds', { seconds: MIN_SECONDS }))
-        }
+        setPhase('analyzing')
+        void analyzeVoiceSampleBlob(blob)
+          .then(({ durationSeconds, quality }) => {
+            const normalizedDuration = Math.round(durationSeconds * 100) / 100
+            setSeconds(normalizedDuration)
+            setQualityResult(quality)
+            setPhase('recorded')
+            if (normalizedDuration < MIN_SECONDS) {
+              setLocalError(t('voiceRecorder.errorMinSeconds', { seconds: MIN_SECONDS }))
+            } else if (normalizedDuration > MAX_SECONDS) {
+              setLocalError(t('voiceRecorder.errorMaxSeconds', { seconds: MAX_SECONDS }))
+            } else if (quality.blockingCode) {
+              setLocalError(t(`voiceRecorder.quality.${quality.blockingCode}`))
+            }
+          })
+          .catch(() => {
+            setPhase('error')
+            setLocalError(t('voiceRecorder.errorAnalysisFailed'))
+          })
       }
 
       recorder.start()
       timerRef.current = window.setInterval(() => {
         const elapsed = Math.max(0, Math.floor((Date.now() - startAtRef.current) / 1000))
         setSeconds(elapsed)
-        if (elapsed >= MAX_SECONDS) {
+        if (Date.now() - startAtRef.current >= (MAX_SECONDS - 0.5) * 1000) {
           stopRecording()
         }
       }, 250)
@@ -248,6 +289,24 @@ export function VoiceRecorderPanel({
       setPhase('recorded')
       return
     }
+    if (seconds > MAX_SECONDS) {
+      setLocalError(t('voiceRecorder.errorMaxSeconds', { seconds: MAX_SECONDS }))
+      setPhase('recorded')
+      return
+    }
+    if (qualityResult?.accepted !== true) {
+      setLocalError(
+        qualityResult?.blockingCode
+          ? t(`voiceRecorder.quality.${qualityResult.blockingCode}`)
+          : t('voiceRecorder.errorAnalysisFailed')
+      )
+      setPhase('recorded')
+      return
+    }
+    if (!playbackCompleted) {
+      setLocalError(t('voiceRecorder.statusPlaybackRequired'))
+      return
+    }
 
     try {
       setPhase('uploading')
@@ -260,14 +319,22 @@ export function VoiceRecorderPanel({
         lastModified: Date.now(),
       })
 
-      const asset = await uploadUserAsset(file, 'voice_sample', 'voice', customerId)
+      const asset = await uploadUserAsset(file, 'voice_sample', 'voice', customerId, {
+        metadata: {
+          quality: qualityResult.metrics,
+        },
+      })
+      const verifiedDuration = Number(asset.metadata?.duration_seconds)
+      justUploadedAssetIdRef.current = asset.asset_id
       setPhase('uploaded')
       onUploadComplete({
         assetId: asset.asset_id,
         storagePath: asset.storage_path,
-        signedUrl: asset.signed_url ?? null,
-        durationSeconds: seconds,
+        signedUrl: null,
+        playbackUrl: asset.playback_url ?? null,
+        durationSeconds: Number.isFinite(verifiedDuration) ? verifiedDuration : seconds,
       })
+      onReadinessChange?.(true)
 
       if (previousAssetId && previousAssetId !== asset.asset_id) {
         deleteVoiceAsset(previousAssetId, customerId).catch((error) => {
@@ -278,13 +345,17 @@ export function VoiceRecorderPanel({
       setPhase('error')
       setLocalError(t('voiceRecorder.errorUploadFailed'))
     }
-  }, [customerId, existingAssetId, onClearValidation, onUploadComplete, recordedBlob, seconds, t])
+  }, [customerId, existingAssetId, onClearValidation, onReadinessChange, onUploadComplete, playbackCompleted, qualityResult, recordedBlob, seconds, t])
 
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
 
-    const handleEnded = () => setIsPlaying(false)
+    const handleEnded = () => {
+      setIsPlaying(false)
+      setPlaybackCompleted(true)
+      if (!recordedBlob && existingAssetId) onReadinessChange?.(true)
+    }
     const handlePause = () => setIsPlaying(false)
     audio.addEventListener('ended', handleEnded)
     audio.addEventListener('pause', handlePause)
@@ -292,7 +363,21 @@ export function VoiceRecorderPanel({
       audio.removeEventListener('ended', handleEnded)
       audio.removeEventListener('pause', handlePause)
     }
-  }, [playbackUrl])
+  }, [existingAssetId, onReadinessChange, playbackUrl, recordedBlob])
+
+  useEffect(() => {
+    if (previousExistingAssetIdRef.current === existingAssetId) return
+    previousExistingAssetIdRef.current = existingAssetId
+    // The selected asset can be restored or replaced by the parent workflow.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeconds(Math.max(0, Number(existingDurationSeconds) || 0))
+    if (justUploadedAssetIdRef.current === existingAssetId) {
+      justUploadedAssetIdRef.current = null
+      return
+    }
+    setPlaybackCompleted(false)
+    onReadinessChange?.(false)
+  }, [existingAssetId, existingDurationSeconds, onReadinessChange])
 
   useEffect(() => {
     return () => {
@@ -421,13 +506,13 @@ export function VoiceRecorderPanel({
             ) : null}
           </div>
 
-          {effectivePhase === 'recorded' || effectivePhase === 'uploading' ? (
+          {effectivePhase === 'recorded' || effectivePhase === 'uploading' || effectivePhase === 'analyzing' ? (
             <Button
               type="button"
               variant="primary"
               size="md"
               onClick={handleUpload}
-              disabled={phase === 'uploading' || !canSaveRecording}
+              disabled={phase === 'uploading' || phase === 'analyzing' || !canSaveRecording}
               className="glass-action-btn glass-action-btn--brand mt-3 h-11 w-full rounded-2xl text-sm font-semibold sm:h-12"
             >
               <Upload className="mr-2 h-4 w-4" />
@@ -441,6 +526,13 @@ export function VoiceRecorderPanel({
         <div className="mx-4 mb-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-5">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{combinedError}</span>
+        </div>
+      ) : null}
+
+      {qualityResult?.warningCode ? (
+        <div className="mx-4 mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:mx-5">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{t(`voiceRecorder.quality.${qualityResult.warningCode}`)}</span>
         </div>
       ) : null}
 

@@ -6,6 +6,7 @@ import { Camera } from 'lucide-react'
 type PreviewIntroHeaderProps = {
   title: string
   subtitle: string
+  editionNotice?: React.ReactNode
   changePhotoLabel: string
   busyLabel: string
   showChangePhoto: boolean
@@ -18,6 +19,7 @@ type PreviewIntroHeaderProps = {
 function PreviewIntroHeaderComponent({
   title,
   subtitle,
+  editionNotice,
   changePhotoLabel,
   busyLabel,
   showChangePhoto,
@@ -30,6 +32,7 @@ function PreviewIntroHeaderComponent({
     <div className="mb-6 text-center text-gray-800 md:mb-10">
       <h2 className="mb-2 font-serif text-2xl font-bold md:text-3xl">{title}</h2>
       <p className="text-sm text-gray-600 md:text-base">{subtitle}</p>
+      {editionNotice ? <div className="mx-auto mt-4 max-w-xl">{editionNotice}</div> : null}
       {showChangePhoto ? (
         <div className="mt-4 flex flex-col items-center">
           <label

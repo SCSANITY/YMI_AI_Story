@@ -142,7 +142,7 @@ export async function GET(request: Request) {
   if (orderIds.length > 0) {
     const { data: cartItems, error: cartItemsError } = await supabaseAdmin
       .from('cart_items')
-      .select('cart_item_id, order_id, final_job_id, product_type, package_type, quantity')
+      .select('cart_item_id, order_id, creation_id, final_job_id, product_type, package_type, quantity')
       .in('order_id', orderIds)
       .eq('status', 'ordered')
 
@@ -154,6 +154,7 @@ export async function GET(request: Request) {
       const orderId = String(item.order_id)
       const normalizedItem: AdminOrderCartItem = {
         cart_item_id: String(item.cart_item_id),
+        creation_id: item.creation_id ? String(item.creation_id) : null,
         generation_job_id: item.final_job_id ? String(item.final_job_id) : null,
         product_type: item.product_type ? String(item.product_type) : null,
         package_type: item.package_type ? String(item.package_type) : null,
@@ -209,6 +210,9 @@ export async function GET(request: Request) {
         cartItems,
         finalJobs.filter((job) => linkedJobIds.has(job.job_id))
       ),
+      signature_voice_item_count: order.payment_id
+        ? cartItems.filter((item) => item.package_type === 'supreme').length
+        : 0,
     }
   })
 

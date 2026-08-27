@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 54, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 62, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -632,7 +632,7 @@ test('Orders keeps production linkage read-only while supporting exact Final Rev
   assert.match(finalReviewPanel, /useState<ReviewVersion>\(initialVersion\)/)
   assert.match(ordersApi, /select\(ORDER_SELECT, \{ count: ['"]exact['"] \}\)/)
   assert.match(ordersApi, /\.range\(rangeStart, rangeEnd\)/)
-  assert.match(ordersApi, /\.select\(['"]cart_item_id, order_id, final_job_id, product_type, package_type, quantity['"]\)/)
+  assert.match(ordersApi, /\.select\(['"]cart_item_id, order_id, creation_id, final_job_id, product_type, package_type, quantity['"]\)/)
   assert.match(ordersApi, /aggregateAdminOrderProgress/)
   assert.match(ordersApi, /\.in\(['"]job_id['"],\s*Array\.from\(linkedGenerationJobIds\)\)/)
   assert.match(snapshotApi, /\.in\(['"]job_id['"],\s*linkedGenerationJobIds\)/)

@@ -11,6 +11,7 @@ export type CreationItem = {
   latestOrderId?: string | null
   latestOrderDisplayId?: string | null
   latestOrderStatus?: string | null
+  latestPackageType?: string | null
   finalJobId?: string | null
   finalReady?: boolean
   finalReviewStatus?: string | null

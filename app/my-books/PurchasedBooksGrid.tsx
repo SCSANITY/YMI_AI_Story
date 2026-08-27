@@ -4,6 +4,8 @@ import { BookOpen, Clock3, RotateCcw } from 'lucide-react'
 import { BookCardCover } from '@/components/BookCardCover'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import type { CreationItem } from './myBooksTypes'
+import { SignatureVoiceBadge } from '@/components/SignatureVoiceEditionNotice'
+import { isSignatureVoicePackage } from '@/lib/signature-voice'
 
 type PurchasedBooksGridProps = {
   items: CreationItem[]
@@ -32,6 +34,7 @@ export function PurchasedBooksGrid({
         const readerHref = buildReaderHref(item)
         const isRefunded = item.purchaseState === 'refunded'
         const isPending = pendingReaderHref === readerHref
+        const isSignatureVoice = isSignatureVoicePackage(item.latestPackageType)
         const displayTitle = resolvePersonalizedBookTitle({
           templateId: item.template_id,
           templateName: item.templates?.name,
@@ -121,8 +124,15 @@ export function PurchasedBooksGrid({
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:text-xs">
                   {item.templates?.story_type || ''}
                 </p>
+                {isSignatureVoice ? <SignatureVoiceBadge className="mb-2" /> : null}
                 <p className="text-sm leading-relaxed text-gray-600">
-                  {isRefunded ? t('myBooks.refundedDescription') : item.finalReady ? t('myBooks.readyDescription') : t('myBooks.preparingDescription')}
+                  {isRefunded
+                    ? t('myBooks.refundedDescription')
+                    : isSignatureVoice
+                      ? t('signatureVoice.myBooksDescription')
+                      : item.finalReady
+                        ? t('myBooks.readyDescription')
+                        : t('myBooks.preparingDescription')}
                 </p>
                 {item.latestOrderDisplayId || item.latestOrderStatus ? (
                   <p className="mt-3 text-xs font-medium text-gray-400">

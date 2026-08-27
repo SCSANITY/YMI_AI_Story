@@ -15,6 +15,7 @@ type VoiceUploadResult = {
   assetId: string
   storagePath: string
   signedUrl?: string | null
+  playbackUrl?: string | null
   durationSeconds: number
 }
 
@@ -101,7 +102,9 @@ type CustomizeFormFieldsProps = {
   voiceCustomerId?: string
   voiceAssetId: string | null
   voiceStoragePath: string | null
-  voiceSignedUrl: string | null
+  voicePlaybackUrl: string | null
+  voiceDurationSeconds: number | null
+  onVoiceReadinessChange: (ready: boolean) => void
   voiceValidationError: string | null
   onVoiceUploadComplete: (result: VoiceUploadResult) => void
   onClearVoiceValidation: () => void
@@ -140,7 +143,9 @@ function CustomizeFormFieldsComponent({
   voiceCustomerId,
   voiceAssetId,
   voiceStoragePath,
-  voiceSignedUrl,
+  voicePlaybackUrl,
+  voiceDurationSeconds,
+  onVoiceReadinessChange,
   voiceValidationError,
   onVoiceUploadComplete,
   onClearVoiceValidation,
@@ -194,9 +199,11 @@ function CustomizeFormFieldsComponent({
             customerId={voiceCustomerId}
             existingAssetId={voiceAssetId}
             existingStoragePath={voiceStoragePath}
-            existingSignedUrl={voiceSignedUrl}
+            existingSignedUrl={voicePlaybackUrl}
+            existingDurationSeconds={voiceDurationSeconds}
             validationError={voiceValidationError}
             onUploadComplete={onVoiceUploadComplete}
+            onReadinessChange={onVoiceReadinessChange}
             onClearValidation={onClearVoiceValidation}
           />
         </div>

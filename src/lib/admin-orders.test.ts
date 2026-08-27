@@ -32,6 +32,7 @@ test('production progress follows cart item job links and deduplicates reused jo
     [
       {
         cart_item_id: 'item-a',
+        creation_id: 'creation-a',
         generation_job_id: 'job-shared',
         product_type: 'physical',
         package_type: 'basic',
@@ -39,6 +40,7 @@ test('production progress follows cart item job links and deduplicates reused jo
       },
       {
         cart_item_id: 'item-b',
+        creation_id: 'creation-b',
         generation_job_id: 'job-shared',
         product_type: 'physical',
         package_type: 'supreme',
@@ -46,6 +48,7 @@ test('production progress follows cart item job links and deduplicates reused jo
       },
       {
         cart_item_id: 'item-c',
+        creation_id: null,
         generation_job_id: null,
         product_type: 'ebook',
         package_type: 'digital',

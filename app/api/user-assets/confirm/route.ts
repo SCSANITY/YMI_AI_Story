@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { parseBuffer } from 'music-metadata'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   isValidUserAssetStoragePath,
@@ -10,8 +11,32 @@ import {
   ownerFilter,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
+import {
+  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
+  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
+} from '@/lib/signature-voice'
+
+export const runtime = 'nodejs'
 
 const MAX_FACE_IMAGES = 8
+
+function normalizeClientVoiceQuality(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const quality = value as Record<string, unknown>
+  const entries = [
+    ['peak', 2],
+    ['rms', 2],
+    ['clippingRatio', 1],
+    ['noiseFloorRatio', 1],
+  ] as const
+  const normalized: Record<string, number> = {}
+  for (const [key, maximum] of entries) {
+    const metric = Number(quality[key])
+    if (!Number.isFinite(metric) || metric < 0 || metric > maximum) return null
+    normalized[key] = metric
+  }
+  return normalized
+}
 
 export async function POST(request: Request) {
   const body = await request.json()
@@ -23,6 +48,9 @@ export async function POST(request: Request) {
   const originalName = body?.original_name || body?.originalName || null
   const contentType = body?.content_type || body?.contentType || null
   const sizeBytes = body?.size_bytes ?? body?.sizeBytes
+  const clientMetadata = body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+    ? body.metadata
+    : null
   const createdFor = assetType === 'profile_avatar' ? 'profile' : 'preview'
   const source = assetType === 'profile_avatar' ? 'profile' : 'upload'
 
@@ -64,12 +92,36 @@ export async function POST(request: Request) {
   }
   const anonSessionId = owner.ownerType === 'anon' ? owner.anonSessionId : null
 
+  let verifiedUpload: { contentType: string; sizeBytes: number }
+  let verifiedVoiceDuration: number | null = null
   try {
     const { data: info, error: infoError } = await supabaseAdmin.storage
       .from('raw-private')
       .info(storagePath)
     if (infoError || !info) throw new Error('Uploaded file was not found')
-    validateStoredUserAssetMetadata(assetType, { contentType, sizeBytes }, info)
+    verifiedUpload = validateStoredUserAssetMetadata(assetType, { contentType, sizeBytes }, info)
+    if (assetType === 'voice_sample') {
+      const { data: storedVoice, error: downloadError } = await supabaseAdmin.storage
+        .from('raw-private')
+        .download(storagePath)
+      if (downloadError || !storedVoice) throw new Error('Uploaded recording could not be read')
+      const bytes = new Uint8Array(await storedVoice.arrayBuffer())
+      const audioMetadata = await parseBuffer(bytes, {
+        mimeType: verifiedUpload.contentType,
+        size: verifiedUpload.sizeBytes,
+      })
+      const duration = Number(audioMetadata.format.duration)
+      if (
+        !Number.isFinite(duration)
+        || duration < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
+        || duration > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
+      ) {
+        throw new Error(
+          `Recording must be between ${SIGNATURE_VOICE_MIN_SAMPLE_SECONDS} and ${SIGNATURE_VOICE_MAX_SAMPLE_SECONDS} seconds`
+        )
+      }
+      verifiedVoiceDuration = Math.round(duration * 100) / 100
+    }
   } catch (error) {
     await supabaseAdmin.storage.from('raw-private').remove([storagePath]).catch(() => undefined)
     return NextResponse.json(
@@ -92,8 +144,14 @@ export async function POST(request: Request) {
         original_name: originalName,
         created_for: createdFor,
         source,
-        content_type: contentType,
-        size_bytes: Number(sizeBytes),
+        content_type: verifiedUpload.contentType,
+        size_bytes: verifiedUpload.sizeBytes,
+        ...(verifiedVoiceDuration !== null
+          ? {
+              duration_seconds: verifiedVoiceDuration,
+              client_quality: normalizeClientVoiceQuality(clientMetadata?.quality),
+            }
+          : {}),
       },
     })
     .select()
@@ -101,6 +159,13 @@ export async function POST(request: Request) {
 
   if (assetError || !asset) {
     return NextResponse.json({ error: 'Failed to record asset' }, { status: 500 })
+  }
+
+  if (assetType === 'voice_sample') {
+    return NextResponse.json({
+      ...asset,
+      playback_url: `/api/user-assets/${encodeURIComponent(assetId)}/download`,
+    })
   }
 
   const { data: signed, error: signedError } = await supabaseAdmin.storage

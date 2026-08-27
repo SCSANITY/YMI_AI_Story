@@ -9,6 +9,7 @@ import {
   normalizeTrackingUrl,
   shouldSendLogisticsUpdateEmail,
 } from '@/lib/order-logistics'
+import { stampSignatureVoiceShipmentIntegrity } from '@/lib/signature-voice-fulfillment-server'
 
 const MANAGED_ORDER_STATUSES = new Set([
   'paid',
@@ -97,6 +98,30 @@ export async function PATCH(
   const shippedAt = nextStatus === 'shipped' && !order.shipped_at ? now : order.shipped_at
   const deliveredAt = nextStatus === 'delivered' && !order.delivered_at ? now : order.delivered_at
 
+  const enteringShipmentLifecycle = (
+    (nextStatus === 'shipped' || nextStatus === 'delivered')
+    && previousStatus !== 'shipped'
+    && previousStatus !== 'delivered'
+  )
+
+  if (enteringShipmentLifecycle) {
+    try {
+      await stampSignatureVoiceShipmentIntegrity({
+        orderId,
+        adminCustomerId: admin.customer_id,
+      })
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: error instanceof Error
+            ? error.message
+            : 'Signature Voice shipment verification failed',
+        },
+        { status: 409 }
+      )
+    }
+  }
+
   const { data: updatedOrder, error: updateError } = await supabaseAdmin
     .from('orders')
     .update({
@@ -134,7 +159,11 @@ export async function PATCH(
     .maybeSingle()
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message || 'Failed to update order status' }, { status: 500 })
+    const message = updateError.message || 'Failed to update order status'
+    return NextResponse.json(
+      { error: message },
+      { status: /Signature Voice|narration|hardware|shipment/i.test(message) ? 409 : 500 }
+    )
   }
   if (!updatedOrder?.order_id) {
     return NextResponse.json({ error: 'Order no longer exists' }, { status: 404 })

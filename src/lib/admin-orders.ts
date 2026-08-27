@@ -26,6 +26,7 @@ export const READONLY_ADMIN_ORDER_VIEWS = new Set<AdminOrderView>([
 
 export type AdminOrderCartItem = {
   cart_item_id: string
+  creation_id: string | null
   generation_job_id: string | null
   product_type: string | null
   package_type: string | null

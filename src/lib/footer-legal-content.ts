@@ -61,7 +61,7 @@ const privacyEn: LegalSection[] = [
       },
       {
         label: 'No Model Training:',
-        text: 'We do not use your or your child\'s uploaded materials to train public AI models or to create products for other users.',
+        text: 'We do not use your or your child\'s uploaded materials to train AI models or to create products for other users.',
       },
     ],
   },
@@ -158,7 +158,25 @@ const privacyEn: LegalSection[] = [
     ],
   },
   {
-    title: '7. Your Rights',
+    title: '7. Voice Data Retention',
+    paragraphs: [
+      {
+        text: 'Signature Voice uses a short adult voice sample and generated narration only to produce, support, replace, and re-fulfil the personalized product covered by your consent. The following operational retention periods apply unless a legal hold, active dispute, fraud review, or other binding obligation requires a limited extension.',
+      },
+    ],
+    bullets: [
+      { label: 'Uploaded but unbound source sample:', text: 'Deleted after 30 days without a Creation binding.' },
+      { label: 'Bound source while an order is open:', text: 'Retained until the Order is delivered, cancelled or refunded and closed, or the related dispute is resolved. We do not expire an unfulfilled paid Order\'s only source sample.' },
+      { label: 'Bound source after delivery:', text: 'Deleted at the later of 180 days after delivery or 30 days after the last related support or dispute case closes.' },
+      { label: 'Replaced source sample:', text: 'Removed from production immediately, retained for 30 days as rollback evidence, then deleted through the durable cleanup process.' },
+      { label: 'Generated narration tracks:', text: 'Retained for 24 months after delivery for support and re-fulfilment, then deleted unless an active support or replacement case requires a bounded extension.' },
+      { label: 'Cancelled or refunded after production but never delivered:', text: 'Generated tracks are deleted at the later of 30 days after cancellation or refund closure or 30 days after the last related dispute or support case closes.' },
+      { label: 'Temporary operator workstation files:', text: 'Deleted within 7 days after the platform archive is verified, and immediately where practical.' },
+      { label: 'Audit metadata:', text: 'Non-audio actor, timestamp, reason, consent version, hash, and lifecycle records follow the ordinary Order and audit retention policy.' },
+    ],
+  },
+  {
+    title: '8. Your Rights',
     paragraphs: [
       { text: 'Depending on your jurisdiction, you may have the right to access, correct, or request deletion of your personal data.' },
     ],
@@ -173,7 +191,7 @@ const privacyEn: LegalSection[] = [
     ],
   },
   {
-    title: '8. International Transfers',
+    title: '9. International Transfers',
     paragraphs: [
       {
         text: 'Because YMI operates online and serves multiple regions, your data may be processed in jurisdictions outside your place of residence. We use reasonable safeguards for such transfers.',
@@ -184,7 +202,7 @@ const privacyEn: LegalSection[] = [
     ],
   },
   {
-    title: '9. Policy Updates',
+    title: '10. Policy Updates',
     paragraphs: [
       {
         text: 'We may revise this Privacy Policy from time to time. Material updates will be reflected on this page and may also be communicated through the site or your registered email address.',
@@ -192,7 +210,7 @@ const privacyEn: LegalSection[] = [
     ],
   },
   {
-    title: '10. Contact',
+    title: '11. Contact',
     paragraphs: [
       {
         text: 'If you have privacy-related questions or requests, please contact us at admin@ymistory.com.',

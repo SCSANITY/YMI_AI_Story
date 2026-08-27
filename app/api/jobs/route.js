@@ -13,6 +13,12 @@ import {
   loadOwnedFaceAsset,
   normalizePendingFaceAsset,
 } from '@/lib/face-assets-server'
+import {
+  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
+  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
+  SignatureVoiceContractError,
+  parseSignatureVoiceBindingRequest,
+} from '@/lib/signature-voice'
 
 const MAX_TEXT_PROFILES = 5
 const DEFAULT_STORY_LANGUAGE = 'English'
@@ -148,6 +154,7 @@ export async function POST(request) {
   const textOverrides = body?.text_overrides || body?.textOverrides || null
   const params = body?.params || null
   const validatedParams = validateAndStampPreviewConsent(params)
+  const isSignatureVoice = String(textOverrides?.book_type || '').trim().toLowerCase() === 'supreme'
 
   if (!templateId || (!faceAssetId && !pendingFaceAsset?.asset_id)) {
     return NextResponse.json({ error: 'Missing template_id or face_asset_id' }, { status: 400 })
@@ -196,6 +203,47 @@ export async function POST(request) {
   const ownerType = owner.ownerType
   const ownerId = owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId
   const anonSessionId = owner.ownerType === 'anon' ? owner.anonSessionId : null
+  let voiceBinding = null
+
+  if (isSignatureVoice) {
+    try {
+      const requestedBinding = parseSignatureVoiceBindingRequest(body?.voice_binding)
+      const voiceOwnerFilter = ownerFilter(owner)
+      const { data: voiceAsset, error: voiceAssetError } = await supabaseAdmin
+        .from('user_assets')
+        .select('asset_id, asset_type, storage_path, metadata')
+        .eq('asset_id', requestedBinding.assetId)
+        .eq('owner_type', voiceOwnerFilter.owner_type)
+        .eq(voiceOwnerFilter.column, voiceOwnerFilter.value)
+        .maybeSingle()
+
+      if (voiceAssetError || !voiceAsset) {
+        throw new SignatureVoiceContractError('Signature Voice recording was not found')
+      }
+      if (voiceAsset.asset_type !== 'voice_sample' || !String(voiceAsset.storage_path || '').trim()) {
+        throw new SignatureVoiceContractError('Signature Voice recording is invalid')
+      }
+      const durationSeconds = Number(voiceAsset.metadata?.duration_seconds)
+      if (
+        !Number.isFinite(durationSeconds)
+        || durationSeconds < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
+        || durationSeconds > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
+      ) {
+        throw new SignatureVoiceContractError('Signature Voice recording duration is invalid')
+      }
+      voiceBinding = { ...requestedBinding, durationSeconds }
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Signature Voice binding is invalid' },
+        { status: 400 }
+      )
+    }
+  } else if (body?.voice_binding !== null && body?.voice_binding !== undefined) {
+    return NextResponse.json(
+      { error: 'Signature Voice binding is only accepted for the Signature Voice package' },
+      { status: 400 }
+    )
+  }
 
   let asset
   if (pendingFaceAsset?.asset_id) {
@@ -271,6 +319,11 @@ export async function POST(request) {
         p_params: validatedParams,
         p_story_language: storyLanguage,
         p_selected_book_type: selectedBookType,
+        p_voice_asset_id: voiceBinding?.assetId ?? null,
+        p_voice_sample_duration_seconds: voiceBinding?.durationSeconds ?? null,
+        p_voice_consent_version: voiceBinding?.consentVersion ?? null,
+        p_voice_subject_name: voiceBinding?.subjectName ?? null,
+        p_voice_subject_relationship: voiceBinding?.subjectRelationship ?? null,
       })
       .single(),
     saveTextProfile({

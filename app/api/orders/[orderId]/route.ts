@@ -107,6 +107,7 @@ export async function GET(
           status,
           creation_id,
           final_job_id,
+          package_type,
           quantity,
           price_at_purchase,
           creations:creations (

@@ -3,6 +3,7 @@ import type { CheckoutCurrency } from '@/lib/locale-pricing'
 export type OrderItem = {
   cart_item_id: string
   creation_id: string
+  package_type?: string | null
   quantity: number
   price_at_purchase?: number | null
   display_unit_price?: number | null

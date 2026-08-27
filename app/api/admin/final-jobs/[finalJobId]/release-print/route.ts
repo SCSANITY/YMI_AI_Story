@@ -30,7 +30,7 @@ export async function POST(
   })
 
   if (error) {
-    const conflict = /must be released|already been released|upload and verify|not verified|changed before release/i.test(error.message)
+    const conflict = /must be released|already been released|upload and verify|not verified|changed before release|signature voice|triage/i.test(error.message)
     return jsonNoStore(
       { error: error.message || 'Failed to release print version' },
       { status: conflict ? 409 : 500 }

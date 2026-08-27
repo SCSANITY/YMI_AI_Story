@@ -39,6 +39,7 @@ export type OrderRow = {
   delivered_at: string | null
   logistics_updated_at: string | null
   production_progress: AdminOrderProductionProgress
+  signature_voice_item_count: number
 }
 
 export type OrderDraft = {

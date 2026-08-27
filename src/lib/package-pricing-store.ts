@@ -6,6 +6,11 @@ import {
   type TemplatePackagePriceRow,
 } from '@/lib/package-pricing'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import {
+  assertSignatureVoicePurchaseBinding,
+  requireSignatureVoiceAssetId,
+  SignatureVoiceContractError,
+} from '@/lib/signature-voice'
 
 export class PackagePricingStoreError extends Error {
   status: number
@@ -33,7 +38,21 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
 }) {
   const { data: creation, error: creationError } = await supabaseAdmin
     .from('creations')
-    .select('creation_id, template_id, customize_snapshot, owner_type, customer_id, anon_session_id')
+    .select(`
+      creation_id,
+      template_id,
+      customize_snapshot,
+      owner_type,
+      customer_id,
+      anon_session_id,
+      voice_asset_id,
+      voice_sample_duration_seconds,
+      voice_consent_version,
+      voice_consent_accepted_at,
+      voice_bound_at,
+      voice_subject_name,
+      voice_subject_relationship
+    `)
     .eq('creation_id', args.creationId)
     .maybeSingle()
 
@@ -47,6 +66,37 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
   const packageType = resolveBookPackageTypeFromSnapshot(creation.customize_snapshot)
   if (!packageType) {
     throw new PackagePricingStoreError('Creation uses an unsupported book package', 409)
+  }
+
+  if (packageType === 'supreme') {
+    let voiceAssetId: string
+    try {
+      voiceAssetId = requireSignatureVoiceAssetId(creation)
+    } catch (error) {
+      if (error instanceof SignatureVoiceContractError) {
+        throw new PackagePricingStoreError(error.message, 409)
+      }
+      throw error
+    }
+
+    const { data: voiceAsset, error: voiceAssetError } = await supabaseAdmin
+      .from('user_assets')
+      .select('asset_id, asset_type, storage_path')
+      .eq('asset_id', voiceAssetId)
+      .maybeSingle()
+
+    if (voiceAssetError) {
+      throw new PackagePricingStoreError('Failed to validate Signature Voice recording')
+    }
+
+    try {
+      assertSignatureVoicePurchaseBinding(creation, voiceAsset)
+    } catch (error) {
+      if (error instanceof SignatureVoiceContractError) {
+        throw new PackagePricingStoreError(error.message, 409)
+      }
+      throw error
+    }
   }
 
   const { data: priceRow, error: priceError } = await supabaseAdmin

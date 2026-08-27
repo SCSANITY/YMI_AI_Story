@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, FileCheck2, Package, Printer, Save, Undo2 } from 'lucide-react'
+import { ChevronDown, FileCheck2, Mic2, Package, Printer, Save, Undo2 } from 'lucide-react'
 import {
   AdminButton,
   AdminNotice,
@@ -22,6 +22,7 @@ import {
 } from '@/components/admin/sections/orders/types'
 import { OrderProductionSnapshot } from '@/components/admin/sections/orders/OrderProductionSnapshot'
 import { AdminFloatingDialog } from '@/components/admin/AdminFloatingDialog'
+import { SignatureVoiceWorkspace } from '@/components/admin/sections/orders/SignatureVoiceWorkspace'
 
 function formatDate(value: string | null) {
   if (!value) return '-'
@@ -90,6 +91,7 @@ function OrderSummary({
   expanded = false,
   onToggle,
   onOpenProduction,
+  onOpenSignatureVoice,
 }: {
   order: OrderRow
   statusLabel: string
@@ -100,6 +102,7 @@ function OrderSummary({
   expanded?: boolean
   onToggle?: () => void
   onOpenProduction: (mode: 'pdf' | 'print') => void
+  onOpenSignatureVoice?: () => void
 }) {
   const progress = order.production_progress
   const identity = (
@@ -159,6 +162,21 @@ function OrderSummary({
         />
         <ProgressFact icon={Package} label="Placed" value={formatDate(order.created_at)} />
       </div>
+      {onOpenSignatureVoice ? (
+        <button
+          type="button"
+          onClick={onOpenSignatureVoice}
+          className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl border border-[color-mix(in_srgb,var(--admin-accent)_42%,var(--admin-card-line))] bg-[color-mix(in_srgb,var(--admin-accent)_10%,var(--admin-card))] px-3 py-2.5 text-left transition hover:border-[var(--admin-accent-dp)] hover:bg-[color-mix(in_srgb,var(--admin-accent)_16%,var(--admin-card))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)]"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Mic2 className="h-4 w-4 shrink-0 text-[var(--admin-accent-dp)]" />
+            <span className="truncate text-sm font-bold text-[var(--admin-page-ink)]">Signature Voice production</span>
+          </span>
+          <AdminStatusBadge tone="warning">
+            {order.signature_voice_item_count} {order.signature_voice_item_count === 1 ? 'item' : 'items'}
+          </AdminStatusBadge>
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -180,6 +198,7 @@ export function OrderManagementCard({
   const [draft, setDraft] = useState<OrderDraft>(() => createOrderDraft(order))
   const [saving, setSaving] = useState(false)
   const [productionSnapshotMode, setProductionSnapshotMode] = useState<'pdf' | 'print' | null>(null)
+  const [signatureVoiceOpen, setSignatureVoiceOpen] = useState(false)
   const [notice, setNotice] = useState<{
     tone: 'success' | 'warning' | 'error'
     text: string
@@ -294,6 +313,10 @@ export function OrderManagementCard({
     if (expanded) onToggle()
     setProductionSnapshotMode(mode)
   }
+  const openSignatureVoice = () => {
+    if (expanded) onToggle()
+    setSignatureVoiceOpen(true)
+  }
 
   return (
     <>
@@ -308,6 +331,7 @@ export function OrderManagementCard({
         expanded={expanded}
         onToggle={onToggle}
         onOpenProduction={openProductionSnapshot}
+        onOpenSignatureVoice={savedOrder.signature_voice_item_count > 0 ? openSignatureVoice : undefined}
       />
     </article>
 
@@ -330,6 +354,7 @@ export function OrderManagementCard({
               isReadOnly={isReadOnly}
               isDirty={isDirty}
               onOpenProduction={openProductionSnapshot}
+              onOpenSignatureVoice={savedOrder.signature_voice_item_count > 0 ? openSignatureVoice : undefined}
             />
           </div>
           {isReadOnly ? (
@@ -465,6 +490,13 @@ export function OrderManagementCard({
           orderId={savedOrder.order_id}
           mode={productionSnapshotMode}
           onClose={() => setProductionSnapshotMode(null)}
+        />
+      ) : null}
+      {signatureVoiceOpen ? (
+        <SignatureVoiceWorkspace
+          orderId={savedOrder.order_id}
+          orderLabel={savedOrder.display_id || savedOrder.order_id}
+          onClose={() => setSignatureVoiceOpen(false)}
         />
       ) : null}
     </>

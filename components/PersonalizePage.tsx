@@ -25,7 +25,7 @@ import { isBrowserTranslated } from '@/lib/browser-translation';
 import { buildPreviewCartHref } from '@/lib/cart-navigation';
 import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants';
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar';
-import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction';
+import { GeneratePreviewAction, type GeneratePreviewConsent } from '@/components/personalize/GeneratePreviewAction';
 import { ProductShowcaseCarousel } from '@/components/personalize/ProductShowcaseCarousel';
 import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector';
 import { StoryInfoPanel } from '@/components/personalize/StoryInfoPanel';
@@ -35,6 +35,7 @@ import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
 import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
 import { LoadingPreviewOverlay } from '@/components/personalize/LoadingPreviewOverlay';
 import { PreviewIntroHeader } from '@/components/personalize/PreviewIntroHeader';
+import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
 import { PreviewShareDialog } from '@/components/personalize/PreviewShareDialog';
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage';
 import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent';
@@ -371,9 +372,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
   const [showAddToCartConfirm, setShowAddToCartConfirm] = useState(false);
-  const pendingGenerateConsentRef = useRef<{ dataGeneration: boolean } | null>(null);
+  const pendingGenerateConsentRef = useRef<GeneratePreviewConsent | null>(null);
+  const signatureVoiceGenerateConsentRef = useRef<GeneratePreviewConsent['signatureVoice'] | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
+  const [voiceDurationSeconds, setVoiceDurationSeconds] = useState<number | null>(null);
+  const [isVoiceReadyForPreview, setIsVoiceReadyForPreview] = useState(false);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [selectedPreviewJobId, setSelectedPreviewJobId] = useState<string | null>(null);
   const selectedPreviewCreationIdRef = useRef<string | null>(null);
@@ -411,8 +415,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [templateDescription, setTemplateDescription] = useState<string | null>(null);
   const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(null);
   const [recentFaces, setRecentFaces] = useState<RecentFaceItem[]>([]);
-  const [recentVoices, setRecentVoices] = useState<Array<{ asset_id: string; storage_path?: string | null; signed_url?: string | null; metadata?: { duration_seconds?: number | null } }>>([]);
-  const [voiceSignedUrl, setVoiceSignedUrl] = useState<string | null>(null);
+  const [recentVoices, setRecentVoices] = useState<Array<{ asset_id: string; storage_path?: string | null; playback_url?: string | null; metadata?: { duration_seconds?: number | null } }>>([]);
+  const [voicePlaybackUrl, setVoicePlaybackUrl] = useState<string | null>(null);
   const [voiceValidationError, setVoiceValidationError] = useState<string | null>(null);
   type RecentProfileItem = {
     asset_id: string
@@ -752,7 +756,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return recentVoices.find((voice) => voice.asset_id === voiceAssetId) ?? null;
   }, [recentVoices, voiceAssetId]);
 
-  const resolvedVoiceSignedUrl = voiceSignedUrl || currentVoiceSample?.signed_url || null;
+  const resolvedVoicePlaybackUrl = voicePlaybackUrl || currentVoiceSample?.playback_url || null;
+  const resolvedVoiceDurationSeconds = voiceDurationSeconds
+    ?? (Number(currentVoiceSample?.metadata?.duration_seconds) || null);
   const markPreviewImageError = useCallback((image: string) => {
     if (!image) return;
     setPreviewImageErrors((prev) => {
@@ -880,7 +886,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setFaceAutoCropped(false)
     setVoiceAssetId(data.voiceAssetId || null)
     setVoiceStoragePath(data.voiceStoragePath || null)
-    setVoiceSignedUrl(null)
+    setVoicePlaybackUrl(null)
+    setVoiceDurationSeconds(null)
+    setIsVoiceReadyForPreview(false)
     setPreviewJobId(isUuid(data.previewJobId) ? data.previewJobId : null)
     setCreationId(data.creationId ?? null)
     resumePersonalization(null)
@@ -1164,7 +1172,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setRecentFaces([])
     setVoiceAssetId(null)
     setVoiceStoragePath(null)
-    setVoiceSignedUrl(null)
+    setVoicePlaybackUrl(null)
+    setVoiceDurationSeconds(null)
+    setIsVoiceReadyForPreview(false)
     setVoiceValidationError(null)
     setPreviewJobId(null)
     setCreationId(null)
@@ -1310,12 +1320,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         const currentFacePrepareStatus = facePrepareStatusRef.current
         const currentFacePrepareError = facePrepareErrorRef.current
         const hasDataGenerationConsent = dataGenerationConsentRef.current
+        const signatureVoiceConsent = signatureVoiceGenerateConsentRef.current
         const currentName = nameRef.current
         const currentAge = ageRef.current
 
         if (!book) throw new Error('Book not found')
         if (!currentPhoto && !faceAssetId) throw new Error('Please upload a photo before generating the preview')
         if (!hasDataGenerationConsent) throw new Error(t('personalize.dataConsentRequired'))
+        if (bookType === 'supreme' && (!voiceAssetId || !signatureVoiceConsent || !isVoiceReadyForPreview)) {
+          throw new Error(t('personalize.voiceSampleRequired'))
+        }
 
         setPreviewUrl(null)
         setPreviewPages([])
@@ -1398,7 +1412,18 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           textOverrides,
           generationConsentParams,
           currentCustomerId ?? undefined,
-          pendingFaceAsset
+          pendingFaceAsset,
+          bookType === 'supreme' && signatureVoiceConsent && voiceAssetId
+            ? {
+                assetId: voiceAssetId,
+                consent: {
+                  accepted: true,
+                  version: signatureVoiceConsent.version,
+                },
+                subjectName: signatureVoiceConsent.subjectName,
+                subjectRelationship: signatureVoiceConsent.subjectRelationship,
+              }
+            : undefined
         )
         markGenerateTiming(pendingFaceAsset ? 'asset_confirmed/job_created' : 'job_created', {
           jobId: created?.jobId,
@@ -1543,7 +1568,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType, trackPreviewReady]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType, trackPreviewReady, isVoiceReadyForPreview, voiceAssetId]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -1697,10 +1722,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [user?.customerId]);
 
   useEffect(() => {
-    if (voiceSignedUrl) return;
-    if (!currentVoiceSample?.signed_url) return;
-    setVoiceSignedUrl(currentVoiceSample.signed_url);
-  }, [currentVoiceSample?.signed_url, voiceSignedUrl]);
+    if (voicePlaybackUrl) return;
+    if (!currentVoiceSample?.playback_url) return;
+    setVoicePlaybackUrl(currentVoiceSample.playback_url);
+  }, [currentVoiceSample?.playback_url, voicePlaybackUrl]);
 
   useEffect(() => {
     if (!requiresVoiceSample || voiceAssetId) {
@@ -2165,14 +2190,21 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [requiresVoiceSample, stage, voiceAssetId, returnToCustomizeFromPreview, t]);
 
   const handleVoiceUploadComplete = useCallback(
-    ({ assetId, storagePath, signedUrl }: { assetId: string; storagePath: string; signedUrl?: string | null }) => {
+    ({ assetId, storagePath, playbackUrl, durationSeconds }: { assetId: string; storagePath: string; playbackUrl?: string | null; durationSeconds: number }) => {
       setVoiceAssetId(assetId);
       setVoiceStoragePath(storagePath);
-      setVoiceSignedUrl(signedUrl ?? null);
+      setVoicePlaybackUrl(playbackUrl ?? null);
+      setVoiceDurationSeconds(durationSeconds);
+      setIsVoiceReadyForPreview(true);
       setVoiceValidationError(null);
     },
     []
   );
+
+  const handleVoiceReadinessChange = useCallback((ready: boolean) => {
+    setIsVoiceReadyForPreview(ready);
+    if (ready) setVoiceValidationError(null);
+  }, []);
 
   const handleDiscardPreviewVariant = useCallback(async (jobId: string) => {
     const variant = previewVariantsRef.current.find((item) => item.jobId === jobId);
@@ -2998,14 +3030,15 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return parsedAge !== null && parsedAge < minimumRecommendedAge;
   }, [minimumRecommendedAge]);
 
-  const startGeneratePreview = useCallback((consent: { dataGeneration: boolean }) => {
+  const startGeneratePreview = useCallback((consent: GeneratePreviewConsent) => {
     dataGenerationConsentRef.current = consent.dataGeneration;
+    signatureVoiceGenerateConsentRef.current = consent.signatureVoice ?? null;
     setName(nameRef.current);
     setAge(ageRef.current);
     primaryAction();
   }, [primaryAction, setAge, setName]);
 
-  const handleGeneratePreviewAction = useCallback((consent: { dataGeneration: boolean }) => {
+  const handleGeneratePreviewAction = useCallback((consent: GeneratePreviewConsent) => {
     if (isAgeBelowRecommendedRange(ageRef.current)) {
       pendingGenerateConsentRef.current = consent;
       setShowAgeRangeConfirm(true);
@@ -3181,6 +3214,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                               isFacePreparing={isFacePreparing}
                               isPhotoFailed={facePrepareStatus === 'failed'}
                               isSupreme={isSupreme}
+                              isVoiceReady={!isSupreme || (Boolean(voiceAssetId) && isVoiceReadyForPreview)}
                               previewError={previewError}
                               labels={{
                                 dataConsentRequired: t('personalize.dataConsentRequiredLabel'),
@@ -3190,7 +3224,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                                 dataConsentRequiredShort: t('personalize.dataConsentRequiredShort'),
                                 generateMagicPreview: t('personalize.generateMagicPreview'),
                                 completeDetails: t('personalize.completeDetails'),
-                                comingSoon: t('personalize.comingSoon'),
+                                voiceConsent: t('personalize.signatureVoiceConsent'),
+                                voiceSubjectName: t('personalize.voiceSubjectName'),
+                                voiceSubjectNamePlaceholder: t('personalize.voiceSubjectNamePlaceholder'),
+                                voiceRelationship: t('personalize.voiceRelationship'),
+                                voiceRelationshipPlaceholder: t('personalize.voiceRelationshipPlaceholder'),
+                                voiceRelationshipSelf: t('personalize.voiceRelationshipSelf'),
+                                voiceRelationshipParent: t('personalize.voiceRelationshipParent'),
+                                voiceRelationshipFamily: t('personalize.voiceRelationshipFamily'),
+                                voiceRelationshipOther: t('personalize.voiceRelationshipOther'),
+                                privacyPolicy: t('personalize.privacyPolicy'),
                               }}
                               onGenerate={handleGeneratePreviewAction}
                             />
@@ -3289,7 +3332,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       voiceCustomerId={user?.customerId}
                       voiceAssetId={voiceAssetId}
                       voiceStoragePath={voiceStoragePath}
-                      voiceSignedUrl={resolvedVoiceSignedUrl}
+                      voicePlaybackUrl={resolvedVoicePlaybackUrl}
+                      voiceDurationSeconds={resolvedVoiceDurationSeconds}
+                      onVoiceReadinessChange={handleVoiceReadinessChange}
                       voiceValidationError={voiceValidationError}
                       onVoiceUploadComplete={handleVoiceUploadComplete}
                       onClearVoiceValidation={() => setVoiceValidationError(null)}
@@ -3306,6 +3351,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                     <PreviewIntroHeader
                       title={t('personalize.previewTitle', { name })}
                       subtitle={t('personalize.previewSubtitle')}
+                      editionNotice={isSupreme ? <SignatureVoiceEditionNotice variant="preview" /> : undefined}
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
                       showChangePhoto={!isPreviewPhotoLocked}

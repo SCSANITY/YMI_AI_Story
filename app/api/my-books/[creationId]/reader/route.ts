@@ -149,6 +149,7 @@ export async function GET(
         latestOrderId: purchaseSummary.latestOrderId,
         latestOrderDisplayId: purchaseSummary.latestOrderDisplayId,
         latestOrderStatus: purchaseSummary.latestOrderStatus,
+        latestPackageType: purchaseSummary.latestPackageType,
       },
       { status: 403 }
     )
@@ -212,6 +213,7 @@ export async function GET(
       latestOrderId: purchaseSummary.latestOrderId,
       latestOrderDisplayId: purchaseSummary.latestOrderDisplayId,
       latestOrderStatus: purchaseSummary.latestOrderStatus,
+      latestPackageType: purchaseSummary.latestPackageType,
       finalJob: finalJob
         ? {
             finalJobId: finalJob.final_job_id,
@@ -255,6 +257,7 @@ export async function GET(
       latestOrderId: purchaseSummary.latestOrderId,
       latestOrderDisplayId: purchaseSummary.latestOrderDisplayId,
       latestOrderStatus: purchaseSummary.latestOrderStatus,
+      latestPackageType: purchaseSummary.latestPackageType,
       finalJob: {
         finalJobId: finalJob.final_job_id,
         status: finalJob.status,
@@ -351,6 +354,7 @@ export async function GET(
     latestOrderId: purchaseSummary.latestOrderId,
     latestOrderDisplayId: purchaseSummary.latestOrderDisplayId,
     latestOrderStatus: purchaseSummary.latestOrderStatus,
+    latestPackageType: purchaseSummary.latestPackageType,
     finalJob: {
       finalJobId: finalJob.final_job_id,
       status: finalJob.status,

@@ -58,6 +58,10 @@
     {
       "path": "/api/internal/email/general-mail/cleanup",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/internal/user-assets/cleanup",
+      "schedule": "30 1 * * *"
     }
   ]
 }

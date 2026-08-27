@@ -1,6 +1,7 @@
 import { isUuid } from '@/lib/validators'
 import type { PendingUserAssetUpload } from '@/services/assets'
 import { parseSignedPreviewAssets, type SignedPreviewAssets } from '@/lib/preview-page-contract'
+import type { SignatureVoiceSubjectRelationship } from '@/lib/signature-voice'
 
 export interface JobRecord {
   job_id: string
@@ -32,6 +33,16 @@ export type CreatePreviewVariantResult = {
   reused: boolean
   sessionVariantCount: number
   sessionVariantCap: number
+}
+
+export type CreatePreviewVoiceBinding = {
+  assetId: string
+  consent: {
+    accepted: true
+    version: 'signature-voice-consent-v1'
+  }
+  subjectName: string
+  subjectRelationship: SignatureVoiceSubjectRelationship
 }
 
 export type CommitPreviewVariantInput = {
@@ -98,7 +109,8 @@ export async function createPreviewJob(
   textOverrides?: Record<string, unknown>,
   params?: Record<string, unknown>,
   customerId?: string,
-  pendingFaceAsset?: PendingUserAssetUpload
+  pendingFaceAsset?: PendingUserAssetUpload,
+  voiceBinding?: CreatePreviewVoiceBinding
 ): Promise<{ jobId: string; creationId: string }> {
   if (!templateId || !faceAssetId) throw new Error('Template ID and face asset ID are required')
 
@@ -112,6 +124,14 @@ export async function createPreviewJob(
       params: params ?? null,
       customerId: customerId ?? null,
       pending_face_asset: pendingFaceAsset ?? null,
+      voice_binding: voiceBinding
+        ? {
+            asset_id: voiceBinding.assetId,
+            consent: voiceBinding.consent,
+            subject_name: voiceBinding.subjectName,
+            subject_relationship: voiceBinding.subjectRelationship,
+          }
+        : null,
     }),
     credentials: 'include',
   })

@@ -9,6 +9,8 @@ import OrderCoverImage from '@/components/OrderCoverImage';
 import type { CartItem } from '@/types';
 import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
 import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title';
+import { SignatureVoiceBadge, SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
+import { isSignatureVoicePackage } from '@/lib/signature-voice';
 
 type CoverStatus = 'ready' | 'pending' | 'unavailable';
 
@@ -35,6 +37,7 @@ export function CheckoutItemsSection({
   onRemoveItem,
   onAddFromCartItems,
 }: CheckoutItemsSectionProps) {
+  const hasSignatureVoice = items.some(item => isSignatureVoicePackage(item.personalization?.bookType));
   const [isAddFromCartOpen, setIsAddFromCartOpen] = useState(false);
   const [addFromCartSelection, setAddFromCartSelection] = useState<string[]>([]);
   const [pendingAddItemIds, setPendingAddItemIds] = useState<string[]>([]);
@@ -192,6 +195,9 @@ export function CheckoutItemsSection({
                           <div className="mt-1 truncate text-xs text-slate-500">
                             {t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}
                           </div>
+                          {isSignatureVoicePackage(item.personalization?.bookType) ? (
+                            <SignatureVoiceBadge className="mt-2" />
+                          ) : null}
                           <div className="mt-1 text-xs font-medium text-slate-500 sm:hidden">
                             {t('cart.miniQuantity', { quantity })} -{' '}
                             <span className="font-semibold text-slate-800">
@@ -272,6 +278,9 @@ export function CheckoutItemsSection({
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{displayTitle}</div>
                       <div className="mt-1 text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
+                      {isSignatureVoicePackage(item.personalization?.bookType) ? (
+                        <SignatureVoiceBadge className="mt-2" />
+                      ) : null}
                       <div className="mt-2 text-sm font-semibold text-gray-900 sm:hidden">
                         {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}
                       </div>
@@ -330,6 +339,9 @@ export function CheckoutItemsSection({
                 );
               })}
             </AnimatePresence>
+            {hasSignatureVoice ? (
+              <SignatureVoiceEditionNotice variant="checkout" compact className="mt-3" />
+            ) : null}
           </div>
         )}
         <div className="pt-4">

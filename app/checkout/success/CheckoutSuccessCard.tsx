@@ -6,6 +6,8 @@ import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
 import { formatMajorCurrencyValue, type CheckoutCurrency } from '@/lib/locale-pricing';
 import { getOrderStatusLabelKey } from '@/lib/order-status';
+import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
+import { isSignatureVoicePackage } from '@/lib/signature-voice';
 
 export type CheckoutSuccessOrder = {
   order_id: string;
@@ -15,7 +17,7 @@ export type CheckoutSuccessOrder = {
   display_currency?: CheckoutCurrency;
   email?: string | null;
   item_count?: number | null;
-  items?: Array<{ quantity?: number | null }>;
+  items?: Array<{ quantity?: number | null; package_type?: string | null }>;
 };
 
 type CheckoutSuccessCardProps = {
@@ -43,6 +45,7 @@ export function CheckoutSuccessCard({
 }: CheckoutSuccessCardProps) {
   const { t } = useI18n();
   const [pendingAction, setPendingAction] = useState<'track' | 'home' | null>(null);
+  const hasSignatureVoice = order?.items?.some(item => isSignatureVoicePackage(item.package_type)) ?? false;
 
   const handleTrackOrder = () => {
     if (pendingAction || (!orderId && !order?.order_id)) return;
@@ -102,6 +105,10 @@ export function CheckoutSuccessCard({
             <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
             <p>{t('checkout.pdfDeliveryNotice')}</p>
           </div>
+        ) : null}
+
+        {hasSignatureVoice ? (
+          <SignatureVoiceEditionNotice variant="postPurchase" className="mx-auto mt-5 max-w-xl" />
         ) : null}
 
         {accountPromptEmail ? (

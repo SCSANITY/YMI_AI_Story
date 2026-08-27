@@ -32,8 +32,8 @@ const LEGAL_DOCUMENT_DEFINITIONS: Record<CanonicalLegalDocumentKey, LegalDocumen
     description:
       'Learn how YMI Story collects, uses, stores, and protects account information, uploaded family media, and generated content.',
     path: '/privacy',
-    effectiveDate: 'July 28, 2026',
-    version: '2026-07-28',
+    effectiveDate: 'August 27, 2026',
+    version: '2026-08-27',
   },
   terms: {
     key: 'terms',

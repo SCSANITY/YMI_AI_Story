@@ -252,7 +252,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
       const childAge = overrides.child_age ?? overrides.childAge ?? overrides.age ?? '';
       const language = normalizeStoryLanguage(overrides.language ?? creation.customize_snapshot?.language);
-      const bookType = overrides.book_type ?? creation.customize_snapshot?.bookType ?? 'basic';
+      const bookType = row.package_type ?? overrides.book_type ?? creation.customize_snapshot?.bookType ?? 'basic';
 
       return {
         id: row.cart_item_id,

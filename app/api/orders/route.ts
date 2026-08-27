@@ -113,6 +113,7 @@ export async function GET(request: Request) {
           status,
           creation_id,
           final_job_id,
+          package_type,
           quantity,
           price_at_purchase,
           creations:creations (
@@ -268,6 +269,7 @@ export async function GET(request: Request) {
       return {
         cart_item_id: item.cart_item_id,
         creation_id: item.creation_id,
+        package_type: item.package_type ?? null,
         quantity: item.quantity ?? 1,
         price_at_purchase: item.price_at_purchase ?? null,
         display_unit_price: getDisplayUnitPrice(Number(item.price_at_purchase ?? 0), displayCurrency),

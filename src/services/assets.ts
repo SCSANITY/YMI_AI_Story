@@ -11,6 +11,8 @@ export interface UserAssetRecord {
   asset_type: AssetType
   storage_path: string
   signed_url?: string
+  playback_url?: string
+  metadata?: Record<string, unknown> | null
   created_at?: string
 }
 
@@ -620,6 +622,7 @@ type UploadUserAssetOptions = {
   skipFacePreparation?: boolean
   originalName?: string
   onTiming?: (label: string, details?: Record<string, unknown>) => void
+  metadata?: Record<string, unknown>
 }
 
 export async function uploadUserAsset(
@@ -726,6 +729,7 @@ export async function uploadUserAsset(
       original_name: options?.originalName ?? file.name,
       content_type: uploadFile.type || 'application/octet-stream',
       size_bytes: uploadFile.size,
+      metadata: options?.metadata ?? null,
     }),
   })
 

@@ -4,6 +4,8 @@ import { MapPin } from 'lucide-react'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import { formatMajorCurrencyValue } from '@/lib/locale-pricing'
 import type { OrderDetail, OrderItem } from './orderDetailTypes'
+import { SignatureVoiceBadge, SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
+import { isSignatureVoicePackage } from '@/lib/signature-voice'
 
 type OrderDetailPanelsProps = {
   items: OrderItem[]
@@ -14,6 +16,7 @@ type OrderDetailPanelsProps = {
 
 export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDetailPanelsProps) {
   const address = order.shipping_address ?? {}
+  const hasSignatureVoice = items.some((item) => isSignatureVoicePackage(item.package_type))
 
   return (
     <div className="grid md:grid-cols-[1.5fr_1fr] gap-5">
@@ -40,6 +43,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
                   {item.template_name || t('common.personalizedStorybook')}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">{t('orderDetail.qty')} {item.quantity}</div>
+                {isSignatureVoicePackage(item.package_type) ? <SignatureVoiceBadge className="mt-2" /> : null}
               </div>
               <div className="text-sm font-bold text-gray-900 shrink-0">
                 {formatMajorCurrencyValue(
@@ -50,6 +54,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
             </div>
           ))}
         </div>
+        {hasSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" compact /> : null}
       </div>
 
       <div className="glass-panel rounded-3xl p-5 md:p-6 space-y-5">

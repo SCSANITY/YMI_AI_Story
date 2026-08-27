@@ -17,6 +17,8 @@ import {
 } from '@/lib/reader-page-contract'
 import { useI18n } from '@/lib/useI18n'
 import type { Book, BookPackagePricing, PersonalizationData, StoryLanguage } from '@/types'
+import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
+import { isSignatureVoicePackage } from '@/lib/signature-voice'
 
 const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
@@ -55,6 +57,7 @@ type ReaderResponse = {
   assetLayout?: string | null
   creation?: ReaderCreation
   latestOrderDisplayId?: string | null
+  latestPackageType?: string | null
   pages?: Array<Omit<SignedReaderPage, 'url'> & { url?: string | null }>
 }
 
@@ -82,12 +85,12 @@ function getSnapshotParts(snapshotValue: unknown) {
   return { snapshot, textOverrides }
 }
 
-function buildCartContext(creation: ReaderCreation): { book: Book; personalization: PersonalizationData } {
+function buildCartContext(creation: ReaderCreation, purchasedPackageType?: string | null): { book: Book; personalization: PersonalizationData } {
   const fallbackBook = BOOKS.find((book) => book.bookID === creation.templateId)
   const { snapshot, textOverrides } = getSnapshotParts(creation.customizeSnapshot)
   const childName = textOverrides.child_name ?? textOverrides.childName ?? ''
   const childAge = textOverrides.child_age ?? textOverrides.childAge ?? textOverrides.age ?? ''
-  const bookType = normalizeBookType(textOverrides.book_type ?? snapshot.bookType)
+  const bookType = normalizeBookType(purchasedPackageType ?? textOverrides.book_type ?? snapshot.bookType)
   let packagePricing: BookPackagePricing | undefined
   try {
     packagePricing = packagePriceRowsToPricing(creation.template?.package_prices)
@@ -238,7 +241,10 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   }, [])
 
   const creation = reader?.creation ?? null
-  const cartContext = useMemo(() => creation ? buildCartContext(creation) : null, [creation])
+  const cartContext = useMemo(
+    () => creation ? buildCartContext(creation, reader?.latestPackageType) : null,
+    [creation, reader?.latestPackageType]
+  )
   const resolvedTitle = useMemo(() => creation
     ? resolvePersonalizedBookTitle({
         templateId: creation.templateId,
@@ -378,6 +384,8 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     )
   }
 
+  const isSignatureVoice = isSignatureVoicePackage(reader.latestPackageType)
+
   if (!reader.finalReady) {
     return (
       <ReaderStateShell backLabel={t('myBooks.readerBack')}>
@@ -386,6 +394,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         <h1 className="mt-2 font-display text-2xl font-semibold text-gray-900">{resolvedTitle}</h1>
         <h2 className="mt-6 text-lg font-semibold text-gray-800">{t('myBooks.readerPreparingTitle')}</h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-gray-500">{t('myBooks.readerPreparingBody')}</p>
+        {isSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" className="mt-5 w-full max-w-md" /> : null}
         {reader.latestOrderDisplayId ? <p className="mt-3 text-xs font-medium text-gray-400">{t('myBooks.orderLabel', { orderId: reader.latestOrderDisplayId })}</p> : null}
         <div className="mt-7 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center">
           <button type="button" onClick={() => void loadReader({ silent: true })} disabled={refreshing} className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-60">
@@ -441,6 +450,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">{t('myBooks.readerEyebrow')}</p>
           <h1 className="mt-3 font-display text-2xl font-semibold text-gray-900 md:text-3xl">{resolvedTitle}</h1>
           <p className="mt-2 text-sm text-gray-500">{t('myBooks.readerFullBook')}</p>
+          {isSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" compact className="mx-auto mt-5 max-w-xl" /> : null}
         </header>
 
         <PreviewBookStage
