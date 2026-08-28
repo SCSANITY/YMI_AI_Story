@@ -2222,3 +2222,43 @@ Before deployment, configure Supabase Auth with the production recovery callback
 Reset Password email template link to that callback using `TokenHash` plus `type=recovery`. Then run
 the production smoke test for a known account, an unknown address, successful password replacement,
 old-password rejection, one-time-link reuse rejection and unchanged Admin login behavior.
+
+## T4-013 - Signature Voice recording readiness and upload failure
+
+**Status:** SQL HOTFIX APPLIED; awaiting code deployment and production smoke test (2026-08-28)
+
+### Diagnosis
+
+- The delayed `Use This Recording` state came from full-file browser decoding/quality analysis plus
+  a mandatory complete playback. That subjective quality gate duplicated the existing Admin source
+  triage and added another 10-20 seconds to the customer path.
+- The upload failure was independent of quality analysis. The production
+  `reserve_signature_voice_capture_authorization` function rejected valid anonymous and customer
+  owner shapes because its owner-validation branches were reversed. The failure happened before a
+  signed Storage upload URL was issued.
+
+### Resolution
+
+- Removed the browser quality scorer and mandatory full playback. A recorded 10-20 second sample is
+  immediately eligible once authorization is checked; playback remains available but optional.
+- Retained the authoritative server checks: the private Storage object is downloaded, parsed as a
+  real audio container, and its actual duration must remain between 10 and 20 seconds. Subjective
+  quality remains an Admin triage decision.
+- Corrected both the canonical migration and the standalone idempotent production hotfix:
+  `Template_folder/sql_signature_voice_capture_owner_hotfix.sql`.
+- Split client errors by upload stage and preserve controlled API error messages, so authorization,
+  secure Storage upload and server verification failures are no longer collapsed into one generic
+  message.
+
+### Verification and release gate
+
+- `npm run signature-voice:tests`: 37/37 passed after removing the obsolete quality-scorer tests.
+- `npm run test:contracts`: 220/220 passed.
+- `npx tsc --noEmit`: passed.
+- Targeted ESLint: passed with no findings.
+- `npm run build`: passed.
+- `sql_signature_voice_capture_owner_hotfix.sql` was applied successfully in production before
+  code deployment.
+- Production smoke: record a valid 10-20 second sample as a guest, confirm the action enables
+  immediately, upload it, and create Preview. Repeat once while signed in. Admin human source triage
+  remains unchanged.

@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const readTemplateSql = (path) => readFile(new URL(`../../Template_folder/${path}`, import.meta.url), 'utf8')
 
 test('S7 authorizes child or adult capture before upload and sends only the asset to Preview', async () => {
-  const [action, recorder, page, jobsClient, uploadRoute, confirmRoute, cleanupServer, sql] = await Promise.all([
+  const [action, recorder, page, jobsClient, uploadRoute, confirmRoute, cleanupServer, sql, ownerHotfix] = await Promise.all([
     read('components/personalize/GeneratePreviewAction.tsx'),
     read('components/personalize/VoiceRecorderPanel.tsx'),
     read('components/PersonalizePage.tsx'),
@@ -15,6 +15,7 @@ test('S7 authorizes child or adult capture before upload and sends only the asse
     read('app/api/user-assets/confirm/route.ts'),
     read('src/lib/user-asset-cleanup-server.ts'),
     readTemplateSql('sql_signature_voice_consent_v2.sql'),
+    readTemplateSql('sql_signature_voice_capture_owner_hotfix.sql'),
   ])
 
   assert.doesNotMatch(action, /Coming Soon|isDisabled\s*=\s*!isFormValid\s*\|\|\s*isSupreme/)
@@ -25,8 +26,8 @@ test('S7 authorizes child or adult capture before upload and sends only the asse
   assert.match(recorder, /voiceAuthorization:[\s\S]*accepted: true[\s\S]*speakerKind/)
   assert.match(recorder, /href="\/privacy"/)
   assert.match(recorder, /addEventListener\('ended', handleEnded\)/)
-  assert.match(recorder, /if \(!playbackCompleted\)[\s\S]*statusPlaybackRequired/)
-  assert.match(recorder, /analyzeVoiceSampleBlob/)
+  assert.match(recorder, /const canSaveRecording =[\s\S]*seconds >= MIN_SECONDS[\s\S]*seconds <= MAX_SECONDS[\s\S]*Boolean\(recordedBlob\)[\s\S]*isAuthorizationAccepted/)
+  assert.doesNotMatch(recorder, /playbackCompleted|analyzeVoiceSampleBlob|AudioContext|client_quality/)
   assert.doesNotMatch(page, /signatureVoiceGenerateConsentRef/)
   assert.match(page, /bookType === 'supreme'[\s\S]*!voiceAssetId \|\| !isVoiceReadyForPreview/)
 
@@ -50,6 +51,10 @@ test('S7 authorizes child or adult capture before upload and sends only the asse
   assert.match(sql, /create or replace function public\.enqueue_stale_signature_voice_capture_uploads/)
   assert.match(sql, /capture_auth\.confirmed_at is null[\s\S]*capture_auth\.created_at < p_cutoff/)
   assert.match(sql, /insert into public\.user_asset_cleanup_outbox[\s\S]*delete from public\.signature_voice_capture_authorizations/)
+  assert.match(ownerHotfix, /if p_owner_type not in \('anon', 'customer'\)[\s\S]*signature_voice_capture_owner_invalid/)
+  assert.match(ownerHotfix, /p_owner_type = 'anon' and \(p_anon_session_id is null or p_customer_id is not null\)[\s\S]*signature_voice_capture_owner_invalid/)
+  assert.match(ownerHotfix, /p_owner_type = 'customer' and \(p_customer_id is null or p_anon_session_id is not null\)[\s\S]*signature_voice_capture_owner_invalid/)
+  assert.doesNotMatch(ownerHotfix, /p_owner_type\s*=\s*'(?:anon|customer)'[\s\S]{0,160}?then\s+null\s*;/i)
   assert.match(cleanupServer, /enqueue_stale_signature_voice_capture_uploads/)
   assert.match(cleanupServer, /Date\.now\(\) - DAY_MS/)
 })
@@ -93,7 +98,7 @@ test('S2 verifies real private audio bytes and derives duration on the server', 
   assert.match(confirmRoute, /parseBuffer\(bytes/)
   assert.match(confirmRoute, /duration < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS[\s\S]*duration > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS/)
   assert.match(confirmRoute, /duration_seconds: verifiedVoiceDuration/)
-  assert.match(confirmRoute, /client_quality: normalizeClientVoiceQuality\(clientMetadata\?\.quality\)/)
+  assert.doesNotMatch(confirmRoute, /client_quality|normalizeClientVoiceQuality|clientMetadata/)
 
   assert.match(jobsRoute, /parseSignatureVoiceBindingRequest\(body\?\.voice_binding\)/)
   assert.match(jobsRoute, /\.eq\('asset_id', requestedBinding\.assetId\)[\s\S]*\.eq\('owner_type', voiceOwnerFilter\.owner_type\)[\s\S]*\.eq\(voiceOwnerFilter\.column, voiceOwnerFilter\.value\)/)

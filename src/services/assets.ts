@@ -627,6 +627,13 @@ type UploadUserAssetOptions = {
   voiceAuthorization?: SignatureVoiceCaptureAuthorization
 }
 
+async function resolveUploadError(response: Response, fallback: string) {
+  const payload = await response.json().catch(() => null) as { error?: unknown } | null
+  return typeof payload?.error === 'string' && payload.error.trim()
+    ? payload.error
+    : fallback
+}
+
 export async function uploadUserAsset(
   file: File,
   type: AssetType,
@@ -651,6 +658,7 @@ export async function uploadUserAsset(
   options?: UploadUserAssetOptions & { deferConfirm?: boolean }
 ): Promise<UserAssetRecord | PendingUserAssetUpload> {
   if (!file) throw new Error('File is required')
+  const uploadLabel = type === 'voice_sample' ? 'recording' : 'file'
   const uploadFile =
     type === 'face_image' && !options?.skipFacePreparation
       ? await prepareFaceImage(file)
@@ -684,7 +692,7 @@ export async function uploadUserAsset(
   })
 
   if (!response.ok) {
-    throw new Error('Upload failed')
+    throw new Error(await resolveUploadError(response, `Unable to prepare the ${uploadLabel} upload. Please try again.`))
   }
 
   const uploadSpec = await response.json()
@@ -710,7 +718,7 @@ export async function uploadUserAsset(
     .uploadToSignedUrl(storagePath, token, uploadFile)
 
   if (uploadError) {
-    throw new Error('Upload failed')
+    throw new Error(`The ${uploadLabel} could not be uploaded to secure storage. Please try again.`)
   }
 
   options?.onTiming?.('storage_upload_done', {
@@ -751,7 +759,7 @@ export async function uploadUserAsset(
   })
 
   if (!confirmResponse.ok) {
-    throw new Error('Failed to confirm upload')
+    throw new Error(await resolveUploadError(confirmResponse, `The uploaded ${uploadLabel} could not be verified. Please try again.`))
   }
 
   return (await confirmResponse.json()) as UserAssetRecord

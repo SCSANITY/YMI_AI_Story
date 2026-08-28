@@ -31,24 +31,6 @@ type ConfirmedSignatureVoiceAsset = {
   out_created_at: string
 }
 
-function normalizeClientVoiceQuality(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const quality = value as Record<string, unknown>
-  const entries = [
-    ['peak', 2],
-    ['rms', 2],
-    ['clippingRatio', 1],
-    ['noiseFloorRatio', 1],
-  ] as const
-  const normalized: Record<string, number> = {}
-  for (const [key, maximum] of entries) {
-    const metric = Number(quality[key])
-    if (!Number.isFinite(metric) || metric < 0 || metric > maximum) return null
-    normalized[key] = metric
-  }
-  return normalized
-}
-
 export async function POST(request: Request) {
   const body = await request.json()
   const assetId = body?.asset_id || body?.assetId
@@ -60,9 +42,6 @@ export async function POST(request: Request) {
   const contentType = body?.content_type || body?.contentType || null
   const sizeBytes = body?.size_bytes ?? body?.sizeBytes
   const voiceAuthorizationId = body?.voice_authorization_id || body?.voiceAuthorizationId || null
-  const clientMetadata = body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
-    ? body.metadata
-    : null
   const createdFor = assetType === 'profile_avatar' ? 'profile' : 'preview'
   const source = assetType === 'profile_avatar' ? 'profile' : 'upload'
 
@@ -152,7 +131,6 @@ export async function POST(request: Request) {
     ...(verifiedVoiceDuration !== null
       ? {
           duration_seconds: verifiedVoiceDuration,
-          client_quality: normalizeClientVoiceQuality(clientMetadata?.quality),
         }
       : {}),
   }
