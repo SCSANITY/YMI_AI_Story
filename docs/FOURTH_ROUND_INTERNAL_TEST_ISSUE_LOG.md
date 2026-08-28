@@ -2179,3 +2179,13 @@ CARRY-FORWARD:
    header, which `storage-js` sends only on POST, is simply ignored on this PUT. Your smoke test
    covers it; noting it so the first live upload is read as a protocol check and not only a size
    check.
+
+### Owner production acceptance (T4-011, 2026-08-28)
+
+- `sql_final_print_artifacts.sql` completed successfully before the application deployment.
+- Commit `68fe21c` deployed successfully through Vercel.
+- The owner completed the production Print Review upload check and reported no issues. This closes
+  the real Supabase signed-`PUT` protocol risk, including the `x-upsert: false` behavior, as well as
+  the job-local progress and error presentation gate.
+- T4-011 is CLOSED. The non-resumable two-hour upload window and external SQL version-control
+  decision remain carry-forward items only.
