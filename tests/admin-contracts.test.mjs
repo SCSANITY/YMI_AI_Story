@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 62, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 63, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -266,6 +266,9 @@ test('Final Review preserves server authority and stale-response intent guards',
   const replacementApi = await read(
     'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-replacement/route.ts'
   )
+  const replacementUploadUrlApi = await read(
+    'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-replacement/upload-url/route.ts'
+  )
   const printUploadUrlApi = await read(
     'app/api/admin/final-jobs/[finalJobId]/print-package/upload-url/route.ts'
   )
@@ -362,6 +365,9 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(replacementApi, /approvedUrl:\s*signedManual\?\.signedUrl/)
   assert.match(replacementApi, /hasManualOutput:\s*true/)
   assert.match(replacementApi, /hasApprovedOutput:\s*true/)
+  assert.match(replacementUploadUrlApi, /await\s+requireAdminCustomer\s*\(\s*\)/)
+  assert.match(replacementUploadUrlApi, /createSignedUploadUrl/)
+  assert.match(replacementUploadUrlApi, /user_asset_cleanup_outbox/)
   assert.match(printUploadUrlApi, /createSignedUploadUrl/)
   assert.match(printUploadUrlApi, /create_final_print_artifact/)
   assert.match(printConfirmApi, /commit_final_print_artifact/)

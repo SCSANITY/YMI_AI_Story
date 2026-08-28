@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   Download,
   FileCheck2,
   FileUp,
@@ -7,6 +8,12 @@ import {
 } from 'lucide-react'
 import type { ManualPrintArtifactClient } from '@/lib/manual-print-artifact'
 import { formatDate } from './reviewUi'
+
+type PrintUploadProgressValue = {
+  fileName: string
+  percent: number
+  phase: 'preparing' | 'uploading' | 'verifying'
+}
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return 'Unknown size'
@@ -19,6 +26,8 @@ export function PrintVersionReview({
   printReleased,
   artifact,
   uploading,
+  uploadProgress,
+  uploadError,
   onUploadPrintPdf,
 }: {
   loadingDetail: boolean
@@ -26,6 +35,8 @@ export function PrintVersionReview({
   printReleased: boolean
   artifact: ManualPrintArtifactClient | null
   uploading: boolean
+  uploadProgress: PrintUploadProgressValue | null
+  uploadError: string | null
   onUploadPrintPdf: () => void
 }) {
   if (loadingDetail) {
@@ -56,6 +67,13 @@ export function PrintVersionReview({
             </div>
           </div>
         </div>
+
+        {uploadProgress || uploadError ? (
+          <div className="space-y-3 px-5 pt-5">
+            {uploadProgress ? <PrintUploadProgress progress={uploadProgress} /> : null}
+            {uploadError ? <PrintUploadError message={uploadError} /> : null}
+          </div>
+        ) : null}
 
         {artifact ? (
           <div className="space-y-4 p-5">
@@ -97,7 +115,7 @@ export function PrintVersionReview({
                 <>
                   <FileUp className="mx-auto h-7 w-7 text-[var(--admin-accent-dp)]" />
                   <p className="mt-3 text-sm font-bold text-[var(--admin-ink)]">Upload one complete printer-ready PDF</p>
-                  <p className="mt-2 text-xs text-[var(--admin-muted)]">PDF · max 250 MiB</p>
+                  <p className="mt-2 text-xs text-[var(--admin-muted)]">PDF, max 600 MiB</p>
                 </>
               ) : (
                 <>
@@ -118,6 +136,58 @@ export function PrintVersionReview({
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+function PrintUploadProgress({ progress }: { progress: PrintUploadProgressValue }) {
+  const label = progress.phase === 'preparing'
+    ? 'Preparing secure upload'
+    : progress.phase === 'verifying'
+      ? 'Upload complete, verifying PDF'
+      : `Uploading, ${progress.percent}%`
+
+  return (
+    <div className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-3">
+      <div className="grid min-w-0 gap-1 text-xs sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+        <p className="truncate font-semibold text-[var(--admin-ink)]" title={progress.fileName}>
+          {progress.fileName}
+        </p>
+        <span className="font-bold text-[var(--admin-accent-ink)] sm:text-right">{label}</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label="Print PDF upload progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress.percent}
+        aria-valuetext={label}
+        className="mt-2 h-2 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--admin-ink)_10%,transparent)]"
+      >
+        <div
+          className={`h-full rounded-full bg-[var(--admin-accent)] transition-[width] duration-150 ${
+            progress.phase === 'verifying' ? 'animate-pulse' : ''
+          }`}
+          style={{ width: `${progress.percent}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function PrintUploadError({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-rose-300/45 bg-rose-950/90 px-3 py-2.5 text-rose-50 shadow-sm backdrop-blur-md"
+    >
+      <div className="flex items-start gap-2">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-xs font-bold">Upload rejected</p>
+          <p className="mt-0.5 break-words text-xs leading-relaxed">{message}</p>
+        </div>
+      </div>
     </div>
   )
 }

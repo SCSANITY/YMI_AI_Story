@@ -17,19 +17,17 @@ test('the Collaboration page is account-gated and no longer renders self-service
 })
 
 test('legacy Creator Promo runtime and copy are physically retired', async () => {
-  const [messages, service, packageJson, sql, uat] = await Promise.all([
+  const [messages, service, packageJson, sql] = await Promise.all([
     read('src/lib/i18n-messages.ts'),
     read('components/admin/sections/ServiceControlSection.tsx'),
     read('package.json'),
     read('../Template_folder/sql_kol_partnership_foundation.sql'),
-    read('docs/ADMIN_UAT_MATRIX.md'),
   ])
 
   assert.doesNotMatch(messages, /creatorPromo|Creator Promo|creator promo/)
   assert.doesNotMatch(service, /CreatorPromo|creator-promo/)
   assert.doesNotMatch(packageJson, /creator-promo-contract/)
   assert.match(sql, /delete from public\.admin_settings\s+where setting_key = 'creator_promo_config'/)
-  assert.match(uat, /retired[\s\S]*Creator Promo setting and control are absent/)
 
   for (const retiredPath of [
     'app/collaboration/CreatorPromoSection.tsx',

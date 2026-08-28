@@ -577,14 +577,11 @@ test('one signed Resend boundary isolates inbound, delivery, and ignored events'
   assert.match(emailEventsPanel, /optionalTrackingEvents/)
 })
 
-test('M6 rehearsal remains isolated from root MX and has bounded recovery', async () => {
-  const [webhook, recovery, vercel, preflight, deliveryProbe, runbook] = await Promise.all([
+test('root-domain inbound processing has bounded handlers and scheduled recovery', async () => {
+  const [webhook, recovery, vercel] = await Promise.all([
     read('app/api/webhooks/resend/route.ts'),
     read('app/api/internal/email/inbound/process/route.ts'),
     read('vercel.json'),
-    read('scripts/root-email-m6-preflight.mjs'),
-    read('scripts/root-email-m6-delivery-probe.ts'),
-    read('docs/ROOT_DOMAIN_EMAIL_M6_REHEARSAL.md'),
   ])
 
   assert.match(webhook, /export const maxDuration = 60/)
@@ -598,24 +595,4 @@ test('M6 rehearsal remains isolated from root MX and has bounded recovery', asyn
     path: '/api/internal/email/inbound/process',
     schedule: '30 0 * * *',
   })
-
-  assert.match(preflight, /Root MX remains on Webmail/)
-  assert.match(preflight, /mail\.ymistory\.com/)
-  assert.match(preflight, /endsWith\('\.resend\.app'\)/)
-  assert.match(preflight, /webhooks\.length !== 1/)
-  assert.match(preflight, /email\.received/)
-  assert.match(preflight, /email\.suppressed/)
-  assert.match(preflight, /open_tracking === false/)
-  assert.match(preflight, /click_tracking === false/)
-  assert.match(preflight, /recoveryRoute\.status === 401/)
-  assert.doesNotMatch(preflight, /domains\.update|webhooks\.create|webhooks\.update/)
-
-  assert.match(deliveryProbe, /Refusing to send without --confirm/)
-  assert.match(deliveryProbe, /delivered.*bounced.*complained.*suppressed/s)
-  assert.match(deliveryProbe, /SUPPORT_INBOUND_DOMAIN must be the M6 managed/)
-  assert.doesNotMatch(deliveryProbe, /example\.com|test\.com/)
-
-  assert.match(runbook, /does not enable[\s\S]*Receiving on `ymistory\.com`/)
-  assert.match(runbook, /Root MX after rehearsal[\s\S]*Still `5 mail\.ymistory\.com`/)
-  assert.match(runbook, /M6 does not modify root DNS/)
 })

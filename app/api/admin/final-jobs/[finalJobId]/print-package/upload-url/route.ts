@@ -99,5 +99,6 @@ export async function POST(
     bucket: MANUAL_PRINT_PDF_BUCKET,
     storagePath,
     token: signed.token,
+    signedUrl: signed.signedUrl,
   })
 }

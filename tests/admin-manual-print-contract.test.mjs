@@ -14,7 +14,12 @@ test('manual print SQL owns immutable revisions and atomic commit/release locks'
 
   assert.match(sql, /create table if not exists public\.final_print_artifacts/)
   assert.match(sql, /storage_path text not null unique/)
-  assert.match(sql, /declared_size_bytes > 0 and declared_size_bytes <= 262144000/)
+  assert.match(sql, /declared_size_bytes > 0 and declared_size_bytes <= 629145600/)
+  assert.match(sql, /verified_size_bytes > 0 and verified_size_bytes <= 629145600/)
+  assert.match(sql, /position\('629145600' in coalesce\(v_declared_definition, ''\)\)/)
+  assert.match(sql, /drop constraint if exists final_print_artifacts_size_check/)
+  assert.match(sql, /validate constraint final_print_artifacts_verified_size_check/)
+  assert.doesNotMatch(sql, /262144000/)
   assert.match(sql, /create_final_print_artifact/)
   assert.match(sql, /commit_final_print_artifact/)
   assert.match(sql, /release_final_print_artifact/)
@@ -30,29 +35,48 @@ test('manual print SQL owns immutable revisions and atomic commit/release locks'
   assert.doesNotMatch(sql, /update public\.orders|send.*email|worker/i)
 })
 
-test('Admin upload is direct-to-Storage and server confirmation verifies bytes before commit', async () => {
-  const [panel, uploadUrl, confirm, policy] = await Promise.all([
+test('Admin upload is direct-to-Storage with progress and server confirmation verifies bytes before commit', async () => {
+  const [panel, uploadUrl, confirm, policy, signedUpload] = await Promise.all([
     read('components/admin/FinalReviewPanel.tsx'),
     read('app/api/admin/final-jobs/[finalJobId]/print-package/upload-url/route.ts'),
     read('app/api/admin/final-jobs/[finalJobId]/print-package/confirm/route.ts'),
     read('src/lib/manual-print-artifact.ts'),
+    read('src/lib/signed-storage-upload.ts'),
   ])
 
   assert.match(uploadUrl, /await\s+requireAdminCustomer\s*\(\s*\)/)
   assert.match(uploadUrl, /createSignedUploadUrl\(storagePath, \{ upsert: false \}\)/)
   assert.match(uploadUrl, /create_final_print_artifact/)
+  assert.match(uploadUrl, /signedUrl:\s*signed\.signedUrl/)
   assert.doesNotMatch(uploadUrl, /arrayBuffer|\.upload\(/)
-  assert.match(panel, /uploadToSignedUrl\(uploadSpec\.storagePath, uploadSpec\.token, file/)
+  assert.match(panel, /uploadFileToSignedStorageUrl\(\{/)
+  assert.match(panel, /signedUrl:\s*uploadSpec\.signedUrl/)
+  assert.match(panel, /setPrintUploadError\(/)
   assert.match(panel, /print-package\/confirm/)
+
+  assert.match(signedUpload, /request\.open\('PUT', signedUrl, true\)/)
+  assert.match(signedUpload, /request\.setRequestHeader\('x-upsert', 'false'\)/)
+  assert.match(signedUpload, /request\.upload\.onprogress/)
+  assert.match(signedUpload, /body\.append\('', args\.file\)/)
 
   assert.match(confirm, /\.info\(row\.storage_path\)/)
   assert.match(confirm, /verifyRemotePdfHeader/)
   assert.match(confirm, /commit_final_print_artifact/)
-  assert.match(policy, /MANUAL_PRINT_PDF_MAX_BYTES = 250 \* 1024 \* 1024/)
+  assert.match(policy, /MANUAL_PRINT_PDF_MAX_BYTES = 600 \* 1024 \* 1024/)
   assert.match(policy, /PDF_HEADER = ['"]%PDF-['"]/)
   assert.match(policy, /Range:\s*['"]bytes=0-4['"]/)
   assert.match(policy, /MANUAL_PRINT_PDF_HEADER_TIMEOUT_MS = 12_000/)
   assert.match(policy, /MANUAL_PRINT_PDF_HEADER_ATTEMPTS = 2/)
+})
+
+test('Print upload reports progress and errors inside the Print Review card', async () => {
+  const printReview = await read('components/admin/final-review/PrintVersionReview.tsx')
+
+  assert.match(printReview, /PDF, max 600 MiB/)
+  assert.match(printReview, /role="progressbar"/)
+  assert.match(printReview, /aria-valuenow=\{progress\.percent\}/)
+  assert.match(printReview, /role="alert"/)
+  assert.match(printReview, /Upload rejected/)
 })
 
 test('Print Release locks only the verified manual artifact', async () => {
@@ -70,7 +94,6 @@ test('Print Release locks only the verified manual artifact', async () => {
   assert.doesNotMatch(printReview, /final_job_pages|buildFinalReviewWorkspace|fetch\s*\(/)
   assert.match(printReview, /artifact\.status === ['"]released['"] \? ['"]Released and locked['"]/)
   assert.match(printReview, /disabled=\{!pdfReleased \|\| printReleased \|\| uploading\}/)
-  assert.match(printReview, /PDF · max 250 MiB/)
   await assert.rejects(
     access(new URL('app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-print-page/route.ts', appRoot))
   )

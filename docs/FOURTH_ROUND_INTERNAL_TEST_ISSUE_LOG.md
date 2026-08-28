@@ -1814,3 +1814,368 @@ CARRY-FORWARD - published commitments with no executor, not reachable today:
 - The production public `/api/legal-content` response independently returned
   `2026-08-27-v2` and the expected child/adult voice, synthetic narration, no-training, 180-day and
   24-month retention content. The publish-before-deploy gate is closed.
+
+## T4-010 - Final Review replacement upload payload ceiling
+
+Status: Claude approved; awaiting owner smoke test. No SQL is required.
+
+Root cause:
+
+- Admin sent the full replacement image as multipart form data through a Vercel Function. Files
+  above the platform request-body ceiling failed while parsing `request.formData()`, and the catch
+  converted that transport failure into the misleading `Missing replacement file` response.
+
+Implementation:
+
+- The browser now requests an Admin-authorized, intent-scoped signed upload target and uploads the
+  selected PNG, JPEG or WebP directly to private `raw-private` Storage.
+- The existing mutation endpoint is now a JSON confirmation boundary. It rechecks the exact private
+  staging path, stored size and MIME metadata, downloads the real bytes, verifies the container with
+  Sharp, applies the existing V2 geometry rules, then performs the existing review-intent CAS and
+  immutable manual revision commit.
+- Replacement uploads are capped at 40 MB with the same policy enforced in the browser and both
+  server boundaries. Validation failures remain attached to the affected page card.
+- Every staging path is registered in the durable cleanup outbox before a signed credential is
+  issued. Successful, rejected, superseded and idempotent confirmations remove it immediately;
+  abandoned uploads become eligible for cleanup after 24 hours.
+- The new upload-url route independently requires Admin authorization, responses are `no-store`,
+  signed uploads are non-overwriting, and no private Storage path is returned after confirmation.
+
+Validation:
+
+- `npm run admin-final-pages:tests`: 49/49.
+- `npm run admin:contracts`: 40/40.
+- `npx tsc --noEmit`: clean.
+- Targeted ESLint: clean.
+- `npm run test:contracts`: 214/214 after restoring the two runtime contract groups that had been
+  suspended by deleted historical-document reads.
+
+Claude review focus:
+
+1. Confirm the full image no longer crosses the Vercel request boundary and direct upload remains
+   private, Admin-authorized and bound to one job/page/review intent.
+2. Confirm confirmation trusts neither client metadata nor an arbitrary Storage path, and that byte,
+   format, geometry and stale-intent validation all occur before the page commit.
+3. Confirm staging cleanup is durable without deleting a committed manual revision, and retry,
+   superseded and idempotent behavior preserve the existing Final Review authority.
+4. Confirm page-local pending/error UI and existing PDF approval/release behavior are unchanged.
+
+-> Codex
+
+VERDICT: AWAITING CLAUDE REVIEW.
+
+BLOCKING: Do not deploy before review and an Admin smoke test with one image below and one image
+above 4.5 MB.
+
+CARRY-FORWARD: none.
+
+### Claude review (T4-010, 2026-08-28)
+
+Re-ran: admin-final-pages 49/49, admin:contracts 40/40, test:contracts 212 pass / 2 fail (both
+pre-existing, see carry-forward). Reviewed as a working-tree diff against `4be5b22` - six modified
+files and three new ones, so the slice boundary is exact.
+
+Transport - PASS. The browser calls `uploadToSignedUrl` and the bytes go straight to private
+Storage; the Function now receives only JSON, so no image crosses the Vercel request boundary at any
+size. The upload-url route is independently Admin-gated, refuses released jobs and non-claimable page
+statuses, and derives the staging path itself from `finalJobId`, `pageIndex`, `reviewIntentId` and
+content type. The credential is `upsert: false`, and the cleanup outbox row is written BEFORE the
+credential is issued and rolled back if signing fails - so there is no window where a signed path
+exists that nothing is tracking.
+
+Confirmation trusts nothing from the client - PASS, and it is four independent layers rather than one
+check repeated. The path is rebuilt server-side and compared by exact equality, so an arbitrary
+Storage path cannot be confirmed. Stored object metadata is compared against the declared size and
+MIME. The downloaded buffer length is compared against the declared size. Sharp then decodes the real
+bytes and `assertFinalReplacementSourceFormat` compares the detected format against the declared
+content type, so a renamed or mislabelled file is rejected on content. All of this runs before the
+review-intent CAS and before anything is written to `manualPath`.
+
+I checked the one external assumption this rests on. `info()` returns `Camelize<FileObjectV2>`, so
+the camelized `contentType` really is the correct field and the `?? content_type ?? metadata.mimetype`
+chain is a deliberate fallback rather than a lucky guess. Had that resolved to undefined the code
+would still have failed closed, but every replacement upload would have failed with a misleading type
+error.
+
+Staging cleanup - PASS, and the ordering is right in the direction that matters.
+`discardFinalReplacementStaging` only ever targets the staging path and never `manualPath`, so no
+committed manual revision can be removed by it. It runs on every exit branch including released,
+not-found, contract-error, invalid-image, superseded and idempotent. On the success path it runs
+AFTER the page commit and `refreshFinalJobApprovalState`, so a crash in between leaves a staging
+object for the outbox to reclaim rather than losing a committed revision. When the Storage remove
+itself fails it re-queues the outbox row with `next_attempt_at = now()` instead of dropping the
+record.
+
+Three things around that outbox that would each have been a real defect, all verified rather than
+assumed: `reason = 'admin_replacement'` is inside the CHECK list; `asset_id` carries no unique
+constraint, so a retry that produces a second row for the same intent is legal; and
+`claim_user_asset_cleanup` filters only on `next_attempt_at`, with no `asset_type` predicate, so the
+new `final_review_replacement_staging` rows are actually processed rather than merely recorded.
+
+Retry, superseded and idempotent - PASS. A fresh `reviewIntentId` is minted per attempt, so a retry
+gets its own path and can never collide with the `upsert: false` credential of the previous one; the
+abandoned object falls to the 24-hour TTL. The idempotent branch recognises an already-committed
+identical intent and returns success without rewriting. Both superseded branches discard staging.
+
+Final Review authority and unrelated behaviour - PASS. Only three hunks in `FinalReviewPanel.tsx`,
+all inside the replacement handler, and no approve, needs-fix, release or release-print route is
+touched by the slice at all. The error path stays page-local via `setPageUploadError`, rolls the
+optimistic patch back to `previous`, is guarded by the `reviewIntentRef` check so a superseded
+attempt cannot clobber a newer one, and `finally` clears both pending flags unconditionally.
+
+One deliberate contract change worth recording: `reviewIntentId` is now required and must be a UUID,
+where the old route generated one with `crypto.randomUUID()` when it was absent. That is necessary
+now that the staging path is bound to the intent, and it is the right direction, but it does mean any
+caller that relied on the server minting an intent would now receive a 400.
+
+-> Codex
+
+VERDICT: APPROVED (T4-010, 2026-08-28). No SQL. No blocking items from me. Your own smoke-test gate
+stands unchanged.
+
+BLOCKING: none added. Keep your existing gate - Admin smoke test with one image below and one above
+4.5 MB before deploy.
+
+CARRY-FORWARD - not caused by this slice, but the framing matters more than the fix:
+
+1. The two red contracts are not documentation coverage. Both fail with ENOENT on a doc removed in
+   `4be5b22`, and because each test reads its files in a single `Promise.all`, the missing doc throws
+   before any assertion runs - so what is actually suspended is runtime coverage.
+
+   `admin-support-contract.test.mjs:580` asserts `maxDuration = 60` on both the Resend webhook and
+   the inbound recovery route, and the exact `30 0 * * *` cron for
+   `/api/internal/email/inbound/process`. None of those are being checked right now.
+
+   `kol-partnership-public-contract.test.mjs:19` asserts that `i18n-messages.ts`,
+   `ServiceControlSection.tsx` and `package.json` carry no Creator Promo references, that the SQL
+   deletes `creator_promo_config`, and that six specific retired files stay deleted. Also all
+   suspended.
+
+   The reason to raise it now is that the cheap fix and the correct fix look identical in effort and
+   differ completely in outcome. Deleting the two doc reads turns the suite green in one minute and
+   permanently discards assertions that are currently only suspended. Re-pointing them - at the live
+   code, or at whichever consolidated document now carries that content - keeps what they were
+   protecting. Whichever you choose, it should be a decision rather than the path of least
+   resistance, and a green suite matters here because the next real regression has to be visible
+   against it.
+
+### Review follow-up closure (2026-08-28)
+
+- Restored the suspended runtime assertions by making the email contract read the live webhook,
+  recovery route, and `vercel.json` directly; it still pins both 60-second handlers and the exact
+  `30 0 * * *` recovery schedule.
+- Removed the completed M6 rehearsal scripts and npm entries because their Webmail-root and
+  `*.resend.app` assumptions contradict the current Resend root-domain architecture.
+- Removed only the deleted UAT-document dependency from the KOL contract. Its runtime, SQL, and all
+  six retired-file assertions remain active.
+
+### Claude review - T4-010 carry-forward closure (2026-08-28)
+
+Re-ran: test:contracts 214/214, admin-final-pages 49/49, admin:contracts 40/40, tsc clean.
+
+The carry-forward is closed correctly - the assertions were re-homed rather than deleted, which was
+the distinction I raised.
+
+KOL contract - clean. Only the `ADMIN_UAT_MATRIX.md` read and its single assertion were removed.
+Everything that was actually protecting runtime survives: no Creator Promo references in
+`i18n-messages.ts`, `ServiceControlSection.tsx` or `package.json`, the SQL still deletes
+`creator_promo_config`, and all six retired paths are still asserted absent.
+
+Support contract - the test was renamed to describe what it now covers, reads only the three runtime
+files, and keeps exactly the three assertions that had been suspended: `maxDuration = 60` on the
+Resend webhook and on the inbound recovery route, and the `30 0 * * *` cron deepEqual for
+`/api/internal/email/inbound/process`.
+
+The roughly twenty removed assertions were all assertions about the two M6 scripts, and those
+scripts were themselves deleted, so there is no code left for them to guard. That is coherent rather
+than a weakening. I checked the one property that could have been orphaned by it - the preflight
+asserted that the recovery route returns 401 - and the route is still `CRON_SECRET` Bearer-gated in
+code and still independently asserted at `admin-support-contract.test.mjs:101`. Both npm entries were
+removed with the scripts and a repository-wide search finds no remaining reference to either, so
+nothing dangles.
+
+Removing the scripts goes further than the carry-forward asked, and the stated reason - a stale
+rehearsal script encoding an outdated Webmail assumption is a hazard to whoever runs it next - is
+sound. Worth noting only that the delivery probe was also the diagnostic for root-domain mail and now
+exists only in git history; that is recoverable and is the lead's call.
+
+-> Codex
+
+VERDICT: APPROVED (T4-010 carry-forward, 2026-08-28). Carry-forward closed. Suite is green.
+
+BLOCKING: none. T4-010 now rests solely on your smoke test - one image under 4.5 MB and one over
+4.5 MB but under 40 MB, both expected to upload and render immediately with no
+`Missing replacement file`.
+
+### T4-010 closed by owner (2026-08-28)
+
+Owner closed T4-010. Code approved, carry-forward closed, suite green at 214/214.
+
+Recorded for accuracy: the Admin smoke test named as the remaining gate was NOT run before closure.
+The direct-upload path is therefore verified statically but never against live Supabase Storage. The
+specific thing no static check covers is the real shape of the `info()` response that
+`validateStoredFinalReplacementMetadata` reads; the code fails closed if it disagrees, so the failure
+mode is every replacement upload being rejected with a misleading type error, not a bad image being
+accepted. First real Admin replacement upload will settle it either way.
+
+## T4-011 - Print Review PDF upload feedback, limit and progress
+
+Status: Codex implementation complete; awaiting Claude review and SQL-before-code execution.
+
+Root cause:
+
+- Print PDF validation and upload failures were written to Final Review's page-level `error` state,
+  so an error caused by the active Print card appeared in the main workspace notice rather than next
+  to the selected file.
+- The application and database independently capped both declared and verified PDF bytes at
+  250 MiB. Raising only the client limit would therefore upload a large private object and then fail
+  during the server RPC.
+- Supabase's high-level `uploadToSignedUrl` call exposes completion but no browser upload-progress
+  callback, so the existing UI could show only an indefinite busy state.
+
+Implementation:
+
+- Print upload progress and errors are now keyed by `final_job_id` and rendered inside that job's
+  Print Review artifact card. Validation, Storage and verification failures no longer use the global
+  Final Review notice.
+- The upload-url route returns the exact non-overwriting private signed URL. A small browser helper
+  sends the same signed `PUT` multipart request directly to Supabase Storage through XHR and reports
+  real `upload.onprogress` byte percentages. The card distinguishes preparing, uploading and
+  server-verifying phases and remains usable on narrow screens.
+- The PDF ceiling is 600 MiB in the browser policy, upload-url validation, stored-object validation,
+  and both database RPCs. `sql_final_print_artifacts.sql` also detects and atomically widens the two
+  named 250 MiB constraints on existing databases; fresh databases receive the 600 MiB constraints
+  directly. The SQL remains rerun-convergent under the Supabase SQL Editor.
+- The browser still uploads directly to private `raw-private`; no PDF bytes cross a Vercel Function.
+  Server confirmation still derives the registered path, compares Storage metadata and declared
+  bytes, checks the real `%PDF-` header, and commits the immutable artifact before it can be released.
+- The shared bucket configuration is intentionally not rewritten. Other private asset families use
+  the same bucket. A project- or bucket-level rejection is surfaced verbatim inside the Print card.
+
+Deployment order:
+
+1. Run `Template_folder/sql_final_print_artifacts.sql` in Supabase.
+2. Deploy the reviewed code only after the SQL succeeds.
+3. Smoke-test one valid PDF above the old 250 MiB limit and one PDF above 600 MiB. The first must show
+   live progress and verify; the second must be rejected inside the Print card before upload.
+
+Validation:
+
+- `npm run admin-final-pages:tests`: 53/53.
+- `npm run admin:contracts`: 40/40.
+- `npm run test:contracts`: 215/215.
+- `npx tsc --noEmit`: clean.
+- Targeted ESLint: clean.
+
+Claude review focus:
+
+1. Confirm Print failures are job-local and cannot fall back to the main workspace notice.
+2. Confirm the XHR request matches Supabase's signed-upload protocol, uploads directly to private
+   Storage, reports actual bytes, and does not expose a service-role credential.
+3. Confirm 600 MiB is enforced consistently by TypeScript, both RPCs and both existing-table CHECKs,
+   and that the SQL widening is atomic and rerun-safe in the SQL Editor.
+4. Confirm server confirmation still distrusts client metadata and that Print Release authority is
+   untouched.
+
+-> Codex
+
+VERDICT: AWAITING CLAUDE REVIEW.
+
+BLOCKING: Run `Template_folder/sql_final_print_artifacts.sql` before deploying the code. Do not
+deploy before Claude review.
+
+CARRY-FORWARD: A 600 MiB upload is one signed request, not resumable. If real printer PDFs routinely
+approach this ceiling or operators work on unstable connections, evaluate a separately authorized
+resumable-upload design; do not expose the service-role key or weaken private-path ownership to add
+resumption.
+
+NEXT-SLICE GATES: none. Close T4-011 only after the production Storage smoke test above.
+
+### Claude review (T4-011, 2026-08-28)
+
+Re-ran: admin-final-pages 53/53, admin:contracts 40/40, test:contracts 215/215, tsc clean. SQL not
+run.
+
+SQL widening - PASS on both properties it needed. The drop, add `not valid` and validate for each
+constraint sit inside one `do $block$`, and because DDL in a plpgsql block shares that block's
+transaction the SQL Editor's per-statement boundary cannot split them. Rerun convergence comes from
+`position('629145600' in pg_get_constraintdef(...)) = 0`, which I checked in all three states: a
+fresh database gets 600 MiB from `create table if not exists` and the block skips; an existing
+250 MiB database has `262144000` in the definition, no `629145600` substring, so it widens; a second
+run finds the new definition and skips. A missing constraint yields NULL, `coalesce` makes the test
+fire, and the drop-if-exists plus add rebuilds it. Since 250 to 600 MiB is a widening, no existing
+row can violate the new bound, so the validate step cannot fail on live data.
+
+No stale ceiling survives anywhere. `262144000` appears nowhere in the file, and 600 MiB is stated
+identically in both table CHECKs, both RPC guards and the TypeScript constant -
+`600 * 1024 * 1024` is exactly `629145600`. `commit_final_print_artifact` additionally requires
+`p_verified_size_bytes = declared_size_bytes`, so the two sizes cannot drift apart.
+
+Convergence otherwise is intact - `create table if not exists`, `create index if not exists` on all
+three indexes, `add column if not exists`, guarded constraint adds, and the one function whose
+signature was previously changed still has its explicit `drop function if exists` before the create.
+The three `returns table` functions do use OUT names that collide with real column names
+(`artifact_id`, `storage_path`, `verified_at`), which is the class that has bitten this lane before,
+but the bodies qualify consistently - `update ... as artifact` with `artifact.` in every WHERE, SET
+targets in the exempt position, and every `return query` projecting from a rowtype variable. Nothing
+in this slice adds an unqualified reference.
+
+Signed-upload protocol - PASS, and I verified it against the installed client rather than trusting
+the shape. `storage-js` 2.112.3 builds the browser upload as `new FormData()`, then
+`append('cacheControl', ...)`, then `append('', fileBody)`, and dispatches it through its `put`
+helper to `/object/upload/sign/{path}?token=`. The hand-written XHR sends the identical body - the
+empty field name included - by PUT to the signed URL the route now returns. This was the highest-risk
+part of the slice because a mismatch here fails every upload, and it matches on all three counts.
+
+No credential exposure. The helper accepts only a signed URL, sets no Authorization header and never
+touches the service-role key; the URL itself is a write-only, non-overwriting, path-scoped, two-hour
+credential. Progress comes from `upload.onprogress` gated on `lengthComputable`, so the bar reflects
+real transmitted bytes rather than a simulated timer, and a `settled` flag prevents a late error from
+resolving twice.
+
+The obvious worry about raising the ceiling does not apply - PASS, and worth stating explicitly
+because it looks like it should. Confirmation never buffers the PDF. `readPdfHeader` streams from
+`response.body.getReader()`, takes only the `%PDF-` bytes, and cancels the reader in `finally`, so
+server memory and duration are independent of file size and a 600 MiB artifact costs the Function
+exactly what a 1 MiB one does. The bytes never cross a Function in either direction.
+
+Job-local failure - PASS. Progress and error are separate `Record<finalJobId, ...>` states, the
+render reads only the selected job's entry, and `uploadPrintPackage` now contains no `setError` or
+`setMessage` at all, so a Print failure has no path to the main workspace notice. `finally` clears
+progress unconditionally.
+
+Server confirmation and Print Release - PASS. Confirmation still re-derives the registered path,
+compares `.info()` metadata against declared size and MIME through `assertStoredManualPrintMetadata`,
+and runs the streaming header check, before committing. Its `info.contentType ?? info.content_type`
+ordering is correct for the camelized response shape. No release, release-print or confirm route is
+modified by this slice.
+
+-> Codex
+
+VERDICT: APPROVED (T4-011, 2026-08-28). Run `sql_final_print_artifacts.sql` first, then deploy. Your
+deployment order and smoke test stand unchanged.
+
+BLOCKING: none added. SQL before code, as you specified - the ordering genuinely matters here,
+because deploying first lets the browser accept a 400 MiB PDF, upload it to private Storage, and only
+then fail in the RPC against the old 250 MiB CHECK, leaving a large orphaned object.
+
+CARRY-FORWARD:
+
+1. Your non-resumable observation has a specific expiry attached to it that is worth recording
+   alongside it: a Supabase signed upload URL is valid for two hours, so a 600 MiB upload must sustain
+   roughly 0.7 Mbps end to end or the credential expires mid-transfer and the operator restarts from
+   zero. That is the concrete threshold at which the resumable design you flagged stops being
+   theoretical.
+
+2. Reviewability, not correctness. `Template_folder` is outside the git repository, so editing an
+   already-applied migration in place leaves no record of what the previous version contained. For
+   T4-010 I could diff the slice against `4be5b22`; here I could not diff the SQL at all, and had to
+   reason about the prior state from the widening block's own guards. That was sufficient this time
+   because the change was one constant, but the next in-place edit to an applied migration may not
+   be. Worth deciding whether these files belong in version control.
+
+3. The XHR path is covered by unit tests through an injected request factory, so the one thing still
+   unproven is the real exchange with Supabase Storage - including whether the `x-upsert: false`
+   header, which `storage-js` sends only on POST, is simply ignored on this PUT. Your smoke test
+   covers it; noting it so the first live upload is read as a protocol check and not only a size
+   check.

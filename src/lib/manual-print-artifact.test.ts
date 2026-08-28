@@ -42,7 +42,7 @@ describe('manual print artifact contract', () => {
     }), /empty/)
     assert.throws(() => validateManualPrintUpload({
       fileName: 'book.pdf', sizeBytes: MANUAL_PRINT_PDF_MAX_BYTES + 1, contentType: 'application/pdf',
-    }), /250 MiB/)
+    }), /600 MiB/)
   })
 
   it('requires Storage metadata to match the declared PDF exactly', () => {

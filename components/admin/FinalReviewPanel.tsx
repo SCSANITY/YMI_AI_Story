@@ -30,6 +30,8 @@ import {
   validateManualPrintUpload,
   type ManualPrintArtifactClient,
 } from '@/lib/manual-print-artifact'
+import { validateFinalReplacementUpload } from '@/lib/final-review-replacement-upload'
+import { uploadFileToSignedStorageUrl } from '@/lib/signed-storage-upload'
 import { supabase } from '@/lib/supabase'
 import { AdminIconButton, AdminNotice } from '@/components/admin/AdminUi'
 import { handleAdminTabKeyDown } from '@/components/admin/adminA11y'
@@ -56,8 +58,22 @@ type PrintUploadSpec = {
   bucket: string
   storagePath: string
   token: string
+  signedUrl: string
+}
+type FinalReplacementUploadSpec = {
+  bucket: string
+  storagePath: string
+  token: string
+  reviewIntentId: string
 }
 type BusyActionState = Record<string, string>
+type PrintUploadProgress = {
+  fileName: string
+  percent: number
+  phase: 'preparing' | 'uploading' | 'verifying'
+}
+type PrintUploadProgressState = Record<string, PrintUploadProgress>
+type PrintUploadErrorState = Record<string, string>
 
 const SIGNED_URL_REFRESH_INTERVAL_MS = 18 * 60 * 1000
 
@@ -144,6 +160,8 @@ export function FinalReviewPanel({
   const [reviewPendingByPage, setReviewPendingByPage] = useState<ReviewPendingState>({})
   const [uploadPendingByPage, setUploadPendingByPage] = useState<UploadPendingState>({})
   const [uploadErrorByPage, setUploadErrorByPage] = useState<UploadErrorState>({})
+  const [printUploadProgressByJob, setPrintUploadProgressByJob] = useState<PrintUploadProgressState>({})
+  const [printUploadErrorByJob, setPrintUploadErrorByJob] = useState<PrintUploadErrorState>({})
   const [activeVersion, setActiveVersion] = useState<ReviewVersion>(initialVersion)
   const [queueFilter, setQueueFilter] = useState<FinalReviewQueueFilter>('all')
   const [reviewFocus, setReviewFocus] = useState(false)
@@ -276,6 +294,26 @@ export function FinalReviewPanel({
   const clearJobBusyAction = useCallback((finalJobId: string, action: string) => {
     setBusyActionByJob((current) => {
       if (current[finalJobId] !== action) return current
+      const next = { ...current }
+      delete next[finalJobId]
+      return next
+    })
+  }, [])
+
+  const setPrintUploadError = useCallback((finalJobId: string, message: string | null) => {
+    setPrintUploadErrorByJob((current) => {
+      if (message) return { ...current, [finalJobId]: message }
+      if (!current[finalJobId]) return current
+      const next = { ...current }
+      delete next[finalJobId]
+      return next
+    })
+  }, [])
+
+  const setPrintUploadProgress = useCallback((finalJobId: string, progress: PrintUploadProgress | null) => {
+    setPrintUploadProgressByJob((current) => {
+      if (progress) return { ...current, [finalJobId]: progress }
+      if (!current[finalJobId]) return current
       const next = { ...current }
       delete next[finalJobId]
       return next
@@ -783,15 +821,57 @@ export function FinalReviewPanel({
       updated_at: new Date().toISOString(),
     })
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('reviewIntentId', reviewIntentId)
+      const validated = validateFinalReplacementUpload({
+        fileName: file.name,
+        sizeBytes: file.size,
+        contentType: file.type,
+      })
+      const uploadResponse = await fetch(
+        `/api/admin/final-jobs/${finalJobId}/pages/${targetPage.page_index}/upload-replacement/upload-url`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reviewIntentId,
+            fileName: validated.fileName,
+            sizeBytes: validated.sizeBytes,
+            contentType: validated.contentType,
+          }),
+        }
+      )
+      const uploadSpec = (await uploadResponse.json().catch(() => ({}))) as ApiResponse<FinalReplacementUploadSpec>
+      if (!uploadResponse.ok) {
+        throw new Error(uploadSpec.error || 'Failed to prepare replacement upload')
+      }
+      if (!uploadSpec.storagePath || !uploadSpec.token || uploadSpec.reviewIntentId !== reviewIntentId) {
+        throw new Error('Replacement upload specification is incomplete')
+      }
+
+      const { error: storageError } = await supabase.storage
+        .from(uploadSpec.bucket || 'raw-private')
+        .uploadToSignedUrl(uploadSpec.storagePath, uploadSpec.token, file, {
+          contentType: validated.contentType,
+        })
+      if (storageError) {
+        throw new Error(storageError.message || 'Failed to upload replacement image')
+      }
+
       const response = await fetch(
         `/api/admin/final-jobs/${finalJobId}/pages/${targetPage.page_index}/upload-replacement`,
         {
           method: 'POST',
           credentials: 'include',
-          body: formData,
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reviewIntentId,
+            storagePath: uploadSpec.storagePath,
+            fileName: validated.fileName,
+            sizeBytes: validated.sizeBytes,
+            contentType: validated.contentType,
+          }),
         }
       )
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<{
@@ -843,8 +923,12 @@ export function FinalReviewPanel({
     const finalJobId = selectedJobId
     const action = 'upload-print-package'
     setJobBusyAction(finalJobId, action)
-    setError('')
-    setMessage('')
+    setPrintUploadError(finalJobId, null)
+    setPrintUploadProgress(finalJobId, {
+      fileName: file.name,
+      percent: 0,
+      phase: 'preparing',
+    })
 
     try {
       const validated = validateManualPrintUpload({
@@ -870,22 +954,31 @@ export function FinalReviewPanel({
       if (!uploadResponse.ok) {
         throw new Error(uploadSpec.error || 'Failed to prepare print PDF upload')
       }
-      if (!uploadSpec.artifactId || !uploadSpec.storagePath || !uploadSpec.token) {
+      if (!uploadSpec.artifactId || !uploadSpec.signedUrl) {
         throw new Error('Print PDF upload specification is incomplete')
       }
 
-      const { error: storageError } = await supabase.storage
-        .from(uploadSpec.bucket || 'raw-private')
-        .uploadToSignedUrl(uploadSpec.storagePath, uploadSpec.token, file, {
-          contentType: validated.contentType,
-        })
-      if (storageError) {
-        throw new Error(storageError.message || 'Failed to upload print PDF')
-      }
-
-      if (selectedJobIdRef.current === finalJobId) {
-        setMessage('Upload complete. Verifying the PDF before Print Release...')
-      }
+      setPrintUploadProgress(finalJobId, {
+        fileName: validated.fileName,
+        percent: 0,
+        phase: 'uploading',
+      })
+      await uploadFileToSignedStorageUrl({
+        signedUrl: uploadSpec.signedUrl,
+        file,
+        onProgress: (percent) => {
+          setPrintUploadProgress(finalJobId, {
+            fileName: validated.fileName,
+            percent,
+            phase: 'uploading',
+          })
+        },
+      })
+      setPrintUploadProgress(finalJobId, {
+        fileName: validated.fileName,
+        percent: 100,
+        phase: 'verifying',
+      })
 
       const confirmResponse = await fetch(
         `/api/admin/final-jobs/${finalJobId}/print-package/confirm`,
@@ -915,15 +1008,14 @@ export function FinalReviewPanel({
           ? { ...current, print_artifact: confirmed.artifact ?? null }
           : current
       )
-      if (selectedJobIdRef.current === finalJobId) {
-        setMessage('Printer PDF uploaded and verified. It is ready for Print Release.')
-      }
     } catch (actionError) {
       reconcileOffscreenFailure(finalJobId)
-      if (selectedJobIdRef.current === finalJobId) {
-        setError(actionError instanceof Error ? actionError.message : 'Failed to upload print PDF')
-      }
+      setPrintUploadError(
+        finalJobId,
+        actionError instanceof Error ? actionError.message : 'Failed to upload print PDF'
+      )
     } finally {
+      setPrintUploadProgress(finalJobId, null)
       clearJobBusyAction(finalJobId, action)
     }
   }
@@ -1068,6 +1160,12 @@ export function FinalReviewPanel({
       activeDetail?.finalJob.review_status === 'released'
   )
   const printArtifact = activeDetail?.print_artifact ?? null
+  const printUploadProgress = selectedJobId
+    ? printUploadProgressByJob[selectedJobId] ?? null
+    : null
+  const printUploadError = selectedJobId
+    ? printUploadErrorByJob[selectedJobId] ?? null
+    : null
   const printReleased =
     activeDetail?.finalJob.print_status === 'released' ||
     Boolean(activeDetail?.finalJob.print_released_at)
@@ -1442,6 +1540,8 @@ export function FinalReviewPanel({
                 printReleased={printReleased}
                 artifact={printArtifact}
                 uploading={busyAction === 'upload-print-package'}
+                uploadProgress={printUploadProgress}
+                uploadError={printUploadError}
                 onUploadPrintPdf={() => printPackageInputRef.current?.click()}
               />
             )}

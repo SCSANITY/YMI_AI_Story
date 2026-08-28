@@ -30,10 +30,18 @@ test('Final Review mutations use page_index identity and the shared V2 output-or
 })
 
 test('replacement upload is intent-scoped, idempotent, and committed with a stale-response CAS', async () => {
-  const [route, panel] = await Promise.all([
+  const [uploadUrlRoute, route, panel] = await Promise.all([
+    readFrom(appRoot, 'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-replacement/upload-url/route.ts'),
     readFrom(appRoot, 'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-replacement/route.ts'),
     readFrom(appRoot, 'components/admin/FinalReviewPanel.tsx'),
   ])
+
+  assert.match(uploadUrlRoute, /await\s+requireAdminCustomer\s*\(\s*\)/)
+  assert.match(uploadUrlRoute, /validateFinalReplacementUpload/)
+  assert.match(uploadUrlRoute, /buildFinalReplacementStagingPath/)
+  assert.match(uploadUrlRoute, /user_asset_cleanup_outbox/)
+  assert.match(uploadUrlRoute, /createSignedUploadUrl\(storagePath,\s*\{\s*upsert:\s*false\s*\}\)/)
+  assert.doesNotMatch(uploadUrlRoute, /request\.formData|\.upload\(/)
 
   assert.match(route, /getFinalPageManualRevisionPath/)
   assert.match(route, /page\.review_intent_id\s*===\s*reviewIntentId/)
@@ -47,6 +55,14 @@ test('replacement upload is intent-scoped, idempotent, and committed with a stal
   assert.match(route, /isFinalJobReleased\(finalJob\)/)
   assert.match(route, /\.in\(['"]status['"],\s*getFinalReplacementClaimablePageStatuses\(String\(finalJob\.status\)\)\)/)
   assert.match(route, /prepareFinalReplacementImage/)
+  assert.match(route, /isFinalReplacementStagingPath/)
+  assert.match(route, /\.info\(storagePath\)/)
+  assert.match(route, /\.download\(storagePath\)/)
+  assert.match(route, /validateStoredFinalReplacementMetadata/)
+  assert.match(route, /assertFinalReplacementSourceFormat/)
+  assert.match(route, /discardFinalReplacementStaging/)
+  assert.match(route, /user_asset_cleanup_outbox/)
+  assert.doesNotMatch(route, /request\.formData|instanceof File/)
   assert.match(route, /contentType:\s*['"]image\/png['"]/)
   assert.ok(
     route.indexOf('prepareFinalReplacementImage') < route.indexOf("review_intent_id: reviewIntentId"),
@@ -57,7 +73,11 @@ test('replacement upload is intent-scoped, idempotent, and committed with a stal
     panel.indexOf('const uploadReplacement'),
     panel.indexOf('const uploadPrintPackage')
   )
-  assert.match(replacementSection, /formData\.append\(['"]reviewIntentId['"],\s*reviewIntentId\)/)
+  assert.match(replacementSection, /validateFinalReplacementUpload/)
+  assert.match(replacementSection, /upload-replacement\/upload-url/)
+  assert.match(replacementSection, /uploadToSignedUrl\(uploadSpec\.storagePath,\s*uploadSpec\.token,\s*file/)
+  assert.match(replacementSection, /storagePath:\s*uploadSpec\.storagePath/)
+  assert.doesNotMatch(replacementSection, /new FormData|formData\.append/)
   assert.match(replacementSection, /setPageReviewPending\([^)]*['"]approve['"],\s*reviewIntentId\)/s)
   assert.match(replacementSection, /reviewIntentRef\.current\[targetPage\.final_job_page_id\]\s*!==\s*reviewIntentId/)
   assert.match(replacementSection, /payload\.superseded/)

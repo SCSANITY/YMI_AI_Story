@@ -1,6 +1,6 @@
 export const MANUAL_PRINT_PDF_BUCKET = 'raw-private'
 export const MANUAL_PRINT_PDF_CONTENT_TYPE = 'application/pdf'
-export const MANUAL_PRINT_PDF_MAX_BYTES = 250 * 1024 * 1024
+export const MANUAL_PRINT_PDF_MAX_BYTES = 600 * 1024 * 1024
 export const MANUAL_PRINT_PDF_HEADER_TIMEOUT_MS = 12_000
 export const MANUAL_PRINT_PDF_HEADER_ATTEMPTS = 2
 
@@ -57,7 +57,7 @@ export function validateManualPrintUpload(input: {
     throw new ManualPrintArtifactError('The print PDF is empty or has an invalid size.')
   }
   if (sizeBytes > MANUAL_PRINT_PDF_MAX_BYTES) {
-    throw new ManualPrintArtifactError('The print PDF exceeds the 250 MiB upload limit.')
+    throw new ManualPrintArtifactError('The print PDF exceeds the 600 MiB upload limit.')
   }
   if (contentType !== MANUAL_PRINT_PDF_CONTENT_TYPE) {
     throw new ManualPrintArtifactError('Only PDF files are accepted for print release.')
