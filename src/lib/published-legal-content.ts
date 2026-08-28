@@ -28,7 +28,7 @@ type PublishedRevisionRow = {
 }
 
 const FALLBACK_EFFECTIVE_DATES: Record<FooterLegalContentKey, string> = {
-  privacy: 'August 27, 2026',
+  privacy: 'August 28, 2026',
   terms: 'March 12, 2026',
   ourStory: 'March 12, 2026',
   shipping: 'May 11, 2026',

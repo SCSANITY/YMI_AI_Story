@@ -8,18 +8,9 @@ import { ChildDetailsFields, type RecentProfileItem } from '@/components/persona
 import { StoryLanguageSelector } from '@/components/personalize/StoryLanguageSelector'
 import { BookPackageSelector, type PersonalizeBookType } from '@/components/personalize/BookPackageSelector'
 import type { StoryLanguage } from '@/types'
-import type { SignatureVoiceSpeakerKind } from '@/lib/signature-voice'
+import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel'
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed'
-
-type VoiceUploadResult = {
-  assetId: string
-  storagePath: string
-  signedUrl?: string | null
-  playbackUrl?: string | null
-  durationSeconds: number
-  speakerKind: SignatureVoiceSpeakerKind
-}
 
 const VoiceRecorderPanel = dynamic(
   () => import('@/components/personalize/VoiceRecorderPanel').then((module) => module.VoiceRecorderPanel),
@@ -101,16 +92,12 @@ type CustomizeFormFieldsProps = {
   onBookTypeChange: (value: PersonalizeBookType) => void
   requiresVoiceSample: boolean
   voicePanelRef: RefObject<HTMLDivElement | null>
-  voiceCustomerId?: string
-  voiceChildName: string
-  voiceSpeakerKind?: SignatureVoiceSpeakerKind | null
   voiceAssetId: string | null
-  voiceStoragePath: string | null
   voicePlaybackUrl: string | null
   voiceDurationSeconds: number | null
   onVoiceReadinessChange: (ready: boolean) => void
   voiceValidationError: string | null
-  onVoiceUploadComplete: (result: VoiceUploadResult) => void
+  onVoiceRecordingSelected: (recording: PendingVoiceRecording | null) => void
   onClearVoiceValidation: () => void
 }
 
@@ -144,16 +131,12 @@ function CustomizeFormFieldsComponent({
   onBookTypeChange,
   requiresVoiceSample,
   voicePanelRef,
-  voiceCustomerId,
-  voiceChildName,
-  voiceSpeakerKind,
   voiceAssetId,
-  voiceStoragePath,
   voicePlaybackUrl,
   voiceDurationSeconds,
   onVoiceReadinessChange,
   voiceValidationError,
-  onVoiceUploadComplete,
+  onVoiceRecordingSelected,
   onClearVoiceValidation,
 }: CustomizeFormFieldsProps) {
   return (
@@ -202,15 +185,11 @@ function CustomizeFormFieldsComponent({
       {requiresVoiceSample ? (
         <div ref={voicePanelRef}>
           <VoiceRecorderPanel
-            customerId={voiceCustomerId}
-            childName={voiceChildName}
-            existingSpeakerKind={voiceSpeakerKind}
             existingAssetId={voiceAssetId}
-            existingStoragePath={voiceStoragePath}
             existingSignedUrl={voicePlaybackUrl}
             existingDurationSeconds={voiceDurationSeconds}
             validationError={voiceValidationError}
-            onUploadComplete={onVoiceUploadComplete}
+            onRecordingSelected={onVoiceRecordingSelected}
             onReadinessChange={onVoiceReadinessChange}
             onClearValidation={onClearVoiceValidation}
           />

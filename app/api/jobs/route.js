@@ -16,6 +16,8 @@ import {
 import {
   SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
   SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
+  SIGNATURE_VOICE_CONSENT_VERSION,
+  SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SignatureVoiceContractError,
   parseSignatureVoiceBindingRequest,
 } from '@/lib/signature-voice'
@@ -237,7 +239,10 @@ export async function POST(request) {
         .eq('confirmed_asset_id', requestedBinding.assetId)
         .eq('owner_type', voiceOwnerFilter.owner_type)
         .eq(voiceOwnerFilter.column, voiceOwnerFilter.value)
-        .eq('consent_version', 'signature-voice-consent-v2')
+        .in('consent_version', [
+          SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
+          SIGNATURE_VOICE_CONSENT_VERSION,
+        ])
         .not('confirmed_at', 'is', null)
         .maybeSingle()
 
@@ -245,6 +250,15 @@ export async function POST(request) {
         throw new SignatureVoiceContractError(
           'Please save this recording again after accepting the Signature Voice authorization'
         )
+      }
+      const isLegacyAuthorization =
+        voiceAuthorization.consent_version === SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION
+        && (voiceAuthorization.speaker_kind === 'current_child' || voiceAuthorization.speaker_kind === 'adult')
+      const isUnifiedAuthorization =
+        voiceAuthorization.consent_version === SIGNATURE_VOICE_CONSENT_VERSION
+        && voiceAuthorization.speaker_kind === 'authorized_speaker'
+      if (!isLegacyAuthorization && !isUnifiedAuthorization) {
+        throw new SignatureVoiceContractError('Signature Voice authorization is invalid')
       }
       voiceBinding = {
         assetId: requestedBinding.assetId,

@@ -45,6 +45,7 @@ const RELATIONSHIP_LABELS: Record<(typeof SIGNATURE_VOICE_SUBJECT_RELATIONSHIPS)
   parent_or_guardian: 'Parent or guardian',
   family_member: 'Family member',
   other_authorized_adult: 'Other authorized adult',
+  authorized_submitter: 'Authorized submitter',
 }
 
 function formatBytes(value: number | null) {

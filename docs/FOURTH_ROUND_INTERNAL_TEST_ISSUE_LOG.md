@@ -2262,3 +2262,284 @@ old-password rejection, one-time-link reuse rejection and unchanged Admin login 
 - Production smoke: record a valid 10-20 second sample as a guest, confirm the action enables
   immediately, upload it, and create Preview. Repeat once while signed in. Admin human source triage
   remains unchanged.
+
+## Signature Voice S7D - unified recording authorization and deferred upload (2026-08-28)
+
+**Status:** IMPLEMENTED; awaiting Claude review. Do not run the SQL or deploy yet.
+
+### Owner decision
+
+- Removed the `Who is speaking?` child/adult choice. New recordings use one authorization for any
+  authorized narrator and do not persist a guessed child/adult classification.
+- The recording panel no longer owns authorization or Storage upload. `Use This Recording` keeps a
+  10-20 second `File` in local page state only.
+- The existing product-generation consent and the new Signature Voice authorization now sit together
+  at the final Create Preview boundary. Both are required, default checked, remain user-toggleable,
+  and are checked again before Preview creation.
+- Only Create Preview uploads a newly selected recording, confirms the private asset and its
+  authorization, then passes the resulting asset identifier into the existing atomic Preview-job
+  binding path.
+
+### Contract and compatibility
+
+- New captures use the closed `signature-voice-consent-v3` + `authorized_speaker` contract and the
+  server-derived subject `Authorized narrator` / `authorized_submitter`.
+- Existing v2 child/adult authorizations remain valid for historical reuse and fulfilment. The new
+  capture parser cannot mint v2 rows, and legacy v1 bindings remain confined to their existing
+  fallback path.
+- `Template_folder/sql_signature_voice_consent_v3.sql` widens only the versioned authorization and
+  Creation shape constraints, updates the reservation/trigger/Preview RPCs, and is designed for the
+  Supabase SQL Editor without explicit transactions or temporary tables.
+- SQL SHA-256: `B7822840C0C774E5EFD2B21A0DC8C4B905AB4A35DDB84DA15F1BE8083CC4BADB`.
+
+### Verification
+
+- `npm run signature-voice:tests`: 39/39 passed.
+- `npm run test:contracts`: 221/221 passed.
+- `npm run admin:contracts`: 40/40 passed.
+- `npx tsc --noEmit`: passed.
+- Targeted ESLint and `git diff --check`: no errors.
+
+### Release order
+
+1. Claude reviews the code and `sql_signature_voice_consent_v3.sql`.
+2. Run the approved SQL in Supabase before deploying code.
+3. Deploy, then smoke-test one guest and one signed-in Signature Voice Preview. Confirm recording is
+   not uploaded when merely selected, either unchecked consent blocks Create Preview, and a successful
+   Create Preview stores one v3 authorization bound to the created Signature Voice Creation.
+
+### Claude review focus
+
+1. Confirm authorization and upload authority moved completely out of the recorder and occurs only at
+   the Create Preview boundary.
+2. Confirm both required checkboxes default on but still block generation when the user unchecks one.
+3. Confirm v3 is the only mintable capture contract while v2 remains readable only for historical
+   compatibility.
+4. Confirm SQL Editor convergence, constraint NULL safety, owner matching and atomic Preview binding.
+5. Confirm failed upload or Preview creation leaves a retryable local or confirmed asset state and
+   cannot bind an unauthorized/private asset from another owner.
+
+-> Codex
+
+VERDICT: AWAITING CLAUDE REVIEW.
+
+BLOCKING: Do not run `sql_signature_voice_consent_v3.sql` or deploy this slice before Claude review.
+
+CARRY-FORWARD: none introduced by this slice. Existing post-delivery retention automation remains in
+`ENGINEERING_BACKLOG.md`.
+
+NEXT-SLICE GATES: SQL before code, followed by the guest and signed-in smoke tests above.
+
+### Claude review (Signature Voice S7D, 2026-08-28)
+
+Re-ran: signature-voice 39/39, test:contracts 221/221, admin:contracts 40/40, tsc clean. SQL not run.
+SQL SHA-256 matches the handoff.
+
+The five review points all hold mechanically. Two items below are about what the slice means rather
+than whether it works, and the first should be settled before deploy.
+
+Authority moved out of the recorder - PASS, completely. `VoiceRecorderPanel.tsx` contains no fetch,
+no upload and no authorization reference at all; the recording is a `File` in page state. Upload and
+authorization happen only in the Create Preview path, behind the
+`if (bookType === 'supreme' && !hasSignatureVoiceAuthorization) throw` guard, and the resulting asset
+id feeds the existing atomic binding.
+
+Blocking behaviour - PASS. `hasRequiredConsent = isDataGenerationConsentChecked && (!isSupreme ||
+isSignatureVoiceAuthorizationChecked)` gates `isFormValid`, and the authorization is re-read from a
+ref at generation time rather than trusted from render state.
+
+v3 is the only mintable contract - PASS. The reservation function rejects anything other than
+`signature-voice-consent-v3` with `authorized_speaker`, so no new v2 row can be created, while the
+trigger keeps its v1 and v2 branches so historical rows stay valid and readable.
+
+SQL - PASS on convergence and NULL safety. Each constraint replacement sits in its own `do $block$`
+with drop-if-exists, add `not valid` and validate inside it, so the SQL Editor cannot split them. The
+v2 branch is preserved in every widened constraint. `authorized_submitter` is added to the
+relationship list without disturbing the original four. The shape check carries an explicit
+`voice_consent_version is null` branch, which is the branch that a `not in (...)` test alone would
+have left uncovered, since that predicate is NULL rather than true for NULL versions.
+
+-> Codex
+
+VERDICT: APPROVED on implementation (Signature Voice S7D, 2026-08-28). One blocking item that is a
+content decision rather than a code defect, and one scope flag.
+
+BLOCKING:
+
+1. Deploying this slice makes a currently published statement untrue. Privacy `2026-08-27-v2` is
+   live, and under `Child Voice Authorization` it says a child may record "only when an adult
+   confirms that they are the child's parent or legal guardian". The v2 checkbox implemented exactly
+   that - "I am 18 or older and this child's parent or legal guardian". The v3 checkbox says "I
+   confirm that I have all necessary rights and authorization, including any required parental or
+   guardian permission".
+
+   Those are different assertions. Confirming you HAVE permission is not confirming you ARE the
+   parent or legal guardian, and the age affirmation is gone entirely while the policy still says
+   "an adult confirms". `footer-legal-content.ts` is not in this slice, so the published text is
+   unchanged while the control it describes has changed shape.
+
+   Both directions are legitimate and it is the owner's call which: restore the identity and age
+   affirmation in the v3 label, or publish a Privacy revision describing the single-authorization
+   model. What should not ship is the deploy on its own, because that is the state where the public
+   policy describes a control that does not exist. Whichever is chosen has to land with this deploy
+   rather than after it.
+
+SCOPE FLAG - probably worth confirming was intended:
+
+2. The slice also changes a consent that has nothing to do with Signature Voice, for every book type.
+   `isDataGenerationConsentChecked` went from `useState(false)` to `useState(true)`. That is the
+   pre-existing product-generation consent, labelled "I agree to use the photos or recordings to
+   create my personalised products", and it is required for Classic Portrait as much as for supreme.
+
+   So the effect is not only that the new voice authorization defaults on - an existing opt-in
+   consent covering a child's uploaded photograph becomes pre-ticked for all customers, including
+   everyone who never touches Signature Voice. The stated decision was about the two authorizations
+   at the Create Preview boundary; this reaches further than that.
+
+   Recording the reasoning rather than only the setting: a pre-ticked box is not a "clear affirmative
+   action", which is the specific thing consent has to be under GDPR Art 4(11), and the CJEU held in
+   Planet49 (C-673/17) that pre-ticked boxes do not constitute valid consent. The wording here is
+   agreement language ("I agree to..."), not an attestation of fact, which is the form that reads
+   most clearly as consent. The Signature Voice checkbox is worded as an attestation ("I confirm that
+   I have...") and is on firmer ground for a default.
+
+   Not blocking, because it is a decision the owner can make with the facts in front of them. Flagged
+   because the blast radius is wider than the issue title suggests.
+
+OPERATIONAL NOTE:
+
+3. This SQL runs `validate constraint` on `creations`, which is a full table scan, and unlike T4-011
+   the constraints are dropped and rebuilt unconditionally, so a rerun pays the scan again. Given the
+   Disk IO budget warning this project hit recently, run it at a quiet time rather than alongside
+   other load, and avoid rerunning it casually to confirm convergence.
+
+### S7D review - owner response (2026-08-28)
+
+Owner confirmed the default-checked consents are a deliberate decision, including the effect on the
+pre-existing product-generation consent across all book types. Scope flag 2 is CLOSED by owner
+decision; do not raise it again.
+
+Blocking item 1 is unaffected by that decision and remains open. It is not about the checkbox
+default: whether the box starts checked or unchecked, the published Privacy `2026-08-27-v2` text
+still says the adult confirms they ARE the child's parent or legal guardian, and the v3 label only
+asks them to confirm they HAVE the necessary permission. One of the two has to move.
+
+Cheapest resolution that preserves the owner's single-authorization design: amend the v3 label so the
+one checkbox carries the identity and age affirmation the published policy promises, without
+reintroducing any child/adult branching. That is a single string in `i18n-messages.ts`, needs no
+schema or SQL change, and leaves the published policy untouched. The alternative - publishing a
+Privacy revision that describes the single-authorization model - is also valid but costs an Admin
+publication with owner authorization.
+
+### S7D blocking item 1 - owner decision and implementation instruction (2026-08-28)
+
+Owner decision: the shipped web implementation stays as built. The published Privacy text moves to
+match it. Claude has written no code for this; the change below is Codex's to implement.
+
+-> Codex
+
+TASK: Align published Privacy with the S7D single-authorization control, then release in the stated
+order.
+
+1. `src/lib/footer-legal-content.ts`, Privacy section 4 "Children's Data", replace the whole
+   `Child Voice Authorization` paragraph text with:
+
+   "A child's voice may be used for a Signature Voice recording only when the person submitting it
+   confirms that they hold all necessary rights and authorization for that use, including any
+   parental or guardian permission required. No recording is uploaded until that confirmation is
+   given, and it authorizes creation of the synthetic narration for that book only."
+
+   Every clause is verified against the S7D code: the first matches
+   `personalize.voiceAuthorizationRequiredLabel` word for word in substance; the second is true
+   because `VoiceRecorderPanel` performs no upload and the Create Preview path is gated on the
+   authorization; the third matches "for this personalised book".
+
+2. `src/lib/legal-documents.ts`: `version` to `2026-08-28-v3`, `effectiveDate` to
+   `August 28, 2026`. The privacy version string is display metadata only - nothing re-prompts users
+   on it, and the cookie/tracking disclosure uses its own separate version - so this is safe.
+
+3. Do NOT change the general clause immediately above it. "By uploading a child's image or related
+   materials, you confirm that you are authorized to provide that data" already matches the
+   rights-holder model; editing it would introduce a fresh inconsistency.
+
+4. Release order, and it matters: publish the Privacy revision FIRST, then run
+   `sql_signature_voice_consent_v3.sql`, then deploy. Publishing before deploy leaves a policy
+   describing a control that is stricter than the live one, which is harmless. Deploying first
+   creates the mismatch this item exists to prevent.
+
+Blocking item 1 closes when the revision is published. Scope flag 2 is already closed by owner
+decision. Nothing else in the S7D review is outstanding.
+
+### S7D Privacy alignment - Codex implementation (2026-08-28)
+
+- Replaced only Privacy section 4 `Child Voice Authorization` with the approved
+  rights-and-authorization wording. The general child-material authorization paragraph immediately
+  above it is unchanged.
+- Advanced the code-owned Privacy metadata to version `2026-08-28-v3`, effective
+  `August 28, 2026`, and aligned the published-content fallback date.
+- Added contract coverage for the new paragraph, removal of the obsolete parent/legal-guardian
+  identity claim, preservation of the general clause, and the new version/date.
+- Verification: `signature-voice:tests` 39/39, `test:contracts` 221/221, TypeScript clean, targeted
+  ESLint clean.
+- RELEASE STATE: prepared only. The Privacy revision is not yet published, the v3 SQL has not been
+  run, and the S7D application code has not been deployed. Required order remains: publish Privacy
+  `2026-08-28-v3` first, run `sql_signature_voice_consent_v3.sql` second, deploy code last.
+
+### Claude review - S7D policy alignment (2026-08-28)
+
+Re-ran: signature-voice 39/39, test:contracts 221/221, admin:contracts 40/40, tsc clean.
+
+Blocking item 1 is RESOLVED. The replacement text is word-for-word what the instruction specified,
+`footer-legal-content.ts` shows exactly one changed paragraph so the general children's-materials
+clause above it is untouched as required, and the version and effective date moved to
+`2026-08-28-v3` / `August 28, 2026`. The `FALLBACK_EFFECTIVE_DATES` entry in
+`published-legal-content.ts` was updated too, which the instruction did not mention and which would
+otherwise have left the code-owned fallback disagreeing with the published document.
+
+The contract tests were rewritten to assert the new model rather than relaxed to accommodate it, and
+several are stronger than what they replaced. The recorder is now pinned by a `doesNotMatch` on
+`uploadUserAsset|voiceAuthorization|speakerKind|href="/privacy"`, which enforces structurally that
+the panel owns no authorization or upload. Both consent defaults are pinned at `useState(true)`, so
+the owner's decision cannot be reverted silently in either direction. The old policy sentence is
+pinned as absent. And the v3 SQL now has assertions for no HTML entities, no `authorization.` alias,
+no `begin;` and no temp tables, plus the three `do $block$` wrappers - the SQL review lessons from
+this lane are now durable tests rather than review memory.
+
+-> Codex
+
+VERDICT: APPROVED (S7D policy alignment, 2026-08-28). Blocking item 1 closed. Release in your stated
+order: publish Privacy `2026-08-28-v3`, then run `sql_signature_voice_consent_v3.sql`, then deploy.
+
+BLOCKING: none.
+
+CARRY-FORWARD:
+
+1. The "No Model Training" commitment lost its only test guard. The S7C test that asserted the
+   consent copy contained "never used to train models" was replaced, and nothing asserts it now. The
+   clause itself is still in the Privacy policy at `footer-legal-content.ts:63` and still published,
+   so no promise has been broken - but a future policy edit could delete it and the suite would stay
+   green.
+
+   It is the single most quotable sentence in this policy for a customer worried about a child's
+   voice, so it is worth one assertion in the privacy contract test. Not a blocker on this release.
+
+   Noting separately, not as a defect: the no-training fact is no longer stated inline in the consent
+   UI and now lives one click away behind the Privacy link in the collapsed details. That is a
+   consequence of the owner's approved single-authorization design, not an oversight, and the
+   published policy carries it. Recorded so the change is visible if the question is ever raised.
+
+### S7D production Privacy publication evidence (2026-08-28)
+
+- Owner explicitly authorized publication of Privacy `2026-08-28-v3` in production Admin.
+- A structural preflight confirmed that the draft differed from the live `2026-08-27-v2` revision
+  only at `Child Voice Authorization`, `effectiveDate`, and `version`.
+- The existing versioned Legal Publishing RPCs saved and CAS-published the draft. Production now
+  points to immutable Privacy revision 9, version `2026-08-28-v3`, effective date `2026-08-28`,
+  with 13 sections.
+- The public `https://www.ymistory.com/api/legal-content` response independently returned version
+  `2026-08-28-v3`, effective date `August 28, 2026`, the new rights-and-authorization paragraph,
+  and no obsolete parent/legal-guardian identity assertion.
+- The owner confirmed that `Template_folder/sql_signature_voice_consent_v3.sql` completed in
+  production without errors on 2026-08-28.
+- RELEASE STATE: Privacy publication and production SQL are complete. The S7D application code is
+  cleared for deployment.

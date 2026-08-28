@@ -86,7 +86,7 @@ const privacyEn: LegalSection[] = [
       },
       {
         label: 'Child Voice Authorization:',
-        text: 'A child may provide the short Signature Voice recording only when an adult confirms that they are the child\'s parent or legal guardian and authorizes creation of the synthetic narration for that child\'s book.',
+        text: 'A child\'s voice may be used for a Signature Voice recording only when the person submitting it confirms that they hold all necessary rights and authorization for that use, including any parental or guardian permission required. No recording is uploaded until that confirmation is given, and it authorizes creation of the synthetic narration for that book only.',
       },
       {
         label: 'No Child Marketing:',

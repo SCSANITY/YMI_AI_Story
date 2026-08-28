@@ -7,6 +7,8 @@ import {
 } from '@/lib/checkout-owner'
 import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 import {
+  SIGNATURE_VOICE_CONSENT_VERSION,
+  SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
   SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
 } from '@/lib/signature-voice'
@@ -62,8 +64,16 @@ export async function GET(request: Request) {
     return Number.isFinite(duration)
       && duration >= SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
       && duration <= SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
-      && metadata.consent_version === 'signature-voice-consent-v2'
-      && (metadata.speaker_kind === 'current_child' || metadata.speaker_kind === 'adult')
+      && (
+        (
+          metadata.consent_version === SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION
+          && (metadata.speaker_kind === 'current_child' || metadata.speaker_kind === 'adult')
+        )
+        || (
+          metadata.consent_version === SIGNATURE_VOICE_CONSENT_VERSION
+          && metadata.speaker_kind === 'authorized_speaker'
+        )
+      )
   }).slice(0, 5)
 
   const facesWithUrls = await Promise.all(

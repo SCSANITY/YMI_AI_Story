@@ -7,6 +7,7 @@ import {
   parseSignatureVoiceBindingRequest,
   requireSignatureVoiceAssetId,
   SIGNATURE_VOICE_CONSENT_VERSION,
+  SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SignatureVoiceContractError,
 } from './signature-voice'
 
@@ -36,44 +37,35 @@ test('accepts only the closed Signature Voice binding request contract', () => {
   )
 })
 
-test('accepts only server-stampable child or adult capture authorization v2', () => {
+test('accepts only the unified server-stampable capture authorization v3', () => {
   assert.deepEqual(parseSignatureVoiceCaptureAuthorization({
     accepted: true,
     version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speaker_kind: 'current_child',
+    speaker_kind: 'authorized_speaker',
   }), {
     accepted: true,
     version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speakerKind: 'current_child',
-  })
-  assert.deepEqual(parseSignatureVoiceCaptureAuthorization({
-    accepted: true,
-    version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speaker_kind: 'adult',
-  }), {
-    accepted: true,
-    version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speakerKind: 'adult',
+    speakerKind: 'authorized_speaker',
   })
   assert.throws(() => parseSignatureVoiceCaptureAuthorization({
     accepted: false,
     version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speaker_kind: 'adult',
+    speaker_kind: 'authorized_speaker',
   }), /missing or unsupported/)
   assert.throws(() => parseSignatureVoiceCaptureAuthorization({
     accepted: true,
-    version: 'signature-voice-consent-v1',
+    version: SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
     speaker_kind: 'adult',
   }), /missing or unsupported/)
   assert.throws(() => parseSignatureVoiceCaptureAuthorization({
     accepted: true,
     version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speaker_kind: 'child_friend',
+    speaker_kind: 'current_child',
   }), /narrator/)
   assert.throws(() => parseSignatureVoiceCaptureAuthorization({
     accepted: true,
     version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speaker_kind: 'adult',
+    speaker_kind: 'authorized_speaker',
     subject_name: 'Client supplied name',
   }), /fields are invalid/)
 })
@@ -84,8 +76,8 @@ const customerCreation = {
   voice_consent_version: SIGNATURE_VOICE_CONSENT_VERSION,
   voice_consent_accepted_at: '2026-08-27T08:00:00.000Z',
   voice_bound_at: '2026-08-27T08:00:00.000Z',
-  voice_subject_name: 'Adult narrator',
-  voice_subject_relationship: 'self',
+  voice_subject_name: 'Authorized narrator',
+  voice_subject_relationship: 'authorized_submitter',
   owner_type: 'customer',
   customer_id: 'customer-1',
   anon_session_id: null,
@@ -102,6 +94,18 @@ const customerAsset = {
 
 test('accepts a complete same-owner Signature Voice binding', () => {
   assert.deepEqual(assertSignatureVoicePurchaseBinding(customerCreation, customerAsset), {
+    voiceAssetId: 'voice-asset-1',
+    durationSeconds: 15,
+  })
+})
+
+test('keeps an already-captured v2 authorization valid for historical fulfilment', () => {
+  assert.deepEqual(assertSignatureVoicePurchaseBinding({
+    ...customerCreation,
+    voice_consent_version: SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
+    voice_subject_name: 'Adult narrator',
+    voice_subject_relationship: 'self',
+  }, customerAsset), {
     voiceAssetId: 'voice-asset-1',
     durationSeconds: 15,
   })

@@ -43,10 +43,14 @@ import { CustomizeFormCard } from '@/components/personalize/CustomizeFormCard';
 import { StoryShowcaseCard } from '@/components/personalize/StoryShowcaseCard';
 import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayout';
 import { getBookPackagePrice } from '@/lib/package-pricing';
-import type { SignatureVoiceSpeakerKind } from '@/lib/signature-voice';
+import {
+  SIGNATURE_VOICE_CONSENT_VERSION,
+  type SignatureVoiceSpeakerKind,
+} from '@/lib/signature-voice';
 import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGallery';
 import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
+import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
 import { useBookCatalog } from '@/components/useBookCatalog';
 import type { CatalogBook } from '@/lib/book-catalog';
 import type { CartItem, StoryLanguage } from '@/types';
@@ -313,6 +317,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const facePrepareStatusRef = useRef<FacePrepareStatus>(facePrepareStatus);
   const facePrepareErrorRef = useRef<string | null>(facePrepareError);
   const dataGenerationConsentRef = useRef(false);
+  const signatureVoiceAuthorizationRef = useRef(false);
   const personalizationStartTrackedRef = useRef(false);
   const previewReadyTrackedJobIdsRef = useRef<Set<string>>(new Set());
 
@@ -378,7 +383,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [voiceDurationSeconds, setVoiceDurationSeconds] = useState<number | null>(null);
   const [isVoiceReadyForPreview, setIsVoiceReadyForPreview] = useState(false);
-  const [voiceSpeakerKind, setVoiceSpeakerKind] = useState<SignatureVoiceSpeakerKind | null>(null);
+  const [pendingVoiceRecording, setPendingVoiceRecording] = useState<PendingVoiceRecording | null>(null);
+  const pendingVoiceRecordingRef = useRef<PendingVoiceRecording | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [selectedPreviewJobId, setSelectedPreviewJobId] = useState<string | null>(null);
   const selectedPreviewCreationIdRef = useRef<string | null>(null);
@@ -760,7 +766,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const resolvedVoicePlaybackUrl = voicePlaybackUrl || currentVoiceSample?.playback_url || null;
   const resolvedVoiceDurationSeconds = voiceDurationSeconds
     ?? (Number(currentVoiceSample?.metadata?.duration_seconds) || null);
-  const resolvedVoiceSpeakerKind = voiceSpeakerKind ?? currentVoiceSample?.metadata?.speaker_kind ?? null;
   const markPreviewImageError = useCallback((image: string) => {
     if (!image) return;
     setPreviewImageErrors((prev) => {
@@ -891,6 +896,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setVoicePlaybackUrl(null)
     setVoiceDurationSeconds(null)
     setIsVoiceReadyForPreview(false)
+    pendingVoiceRecordingRef.current = null
+    setPendingVoiceRecording(null)
     setPreviewJobId(isUuid(data.previewJobId) ? data.previewJobId : null)
     setCreationId(data.creationId ?? null)
     resumePersonalization(null)
@@ -1177,6 +1184,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setVoicePlaybackUrl(null)
     setVoiceDurationSeconds(null)
     setIsVoiceReadyForPreview(false)
+    pendingVoiceRecordingRef.current = null
+    setPendingVoiceRecording(null)
     setVoiceValidationError(null)
     setPreviewJobId(null)
     setCreationId(null)
@@ -1322,13 +1331,19 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         const currentFacePrepareStatus = facePrepareStatusRef.current
         const currentFacePrepareError = facePrepareErrorRef.current
         const hasDataGenerationConsent = dataGenerationConsentRef.current
+        const hasSignatureVoiceAuthorization = signatureVoiceAuthorizationRef.current
+        const selectedVoiceRecording = pendingVoiceRecordingRef.current
+        let currentVoiceAssetId = voiceAssetId
         const currentName = nameRef.current
         const currentAge = ageRef.current
 
         if (!book) throw new Error('Book not found')
         if (!currentPhoto && !faceAssetId) throw new Error('Please upload a photo before generating the preview')
         if (!hasDataGenerationConsent) throw new Error(t('personalize.dataConsentRequired'))
-        if (bookType === 'supreme' && (!voiceAssetId || !isVoiceReadyForPreview)) {
+        if (bookType === 'supreme' && !hasSignatureVoiceAuthorization) {
+          throw new Error(t('personalize.voiceAuthorizationRequired'))
+        }
+        if (bookType === 'supreme' && (!isVoiceReadyForPreview || (!currentVoiceAssetId && !selectedVoiceRecording))) {
           throw new Error(t('personalize.voiceSampleRequired'))
         }
 
@@ -1359,6 +1374,33 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           }
           pendingFaceAsset = faceAsset
           faceAssetId = faceAsset.asset_id
+        }
+
+        if (bookType === 'supreme' && selectedVoiceRecording) {
+          const voiceAsset = await uploadUserAsset(
+            selectedVoiceRecording.file,
+            'voice_sample',
+            'voice',
+            currentCustomerId ?? undefined,
+            {
+              voiceAuthorization: {
+                accepted: true,
+                version: SIGNATURE_VOICE_CONSENT_VERSION,
+                speakerKind: 'authorized_speaker',
+              },
+            }
+          )
+          if (!isActive) return
+          currentVoiceAssetId = voiceAsset.asset_id
+          pendingVoiceRecordingRef.current = null
+          setPendingVoiceRecording(null)
+          setVoiceAssetId(voiceAsset.asset_id)
+          setVoiceStoragePath(voiceAsset.storage_path)
+          setVoicePlaybackUrl(`/api/user-assets/${encodeURIComponent(voiceAsset.asset_id)}/download`)
+          setVoiceDurationSeconds(
+            Number(voiceAsset.metadata?.duration_seconds) || selectedVoiceRecording.durationSeconds
+          )
+          setIsVoiceReadyForPreview(true)
         }
 
         const parsedAge = Number.parseInt(currentAge, 10)
@@ -1414,9 +1456,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           generationConsentParams,
           currentCustomerId ?? undefined,
           pendingFaceAsset,
-          bookType === 'supreme' && voiceAssetId
+          bookType === 'supreme' && currentVoiceAssetId
             ? {
-                assetId: voiceAssetId,
+                assetId: currentVoiceAssetId,
               }
             : undefined
         )
@@ -1723,10 +1765,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, [currentVoiceSample?.playback_url, voicePlaybackUrl]);
 
   useEffect(() => {
-    if (!requiresVoiceSample || voiceAssetId) {
+    if (!requiresVoiceSample || voiceAssetId || pendingVoiceRecording) {
       setVoiceValidationError(null);
     }
-  }, [requiresVoiceSample, voiceAssetId]);
+  }, [pendingVoiceRecording, requiresVoiceSample, voiceAssetId]);
 
   useEffect(() => {
     if (!voiceValidationError) return;
@@ -2184,13 +2226,11 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     return false;
   }, [requiresVoiceSample, stage, voiceAssetId, returnToCustomizeFromPreview, t]);
 
-  const handleVoiceUploadComplete = useCallback(
-    ({ assetId, storagePath, playbackUrl, durationSeconds, speakerKind }: { assetId: string; storagePath: string; playbackUrl?: string | null; durationSeconds: number; speakerKind: SignatureVoiceSpeakerKind }) => {
-      setVoiceAssetId(assetId);
-      setVoiceStoragePath(storagePath);
-      setVoicePlaybackUrl(playbackUrl ?? null);
-      setVoiceDurationSeconds(durationSeconds);
-      setVoiceSpeakerKind(speakerKind);
+  const handleVoiceRecordingSelected = useCallback(
+    (recording: PendingVoiceRecording | null) => {
+      pendingVoiceRecordingRef.current = recording;
+      setPendingVoiceRecording(recording);
+      if (!recording) return;
       setIsVoiceReadyForPreview(true);
       setVoiceValidationError(null);
     },
@@ -3028,6 +3068,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const startGeneratePreview = useCallback((consent: GeneratePreviewConsent) => {
     dataGenerationConsentRef.current = consent.dataGeneration;
+    signatureVoiceAuthorizationRef.current = consent.signatureVoiceAuthorization;
     setName(nameRef.current);
     setAge(ageRef.current);
     primaryAction();
@@ -3209,10 +3250,14 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                               isFacePreparing={isFacePreparing}
                               isPhotoFailed={facePrepareStatus === 'failed'}
                               isSupreme={isSupreme}
-                              isVoiceReady={!isSupreme || (Boolean(voiceAssetId) && isVoiceReadyForPreview)}
+                              isVoiceReady={!isSupreme || (Boolean(voiceAssetId || pendingVoiceRecording) && isVoiceReadyForPreview)}
                               previewError={previewError}
                               labels={{
                                 dataConsentRequired: t('personalize.dataConsentRequiredLabel'),
+                                voiceAuthorizationRequired: t('personalize.voiceAuthorizationRequiredLabel'),
+                                voiceAuthorizationDetails: t('personalize.voiceAuthorizationDetails'),
+                                voiceAuthorizationRequiredShort: t('personalize.voiceAuthorizationRequired'),
+                                privacyPolicy: t('personalize.privacyPolicy'),
                                 required: t('personalize.requiredLabel'),
                                 photoPreparing: t('personalize.photoPreparing'),
                                 photoNeedsFix: t('personalize.photoNeedsFix'),
@@ -3314,16 +3359,12 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       onBookTypeChange={setBookType}
                       requiresVoiceSample={requiresVoiceSample}
                       voicePanelRef={voicePanelRef}
-                      voiceCustomerId={user?.customerId}
-                      voiceChildName={name}
-                      voiceSpeakerKind={resolvedVoiceSpeakerKind}
                       voiceAssetId={voiceAssetId}
-                      voiceStoragePath={voiceStoragePath}
                       voicePlaybackUrl={resolvedVoicePlaybackUrl}
                       voiceDurationSeconds={resolvedVoiceDurationSeconds}
                       onVoiceReadinessChange={handleVoiceReadinessChange}
                       voiceValidationError={voiceValidationError}
-                      onVoiceUploadComplete={handleVoiceUploadComplete}
+                      onVoiceRecordingSelected={handleVoiceRecordingSelected}
                       onClearVoiceValidation={() => setVoiceValidationError(null)}
                     />
                     </CustomizeFormCard>

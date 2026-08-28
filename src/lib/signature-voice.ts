@@ -1,7 +1,9 @@
 export const SIGNATURE_VOICE_ADULT_CONSENT_VERSION = 'signature-voice-consent-v1'
-export const SIGNATURE_VOICE_CONSENT_VERSION = 'signature-voice-consent-v2'
+export const SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION = 'signature-voice-consent-v2'
+export const SIGNATURE_VOICE_CONSENT_VERSION = 'signature-voice-consent-v3'
 export const SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS = [
   SIGNATURE_VOICE_ADULT_CONSENT_VERSION,
+  SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SIGNATURE_VOICE_CONSENT_VERSION,
 ] as const
 export const SIGNATURE_VOICE_MIN_SAMPLE_SECONDS = 10
@@ -16,18 +18,19 @@ export const SIGNATURE_VOICE_SUBJECT_RELATIONSHIPS = [
   'parent_or_guardian',
   'family_member',
   'other_authorized_adult',
+  'authorized_submitter',
 ] as const
 
 export type SignatureVoiceSubjectRelationship =
   (typeof SIGNATURE_VOICE_SUBJECT_RELATIONSHIPS)[number]
 
-export const SIGNATURE_VOICE_SPEAKER_KINDS = ['current_child', 'adult'] as const
+export const SIGNATURE_VOICE_SPEAKER_KINDS = ['current_child', 'adult', 'authorized_speaker'] as const
 export type SignatureVoiceSpeakerKind = (typeof SIGNATURE_VOICE_SPEAKER_KINDS)[number]
 
 export type SignatureVoiceCaptureAuthorization = {
   accepted: true
   version: typeof SIGNATURE_VOICE_CONSENT_VERSION
-  speakerKind: SignatureVoiceSpeakerKind
+  speakerKind: 'authorized_speaker'
 }
 
 export type SignatureVoiceBindingRequest = {
@@ -100,13 +103,13 @@ export function parseSignatureVoiceCaptureAuthorization(
     throw new SignatureVoiceContractError('Signature Voice authorization is missing or unsupported')
   }
   const speakerKind = requiredString(authorization.speaker_kind)
-  if (!SIGNATURE_VOICE_SPEAKER_KINDS.includes(speakerKind as SignatureVoiceSpeakerKind)) {
+  if (speakerKind !== 'authorized_speaker') {
     throw new SignatureVoiceContractError('Signature Voice narrator is invalid')
   }
   return {
     accepted: true,
     version: SIGNATURE_VOICE_CONSENT_VERSION,
-    speakerKind: speakerKind as SignatureVoiceSpeakerKind,
+    speakerKind: 'authorized_speaker',
   }
 }
 
