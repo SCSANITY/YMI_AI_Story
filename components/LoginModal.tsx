@@ -54,12 +54,13 @@ export function LoginModal() {
     login,
     loginWithOAuth,
     verifySignupOtp,
+    requestPasswordReset,
     checkoutEmail,
     loginModalMode,
     loginModalEmail,
   } = useGlobalContext();
 
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'recovery'>('login');
   const [signupStep, setSignupStep] = useState<'credentials' | 'verify'>('credentials');
   const [email, setEmail] = useState(checkoutEmail);
   const [password, setPassword] = useState('');
@@ -137,6 +138,16 @@ export function LoginModal() {
           return;
         }
 
+        if (mode === 'recovery') {
+          const result = await Promise.resolve(requestPasswordReset(email));
+          if (result?.error) {
+            setError(result.error);
+            return;
+          }
+          setInfo(result?.message ?? 'If an account exists for this email, a reset link is on its way.');
+          return;
+        }
+
         const result = await Promise.resolve(login(email, password, 'login'));
         if (result?.error) {
           setError(result.error);
@@ -173,13 +184,15 @@ export function LoginModal() {
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-gray-100">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">{t('login.title')}</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            {mode === 'recovery' ? t('login.resetTitle') : t('login.title')}
+          </h2>
           <button onClick={closeLoginModal} className="p-2 rounded-full hover:bg-gray-100">
             <X className="h-4 w-4 text-gray-500" />
           </button>
         </div>
 
-        <div className="px-6 pt-5">
+        {mode !== 'recovery' ? <div className="px-6 pt-5">
           <div className="flex rounded-full bg-gray-100 p-1 text-xs font-semibold text-gray-500">
             <button
               type="button"
@@ -214,9 +227,12 @@ export function LoginModal() {
               {t('login.signUp')}
             </button>
           </div>
-        </div>
+        </div> : null}
 
         <form onSubmit={handleSubmit} className="px-6 py-6 space-y-4">
+          {mode === 'recovery' ? (
+            <p className="text-sm leading-6 text-gray-600">{t('login.resetDescription')}</p>
+          ) : null}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('login.email')}</label>
             <div className="relative">
@@ -233,9 +249,25 @@ export function LoginModal() {
             </div>
           </div>
 
-          {(mode === 'login' || !isSignupVerify) && (
+          {(mode === 'login' || (mode === 'signup' && !isSignupVerify)) && (
             <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('login.password')}</label>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('login.password')}</label>
+                {mode === 'login' ? (
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-amber-700 transition hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    onClick={() => {
+                      setMode('recovery');
+                      setPassword('');
+                      setError(null);
+                      setInfo(null);
+                    }}
+                  >
+                    {t('login.forgotPassword')}
+                  </button>
+                ) : null}
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -294,8 +326,25 @@ export function LoginModal() {
                 ? isSignupVerify
                   ? t('login.verifyAndCreate')
                   : t('login.sendVerificationCode')
-                : t('login.logIn')}
+                : mode === 'recovery'
+                  ? t('login.sendResetLink')
+                  : t('login.logIn')}
           </Button>
+
+          {mode === 'recovery' ? (
+            <button
+              type="button"
+              className="w-full text-xs font-semibold text-amber-700 transition hover:text-amber-900"
+              onClick={() => {
+                setMode('login');
+                setError(null);
+                setInfo(null);
+              }}
+              disabled={isPending || Boolean(pendingOAuthProvider)}
+            >
+              {t('login.backToLogin')}
+            </button>
+          ) : null}
 
           {isSignupVerify && (
             <button
@@ -321,13 +370,13 @@ export function LoginModal() {
             </button>
           )}
 
-          <div className="flex items-center gap-3 text-xs text-gray-400">
+          {mode !== 'recovery' ? <div className="flex items-center gap-3 text-xs text-gray-400">
             <span className="h-px flex-1 bg-gray-200" />
             {t('login.orContinue')}
             <span className="h-px flex-1 bg-gray-200" />
-          </div>
+          </div> : null}
 
-          {enabledSocialLogins.map((option) => {
+          {mode !== 'recovery' ? enabledSocialLogins.map((option) => {
             const isProviderPending = pendingOAuthProvider === option.provider;
             return (
               <button
@@ -343,7 +392,7 @@ export function LoginModal() {
                 {isProviderPending ? t(option.redirectingKey) : t(option.continueKey)}
               </button>
             );
-          })}
+          }) : null}
         </form>
       </div>
     </div>

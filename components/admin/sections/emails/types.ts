@@ -22,6 +22,7 @@ export const EMAIL_EVENT_KEY_OPTIONS = [
   'unpaid_reminder',
   'stripe_receipt',
   'supabase_signup_otp',
+  'supabase_password_recovery',
 ] as const
 
 export type EmailEventStatus = (typeof EMAIL_EVENT_STATUS_OPTIONS)[number]

@@ -13,6 +13,7 @@ import { getCurrencyRegionOption, resolveCurrencyRegionOption, resolveInitialCur
 import { CURRENCY_GEO_COOKIE, CURRENCY_USER_SELECTED_KEY, readCookieValue } from '@/lib/currency-geo';
 import {
   login as loginAction,
+  requestPasswordReset as requestPasswordResetAction,
   signup as signupAction,
   verifySignupOtp as verifySignupOtpAction,
   signout as signoutAction,
@@ -111,7 +112,10 @@ const catalogTemplateToBook = (templateId: string, template: any): Book | null =
   }
 };
 
-export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const GlobalProvider: React.FC<{
+  children: ReactNode;
+  suspendAuthSync?: boolean;
+}> = ({ children, suspendAuthSync = false }) => {
   const [user, setUser] = useState<User | null>(null);
   const userRef = useRef<User | null>(null);
   const authSyncInFlightRef = useRef<string | null>(null);
@@ -511,6 +515,10 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     if (typeof window === 'undefined' || !isHydrated) return;
 
+    if (suspendAuthSync) {
+      return;
+    }
+
     let active = true;
     const resolveAuthUser = async (authUser?: SupabaseUser | null) => {
       const runId = ++authResolutionRunIdRef.current;
@@ -550,7 +558,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       active = false;
       subscription.unsubscribe();
     };
-  }, [isHydrated]);
+  }, [isHydrated, suspendAuthSync]);
 
   const refreshUserProfile = useCallback(async () => {
     if (!user?.customerId) return;
@@ -638,6 +646,16 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
     return {};
   }, [finalizeAuth]);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    if (!email) {
+      return { error: 'Enter your email address.' };
+    }
+
+    const formData = new FormData();
+    formData.set('email', email);
+    return requestPasswordResetAction(formData);
+  }, []);
 
   const logout = useCallback(() => {
     void (async () => {
@@ -1143,6 +1161,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     login,
     loginWithOAuth,
     verifySignupOtp,
+    requestPasswordReset,
     logout,
     addToCart,
     removeFromCart,
@@ -1186,6 +1205,7 @@ export const GlobalProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     login,
     loginWithOAuth,
     verifySignupOtp,
+    requestPasswordReset,
     logout,
     addToCart,
     removeFromCart,

@@ -203,6 +203,7 @@ export interface GlobalContextType {
   login: (email: string, password: string, mode?: 'login' | 'signup') => Promise<{ error?: string; otpRequired?: boolean } | void>;
   loginWithOAuth: (provider: 'google' | 'facebook' | 'apple', nextPath?: string) => Promise<{ error?: string } | void>;
   verifySignupOtp: (email: string, code: string, password: string) => Promise<{ error?: string } | void>;
+  requestPasswordReset: (email: string) => Promise<{ error?: string; message?: string }>;
   logout: () => void;
   addToCart: (book: Book,personalization?: PersonalizationData,step?: number,finalPrice?: number,previewCoverUrl?: string) => Promise<CartItem | null>;
   removeFromCart: (itemId: string) => Promise<boolean>;

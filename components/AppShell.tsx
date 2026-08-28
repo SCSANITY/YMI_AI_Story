@@ -76,8 +76,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isMaintenanceRoute = pathname?.startsWith('/maintenance') ?? false
   const isPersonalizeRoute = pathname?.startsWith('/personalize/') ?? false
   const isAdminRoute = pathname?.startsWith('/admin') ?? false
+  const isPasswordRecoveryRoute = pathname === '/reset-password'
   const isTrackingFrameRoute = pathname === '/tracking/meta-frame'
-  const showGlobalNav = !isMaintenanceRoute && !isPersonalizeRoute && !isAdminRoute
+  const showGlobalNav = !isMaintenanceRoute && !isPersonalizeRoute && !isAdminRoute && !isPasswordRecoveryRoute
 
   const isHomePage = pathname === '/'
 
@@ -100,7 +101,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (isTrackingFrameRoute) return <>{children}</>
 
   return (
-    <GlobalProvider>
+    <GlobalProvider suspendAuthSync={isPasswordRecoveryRoute}>
       {showGlobalNav ? <Navbar /> : null}
       <LoginModalGate enabled={!isMaintenanceRoute && !isAdminRoute} />
       {/* Home page: no pt-16. Hero fills the full viewport and manages its own spacing. */}

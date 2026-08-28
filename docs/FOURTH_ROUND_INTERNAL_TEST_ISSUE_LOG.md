@@ -2189,3 +2189,36 @@ CARRY-FORWARD:
   the job-local progress and error presentation gate.
 - T4-011 is CLOSED. The non-resumable two-hour upload window and external SQL version-control
   decision remain carry-forward items only.
+
+## T4-012 - Customer password recovery
+
+**Status:** IMPLEMENTED; awaiting Supabase configuration and production smoke test (2026-08-28)
+
+### Scope and outcome
+
+- Added a lightweight customer-only forgot-password flow using Supabase Auth's native recovery
+  email, OTP verification and password update APIs. No custom recovery-token table or SQL was added.
+- Added `Forgot password?` to the customer login modal, a credential-stripping recovery callback,
+  and a dedicated noindex reset page. Admin authentication is unchanged.
+- Reset requests always return the same customer-facing response, so the UI does not disclose
+  whether an email address is registered.
+- Password updates require both a valid Supabase recovery session and a short-lived HttpOnly
+  recovery-intent cookie. Successful updates sign out all sessions and require a fresh login.
+- Recovery sessions suspend the normal customer merge/auth synchronization path, preventing an
+  emailed recovery link from mutating customer, cart or asset ownership before the password reset.
+- Added an external email-event classification for Supabase password-recovery mail.
+
+### Verification
+
+- `node --test tests/password-recovery-contract.test.mjs`: 5/5 passed.
+- `npm run test:contracts`: 220/220 passed.
+- `npx tsc --noEmit`: passed.
+- Targeted ESLint: no errors; only pre-existing warnings in shared context/type files.
+- `npm run build`: passed, including `/auth/recovery/callback` and `/reset-password`.
+
+### Owner configuration gate
+
+Before deployment, configure Supabase Auth with the production recovery callback URL and make the
+Reset Password email template link to that callback using `TokenHash` plus `type=recovery`. Then run
+the production smoke test for a known account, an unknown address, successful password replacement,
+old-password rejection, one-time-link reuse rejection and unchanged Admin login behavior.
