@@ -149,38 +149,49 @@ export function CookieConsentBanner() {
     <>
       {isBannerVisible ? (
         <div className="fixed inset-x-0 bottom-0 z-[90] px-3 pb-3 sm:px-5 sm:pb-5">
-          <div className="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-white/55 bg-white/72 shadow-[0_20px_64px_rgba(120,53,15,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-2xl">
-            <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+          <div
+            role="dialog"
+            aria-label={t('cookies.bannerTitle')}
+            aria-describedby="cookie-consent-description"
+            className="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-white/55 bg-white/78 shadow-[0_20px_64px_rgba(120,53,15,0.18),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-2xl"
+          >
+            <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
               <div className="flex gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-200/60">
                   <Cookie className="h-5 w-5" />
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-gray-900">{t('cookies.bannerTitle')}</h2>
-                  <p className="mt-0.5 max-w-xl text-sm leading-5 text-gray-600">{t('cookies.bannerDescription')}</p>
+                  <p
+                    id="cookie-consent-description"
+                    className="mt-1 max-w-2xl text-sm leading-5 text-gray-700"
+                  >
+                    {t('cookies.bannerDescription')}
+                  </p>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 sm:min-w-[360px] sm:flex-row sm:justify-end">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:min-w-[410px]">
                 <button
                   type="button"
                   onClick={rejectOptional}
-                  className="h-11 rounded-full border border-amber-200/70 bg-white/50 px-5 text-sm font-semibold text-gray-700 transition hover:bg-white/80"
+                  className="h-11 rounded-full border border-gray-400/80 bg-white/80 px-4 text-sm font-bold text-gray-900 shadow-sm transition hover:border-gray-500 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-700 focus-visible:ring-offset-2"
                 >
                   {t('cookies.rejectOptional')}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsPreferencesOpen(true)}
-                  className="h-11 rounded-full border border-amber-200/70 bg-white/50 px-5 text-sm font-semibold text-gray-700 transition hover:bg-white/80"
+                  onClick={acceptAll}
+                  className="h-11 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 text-sm font-bold text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 focus-visible:ring-offset-2"
                 >
-                  {t('cookies.manageChoices')}
+                  {t('cookies.acceptAll')}
                 </button>
                 <button
                   type="button"
-                  onClick={acceptAll}
-                  className="h-11 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-5 text-sm font-bold text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5"
+                  onClick={() => setIsPreferencesOpen(true)}
+                  className="flex h-11 items-center justify-center gap-2 rounded-full border border-amber-200/80 bg-white/55 px-4 text-sm font-semibold text-gray-800 transition hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 sm:col-span-2"
                 >
-                  {t('cookies.acceptAll')}
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                  {t('cookies.manageChoices')}
                 </button>
               </div>
             </div>

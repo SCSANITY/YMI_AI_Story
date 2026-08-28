@@ -70,6 +70,20 @@ test('the new disclosure version re-prompts users and names providers in Cookie 
   assert.match(footer, /publishedLegalContent\?\.footerEffectiveDates/)
 })
 
+test('the first cookie layer requires an explicit choice without preselecting optional tracking', async () => {
+  const banner = await read('components/CookieConsentBanner.tsx')
+  const messages = await read('src/lib/i18n-messages.ts')
+
+  assert.match(banner, /defaultDraft = createCookieConsentPreferences\(\{ analytics: false, marketing: false \}\)/)
+  assert.match(banner, /onClick=\{rejectOptional\}[\s\S]*cookies\.rejectOptional/)
+  assert.match(banner, /onClick=\{acceptAll\}[\s\S]*cookies\.acceptAll/)
+  assert.match(banner, /onClick=\{\(\) => setIsPreferencesOpen\(true\)\}[\s\S]*cookies\.manageChoices/)
+  assert.match(banner, /grid grid-cols-1[\s\S]*sm:grid-cols-2[\s\S]*sm:col-span-2/)
+  assert.match(messages, /Optional cookies let Google and Meta process limited device information and approved, coarse site and shopping-flow events/)
+  assert.match(messages, /never send children\\'s names, photos, recordings, customer contact details, or internal identifiers/)
+  assert.match(messages, /'cookies\.manageChoices': 'Cookie settings'/)
+})
+
 test('vendor runtime stays confined to the single S3 tracking boundary', async () => {
   const sourceDirectories = ['app', 'components', 'contexts', 'src']
   const files = (await Promise.all(sourceDirectories.map(listSourceFiles))).flat()
