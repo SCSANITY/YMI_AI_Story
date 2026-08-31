@@ -15,7 +15,6 @@ repository:
 ## Application References
 
 - `../AGENTS.md`: component-specific agent instructions.
-- `../README.md`: application setup and local development entry point.
 - `../package.json`: authoritative development, test, and build commands.
 - `../tests/`: runtime and source-contract coverage.
 - `../tests/fixtures/external-contracts/`: versioned SQL and Worker contract

@@ -33,5 +33,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "worker"]
+  "exclude": [
+    "node_modules",
+    "worker",
+    "tests/fixtures/external-contracts"
+  ]
 }
