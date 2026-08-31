@@ -182,7 +182,7 @@ test('Admin client components never import the service-role Supabase client', as
 })
 
 test('Legal Content preserves draft isolation, atomic publishing, and immutable history', async () => {
-  const sql = await read('../Template_folder/sql_legal_content_publishing.sql')
+  const sql = await read('tests/fixtures/external-contracts/sql/sql_legal_content_publishing.sql')
   const publishing = await read('src/lib/legal-publishing.ts')
   const store = await read('src/lib/legal-publishing-store.ts')
   const rootApi = await read('app/api/admin/legal-documents/route.ts')

@@ -21,7 +21,7 @@ test('newsletter signup remains pending until a hashed confirmation token is con
 
 test('newsletter requests are bounded and subscriber data is service-only', () => {
   const signup = read('app/api/newsletter-subscribers/route.ts')
-  const sql = read('../Template_folder/sql_newsletter_double_opt_in.sql')
+  const sql = read('tests/fixtures/external-contracts/sql/sql_newsletter_double_opt_in.sql')
 
   assert.match(signup, /consume_newsletter_signup_rate_limit/)
   assert.match(sql, /cardinality\(v_email_times\) >= 3/)

@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
-const readTemplateSql = (path) => readFile(new URL(`../../Template_folder/${path}`, import.meta.url), 'utf8')
+const readTemplateSql = (path) =>
+  readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
 test('S3 stores two independent source decisions and immutable actor-attributed history', async () => {
   const sql = await readTemplateSql('sql_signature_voice_admin_surface.sql')

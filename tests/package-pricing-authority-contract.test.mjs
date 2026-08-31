@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
-const readTemplateSql = (path) => readFile(new URL(`../../Template_folder/${path}`, import.meta.url), 'utf8')
+const readTemplateSql = (path) =>
+  readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
 test('cart and order-start derive package and price from the owned creation', async () => {
   const [cartRoute, orderStart, store] = await Promise.all([

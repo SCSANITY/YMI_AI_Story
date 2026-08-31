@@ -1,34 +1,26 @@
-# YMI Story Documentation
+# YMI Story Next.js Application Documentation
 
-Last reset: 2026-08-27
+This directory documents only the Next.js application in this repository. It
+does not own platform status, cross-component decisions, issue ledgers, or the
+platform backlog.
 
-## Start Here
+## Platform Authority
 
-1. [Current Codex handoff](./Codex/CONVERSATION_HANDOFF_2026-07-09.md)
-2. [Fourth-round active ledger](./FOURTH_ROUND_INTERNAL_TEST_ISSUE_LOG.md)
-3. [Engineering backlog](./ENGINEERING_BACKLOG.md)
+When this repository is opened inside the YMI Story workspace, start with
+`../../docs/README.md`. Remote-only readers can use the private governance
+repository:
 
-These three files are the current operating context. Live code and the live
-Supabase schema override documentation when they disagree.
+`https://github.com/SCSANITY/YMI_Story_Workspace_Governance/tree/main/docs`
 
-## Active Specialized References
+## Application References
 
-- [Meta Ads technical pause/resume handoff](./META_ADS_GO_LIVE_ALIGNMENT_BRIEF.md)
-- [V2 book-page completion plan](./V2_BOOK_PAGE_COMPLETION_PLAN.md)
-- [V2 story authoring workflow](./V2_AUTHORING_WORKFLOW.md)
+- `../AGENTS.md`: component-specific agent instructions.
+- `../README.md`: application setup and local development entry point.
+- `../package.json`: authoritative development, test, and build commands.
+- `../tests/`: runtime and source-contract coverage.
+- `../tests/fixtures/external-contracts/`: versioned SQL and Worker contract
+  snapshots required for isolated CI.
 
-Older round ledgers, review briefs, migration plans, and architecture snapshots
-were removed after their durable conclusions were consolidated into the current
-handoff and backlog. Git history remains the audit trail when historical detail
-is genuinely needed.
-
-## Maintenance Rules
-
-- Never document API keys, service-role keys, webhook secrets, database direct
-  credentials, private Healthchecks URLs, or private signed asset URLs.
-- Keep Mock and real provider workflows explicitly separated.
-- Put durable deferred work only in `ENGINEERING_BACKLOG.md`.
-- Remove transient review concerns after closure rather than carrying them into
-  the next issue.
-- Commit documentation changes only when the owner asks or when they are part of
-  an explicitly approved documentation consolidation.
+The application repository may add focused documentation for its architecture,
+API routes, Admin UI, testing, Vercel deployment, or local development. Any
+cross-platform state or deferred work belongs in the root governance repository.

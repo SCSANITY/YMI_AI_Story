@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const readTemplateSql = (path) =>
-  readFile(new URL(`../../Template_folder/${path}`, import.meta.url), 'utf8')
+  readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
 test('legacy self-service Codes are retired without erasing paid audit history', async () => {
   const sql = await readTemplateSql('sql_kol_partnership_foundation.sql')

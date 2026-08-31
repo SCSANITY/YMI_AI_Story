@@ -134,7 +134,7 @@ test('S4b KOL replies use opaque routing, sender quarantine, and Admin-only asso
     read('app/api/admin/kol-partnerships/[leadId]/route.ts'),
     read('components/admin/sections/kol/KolPartnershipConversation.tsx'),
     read('app/api/admin/inbox/attachments/[attachmentId]/download/route.ts'),
-    read('../Template_folder/sql_kol_partnership_foundation.sql'),
+    read('tests/fixtures/external-contracts/sql/sql_kol_partnership_foundation.sql'),
   ])
 
   assert.match(routing, /kind:\s*['"]kol_reply['"]/)
@@ -168,7 +168,7 @@ test('S5 KOL Code management keeps edit and rotation inside dedicated transactio
       read('src/lib/admin-kol-codes-server.ts'),
       read('components/admin/sections/kol/KolPartnershipCodePanel.tsx'),
       read('app/api/admin/kol-partnerships/[leadId]/route.ts'),
-      read('../Template_folder/sql_kol_partnership_foundation.sql'),
+      read('tests/fixtures/external-contracts/sql/sql_kol_partnership_foundation.sql'),
       read('app/api/admin/discounts/route.ts'),
       read('src/lib/discounts.ts'),
     ])

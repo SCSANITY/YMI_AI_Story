@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
-const readTemplateSql = (path) => readFile(new URL(`../../Template_folder/${path}`, import.meta.url), 'utf8')
+const readTemplateSql = (path) =>
+  readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
 test('Signature Voice v3 keeps recording local until Create Preview and uses one authorization', async () => {
   const [action, recorder, page, jobsClient, uploadRoute, confirmRoute, cleanupServer, sql, consentV3Sql, ownerHotfix] = await Promise.all([

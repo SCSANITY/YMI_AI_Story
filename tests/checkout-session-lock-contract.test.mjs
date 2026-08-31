@@ -31,7 +31,9 @@ test('both Stripe completion paths require the active immutable session', () => 
 })
 
 test('database triggers block order and cart mutation while checkout is active', () => {
-  const sql = read('../Template_folder/sql_stripe_checkout_session_lock.sql')
+  const sql = read(
+    'tests/fixtures/external-contracts/sql/sql_stripe_checkout_session_lock.sql',
+  )
 
   assert.match(sql, /checkout_session_id text/)
   assert.match(sql, /before insert or update or delete on public\.cart_items/i)

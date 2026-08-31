@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const readTemplateSql = (path) =>
-  readFile(new URL(`../../Template_folder/${path}`, import.meta.url), 'utf8')
+  readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
 test('Homepage banners have exactly three database-owned fixed anchors', async () => {
   const [sql, core] = await Promise.all([

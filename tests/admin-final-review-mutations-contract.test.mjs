@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 
 const appRoot = new URL('../', import.meta.url)
-const workerRoot = new URL('../../worker/', import.meta.url)
+const workerRoot = new URL('./fixtures/external-contracts/worker/', import.meta.url)
 
 async function readFrom(root, path) {
   return readFile(new URL(path, root), 'utf8')

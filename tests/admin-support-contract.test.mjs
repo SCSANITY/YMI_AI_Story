@@ -4,7 +4,7 @@ import path from 'node:path'
 import test from 'node:test'
 
 const root = process.cwd()
-const templates = path.resolve(root, '..', 'Template_folder')
+const templates = path.resolve(root, 'tests', 'fixtures', 'external-contracts', 'sql')
 
 async function read(relativePath, base = root) {
   return readFile(path.join(base, relativePath), 'utf8')

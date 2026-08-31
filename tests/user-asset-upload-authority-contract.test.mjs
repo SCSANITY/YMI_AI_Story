@@ -9,7 +9,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 test('signed user uploads declare size and are rate limited by owner and IP', () => {
   const client = read('src/services/assets.ts')
   const route = read('app/api/upload-url/route.ts')
-  const sql = read('../Template_folder/sql_user_asset_upload_rate_limits.sql')
+  const sql = read('tests/fixtures/external-contracts/sql/sql_user_asset_upload_rate_limits.sql')
 
   assert.match(client, /size_bytes:\s*uploadFile\.size/)
   assert.match(route, /validateUserAssetUpload\(\{ assetType, contentType, sizeBytes \}\)/)

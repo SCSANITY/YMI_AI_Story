@@ -4,7 +4,10 @@ import { test } from 'node:test'
 
 const verifyRoutePath = new URL('../app/api/guest/verify-otp/route.ts', import.meta.url)
 const requestRoutePath = new URL('../app/api/guest/request-otp/route.ts', import.meta.url)
-const sqlPath = new URL('../../Template_folder/sql_guest_otp_verification_attempts.sql', import.meta.url)
+const sqlPath = new URL(
+  './fixtures/external-contracts/sql/sql_guest_otp_verification_attempts.sql',
+  import.meta.url,
+)
 
 test('Guest OTP verification is atomic and bounded to five failed attempts', async () => {
   const [verifyRoute, requestRoute, sql] = await Promise.all([

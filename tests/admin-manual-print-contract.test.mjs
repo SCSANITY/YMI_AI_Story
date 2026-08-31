@@ -3,7 +3,10 @@ import { access, readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 
 const appRoot = new URL('../', import.meta.url)
-const sqlUrl = new URL('../../Template_folder/sql_final_print_artifacts.sql', import.meta.url)
+const sqlUrl = new URL(
+  './fixtures/external-contracts/sql/sql_final_print_artifacts.sql',
+  import.meta.url,
+)
 
 async function read(path) {
   return readFile(new URL(path, appRoot), 'utf8')

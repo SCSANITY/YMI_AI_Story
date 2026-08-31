@@ -21,7 +21,7 @@ test('legacy Creator Promo runtime and copy are physically retired', async () =>
     read('src/lib/i18n-messages.ts'),
     read('components/admin/sections/ServiceControlSection.tsx'),
     read('package.json'),
-    read('../Template_folder/sql_kol_partnership_foundation.sql'),
+    read('tests/fixtures/external-contracts/sql/sql_kol_partnership_foundation.sql'),
   ])
 
   assert.doesNotMatch(messages, /creatorPromo|Creator Promo|creator promo/)
