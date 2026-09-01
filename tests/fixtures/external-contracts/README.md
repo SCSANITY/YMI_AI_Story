@@ -7,6 +7,10 @@ not a second Worker source.
   `Web/Template_folder/<name>` on 2026-08-31.
 - `worker/<name>` was copied byte-for-byte from `Web/worker/<name>` on
   2026-08-31.
+- T4-016 refreshed `worker/index.ts` and added `worker/workerRuntime.ts`
+  byte-for-byte from the active Worker on 2026-09-01. The related database SQL
+  remains an unexecuted governance proposal and is intentionally not represented
+  here as a live Supabase contract.
 - `SHA256SUMS` records the source byte identity at capture time.
 
 The fixtures let this repository's contract suite run from an isolated clone.

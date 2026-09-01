@@ -1,10 +1,18 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type RealtimeChannel } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 import http from 'http'
 import { PDFDocument } from 'pdf-lib'
 import axios from 'axios'
 import { resolveWorkerExecutionMode } from './executionMode'
-import { listenOnExclusivePort, resolveWorkerPollingPolicy } from './workerRuntime'
+import {
+  ClaimWakeSignal,
+  WORKER_QUEUE_WAKE_EVENT,
+  WORKER_QUEUE_WAKE_TOPIC,
+  listenOnExclusivePort,
+  resolveQueueWakeRetryDelayMs,
+  resolveWorkerPollingPolicy,
+  resolveWorkerQueueWakePolicy,
+} from './workerRuntime'
 import {
   SinglePageJobAssetError,
   type BookPageManifestEntry,
@@ -179,6 +187,9 @@ const WORKER_POLL_ENABLED = WORKER_POLLING_POLICY.enabled
 const WORKER_CLAIM_IDLE_INITIAL_MS = WORKER_POLLING_POLICY.initialIdleMs
 const WORKER_CLAIM_IDLE_MAX_MS = WORKER_POLLING_POLICY.maxIdleMs
 const WORKER_CLAIM_IDLE_BACKOFF_MULTIPLIER = WORKER_POLLING_POLICY.backoffMultiplier
+const WORKER_QUEUE_WAKE_POLICY = resolveWorkerQueueWakePolicy(process.env)
+const WORKER_QUEUE_WAKE_ENABLED = WORKER_QUEUE_WAKE_POLICY.enabled
+const WORKER_QUEUE_WAKE_HEALTH_GRACE_MS = WORKER_QUEUE_WAKE_POLICY.healthGraceMs
 const WORKER_HEALTH_PORT = Number.parseInt(process.env.WORKER_HEALTH_PORT || '8787', 10)
 const WORKER_HEALTH_HOST = process.env.WORKER_HEALTH_HOST || '127.0.0.1'
 const HEALTHCHECKS_URL = (process.env.HEALTHCHECKS_URL || '').trim()
@@ -211,7 +222,15 @@ const RUNCOMFY_RESULT_RETRY_MAX_FINAL = Number.parseInt(
 const WORKER_DEBUG_PROMPTS = process.env.WORKER_DEBUG_PROMPTS === 'true'
 const PREVIEW_DISPLAY_COVER_NAME = (process.env.PREVIEW_DISPLAY_COVER_NAME || 'Display.png').trim() || 'Display.png'
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+  realtime: {
+    reconnectAfterMs: resolveQueueWakeRetryDelayMs,
+  },
+})
 const templateFileCache = new Map<string, { files: Set<string>; ts: number }>()
 const workerStartedAt = Date.now()
 
@@ -222,10 +241,26 @@ type ProcessingJobState = {
 }
 
 const currentlyProcessing = new Map<string, ProcessingJobState>()
+const claimWakeSignal = new ClaimWakeSignal()
 let lastClaimPollAt: string | null = null
 let lastSupabaseOkAt: string | null = null
 let lastJobProcessedAt: string | null = null
 let lastError: { message: string; at: string } | null = null
+type QueueWakeStatus =
+  | 'disabled'
+  | 'connecting'
+  | 'subscribed'
+  | 'retry_wait'
+  | 'timed_out'
+  | 'closed'
+  | 'channel_error'
+let queueWakeStatus: QueueWakeStatus = WORKER_QUEUE_WAKE_ENABLED ? 'connecting' : 'disabled'
+let queueWakeStatusAt = nowIso()
+let lastQueueWakeAt: string | null = null
+let queueWakeCount = 0
+let queueWakeLastError: { message: string; at: string } | null = null
+let queueWakeReconnectAttempts = 0
+let queueWakeNextRetryAt: string | null = null
 let shutdownRequested = false
 
 type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancel_requested' | 'cancelled'
@@ -413,13 +448,18 @@ function getHealthSnapshot() {
     !hasActiveJob && (!claimPollMs || !Number.isFinite(claimPollMs) || claimPollMs > HEALTHCHECK_SUPABASE_STALE_MS)
   const supabaseStale =
     !hasActiveJob && (!supabaseOkMs || !Number.isFinite(supabaseOkMs) || supabaseOkMs > HEALTHCHECK_SUPABASE_STALE_MS)
+  const queueWakeDegraded =
+    WORKER_POLL_ENABLED &&
+    WORKER_QUEUE_WAKE_ENABLED &&
+    queueWakeStatus !== 'subscribed' &&
+    now - workerStartedAt > WORKER_QUEUE_WAKE_HEALTH_GRACE_MS
 
   let status: 'paused' | 'starting' | 'ok' | 'degraded' = 'ok'
   if (!WORKER_POLL_ENABLED) {
     status = 'paused'
   } else if (!lastClaimPollAt && !hasActiveJob) {
     status = 'starting'
-  } else if (activeJobStale || claimPollStale || supabaseStale) {
+  } else if (activeJobStale || claimPollStale || supabaseStale || queueWakeDegraded) {
     status = 'degraded'
   }
 
@@ -427,6 +467,16 @@ function getHealthSnapshot() {
     status,
     executionMode: WORKER_EXECUTION_MODE,
     pollEnabled: WORKER_POLL_ENABLED,
+    queueWakeEnabled: WORKER_QUEUE_WAKE_ENABLED,
+    queueWakeStatus,
+    queueWakeStatusAt,
+    queueWakeTopic: WORKER_QUEUE_WAKE_TOPIC,
+    lastQueueWakeAt,
+    queueWakeCount,
+    queueWakeLastError,
+    queueWakeReconnectAttempts,
+    queueWakeNextRetryAt,
+    fallbackClaimIdleMaxMs: WORKER_CLAIM_IDLE_MAX_MS,
     uptimeSec: Math.round((now - workerStartedAt) / 1000),
     lastClaimPollAt,
     lastSupabaseOkAt,
@@ -434,6 +484,127 @@ function getHealthSnapshot() {
     minutesSinceLastJob: minutesSince(lastJobProcessedAt),
     currentlyProcessing: Array.from(currentlyProcessing.values()),
     lastError,
+  }
+}
+
+function setQueueWakeStatus(status: QueueWakeStatus, error?: unknown) {
+  queueWakeStatus = status
+  queueWakeStatusAt = nowIso()
+  if (status === 'subscribed') {
+    queueWakeLastError = null
+    return
+  }
+  if (!error) return
+  queueWakeLastError = {
+    message: error instanceof Error ? error.message : String(error || status),
+    at: queueWakeStatusAt,
+  }
+}
+
+type QueueWakeSubscription = {
+  stop: () => Promise<void>
+}
+
+async function startQueueWakeSubscription(): Promise<QueueWakeSubscription | null> {
+  if (!WORKER_POLL_ENABLED || !WORKER_QUEUE_WAKE_ENABLED) {
+    setQueueWakeStatus('disabled')
+    console.log('[queue-wake] disabled; fallback claim polling remains active')
+    return null
+  }
+
+  let activeChannel: RealtimeChannel | null = null
+  let retryTimer: NodeJS.Timeout | null = null
+  let stopped = false
+  let connecting = false
+
+  const removeChannel = async (channel: RealtimeChannel) => {
+    try {
+      await supabase.removeChannel(channel)
+    } catch (error) {
+      console.error('[queue-wake] failed to remove channel', error)
+    }
+  }
+
+  const scheduleRetry = (failedChannel: RealtimeChannel | null) => {
+    if (stopped) return
+    if (failedChannel && activeChannel === failedChannel) activeChannel = null
+    if (failedChannel) void removeChannel(failedChannel)
+    if (retryTimer) return
+
+    queueWakeReconnectAttempts += 1
+    const delayMs = resolveQueueWakeRetryDelayMs(queueWakeReconnectAttempts)
+    queueWakeNextRetryAt = new Date(Date.now() + delayMs).toISOString()
+    setQueueWakeStatus('retry_wait')
+    console.warn(
+      `[queue-wake] retrying in ${delayMs}ms; fallback claim polling remains active`
+    )
+    retryTimer = setTimeout(() => {
+      retryTimer = null
+      queueWakeNextRetryAt = null
+      void connect()
+    }, delayMs)
+  }
+
+  const connect = async () => {
+    if (stopped || connecting || activeChannel) return
+    connecting = true
+    setQueueWakeStatus('connecting')
+    try {
+      await supabase.realtime.setAuth(SUPABASE_SERVICE_KEY)
+      if (stopped) return
+
+      const channel = supabase
+        .channel(WORKER_QUEUE_WAKE_TOPIC, { config: { private: true } })
+        .on('broadcast', { event: WORKER_QUEUE_WAKE_EVENT }, () => {
+          lastQueueWakeAt = nowIso()
+          queueWakeCount += 1
+          claimWakeSignal.wake()
+        })
+      activeChannel = channel
+
+      channel.subscribe((status, error) => {
+        if (stopped || activeChannel !== channel) return
+        if (status === 'SUBSCRIBED') {
+          queueWakeReconnectAttempts = 0
+          queueWakeNextRetryAt = null
+          setQueueWakeStatus('subscribed')
+          console.log(
+            `[queue-wake] subscribed topic=${WORKER_QUEUE_WAKE_TOPIC} event=${WORKER_QUEUE_WAKE_EVENT}`
+          )
+        } else if (status === 'TIMED_OUT') {
+          setQueueWakeStatus('timed_out', error)
+          console.error('[queue-wake] subscription timed out; fallback polling remains active', error)
+          scheduleRetry(channel)
+        } else if (status === 'CHANNEL_ERROR') {
+          setQueueWakeStatus('channel_error', error)
+          console.error('[queue-wake] channel error; fallback polling remains active', error)
+          scheduleRetry(channel)
+        } else if (status === 'CLOSED') {
+          setQueueWakeStatus('closed', error)
+          console.warn('[queue-wake] channel closed; fallback polling remains active')
+          scheduleRetry(channel)
+        }
+      })
+    } catch (error) {
+      setQueueWakeStatus('channel_error', error)
+      console.error('[queue-wake] startup failed; fallback polling remains active', error)
+      scheduleRetry(activeChannel)
+    } finally {
+      connecting = false
+    }
+  }
+
+  await connect()
+  return {
+    stop: async () => {
+      stopped = true
+      if (retryTimer) clearTimeout(retryTimer)
+      retryTimer = null
+      queueWakeNextRetryAt = null
+      const channel = activeChannel
+      activeChannel = null
+      if (channel) await removeChannel(channel)
+    },
   }
 }
 
@@ -530,6 +701,7 @@ const closeHealthServer = (server: http.Server | null) =>
 function installShutdownHandlers() {
   const requestShutdown = (signal: string) => {
     shutdownRequested = true
+    claimWakeSignal.wake()
     console.log(`[worker] received ${signal}; stopping new job claims after current work`)
   }
 
@@ -2591,14 +2763,19 @@ async function main() {
   installShutdownHandlers()
   let healthServer: http.Server | null = null
   let healthchecksTimer: NodeJS.Timeout | null = null
+  let queueWakeSubscription: QueueWakeSubscription | null = null
 
   try {
     healthServer = await startHealthServer()
     healthchecksTimer = startHealthchecksPing()
+    queueWakeSubscription = await startQueueWakeSubscription()
 
     console.log('Worker started')
     console.log(`[worker] mode=${WORKER_EXECUTION_MODE}`)
     console.log(`[worker] poll_enabled=${WORKER_POLL_ENABLED}`)
+    console.log(
+      `[worker] queue_wake_enabled=${WORKER_QUEUE_WAKE_ENABLED} status=${queueWakeStatus} fallback_max_ms=${WORKER_CLAIM_IDLE_MAX_MS}`
+    )
     if (EXECUTION_MODE_RESOLUTION.source === 'default') {
       console.log('[worker] WORKER_EXECUTION_MODE is unset; defaulting safely to provider')
     } else if (EXECUTION_MODE_RESOLUTION.source === 'invalid') {
@@ -2658,6 +2835,7 @@ async function main() {
     const idleBackoff = WORKER_CLAIM_IDLE_BACKOFF_MULTIPLIER
 
     while (!shutdownRequested) {
+      const observedWakeGeneration = claimWakeSignal.getGeneration()
       lastClaimPollAt = nowIso()
       const { data, error } = await supabase.rpc('claim_next_job')
 
@@ -2673,8 +2851,12 @@ async function main() {
       const job = Array.isArray(data) ? data[0] : data
 
       if (!job) {
-        await sleep(idleMs)
-        idleMs = Math.min(Math.round(idleMs * idleBackoff), maxIdleMs)
+        const waitResult = await claimWakeSignal.wait(idleMs, observedWakeGeneration)
+        if (waitResult === 'wake') {
+          idleMs = WORKER_CLAIM_IDLE_INITIAL_MS
+        } else {
+          idleMs = Math.min(Math.round(idleMs * idleBackoff), maxIdleMs)
+        }
         continue
       }
 
@@ -2700,6 +2882,7 @@ async function main() {
     }
   } finally {
     if (healthchecksTimer) clearInterval(healthchecksTimer)
+    await queueWakeSubscription?.stop()
     await closeHealthServer(healthServer)
     console.log('[worker] shutdown requested; main loop stopped')
   }
