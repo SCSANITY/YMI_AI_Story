@@ -5,7 +5,10 @@ import {
   templateStorageUrl,
   type TemplateCatalogRow,
 } from '@/lib/book-catalog'
-import { parseTemplateLockedPreviewPages } from '@/lib/template-locked-preview'
+import {
+  parseTemplateLockedPreviewPages,
+  parseTemplatePreviewFirstSpreadPages,
+} from '@/lib/template-locked-preview'
 
 const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.webp$/i
 const TEMPLATE_DETAIL_CACHE_CONTROL = 'public, max-age=0, s-maxage=60'
@@ -80,6 +83,24 @@ async function withLockedPreviewPages(row: TemplateCatalogRow): Promise<Template
   return { ...row, locked_preview_pages: lockedPreviewPages }
 }
 
+async function withPreviewFirstSpreadPages(row: TemplateCatalogRow): Promise<TemplateCatalogRow> {
+  const templateId = String(row.template_id ?? '').trim()
+  if (!templateId) return row
+
+  const { data, error } = await supabaseAdmin.storage
+    .from('app-templates')
+    .list(templateId, {
+      limit: 10,
+      search: 'preview1_',
+      sortBy: { column: 'name', order: 'asc' },
+    })
+
+  const previewFirstSpreadPages = error
+    ? []
+    : parseTemplatePreviewFirstSpreadPages(templateId, data, templateStorageUrl)
+  return { ...row, preview_first_spread_pages: previewFirstSpreadPages }
+}
+
 export async function GET(_request: Request, context: { params: Promise<{ templateId: string }> }) {
   const { templateId } = await context.params
 
@@ -102,10 +123,12 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
     ? await Promise.all([
         withProductShowcaseImages(data),
         withLockedPreviewPages(data),
+        withPreviewFirstSpreadPages(data),
       ]).then(
-        ([productRow, lockedRow]) => ({
+        ([productRow, lockedRow, previewFirstSpreadRow]) => ({
           ...productRow,
           locked_preview_pages: lockedRow.locked_preview_pages,
+          preview_first_spread_pages: previewFirstSpreadRow.preview_first_spread_pages,
         })
       )
     : null

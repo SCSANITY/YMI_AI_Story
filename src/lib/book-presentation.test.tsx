@@ -114,21 +114,27 @@ describe('physical-book leaf presentation', () => {
     assert.doesNotMatch(html, /width:200%/)
   })
 
-  it('never places a locked template leaf under a generating first-spread side', () => {
-    const lockedPresentation = buildBookPresentation([
-      lockedLeaf('locked-left', 'locked-first-left.webp', 1, 'left'),
-      lockedLeaf('locked-right', 'locked-first-right.webp', 1, 'right'),
+  it('replaces each masked preview1 underlay independently as its generated leaf arrives', () => {
+    const generatedPresentation = buildBookPresentation([
+      singlePageLeaf('generated-left', 'generated-first-left.webp', 1, 'left'),
     ], {
-      coverRole: 'final_front_cover',
-      interiorRole: 'final_interior',
+      coverRole: 'preview_cover',
+      interiorRole: 'preview_interior',
+    })
+    const previewFirstSpreadPresentation = buildBookPresentation([
+      singlePageLeaf('underlay-left', 'preview1_L_B.webp', 1, 'left'),
+      singlePageLeaf('underlay-right', 'preview1_R_A.webp', 1, 'right'),
+    ], {
+      coverRole: 'preview_cover',
+      interiorRole: 'preview_interior',
     })
     const commonProps = {
       spreadIndex: 1,
       bookType: 'basic' as const,
       previewPages: ['cover.webp'],
       previewImageErrors: new Set<string>(),
-      bookPresentation: null,
-      lockedPreviewPresentation: lockedPresentation,
+      bookPresentation: generatedPresentation,
+      previewFirstSpreadPresentation,
       currentSpread: 1,
       isFlipping: false,
       resolvedTitle: 'Test book',
@@ -149,8 +155,40 @@ describe('physical-book leaf presentation', () => {
       </>
     )
 
-    assert.equal((html.match(/Creating this leaf/g) ?? []).length, 2)
-    assert.doesNotMatch(html, /locked-first-(left|right)\.webp|Locked preview/)
+    assert.match(html, /generated-first-left\.webp/)
+    assert.doesNotMatch(html, /preview1_L_B\.webp/)
+    assert.match(html, /preview1_R_A\.webp/)
+    assert.equal((html.match(/Creating this leaf/g) ?? []).length, 1)
+    assert.doesNotMatch(html, /Locked preview/)
+  })
+
+  it('falls back to the creation placeholder when a first-spread underlay is unavailable', () => {
+    const html = renderToStaticMarkup(
+      <PreviewBookPageContent
+        side="left"
+        spreadIndex={1}
+        bookType="basic"
+        previewPages={['cover.webp']}
+        previewImageErrors={new Set<string>()}
+        bookPresentation={null}
+        previewFirstSpreadPresentation={null}
+        currentSpread={1}
+        isFlipping={false}
+        resolvedTitle="Test book"
+        labels={{
+          previewAlt: 'Preview',
+          previewPageStillCreating: 'Creating this leaf',
+          previewPageLocked: 'Locked preview',
+          backToCover: 'Back to cover',
+        }}
+        onImageError={() => undefined}
+        onTurnPage={() => undefined}
+        onReturnToCover={() => undefined}
+      />
+    )
+
+    assert.match(html, /Creating this leaf/)
+    assert.doesNotMatch(html, /preview1_[LR]_[AB]\.webp|Locked preview/)
   })
 
   it('uses locked WebP leaves only from spread two onward and fails to a locked placeholder', () => {

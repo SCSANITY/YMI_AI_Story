@@ -18,6 +18,7 @@ type PreviewBookPageContentProps = {
   previewPages: string[]
   previewImageErrors: Set<string>
   bookPresentation?: BookPresentation | null
+  previewFirstSpreadPresentation?: BookPresentation | null
   lockedPreviewPresentation?: BookPresentation | null
   currentSpread: number
   isFlipping: boolean
@@ -41,6 +42,7 @@ function PreviewBookPageContentComponent({
   previewPages,
   previewImageErrors,
   bookPresentation,
+  previewFirstSpreadPresentation,
   lockedPreviewPresentation,
   currentSpread,
   isFlipping,
@@ -123,14 +125,26 @@ function PreviewBookPageContentComponent({
     const usableLegacyLeaf = legacySpreadImage && !previewImageErrors.has(legacySpreadImage)
       ? createLegacySpreadLeaf(legacySpreadImage, spreadIndex, side)
       : null
+    const firstSpreadUnderlayLeaf = mode === 'preview' && spreadIndex === 1
+      ? resolveBookLeaf(previewFirstSpreadPresentation, spreadIndex, side)
+      : null
+    const usableFirstSpreadUnderlay = firstSpreadUnderlayLeaf && !previewImageErrors.has(firstSpreadUnderlayLeaf.url)
+      ? firstSpreadUnderlayLeaf
+      : null
     const lockedStructuredLeaf = mode === 'preview' && spreadIndex >= 2
       ? resolveBookLeaf(lockedPreviewPresentation, spreadIndex, side)
       : null
     const usableLockedLeaf = lockedStructuredLeaf && !previewImageErrors.has(lockedStructuredLeaf.url)
       ? lockedStructuredLeaf
       : null
-    const displayLeaf = usableStructuredLeaf || usableLegacyLeaf || usableLockedLeaf
+    const displayLeaf = usableStructuredLeaf || usableLegacyLeaf || usableFirstSpreadUnderlay || usableLockedLeaf
     const isLockedPreview = mode === 'preview' && spreadIndex >= 2
+    const isGeneratingWithUnderlay = mode === 'preview'
+      && spreadIndex === 1
+      && !usableStructuredLeaf
+      && !usableLegacyLeaf
+      && Boolean(usableFirstSpreadUnderlay)
+    const isMaskedPreview = isLockedPreview || isGeneratingWithUnderlay
     const isLeftSide = side === 'left'
     const isNearbySpread = Math.abs(spreadIndex - currentSpread) <= 1
 
@@ -144,7 +158,7 @@ function PreviewBookPageContentComponent({
             <BookLeafImage
               leaf={displayLeaf}
               alt="Preview spread"
-              className={isLockedPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}
+              className={isMaskedPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}
               loading={isNearbySpread ? 'eager' : 'lazy'}
               fetchPriority={isNearbySpread ? 'high' : 'auto'}
               onError={() => onImageError(displayLeaf.url, {
@@ -158,12 +172,12 @@ function PreviewBookPageContentComponent({
           <CreatingPlaceholder label={labels.previewPageStillCreating} />
         )}
 
-        {isLockedPreview && displayLeaf ? (
+        {isMaskedPreview && displayLeaf ? (
           <>
             <div className="pointer-events-none absolute inset-0 z-20 bg-white/68 backdrop-blur-[3px]" />
             <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center px-6 text-center">
               <div className="rounded-full border border-white/70 bg-white/74 px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-                {labels.previewPageLocked}
+                {isGeneratingWithUnderlay ? labels.previewPageStillCreating : labels.previewPageLocked}
               </div>
             </div>
           </>

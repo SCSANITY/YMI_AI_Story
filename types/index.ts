@@ -47,6 +47,14 @@ export type TemplateLockedPreviewPage = {
   pageNumber: number;
 }
 
+export type TemplatePreviewFirstSpreadPage = {
+  sourceName: string;
+  url: string;
+  spreadIndex: 1;
+  side: 'left' | 'right';
+  pageNumber: 1 | 2;
+}
+
 export interface Book {
   bookID: string;
   title: string;
@@ -61,6 +69,7 @@ export interface Book {
   finalPreviewImages?: string[];
   finalPreviewPages?: TemplateFinalPreviewPage[];
   lockedPreviewPages?: TemplateLockedPreviewPage[];
+  previewFirstSpreadPages?: TemplatePreviewFirstSpreadPage[];
   description: string;
   innerDescription?: string;
   category: string;

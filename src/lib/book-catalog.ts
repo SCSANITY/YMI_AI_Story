@@ -4,6 +4,7 @@ import type {
   MagicAttribute,
   TemplateFinalPreviewPage,
   TemplateLockedPreviewPage,
+  TemplatePreviewFirstSpreadPage,
 } from '@/types'
 import {
   getCatalogDisplayPrice,
@@ -45,6 +46,7 @@ export type TemplateCatalogRow = {
   final_preview_paths?: string[] | null
   final_preview_pages?: TemplateFinalPreviewPage[] | null
   locked_preview_pages?: TemplateLockedPreviewPage[] | null
+  preview_first_spread_pages?: TemplatePreviewFirstSpreadPage[] | null
   magic_attributes?: unknown
   package_prices?: TemplatePackagePriceRow[] | null
   home_placements?: Array<{ section_key?: unknown; position?: unknown }> | null
@@ -68,6 +70,7 @@ export type CatalogBook = Book & {
   finalPreviewImages: string[]
   finalPreviewPages: TemplateFinalPreviewPage[]
   lockedPreviewPages: TemplateLockedPreviewPage[]
+  previewFirstSpreadPages: TemplatePreviewFirstSpreadPage[]
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
@@ -192,6 +195,9 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const lockedPreviewPages = Array.isArray(row.locked_preview_pages)
     ? row.locked_preview_pages.filter((page) => Boolean(page?.url))
     : []
+  const previewFirstSpreadPages = Array.isArray(row.preview_first_spread_pages)
+    ? row.preview_first_spread_pages.filter((page) => Boolean(page?.url))
+    : []
   const magicAttributes = normalizeMagicAttributes(row.magic_attributes)
 
   const fallbackShowcaseImages = coverUrl ? [coverUrl] : []
@@ -225,6 +231,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
     finalPreviewImages,
     finalPreviewPages,
     lockedPreviewPages,
+    previewFirstSpreadPages,
     description: String(row.description ?? '').trim(),
     innerDescription: String(row.inner_description ?? '').trim() || undefined,
     category: storyTypes[0] || 'Story',

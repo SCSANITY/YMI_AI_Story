@@ -55,7 +55,11 @@ import { useBookCatalog } from '@/components/useBookCatalog';
 import type { CatalogBook } from '@/lib/book-catalog';
 import type { CartItem, StoryLanguage } from '@/types';
 import type { BookPresentation } from '@/lib/book-presentation';
-import { buildTemplateLockedPreviewPresentation } from '@/lib/template-locked-preview';
+import {
+  buildTemplateLockedPreviewPresentation,
+  buildTemplatePreviewFirstSpreadPresentation,
+  getTemplatePreviewFirstSpreadDisplayUrls,
+} from '@/lib/template-locked-preview';
 import {
   getAllPreviewDisplayUrls,
   getPreviewMaxSpreadIndex,
@@ -731,6 +735,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const lockedPreviewPresentation = useMemo(
     () => buildTemplateLockedPreviewPresentation(resolvedBook?.lockedPreviewPages),
     [resolvedBook?.lockedPreviewPages],
+  );
+  const previewFirstSpreadPresentation = useMemo(
+    () => buildTemplatePreviewFirstSpreadPresentation(resolvedBook?.previewFirstSpreadPages),
+    [resolvedBook?.previewFirstSpreadPages],
   );
   const magicAttributes = useMemo(
     () => (Array.isArray(resolvedBook?.magicAttributes) ? resolvedBook.magicAttributes.filter((attribute) => attribute.label.trim()) : []),
@@ -1790,15 +1798,25 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, []);
 
   const resolvePreviewSpreadImages = useCallback((spreadIndex: number) => {
-    if (spreadIndex <= 1) {
+    if (spreadIndex === 0) {
       return getPreviewSpreadUrls(previewDisplayState, spreadIndex);
+    }
+    if (spreadIndex === 1) {
+      if (!previewDisplayState.presentation) {
+        const legacyUrls = getPreviewSpreadUrls(previewDisplayState, spreadIndex);
+        if (legacyUrls.length) return legacyUrls;
+      }
+      return getTemplatePreviewFirstSpreadDisplayUrls(
+        previewDisplayState.presentation,
+        previewFirstSpreadPresentation,
+      );
     }
     const lockedSpread = lockedPreviewPresentation?.spreads.find(
       (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex,
     );
     return [lockedSpread?.left?.url, lockedSpread?.right?.url]
       .filter((url): url is string => Boolean(url));
-  }, [lockedPreviewPresentation, previewDisplayState]);
+  }, [lockedPreviewPresentation, previewDisplayState, previewFirstSpreadPresentation]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -2984,6 +3002,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       previewPages={previewPages}
       previewImageErrors={previewImageErrors}
       bookPresentation={previewBookPresentation}
+      previewFirstSpreadPresentation={previewFirstSpreadPresentation}
       lockedPreviewPresentation={lockedPreviewPresentation}
       currentSpread={currentSpread}
       isFlipping={isFlipping}
