@@ -413,13 +413,12 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
 
   const renderPageContent = (side: 'left' | 'right', spreadIndex: number) => (
     <PreviewBookPageContent
+      mode="reader"
       side={side}
       spreadIndex={spreadIndex}
       bookType={cartContext?.personalization.bookType || 'basic'}
       previewPages={bookSpreads}
       previewImageErrors={imageErrors}
-      staticPreviewSecondPageUrl={null}
-      finalPreviewImages={[]}
       bookPresentation={bookDisplay?.presentation}
       currentSpread={currentSpread}
       isFlipping={isFlipping}
@@ -429,8 +428,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         previewPageStillCreating: t('myBooks.readerPageUnavailable'),
         previewPageLocked: '',
         backToCover: t('personalize.backToCover'),
-        locked: '',
-        pageLabel: (pageNumber) => t('personalize.pageLabel', { num: pageNumber }),
       }}
       onImageError={handleImageError}
       onTurnPage={turnPage}

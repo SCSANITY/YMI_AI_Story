@@ -123,3 +123,16 @@ export function getAllPreviewDisplayUrls(
     ...assets.presentation.spreads.flatMap((spread) => [spread.left?.url, spread.right?.url]),
   ].filter((url): url is string => Boolean(url))
 }
+
+export function getPreviewPreloadSpreadIndexes(
+  currentSpread: number,
+  maxSpreadIndex: number
+): number[] {
+  const current = Math.max(0, Math.min(maxSpreadIndex, Math.trunc(currentSpread)))
+  return [current - 1, current, current + 1].filter(
+    (spreadIndex, index, values) =>
+      spreadIndex >= 0 &&
+      spreadIndex <= maxSpreadIndex &&
+      values.indexOf(spreadIndex) === index
+  )
+}

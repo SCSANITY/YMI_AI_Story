@@ -11,15 +11,14 @@ import {
 } from '@/lib/book-presentation'
 
 type PreviewBookPageContentProps = {
+  mode?: 'preview' | 'reader'
   side: 'left' | 'right'
   spreadIndex: number
   bookType: PersonalizeBookType
   previewPages: string[]
   previewImageErrors: Set<string>
-  staticPreviewSecondPageUrl: string | null
-  finalPreviewImages: string[]
   bookPresentation?: BookPresentation | null
-  lockedFinalPresentation?: BookPresentation | null
+  lockedPreviewPresentation?: BookPresentation | null
   currentSpread: number
   isFlipping: boolean
   resolvedTitle: string
@@ -28,8 +27,6 @@ type PreviewBookPageContentProps = {
     previewPageStillCreating: string
     previewPageLocked: string
     backToCover: string
-    locked: string
-    pageLabel: (pageNumber: number) => string
   }
   onImageError: (imageUrl: string, options?: { refreshGenerated?: boolean }) => void
   onTurnPage: (direction: 'next' | 'prev') => void
@@ -37,15 +34,14 @@ type PreviewBookPageContentProps = {
 }
 
 function PreviewBookPageContentComponent({
+  mode = 'preview',
   side,
   spreadIndex,
   bookType,
   previewPages,
   previewImageErrors,
-  staticPreviewSecondPageUrl,
-  finalPreviewImages,
   bookPresentation,
-  lockedFinalPresentation,
+  lockedPreviewPresentation,
   currentSpread,
   isFlipping,
   resolvedTitle,
@@ -112,46 +108,29 @@ function PreviewBookPageContentComponent({
     )
   }
 
-  if (
-    spreadIndex > 0 &&
-    (bookPresentation?.spreads.some(
-      (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex
-    ) || lockedFinalPresentation?.spreads.some(
-      (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex
-    ) ||
-      spreadIndex < previewPages.length ||
-      (spreadIndex === 1 && (previewPages.length === 1 || staticPreviewSecondPageUrl)) ||
-      finalPreviewImages[spreadIndex - 1]) &&
-    (side === 'left' || side === 'right')
-  ) {
+  if (spreadIndex > 0) {
+    const mayUseGeneratedLeaf = mode === 'reader' || spreadIndex === 1
     const usesStructuredLeaves = Boolean(bookPresentation)
-    const structuredLeaf = resolveBookLeaf(bookPresentation, spreadIndex, side)
+    const structuredLeaf = mayUseGeneratedLeaf
+      ? resolveBookLeaf(bookPresentation, spreadIndex, side)
+      : null
     const usableStructuredLeaf = structuredLeaf && !previewImageErrors.has(structuredLeaf.url)
       ? structuredLeaf
       : null
-    const lockedStructuredLeaf = resolveBookLeaf(lockedFinalPresentation, spreadIndex, side)
+    const legacySpreadImage = mayUseGeneratedLeaf && !usesStructuredLeaves
+      ? previewPages[spreadIndex] || ''
+      : ''
+    const usableLegacyLeaf = legacySpreadImage && !previewImageErrors.has(legacySpreadImage)
+      ? createLegacySpreadLeaf(legacySpreadImage, spreadIndex, side)
+      : null
+    const lockedStructuredLeaf = mode === 'preview' && spreadIndex >= 2
+      ? resolveBookLeaf(lockedPreviewPresentation, spreadIndex, side)
+      : null
     const usableLockedLeaf = lockedStructuredLeaf && !previewImageErrors.has(lockedStructuredLeaf.url)
       ? lockedStructuredLeaf
       : null
-    const previewSpreadImage = usesStructuredLeaves ? '' : previewPages[spreadIndex] || ''
-    const generatedSpreadImage = previewSpreadImage && !previewImageErrors.has(previewSpreadImage) ? previewSpreadImage : ''
-    const staticSecondPageImage = !usesStructuredLeaves && spreadIndex === 1 && staticPreviewSecondPageUrl && !previewImageErrors.has(staticPreviewSecondPageUrl)
-      ? staticPreviewSecondPageUrl
-      : ''
-    const finalPreviewImage = !usesStructuredLeaves && spreadIndex > 1 ? finalPreviewImages[spreadIndex - 1] || '' : ''
-    const spreadImage = generatedSpreadImage || staticSecondPageImage || finalPreviewImage
-    const displayLeaf = usableStructuredLeaf || usableLockedLeaf || (spreadImage
-      ? createLegacySpreadLeaf(
-          spreadImage,
-          spreadIndex,
-          side,
-          finalPreviewImage === spreadImage ? 'final_interior' : 'preview_interior'
-        )
-      : null)
-    const isGeneratingSecondPreview = spreadIndex === 1 && !usableStructuredLeaf && !generatedSpreadImage
-    const isLockedFinalPreview = Boolean(usableLockedLeaf) || (
-      !usableStructuredLeaf && !generatedSpreadImage && !staticSecondPageImage && Boolean(finalPreviewImage)
-    )
+    const displayLeaf = usableStructuredLeaf || usableLegacyLeaf || usableLockedLeaf
+    const isLockedPreview = mode === 'preview' && spreadIndex >= 2
     const isLeftSide = side === 'left'
     const isNearbySpread = Math.abs(spreadIndex - currentSpread) <= 1
 
@@ -165,29 +144,21 @@ function PreviewBookPageContentComponent({
             <BookLeafImage
               leaf={displayLeaf}
               alt="Preview spread"
-              className={isLockedFinalPreview || isGeneratingSecondPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}
+              className={isLockedPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}
               loading={isNearbySpread ? 'eager' : 'lazy'}
               fetchPriority={isNearbySpread ? 'high' : 'auto'}
               onError={() => onImageError(displayLeaf.url, {
-                refreshGenerated: Boolean(usableStructuredLeaf || (generatedSpreadImage && displayLeaf.url === generatedSpreadImage)),
+                refreshGenerated: Boolean(usableStructuredLeaf || usableLegacyLeaf),
               })}
             />
           </div>
+        ) : isLockedPreview ? (
+          <LockedPlaceholder label={labels.previewPageLocked} />
         ) : (
           <CreatingPlaceholder label={labels.previewPageStillCreating} />
         )}
 
-        {isGeneratingSecondPreview ? (
-          <>
-            <div className="pointer-events-none absolute inset-0 z-20 bg-white/64 backdrop-blur-[3px]" />
-            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center px-6 text-center">
-              <div className="flex items-center gap-2 rounded-full border border-white/70 bg-white/78 px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-                <Wand2 className="h-4 w-4 animate-pulse text-amber-500" />
-                <span>{labels.previewPageStillCreating}</span>
-              </div>
-            </div>
-          </>
-        ) : isLockedFinalPreview ? (
+        {isLockedPreview && displayLeaf ? (
           <>
             <div className="pointer-events-none absolute inset-0 z-20 bg-white/68 backdrop-blur-[3px]" />
             <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center px-6 text-center">
@@ -212,37 +183,22 @@ function PreviewBookPageContentComponent({
   }
 
   if (spreadIndex === 0 && side === 'left') return null
-
-  const pageNum = spreadIndex * 2 + (side === 'left' ? 0 : 1)
-  return (
-    <div className={`relative h-full w-full overflow-hidden ${side === 'left' ? 'rounded-l-sm border-r' : 'rounded-r-sm'}`} style={commonPageStyle}>
-      <div className="pointer-events-none absolute inset-0 z-10" style={{ background: bindingShadow }} />
-      <div className="absolute inset-0 flex flex-col p-8 opacity-60 blur-[2px]">
-        <span className="absolute right-4 top-4 font-serif text-xs text-gray-400">{pageNum}</span>
-        <h3 className="mb-4 font-serif text-xl font-bold text-gray-800">{labels.pageLabel(pageNum)}</h3>
-        <div className="mt-4 h-32 rounded-md bg-gray-200/50" />
-      </div>
-      <div className="absolute inset-0 z-20 flex items-center justify-center">
-        <div className="flex items-center gap-2 rounded-full border border-gray-100 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-sm">
-          <Lock className="h-4 w-4 text-amber-500" />
-          <span className="text-xs font-bold text-gray-600">{labels.locked}</span>
-        </div>
-      </div>
-      <PageControls
-        side={side}
-        isFlipping={isFlipping}
-        backToCoverLabel={labels.backToCover}
-        onTurnPage={onTurnPage}
-        onReturnToCover={onReturnToCover}
-      />
-    </div>
-  )
+  return null
 }
 
 function CreatingPlaceholder({ label }: { label: string }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-amber-50/80 px-6 text-center text-amber-900">
       <Wand2 className="h-9 w-9 animate-pulse text-amber-500" />
+      <p className="text-sm font-semibold">{label}</p>
+    </div>
+  )
+}
+
+function LockedPlaceholder({ label }: { label: string }) {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-stone-100/90 px-6 text-center text-gray-700">
+      <Lock className="h-8 w-8 text-amber-500" />
       <p className="text-sm font-semibold">{label}</p>
     </div>
   )

@@ -55,10 +55,11 @@ import { useBookCatalog } from '@/components/useBookCatalog';
 import type { CatalogBook } from '@/lib/book-catalog';
 import type { CartItem, StoryLanguage } from '@/types';
 import type { BookPresentation } from '@/lib/book-presentation';
-import { buildTemplateFinalPreviewPresentation } from '@/lib/template-final-preview';
+import { buildTemplateLockedPreviewPresentation } from '@/lib/template-locked-preview';
 import {
   getAllPreviewDisplayUrls,
   getPreviewMaxSpreadIndex,
+  getPreviewPreloadSpreadIndexes,
   getPreviewSpreadUrls,
   isPreviewDisplayComplete,
   resolvePreviewDisplayAssets,
@@ -727,18 +728,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const previewScale = isMobile ? mobilePreviewScale : 1;
   const previewStageHeight = isMobile ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
   const previewShareImageUrl = previewPublicShareImageUrl || previewUrl || previewPages[0] || resolvedBook?.coverUrl || null;
-  const staticPreviewSecondPageUrl = useMemo(() => {
-    if (!bookID) return '';
-    const { data } = supabase.storage.from('app-templates').getPublicUrl(`${bookID}/preview_2.png`);
-    return data?.publicUrl || '';
-  }, [bookID]);
-  const finalPreviewImages = useMemo(
-    () => (Array.isArray(resolvedBook?.finalPreviewImages) ? resolvedBook.finalPreviewImages.filter(Boolean) : []),
-    [resolvedBook],
-  );
-  const lockedFinalPresentation = useMemo(
-    () => buildTemplateFinalPreviewPresentation(resolvedBook?.finalPreviewPages),
-    [resolvedBook?.finalPreviewPages],
+  const lockedPreviewPresentation = useMemo(
+    () => buildTemplateLockedPreviewPresentation(resolvedBook?.lockedPreviewPages),
+    [resolvedBook?.lockedPreviewPages],
   );
   const magicAttributes = useMemo(
     () => (Array.isArray(resolvedBook?.magicAttributes) ? resolvedBook.magicAttributes.filter((attribute) => attribute.label.trim()) : []),
@@ -748,16 +740,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     urls: previewPages,
     presentation: previewBookPresentation,
   }), [previewBookPresentation, previewPages]);
-  const maxLockedSpreadIndex = lockedFinalPresentation?.spreads.reduce(
-    (maximum, spread) => Math.max(maximum, spread.displayIndex ?? spread.spreadIndex),
-    0,
-  ) ?? 0;
-  const maxSpreadIndex = previewBookPresentation
-    ? Math.max(getPreviewMaxSpreadIndex(previewDisplayState), maxLockedSpreadIndex)
-    : Math.max(
-        finalPreviewImages.length || TOTAL_SPREADS,
-        Math.max(0, previewPages.length - 1),
-      );
+  const maxSpreadIndex = Math.max(
+    TOTAL_SPREADS,
+    getPreviewMaxSpreadIndex(previewDisplayState),
+  );
   const currentVoiceSample = useMemo(() => {
     if (!voiceAssetId) return null;
     return recentVoices.find((voice) => voice.asset_id === voiceAssetId) ?? null;
@@ -1804,70 +1790,29 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   }, []);
 
   const resolvePreviewSpreadImages = useCallback((spreadIndex: number) => {
-    if (previewBookPresentation) {
-      const generatedUrls = getPreviewSpreadUrls(previewDisplayState, spreadIndex);
-      const lockedSpread = lockedFinalPresentation?.spreads.find(
-        (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex,
-      );
-      return Array.from(new Set([
-        ...generatedUrls,
-        lockedSpread?.left?.url,
-        lockedSpread?.right?.url,
-      ].filter((url): url is string => Boolean(url))));
+    if (spreadIndex <= 1) {
+      return getPreviewSpreadUrls(previewDisplayState, spreadIndex);
     }
-    if (spreadIndex <= 0) return previewPages[0] ? [previewPages[0]] : [];
-    if (spreadIndex === 1) {
-      const url = previewPages[1] || staticPreviewSecondPageUrl || '';
-      return url ? [url] : [];
-    }
-    const url = previewPages[spreadIndex] || finalPreviewImages[spreadIndex - 1] || '';
-    return url ? [url] : [];
-  }, [finalPreviewImages, lockedFinalPresentation, previewBookPresentation, previewDisplayState, previewPages, staticPreviewSecondPageUrl]);
+    const lockedSpread = lockedPreviewPresentation?.spreads.find(
+      (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex,
+    );
+    return [lockedSpread?.left?.url, lockedSpread?.right?.url]
+      .filter((url): url is string => Boolean(url));
+  }, [lockedPreviewPresentation, previewDisplayState]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
 
-    const immediateIndexes = new Set([
-      0,
-      Math.max(0, currentSpread - 1),
-      currentSpread,
-      currentSpread + 1,
-      currentSpread + 2,
-    ]);
-    const immediateUrls = new Set<string>();
-
-    immediateIndexes.forEach((spreadIndex) => {
+    getPreviewPreloadSpreadIndexes(currentSpread, maxSpreadIndex).forEach((spreadIndex) => {
       resolvePreviewSpreadImages(spreadIndex).forEach((url) => {
-        immediateUrls.add(url);
         preloadPreviewImage(url);
       });
     });
-
-    const allPreviewUrls = previewBookPresentation
-      ? getAllPreviewDisplayUrls(previewDisplayState)
-      : [
-          ...previewPages,
-          staticPreviewSecondPageUrl,
-          ...finalPreviewImages,
-        ].filter(Boolean);
-
-    const backgroundPreloadId = window.setTimeout(() => {
-      allPreviewUrls.forEach((url) => {
-        if (!url || immediateUrls.has(url)) return;
-        preloadPreviewImage(url);
-      });
-    }, 500);
-
-    return () => window.clearTimeout(backgroundPreloadId);
   }, [
     currentSpread,
-    finalPreviewImages,
+    maxSpreadIndex,
     preloadPreviewImage,
-    previewBookPresentation,
-    previewDisplayState,
-    previewPages,
     resolvePreviewSpreadImages,
-    staticPreviewSecondPageUrl,
     viewState.showPreview,
   ]);
 
@@ -3038,10 +2983,8 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       bookType={bookType}
       previewPages={previewPages}
       previewImageErrors={previewImageErrors}
-      staticPreviewSecondPageUrl={staticPreviewSecondPageUrl}
-      finalPreviewImages={finalPreviewImages}
       bookPresentation={previewBookPresentation}
-      lockedFinalPresentation={lockedFinalPresentation}
+      lockedPreviewPresentation={lockedPreviewPresentation}
       currentSpread={currentSpread}
       isFlipping={isFlipping}
       resolvedTitle={resolvedBook?.title || book?.title || t('personalize.preview')}
@@ -3050,8 +2993,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         previewPageStillCreating: t('personalize.previewPageStillCreating'),
         previewPageLocked: t('personalize.previewPageLocked'),
         backToCover: t('personalize.backToCover'),
-        locked: t('personalize.locked'),
-        pageLabel: (pageNumber) => t('personalize.pageLabel', { num: pageNumber }),
       }}
       onImageError={handlePreviewBookImageError}
       onTurnPage={turnPage}

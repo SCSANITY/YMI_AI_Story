@@ -5,6 +5,7 @@ import type { SignedPreviewAssets, SignedPreviewPage } from './preview-page-cont
 import {
   getAllPreviewDisplayUrls,
   getPreviewMaxSpreadIndex,
+  getPreviewPreloadSpreadIndexes,
   getPreviewSpreadUrls,
   isPreviewDisplayComplete,
   resolvePreviewDisplayAssets,
@@ -46,6 +47,12 @@ describe('Personalize structured Preview presentation', () => {
     assert.deepEqual(getPreviewSpreadUrls(display, 1), ['left.webp', 'right.webp'])
     assert.equal(getPreviewMaxSpreadIndex(display), 1)
     assert.deepEqual(getAllPreviewDisplayUrls(display), ['cover.webp', 'left.webp', 'right.webp'])
+  })
+
+  it('limits physical-book preloading to the current and adjacent spreads', () => {
+    assert.deepEqual(getPreviewPreloadSpreadIndexes(0, 15), [0, 1])
+    assert.deepEqual(getPreviewPreloadSpreadIndexes(7, 15), [6, 7, 8])
+    assert.deepEqual(getPreviewPreloadSpreadIndexes(15, 15), [14, 15])
   })
 
   it('keeps a cover-only partial response representable but incomplete', () => {

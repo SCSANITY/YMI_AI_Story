@@ -21,7 +21,7 @@
     "support:tests": "tsx --test src/lib/support-ticket.test.ts src/lib/support-inbound.test.ts src/lib/inbound-email-routing.test.ts src/lib/general-inbox.test.ts src/lib/general-mail.test.ts src/lib/inbound-email-attachments.test.ts src/lib/resend-webhook-policy.test.ts components/emails/SupportReplyEmail.test.tsx components/emails/GeneralInboxReplyEmail.test.tsx components/admin/sections/inbox/GeneralMailRichText.test.ts tests/admin-support-contract.test.mjs",
     "final-release:tests": "tsx --test src/lib/finalReleaseContract.test.ts src/lib/structuredFinalPdf.test.ts src/lib/finalPdfRelease.test.ts tests/structured-final-pdf-contract.test.mjs",
     "preview-pages:tests": "tsx --test src/lib/preview-page-contract.test.ts",
-    "book-leaves:tests": "tsx --test src/lib/book-presentation.test.tsx src/lib/preview-book-presentation.test.ts src/lib/template-final-preview.test.ts",
+    "book-leaves:tests": "tsx --test src/lib/book-presentation.test.tsx src/lib/preview-book-presentation.test.ts src/lib/template-final-preview.test.ts src/lib/template-locked-preview.test.ts tests/preview-locked-pages-contract.test.mjs",
     "reader-pages:tests": "tsx --test src/lib/reader-page-contract.test.ts",
     "test:contracts": "node --test tests/*.test.mjs",
     "covers:normalize": "node scripts/normalize-template-covers.mjs",

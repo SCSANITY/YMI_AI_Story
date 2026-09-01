@@ -28,6 +28,23 @@ function singlePageLeaf(
   }
 }
 
+function lockedLeaf(
+  id: string,
+  url: string,
+  spreadIndex: number,
+  side: 'left' | 'right'
+): BookLeaf {
+  return {
+    id,
+    url,
+    role: 'final_interior',
+    spreadIndex,
+    side,
+    pageNumber: (spreadIndex - 1) * 2 + (side === 'left' ? 1 : 2),
+    source: { layout: 'single-page' },
+  }
+}
+
 describe('physical-book leaf presentation', () => {
   it('pairs explicit left and right leaves without inspecting filenames', () => {
     const left = singlePageLeaf('left-id', 'opaque-source-one', 4, 'left')
@@ -70,8 +87,6 @@ describe('physical-book leaf presentation', () => {
       bookType: 'basic' as const,
       previewPages: ['legacy-cover.png', 'legacy-spread.png'],
       previewImageErrors: new Set<string>(),
-      staticPreviewSecondPageUrl: 'legacy-static.png',
-      finalPreviewImages: ['legacy-final.png'],
       bookPresentation: presentation,
       currentSpread: 1,
       isFlipping: false,
@@ -81,8 +96,6 @@ describe('physical-book leaf presentation', () => {
         previewPageStillCreating: 'Creating',
         previewPageLocked: 'Locked preview',
         backToCover: 'Back to cover',
-        locked: 'Locked',
-        pageLabel: (pageNumber: number) => `Page ${pageNumber}`,
       },
       onImageError: () => undefined,
       onTurnPage: () => undefined,
@@ -97,8 +110,122 @@ describe('physical-book leaf presentation', () => {
 
     assert.match(html, /https:\/\/signed\.example\/left\.webp/)
     assert.match(html, /https:\/\/signed\.example\/right\.webp/)
-    assert.doesNotMatch(html, /legacy-spread\.png|legacy-static\.png|legacy-final\.png/)
+    assert.doesNotMatch(html, /legacy-spread\.png/)
     assert.doesNotMatch(html, /width:200%/)
+  })
+
+  it('never places a locked template leaf under a generating first-spread side', () => {
+    const lockedPresentation = buildBookPresentation([
+      lockedLeaf('locked-left', 'locked-first-left.webp', 1, 'left'),
+      lockedLeaf('locked-right', 'locked-first-right.webp', 1, 'right'),
+    ], {
+      coverRole: 'final_front_cover',
+      interiorRole: 'final_interior',
+    })
+    const commonProps = {
+      spreadIndex: 1,
+      bookType: 'basic' as const,
+      previewPages: ['cover.webp'],
+      previewImageErrors: new Set<string>(),
+      bookPresentation: null,
+      lockedPreviewPresentation: lockedPresentation,
+      currentSpread: 1,
+      isFlipping: false,
+      resolvedTitle: 'Test book',
+      labels: {
+        previewAlt: 'Preview',
+        previewPageStillCreating: 'Creating this leaf',
+        previewPageLocked: 'Locked preview',
+        backToCover: 'Back to cover',
+      },
+      onImageError: () => undefined,
+      onTurnPage: () => undefined,
+      onReturnToCover: () => undefined,
+    }
+    const html = renderToStaticMarkup(
+      <>
+        <PreviewBookPageContent {...commonProps} side="left" />
+        <PreviewBookPageContent {...commonProps} side="right" />
+      </>
+    )
+
+    assert.equal((html.match(/Creating this leaf/g) ?? []).length, 2)
+    assert.doesNotMatch(html, /locked-first-(left|right)\.webp|Locked preview/)
+  })
+
+  it('uses locked WebP leaves only from spread two onward and fails to a locked placeholder', () => {
+    const lockedPresentation = buildBookPresentation([
+      lockedLeaf('locked-left', 'locked-second-left.webp', 2, 'left'),
+    ], {
+      coverRole: 'final_front_cover',
+      interiorRole: 'final_interior',
+    })
+    const commonProps = {
+      spreadIndex: 2,
+      bookType: 'basic' as const,
+      previewPages: ['cover.webp'],
+      previewImageErrors: new Set<string>(),
+      bookPresentation: null,
+      lockedPreviewPresentation: lockedPresentation,
+      currentSpread: 2,
+      isFlipping: false,
+      resolvedTitle: 'Test book',
+      labels: {
+        previewAlt: 'Preview',
+        previewPageStillCreating: 'Creating this leaf',
+        previewPageLocked: 'Locked preview',
+        backToCover: 'Back to cover',
+      },
+      onImageError: () => undefined,
+      onTurnPage: () => undefined,
+      onReturnToCover: () => undefined,
+    }
+    const html = renderToStaticMarkup(
+      <>
+        <PreviewBookPageContent {...commonProps} side="left" />
+        <PreviewBookPageContent {...commonProps} side="right" />
+      </>
+    )
+
+    assert.match(html, /locked-second-left\.webp/)
+    assert.equal((html.match(/Locked preview/g) ?? []).length, 2)
+    assert.doesNotMatch(html, /Creating this leaf/)
+  })
+
+  it('keeps the owned-book reader free to render generated leaves after spread one', () => {
+    const presentation = buildBookPresentation([
+      singlePageLeaf('reader-left', 'reader-left.webp', 2, 'left'),
+      singlePageLeaf('reader-right', 'reader-right.webp', 2, 'right'),
+    ], {
+      coverRole: 'preview_cover',
+      interiorRole: 'preview_interior',
+    })
+    const html = renderToStaticMarkup(
+      <PreviewBookPageContent
+        mode="reader"
+        side="right"
+        spreadIndex={2}
+        bookType="basic"
+        previewPages={[]}
+        previewImageErrors={new Set<string>()}
+        bookPresentation={presentation}
+        currentSpread={2}
+        isFlipping={false}
+        resolvedTitle="Owned book"
+        labels={{
+          previewAlt: 'Owned book',
+          previewPageStillCreating: 'Unavailable',
+          previewPageLocked: '',
+          backToCover: 'Back to cover',
+        }}
+        onImageError={() => undefined}
+        onTurnPage={() => undefined}
+        onReturnToCover={() => undefined}
+      />
+    )
+
+    assert.match(html, /reader-right\.webp/)
+    assert.doesNotMatch(html, /Unavailable/)
   })
 
   it('keeps the current landscape spread crop behind an explicit adapter', () => {

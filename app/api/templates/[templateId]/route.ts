@@ -5,24 +5,14 @@ import {
   templateStorageUrl,
   type TemplateCatalogRow,
 } from '@/lib/book-catalog'
-import { parseTemplateFinalPreviewPages } from '@/lib/template-final-preview'
+import { parseTemplateLockedPreviewPages } from '@/lib/template-locked-preview'
 
 const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.webp$/i
-const FINAL_PREVIEW_IMAGE_PATTERN = /^page_(\d+)\.png$/i
 const TEMPLATE_DETAIL_CACHE_CONTROL = 'public, max-age=0, s-maxage=60'
 
 type ProductImageEntry = {
   name: string
   order: number
-}
-
-type OrderedImageEntry = {
-  name: string
-  order: number
-}
-
-function isOrderedImageEntry(value: OrderedImageEntry | null): value is OrderedImageEntry {
-  return value !== null
 }
 
 function normalizeTemplatePath(path: unknown): string {
@@ -73,52 +63,21 @@ async function withProductShowcaseImages(row: TemplateCatalogRow): Promise<Templ
   }
 }
 
-async function withFinalPreviewImages(row: TemplateCatalogRow): Promise<TemplateCatalogRow> {
+async function withLockedPreviewPages(row: TemplateCatalogRow): Promise<TemplateCatalogRow> {
   const templateId = String(row.template_id ?? '').trim()
   if (!templateId) return row
 
   const { data, error } = await supabaseAdmin.storage
     .from('app-templates')
-    .list(`${templateId}/final`, {
+    .list(`${templateId}/preview-final`, {
       limit: 1000,
       sortBy: { column: 'name', order: 'asc' },
     })
 
-  if (error || !data?.length) return row
-
-  const finalPreviewPaths = data
-    .map((item) => {
-      const match = item.name.match(FINAL_PREVIEW_IMAGE_PATTERN)
-      return match ? { name: item.name, order: Number(match[1]) } : null
-    })
-    .filter(isOrderedImageEntry)
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
-    .map((item) => `${templateId}/final/${item.name}`)
-
-  if (!finalPreviewPaths.length) return row
-
-  return {
-    ...row,
-    final_preview_paths: finalPreviewPaths,
-  }
-}
-
-async function withStructuredFinalPreviewPages(row: TemplateCatalogRow): Promise<TemplateCatalogRow> {
-  const configPath = normalizeTemplatePath(row.default_config_path)
-  if (!configPath) return row
-
-  const { data, error } = await supabaseAdmin.storage.from('app-templates').download(configPath)
-  if (error || !data) return row
-
-  let config: unknown
-  try {
-    config = JSON.parse(await data.text())
-  } catch {
-    return row
-  }
-
-  const finalPreviewPages = parseTemplateFinalPreviewPages(config, templateStorageUrl)
-  return finalPreviewPages.length ? { ...row, final_preview_pages: finalPreviewPages } : row
+  const lockedPreviewPages = error
+    ? []
+    : parseTemplateLockedPreviewPages(templateId, data, templateStorageUrl)
+  return { ...row, locked_preview_pages: lockedPreviewPages }
 }
 
 export async function GET(_request: Request, context: { params: Promise<{ templateId: string }> }) {
@@ -142,13 +101,11 @@ export async function GET(_request: Request, context: { params: Promise<{ templa
   const row = data
     ? await Promise.all([
         withProductShowcaseImages(data),
-        withFinalPreviewImages(data),
-        withStructuredFinalPreviewPages(data),
+        withLockedPreviewPages(data),
       ]).then(
-        ([productRow, finalRow, structuredRow]) => ({
+        ([productRow, lockedRow]) => ({
           ...productRow,
-          final_preview_paths: finalRow.final_preview_paths,
-          final_preview_pages: structuredRow.final_preview_pages,
+          locked_preview_pages: lockedRow.locked_preview_pages,
         })
       )
     : null
