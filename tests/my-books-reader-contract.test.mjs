@@ -21,6 +21,14 @@ test('released Reader keeps ownership, purchase, and release gates before signin
   assert.match(source, /\.eq\(['"]job_id['"], finalJob\.job_id\)[\s\S]*\.eq\(['"]job_type['"], ['"]final['"]\)/)
 })
 
+test('released Reader has no development or request-controlled purchase bypass', async () => {
+  const source = await readFile(routePath, 'utf8')
+
+  assert.doesNotMatch(source, /process\.env/)
+  assert.doesNotMatch(source, /(?:bypass|skip|force).{0,40}(?:purchase|payment|owner|reader)/i)
+  assert.doesNotMatch(source, /(?:searchParams|get\(|headers\.get\()[^\n]{0,80}(?:paid|purchased|eligible)/i)
+})
+
 test('Reader response signs approved paths but exposes only URLs and explicit metadata', async () => {
   const source = await readFile(routePath, 'utf8')
   const responseStart = source.lastIndexOf('return privateJson({')
