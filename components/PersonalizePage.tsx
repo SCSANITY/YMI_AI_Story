@@ -729,9 +729,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const isSupreme = bookType === 'supreme';
   const requiresVoiceSample = bookType === 'supreme';
   const isMobile = windowWidth < 768;
-  const mobilePreviewScale = Math.min(0.58, Math.max(0.4, (windowWidth - 24) / (PAGE_WIDTH * 2)));
-  const previewScale = isMobile ? mobilePreviewScale : 1;
-  const previewStageHeight = isMobile ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
+  const isCompactPreview = windowWidth < 1024;
+  const compactPreviewScale = Math.min(1, Math.max(0.32, (windowWidth - 32) / (PAGE_WIDTH * 2)));
+  const previewScale = isCompactPreview ? compactPreviewScale : 1;
+  const previewStageHeight = previewScale < 1 ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
   const previewShareImageUrl = previewPublicShareImageUrl || previewUrl || previewPages[0] || resolvedBook?.coverUrl || null;
   const lockedPreviewPresentation = useMemo(
     () => buildTemplateLockedPreviewPresentation(resolvedBook?.lockedPreviewPages),
