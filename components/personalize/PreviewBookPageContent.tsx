@@ -22,12 +22,16 @@ type PreviewBookPageContentProps = {
   lockedPreviewPresentation?: BookPresentation | null
   currentSpread: number
   isFlipping: boolean
+  canTurnNext: boolean
+  canTurnPrev: boolean
   resolvedTitle: string
   labels: {
     previewAlt: string
     previewPageStillCreating: string
     previewPageLocked: string
     backToCover: string
+    nextPage: string
+    previousPage: string
   }
   onImageError: (imageUrl: string, options?: { refreshGenerated?: boolean }) => void
   onTurnPage: (direction: 'next' | 'prev') => void
@@ -46,6 +50,8 @@ function PreviewBookPageContentComponent({
   lockedPreviewPresentation,
   currentSpread,
   isFlipping,
+  canTurnNext,
+  canTurnPrev,
   resolvedTitle,
   labels,
   onImageError,
@@ -95,16 +101,19 @@ function PreviewBookPageContentComponent({
 
         <div className="absolute bottom-0 left-0 top-0 z-30 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent" />
 
-        {!isFlipping && (
-          <div
+        {!isFlipping && canTurnNext && (
+          <button
+            type="button"
+            aria-label={labels.nextPage}
+            title={labels.nextPage}
             className="absolute right-4 top-1/2 z-30 -translate-y-1/2 cursor-pointer rounded-full bg-black/20 p-3 text-white drop-shadow-lg transition-colors hover:bg-black/40"
             onClick={(event) => {
               event.stopPropagation()
               onTurnPage('next')
             }}
           >
-            <ChevronRight className="h-8 w-8" />
-          </div>
+            <ChevronRight className="h-8 w-8" aria-hidden="true" />
+          </button>
         )}
       </div>
     )
@@ -157,7 +166,7 @@ function PreviewBookPageContentComponent({
           <div className="absolute inset-0 overflow-hidden">
             <BookLeafImage
               leaf={displayLeaf}
-              alt="Preview spread"
+              alt={labels.previewAlt}
               className={isMaskedPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}
               loading={isNearbySpread ? 'eager' : 'lazy'}
               fetchPriority={isNearbySpread ? 'high' : 'auto'}
@@ -187,7 +196,11 @@ function PreviewBookPageContentComponent({
         <PageControls
           side={side}
           isFlipping={isFlipping}
+          canTurnNext={canTurnNext}
+          canTurnPrev={canTurnPrev}
           backToCoverLabel={labels.backToCover}
+          nextPageLabel={labels.nextPage}
+          previousPageLabel={labels.previousPage}
           onTurnPage={onTurnPage}
           onReturnToCover={onReturnToCover}
           strongBackground
@@ -221,14 +234,22 @@ function LockedPlaceholder({ label }: { label: string }) {
 function PageControls({
   side,
   isFlipping,
+  canTurnNext,
+  canTurnPrev,
   backToCoverLabel,
+  nextPageLabel,
+  previousPageLabel,
   strongBackground = false,
   onTurnPage,
   onReturnToCover,
 }: {
   side: 'left' | 'right'
   isFlipping: boolean
+  canTurnNext: boolean
+  canTurnPrev: boolean
   backToCoverLabel: string
+  nextPageLabel: string
+  previousPageLabel: string
   strongBackground?: boolean
   onTurnPage: (direction: 'next' | 'prev') => void
   onReturnToCover: () => void
@@ -250,29 +271,39 @@ function PageControls({
         >
           <BookOpen className="h-4 w-4" />
         </button>
-        <div
-          className={`absolute right-4 top-1/2 z-30 -translate-y-1/2 cursor-pointer rounded-full p-2 transition-colors ${strongBackground ? 'bg-white/65 hover:bg-white/90' : 'hover:bg-gray-200'}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            onTurnPage('next')
-          }}
-        >
-          <ChevronRight className={`h-8 w-8 ${strongBackground ? 'text-gray-500' : 'text-gray-400'}`} />
-        </div>
+        {canTurnNext ? (
+          <button
+            type="button"
+            aria-label={nextPageLabel}
+            title={nextPageLabel}
+            className={`absolute right-4 top-1/2 z-30 -translate-y-1/2 rounded-full p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${strongBackground ? 'bg-white/65 hover:bg-white/90' : 'hover:bg-gray-200'}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onTurnPage('next')
+            }}
+          >
+            <ChevronRight className={`h-8 w-8 ${strongBackground ? 'text-gray-500' : 'text-gray-400'}`} aria-hidden="true" />
+          </button>
+        ) : null}
       </>
     )
   }
 
+  if (!canTurnPrev) return null
+
   return (
-    <div
-      className={`absolute left-4 top-1/2 z-30 -translate-y-1/2 cursor-pointer rounded-full p-2 transition-colors ${strongBackground ? 'bg-white/65 hover:bg-white/90' : 'hover:bg-gray-200'}`}
+    <button
+      type="button"
+      aria-label={previousPageLabel}
+      title={previousPageLabel}
+      className={`absolute left-4 top-1/2 z-30 -translate-y-1/2 rounded-full p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${strongBackground ? 'bg-white/65 hover:bg-white/90' : 'hover:bg-gray-200'}`}
       onClick={(event) => {
         event.stopPropagation()
         onTurnPage('prev')
       }}
     >
-      <ChevronLeft className={`h-8 w-8 ${strongBackground ? 'text-gray-500' : 'text-gray-400'}`} />
-    </div>
+      <ChevronLeft className={`h-8 w-8 ${strongBackground ? 'text-gray-500' : 'text-gray-400'}`} aria-hidden="true" />
+    </button>
   )
 }
 

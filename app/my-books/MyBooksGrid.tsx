@@ -47,6 +47,7 @@ export function MyBooksGrid({
   return (
     <div className={gridClass}>
       {items.map((item) => {
+        const title = item.templates?.name || item.template_id
         const price = resolveTemplatePrice(item)
         const priceLabel = formatDisplayCurrency(price, displayCurrency)
         const compareAtPrice = resolveTemplateCompareAtPrice(item)
@@ -61,12 +62,12 @@ export function MyBooksGrid({
         return (
           <div
             key={item.creation_id}
-            className="group book-card-hoverable relative isolate flex flex-col h-full overflow-visible cursor-pointer transition-transform duration-300 ease-out md:hover:-translate-y-1"
+            className="group book-card-hoverable relative isolate flex h-full flex-col overflow-visible transition-transform duration-300 ease-out md:hover:-translate-y-1"
             aria-busy={isPreviewPending || undefined}
           >
             <BookCardCover
               src={resolveCover(item)}
-              alt={item.templates?.name || item.template_id}
+              alt={title}
               loading="lazy"
               decoding="async"
             >
@@ -77,6 +78,7 @@ export function MyBooksGrid({
                 onFocus={() => onPrefetchPreview(previewHref)}
                 disabled={isActionPending}
                 className="absolute inset-0 z-10 block h-full w-full"
+                aria-label={t('myBooks.openPreview', { title })}
               />
 
               <div
@@ -89,10 +91,10 @@ export function MyBooksGrid({
                 type="button"
                 onClick={() => onDelete(item)}
                 disabled={isActionPending}
-                className="absolute top-2 right-2 z-20 md:top-3 md:right-3 h-6 w-6 rounded-full bg-white/80 text-gray-300 hover:text-red-500 hover:bg-white/95 shadow-sm opacity-0 group-hover:opacity-100 transition"
-                aria-label="Delete"
+                className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-sm transition hover:bg-white hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 md:right-3 md:top-3 md:h-8 md:w-8 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                aria-label={t('myBooks.deleteBook', { title })}
               >
-                <Trash2 className="h-3.5 w-3.5 mx-auto" />
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
               {isDiscounted ? (
                 <div className="pointer-events-none absolute -right-2 -top-3 z-30 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-extrabold tracking-wide text-white shadow-lg shadow-orange-300/30 md:-right-3 md:-top-5 md:px-5 md:py-2 md:text-lg">
@@ -119,7 +121,7 @@ export function MyBooksGrid({
                   className="text-left"
                 >
                   <h3 className="font-display pt-px md:pt-0 text-base md:text-lg font-medium text-gray-900 leading-snug md:leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">
-                    {item.templates?.name || item.template_id}
+                    {title}
                   </h3>
                 </button>
                 <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:mb-3 md:text-xs">

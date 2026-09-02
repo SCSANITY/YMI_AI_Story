@@ -2,13 +2,14 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
-import { BookOpen } from 'lucide-react'
+import { AlertCircle, BookOpen, CheckCircle2, LogIn, RotateCw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { BOOKS } from '@/data/books'
 import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
 import { useI18n } from '@/lib/useI18n'
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
+import { startOwnedCreationCheckout } from '@/lib/owned-creation-checkout-client'
 import {
   packagePriceRowsToPricing,
   resolveBookPackageTypeFromSnapshot,
@@ -117,44 +118,96 @@ function MyBooksLoadingGrid({ gridClass }: { gridClass: string }) {
   )
 }
 
+type MyBooksNotice = {
+  tone: 'success' | 'error'
+  message: string
+  showCartAction?: boolean
+}
+
+function MyBooksStateCard({
+  message,
+  primaryLabel,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+}: {
+  message: string
+  primaryLabel: string
+  onPrimary: () => void
+  secondaryLabel?: string
+  onSecondary?: () => void
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 px-6 py-10 text-center">
+      <p className="text-sm leading-6 text-gray-500">{message}</p>
+      <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={onPrimary}
+          className="inline-flex min-w-36 items-center justify-center rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+        >
+          {primaryLabel}
+        </button>
+        {secondaryLabel && onSecondary ? (
+          <button
+            type="button"
+            onClick={onSecondary}
+            className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full border border-amber-200 bg-white px-5 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+          >
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+            {secondaryLabel}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export default function MyBooksPage() {
   const router = useRouter()
   const { t } = useI18n()
-  const { user, displayCurrency, addToCart, hydrateCheckoutItems } = useGlobalContext()
+  const { user, displayCurrency, addToCart, hydrateCheckoutItems, openLoginModal } = useGlobalContext()
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
   const [items, setItems] = useState<CreationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState<{ creationId: string; action: 'add' | 'buy' | 'delete' } | null>(null)
   const [pendingReaderHref, setPendingReaderHref] = useState<string | null>(null)
   const [activeShelf, setActiveShelf] = useState<MyBooksShelf | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<MyBooksNotice | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  const loadBooks = useCallback(async (signal?: AbortSignal) => {
     const url = user?.customerId ? `/api/my-books?customerId=${user.customerId}` : '/api/my-books'
 
-    fetch(url, { credentials: 'include', cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : { items: [] }))
-      .then((data) => {
-        if (cancelled) return
-        const next = Array.isArray(data?.items) ? data.items : []
-        setItems(next)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setItems([])
-      })
-      .finally(() => {
-        if (cancelled) return
-        setLoading(false)
-      })
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const response = await fetch(url, { credentials: 'include', cache: 'no-store', signal })
+      if (!response.ok) throw new Error('Failed to load My Books')
+      const data = await response.json()
+      if (signal?.aborted) return
+      setItems(Array.isArray(data?.items) ? data.items : [])
+    } catch (error) {
+      if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+      setLoadError(t('myBooks.loadError'))
+    } finally {
+      if (!signal?.aborted) setLoading(false)
+    }
+  }, [t, user?.customerId])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setActiveShelf(null)
+    void loadBooks(controller.signal)
 
     return () => {
-      cancelled = true
+      controller.abort()
     }
-  }, [user?.customerId])
+  }, [loadBooks])
 
   const handleAddToCart = async (item: CreationItem) => {
     if (pendingAction) return
+    setNotice(null)
     setPendingAction({ creationId: item.creation_id, action: 'add' })
     const coverUrl = resolveCover(item)
     const fallbackBook = BOOKS.find((b) => b.bookID === item.template_id)
@@ -176,7 +229,12 @@ export default function MyBooksPage() {
     }
     const personalization = toPersonalization(item)
     try {
-      await addToCart(book, personalization, 3, undefined, coverUrl)
+      const cartItem = await addToCart(book, personalization, 3, undefined, coverUrl)
+      setNotice(cartItem
+        ? { tone: 'success', message: t('myBooks.addedToCart'), showCartAction: true }
+        : { tone: 'error', message: t('myBooks.addToCartFailed') })
+    } catch {
+      setNotice({ tone: 'error', message: t('myBooks.addToCartFailed') })
     } finally {
       setPendingAction(null)
     }
@@ -184,52 +242,27 @@ export default function MyBooksPage() {
 
   const handleBuyNow = async (item: CreationItem) => {
     if (pendingAction) return
+    setNotice(null)
     setPendingAction({ creationId: item.creation_id, action: 'buy' })
+    let checkoutStarted = false
     try {
-      const response = await fetch('/api/orders/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          customerId: user?.customerId ?? null,
-          items: [
-            {
-              creationId: item.creation_id,
-              quantity: 1,
-            },
-          ],
-        }),
+      const checkout = await startOwnedCreationCheckout({
+        creationId: item.creation_id,
+        customerId: user?.customerId,
       })
-
-      if (!response.ok) return
-      const data = await response.json()
-      const cartItemIds = Array.isArray(data?.cartItemIds) ? data.cartItemIds : []
-      if (!cartItemIds.length) return
-
-      const idsQuery = encodeURIComponent(cartItemIds.join(','))
-      const cartUrl = user?.customerId
-        ? `/api/cart?ids=${idsQuery}&customerId=${encodeURIComponent(user.customerId)}`
-        : `/api/cart?ids=${idsQuery}`
-      const cartResponse = await fetch(cartUrl, { credentials: 'include' })
-      if (cartResponse.ok) {
-        const cartData = await cartResponse.json()
-        const fetchedItems = Array.isArray(cartData?.items) ? cartData.items : []
-        if (fetchedItems.length > 0) {
-          hydrateCheckoutItems(fetchedItems)
-        }
-      }
-
-      const params = new URLSearchParams()
-      params.set('ids', cartItemIds.join(','))
-      if (data?.orderId) params.set('orderId', data.orderId)
-      router.push(`/checkout?${params.toString()}`)
+      if (checkout.cartItems.length > 0) hydrateCheckoutItems(checkout.cartItems)
+      checkoutStarted = true
+      router.push(checkout.checkoutHref)
+    } catch {
+      setNotice({ tone: 'error', message: t('myBooks.checkoutFailed') })
     } finally {
-      setPendingAction(null)
+      if (!checkoutStarted) setPendingAction(null)
     }
   }
 
   const handleDelete = async (item: CreationItem) => {
     if (pendingAction) return
+    setNotice(null)
     const confirmed = window.confirm(t('myBooks.deleteConfirm'))
     if (!confirmed) return
 
@@ -245,15 +278,19 @@ export default function MyBooksPage() {
         }),
       }).catch(() => null)
 
-      if (!response || !response.ok) return
+      if (!response || !response.ok) {
+        setNotice({ tone: 'error', message: t('myBooks.deleteFailed') })
+        return
+      }
       setItems((prev) => prev.filter((row) => row.creation_id !== item.creation_id))
+      setNotice({ tone: 'success', message: t('myBooks.deleteSuccess') })
     } finally {
       setPendingAction(null)
     }
   }
 
   const buildPreviewHref = (item: CreationItem) => {
-    const params = new URLSearchParams({ view: 'preview' })
+    const params = new URLSearchParams({ view: 'preview', source: 'my-books' })
     params.set('creationId', item.creation_id)
     if (item.preview_job_id) params.set('jobId', item.preview_job_id)
     return `/personalize/${item.template_id}?${params.toString()}`
@@ -355,12 +392,55 @@ export default function MyBooksPage() {
         </header>
 
         <div className="mt-8 md:mt-10">
+        {notice ? (
+          <div
+            role={notice.tone === 'error' ? 'alert' : 'status'}
+            className={`fixed bottom-6 left-1/2 z-[160] flex w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl ${
+              notice.tone === 'error'
+                ? 'border-red-200 bg-red-50 text-red-800'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            }`}
+          >
+            <span className="flex items-center gap-2 font-medium">
+              {notice.tone === 'error'
+                ? <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                : <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />}
+              {notice.message}
+            </span>
+            {notice.showCartAction ? (
+              <button type="button" onClick={() => router.push('/cart')} className="ml-auto font-semibold underline underline-offset-4">
+                {t('myBooks.viewCart')}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className={`${notice.showCartAction ? '' : 'ml-auto'} rounded-full p-1 transition hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current`}
+              aria-label={t('common.close')}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
         {loading || isResolvingShelf ? (
           <MyBooksLoadingGrid gridClass={gridClass} />
-        ) : !hasVisibleItems ? (
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-sm text-gray-500 text-center">
-            {t('myBooks.empty')}
+        ) : loadError ? (
+          <div role="alert" className="rounded-2xl border border-red-200 bg-red-50/90 px-6 py-10 text-center text-red-800">
+            <AlertCircle className="mx-auto h-8 w-8" aria-hidden="true" />
+            <p className="mt-3 text-sm font-medium">{loadError}</p>
+            <button type="button" onClick={() => void loadBooks()} className="mt-5 inline-flex items-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white">
+              <RotateCw className="h-4 w-4" aria-hidden="true" />
+              {t('myBooks.retry')}
+            </button>
           </div>
+        ) : !hasVisibleItems ? (
+          <MyBooksStateCard
+            message={t('myBooks.empty')}
+            primaryLabel={t('common.browseBooks')}
+            onPrimary={() => router.push('/books')}
+            secondaryLabel={!user ? t('navbar.logIn') : undefined}
+            onSecondary={!user ? openLoginModal : undefined}
+          />
         ) : (
             <section
               key={activeShelf}
@@ -383,9 +463,11 @@ export default function MyBooksPage() {
                     onOpenReader={goToReader}
                   />
                 ) : (
-                  <div className="rounded-lg border border-dashed border-gray-200 bg-white/70 p-8 text-center text-sm text-gray-500">
-                    {t('myBooks.purchasedEmpty')}
-                  </div>
+                  <MyBooksStateCard
+                    message={t('myBooks.purchasedEmpty')}
+                    primaryLabel={t('common.browseBooks')}
+                    onPrimary={() => router.push('/books')}
+                  />
                 )
               ) : unpurchasedItems.length > 0 ? (
                 <MyBooksGrid
@@ -407,9 +489,11 @@ export default function MyBooksPage() {
                   onBuyNow={(item) => void handleBuyNow(item)}
                 />
               ) : (
-                <div className="rounded-lg border border-dashed border-gray-200 bg-white/70 p-8 text-center text-sm text-gray-500">
-                  {t('myBooks.previewsEmpty')}
-                </div>
+                <MyBooksStateCard
+                  message={t('myBooks.previewsEmpty')}
+                  primaryLabel={t('common.browseBooks')}
+                  onPrimary={() => router.push('/books')}
+                />
               )}
             </section>
         )}

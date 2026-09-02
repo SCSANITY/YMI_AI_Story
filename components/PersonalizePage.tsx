@@ -246,6 +246,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const viewMode = searchParams?.get('view') || 'edit';
   const creationIdParam = searchParams?.get('creationId') || null;
   const previewJobIdParam = searchParams?.get('jobId') || null;
+  const previewSource = searchParams?.get('source') || null;
   const { step: flowStep } = usePersonalizeFlow(book);
 
   const {
@@ -1200,6 +1201,9 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     params.set('view', 'preview');
     params.set('creationId', nextCreationId);
     params.set('jobId', nextJobId);
+    if (new URLSearchParams(window.location.search).get('source') === 'my-books') {
+      params.set('source', 'my-books');
+    }
     replacePersonalizeUrl(params);
   }, [replacePersonalizeUrl]);
 
@@ -1939,6 +1943,17 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
 
   const handleBack = () => {
     if (!canBack) return
+
+    if (viewState.showPreview && previewSource === 'my-books') {
+      void (async () => {
+        try {
+          await cleanupCurrentPreviewVariantSession()
+        } finally {
+          router.push('/my-books?shelf=previews')
+        }
+      })()
+      return
+    }
 
     switch (backIntent) {
         case 'EXIT_FLOW':
@@ -3006,12 +3021,16 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       lockedPreviewPresentation={lockedPreviewPresentation}
       currentSpread={currentSpread}
       isFlipping={isFlipping}
+      canTurnNext={currentSpread < maxSpreadIndex}
+      canTurnPrev={currentSpread > 0}
       resolvedTitle={resolvedBook?.title || book?.title || t('personalize.preview')}
       labels={{
         previewAlt: t('personalize.preview'),
         previewPageStillCreating: t('personalize.previewPageStillCreating'),
         previewPageLocked: t('personalize.previewPageLocked'),
         backToCover: t('personalize.backToCover'),
+        nextPage: t('personalize.nextPage'),
+        previousPage: t('personalize.previousPage'),
       }}
       onImageError={handlePreviewBookImageError}
       onTurnPage={turnPage}

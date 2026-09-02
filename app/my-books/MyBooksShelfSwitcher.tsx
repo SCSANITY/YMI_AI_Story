@@ -21,16 +21,19 @@ export function MyBooksShelfSwitcher({
   purchasedCount,
   previewCount,
   purchasedLabel,
+  purchasedDescription,
   previewsLabel,
+  previewsDescription,
   ariaLabel,
   onChange,
 }: MyBooksShelfSwitcherProps) {
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const shelves = [
-    { id: 'purchased' as const, label: purchasedLabel, count: purchasedCount, Icon: BookMarked },
-    { id: 'previews' as const, label: previewsLabel, count: previewCount, Icon: Images },
+    { id: 'purchased' as const, label: purchasedLabel, description: purchasedDescription, count: purchasedCount, Icon: BookMarked },
+    { id: 'previews' as const, label: previewsLabel, description: previewsDescription, count: previewCount, Icon: Images },
   ]
   const activeIndex = shelves.findIndex((shelf) => shelf.id === activeShelf)
+  const activeDescription = shelves[activeIndex]?.description
 
   const activateAndFocus = (index: number) => {
     onChange(shelves[index].id)
@@ -79,6 +82,7 @@ export function MyBooksShelfSwitcher({
                 role="tab"
                 aria-selected={isActive}
                 aria-controls={`my-books-panel-${id}`}
+                aria-describedby={isActive ? `my-books-tab-description-${id}` : undefined}
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => onChange(id)}
                 onKeyDown={(event) => handleKeyDown(event, index)}
@@ -111,6 +115,12 @@ export function MyBooksShelfSwitcher({
           })}
         </div>
       </div>
+      <p
+        id={`my-books-tab-description-${activeShelf}`}
+        className="mt-2 text-center text-xs font-medium text-slate-500 sm:text-right"
+      >
+        {activeDescription}
+      </p>
     </div>
   )
 }

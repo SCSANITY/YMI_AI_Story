@@ -16,6 +16,8 @@ repository:
 
 - `../AGENTS.md`: component-specific agent instructions.
 - `../package.json`: authoritative development, test, and build commands.
+- [`MY_BOOKS_CUSTOMER_JOURNEY.md`](MY_BOOKS_CUSTOMER_JOURNEY.md): My Books,
+  Saved Preview, owned Reader, and direct-checkout customer journey.
 - `../tests/`: runtime and source-contract coverage.
 - `../tests/fixtures/external-contracts/`: versioned SQL and Worker contract
   snapshots required for isolated CI.

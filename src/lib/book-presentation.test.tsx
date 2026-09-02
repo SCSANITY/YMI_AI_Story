@@ -90,12 +90,16 @@ describe('physical-book leaf presentation', () => {
       bookPresentation: presentation,
       currentSpread: 1,
       isFlipping: false,
+      canTurnNext: true,
+      canTurnPrev: true,
       resolvedTitle: 'Test book',
       labels: {
         previewAlt: 'Preview',
         previewPageStillCreating: 'Creating',
         previewPageLocked: 'Locked preview',
         backToCover: 'Back to cover',
+        nextPage: 'Next page',
+        previousPage: 'Previous page',
       },
       onImageError: () => undefined,
       onTurnPage: () => undefined,
@@ -137,12 +141,16 @@ describe('physical-book leaf presentation', () => {
       previewFirstSpreadPresentation,
       currentSpread: 1,
       isFlipping: false,
+      canTurnNext: true,
+      canTurnPrev: true,
       resolvedTitle: 'Test book',
       labels: {
         previewAlt: 'Preview',
         previewPageStillCreating: 'Creating this leaf',
         previewPageLocked: 'Locked preview',
         backToCover: 'Back to cover',
+        nextPage: 'Next page',
+        previousPage: 'Previous page',
       },
       onImageError: () => undefined,
       onTurnPage: () => undefined,
@@ -174,12 +182,16 @@ describe('physical-book leaf presentation', () => {
         previewFirstSpreadPresentation={null}
         currentSpread={1}
         isFlipping={false}
+        canTurnNext={true}
+        canTurnPrev={true}
         resolvedTitle="Test book"
         labels={{
           previewAlt: 'Preview',
           previewPageStillCreating: 'Creating this leaf',
           previewPageLocked: 'Locked preview',
           backToCover: 'Back to cover',
+          nextPage: 'Next page',
+          previousPage: 'Previous page',
         }}
         onImageError={() => undefined}
         onTurnPage={() => undefined}
@@ -207,12 +219,16 @@ describe('physical-book leaf presentation', () => {
       lockedPreviewPresentation: lockedPresentation,
       currentSpread: 2,
       isFlipping: false,
+      canTurnNext: true,
+      canTurnPrev: true,
       resolvedTitle: 'Test book',
       labels: {
         previewAlt: 'Preview',
         previewPageStillCreating: 'Creating this leaf',
         previewPageLocked: 'Locked preview',
         backToCover: 'Back to cover',
+        nextPage: 'Next page',
+        previousPage: 'Previous page',
       },
       onImageError: () => undefined,
       onTurnPage: () => undefined,
@@ -249,12 +265,16 @@ describe('physical-book leaf presentation', () => {
         bookPresentation={presentation}
         currentSpread={2}
         isFlipping={false}
+        canTurnNext={false}
+        canTurnPrev={true}
         resolvedTitle="Owned book"
         labels={{
           previewAlt: 'Owned book',
           previewPageStillCreating: 'Unavailable',
           previewPageLocked: '',
           backToCover: 'Back to cover',
+          nextPage: 'Next page',
+          previousPage: 'Previous page',
         }}
         onImageError={() => undefined}
         onTurnPage={() => undefined}
@@ -264,6 +284,8 @@ describe('physical-book leaf presentation', () => {
 
     assert.match(html, /reader-right\.webp/)
     assert.doesNotMatch(html, /Unavailable/)
+    assert.match(html, /aria-label="Back to cover"/)
+    assert.doesNotMatch(html, /aria-label="Next page"/)
   })
 
   it('keeps the current landscape spread crop behind an explicit adapter', () => {

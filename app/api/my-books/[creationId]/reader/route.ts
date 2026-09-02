@@ -131,8 +131,14 @@ export async function GET(
     return privateJson({ error: 'Creation not found' }, { status: 404 })
   }
 
-  const purchaseSummary =
-    (await loadPurchaseSummaryByCreation([creationId])).get(creationId) ?? getEmptyPurchaseSummary()
+  let purchaseSummary
+  try {
+    purchaseSummary =
+      (await loadPurchaseSummaryByCreation([creationId])).get(creationId) ?? getEmptyPurchaseSummary()
+  } catch (error) {
+    console.error('[my-books-reader] Failed to load purchase state', error)
+    return privateJson({ error: 'Failed to load purchase state' }, { status: 500 })
+  }
   const purchaseState = purchaseSummary.purchaseState
 
   if (purchaseState !== 'purchased') {

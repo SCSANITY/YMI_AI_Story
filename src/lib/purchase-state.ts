@@ -138,10 +138,14 @@ export async function loadReleasedFinalPdfAssetsByJobId(
   const uniqueJobIds = Array.from(new Set(jobIds.filter(Boolean)))
   if (!uniqueJobIds.length) return assetsByJobId
 
-  const { data: finalJobs } = await supabaseAdmin
+  const { data: finalJobs, error: finalJobsError } = await supabaseAdmin
     .from('final_jobs')
     .select('job_id, pdf_path, review_status, released_at, created_at')
     .in('job_id', uniqueJobIds)
+
+  if (finalJobsError) {
+    throw new Error(`Failed to load released Final PDF assets: ${finalJobsError.message}`)
+  }
 
   for (const finalJob of finalJobs ?? []) {
     const jobId = String(finalJob.job_id || '')
@@ -185,30 +189,47 @@ export async function loadPurchaseSummaryByCreation(creationIds: string[]): Prom
   const uniqueCreationIds = Array.from(new Set(creationIds.filter(Boolean)))
   if (!uniqueCreationIds.length) return summaryByCreation
 
-  const { data: cartItems } = await supabaseAdmin
+  const cartItemsQuery = supabaseAdmin
     .from('cart_items')
     .select('cart_item_id, creation_id, order_id, final_job_id, package_type, status, created_at')
     .in('creation_id', uniqueCreationIds)
+
+  const finalJobsQuery = supabaseAdmin
+    .from('final_jobs')
+    .select('final_job_id, creation_id, order_id, review_status, released_at, pdf_path, status, created_at')
+    .in('creation_id', uniqueCreationIds)
+
+  const [
+    { data: cartItems, error: cartItemsError },
+    { data: finalJobs, error: finalJobsError },
+  ] = await Promise.all([cartItemsQuery, finalJobsQuery])
+
+  if (cartItemsError) {
+    throw new Error(`Failed to load creation cart items: ${cartItemsError.message}`)
+  }
 
   const linkedCartItems = ((cartItems ?? []) as CartPurchaseRow[]).filter((item) => item.creation_id && item.order_id)
   const orderIds = Array.from(new Set(linkedCartItems.map((item) => item.order_id).filter(Boolean)))
   const orderById = new Map<string, OrderPurchaseRow>()
 
   if (orderIds.length > 0) {
-    const { data: orders } = await supabaseAdmin
+    const { data: orders, error: ordersError } = await supabaseAdmin
       .from('orders')
       .select('order_id, display_id, order_status, created_at')
       .in('order_id', orderIds)
+
+    if (ordersError) {
+      throw new Error(`Failed to load creation orders: ${ordersError.message}`)
+    }
 
     for (const order of (orders ?? []) as OrderPurchaseRow[]) {
       if (order.order_id) orderById.set(String(order.order_id), order)
     }
   }
 
-  const { data: finalJobs } = await supabaseAdmin
-    .from('final_jobs')
-    .select('final_job_id, creation_id, order_id, review_status, released_at, pdf_path, status, created_at')
-    .in('creation_id', uniqueCreationIds)
+  if (finalJobsError) {
+    throw new Error(`Failed to load creation Final jobs: ${finalJobsError.message}`)
+  }
 
   const finalJobByCreation = new Map<string, FinalJobSummaryRow>()
   for (const finalJob of (finalJobs ?? []) as FinalJobSummaryRow[]) {

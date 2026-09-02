@@ -24,8 +24,8 @@ function buildOwnerScopedQuery(query: any, owner: CheckoutOwner): any {
   return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
-function privateJson(body: unknown) {
-  const response = NextResponse.json(body)
+function privateJson(body: unknown, init?: { status?: number }) {
+  const response = NextResponse.json(body, init)
   response.headers.set('Cache-Control', MY_BOOKS_CACHE_CONTROL)
   return response
 }
@@ -88,9 +88,15 @@ export async function GET(request: Request) {
   }
 
   const allRows = items ?? []
-  const purchaseSummaryByCreation = await loadPurchaseSummaryByCreation(
-    allRows.map((row: { creation_id?: string | null }) => String(row.creation_id || '')).filter(Boolean)
-  )
+  let purchaseSummaryByCreation
+  try {
+    purchaseSummaryByCreation = await loadPurchaseSummaryByCreation(
+      allRows.map((row: { creation_id?: string | null }) => String(row.creation_id || '')).filter(Boolean)
+    )
+  } catch (error) {
+    console.error('[my-books] Failed to load purchase state', error)
+    return privateJson({ error: 'Failed to load purchase state' }, { status: 500 })
+  }
   const visibleRows = allRows.filter((row: { creation_id?: string | null; is_archived?: boolean | null }) => {
     const summary = purchaseSummaryByCreation.get(String(row.creation_id || '')) ?? getEmptyPurchaseSummary()
     return summary.purchaseState !== 'unpurchased' || row?.is_archived !== true
@@ -102,10 +108,15 @@ export async function GET(request: Request) {
   const previewUrlMap = new Map<string, string>()
 
   if (jobIds.length > 0) {
-    const { data: jobs } = await supabaseAdmin
+    const { data: jobs, error: jobsError } = await supabaseAdmin
       .from('jobs')
       .select('job_id, output_assets')
       .in('job_id', jobIds as string[])
+
+    if (jobsError) {
+      console.error('[my-books] Failed to load Preview covers', jobsError)
+      return privateJson({ error: 'Failed to load Preview covers' }, { status: 500 })
+    }
 
     const jobMap = new Map<string, { bucket: string; path: string }>()
     for (const job of jobs ?? []) {

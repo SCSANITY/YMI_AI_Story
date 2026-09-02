@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, BookOpen, Clock3, RefreshCw, ShoppingCart } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, BookOpen, Clock3, CreditCard, RefreshCw } from 'lucide-react'
 import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent'
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage'
 import { useGlobalContext } from '@/contexts/GlobalContext'
@@ -19,6 +20,7 @@ import { useI18n } from '@/lib/useI18n'
 import type { Book, BookPackagePricing, PersonalizationData, StoryLanguage } from '@/types'
 import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
+import { startOwnedCreationCheckout } from '@/lib/owned-creation-checkout-client'
 
 const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
@@ -59,6 +61,16 @@ type ReaderResponse = {
   latestOrderDisplayId?: string | null
   latestPackageType?: string | null
   pages?: Array<Omit<SignedReaderPage, 'url'> & { url?: string | null }>
+}
+
+type ReaderLoadIssue = 'signed_out' | 'not_found' | 'not_purchased' | 'refunded' | 'service' | 'invalid'
+
+function resolveReaderLoadIssue(status: number, response: ReaderResponse): ReaderLoadIssue {
+  if (status === 401) return 'signed_out'
+  if (status === 404) return 'not_found'
+  if (status === 403 && response.reason === 'refunded') return 'refunded'
+  if (status === 403) return 'not_purchased'
+  return 'service'
 }
 
 function normalizeLanguage(value: unknown): StoryLanguage {
@@ -142,22 +154,23 @@ function buildCartContext(creation: ReaderCreation, purchasedPackageType?: strin
 }
 
 export function OwnedBookReader({ creationId }: { creationId: string }) {
+  const router = useRouter()
   const { t } = useI18n()
-  const { user, isHydrated, addToCart } = useGlobalContext()
+  const { user, isHydrated, hydrateCheckoutItems, openLoginModal } = useGlobalContext()
   const [reader, setReader] = useState<ReaderResponse | null>(null)
   const [bookDisplay, setBookDisplay] = useState<ReaderBookDisplay | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<ReaderLoadIssue | null>(null)
   const [windowWidth, setWindowWidth] = useState(1024)
   const [currentSpread, setCurrentSpread] = useState(0)
   const [isFlipping, setIsFlipping] = useState(false)
   const [flipDirection, setFlipDirection] = useState<'next' | 'prev' | null>(null)
   const [imageErrors, setImageErrors] = useState<Set<string>>(() => new Set())
-  const [adding, setAdding] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  const [checkoutPending, setCheckoutPending] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const flipTimerRef = useRef<number | null>(null)
-  const toastTimerRef = useRef<number | null>(null)
+  const checkoutInFlightRef = useRef(false)
   const loadRunIdRef = useRef(0)
 
   const loadReader = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -172,29 +185,38 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         cache: 'no-store',
       })
       const data = await response.json().catch(() => ({})) as ReaderResponse
-      if (!response.ok && response.status !== 403) {
-        throw new Error(data.error || 'Failed to load reader')
+      if (!response.ok) {
+        if (runId === loadRunIdRef.current && !silent) {
+          setLoadError(resolveReaderLoadIssue(response.status, data))
+          setReader(data)
+          setBookDisplay(null)
+        }
+        return
       }
-      const nextBookDisplay = data.finalReady
-        ? buildReaderBookDisplay({
-            schemaVersion: data.schemaVersion,
-            assetLayout: data.assetLayout,
-            legacyCoverUrl: data.creation?.coverUrl,
-            pages: (data.pages ?? []).map((page) => {
-              if (!page.url) throw new Error(`Missing signed Reader URL for page ${page.pageIndex}`)
-              return { ...page, url: page.url }
-            }),
-          })
-        : null
+      let nextBookDisplay: ReaderBookDisplay | null = null
+      try {
+        nextBookDisplay = data.finalReady
+          ? buildReaderBookDisplay({
+              schemaVersion: data.schemaVersion,
+              assetLayout: data.assetLayout,
+              legacyCoverUrl: data.creation?.coverUrl,
+              pages: (data.pages ?? []).map((page) => {
+                if (!page.url) throw new Error(`Missing signed Reader URL for page ${page.pageIndex}`)
+                return { ...page, url: page.url }
+              }),
+            })
+          : null
+      } catch {
+        if (runId === loadRunIdRef.current && !silent) setLoadError('invalid')
+        return
+      }
       if (runId !== loadRunIdRef.current) return
       setReader(data)
       setBookDisplay(nextBookDisplay)
       setLoadError(null)
       setImageErrors(new Set())
-    } catch (error) {
-      if (runId === loadRunIdRef.current && !silent) {
-        setLoadError(error instanceof Error ? error.message : 'Failed to load reader')
-      }
+    } catch {
+      if (runId === loadRunIdRef.current && !silent) setLoadError('service')
     } finally {
       if (runId === loadRunIdRef.current) {
         setLoading(false)
@@ -237,7 +259,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   useEffect(() => () => {
     loadRunIdRef.current += 1
     if (flipTimerRef.current !== null) window.clearTimeout(flipTimerRef.current)
-    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current)
   }, [])
 
   const creation = reader?.creation ?? null
@@ -265,7 +286,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       Math.max(0, currentSpread - 1),
       currentSpread,
       currentSpread + 1,
-      currentSpread + 2,
     ])
     const preload = (url: string) => {
       if (!url) return
@@ -274,45 +294,31 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       image.src = url
       void image.decode?.().catch(() => undefined)
     }
-    const immediateUrls = new Set<string>()
     immediateIndexes.forEach((index) => {
       getReaderSpreadUrls(bookDisplay, index).forEach((url) => {
-        immediateUrls.add(url)
         preload(url)
       })
     })
-    const backgroundId = window.setTimeout(() => {
-      bookDisplay.preloadUrls.forEach((url) => {
-        if (!immediateUrls.has(url)) preload(url)
-      })
-    }, 500)
-    return () => window.clearTimeout(backgroundId)
   }, [bookDisplay, currentSpread, reader?.finalReady])
 
-  const showToast = useCallback((message: string) => {
-    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current)
-    setToast(message)
-    toastTimerRef.current = window.setTimeout(() => setToast(null), 2800)
-  }, [])
-
   const handleBuyAgain = useCallback(async () => {
-    if (!creation || !cartContext || adding) return
-    setAdding(true)
+    if (!creation || checkoutInFlightRef.current) return
+    checkoutInFlightRef.current = true
+    setCheckoutPending(true)
+    setCheckoutError(null)
     try {
-      const item = await addToCart(
-        cartContext.book,
-        cartContext.personalization,
-        3,
-        undefined,
-        creation.coverUrl || undefined
-      )
-      showToast(item ? t('myBooks.readerAdded') : t('myBooks.readerAddFailed'))
+      const checkout = await startOwnedCreationCheckout({
+        creationId: creation.creationId,
+        customerId: user?.customerId,
+      })
+      if (checkout.cartItems.length > 0) hydrateCheckoutItems(checkout.cartItems)
+      router.push(checkout.checkoutHref)
     } catch {
-      showToast(t('myBooks.readerAddFailed'))
-    } finally {
-      setAdding(false)
+      setCheckoutError(t('myBooks.checkoutFailed'))
+      checkoutInFlightRef.current = false
+      setCheckoutPending(false)
     }
-  }, [addToCart, adding, cartContext, creation, showToast, t])
+  }, [creation, hydrateCheckoutItems, router, t, user?.customerId])
 
   const turnPage = useCallback((direction: 'next' | 'prev') => {
     if (isFlipping) return
@@ -372,14 +378,24 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   if (!isHydrated || loading) return <MyBookReaderSkeleton />
 
   if (loadError || !reader || !reader.eligible || !creation || (reader.finalReady && !bookDisplay)) {
+    const issue = loadError ?? 'invalid'
+    const title = t(`myBooks.readerIssue.${issue}.title`)
+    const body = t(`myBooks.readerIssue.${issue}.body`)
+    const canRetry = issue === 'service' || issue === 'invalid'
     return (
       <ReaderStateShell backLabel={t('myBooks.readerBack')}>
         <BookOpen className="h-10 w-10 text-gray-400" />
-        <h1 className="mt-5 font-display text-2xl font-semibold text-gray-900">{t('myBooks.readerUnavailableTitle')}</h1>
-        <p className="mt-2 max-w-md text-sm leading-6 text-gray-500">{t('myBooks.readerUnavailableBody')}</p>
-        <button type="button" onClick={() => void loadReader()} className="mt-6 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white">
-          {t('myBooks.readerRetry')}
-        </button>
+        <h1 className="mt-5 font-display text-2xl font-semibold text-gray-900">{title}</h1>
+        <p className="mt-2 max-w-md text-sm leading-6 text-gray-500">{body}</p>
+        {issue === 'signed_out' ? (
+          <button type="button" onClick={() => openLoginModal('login')} className="mt-6 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white">
+            {t('navbar.logIn')}
+          </button>
+        ) : canRetry ? (
+          <button type="button" onClick={() => void loadReader()} className="mt-6 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white">
+            {t('myBooks.readerRetry')}
+          </button>
+        ) : null}
       </ReaderStateShell>
     )
   }
@@ -401,12 +417,12 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             {t('myBooks.readerRefresh')}
           </button>
-          <button type="button" onClick={() => void handleBuyAgain()} disabled={adding} className="inline-flex items-center justify-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-            <ShoppingCart className="h-4 w-4" />
-            {adding ? t('myBooks.readerAdding') : t('myBooks.readerBuyAgain')}
+          <button type="button" onClick={() => void handleBuyAgain()} disabled={checkoutPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+            <CreditCard className="h-4 w-4" aria-hidden="true" />
+            {checkoutPending ? t('myBooks.readerStartingCheckout') : t('myBooks.readerBuyAgain')}
           </button>
         </div>
-        {toast ? <ReaderToast message={toast} /> : null}
+        {checkoutError ? <p role="alert" className="mt-4 text-sm font-medium text-red-700">{checkoutError}</p> : null}
       </ReaderStateShell>
     )
   }
@@ -428,7 +444,11 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         previewPageStillCreating: t('myBooks.readerPageUnavailable'),
         previewPageLocked: '',
         backToCover: t('personalize.backToCover'),
+        nextPage: t('personalize.nextPage'),
+        previousPage: t('personalize.previousPage'),
       }}
+      canTurnNext={currentSpread < maxSpreadIndex}
+      canTurnPrev={currentSpread > 0}
       onImageError={handleImageError}
       onTurnPage={turnPage}
       onReturnToCover={returnToCover}
@@ -438,7 +458,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   return (
     <div className="page-surface min-h-screen overflow-x-hidden px-3 pb-16 pt-24 md:px-8">
       <div className="mx-auto max-w-6xl">
-        <Link href="/my-books" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 transition hover:text-gray-900">
+        <Link href="/my-books?shelf=purchased" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 transition hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" />
           {t('myBooks.readerBack')}
         </Link>
@@ -470,13 +490,13 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
 
         <div className="mx-auto mt-3 flex max-w-md flex-col items-center gap-3 text-center">
           <p className="text-xs font-medium text-gray-400">{currentSpread === 0 ? t('myBooks.readyBadge') : `${currentSpread} / ${maxSpreadIndex}`}</p>
-          <button type="button" onClick={() => void handleBuyAgain()} disabled={adding} className="inline-flex min-w-40 items-center justify-center gap-2 rounded-full bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60">
-            <ShoppingCart className="h-4 w-4" />
-            {adding ? t('myBooks.readerAdding') : t('myBooks.readerBuyAgain')}
+          <button type="button" onClick={() => void handleBuyAgain()} disabled={checkoutPending} className="inline-flex min-w-40 items-center justify-center gap-2 rounded-full bg-gray-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60">
+            <CreditCard className="h-4 w-4" aria-hidden="true" />
+            {checkoutPending ? t('myBooks.readerStartingCheckout') : t('myBooks.readerBuyAgain')}
           </button>
+          {checkoutError ? <p role="alert" className="text-sm font-medium text-red-700">{checkoutError}</p> : null}
         </div>
       </div>
-      {toast ? <ReaderToast message={toast} /> : null}
     </div>
   )
 }
@@ -497,7 +517,7 @@ function ReaderStateShell({ children, backLabel }: { children: React.ReactNode; 
   return (
     <div className="page-surface min-h-screen px-4 pb-16 pt-24">
       <div className="mx-auto max-w-5xl">
-        <Link href="/my-books" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 transition hover:text-gray-900">
+        <Link href="/my-books?shelf=purchased" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 transition hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" />
           {backLabel}
         </Link>
@@ -505,14 +525,6 @@ function ReaderStateShell({ children, backLabel }: { children: React.ReactNode; 
           {children}
         </div>
       </div>
-    </div>
-  )
-}
-
-function ReaderToast({ message }: { message: string }) {
-  return (
-    <div role="status" className="fixed bottom-6 left-1/2 z-[160] -translate-x-1/2 rounded-full border border-white/70 bg-gray-950 px-5 py-3 text-sm font-semibold text-white shadow-xl">
-      {message}
     </div>
   )
 }
