@@ -775,6 +775,7 @@ const en: MessageDictionary = {
   'personalize.completeDetails': 'Complete Details to Continue',
   'personalize.previewTitle': "Preview {{name}}'s Story",
   'personalize.previewSubtitle': 'Flip through the first few pages of your masterpiece.',
+  'personalize.scrollToPurchase': 'Continue to order options',
   'signatureVoice.badge': 'Signature Voice',
   'signatureVoice.previewTitle': 'Audio edition preview',
   'signatureVoice.previewBody': 'This preview shows the visual book. After purchase, your narration is prepared for the printed edition.',

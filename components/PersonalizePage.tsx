@@ -3435,6 +3435,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       addToCartButtonRef={addToCartBtnRef}
                     />
                   }
+                  scrollCueLabel={t('personalize.scrollToPurchase')}
                 />
             )}
         <PreviewShareDialog
