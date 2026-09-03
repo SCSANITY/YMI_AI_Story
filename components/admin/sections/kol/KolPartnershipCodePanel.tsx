@@ -328,7 +328,7 @@ export function KolPartnershipCodePanel({
 
       {codes.length > 1 ? (
         <div className="mt-5 border-t border-[var(--admin-line)] pt-4">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
             <History className="h-4 w-4" /> Code history
           </div>
           <div className="mt-3 space-y-2">
@@ -371,7 +371,7 @@ function CodeEditor({
 
   return (
     <div>
-      <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">{title}</p>
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">{title}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <label className={adminLabelClass}>
           Code

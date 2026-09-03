@@ -61,7 +61,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
         <div>
           <div className="flex items-center gap-2 mb-3">
             <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-400">{t('orderDetail.shipping')}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{t('orderDetail.shipping')}</p>
           </div>
           <div className="text-sm text-gray-700 space-y-0.5 leading-relaxed">
             <div className="font-medium text-gray-900">{`${address.firstName ?? ''} ${address.lastName ?? ''}`.trim() || '-'}</div>

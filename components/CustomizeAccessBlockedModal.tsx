@@ -60,7 +60,7 @@ export function CustomizeAccessBlockedModal({
               <Lock className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">Private Beta</p>
+              <p className="text-xs font-bold uppercase tracking-[0.1em] text-amber-700">Private Beta</p>
               <h2 className="mt-1 text-xl font-bold text-gray-900">Customize is temporarily closed</h2>
             </div>
           </div>

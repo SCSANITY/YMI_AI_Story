@@ -32,7 +32,7 @@ export function AnnouncementList({
     <AdminPanel className="p-4 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
             All announcements
           </p>
           <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Manage content</h2>

@@ -112,7 +112,7 @@ function BannerPreview({
     <AdminPanel className="overflow-hidden p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-page-line)] px-4 py-3 sm:px-5">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Preview</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Preview</p>
           <p className="mt-1 truncate text-sm font-bold text-[var(--admin-page-ink)]">{slot.displayName}</p>
         </div>
         <div className="flex rounded-lg bg-[var(--admin-page-soft)] p-1" role="tablist" aria-label="Preview size">
@@ -424,7 +424,7 @@ export function HomepageBannerManager() {
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="min-w-0">
-                    <span className={`block text-[9px] font-bold uppercase tracking-[0.14em] ${selected ? 'text-white/55' : 'text-[var(--admin-page-muted)]'}`}>
+                    <span className={`block text-[10px] font-bold uppercase tracking-[0.06em] ${selected ? 'text-white/55' : 'text-[var(--admin-page-muted)]'}`}>
                       {SLOT_LABELS[slotKey]}
                     </span>
                     <span className="mt-1 block truncate text-xs font-bold">{slot?.displayName || 'Unavailable'}</span>
@@ -467,7 +467,7 @@ export function HomepageBannerManager() {
           <AdminPanel className="min-w-0 space-y-4 overflow-hidden p-4 sm:p-5">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
                   {SLOT_LABELS[selectedSlot.slotKey]}
                 </p>
                 <h2 className="mt-1 truncate text-lg font-bold text-[var(--admin-page-ink)]">Publish settings</h2>

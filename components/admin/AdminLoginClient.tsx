@@ -96,7 +96,7 @@ export function AdminLoginClient() {
             </div>
 
             <div className="relative my-auto py-10">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--admin-accent)]">
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--admin-accent)]">
                 Internal workspace
               </p>
               <h1 className="mt-5 max-w-md text-[clamp(2.35rem,3.5vw,4rem)] font-bold leading-[1.03] tracking-[-0.035em]">
@@ -138,13 +138,13 @@ export function AdminLoginClient() {
               />
               <div className="border-l border-[var(--admin-line)] pl-3">
                 <p className="text-sm font-bold">Operations</p>
-                <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--admin-muted)]">Production console</p>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--admin-muted)]">Production console</p>
               </div>
             </header>
 
             <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-10 sm:py-12 lg:px-14 xl:px-20">
               <div className="w-full max-w-[440px]">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--admin-good)]" />
                   Secure staff access
                 </div>
@@ -222,7 +222,7 @@ export function AdminLoginClient() {
                   </button>
                 </form>
 
-                <div className="my-6 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-muted)]">
+                <div className="my-6 flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">
                   <span className="h-px flex-1 bg-[var(--admin-line)]" />
                   or
                   <span className="h-px flex-1 bg-[var(--admin-line)]" />

@@ -80,7 +80,7 @@ export function OrdersList({
                 />
               </span>
               <div>
-                <div className="text-xs text-gray-500 font-medium tabular-nums tracking-[0.14em]">
+                <div className="text-xs font-medium tabular-nums tracking-[0.06em] text-gray-500">
                   #{order.display_id ?? order.order_id}
                 </div>
                 <div className="text-lg font-semibold text-gray-900">

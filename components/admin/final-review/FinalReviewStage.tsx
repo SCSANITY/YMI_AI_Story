@@ -56,7 +56,7 @@ export function FinalReviewStage({
             </div>
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Pages approved</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Pages approved</p>
             <p className="mt-1 text-sm font-semibold text-[var(--admin-page-ink)]">
               {readyToRelease
                 ? 'Ready to release'
@@ -162,7 +162,7 @@ function StageCard({
       <div className="flex items-center gap-2">
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${toneClass}`}>{icon}</div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">{label}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">{label}</p>
           <h3 className="text-lg font-semibold text-[var(--admin-page-ink)]">{title}</h3>
         </div>
       </div>

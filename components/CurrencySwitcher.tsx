@@ -131,7 +131,7 @@ export function CurrencySwitcher({ className, buttonClassName, menuClassName }: 
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="sticky top-0 z-10 rounded-xl bg-white/96 px-1 pb-2 pt-1 backdrop-blur-xl">
-              <div className="px-2 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-600">
+              <div className="px-2 pb-2 pt-1 text-xs font-bold uppercase tracking-[0.08em] text-amber-600">
                 Region / Currency
               </div>
               <label className="relative block">
@@ -149,7 +149,7 @@ export function CurrencySwitcher({ className, buttonClassName, menuClassName }: 
               <div className="px-3 py-8 text-center text-xs text-slate-500">No matching regions</div>
             ) : groupedOptions.map((group) => (
               <div key={group.currency} className="pb-1">
-                <div className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                <div className="px-3 pb-1 pt-2 text-xs font-bold uppercase tracking-[0.08em] text-slate-400">
                   {group.currency}
                 </div>
                 {group.options.map((option) => {

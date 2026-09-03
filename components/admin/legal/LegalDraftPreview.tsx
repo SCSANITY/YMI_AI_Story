@@ -5,7 +5,7 @@ export function LegalDraftPreview({ content }: { content: LegalRevisionContent }
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 text-slate-900 sm:p-7">
       <div className="border-b border-slate-200 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
           Draft preview
         </p>
         <p className="mt-2 text-sm text-slate-600">

@@ -18,7 +18,7 @@ export default function AdminError({
             <TriangleAlert aria-hidden="true" className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-rose-200">Admin request failed</p>
+            <p className="text-xs font-bold uppercase tracking-[0.08em] text-rose-200">Admin request failed</p>
             <h1 className="mt-1 text-xl font-semibold text-white">This section could not be loaded</h1>
             <p className="mt-2 break-words text-sm leading-6 text-slate-300">
               {error.message || 'The server returned an unexpected error.'}

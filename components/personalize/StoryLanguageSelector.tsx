@@ -52,7 +52,7 @@ function StoryLanguageSelectorComponent({ value, labels, onChange }: StoryLangua
 
   return (
     <div className="space-y-3">
-      <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{labels.field}</label>
+      <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.field}</label>
       <div ref={rootRef} className="relative">
         <button
           type="button"
@@ -90,7 +90,7 @@ function StoryLanguageSelectorComponent({ value, labels, onChange }: StoryLangua
               >
                 <span>{labels[option.labelKey]}</span>
                 {option.disabled ? (
-                  <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
+                  <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
                     {labels.comingSoon}
                   </span>
                 ) : null}

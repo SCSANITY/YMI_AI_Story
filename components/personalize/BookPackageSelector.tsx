@@ -55,7 +55,7 @@ function BookPackageSelectorComponent({ value, labels, includedItems, priceLabel
 
   return (
     <div className="space-y-3">
-      <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{labels.field}</label>
+      <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.field}</label>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {PACKAGE_OPTIONS.map((option) => {
           const isSelected = value === option.value
@@ -79,7 +79,7 @@ function BookPackageSelectorComponent({ value, labels, includedItems, priceLabel
                   </div>
                 ) : null}
               </div>
-              <div className="text-[11px] text-gray-400 mt-0.5">{labels[option.subtitleKey]}</div>
+              <div className="mt-0.5 text-xs text-gray-400">{labels[option.subtitleKey]}</div>
             </button>
           )
         })}
@@ -97,7 +97,7 @@ function BookPackageSelectorComponent({ value, labels, includedItems, priceLabel
               <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.10em] text-amber-700">
+              <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">
                 {labels.whatIncluded}
               </span>
               <span className="mt-0.5 block truncate text-xs font-medium text-slate-500">

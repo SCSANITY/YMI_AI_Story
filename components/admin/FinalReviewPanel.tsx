@@ -1267,7 +1267,7 @@ export function FinalReviewPanel({
       <section className="admin-v2-panel relative p-2.5">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="flex shrink-0 items-baseline gap-2 pr-12 lg:block lg:w-32 lg:pr-0">
-            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--admin-page-ink)]">
+            <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-page-ink)]">
               Queue Overview
             </h2>
             <span className="text-[10px] text-[var(--admin-page-muted)]">
@@ -1443,7 +1443,7 @@ export function FinalReviewPanel({
           <div className="border-b border-[var(--admin-line)] bg-[var(--admin-panel)]/92 px-3.5 py-3 backdrop-blur-xl lg:sticky lg:top-0 lg:z-10">
             <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-accent)]">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)]">
                   {reviewFocus
                     ? 'Review Focus'
                     : activeVersion === 'pdf'

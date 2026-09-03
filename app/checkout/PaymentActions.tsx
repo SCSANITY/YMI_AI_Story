@@ -161,7 +161,7 @@ function MobilePaymentBarComponent({
     <div className="fixed inset-x-0 bottom-0 z-[90] px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 md:hidden">
       <div className="mx-auto flex max-w-7xl items-center gap-3 rounded-[24px] border border-white/85 bg-white/88 px-4 py-3 shadow-[0_18px_40px_rgba(148,93,34,0.14)] backdrop-blur-xl">
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-500">
+          <div className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">
             {t('common.total')}
           </div>
           <div className="mt-1 text-lg font-bold tracking-tight text-slate-900">

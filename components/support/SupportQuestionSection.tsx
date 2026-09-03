@@ -66,7 +66,7 @@ export function SupportQuestionSection({ user, openLoginModal, t }: SupportQuest
       {user ? (
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-amber-700">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-amber-700">
               <Send className="h-3.5 w-3.5" />
               {t('support.formBadge')}
             </div>

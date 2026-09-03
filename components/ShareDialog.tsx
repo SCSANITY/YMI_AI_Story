@@ -389,10 +389,10 @@ export function ShareDialog({
           {/* Code badge */}
           {code ? (
             <div className="rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/80 to-orange-50/80 px-4 py-3 backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">
+              <p className="text-xs font-bold uppercase tracking-[0.1em] text-amber-500">
                 {t('share.yourCode')}
               </p>
-              <p className="mt-1.5 font-mono text-xl font-black tracking-[0.22em] text-gray-900">{code}</p>
+              <p className="mt-1.5 font-mono text-xl font-black tracking-[0.14em] text-gray-900">{code}</p>
             </div>
           ) : null}
 
@@ -401,7 +401,7 @@ export function ShareDialog({
             style={{ backdropFilter: 'blur(12px)' }}
           >
             <div className="flex items-center justify-between gap-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                 {t('share.copyPreviewLabel')}
               </p>
               <button

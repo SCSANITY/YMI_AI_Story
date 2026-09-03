@@ -58,7 +58,7 @@ export function PrintVersionReview({
               {artifact ? <FileCheck2 className="h-5 w-5" /> : <FileUp className="h-5 w-5" />}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--admin-muted)]">
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">
                 Manual print artifact
               </p>
               <h4 className="mt-1 text-lg font-bold text-[var(--admin-ink)]">
@@ -195,7 +195,7 @@ function PrintUploadError({ message }: { message: string }) {
 function ArtifactFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">{label}</p>
       <p className="mt-1 break-words text-sm font-semibold text-[var(--admin-ink)]">{value}</p>
     </div>
   )

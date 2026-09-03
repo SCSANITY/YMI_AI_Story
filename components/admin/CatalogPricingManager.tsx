@@ -447,7 +447,7 @@ export function CatalogPricingManager() {
                     <section key={meta.type} className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-accent)]">{meta.type}</p>
+                          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)]">{meta.type}</p>
                           <h3 className="mt-1 font-bold text-[var(--admin-page-ink)]">{meta.name}</h3>
                         </div>
                         <Tag className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" />
@@ -502,7 +502,7 @@ export function CatalogPricingManager() {
 
                       <div className="mt-4 flex items-end justify-between gap-3 border-t border-[var(--admin-line)] pt-4">
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">Customer price</p>
+                          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Customer price</p>
                           <p className="mt-1 text-xl font-bold text-[var(--admin-page-ink)]">{valid ? formatUsd(effective) : '--'}</p>
                           {discountPercent ? <p className="mt-0.5 text-xs font-semibold text-emerald-600">{discountPercent}% catalog discount</p> : null}
                         </div>

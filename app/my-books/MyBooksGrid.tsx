@@ -103,7 +103,7 @@ export function MyBooksGrid({
               ) : null}
               {isPreviewPending || activeAction ? (
                 <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-[inherit] bg-white/24 backdrop-blur-[2px]">
-                  <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 shadow-sm md:text-xs">
+                  <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-amber-700 shadow-sm md:text-xs">
                     {t('common.loading')}
                   </span>
                 </div>
@@ -120,11 +120,11 @@ export function MyBooksGrid({
                   disabled={isActionPending}
                   className="text-left"
                 >
-                  <h3 className="font-display pt-px md:pt-0 text-base md:text-lg font-medium text-gray-900 leading-snug md:leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">
+                  <h3 className="font-display pt-px md:pt-0 text-base md:text-lg font-semibold text-gray-900 leading-snug md:leading-tight mb-1 md:mb-2 line-clamp-2 md:line-clamp-none">
                     {title}
                   </h3>
                 </button>
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:mb-3 md:text-xs">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.04em] text-gray-400 md:mb-3 md:text-xs">
                   {item.templates?.story_type || ''}
                 </p>
                 <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
@@ -133,7 +133,7 @@ export function MyBooksGrid({
                 <div className="mt-3">
                   {isDiscounted ? (
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                      <span className="whitespace-nowrap text-base font-extrabold tracking-normal text-amber-600 md:text-lg">
                         {priceLabel}
                       </span>
                       {compareAtLabel ? (
@@ -144,10 +144,10 @@ export function MyBooksGrid({
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-baseline gap-x-1.5">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 md:text-sm">
+                      <span className="text-xs font-semibold uppercase tracking-[0.06em] text-gray-400 md:text-sm">
                         {t('bookList.from')}
                       </span>
-                      <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                      <span className="whitespace-nowrap text-base font-extrabold tracking-normal text-amber-600 md:text-lg">
                         {priceLabel}
                       </span>
                     </div>

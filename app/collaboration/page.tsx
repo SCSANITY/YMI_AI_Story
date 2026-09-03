@@ -20,7 +20,7 @@ export default function CollaborationPage() {
     <section className="glass-panel overflow-hidden rounded-[2rem] px-6 py-8 md:px-10 md:py-10">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="flex flex-col gap-3">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/75 bg-white/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-600 shadow-sm">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/75 bg-white/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-amber-600 shadow-sm">
                 <Sparkles className="h-3.5 w-3.5" />
                 {t('collaboration.badge')}
               </div>
@@ -35,7 +35,7 @@ export default function CollaborationPage() {
 
           <div className="relative mt-8 overflow-hidden rounded-[1.75rem] border border-white/70 bg-[linear-gradient(135deg,rgba(255,251,235,0.86),rgba(255,255,255,0.7))] p-4 shadow-[0_8px_30px_rgba(15,23,42,0.06)] md:p-5">
             <div className="mb-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">
                 {t('collaboration.posterBadge')}
               </p>
               <h2 className="mt-1 font-title text-xl text-slate-900">
@@ -65,7 +65,7 @@ export default function CollaborationPage() {
                     </div>
                     <div className="px-1 pb-0.5 pt-2.5">
                       <h3 className="line-clamp-1 font-title text-sm leading-tight text-slate-800">{book.title}</h3>
-                      <p className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-slate-400">{book.storyTypeLabel || book.category}</p>
+                      <p className="mt-0.5 text-[11px] uppercase tracking-[0.06em] text-slate-400">{book.storyTypeLabel || book.category}</p>
                     </div>
                   </article>
                 ))}

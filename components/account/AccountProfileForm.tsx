@@ -69,7 +69,7 @@ export function AccountProfileForm({
     <section className="rounded-[2rem] border border-white/70 bg-white/88 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:p-6 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="break-words text-xs font-semibold uppercase tracking-[0.14em] text-amber-500 sm:tracking-[0.22em]">{t('account.profileDetails')}</p>
+          <p className="break-words text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">{t('account.profileDetails')}</p>
           <h2 className="mt-2 break-words text-2xl font-semibold text-slate-900 sm:text-3xl">{t('account.customizeAppearanceTitle')}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             {t('account.customizeAppearanceDescription')}

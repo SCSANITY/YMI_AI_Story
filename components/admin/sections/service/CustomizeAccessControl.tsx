@@ -96,7 +96,7 @@ export function CustomizeAccessControl() {
     <AdminPanel className="p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Access Control</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Access Control</p>
           <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Customize access</h2>
         </div>
 
@@ -126,7 +126,7 @@ export function CustomizeAccessControl() {
         </div>
       ) : settings ? (
         <div className="admin-v2-data-row mt-5 px-4 py-3.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Blocked message preview</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Blocked message preview</p>
           <p className="mt-1.5 text-sm leading-7 text-[#4e534c]">{settings.message}</p>
         </div>
       ) : (

@@ -31,7 +31,7 @@ export function BlogPostCard({ post, isLikePending, onOpenLightbox, onLike }: Bl
     <article className="rounded-[26px] border border-white/80 bg-white/78 p-5 shadow-[0_14px_44px_rgba(120,74,20,0.10)] backdrop-blur-2xl md:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">YMI Story</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-600">YMI Story</p>
           <h2 className="mt-2 text-2xl font-bold text-gray-900">{post.title}</h2>
         </div>
         <time className="shrink-0 text-xs text-gray-400">{formatDate(post.published_at || post.created_at)}</time>

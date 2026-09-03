@@ -177,7 +177,7 @@ export function CollaborationLeadFormSection({ user }: { user: User }) {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
             <CheckCircle2 className="h-7 w-7" />
           </div>
-          <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-600">
+          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-amber-600">
             {t('collaboration.applicationReceived')}
           </p>
           <h2 className="mt-2 font-title text-3xl text-slate-900">
@@ -194,7 +194,7 @@ export function CollaborationLeadFormSection({ user }: { user: User }) {
   return (
     <section className="glass-panel rounded-[2rem] px-6 py-8 md:px-10 md:py-10">
       <div className="mb-7">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-500">
+        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">
           {t('collaboration.formBadge')}
         </p>
         <h2 className="mt-2 font-title text-3xl text-slate-900">{t('collaboration.formTitle')}</h2>
@@ -259,7 +259,7 @@ export function CollaborationLeadFormSection({ user }: { user: User }) {
         </div>
 
         <div className="rounded-[1.2rem] border border-white/70 bg-white/60 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
             {t('collaboration.accountIdentity')}
           </p>
           <p className="mt-1 text-sm font-medium text-slate-700">{user.email}</p>

@@ -322,7 +322,7 @@ export const Navbar: React.FC = () => {
               }
               handlePlainLinkClick(e, '/')
             }}
-            className="flex items-center"
+            className={`flex shrink-0 items-center ${pathname !== '/' ? 'max-[340px]:hidden' : ''}`}
           >
             <Image
               src="/logo.webp"
@@ -506,9 +506,9 @@ export const Navbar: React.FC = () => {
                   openLoginModal()
                 }}
                 size="sm"
-                className={isTransparent
+                className={`shrink-0 whitespace-nowrap px-3 sm:px-4 ${isTransparent
                   ? 'rounded-full border border-white/50 bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm'
-                  : ''}
+                  : ''}`}
               >
                 {t('navbar.logIn')}
               </Button>

@@ -702,7 +702,7 @@ function AddressFormSectionComponent({
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <span className="h-3.5 w-1 shrink-0 rounded-full bg-amber-400" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Contact</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Contact</span>
           <div className="h-px flex-1 bg-gray-100" />
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -790,7 +790,7 @@ function AddressFormSectionComponent({
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <span className="h-3.5 w-1 shrink-0 rounded-full bg-amber-400" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Address</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Address</span>
           <div className="h-px flex-1 bg-gray-100" />
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -906,7 +906,7 @@ function AddressFormSectionComponent({
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <span className="h-3.5 w-1 shrink-0 rounded-full bg-amber-400" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Additional</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Additional</span>
           <div className="h-px flex-1 bg-gray-100" />
         </div>
         <div className="grid gap-3 md:grid-cols-2">

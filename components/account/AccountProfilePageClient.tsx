@@ -258,7 +258,7 @@ export function AccountProfilePageClient() {
     return (
       <div className="min-h-[70vh] px-4 py-12">
         <div className="mx-auto max-w-3xl rounded-[2rem] border border-white/70 bg-white/85 p-6 text-center shadow-[0_20px_70px_rgba(15,23,42,0.1)] backdrop-blur-xl sm:p-8">
-          <p className="break-words text-xs font-semibold uppercase tracking-[0.14em] text-amber-500 sm:tracking-[0.24em]">{t('account.centerBadge')}</p>
+          <p className="break-words text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">{t('account.centerBadge')}</p>
           <h1 className="mt-4 break-words font-title text-3xl text-slate-900 sm:text-4xl">{t('account.signInTitle')}</h1>
           <p className="mt-4 text-base text-slate-600">
             {t('account.signInDescription')}

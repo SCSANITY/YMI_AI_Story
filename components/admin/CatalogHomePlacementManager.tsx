@@ -93,7 +93,7 @@ export function CatalogHomePlacementManager({
   return (
     <AdminPanel className="p-4 sm:p-5">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-accent)]">Home merchandising</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)]">Home merchandising</p>
         <h2 className="mt-1 text-xl font-bold text-[var(--admin-page-ink)]">Four-slot story placements</h2>
       </div>
 
@@ -113,7 +113,7 @@ export function CatalogHomePlacementManager({
               <h3 className="font-bold text-[var(--admin-page-ink)]">{section.name}</h3>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {values.map((value, slotIndex) => (
-                  <label key={slotIndex} className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
+                  <label key={slotIndex} className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
                     Slot {slotIndex + 1}
                     <select
                       value={value}

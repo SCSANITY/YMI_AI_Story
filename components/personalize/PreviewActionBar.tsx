@@ -100,7 +100,7 @@ function PreviewActionBarComponent({
               {shareDescription}
             </span>
           </span>
-          <span className="hidden rounded-full border border-white/70 bg-white/55 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-600 shadow-sm sm:inline-flex">
+          <span className="hidden rounded-full border border-white/70 bg-white/55 px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-amber-600 shadow-sm sm:inline-flex">
             {shareCopyLabel}
           </span>
         </button>

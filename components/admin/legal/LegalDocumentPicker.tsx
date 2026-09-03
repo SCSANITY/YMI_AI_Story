@@ -15,7 +15,7 @@ export function LegalDocumentPicker({ documents, selectedKey, onSelect }: Props)
       aria-label="Legal documents"
       className="admin-v2-panel min-w-0 p-3"
     >
-      <p className="px-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
+      <p className="px-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
         Documents
       </p>
       <div className="mt-3 space-y-1.5">

@@ -259,7 +259,7 @@ function StructuredPdfWorkspace({
       <section className="overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--admin-accent-dp)_28%,transparent)] bg-[var(--admin-panel-2)]">
         <div className="flex flex-col gap-2 border-b border-[var(--admin-card-line)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-accent-dp)]">Selected page</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent-dp)]">Selected page</p>
             <h4 className="mt-0.5 text-lg font-bold text-[var(--admin-ink)]">{selectedItem.primaryLabel}</h4>
             <p className="text-xs text-[var(--admin-muted)]">{selectedItem.secondaryLabel}</p>
           </div>
@@ -342,7 +342,7 @@ function StructuredPdfWorkspace({
         {groups.map((group) => (
           <section key={group.key} className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <h4 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--admin-muted)]">{group.label}</h4>
+              <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">{group.label}</h4>
               <span className="text-[10px] text-[var(--admin-muted)]">{group.items.length} pages</span>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -543,7 +543,7 @@ function ApprovedSourceExportToolbar({
     <section className="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--admin-ink)_15%,transparent)] bg-[color-mix(in_srgb,var(--admin-ink)_10%,var(--admin-card))] p-3.5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-ink-soft)]">Approved source export</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-ink-soft)]">Approved source export</p>
           <p className="mt-1 text-xs text-[var(--admin-muted)]">
             {selectedPageIndices.length} selected · {approvedCount} approved
           </p>

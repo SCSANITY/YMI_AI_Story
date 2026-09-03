@@ -12,7 +12,7 @@ export default function MaintenancePage() {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-2xl font-semibold text-amber-700">
             Y
           </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-600">
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-600">
             {t('maintenance.badge')}
           </p>
           <h1 className="mt-4 font-title text-4xl text-gray-900 md:text-5xl">

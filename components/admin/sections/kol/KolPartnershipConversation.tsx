@@ -140,7 +140,7 @@ export function KolPartnershipConversation({
         {quarantinedMessages.length > 0 ? (
           <section className="mb-5 space-y-3 rounded-lg border border-[color-mix(in_srgb,var(--admin-warn)_45%,var(--admin-card-line))] bg-[color-mix(in_srgb,var(--admin-warn)_9%,var(--admin-card))] p-4" aria-label="Replies awaiting sender confirmation">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--admin-warn)]">Sender confirmation required</p>
+              <p className="text-xs font-black uppercase tracking-[0.08em] text-[var(--admin-warn)]">Sender confirmation required</p>
               <p className="mt-1 text-xs leading-5 text-[var(--admin-page-muted)]">
                 These replies came from an address outside the account and partnership contact emails. Confirm only when you recognize the sender.
               </p>

@@ -1394,7 +1394,7 @@ function CheckoutPageContent() {
                 <div className="relative z-40 rounded-[26px] border border-amber-100/80 bg-[linear-gradient(145deg,rgba(255,253,247,0.96),rgba(255,248,238,0.84))] p-4 shadow-[0_16px_36px_rgba(148,93,34,0.08)] backdrop-blur-xl md:p-5">
                   <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div className="space-y-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-500">
+                      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">
                         {t('checkout.summaryTitle')}
                       </div>
                       <div>

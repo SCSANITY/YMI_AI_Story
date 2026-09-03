@@ -83,7 +83,7 @@ export function PurchasedBooksGrid({
               />
 
               <div
-                className={`pointer-events-none absolute left-3 top-3 z-30 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm ${
+                className={`pointer-events-none absolute left-3 top-3 z-30 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] shadow-sm ${
                   isRefunded
                     ? 'bg-gray-900/75 text-white'
                     : item.finalReady
@@ -97,7 +97,7 @@ export function PurchasedBooksGrid({
 
               {isPending ? (
                 <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-[inherit] bg-white/24 backdrop-blur-[2px]">
-                  <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 shadow-sm md:text-xs">
+                  <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-amber-700 shadow-sm md:text-xs">
                     {t('common.loading')}
                   </span>
                 </div>
@@ -112,16 +112,16 @@ export function PurchasedBooksGrid({
                   onClick={() => onOpenReader(item)}
                   className="text-left"
                 >
-                    <h3 className="font-display mb-1 line-clamp-2 pt-px text-base font-medium leading-snug text-gray-900 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
+                    <h3 className="font-display mb-1 line-clamp-2 pt-px text-base font-semibold leading-snug text-gray-900 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
                       {displayTitle}
                     </h3>
                   </button>
                 ) : (
-                  <h3 className="font-display mb-1 line-clamp-2 pt-px text-base font-medium leading-snug text-gray-700 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
+                  <h3 className="font-display mb-1 line-clamp-2 pt-px text-base font-semibold leading-snug text-gray-700 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
                     {displayTitle}
                   </h3>
                 )}
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:text-xs">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-gray-400 md:text-xs">
                   {item.templates?.story_type || ''}
                 </p>
                 {isSignatureVoice ? <SignatureVoiceBadge className="mb-2" /> : null}

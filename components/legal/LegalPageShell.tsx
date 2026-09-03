@@ -32,7 +32,7 @@ export async function LegalPageShell({
       <main className="page-surface page-surface--flush-bottom min-h-screen">
         <header className="border-b border-amber-100/80 bg-white/72">
           <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">
+            <p className="text-xs font-bold uppercase tracking-[0.1em] text-amber-700">
               {eyebrow}
             </p>
             <h1 className="mt-3 max-w-4xl font-title text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">

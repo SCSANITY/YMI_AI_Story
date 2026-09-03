@@ -405,7 +405,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     return (
       <ReaderStateShell backLabel={t('myBooks.readerBack')}>
         <Clock3 className="h-10 w-10 text-amber-600" />
-        <p className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-amber-700">{t('myBooks.readerEyebrow')}</p>
+        <p className="mt-5 text-xs font-bold uppercase tracking-[0.08em] text-amber-700">{t('myBooks.readerEyebrow')}</p>
         <h1 className="mt-2 font-display text-2xl font-semibold text-gray-900">{resolvedTitle}</h1>
         <h2 className="mt-6 text-lg font-semibold text-gray-800">{t('myBooks.readerPreparingTitle')}</h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-gray-500">{t('myBooks.readerPreparingBody')}</p>
@@ -463,7 +463,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         </Link>
 
         <header className="mx-auto mb-8 mt-8 max-w-2xl text-center md:mb-12">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">{t('myBooks.readerEyebrow')}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-amber-700">{t('myBooks.readerEyebrow')}</p>
           <h1 className="mt-3 font-display text-2xl font-semibold text-gray-900 md:text-3xl">{resolvedTitle}</h1>
           <p className="mt-2 text-sm text-gray-500">{t('myBooks.readerFullBook')}</p>
           {isSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" compact className="mx-auto mt-5 max-w-xl" /> : null}

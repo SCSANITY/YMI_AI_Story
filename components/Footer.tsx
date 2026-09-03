@@ -725,7 +725,7 @@ export const Footer: React.FC = () => {
                 {isFaq ? (
                   <section className="space-y-5">
                     <div className="rounded-2xl border border-amber-100/80 bg-amber-50/70 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                      <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-amber-700">Quick Answers</h3>
+                      <h3 className="text-sm font-bold uppercase tracking-[0.08em] text-amber-700">Quick Answers</h3>
                       <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
                         {quickAnswers.map((answer) => (
                           <li key={answer} className="flex gap-2">

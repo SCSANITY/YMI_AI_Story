@@ -98,13 +98,13 @@ export function BookCard({
           </div>
         ) : null}
         {isComingSoon ? (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 -rotate-12 rounded-full border-2 border-amber-500/90 bg-white/70 px-4 py-2 text-center text-sm font-black uppercase tracking-[0.16em] text-amber-700 shadow-[0_12px_36px_rgba(180,83,9,0.20)] backdrop-blur-md md:px-6 md:py-3 md:text-lg">
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 -rotate-12 rounded-full border-2 border-amber-500/90 bg-white/70 px-4 py-2 text-center text-sm font-black uppercase tracking-[0.08em] text-amber-700 shadow-[0_12px_36px_rgba(180,83,9,0.20)] backdrop-blur-md md:px-6 md:py-3 md:text-lg">
             {t('bookList.comingSoon')}
           </div>
         ) : null}
         {isNavigating ? (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-[inherit] bg-white/24 backdrop-blur-[2px]">
-            <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 shadow-sm md:text-xs">
+            <span className="rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-amber-700 shadow-sm md:text-xs">
               {t('common.loading')}
             </span>
           </div>
@@ -113,10 +113,10 @@ export function BookCard({
 
       <div className={`book-card-panel -mt-4 flex flex-1 flex-col rounded-xl px-3 pb-3 pt-6 md:-mt-6 md:rounded-2xl md:px-5 md:pb-5 md:pt-10 ${isComingSoon ? 'opacity-80' : ''}`}>
         <div className="flex flex-1 flex-col">
-          <h3 className="font-display mb-1 line-clamp-2 pt-px text-sm font-medium leading-snug text-gray-900 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
+          <h3 className="font-display mb-1 line-clamp-2 pt-px text-sm font-semibold leading-snug text-gray-900 md:mb-2 md:line-clamp-none md:pt-0 md:text-lg md:leading-tight">
             {title}
           </h3>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 md:mb-3 md:text-xs">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.04em] text-gray-400 md:mb-3 md:text-xs">
             {storyType}
           </p>
           <p className="hidden text-sm leading-relaxed text-gray-600 md:block">
@@ -128,7 +128,7 @@ export function BookCard({
           <div className="min-w-0">
             {isDiscounted ? (
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                <span className="whitespace-nowrap text-base font-extrabold tracking-normal text-amber-600 md:text-lg">
                   {priceLabel}
                 </span>
                 {compareAtLabel ? (
@@ -139,13 +139,13 @@ export function BookCard({
               </div>
             ) : (
               <div className="flex flex-wrap items-baseline">
-                <span className="whitespace-nowrap text-base font-extrabold tracking-wide text-amber-600 md:text-lg">
+                <span className="whitespace-nowrap text-base font-extrabold tracking-normal text-amber-600 md:text-lg">
                   {priceLabel}
                 </span>
               </div>
             )}
           </div>
-          <div className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 md:px-3 md:text-sm ${
+          <div className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 md:px-3 md:text-sm ${
             isComingSoon
               ? 'bg-gray-100/70 text-gray-500'
               : 'text-amber-600 hover:bg-amber-100/80 hover:text-amber-700 hover:shadow-sm group-hover:bg-amber-50/70'

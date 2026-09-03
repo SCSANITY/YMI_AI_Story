@@ -8,7 +8,7 @@ export default function NotFound() {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-700">
           <BookOpen className="h-6 w-6" aria-hidden="true" />
         </div>
-        <p className="mt-6 text-xs font-bold uppercase tracking-[0.22em] text-amber-600">Page not found</p>
+        <p className="mt-6 text-xs font-bold uppercase tracking-[0.1em] text-amber-600">Page not found</p>
         <h1 className="mt-2 font-title text-3xl text-gray-900">This story page is not here</h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-gray-600">
           The link may be outdated, or the page may have moved.

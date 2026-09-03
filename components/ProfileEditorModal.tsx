@@ -128,7 +128,7 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
         </button>
 
         <div className="mb-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-500">Account Profile</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">Account Profile</p>
           <h2 className="mt-2 text-2xl font-semibold text-slate-900">Edit your profile</h2>
           <p className="mt-1 text-sm text-slate-500">Update the name and avatar shown in the navigation.</p>
         </div>

@@ -60,7 +60,7 @@ export function KolLeadQueue({
       <div className="admin-v2-comm-toolbar shrink-0 space-y-3 border-b p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
               Partnership queue
             </p>
             <p className="text-sm font-semibold text-[var(--admin-page-ink)]">

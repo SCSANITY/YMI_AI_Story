@@ -91,7 +91,7 @@ export function AccountQuickLinksPanel({
   return (
     <aside className="space-y-5">
       <section className="rounded-[2rem] border border-white/70 bg-white/88 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-        <p className="break-words text-xs font-semibold uppercase tracking-[0.14em] text-amber-500 sm:tracking-[0.22em]">{t('account.quickAccess')}</p>
+        <p className="break-words text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">{t('account.quickAccess')}</p>
         <div className="mt-5 space-y-3">
           {quickLinks.map(({ key, title, description, icon: Icon, action, routeAction, meta }) => {
             const isPending = pendingLink === key
@@ -124,7 +124,7 @@ export function AccountQuickLinksPanel({
       </section>
 
       <section className="rounded-[2rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,250,235,0.95),rgba(255,255,255,0.95))] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-        <p className="break-words text-xs font-semibold uppercase tracking-[0.14em] text-amber-500 sm:tracking-[0.22em]">{t('account.comingNext')}</p>
+        <p className="break-words text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">{t('account.comingNext')}</p>
         <h3 className="mt-3 break-words text-xl font-semibold text-slate-900">{t('account.hubTitle')}</h3>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           {t('account.hubDescription')}

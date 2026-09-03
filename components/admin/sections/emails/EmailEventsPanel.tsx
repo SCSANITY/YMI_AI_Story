@@ -322,7 +322,7 @@ function OperationsMetric({
   return (
     <AdminPanel className={`p-4 ${warning ? 'border-[#ead28d] bg-[#fff7db]' : ''}`}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">{label}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">{label}</p>
         <Icon className={`h-4 w-4 ${warning ? 'text-[#856516]' : 'text-[var(--admin-page-muted)]'}`} />
       </div>
       <p className="mt-2 text-2xl font-black text-[var(--admin-page-ink)]">{value}</p>
@@ -396,7 +396,7 @@ function EmailEventCard({ event }: { event: EmailEventRow }) {
 function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
   return (
     <table className="min-w-full divide-y divide-black/[0.07] text-left text-sm">
-      <thead className="bg-black/[0.025] text-xs uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
+      <thead className="bg-black/[0.025] text-xs uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
         <tr>
           <th className="px-4 py-3">Created</th>
           <th className="px-4 py-3">Type</th>

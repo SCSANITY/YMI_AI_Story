@@ -14,7 +14,7 @@ export function SupportCustomerContext({ detail }: { detail: SupportTicketDetail
   const { ticket, orders } = detail
   return (
     <aside className="admin-v2-comm-context admin-v2-comm-scroll border-t border-black/[0.08] p-4 2xl:h-full 2xl:w-72 2xl:shrink-0 2xl:overflow-y-auto 2xl:overscroll-contain 2xl:border-l 2xl:border-t-0">
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Customer context</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Customer context</p>
 
       <div className="mt-4 space-y-3">
         <ContextRow icon={UserRound} label="Customer" value={ticket.display_name || 'No display name'} />
@@ -23,13 +23,13 @@ export function SupportCustomerContext({ detail }: { detail: SupportTicketDetail
       </div>
 
       <div className="admin-v2-data-row mt-5 p-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">Ticket</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Ticket</p>
         <p className="mt-2 font-mono text-sm font-bold tracking-wider text-[#765a12]">#{ticket.ticket_code}</p>
         <p className="mt-1 break-all text-[10px] text-[var(--admin-page-muted)]">{ticket.question_id}</p>
       </div>
 
       <div className="mt-5">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
           <Package className="h-3.5 w-3.5" /> Recent orders
         </div>
         {orders.length === 0 ? (

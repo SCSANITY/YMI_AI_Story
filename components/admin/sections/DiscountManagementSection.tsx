@@ -92,7 +92,7 @@ export function DiscountManagementSection() {
       <AdminPanel className="p-5">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--admin-page-muted)]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
               Manage
             </p>
             <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Discount instruments</h2>

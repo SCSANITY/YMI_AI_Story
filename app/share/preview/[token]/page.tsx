@@ -123,7 +123,7 @@ export default async function PreviewSharePage(
           </div>
 
           <div className="flex min-w-0 flex-col justify-center px-1 pb-2 sm:px-0 sm:pb-0">
-            <div className="inline-flex w-fit max-w-full rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 sm:px-4 sm:text-xs sm:tracking-[0.24em]">
+            <div className="inline-flex w-fit max-w-full rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-amber-700 sm:px-4">
               YMI Preview
             </div>
             <h1 className="mt-4 text-3xl font-title leading-tight text-gray-900 sm:mt-5 sm:text-4xl md:text-5xl">

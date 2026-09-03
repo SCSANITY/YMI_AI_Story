@@ -212,7 +212,7 @@ export function AnnouncementWorkspace({
         <AdminPanel className="p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
                 Blog / Announcements
               </p>
               <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">
@@ -424,7 +424,7 @@ export function AnnouncementWorkspace({
         className={mobileTab === 'preview' ? 'block' : 'hidden lg:block'}
       >
         <aside className="admin-v2-panel p-4 sm:p-5 xl:sticky xl:top-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
             Live Preview
           </p>
           <h2 className="mt-1 text-xl font-semibold text-[var(--admin-page-ink)]">Public Blog card</h2>

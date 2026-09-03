@@ -68,14 +68,16 @@ function GlassSelect({ label, value, options, onChange }: {
     <div ref={ref} className="relative flex-1">
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center h-9 rounded-full border px-3 w-full gap-1.5 transition-colors ${active ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white hover:border-amber-200'}`}
+        className={`flex h-9 w-full min-w-0 items-center gap-1 rounded-full border px-2 transition-colors sm:px-3 ${active ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white hover:border-amber-200'}`}
       >
-        <span className={`text-[10px] font-bold uppercase tracking-wide shrink-0 ${active ? 'text-amber-600' : 'text-gray-400'}`}>
+        <span className={`min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-[0.04em] ${active ? 'text-left text-amber-600' : 'text-center text-gray-400'}`}>
           {label}
         </span>
-        <span className={`flex-1 text-center text-xs font-medium ${active ? 'text-amber-800' : 'text-gray-400'}`}>
-          {selectedLabel}
-        </span>
+        {active ? (
+          <span className="max-w-[48%] truncate text-right text-xs font-medium text-amber-800">
+            {selectedLabel}
+          </span>
+        ) : null}
       </button>
 
       {open && (
@@ -302,7 +304,7 @@ const handlePersonalize = (bookID: string) => {
         
         {/* Section Header */}
         <div className="mb-10 md:mb-16 text-center">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-500 mb-3">
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.1em] text-amber-500">
             Our Collection
           </p>
           <h2 className="text-3xl md:text-5xl font-title text-gray-900 leading-tight mb-4">

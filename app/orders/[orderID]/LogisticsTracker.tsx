@@ -56,7 +56,7 @@ export function LogisticsTracker({
     <div className="glass-panel rounded-3xl p-5 md:p-7 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-600/80">Logistics</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-600/80">Logistics</p>
           <h3 className="text-base font-bold text-gray-900 mt-0.5">Order Progress</h3>
           <p className="mt-1 text-xs text-slate-400">Current order status: {statusLabel}</p>
         </div>
@@ -140,7 +140,7 @@ export function LogisticsTracker({
                       className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200/60 px-2 py-0.5"
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      <span className="text-[10px] font-semibold text-amber-700">In progress</span>
+                      <span className="text-xs font-semibold text-amber-700">In progress</span>
                     </motion.div>
                   )}
                 </div>

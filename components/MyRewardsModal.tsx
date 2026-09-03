@@ -45,7 +45,7 @@ function VoucherSection({
 
   return (
     <section className="space-y-3">
-      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</div>
+      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{title}</div>
       {vouchers.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-500">
           {emptyLabel}
@@ -182,7 +182,7 @@ export const MyRewardsModal: React.FC<MyRewardsModalProps> = ({ open, user, onCl
           </button>
 
           <div className="pr-10">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-500">{t('rewards.label')}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">{t('rewards.label')}</p>
             <h2 id="my-rewards-title" className="mt-2 flex items-center gap-2 text-2xl font-semibold text-slate-900">
               <Gift className="h-6 w-6 text-amber-500" />
               {t('rewards.title')}

@@ -260,7 +260,7 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
       <header className="border-b border-slate-200 p-4 sm:p-5">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
               English · Atomic revision
             </p>
             <h2 className="mt-1 truncate text-xl font-semibold text-[var(--admin-page-ink)]">{label.title}</h2>
@@ -373,7 +373,7 @@ export function LegalDocumentEditor({ state, onCommitted, onReload }: Props) {
                 className="rounded-lg border border-slate-200 bg-white/55 p-3 sm:p-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">
+                  <p className="text-xs font-bold uppercase tracking-[0.08em] text-amber-700">
                     Section {sectionIndex + 1}
                   </p>
                   <button

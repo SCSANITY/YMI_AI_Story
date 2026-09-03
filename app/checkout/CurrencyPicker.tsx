@@ -76,7 +76,7 @@ function CurrencyPickerComponent({ selectedCurrency, selectedLabel, t, onChange 
 
   return (
     <div className="w-full md:max-w-[240px]">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-gray-500">
         {selectedLabel}
       </div>
       <div className="relative" ref={dropdownRef}>

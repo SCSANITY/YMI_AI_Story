@@ -91,7 +91,7 @@ export function HomeBookCategories({ banners }: HomeBookCategoriesProps) {
     <section className="page-surface page-surface--flush-bottom relative pt-12 pb-10 md:pt-20 md:pb-14">
       <div className="container mx-auto min-w-0 px-4 md:px-6 lg:px-12">
         <div className="mx-auto mb-10 max-w-4xl text-center md:mb-14">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-500">
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.1em] text-amber-500">
             {t('homeBooks.eyebrow')}
           </p>
           <h2 className="font-title text-3xl leading-tight text-gray-900 md:text-5xl">

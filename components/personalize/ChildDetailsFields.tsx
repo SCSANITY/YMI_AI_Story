@@ -134,7 +134,7 @@ function ChildDetailsFieldsComponent({
   return (
     <div className="grid gap-4 md:grid-cols-2 md:gap-6">
       <div ref={nameBoxRef} className="space-y-2 relative">
-        <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{labels.nameLabel}</label>
+        <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.nameLabel}</label>
         <input
           type="text"
           value={name}
@@ -188,7 +188,7 @@ function ChildDetailsFieldsComponent({
       </div>
 
       <div ref={ageBoxRef} className="space-y-2 relative">
-        <label className="text-[11px] font-semibold uppercase tracking-[0.10em] text-slate-500">{labels.ageLabel}</label>
+        <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.ageLabel}</label>
         <input
           type="number"
           value={age}

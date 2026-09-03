@@ -61,7 +61,7 @@ function OrderDetailLoadingShell({
             <span className="ml-2">{t('common.back')}</span>
           </Button>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{t('orderDetail.title')}</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{t('orderDetail.title')}</div>
             <div className="mt-2 h-7 w-52 max-w-full animate-pulse rounded-full bg-slate-200" />
             {orderId ? <div className="sr-only">{orderId}</div> : null}
           </div>
@@ -270,7 +270,7 @@ export default function OrderDetailPage() {
             <span className="ml-2">{t('common.back')}</span>
           </Button>
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{t('orderDetail.title')}</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{t('orderDetail.title')}</div>
             <div className="text-2xl font-bold tracking-[0.06em] tabular-nums text-gray-900">{order.display_id ?? order.order_id}</div>
           </div>
           <div className="ml-auto">

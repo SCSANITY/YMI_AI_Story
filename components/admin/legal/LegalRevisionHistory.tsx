@@ -61,7 +61,7 @@ export function LegalRevisionHistory({ state, onCommitted }: Props) {
   return (
     <aside className="admin-v2-panel min-w-0 p-4">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-page-muted)]">
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
           Revision History
         </p>
         <p className="mt-1 text-xs leading-5 text-[var(--admin-page-muted)]">

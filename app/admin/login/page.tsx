@@ -35,7 +35,7 @@ export default async function AdminLoginPage() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
               <ShieldX aria-hidden="true" className="h-7 w-7" />
             </div>
-            <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--admin-muted)]">YMI Operations</p>
+            <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--admin-muted)]">YMI Operations</p>
             <h1 className="mt-2 text-3xl font-bold tracking-[-0.025em] text-[var(--admin-ink)] sm:text-4xl">Admin access required</h1>
             <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-[var(--admin-muted)]">
               <span className="font-semibold text-[var(--admin-ink)]">{customer.email}</span> is signed in, but this account is not authorized for the operations console. Contact a YMI Story administrator if you believe this is an error.

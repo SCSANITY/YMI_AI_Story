@@ -60,7 +60,7 @@ export function InboundAttachmentList({
 
   return (
     <section className="space-y-2" aria-label="Email attachments">
-      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--admin-page-muted)]">
+      <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">
         <File className="h-3.5 w-3.5" /> Attachments
       </div>
       {envelopeError ? (

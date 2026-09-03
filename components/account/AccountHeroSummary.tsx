@@ -33,7 +33,7 @@ export function AccountHeroSummary({
           </div>
 
           <div className="min-w-0">
-            <p className="break-words text-xs font-semibold uppercase tracking-[0.14em] text-amber-500 sm:tracking-[0.24em]">{t('account.centerBadge')}</p>
+            <p className="break-words text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">{t('account.centerBadge')}</p>
             <h1 className="mt-2 break-words font-title text-3xl leading-tight text-slate-900 sm:text-4xl">{user.name}</h1>
             <p className="mt-2 break-all text-sm text-slate-500">{user.email}</p>
           </div>
@@ -41,15 +41,15 @@ export function AccountHeroSummary({
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="min-w-0 rounded-3xl border border-white/70 bg-white/80 px-4 py-4 shadow-sm">
-            <p className="break-words text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 sm:tracking-[0.16em]">{t('account.statsRewards')}</p>
+            <p className="break-words text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{t('account.statsRewards')}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-900">{rewardCount}</p>
           </div>
           <div className="min-w-0 rounded-3xl border border-white/70 bg-white/80 px-4 py-4 shadow-sm">
-            <p className="break-words text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 sm:tracking-[0.16em]">{t('account.statsFavorites')}</p>
+            <p className="break-words text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{t('account.statsFavorites')}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-900">{favoritesCount}</p>
           </div>
           <div className="min-w-0 rounded-3xl border border-white/70 bg-white/80 px-4 py-4 shadow-sm">
-            <p className="break-words text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 sm:tracking-[0.16em]">{t('account.statsCart')}</p>
+            <p className="break-words text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{t('account.statsCart')}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-900">{cartCount}</p>
           </div>
         </div>

@@ -20,7 +20,7 @@ export function AnnouncementPreview({ form }: { form: AnnouncementForm }) {
     <article className="rounded-lg border border-slate-200 bg-white p-5 text-slate-900 shadow-[0_14px_34px_rgba(15,23,42,0.09)]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-600">
+          <p className="text-xs font-bold uppercase tracking-[0.1em] text-amber-600">
             YMI Story
           </p>
           <h3 className="mt-2 text-2xl font-bold leading-tight">

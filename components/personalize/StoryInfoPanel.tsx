@@ -126,7 +126,7 @@ function StoryInfoPanelComponent({
         >
           <span className="flex items-center gap-2">
             <CircleHelp className="h-5 w-5 text-amber-500" />
-            <span className="text-sm font-bold uppercase tracking-[0.18em] text-amber-600">
+            <span className="text-sm font-bold uppercase tracking-[0.08em] text-amber-600">
               {labels.aboutThisStory}
             </span>
           </span>
