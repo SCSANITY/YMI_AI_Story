@@ -1,10 +1,9 @@
-export const SINGLE_PAGE_SCHEMA_VERSION = 2 as const
+export const SINGLE_PAGE_SCHEMA_VERSION = 3 as const
 export const SINGLE_PAGE_ASSET_LAYOUT = 'single-page' as const
 
 export type BookPageRole =
   | 'preview_cover'
   | 'preview_interior'
-  | 'final_back_cover'
   | 'final_front_cover'
   | 'final_interior'
 
@@ -99,7 +98,6 @@ type ParsedPage = {
 const PAGE_ROLES = new Set<BookPageRole>([
   'preview_cover',
   'preview_interior',
-  'final_back_cover',
   'final_front_cover',
   'final_interior',
 ])
@@ -229,15 +227,11 @@ function validateRoleShape(page: ParsedPage, issues: string[]) {
     return
   }
 
-  if (role === 'final_back_cover' || role === 'final_front_cover') {
-    const expectedSide: BookPageSide = role === 'final_back_cover' ? 'left' : 'right'
-    const expectedFaceSwap = role === 'final_front_cover'
+  if (role === 'final_front_cover') {
     if (spreadIndex !== 0) issues.push(`${label} must use spread_index 0`)
-    if (side !== expectedSide) issues.push(`${label} must use side ${expectedSide}`)
+    if (side !== undefined) issues.push(`${label} must not define a side`)
     if (pageNumber !== undefined) issues.push(`${label} must not define page_number`)
-    if (page.enableFaceSwap !== expectedFaceSwap) {
-      issues.push(`${label} must set enable_face_swap=${expectedFaceSwap}`)
-    }
+    if (!page.enableFaceSwap) issues.push(`${label} must enable face swap`)
     return
   }
 
@@ -310,6 +304,60 @@ function validatePairedPages(
       issues.push(`${role} spread ${spreadIndex} must order the left page before the right page`)
     }
   }
+}
+
+function validateFinalDeliveryOrder(pages: ParsedPage[], issues: string[]) {
+  const frontCovers = pages.filter((page) => page.presentation.role === 'final_front_cover')
+  if (frontCovers.length !== 1) {
+    issues.push('Final must contain exactly one final_front_cover')
+  }
+  if (pages[0]?.presentation.role !== 'final_front_cover') {
+    issues.push('final.page_indices must place final_front_cover first')
+  }
+
+  const interiors = pages.filter((page) => page.presentation.role === 'final_interior')
+  if (interiors.length !== 30) {
+    issues.push('Final must contain exactly 30 final_interior pages')
+    return
+  }
+  interiors.forEach((page, index) => {
+    const pageNumber = index + 1
+    const expectedSide: BookPageSide = pageNumber % 2 === 1 ? 'left' : 'right'
+    const expectedSpreadIndex = Math.ceil(pageNumber / 2)
+    if (
+      page.presentation.page_number !== pageNumber ||
+      page.presentation.side !== expectedSide ||
+      page.presentation.spread_index !== expectedSpreadIndex
+    ) {
+      issues.push(`Final interior output order mismatch at physical page ${pageNumber}`)
+    }
+  })
+}
+
+function validatePreviewDeliveryOrder(pages: ParsedPage[], issues: string[]) {
+  const covers = pages.filter((page) => page.presentation.role === 'preview_cover')
+  if (covers.length !== 1) issues.push('Preview must contain exactly one preview_cover')
+  if (pages.length !== 3) issues.push('Preview must contain exactly three pages')
+  if (pages[0]?.presentation.role !== 'preview_cover') {
+    issues.push('preview.page_indices must place preview_cover first')
+  }
+
+  const interiors = pages.filter((page) => page.presentation.role === 'preview_interior')
+  const expected = [
+    { side: 'left' as const, pageNumber: 1 },
+    { side: 'right' as const, pageNumber: 2 },
+  ]
+  expected.forEach(({ side, pageNumber }, index) => {
+    const page = interiors[index]
+    if (
+      !page ||
+      page.presentation.spread_index !== 1 ||
+      page.presentation.side !== side ||
+      page.presentation.page_number !== pageNumber
+    ) {
+      issues.push(`Preview interior output order mismatch at physical page ${pageNumber}`)
+    }
+  })
 }
 
 function buildManifest(pages: ParsedPage[]): BookPageManifestEntry[] {
@@ -406,26 +454,10 @@ export function validateSinglePageTemplateContract(args: {
     }
   }
 
-  const previewCovers = previewPages.filter((page) => page.presentation.role === 'preview_cover')
-  if (previewCovers.length !== 1) issues.push('Preview must contain exactly one preview_cover')
-  if (previewPages[0]?.presentation.role !== 'preview_cover') {
-    issues.push('preview.page_indices must place preview_cover first')
-  }
-
-  const backCovers = finalPages.filter((page) => page.presentation.role === 'final_back_cover')
-  const frontCovers = finalPages.filter((page) => page.presentation.role === 'final_front_cover')
-  if (backCovers.length !== 1 || frontCovers.length !== 1) {
-    issues.push('Final must contain exactly one final_back_cover and one final_front_cover')
-  } else if (
-    backCovers[0].presentation.spread_index !== frontCovers[0].presentation.spread_index ||
-    backCovers[0].presentation.side !== 'left' ||
-    frontCovers[0].presentation.side !== 'right'
-  ) {
-    issues.push('Final cover halves must form one left-back/right-front cover pair')
-  }
-
   validatePairedPages(previewPages, 'preview_interior', issues)
   validatePairedPages(finalPages, 'final_interior', issues)
+  validatePreviewDeliveryOrder(previewPages, issues)
+  validateFinalDeliveryOrder(finalPages, issues)
 
   for (const scope of [previewPages, finalPages]) {
     const pageNumbers = new Set<number>()

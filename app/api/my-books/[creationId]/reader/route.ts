@@ -305,43 +305,30 @@ export async function GET(
     return privateJson({ error: 'Released book page contract is invalid' }, { status: 500 })
   }
 
-  const usesSinglePageLayout =
-    releasedContract.schemaVersion === 2 && releasedContract.assetLayout === 'single-page'
   const signedPages = await createSignedStorageUrlMap(
-    [
-      ...(!usesSinglePageLayout && previewCoverPath
-        ? [{ key: 'cover', bucket: previewCoverBucket, path: previewCoverPath, expiresIn: 60 * 60 }]
-        : []),
-      ...releasedContract.pages.map((page) => ({
+    releasedContract.pages.map((page) => ({
         key: `page:${page.pageIndex}`,
         bucket: STORAGE_BUCKET,
         path: page.approvedPath,
         expiresIn: 60 * 60,
-      })),
-    ]
+      }))
   )
 
   const signedReaderPages = releasedContract.pages.map((page) => ({
     pageIndex: page.pageIndex,
     status: page.status,
     url: signedPages.get(`page:${page.pageIndex}`) ?? null,
-    ...(usesSinglePageLayout
-      ? {
-          outputOrder: page.outputOrder,
-          role: page.role,
-          spreadIndex: page.spreadIndex,
-          side: page.side,
-          pageNumber: page.pageNumber,
-        }
-      : {}),
+    outputOrder: page.outputOrder,
+    role: page.role,
+    spreadIndex: page.spreadIndex,
+    side: page.side,
+    pageNumber: page.pageNumber,
   }))
   if (signedReaderPages.some((page) => !page.url)) {
     return privateJson({ error: 'Failed to sign released book pages' }, { status: 500 })
   }
-  const finalCoverUrl = usesSinglePageLayout && releasedContract.frontCoverPageIndex !== null
-    ? signedPages.get(`page:${releasedContract.frontCoverPageIndex}`) ?? null
-    : signedPages.get('cover') ?? null
-  if (usesSinglePageLayout && !finalCoverUrl) {
+  const finalCoverUrl = signedPages.get(`page:${releasedContract.frontCoverPageIndex}`) ?? null
+  if (!finalCoverUrl) {
     return privateJson({ error: 'Failed to sign released book cover' }, { status: 500 })
   }
 
@@ -367,7 +354,8 @@ export async function GET(
       reviewStatus: finalJob.review_status,
       releasedAt: finalJob.released_at ?? null,
     },
-    ...(usesSinglePageLayout ? { schemaVersion: 2, assetLayout: 'single-page' } : {}),
+    schemaVersion: 3,
+    assetLayout: 'single-page',
     pages: signedReaderPages,
   })
 }

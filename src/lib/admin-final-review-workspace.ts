@@ -11,42 +11,21 @@ export type FinalReviewPageItem = {
 export type FinalReviewPageGroup = {
   key: string
   label: string
-  kind: 'cover' | 'spread' | 'legacy'
+  kind: 'cover' | 'spread'
   items: FinalReviewPageItem[]
 }
 
 export type FinalReviewWorkspace = {
-  isV2: boolean
   items: FinalReviewPageItem[]
   groups: FinalReviewPageGroup[]
 }
 
-function legacyItem(page: FinalJobPageRow, index: number): FinalReviewPageItem {
-  const pageNumber = index + 1
-  return {
-    page,
-    primaryLabel: `Page ${String(pageNumber).padStart(2, '0')}`,
-    secondaryLabel: 'Legacy spread image',
-    shortLabel: String(pageNumber).padStart(2, '0'),
-    downloadNumber: pageNumber,
-  }
-}
-
-function v2Item(page: FinalJobPageRow): FinalReviewPageItem {
-  if (page.role === 'final_back_cover') {
-    return {
-      page,
-      primaryLabel: 'Back cover',
-      secondaryLabel: 'Cover pair · Left',
-      shortLabel: 'Back',
-      downloadNumber: Number(page.output_order) + 1,
-    }
-  }
+function structuredItem(page: FinalJobPageRow): FinalReviewPageItem {
   if (page.role === 'final_front_cover') {
     return {
       page,
       primaryLabel: 'Front cover',
-      secondaryLabel: 'Cover pair · Right',
+      secondaryLabel: 'Standalone customer PDF cover',
       shortLabel: 'Front',
       downloadNumber: Number(page.output_order) + 1,
     }
@@ -66,25 +45,15 @@ export function buildFinalReviewWorkspace(args: {
   pages: FinalJobPageRow[]
   pageContract: FinalPageContractSummary
 }): FinalReviewWorkspace {
-  const isV2 =
-    args.pageContract.schema_version === 2 &&
-    args.pageContract.asset_layout === 'single-page'
-
-  if (!isV2) {
-    const items = args.pages.map(legacyItem)
-    return {
-      isV2: false,
-      items,
-      groups: items.map((item) => ({
-        key: `legacy-${item.page.final_job_page_id}`,
-        label: item.primaryLabel,
-        kind: 'legacy',
-        items: [item],
-      })),
-    }
+  if (args.pages.length === 0) return { items: [], groups: [] }
+  if (
+    args.pageContract.schema_version !== 3 ||
+    args.pageContract.asset_layout !== 'single-page'
+  ) {
+    throw new Error('Final Review requires the V3 single-page contract')
   }
 
-  const items = args.pages.map(v2Item)
+  const items = args.pages.map(structuredItem)
   const covers = items.filter((item) => item.page.spread_index === 0)
   const spreadIndices = [...new Set(
     items
@@ -94,7 +63,7 @@ export function buildFinalReviewWorkspace(args: {
   const groups: FinalReviewPageGroup[] = [
     {
       key: 'cover',
-      label: 'Cover pair',
+      label: 'Front cover',
       kind: 'cover',
       items: covers,
     },
@@ -106,9 +75,9 @@ export function buildFinalReviewWorkspace(args: {
     })),
   ]
 
-  return { isV2: true, items, groups }
+  return { items, groups }
 }
 
-export function getFinalReviewPageLabel(page: FinalJobPageRow, legacyIndex = 0) {
-  return page.role ? v2Item(page).primaryLabel : legacyItem(page, legacyIndex).primaryLabel
+export function getFinalReviewPageLabel(page: FinalJobPageRow) {
+  return structuredItem(page).primaryLabel
 }

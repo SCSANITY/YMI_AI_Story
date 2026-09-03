@@ -26,8 +26,8 @@ export type AdminFinalPageSource = {
 
 export type AdminFinalPageReadModel = {
   page_contract: {
-    schema_version: 2 | null
-    asset_layout: 'single-page' | null
+    schema_version: 3
+    asset_layout: 'single-page'
   }
   pages: Array<{
     final_job_page_id: string
@@ -70,8 +70,8 @@ export function buildAdminFinalPageReadModel(args: {
 
   const pages = args.reviewPages.map((page) => {
     const metadata = metadataByIndex.get(page.page_index)
-    if (contract.schemaVersion === 2 && !metadata) {
-      throw new Error(`Missing V2 Final metadata for review page ${page.page_index}`)
+    if (!metadata) {
+      throw new Error(`Missing V3 Final metadata for review page ${page.page_index}`)
     }
     return {
       final_job_page_id: page.final_job_page_id,
@@ -101,10 +101,7 @@ export function buildAdminFinalPageReadModel(args: {
   })
 
   pages.sort((a, b) => {
-    if (contract.schemaVersion === 2) {
-      return Number(a.output_order) - Number(b.output_order)
-    }
-    return a.page_index - b.page_index
+    return Number(a.output_order) - Number(b.output_order)
   })
 
   return {

@@ -68,22 +68,20 @@ export async function inspectFinalSourceImage(args: {
 export async function prepareFinalReplacementImage(args: {
   buffer: Buffer
   label: string
-  structured: boolean
   expectedInteriorSource?: FinalSourceDimensions | null
 }) {
   const source = await inspectFinalSourceImage({
     buffer: args.buffer,
     label: args.label,
-    minSourceEdge: args.structured ? DEFAULT_FINAL_SOURCE_MIN_EDGE : undefined,
+    minSourceEdge: DEFAULT_FINAL_SOURCE_MIN_EDGE,
   })
 
-  if (args.structured && !isApproximatelySquareFinalSource(source)) {
+  if (!isApproximatelySquareFinalSource(source)) {
     throw new FinalSourceImageError(
       `${args.label} must be approximately square (received ${source.width}x${source.height})`
     )
   }
   if (
-    args.structured &&
     args.expectedInteriorSource &&
     (source.width !== args.expectedInteriorSource.width || source.height !== args.expectedInteriorSource.height)
   ) {

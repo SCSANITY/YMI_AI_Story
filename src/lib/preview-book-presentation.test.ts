@@ -20,7 +20,7 @@ function page(overrides: Partial<SignedPreviewPage> & Pick<SignedPreviewPage, 'p
 
 const structuredAssets: SignedPreviewAssets = {
   urls: ['right.webp', 'cover.webp', 'left.webp'],
-  schemaVersion: 2,
+  schemaVersion: 3,
   assetLayout: 'single-page',
   pages: [
     page({ page_index: 2, output_order: 2, role: 'preview_interior', spread_index: 7, side: 'right', page_number: 14, url: 'right.webp' }),
@@ -79,7 +79,7 @@ describe('Personalize structured Preview presentation', () => {
     assert.equal(isPreviewDisplayComplete(display), true)
   })
 
-  it('rejects V2 pages whose required presentation metadata was filtered away', () => {
+  it('rejects V3 pages whose required presentation metadata was filtered away', () => {
     const malformed = {
       ...structuredAssets,
       pages: structuredAssets.pages.map((candidate) => candidate.page_index === 1

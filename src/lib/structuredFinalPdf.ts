@@ -24,7 +24,6 @@ export type StructuredFinalPdfInteriorSpread = {
 }
 
 export type StructuredFinalPdfPlan = {
-  backCover: FinalPageMetadata
   frontCover: FinalPageMetadata
   interiors: FinalPageMetadata[]
   interiorSpreads: StructuredFinalPdfInteriorSpread[]
@@ -80,17 +79,16 @@ export function buildStructuredFinalPdfPlan(args: {
       error instanceof Error ? error.message : 'Invalid structured Final metadata'
     )
   }
-  if (contract.schemaVersion !== 2 || contract.assetLayout !== 'single-page') {
-    throw new StructuredFinalPdfError('Structured Final PDF requires the V2 single-page contract')
+  if (contract.schemaVersion !== 3 || contract.assetLayout !== 'single-page') {
+    throw new StructuredFinalPdfError('Structured Final PDF requires the V3 single-page contract')
   }
 
-  const backCover = contract.pages.find((page) => page.role === 'final_back_cover')
   const frontCover = contract.pages.find((page) => page.role === 'final_front_cover')
-  if (!backCover || !frontCover) {
-    throw new StructuredFinalPdfError('Structured Final PDF requires one back/front cover pair')
+  if (!frontCover) {
+    throw new StructuredFinalPdfError('Structured Final PDF requires one standalone front cover')
   }
-  if (backCover.output_order !== 0 || frontCover.output_order !== 1) {
-    throw new StructuredFinalPdfError('Final cover halves must be output orders 0 and 1')
+  if (frontCover.output_order !== 0) {
+    throw new StructuredFinalPdfError('Final front cover must be output order 0')
   }
 
   const interiors = contract.pages.filter((page) => page.role === 'final_interior')
@@ -99,7 +97,7 @@ export function buildStructuredFinalPdfPlan(args: {
     const expectedSide = physicalPageNumber % 2 === 1 ? 'left' : 'right'
     const expectedSpreadIndex = Math.ceil(physicalPageNumber / 2)
     if (
-      page.output_order !== index + 2 ||
+      page.output_order !== index + 1 ||
       page.page_number !== physicalPageNumber ||
       page.spread_index !== expectedSpreadIndex ||
       page.side !== expectedSide
@@ -120,13 +118,11 @@ export function buildStructuredFinalPdfPlan(args: {
   }
 
   return {
-    backCover,
     frontCover,
     interiors,
     interiorSpreads,
     expectedPdfPageCount: 1 + interiorSpreads.length,
     orderedSourcePageIndices: [
-      backCover.page_index,
       frontCover.page_index,
       ...interiors.map((page) => page.page_index),
     ],
@@ -143,83 +139,36 @@ async function inspectSource(buffer: Buffer, label: string, minSourceEdge: numbe
   }
 }
 
-export async function composeFinalCoverSpread(args: {
-  backBuffer: Buffer
+export async function normalizeFinalFrontCover(args: {
   frontBuffer: Buffer
   maxImageEdge: number
   jpegQuality: number
   minSourceEdge: number
 }) {
-  const back = await inspectSource(args.backBuffer, 'Final back cover', args.minSourceEdge)
   const front = await inspectSource(args.frontBuffer, 'Final front cover', args.minSourceEdge)
-  if (
-    !isApproximatelySquareFinalSource(back) ||
-    !isApproximatelySquareFinalSource(front)
-  ) {
+  if (!isApproximatelySquareFinalSource(front)) {
     throw new StructuredFinalPdfError(
-      `Final cover halves must each be approximately square (back=${back.width}x${back.height}; front=${front.width}x${front.height})`
+      `Final front cover must be approximately square (${front.width}x${front.height})`
     )
   }
 
-  // Provider output may differ from the untouched half by a few pixels. Use the
-  // largest common no-upscale canvas so neither half is cropped or distorted.
-  const normalizedWidth = Math.min(back.width, front.width)
-  const normalizedHeight = Math.min(back.height, front.height)
-
-  const [backPng, frontPng] = await Promise.all([
-    sharp(args.backBuffer, { failOn: 'error' })
-      .rotate()
-      .resize({
-        width: normalizedWidth,
-        height: normalizedHeight,
-        fit: 'contain',
-        position: 'centre',
-        background: '#ffffff',
-        withoutEnlargement: true,
-      })
-      .flatten({ background: '#ffffff' })
-      .png()
-      .toBuffer(),
-    sharp(args.frontBuffer, { failOn: 'error' })
-      .rotate()
-      .resize({
-        width: normalizedWidth,
-        height: normalizedHeight,
-        fit: 'contain',
-        position: 'centre',
-        background: '#ffffff',
-        withoutEnlargement: true,
-      })
-      .flatten({ background: '#ffffff' })
-      .png()
-      .toBuffer(),
-  ])
-  const spreadWidth = normalizedWidth * 2
-  const spreadHeight = normalizedHeight
-  const resizeWidth = spreadWidth > args.maxImageEdge ? args.maxImageEdge : undefined
-  // Sharp applies resize before composite regardless of call order, so build the
-  // physical spread first and normalize it in a separate pipeline.
-  const composed = await sharp({
-    create: {
-      width: spreadWidth,
-      height: spreadHeight,
-      channels: 3,
+  const coverEdge = Math.min(args.maxImageEdge, Math.max(front.width, front.height))
+  const { data, info } = await sharp(args.frontBuffer, { failOn: 'error' })
+    .rotate()
+    .resize({
+      width: coverEdge,
+      height: coverEdge,
+      fit: 'contain',
+      position: 'centre',
       background: '#ffffff',
-    },
-  })
-    .composite([
-      { input: backPng, left: 0, top: 0 },
-      { input: frontPng, left: normalizedWidth, top: 0 },
-    ])
-    .png()
-    .toBuffer()
-  const { data, info } = await sharp(composed)
-    .resize({ width: resizeWidth, fit: 'inside', withoutEnlargement: true })
+      withoutEnlargement: true,
+    })
+    .flatten({ background: '#ffffff' })
     .jpeg({ quality: args.jpegQuality, mozjpeg: true })
     .toBuffer({ resolveWithObject: true })
 
-  if (info.width <= info.height) {
-    throw new StructuredFinalPdfError('Composed Final cover must be landscape')
+  if (!isApproximatelySquareFinalSource({ width: info.width, height: info.height })) {
+    throw new StructuredFinalPdfError('Normalized Final front cover must be square')
   }
   return { buffer: data, width: info.width, height: info.height }
 }
@@ -347,12 +296,8 @@ export async function buildStructuredFinalPdf(args: {
   }
 
   const plan = buildStructuredFinalPdfPlan(args)
-  const [backBuffer, frontBuffer] = await Promise.all([
-    args.loadPage(plan.backCover.page_index),
-    args.loadPage(plan.frontCover.page_index),
-  ])
-  const cover = await composeFinalCoverSpread({
-    backBuffer,
+  const frontBuffer = await args.loadPage(plan.frontCover.page_index)
+  const cover = await normalizeFinalFrontCover({
     frontBuffer,
     maxImageEdge,
     jpegQuality,

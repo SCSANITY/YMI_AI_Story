@@ -68,7 +68,7 @@ async function loadInteriorGeometryReference(args: {
   targetPageIndex: number
   plan: FinalReviewMutationPlan
 }): Promise<FinalSourceDimensions | null> {
-  if (args.plan.schema_version !== 2) return null
+  if (args.plan.schema_version !== 3) return null
 
   const interiorIndices = new Set(
     args.plan.pages
@@ -260,7 +260,6 @@ export async function POST(
     const prepared = await prepareFinalReplacementImage({
       buffer: rawBuffer,
       label: `Final page ${pageIndex}`,
-      structured: mutationPlan.schema_version === 2,
       expectedInteriorSource,
     })
     assertFinalReplacementSourceFormat(upload.contentType, prepared.source.format)

@@ -14,7 +14,7 @@ export type ApprovedFinalPdfPage = {
 export type FinalPdfReleaseArtifact = {
   buffer: Buffer
   outputAssets: Record<string, unknown>
-  structuredProof: StructuredFinalPdfReleaseProof | null
+  structuredProof: StructuredFinalPdfReleaseProof
   previewImagePath: string | null
 }
 
@@ -44,7 +44,6 @@ export async function buildFinalPdfReleaseArtifact(args: {
   totalPages: number
   approvedPages: ApprovedFinalPdfPage[]
   loadApprovedPage: (path: string, pageIndex: number) => Promise<Buffer>
-  buildLegacyPdf: (paths: string[]) => Promise<Buffer>
 }): Promise<FinalPdfReleaseArtifact> {
   const linkedOutputAssets = asOutputAssets(args.outputAssets)
   const reviewedPages = mergeApprovedFinalOutputPages(linkedOutputAssets, args.approvedPages)
@@ -56,44 +55,35 @@ export async function buildFinalPdfReleaseArtifact(args: {
     args.approvedPages.map((page) => [page.page_index, page.approved_output_path])
   )
 
-  if (isStructuredFinalOutputAssets(reviewedOutputAssets)) {
-    const result = await buildStructuredFinalPdf({
-      outputAssets: reviewedOutputAssets,
-      totalPages: args.totalPages,
-      pageIndices: args.approvedPages.map((page) => page.page_index),
-      loadPage: async (pageIndex) => {
-        const path = approvedPathByPageIndex.get(pageIndex)
-        if (!path) throw new Error(`Missing approved path for Final page ${pageIndex}`)
-        return args.loadApprovedPage(path, pageIndex)
-      },
-    })
-    const structuredProof: StructuredFinalPdfReleaseProof = {
-      schema_version: 2,
-      mode: 'v2-spread-pages',
-      source_page_count: result.sourcePageCount,
-      expected_pdf_page_count: result.expectedPdfPageCount,
-      pdf_page_count: result.pdfPageCount,
-    }
-    const outputAssets = {
-      ...reviewedOutputAssets,
-      pdf_composition: structuredProof,
-    }
-    assertFinalOutputAssetsReleasable(outputAssets, structuredProof)
-    return {
-      buffer: result.buffer,
-      outputAssets,
-      structuredProof,
-      previewImagePath: getFinalPdfPreviewImagePath(outputAssets, args.approvedPages),
-    }
+  if (!isStructuredFinalOutputAssets(reviewedOutputAssets)) {
+    throw new Error('Final PDF release requires the V3 single-page output contract')
   }
-
-  assertFinalOutputAssetsReleasable(reviewedOutputAssets)
-  const outputAssets: Record<string, unknown> = { ...reviewedOutputAssets }
-  delete outputAssets.pdf_composition
+  const result = await buildStructuredFinalPdf({
+    outputAssets: reviewedOutputAssets,
+    totalPages: args.totalPages,
+    pageIndices: args.approvedPages.map((page) => page.page_index),
+    loadPage: async (pageIndex) => {
+      const path = approvedPathByPageIndex.get(pageIndex)
+      if (!path) throw new Error(`Missing approved path for Final page ${pageIndex}`)
+      return args.loadApprovedPage(path, pageIndex)
+    },
+  })
+  const structuredProof: StructuredFinalPdfReleaseProof = {
+    schema_version: 3,
+    mode: 'v3-front-cover-plus-interior-spreads',
+    source_page_count: result.sourcePageCount,
+    expected_pdf_page_count: result.expectedPdfPageCount,
+    pdf_page_count: result.pdfPageCount,
+  }
+  const outputAssets = {
+    ...reviewedOutputAssets,
+    pdf_composition: structuredProof,
+  }
+  assertFinalOutputAssetsReleasable(outputAssets, structuredProof)
   return {
-    buffer: await args.buildLegacyPdf(args.approvedPages.map((page) => page.approved_output_path)),
+    buffer: result.buffer,
     outputAssets,
-    structuredProof: null,
+    structuredProof,
     previewImagePath: getFinalPdfPreviewImagePath(outputAssets, args.approvedPages),
   }
 }

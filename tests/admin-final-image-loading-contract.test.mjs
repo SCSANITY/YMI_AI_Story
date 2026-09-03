@@ -34,7 +34,7 @@ test('selected PDF images stay full-resolution while navigation uses local thumb
   assert.match(thumbnail, /export function FullResolutionImage/)
   assert.match(thumbnail, /fetchPriority="high"/)
   assert.match(pdfReview, /<FullResolutionImage/)
-  assert.match(pdfReview, /function V2PageNavigatorButton[\s\S]*<ThumbnailImage/)
+  assert.match(pdfReview, /function StructuredPageNavigatorButton[\s\S]*<ThumbnailImage/)
   assert.doesNotMatch(printReview, /ThumbnailImage|FullResolutionImage/)
 
   const sources = thumbnail + pdfReview + printReview

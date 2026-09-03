@@ -35,6 +35,9 @@ documentation.
 - The Reader distinguishes sign-in, missing book, non-purchased, refunded,
   temporary service, and invalid-asset states instead of collapsing them into
   one generic failure.
+- A released book must satisfy the V3 Final contract: one approved standalone
+  front cover and 15 complete approved interior spreads. Unversioned, V2,
+  partial, or filename-inferred Final assets fail visibly.
 - Reader pages use bounded Previous/Next buttons and preload only the current
   and adjacent spreads.
 - **Buy Again** starts a new one-copy order for the owned creation and goes

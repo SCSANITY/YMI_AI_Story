@@ -9,24 +9,25 @@ import {
   mergeApprovedFinalOutputPages,
   readStructuredFinalPdfReleaseProof,
 } from './finalReleaseContract'
+import { createFinalV3Metadata } from './final-page-metadata.fixture'
 
 describe('Final PDF release contract', () => {
-  it('allows existing non-fallback output assets', () => {
-    assert.doesNotThrow(() => assertFinalOutputAssetsReleasable({ pages: [] }))
+  it('rejects unversioned Final output assets', () => {
+    assert.throws(() => assertFinalOutputAssetsReleasable({ pages: [] }), /requires complete V3/)
   })
 
-  it('rejects incomplete V2 markers and V2 output without positive composition proof', () => {
+  it('rejects superseded V2, incomplete V3 markers, and V3 output without proof', () => {
     assert.throws(
       () => assertFinalOutputAssetsReleasable({ schema_version: 2 }),
-      /incomplete V2/
+      /requires complete V3/
     )
     assert.throws(
       () => assertFinalOutputAssetsReleasable({ asset_layout: 'single-page' }),
-      /incomplete V2/
+      /requires complete V3/
     )
     assert.throws(
       () => assertFinalOutputAssetsReleasable({
-        schema_version: 2,
+        schema_version: 3,
         asset_layout: 'single-page',
         pages: [{}, {}, {}],
       }),
@@ -34,37 +35,33 @@ describe('Final PDF release contract', () => {
     )
   })
 
-  it('allows V2 only when the server proof matches the persisted page contract', () => {
+  it('allows V3 only when the server proof matches the persisted page contract', () => {
+    const pages = createFinalV3Metadata()
     const assets = {
-      schema_version: 2,
+      schema_version: 3,
       asset_layout: 'single-page',
-      pages: [
-        { page_index: 10, output_order: 0, role: 'final_back_cover', spread_index: 0, side: 'left', page_number: null },
-        { page_index: 4, output_order: 1, role: 'final_front_cover', spread_index: 0, side: 'right', page_number: null },
-        { page_index: 19, output_order: 2, role: 'final_interior', spread_index: 1, side: 'left', page_number: 1 },
-        { page_index: 7, output_order: 3, role: 'final_interior', spread_index: 1, side: 'right', page_number: 2 },
-      ],
+      pages,
       pdf_composition: {
-        schema_version: 2,
-        mode: 'v2-spread-pages',
-        source_page_count: 4,
-        expected_pdf_page_count: 2,
-        pdf_page_count: 2,
+        schema_version: 3,
+        mode: 'v3-front-cover-plus-interior-spreads',
+        source_page_count: 31,
+        expected_pdf_page_count: 16,
+        pdf_page_count: 16,
       },
     }
     const proof = readStructuredFinalPdfReleaseProof(assets)
 
     assert.equal(isStructuredFinalOutputAssets(assets), true)
-    assert.equal(getStructuredFinalPdfExpectedPageCount(assets), 2)
+    assert.equal(getStructuredFinalPdfExpectedPageCount(assets), 16)
     assert.ok(proof)
     assert.equal(isStructuredFinalPdfReleaseProofValid(assets, proof), true)
     assert.doesNotThrow(() => assertFinalOutputAssetsReleasable(assets, proof))
     assert.equal(
-      isStructuredFinalPdfReleaseProofValid(assets, { ...proof, source_page_count: 5 }),
+      isStructuredFinalPdfReleaseProofValid(assets, { ...proof, source_page_count: 32 }),
       false
     )
     assert.throws(
-      () => assertFinalOutputAssetsReleasable(assets, { ...proof, pdf_page_count: 3 }),
+      () => assertFinalOutputAssetsReleasable(assets, { ...proof, pdf_page_count: 15 }),
       /successful structured PDF composition/
     )
   })
@@ -87,7 +84,7 @@ describe('Final PDF release contract', () => {
     )
   })
 
-  it('preserves V2 page identity while replacing reviewed storage paths', () => {
+  it('preserves structured page identity while replacing reviewed storage paths', () => {
     const pages = mergeApprovedFinalOutputPages({
       pages: [{
         page_index: 7,

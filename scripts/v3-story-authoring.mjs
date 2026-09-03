@@ -1,11 +1,11 @@
 import path from 'node:path'
 import {
-  V2AuthoringError,
+  V3AuthoringError,
   buildAuthoringPackage,
   inventoryLocalAssets,
   readInventoryFile,
   writeAuthoringPackage,
-} from './v2-authoring/lib.mjs'
+} from './v3-authoring/lib.mjs'
 
 function parseArgs(argv) {
   const options = { write: false }
@@ -26,8 +26,8 @@ function parseArgs(argv) {
 function usage() {
   return [
     'Usage:',
-    '  npm run v2:author -- --story-dir <story> --assets-dir <staging>',
-    '  npm run v2:author -- --story-dir <story> --inventory <inventory.json>',
+    '  npm run v3:author -- --story-dir <story> --assets-dir <staging>',
+    '  npm run v3:author -- --story-dir <story> --inventory <inventory.json>',
     '',
     'Default mode validates and prints a dry-run report without writing files.',
     'Add --write --out <review-dir> to create a review package.',
@@ -54,7 +54,7 @@ async function main() {
     : await readInventoryFile(path.resolve(options.inventory))
   const packageData = await buildAuthoringPackage({ storyDir, rawInventory })
 
-  console.log(`V2 authoring dry run passed: ${packageData.report.template_id}`)
+  console.log(`V3 authoring dry run passed: ${packageData.report.template_id}`)
   console.log(`Preview pages: ${packageData.report.preview_pages}`)
   console.log(`Final pages: ${packageData.report.final_pages}`)
   console.log(`Subtitle templates: ${packageData.report.subtitle_templates.join(', ')}`)
@@ -64,7 +64,7 @@ async function main() {
     const outputDir = path.resolve(options.out)
     const relativeToStory = path.relative(storyDir, outputDir)
     if (!relativeToStory || (!relativeToStory.startsWith('..') && !path.isAbsolute(relativeToStory))) {
-      throw new V2AuthoringError(['Review output must be outside the source story directory'])
+      throw new V3AuthoringError(['Review output must be outside the source story directory'])
     }
     await writeAuthoringPackage({ outputDir, packageData })
     console.log(`Review package written: ${outputDir}`)
@@ -74,7 +74,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  if (error instanceof V2AuthoringError) console.error(error.message)
+  if (error instanceof V3AuthoringError) console.error(error.message)
   else console.error(error instanceof Error ? error.message : error)
   process.exitCode = 1
 })

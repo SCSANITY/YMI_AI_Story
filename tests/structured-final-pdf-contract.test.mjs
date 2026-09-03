@@ -18,22 +18,22 @@ test('structured Final PDF composer stays pure and page-count agnostic', async (
   assert.doesNotMatch(composer, /sourcePageCount\s*[\/-]\s*2|sourcePageCount\s*-\s*1/)
 })
 
-test('T3-016 integrates V2 through a positive proof while preserving V1 and retry gates', async () => {
+test('T4-019 releases only the V3 contract through a positive composition proof', async () => {
   const [finalReview, releaseContract, releaseArtifact] = await Promise.all([
     read('src/lib/finalReview.ts'),
     read('src/lib/finalReleaseContract.ts'),
     read('src/lib/finalPdfRelease.ts'),
   ])
 
-  assert.match(finalReview, /export async function buildFinalPdfFromPaths/)
   assert.match(finalReview, /buildFinalPdfReleaseArtifact\(\{/)
   assert.match(finalReview, /alreadyPdfReleased[\s\S]*finalJob\.pdf_path[\s\S]*persistedStructuredProof/)
   assert.match(finalReview, /output_assets:\s*\{[\s\S]*\.\.\.releaseOutputAssets/)
   assert.match(finalReview, /getFinalPdfPreviewImagePath/)
-  assert.match(releaseArtifact, /buildLegacyPdf:\s*\(paths: string\[\]\)/)
+  assert.doesNotMatch(releaseArtifact, /buildLegacyPdf|legacy/i)
   assert.match(releaseArtifact, /pdf_composition:\s*structuredProof/)
   assert.match(releaseArtifact, /loadApprovedPage\(path, pageIndex\)/)
-  assert.match(releaseContract, /schemaVersion === 2 \|\| assetLayout === 'single-page'/)
+  assert.match(releaseContract, /schemaVersion !== FINAL_PAGE_SCHEMA_VERSION/)
+  assert.match(releaseContract, /parseFinalPageMetadataContract/)
   assert.match(releaseContract, /successful structured PDF composition/)
   assert.match(releaseContract, /getStructuredFinalPdfExpectedPageCount/)
   assert.doesNotMatch(releaseContract, /sourcePageCount\s*[\/-]\s*2|sourcePageCount\s*-\s*1/)

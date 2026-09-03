@@ -1680,9 +1680,12 @@ async function processJob(job: JobRow): Promise<void> {
   const workflowProvider = resolveWorkflowProvider(config)
   const hasSinglePageMarker = hasSinglePageTemplateMarker(config)
   const isSinglePageContract = isSinglePageTemplateConfig(config)
+  if (job.job_type === 'final' && !hasSinglePageMarker) {
+    throw new Error('Final jobs require the V3 single-page template contract')
+  }
   const subtitleEnabled = isSubtitleRenderEnabled(config)
   if (hasSinglePageMarker && !subtitleEnabled) {
-    throw new Error('Single-page V2 config requires subtitle_render.enabled=true')
+    throw new Error('Single-page V3 config requires subtitle_render.enabled=true')
   }
   const subtitleEnabledForJob =
     subtitleEnabled && (hasSinglePageMarker || !(IS_MOCK_MODE && job.job_type === 'final'))
@@ -1746,7 +1749,7 @@ async function processJob(job: JobRow): Promise<void> {
       })
       .eq('job_id', job.job_id)
     if (contractMarkerError) {
-      throw new Error(`Failed to persist V2 output contract marker: ${contractMarkerError.message}`)
+      throw new Error(`Failed to persist V3 output contract marker: ${contractMarkerError.message}`)
     }
     job.output_assets = contractMarkedOutputAssets
   }

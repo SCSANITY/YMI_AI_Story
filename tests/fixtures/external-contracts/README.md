@@ -11,6 +11,9 @@ not a second Worker source.
   byte-for-byte from the active Worker on 2026-09-01. The related database SQL
   remains an unexecuted governance proposal and is intentionally not represented
   here as a live Supabase contract.
+- T4-019 refreshed `worker/bookPageContract.ts` and `worker/index.ts`
+  byte-for-byte from the active Worker on 2026-09-02 for the V3 Final delivery
+  contract: one standalone front cover plus thirty interior leaves.
 - `SHA256SUMS` records the source byte identity at capture time.
 
 The fixtures let this repository's contract suite run from an isolated clone.

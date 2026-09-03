@@ -902,7 +902,7 @@ export function FinalReviewPanel({
       if (manualUrl !== localUrl && approvedUrl !== localUrl) {
         window.setTimeout(() => URL.revokeObjectURL(localUrl), 0)
       }
-      setMessage(`Replacement uploaded for ${getFinalReviewPageLabel(targetPage, targetPage.page_index)}.`)
+      setMessage(`Replacement uploaded for ${getFinalReviewPageLabel(targetPage)}.`)
     } catch (actionError) {
       if (reviewIntentRef.current[targetPage.final_job_page_id] === reviewIntentId) {
         const uploadError =

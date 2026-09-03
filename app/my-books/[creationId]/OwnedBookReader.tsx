@@ -26,6 +26,7 @@ const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
 const PREVIEW_HEIGHT = PAGE_HEIGHT + 40
 const ANIMATION_DURATION = 0.8
+const EMPTY_POSITIONAL_BOOK_SPREADS: string[] = []
 
 type ReaderTemplate = {
   name?: string | null
@@ -199,7 +200,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
           ? buildReaderBookDisplay({
               schemaVersion: data.schemaVersion,
               assetLayout: data.assetLayout,
-              legacyCoverUrl: data.creation?.coverUrl,
               pages: (data.pages ?? []).map((page) => {
                 if (!page.url) throw new Error(`Missing signed Reader URL for page ${page.pageIndex}`)
                 return { ...page, url: page.url }
@@ -273,7 +273,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         customizeSnapshot: creation.customizeSnapshot,
       })
     : '', [creation])
-  const bookSpreads = bookDisplay?.legacySpreads ?? []
   const maxSpreadIndex = bookDisplay?.maxSpreadIndex ?? 0
 
   useEffect(() => {
@@ -433,7 +432,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       side={side}
       spreadIndex={spreadIndex}
       bookType={cartContext?.personalization.bookType || 'basic'}
-      previewPages={bookSpreads}
+      previewPages={EMPTY_POSITIONAL_BOOK_SPREADS}
       previewImageErrors={imageErrors}
       bookPresentation={bookDisplay?.presentation}
       currentSpread={currentSpread}

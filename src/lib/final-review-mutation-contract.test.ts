@@ -8,41 +8,32 @@ import {
   getFinalPageManualRevisionPath,
   resolveFinalReviewMutationPage,
 } from './final-review-mutation-contract'
+import { createFinalV3Metadata } from './final-page-metadata.fixture'
 
-function v2Pages() {
-  const pages: Array<Record<string, unknown>> = [
-    { page_index: 40, output_order: 0, role: 'final_back_cover', spread_index: 0, side: 'left', page_number: null },
-    { page_index: 8, output_order: 1, role: 'final_front_cover', spread_index: 0, side: 'right', page_number: null },
-  ]
-  for (let spreadIndex = 1; spreadIndex <= 15; spreadIndex += 1) {
-    pages.push({ page_index: 100 + spreadIndex * 2, output_order: spreadIndex * 2, role: 'final_interior', spread_index: spreadIndex, side: 'left', page_number: spreadIndex * 2 - 1 })
-    pages.push({ page_index: 99 + spreadIndex * 2, output_order: spreadIndex * 2 + 1, role: 'final_interior', spread_index: spreadIndex, side: 'right', page_number: spreadIndex * 2 })
-  }
-  return pages
+function v3Pages() {
+  return createFinalV3Metadata((outputOrder) => outputOrder === 0 ? 40 : 100 + outputOrder * 3)
 }
 
 describe('Final Review mutation contract', () => {
-  it('uses explicit V2 output_order rather than sorted page_index for storage paths', () => {
-    const metadata = v2Pages()
+  it('uses explicit V3 output_order rather than sorted page_index for storage paths', () => {
+    const metadata = v3Pages()
     const plan = buildFinalReviewMutationPlan({
-      outputAssets: { schema_version: 2, asset_layout: 'single-page', pages: metadata },
-      totalPages: 32,
+      outputAssets: { schema_version: 3, asset_layout: 'single-page', pages: metadata },
+      totalPages: 31,
       reviewPageIndices: metadata.map((page) => Number(page.page_index)).reverse(),
     })
 
     assert.equal(resolveFinalReviewMutationPage(plan, 40).storage_page_number, 1)
-    assert.equal(resolveFinalReviewMutationPage(plan, 8).storage_page_number, 2)
-    assert.equal(resolveFinalReviewMutationPage(plan, 102).storage_page_number, 3)
-    assert.equal(resolveFinalReviewMutationPage(plan, 101).storage_page_number, 4)
+    assert.equal(resolveFinalReviewMutationPage(plan, 103).storage_page_number, 2)
+    assert.equal(resolveFinalReviewMutationPage(plan, 106).storage_page_number, 3)
   })
 
-  it('keeps the V1 sorted-page-index fallback', () => {
-    const plan = buildFinalReviewMutationPlan({
+  it('rejects unversioned mutation plans', () => {
+    assert.throws(() => buildFinalReviewMutationPlan({
       outputAssets: { pages: [] },
       totalPages: 3,
       reviewPageIndices: [9, 2, 5],
-    })
-    assert.deepEqual(plan.pages.map((page) => [page.page_index, page.storage_page_number]), [[2, 1], [5, 2], [9, 3]])
+    }), /contract marker/)
   })
 
   it('requires exact review-row coverage before any mutation plan is built', () => {

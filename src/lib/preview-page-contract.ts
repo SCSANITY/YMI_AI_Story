@@ -29,7 +29,7 @@ export type SignedPreviewPage = {
 export type SignedPreviewAssets = {
   urls: string[]
   pages: SignedPreviewPage[]
-  schemaVersion: 2 | null
+  schemaVersion: 3 | null
   assetLayout: 'single-page' | null
 }
 
@@ -140,7 +140,7 @@ export function buildSignedPreviewResponse(args: {
     return page ? [page] : []
   })
   const contract = {
-    ...(Number(args.schemaVersion) === 2 ? { schema_version: 2 } : {}),
+    ...(Number(args.schemaVersion) === 3 ? { schema_version: 3 } : {}),
     ...(args.assetLayout === 'single-page' ? { asset_layout: 'single-page' as const } : {}),
     pages,
   }
@@ -197,7 +197,7 @@ function parseSignedPreviewPage(value: unknown): SignedPreviewPage {
 
 export function parseSignedPreviewAssets(value: unknown): SignedPreviewAssets {
   if (!isRecord(value)) throw new Error('Invalid signed Preview response')
-  const schemaVersion = value.schema_version === 2 ? 2 : null
+  const schemaVersion = value.schema_version === 3 ? 3 : null
   const assetLayout = value.asset_layout === 'single-page' ? 'single-page' : null
   if (Boolean(schemaVersion) !== Boolean(assetLayout)) {
     throw new Error('Incomplete signed Preview contract marker')

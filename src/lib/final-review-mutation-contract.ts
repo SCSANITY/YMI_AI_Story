@@ -7,12 +7,12 @@ export type FinalReviewMutationPage = {
   page_index: number
   output_order: number
   storage_page_number: number
-  role: FinalPageRole | null
+  role: FinalPageRole
 }
 
 export type FinalReviewMutationPlan = {
-  schema_version: 2 | null
-  asset_layout: 'single-page' | null
+  schema_version: 3
+  asset_layout: 'single-page'
   pages: FinalReviewMutationPage[]
 }
 
@@ -69,21 +69,12 @@ export function buildFinalReviewMutationPlan(args: {
       error instanceof Error ? error.message : 'Invalid Final output metadata'
     )
   }
-  const pages = contract.schemaVersion === 2
-      ? contract.pages.map((page) => ({
-        page_index: page.page_index,
-        output_order: page.output_order,
-        storage_page_number: page.output_order + 1,
-        role: page.role,
-      }))
-    : [...args.reviewPageIndices]
-        .sort((a, b) => a - b)
-        .map((pageIndex, outputOrder) => ({
-          page_index: pageIndex,
-          output_order: outputOrder,
-          storage_page_number: outputOrder + 1,
-          role: null,
-        }))
+  const pages = contract.pages.map((page) => ({
+    page_index: page.page_index,
+    output_order: page.output_order,
+    storage_page_number: page.output_order + 1,
+    role: page.role,
+  }))
 
   return {
     schema_version: contract.schemaVersion,

@@ -22,15 +22,15 @@ test('streams approved source responses and the audit manifest into one ZIP', as
     },
     files: [
       {
-        page_index: 30,
+        page_index: 3,
         output_order: 0,
-        role: 'final_back_cover',
+        role: 'final_front_cover',
         spread_index: 0,
-        side: 'left',
+        side: null,
         page_number: null,
         approved_source: 'ai',
         reviewed_at: null,
-        entry_base_name: '01_cover_back',
+        entry_base_name: '01_cover_front',
         signed_url: 'data:image/png;base64,iVBORw0KGgo=',
       },
       {
@@ -62,7 +62,7 @@ test('streams approved source responses and the audit manifest into one ZIP', as
 
   assert.deepEqual(Array.from(archive.slice(0, 4)), [0x50, 0x4b, 0x03, 0x04])
   const archiveText = new TextDecoder().decode(archive)
-  assert.match(archiveText, /01_cover_back\.png/)
+  assert.match(archiveText, /01_cover_front\.png/)
   assert.match(archiveText, /03_spread_01_left_page_01\.jpg/)
   assert.match(archiveText, /manifest\.json/)
   assert.match(archiveText, /approved-final-sources/)

@@ -3,7 +3,6 @@ export type BookLeafSide = 'left' | 'right'
 export type BookLeafRole =
   | 'preview_cover'
   | 'preview_interior'
-  | 'final_back_cover'
   | 'final_front_cover'
   | 'final_interior'
 

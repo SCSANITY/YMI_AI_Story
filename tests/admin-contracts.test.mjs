@@ -124,7 +124,7 @@ test('every exported Admin API method performs its own authorization check', asy
   }
 })
 
-test('Final Review detail uses the protected no-store V2 page read model', async () => {
+test('Final Review detail uses the protected no-store V3 page read model', async () => {
   const [route, readModel] = await Promise.all([
     read('app/api/admin/final-jobs/[finalJobId]/route.ts'),
     read('src/lib/admin-final-page-read-model.ts'),
@@ -463,7 +463,7 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.match(sidebar, /fixed inset-0 z-\[180\] lg:hidden/)
 })
 
-test('Final Review V2 PDF workspace and manual Print handoff add no nested scroll owners', async () => {
+test('Final Review V3 PDF workspace and manual Print handoff add no nested scroll owners', async () => {
   const [panel, pdfReview, printReview, workspace] = await Promise.all([
     read('components/admin/FinalReviewPanel.tsx'),
     read('components/admin/final-review/PdfVersionReview.tsx'),
@@ -478,7 +478,7 @@ test('Final Review V2 PDF workspace and manual Print handoff add no nested scrol
   assert.match(pdfReview, /aspect-square/)
   assert.doesNotMatch(printReview, /buildFinalReviewWorkspace|final_job_pages/)
   assert.match(printReview, /Manual print artifact/)
-  assert.match(workspace, /final_back_cover/)
+  assert.doesNotMatch(workspace, /final_back_cover/)
   assert.match(workspace, /final_front_cover/)
   assert.match(workspace, /page\.spread_index/)
   assert.match(workspace, /page\.page_number/)
@@ -774,7 +774,7 @@ test('Admin V2 publishing workspaces share presentation primitives without chang
   assert.doesNotMatch(announcementWorkspace, /h-dvh|h-screen|calc\(100(?:d)?vh/)
 })
 
-test('Admin V2 Final Review keeps the T3-026 workspace while preserving the release controller', async () => {
+test('Admin Final Review keeps the T3-026 workspace while preserving the release controller', async () => {
   const [finalsPage, panel, queue, stage, pdfReview, printReview, globals] =
     await Promise.all([
       read('app/admin/(protected)/finals/page.tsx'),

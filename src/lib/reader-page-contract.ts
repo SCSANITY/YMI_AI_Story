@@ -14,7 +14,7 @@ export type ApprovedFinalReaderPage = {
 
 export type ReaderPageRole = Extract<
   BookLeafRole,
-  'final_back_cover' | 'final_front_cover' | 'final_interior'
+  'final_front_cover' | 'final_interior'
 >
 
 export type ReleasedReaderPagePlan = {
@@ -33,16 +33,15 @@ export type SignedReaderPage = Omit<ReleasedReaderPagePlan, 'approvedPath'> & {
 }
 
 export type ReleasedReaderContract = {
-  schemaVersion: 2 | null
-  assetLayout: 'single-page' | null
-  frontCoverPageIndex: number | null
+  schemaVersion: 3
+  assetLayout: 'single-page'
+  frontCoverPageIndex: number
   pages: ReleasedReaderPagePlan[]
 }
 
 export type ReaderBookDisplay = {
   coverUrl: string | null
   presentation: BookPresentation | null
-  legacySpreads: string[]
   preloadUrls: string[]
   maxSpreadIndex: number
 }
@@ -69,23 +68,10 @@ export function buildReleasedReaderContract(args: {
   })
   const { schemaVersion, assetLayout } = metadataContract
 
-  if (!schemaVersion || !assetLayout) {
-    return {
-      schemaVersion: null,
-      assetLayout: null,
-      frontCoverPageIndex: null,
-      pages: sortedApproved.map((page) => ({
-        pageIndex: page.pageIndex,
-        status: page.status,
-        approvedPath: page.approvedPath,
-      })),
-    }
-  }
-
   const storedByIndex = new Map(metadataContract.pages.map((page) => [page.page_index, page]))
   const plans = sortedApproved.map((approvedPage) => {
     const page = storedByIndex.get(approvedPage.pageIndex)
-    if (!page) throw new Error(`Missing V2 Final metadata for page ${approvedPage.pageIndex}`)
+    if (!page) throw new Error(`Missing V3 Final metadata for page ${approvedPage.pageIndex}`)
     return {
       pageIndex: approvedPage.pageIndex,
       status: approvedPage.status,
@@ -128,22 +114,10 @@ function toReaderLeaf(page: SignedReaderPage): BookLeaf | null {
 export function buildReaderBookDisplay(args: {
   schemaVersion?: number | null
   assetLayout?: string | null
-  legacyCoverUrl?: string | null
   pages: SignedReaderPage[]
 }): ReaderBookDisplay {
-  const isV2 = args.schemaVersion === 2 && args.assetLayout === 'single-page'
-  if (!isV2) {
-    const signedPages = [...args.pages]
-      .sort((a, b) => a.pageIndex - b.pageIndex)
-      .map((page) => page.url)
-    const legacySpreads = [args.legacyCoverUrl || '', ...signedPages]
-    return {
-      coverUrl: args.legacyCoverUrl ?? null,
-      presentation: null,
-      legacySpreads,
-      preloadUrls: legacySpreads.filter(Boolean),
-      maxSpreadIndex: Math.max(0, legacySpreads.length - 1),
-    }
+  if (args.schemaVersion !== 3 || args.assetLayout !== 'single-page') {
+    throw new Error('Reader requires the V3 single-page contract')
   }
 
   const leaves = args.pages.map(toReaderLeaf).filter((leaf): leaf is BookLeaf => Boolean(leaf))
@@ -173,16 +147,13 @@ export function buildReaderBookDisplay(args: {
   return {
     coverUrl: presentation.cover.url,
     presentation,
-    legacySpreads: [],
     preloadUrls,
     maxSpreadIndex: presentation.spreads.length,
   }
 }
 
 export function getReaderSpreadUrls(display: ReaderBookDisplay, spreadIndex: number): string[] {
-  if (!display.presentation) {
-    return display.legacySpreads[spreadIndex] ? [display.legacySpreads[spreadIndex]] : []
-  }
+  if (!display.presentation) return []
   if (spreadIndex === 0) return display.presentation.cover?.url ? [display.presentation.cover.url] : []
   const spread = display.presentation.spreads.find(
     (candidate) => (candidate.displayIndex ?? candidate.spreadIndex) === spreadIndex

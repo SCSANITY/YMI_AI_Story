@@ -186,44 +186,23 @@ export function PdfVersionReview(props: Props) {
       {loadingDetail ? (
         <EmptyState>Loading pages...</EmptyState>
       ) : pages.length ? (
-        workspace.isV2 ? (
-          <V2PdfWorkspace
-            items={workspace.items}
-            groups={workspace.groups}
-            selectedPageId={selectedItem?.page.final_job_page_id ?? null}
-            onSelectPage={setSelectedPageId}
-            selectedExportPageIndices={selectedExportPageIndices}
-            onToggleExportPage={toggleExportPage}
-            busyAction={busyAction}
-            reviewPendingByPage={reviewPendingByPage}
-            uploadPendingByPage={uploadPendingByPage}
-            uploadErrorByPage={uploadErrorByPage}
-            approvePage={approvePage}
-            markNeedsFix={markNeedsFix}
-            openReplacementPicker={openReplacementPicker}
-            emptySlotUploadAllowed={emptySlotUploadAllowed}
-            onImageLoadError={onImageLoadError}
-          />
-        ) : (
-          <div className="mt-4 space-y-3">
-            {workspace.items.map((item, index) => (
-              <LegacyPdfPageCard
-                key={item.page.final_job_page_id}
-                item={item}
-                index={index}
-                busyAction={busyAction}
-                reviewPendingByPage={reviewPendingByPage}
-                uploadPendingByPage={uploadPendingByPage}
-                uploadError={uploadErrorByPage[item.page.final_job_page_id]}
-                approvePage={approvePage}
-                markNeedsFix={markNeedsFix}
-                openReplacementPicker={openReplacementPicker}
-                emptySlotUploadAllowed={emptySlotUploadAllowed}
-                onImageLoadError={onImageLoadError}
-              />
-            ))}
-          </div>
-        )
+        <StructuredPdfWorkspace
+          items={workspace.items}
+          groups={workspace.groups}
+          selectedPageId={selectedItem?.page.final_job_page_id ?? null}
+          onSelectPage={setSelectedPageId}
+          selectedExportPageIndices={selectedExportPageIndices}
+          onToggleExportPage={toggleExportPage}
+          busyAction={busyAction}
+          reviewPendingByPage={reviewPendingByPage}
+          uploadPendingByPage={uploadPendingByPage}
+          uploadErrorByPage={uploadErrorByPage}
+          approvePage={approvePage}
+          markNeedsFix={markNeedsFix}
+          openReplacementPicker={openReplacementPicker}
+          emptySlotUploadAllowed={emptySlotUploadAllowed}
+          onImageLoadError={onImageLoadError}
+        />
       ) : (
         <EmptyState>
           {selectedJob ? 'This job does not have any rendered pages yet.' : 'Select a job from the queue to inspect pages.'}
@@ -233,7 +212,7 @@ export function PdfVersionReview(props: Props) {
   )
 }
 
-function V2PdfWorkspace({
+function StructuredPdfWorkspace({
   items,
   groups,
   selectedPageId,
@@ -368,7 +347,7 @@ function V2PdfWorkspace({
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {group.items.map((item) => (
-                <V2PageNavigatorButton
+                <StructuredPageNavigatorButton
                   key={item.page.final_job_page_id}
                   item={item}
                   selected={item.page.final_job_page_id === page.final_job_page_id}
@@ -398,7 +377,7 @@ function V2PdfWorkspace({
   )
 }
 
-function V2PageNavigatorButton({
+function StructuredPageNavigatorButton({
   item,
   selected,
   onSelect,
@@ -603,68 +582,6 @@ function ApprovedSourceExportToolbar({
   )
 }
 
-function LegacyPdfPageCard({
-  item,
-  index,
-  busyAction,
-  reviewPendingByPage,
-  uploadPendingByPage,
-  uploadError,
-  approvePage,
-  markNeedsFix,
-  openReplacementPicker,
-  emptySlotUploadAllowed,
-  onImageLoadError,
-}: {
-  item: FinalReviewPageItem
-  index: number
-  busyAction: string | null
-  reviewPendingByPage: ReviewPendingState
-  uploadPendingByPage: UploadPendingState
-  uploadError: string | undefined
-  approvePage: (page: FinalJobPageRow) => Promise<void>
-  markNeedsFix: (page: FinalJobPageRow) => Promise<void>
-  openReplacementPicker: (page: FinalJobPageRow) => void
-  emptySlotUploadAllowed: boolean
-  onImageLoadError: () => void
-}) {
-  const page = item.page
-  const previewUrl = pagePreviewUrl(page)
-  const reviewPending = reviewPendingByPage[page.final_job_page_id]
-  const uploadPending = uploadPendingByPage[page.final_job_page_id]
-  const emptySlot = isEmptyFinalPageSlot(page)
-  return (
-    <article className="grid gap-3 overflow-hidden rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-3 sm:grid-cols-[8rem_minmax(0,1fr)] lg:grid-cols-[10rem_minmax(0,1fr)]">
-      <div className="relative overflow-hidden rounded-lg border border-[var(--admin-card-line)]">
-        <PageThumb item={item} eager={index < 6} onImageLoadError={onImageLoadError} />
-        <UploadErrorOverlay message={uploadError} compact />
-      </div>
-      <div className="flex min-w-0 flex-col justify-between gap-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--admin-accent-dp)]">{item.primaryLabel}</p>
-            <p className="mt-0.5 truncate text-sm font-semibold text-[var(--admin-ink)]">
-              {page.approved_source ? `${page.approved_source} output` : 'Awaiting review'}
-            </p>
-          </div>
-          <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusClass(page.status)}`}>
-            {page.status}
-          </span>
-        </div>
-        <div className="space-y-2 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-2.5">
-          <PageFileLinks url={previewUrl} pageNumber={item.downloadNumber} compact />
-          <div className="grid grid-cols-2 gap-1.5">
-            <ReviewActionButton label="Approve" icon={reviewPending?.action === 'approve' || reviewPending?.action === 'approve_all' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} tone="approve" disabled={!previewUrl || Boolean(uploadPending)} onClick={() => void approvePage(page)} />
-            <ReviewActionButton label="Needs fix" icon={reviewPending?.action === 'needs_fix' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />} tone="warn" disabled={emptySlot || Boolean(uploadPending)} onClick={() => void markNeedsFix(page)} />
-            <ReviewActionButton label="Rerun" title="Rerun with random seed is coming later. Current fixed-seed rerun is disabled." icon={<RotateCcw className="h-3.5 w-3.5" />} tone="rerun" disabled />
-            <ReviewActionButton label={emptySlot ? 'Upload page' : 'Replace'} icon={uploadPending === 'replacement' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />} disabled={busyAction !== null || Boolean(uploadPending) || (emptySlot && !emptySlotUploadAllowed)} onClick={() => openReplacementPicker(page)} />
-          </div>
-        </div>
-      </div>
-    </article>
-  )
-}
-
 function UploadErrorOverlay({ message, compact = false }: { message?: string; compact?: boolean }) {
   if (!message) return null
   return (
@@ -685,34 +602,6 @@ function UploadErrorOverlay({ message, compact = false }: { message?: string; co
             {message}
           </p>
         </div>
-      </div>
-    </div>
-  )
-}
-
-function PageThumb({
-  item,
-  eager,
-  onImageLoadError,
-}: {
-  item: FinalReviewPageItem
-  eager?: boolean
-  onImageLoadError: () => void
-}) {
-  const previewUrl = pagePreviewUrl(item.page)
-  const sourceKind = getPageImageSource(item.page)
-  const cacheKey = sourceKind === 'none' ? null : getThumbCacheKey(item.page, sourceKind)
-  return (
-    <div className="relative aspect-[3/4] bg-[var(--admin-panel-2)]">
-      {previewUrl ? (
-        <a href={previewUrl} target="_blank" rel="noreferrer" className="block h-full w-full">
-          <ThumbnailImage sourceUrl={previewUrl} cacheKey={cacheKey} alt={item.primaryLabel} loading={eager ? 'eager' : 'lazy'} onError={onImageLoadError} className="h-full w-full object-contain" />
-        </a>
-      ) : (
-        <div className="flex h-full items-center justify-center text-xs text-[var(--admin-muted)]">No preview yet</div>
-      )}
-      <div className="absolute bottom-2 left-2 rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-card)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--admin-ink)]">
-        {item.shortLabel}
       </div>
     </div>
   )

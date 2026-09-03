@@ -9,7 +9,7 @@ async function readFrom(root, path) {
   return readFile(new URL(path, root), 'utf8')
 }
 
-test('Final Review mutations use page_index identity and the shared V2 output-order contract', async () => {
+test('Final Review mutations use page_index identity and the shared V3 output-order contract', async () => {
   const routes = await Promise.all([
     readFrom(appRoot, 'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/approve/route.ts'),
     readFrom(appRoot, 'app/api/admin/final-jobs/[finalJobId]/pages/[pageIndex]/upload-replacement/route.ts'),
@@ -138,13 +138,13 @@ test('empty Final slots are structural and become uploadable only after automati
   assert.doesNotMatch(mutationContract, /INACTIVE_FINAL_JOB_STATUSES[^\n]*queued|INACTIVE_FINAL_JOB_STATUSES[^\n]*processing|INACTIVE_FINAL_JOB_STATUSES[^\n]*releasing/)
 })
 
-test('every V2 Final page card exposes its own review and replacement controls', async () => {
+test('every V3 Final page card exposes its own review and replacement controls', async () => {
   const [pdfReview, thumbnail] = await Promise.all([
     readFrom(appRoot, 'components/admin/final-review/PdfVersionReview.tsx'),
     readFrom(appRoot, 'components/admin/final-review/thumbnail.tsx'),
   ])
   const navigator = pdfReview.slice(
-    pdfReview.indexOf('function V2PageNavigatorButton'),
+    pdfReview.indexOf('function StructuredPageNavigatorButton'),
     pdfReview.indexOf('function ApprovedSourceExportToolbar')
   )
 
@@ -194,6 +194,7 @@ test('single-page rerun preserves the stored job contract and leaves A/B provide
   assert.doesNotMatch(route, /output_assets\s*:/)
 
   assert.match(workerIndex, /selectSinglePageJobManifest/)
+  assert.match(workerIndex, /job\.job_type === 'final' && !hasSinglePageMarker[\s\S]*Final jobs require the V3 single-page template contract/)
   assert.match(workerIndex, /finalPageOverrideIndices:\s*normalizeOverridePageIndices\(input\)/)
   assert.match(workerIndex, /const mergedPages = isFinalPageRerun/)
   assert.match(workerIndex, /existingPagesByIndex/)

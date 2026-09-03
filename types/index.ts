@@ -33,9 +33,9 @@ export type BookPackagePricing = Record<BookPackageType, BookPackagePrice>;
 export type TemplateFinalPreviewPage = {
   pageIndex: number;
   url: string;
-  role: 'final_back_cover' | 'final_front_cover' | 'final_interior';
+  role: 'final_front_cover' | 'final_interior';
   spreadIndex: number;
-  side: 'left' | 'right';
+  side: 'left' | 'right' | null;
   pageNumber: number | null;
 }
 

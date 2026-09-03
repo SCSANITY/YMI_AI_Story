@@ -5,25 +5,14 @@ import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 
 import { buildFinalPdfReleaseArtifact } from './finalPdfRelease'
+import { createFinalV3Metadata } from './final-page-metadata.fixture'
 
 function birthdaygirlFixture() {
-  const pages: Array<Record<string, unknown>> = [
-    { page_index: 40, output_order: 0, role: 'final_back_cover', spread_index: 0, side: 'left', page_number: null },
-    { page_index: 8, output_order: 1, role: 'final_front_cover', spread_index: 0, side: 'right', page_number: null },
-  ]
-  for (let pageNumber = 1; pageNumber <= 30; pageNumber += 1) {
-    pages.push({
-      page_index: 100 + pageNumber * 3,
-      output_order: pageNumber + 1,
-      role: 'final_interior',
-      spread_index: Math.ceil(pageNumber / 2),
-      side: pageNumber % 2 === 1 ? 'left' : 'right',
-      page_number: pageNumber,
-      storage_path: `worker/${pageNumber}.png`,
-    })
-  }
+  const pages = createFinalV3Metadata((outputOrder) =>
+    outputOrder === 0 ? 8 : 100 + outputOrder * 3
+  ).map((page) => ({ ...page, storage_path: `worker/${page.page_number ?? 'cover'}.png` }))
   return {
-    outputAssets: { schema_version: 2, asset_layout: 'single-page', pages },
+    outputAssets: { schema_version: 3, asset_layout: 'single-page', pages },
     approvedPages: pages.map((page) => ({
       page_index: Number(page.page_index),
       approved_output_path: `approved/${page.page_index}.png`,
@@ -38,57 +27,50 @@ async function solidPng(color: string) {
 }
 
 describe('Final PDF release artifact', () => {
-  it('builds a valid V2 artifact from approved paths and preserves all metadata markers', async () => {
+  it('builds a valid V3 artifact from approved paths and preserves all metadata markers', async () => {
     const fixture = birthdaygirlFixture()
     const image = await solidPng('#d8b4fe')
     const loaded: Array<{ path: string; pageIndex: number }> = []
-    let legacyCalls = 0
 
     const artifact = await buildFinalPdfReleaseArtifact({
       ...fixture,
-      totalPages: 32,
+      totalPages: 31,
       loadApprovedPage: async (path, pageIndex) => {
         loaded.push({ path, pageIndex })
         return image
-      },
-      buildLegacyPdf: async () => {
-        legacyCalls += 1
-        return Buffer.from('legacy')
       },
     })
     const document = await PDFDocument.load(artifact.buffer)
     const outputPages = artifact.outputAssets.pages as Array<Record<string, unknown>>
 
     assert.equal(document.getPageCount(), 16)
-    assert.equal(loaded.length, 32)
-    assert.equal(legacyCalls, 0)
-    assert.equal(artifact.outputAssets.schema_version, 2)
+    assert.equal(loaded.length, 31)
+    assert.equal(artifact.outputAssets.schema_version, 3)
     assert.equal(artifact.outputAssets.asset_layout, 'single-page')
     assert.deepEqual(artifact.structuredProof, {
-      schema_version: 2,
-      mode: 'v2-spread-pages',
-      source_page_count: 32,
+      schema_version: 3,
+      mode: 'v3-front-cover-plus-interior-spreads',
+      source_page_count: 31,
       expected_pdf_page_count: 16,
       pdf_page_count: 16,
     })
     assert.deepEqual(artifact.outputAssets.pdf_composition, artifact.structuredProof)
-    assert.equal(outputPages.length, 32)
+    assert.equal(outputPages.length, 31)
     assert.ok(outputPages.every((page) => page.storage_path === `approved/${page.page_index}.png`))
     assert.ok(outputPages.every((page) => !('storage_path_full' in page)))
     assert.equal(artifact.previewImagePath, 'approved/8.png')
     assert.ok(loaded.every(({ path, pageIndex }) => path === `approved/${pageIndex}.png`))
   })
 
-  it('fails closed before upload on incomplete V2 review coverage or fallback output', async () => {
+  it('fails closed before upload on incomplete V3 review coverage or fallback output', async () => {
     const fixture = birthdaygirlFixture()
     const image = await solidPng('#ffffff')
     const build = (outputAssets: unknown, approvedPages = fixture.approvedPages) => {
       return buildFinalPdfReleaseArtifact({
         outputAssets,
         approvedPages,
-        totalPages: 32,
+        totalPages: 31,
         loadApprovedPage: async () => image,
-        buildLegacyPdf: async () => Buffer.from('legacy'),
       })
     }
 
@@ -102,34 +84,16 @@ describe('Final PDF release artifact', () => {
     )
   })
 
-  it('keeps legacy V1 composition byte-for-byte on the injected legacy path', async () => {
+  it('rejects unversioned Final output instead of composing a legacy PDF', async () => {
     const approvedPages = [
       { page_index: 7, approved_output_path: 'approved/7.png' },
       { page_index: 2, approved_output_path: 'approved/2.png' },
     ]
-    let loaded = false
-    let receivedPaths: string[] = []
-    const expected = Buffer.from('legacy-pdf')
-
-    const artifact = await buildFinalPdfReleaseArtifact({
+    await assert.rejects(() => buildFinalPdfReleaseArtifact({
       outputAssets: { pages: [{ page_index: 7 }, { page_index: 2 }] },
       totalPages: 2,
       approvedPages,
-      loadApprovedPage: async () => {
-        loaded = true
-        return Buffer.alloc(0)
-      },
-      buildLegacyPdf: async (paths) => {
-        receivedPaths = paths
-        return expected
-      },
-    })
-
-    assert.equal(artifact.buffer, expected)
-    assert.deepEqual(receivedPaths, ['approved/7.png', 'approved/2.png'])
-    assert.equal(loaded, false)
-    assert.equal(artifact.structuredProof, null)
-    assert.equal(artifact.previewImagePath, 'approved/7.png')
-    assert.equal('pdf_composition' in artifact.outputAssets, false)
+      loadApprovedPage: async () => Buffer.alloc(0),
+    }), /requires the V3 single-page output contract/)
   })
 })

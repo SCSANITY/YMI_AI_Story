@@ -38,7 +38,7 @@ test('Reader response signs approved paths but exposes only URLs and explicit me
   assert.doesNotMatch(responseSource, /approvedPath|approved_output_path/)
   assert.doesNotMatch(source, /pdf_path/)
   assert.doesNotMatch(responseSource, /pdfPath/)
-  assert.match(responseSource, /schemaVersion: 2, assetLayout: ['"]single-page['"]/)
+  assert.match(responseSource, /schemaVersion:\s*3,[\s\S]*assetLayout:\s*['"]single-page['"]/)
   assert.match(responseSource, /pages: signedReaderPages/)
   assert.match(source, /frontCoverPageIndex/)
 })

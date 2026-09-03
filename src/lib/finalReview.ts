@@ -1,5 +1,3 @@
-import { PDFDocument } from 'pdf-lib'
-import sharp from 'sharp'
 import { sendOrderDeliveryEmail } from '@/lib/email'
 import {
   assertFinalOutputAssetsReleasable,
@@ -24,8 +22,6 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_TTL_SECONDS = 60 * 60 * 24
-const FINAL_PDF_MAX_IMAGE_EDGE = Number(process.env.FINAL_PDF_MAX_IMAGE_EDGE || 1800)
-const FINAL_PDF_JPEG_QUALITY = Number(process.env.FINAL_PDF_JPEG_QUALITY || 82)
 
 export type FinalReleaseMode = 'manual' | 'job_auto' | 'story_auto' | 'global_auto'
 
@@ -62,7 +58,7 @@ export type FinalJobPageRow = {
   final_job_page_id: string
   page_index: number
   output_order: number | null
-  role: 'final_back_cover' | 'final_front_cover' | 'final_interior' | null
+  role: 'final_front_cover' | 'final_interior' | null
   spread_index: number | null
   side: 'left' | 'right' | null
   page_number: number | null
@@ -88,7 +84,7 @@ export type FinalJobPageRow = {
 }
 
 export type FinalPageContractSummary = {
-  schema_version: 2 | null
+  schema_version: 3 | null
   asset_layout: 'single-page' | null
 }
 
@@ -97,14 +93,6 @@ export type FinalJobDetail = {
   page_contract: FinalPageContractSummary
   pages: FinalJobPageRow[]
   print_artifact: ManualPrintArtifactClient | null
-}
-
-function isPngBuffer(buffer: Buffer) {
-  return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-}
-
-function isJpegBuffer(buffer: Buffer) {
-  return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
 }
 
 export function getFinalPagePath(orderId: string, pageNumber: number) {
@@ -129,67 +117,6 @@ export async function downloadStorageBuffer(path: string): Promise<Buffer> {
     throw new Error(error?.message || `Failed to download ${path}`)
   }
   return Buffer.from(await data.arrayBuffer())
-}
-
-async function embedPageImage(pdf: PDFDocument, buffer: Buffer) {
-  if (isPngBuffer(buffer)) return pdf.embedPng(buffer)
-  if (isJpegBuffer(buffer)) return pdf.embedJpg(buffer)
-  throw new Error('Unsupported image format for PDF export')
-}
-
-async function prepareImageForCustomerPdf(buffer: Buffer) {
-  const image = sharp(buffer, { failOn: 'none' }).rotate()
-  const metadata = await image.metadata()
-  const width = Number(metadata.width || 0)
-  const height = Number(metadata.height || 0)
-  if (!width || !height) {
-    throw new Error('Invalid image dimensions for PDF export')
-  }
-
-  const maxEdge = Math.max(1, FINAL_PDF_MAX_IMAGE_EDGE)
-  const shouldResize = Math.max(width, height) > maxEdge
-  const outputBuffer = await image
-    .resize({
-      width: shouldResize && width >= height ? maxEdge : undefined,
-      height: shouldResize && height > width ? maxEdge : undefined,
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .flatten({ background: '#ffffff' })
-    .jpeg({
-      quality: Math.min(95, Math.max(60, FINAL_PDF_JPEG_QUALITY)),
-      mozjpeg: true,
-    })
-    .toBuffer()
-
-  const outputMeta = await sharp(outputBuffer).metadata()
-  return {
-    buffer: outputBuffer,
-    width: Number(outputMeta.width || 0),
-    height: Number(outputMeta.height || 0),
-  }
-}
-
-export async function buildFinalPdfFromPaths(paths: string[]): Promise<Buffer> {
-  if (!paths.length) {
-    throw new Error('No approved page images available for PDF export')
-  }
-
-  const pdf = await PDFDocument.create()
-  for (const path of paths) {
-    const originalBuffer = await downloadStorageBuffer(path)
-    const prepared = await prepareImageForCustomerPdf(originalBuffer)
-    const image = await embedPageImage(pdf, prepared.buffer)
-    const width = image.width || prepared.width || 0
-    const height = image.height || prepared.height || 0
-    if (!width || !height) {
-      throw new Error(`Invalid image dimensions for ${path}`)
-    }
-    const page = pdf.addPage([width, height])
-    page.drawImage(image, { x: 0, y: 0, width, height })
-  }
-
-  return Buffer.from(await pdf.save())
 }
 
 export async function signStorageUrl(path: string | null, ttlSeconds = FINAL_PDF_TTL_SECONDS) {
@@ -365,8 +292,8 @@ export async function releaseFinalJob(params: {
   const canReuseExistingPdf = Boolean(
     alreadyPdfReleased &&
       finalJob.pdf_path &&
-      (!isStructuredOutput ||
-        isStructuredFinalPdfReleaseProofValid(reviewedOutputAssets, persistedStructuredProof))
+      isStructuredOutput &&
+      isStructuredFinalPdfReleaseProofValid(reviewedOutputAssets, persistedStructuredProof)
   )
   let releaseOutputAssets: Record<string, unknown> = reviewedOutputAssets
   let previewPath = getFinalPdfPreviewImagePath(reviewedOutputAssets, approvedPages)
@@ -377,7 +304,6 @@ export async function releaseFinalJob(params: {
       totalPages: expectedTotalPages,
       approvedPages,
       loadApprovedPage: (path) => downloadStorageBuffer(path),
-      buildLegacyPdf: buildFinalPdfFromPaths,
     })
     releaseOutputAssets = artifact.outputAssets
     previewPath = artifact.previewImagePath

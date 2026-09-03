@@ -87,7 +87,7 @@ describe('structured signed Preview page contract', () => {
     const response = buildSignedPreviewResponse({
       targets,
       signedUrls: ['https://signed.example/cover'],
-      schemaVersion: 2,
+      schemaVersion: 3,
       assetLayout: 'single-page',
     })
 
@@ -104,7 +104,7 @@ describe('structured signed Preview page contract', () => {
       url: 'https://signed.example/cover',
     })
     assert.equal('storage_path' in response.pages[0], false)
-    assert.equal(response.schema_version, 2)
+    assert.equal(response.schema_version, 3)
     assert.equal(response.asset_layout, 'single-page')
   })
 
@@ -149,7 +149,7 @@ describe('structured signed Preview page contract', () => {
 
   it('parses the additive client response without changing legacy URL order', () => {
     const parsed = parseSignedPreviewAssets({
-      schema_version: 2,
+      schema_version: 3,
       asset_layout: 'single-page',
       urls: ['cover.webp', 'left.webp', 'right.webp'],
       pages: [
@@ -165,14 +165,14 @@ describe('structured signed Preview page contract', () => {
     })
 
     assert.deepEqual(parsed.urls, ['cover.webp', 'left.webp', 'right.webp'])
-    assert.equal(parsed.schemaVersion, 2)
+    assert.equal(parsed.schemaVersion, 3)
     assert.equal(parsed.assetLayout, 'single-page')
     assert.equal(parsed.pages[0].role, 'preview_cover')
   })
 
-  it('rejects a partial V2 marker instead of silently treating it as legacy', () => {
+  it('rejects a partial V3 marker instead of silently treating it as legacy', () => {
     assert.throws(() => parseSignedPreviewAssets({
-      schema_version: 2,
+      schema_version: 3,
       url: 'cover.webp',
       pages: [],
     }), /Incomplete signed Preview contract marker/)

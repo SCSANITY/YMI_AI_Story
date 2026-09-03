@@ -10,10 +10,10 @@ const SQUARE_TOLERANCE = 0.02
 const AUTHORING_IMAGE_PATTERN = /\.(?:png|webp)$/i
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-export class V2AuthoringError extends Error {
+export class V3AuthoringError extends Error {
   constructor(issues) {
-    super(`V2 authoring package is invalid:\n- ${issues.join('\n- ')}`)
-    this.name = 'V2AuthoringError'
+    super(`V3 authoring package is invalid:\n- ${issues.join('\n- ')}`)
+    this.name = 'V3AuthoringError'
     this.issues = issues
   }
 }
@@ -21,11 +21,11 @@ export class V2AuthoringError extends Error {
 function normalizeRelativePath(value) {
   const normalized = String(value).trim().replace(/\\/g, '/').replace(/^\.\//, '')
   if (!normalized || normalized.startsWith('/') || /^[a-z]:/i.test(normalized)) {
-    throw new V2AuthoringError([`Path must be relative: ${value}`])
+    throw new V3AuthoringError([`Path must be relative: ${value}`])
   }
   const segments = normalized.split('/')
   if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
-    throw new V2AuthoringError([`Path must not contain traversal or empty segments: ${value}`])
+    throw new V3AuthoringError([`Path must not contain traversal or empty segments: ${value}`])
   }
   return normalized
 }
@@ -80,17 +80,16 @@ function parseAssetPath(rawPath) {
     }
   }
 
-  match = assetPath.match(/^final\/page0_([LR])_([AB])\.png$/i)
+  match = assetPath.match(/^final\/page0_R_([AB])\.png$/i)
   if (match) {
-    const side = match[1].toUpperCase() === 'L' ? 'left' : 'right'
     return {
       assetPath,
       templateImage: path.posix.basename(assetPath),
       format: 'png',
-      marker: match[2].toUpperCase(),
-      role: side === 'left' ? 'final_back_cover' : 'final_front_cover',
+      marker: match[1].toUpperCase(),
+      role: 'final_front_cover',
       spreadIndex: 0,
-      side,
+      side: null,
       pageNumber: null,
       scope: 'final',
     }
@@ -159,7 +158,7 @@ export async function inventoryLocalAssets(assetsDir) {
     })
   }
 
-  if (issues.length) throw new V2AuthoringError(issues)
+  if (issues.length) throw new V3AuthoringError(issues)
   return inventory
 }
 
@@ -167,7 +166,7 @@ export async function readInventoryFile(inventoryPath) {
   const raw = JSON.parse(await fs.readFile(inventoryPath, 'utf8'))
   const assets = Array.isArray(raw) ? raw : raw?.assets
   if (!Array.isArray(assets)) {
-    throw new V2AuthoringError(['Inventory JSON must be an array or contain an assets array'])
+    throw new V3AuthoringError(['Inventory JSON must be an array or contain an assets array'])
   }
   return assets
 }
@@ -254,20 +253,16 @@ export function deriveAuthoredPages(rawInventory) {
   }
 
   const previewCovers = parsedPages.filter((page) => page.role === 'preview_cover')
-  const backCovers = parsedPages.filter((page) => page.role === 'final_back_cover')
   const frontCovers = parsedPages.filter((page) => page.role === 'final_front_cover')
   if (previewCovers.length !== 1) issues.push('Exactly one preview0_A.webp cover is required')
   if (previewCovers[0]?.marker !== 'A') issues.push('Preview cover must use the _A face-swap authoring marker')
-  if (backCovers.length !== 1 || backCovers[0]?.marker !== 'B') {
-    issues.push('Final back cover must be exactly final/page0_L_B.png')
-  }
   if (frontCovers.length !== 1 || frontCovers[0]?.marker !== 'A') {
     issues.push('Final front cover must be exactly final/page0_R_A.png')
   }
   validatePairing(parsedPages, 'preview_interior', issues)
   validatePairing(parsedPages, 'final_interior', issues)
 
-  if (issues.length) throw new V2AuthoringError(issues)
+  if (issues.length) throw new V3AuthoringError(issues)
   return parsedPages.sort(sortParsedAssets)
 }
 
@@ -296,24 +291,43 @@ function findWorkflowOverrides(sourceConfig, page) {
     return null
   }
   if (page.role === 'preview_interior') {
-    const interior = previewPages.slice(1).find((candidate) => isRecord(candidate?.workflow_overrides))
-    return interior ? clone(interior.workflow_overrides) : null
+    const presentedPreviewPages = previewPages.filter((candidate) => isRecord(candidate?.presentation))
+    const logicalMatch = presentedPreviewPages.find((candidate) =>
+      candidate.presentation.role === 'preview_interior' &&
+      candidate.presentation.spread_index === page.spreadIndex &&
+      candidate.presentation.side === page.side
+    )
+    const interior = logicalMatch ?? (
+      presentedPreviewPages.length === 0
+        ? previewPages.slice(1).find((candidate) => isRecord(candidate?.workflow_overrides))
+        : null
+    )
+    return isRecord(interior?.workflow_overrides) ? clone(interior.workflow_overrides) : null
   }
   if (page.role === 'final_interior') {
-    const sourcePage = getSourcePages(sourceConfig, 'final')[page.spreadIndex - 1]
+    const finalPages = getSourcePages(sourceConfig, 'final')
+    const presentedFinalPages = finalPages.filter((candidate) => isRecord(candidate?.presentation))
+    const logicalMatch = presentedFinalPages.find((candidate) =>
+      candidate.presentation.role === 'final_interior' &&
+      candidate.presentation.spread_index === page.spreadIndex &&
+      candidate.presentation.side === page.side
+    )
+    const sourcePage = logicalMatch ?? (
+      presentedFinalPages.length === 0 ? finalPages[page.spreadIndex - 1] : null
+    )
     const finalFace = sourcePage?.workflow_overrides?.final_face
     return isRecord(finalFace) ? { final_face: clone(finalFace) } : null
   }
   return null
 }
 
-export function buildV2Config(sourceConfig, authoredPages) {
-  if (!isRecord(sourceConfig)) throw new V2AuthoringError(['Source config must be an object'])
+export function buildV3Config(sourceConfig, authoredPages) {
+  if (!isRecord(sourceConfig)) throw new V3AuthoringError(['Source config must be an object'])
   if (!sourceConfig.template_id || !sourceConfig.base_path) {
-    throw new V2AuthoringError(['Source config must define template_id and base_path'])
+    throw new V3AuthoringError(['Source config must define template_id and base_path'])
   }
   if (!sourceConfig.subtitle_render?.enabled || !sourceConfig.subtitle_render?.template_path) {
-    throw new V2AuthoringError(['Source config must enable subtitle_render and define template_path'])
+    throw new V3AuthoringError(['Source config must enable subtitle_render and define template_path'])
   }
 
   const preserved = clone(sourceConfig)
@@ -344,7 +358,7 @@ export function buildV2Config(sourceConfig, authoredPages) {
   const finalIndices = pages.filter((page) => page.presentation.role.startsWith('final_')).map((page) => page.index)
 
   return {
-    schema_version: 2,
+    schema_version: 3,
     asset_layout: 'single-page',
     ...preserved,
     pages,
@@ -368,7 +382,7 @@ export function collectSubtitleTemplatePaths(config) {
 export function validateSubtitleDocument({ document, templatePath, authoredPages, placeholderKeys = [] }) {
   const issues = []
   if (!isRecord(document) || !Array.isArray(document.pages)) {
-    throw new V2AuthoringError([`${templatePath} must contain a pages array`])
+    throw new V3AuthoringError([`${templatePath} must contain a pages array`])
   }
   const expected = new Map(authoredPages.map((page) => [page.templateImage, page]))
   const seen = new Set()
@@ -407,7 +421,7 @@ export function validateSubtitleDocument({ document, templatePath, authoredPages
   for (const image of expected.keys()) {
     if (!seen.has(image)) issues.push(`${templatePath} is missing subtitle entry ${image}`)
   }
-  if (issues.length) throw new V2AuthoringError(issues)
+  if (issues.length) throw new V3AuthoringError(issues)
 }
 
 async function validateWithWorkerContract({ config, subtitleDocuments, authoredPages }) {
@@ -418,12 +432,12 @@ async function validateWithWorkerContract({ config, subtitleDocuments, authoredP
   try {
     await fs.access(contractPath)
   } catch {
-    throw new V2AuthoringError([`Active Worker contract not found: ${contractPath}`])
+    throw new V3AuthoringError([`Active Worker contract not found: ${contractPath}`])
   }
 
   const workerContract = await tsImport(pathToFileURL(contractPath).href, import.meta.url)
   if (typeof workerContract.validateSinglePageTemplateContract !== 'function') {
-    throw new V2AuthoringError([`Active Worker contract does not export validateSinglePageTemplateContract`])
+    throw new V3AuthoringError([`Active Worker contract does not export validateSinglePageTemplateContract`])
   }
   const availableStorageFiles = authoredPages.map((page) => page.assetPath)
   const results = []
@@ -441,7 +455,7 @@ async function validateWithWorkerContract({ config, subtitleDocuments, authoredP
       })
     } catch (error) {
       const message = Array.isArray(error?.issues) ? error.issues.join('; ') : error instanceof Error ? error.message : String(error)
-      throw new V2AuthoringError([`Active Worker rejected ${subtitle.path}: ${message}`])
+      throw new V3AuthoringError([`Active Worker rejected ${subtitle.path}: ${message}`])
     }
   }
   return results
@@ -472,14 +486,14 @@ function validateAgeVariants(config) {
       issues.push(`Subtitle variants ${ranges[index - 1].id} and ${ranges[index].id} overlap`)
     }
   }
-  if (issues.length) throw new V2AuthoringError(issues)
+  if (issues.length) throw new V3AuthoringError(issues)
 }
 
 export async function buildAuthoringPackage({ storyDir, rawInventory }) {
   const sourceConfigPath = path.join(storyDir, 'config.json')
   const sourceConfig = JSON.parse(await fs.readFile(sourceConfigPath, 'utf8'))
   const authoredPages = deriveAuthoredPages(rawInventory)
-  const config = buildV2Config(sourceConfig, authoredPages)
+  const config = buildV3Config(sourceConfig, authoredPages)
   validateAgeVariants(config)
 
   const subtitleDocuments = []
@@ -490,7 +504,7 @@ export async function buildAuthoringPackage({ storyDir, rawInventory }) {
     try {
       document = JSON.parse(await fs.readFile(absolutePath, 'utf8'))
     } catch (error) {
-      throw new V2AuthoringError([`Cannot read subtitle template ${templatePath}: ${error instanceof Error ? error.message : error}`])
+      throw new V3AuthoringError([`Cannot read subtitle template ${templatePath}: ${error instanceof Error ? error.message : error}`])
     }
     validateSubtitleDocument({
       document,
@@ -507,7 +521,7 @@ export async function buildAuthoringPackage({ storyDir, rawInventory }) {
     const absoluteFontsPath = path.join(storyDir, ...normalizedFontsPath.split('/'))
     const entries = await fs.readdir(absoluteFontsPath, { withFileTypes: true }).catch(() => [])
     if (!entries.some((entry) => entry.isFile() && /\.(?:ttf|otf|woff2?)$/i.test(entry.name))) {
-      throw new V2AuthoringError([`Font directory ${normalizedFontsPath} must contain at least one supported font file`])
+      throw new V3AuthoringError([`Font directory ${normalizedFontsPath} must contain at least one supported font file`])
     }
   }
 
@@ -540,7 +554,7 @@ export async function buildAuthoringPackage({ storyDir, rawInventory }) {
 
 export async function writeAuthoringPackage({ outputDir, packageData }) {
   const outputExists = await fs.access(outputDir).then(() => true, () => false)
-  if (outputExists) throw new V2AuthoringError([`Output directory already exists: ${outputDir}`])
+  if (outputExists) throw new V3AuthoringError([`Output directory already exists: ${outputDir}`])
   await fs.mkdir(outputDir, { recursive: true })
   await fs.writeFile(path.join(outputDir, 'config.json'), `${JSON.stringify(packageData.config, null, 2)}\n`)
   for (const subtitle of packageData.subtitleDocuments) {

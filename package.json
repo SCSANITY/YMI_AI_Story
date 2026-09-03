@@ -27,8 +27,8 @@
     "covers:normalize": "node scripts/normalize-template-covers.mjs",
     "images:optimize": "node scripts/optimize-images.mjs",
     "products:optimize": "node scripts/optimize-template-products.mjs",
-    "v2:author": "node scripts/v2-story-authoring.mjs",
-    "v2:authoring:tests": "node --test scripts/v2-authoring/lib.test.mjs",
+    "v3:author": "node scripts/v3-story-authoring.mjs",
+    "v3:authoring:tests": "node --test scripts/v3-authoring/lib.test.mjs",
     "emails:preview": "tsx scripts/render-email-previews.tsx"
   },
   "dependencies": {

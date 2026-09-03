@@ -55,7 +55,7 @@ function toPreviewLeaf(page: SignedPreviewPage): BookLeaf {
 }
 
 export function resolvePreviewDisplayAssets(assets: SignedPreviewAssets): PreviewDisplayAssets {
-  if (assets.schemaVersion !== 2 || assets.assetLayout !== 'single-page') {
+  if (assets.schemaVersion !== 3 || assets.assetLayout !== 'single-page') {
     return {
       ...assets,
       coverUrl: assets.urls[0] ?? null,

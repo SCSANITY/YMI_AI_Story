@@ -12,7 +12,7 @@ export type ApprovedSourceReviewPage = {
 export type ApprovedSourceExportFile = {
   page_index: number
   output_order: number
-  role: 'final_back_cover' | 'final_front_cover' | 'final_interior' | 'legacy_page'
+  role: 'final_front_cover' | 'final_interior'
   spread_index: number | null
   side: 'left' | 'right' | null
   page_number: number | null
@@ -32,8 +32,8 @@ export type ApprovedSourceExportPlan = {
     final_job_id: string
     display_title: string
     page_contract: {
-      schema_version: 2 | null
-      asset_layout: 'single-page' | null
+      schema_version: 3
+      asset_layout: 'single-page'
     }
   }
   files: ApprovedSourceExportFile[]
@@ -50,9 +50,8 @@ function pad(value: number) {
   return String(value).padStart(2, '0')
 }
 
-function v2EntryBaseName(page: ReturnType<typeof parseFinalPageMetadataContract>['pages'][number]) {
+function structuredEntryBaseName(page: ReturnType<typeof parseFinalPageMetadataContract>['pages'][number]) {
   const order = pad(page.output_order + 1)
-  if (page.role === 'final_back_cover') return `${order}_cover_back`
   if (page.role === 'final_front_cover') return `${order}_cover_front`
   return `${order}_spread_${pad(page.spread_index)}_${page.side}_page_${pad(Number(page.page_number))}`
 }
@@ -91,11 +90,6 @@ export function buildApprovedSourceExportPlan(args: {
 
   const metadataByIndex = new Map(contract.pages.map((page) => [page.page_index, page]))
   const reviewByIndex = new Map(args.reviewPages.map((page) => [page.page_index, page]))
-  const legacyOutputOrderByIndex = new Map(
-    [...args.reviewPages]
-      .sort((a, b) => a.page_index - b.page_index)
-      .map((page, outputOrder) => [page.page_index, outputOrder])
-  )
   const selected = selectedPageIndices.map((pageIndex) => {
     const reviewPage = reviewByIndex.get(pageIndex)
     if (!reviewPage) {
@@ -108,49 +102,29 @@ export function buildApprovedSourceExportPlan(args: {
       throw new ApprovedSourceExportError(`Final page ${pageIndex} is not currently approved`)
     }
     const metadata = metadataByIndex.get(pageIndex)
-    if (contract.schemaVersion === 2 && !metadata) {
-      throw new ApprovedSourceExportError(`Missing V2 metadata for Final page ${pageIndex}`)
+    if (!metadata) {
+      throw new ApprovedSourceExportError(`Missing V3 metadata for Final page ${pageIndex}`)
     }
     return { reviewPage, metadata }
   })
 
   selected.sort((a, b) => {
-    if (contract.schemaVersion === 2) {
-      return Number(a.metadata?.output_order) - Number(b.metadata?.output_order)
-    }
-    return a.reviewPage.page_index - b.reviewPage.page_index
+    return Number(a.metadata?.output_order) - Number(b.metadata?.output_order)
   })
 
   const safeTitle = buildSafeBookDownloadBaseName(args.displayTitle)
   const files = selected.map(({ reviewPage, metadata }) => {
-    if (metadata) {
-      return {
-        page_index: reviewPage.page_index,
-        output_order: metadata.output_order,
-        role: metadata.role,
-        spread_index: metadata.spread_index,
-        side: metadata.side,
-        page_number: metadata.page_number,
-        approved_source: reviewPage.approved_source,
-        reviewed_at: reviewPage.reviewed_at,
-        entry_base_name: v2EntryBaseName(metadata),
-        storage_path: String(reviewPage.approved_output_path),
-      }
-    }
-    const outputOrder = legacyOutputOrderByIndex.get(reviewPage.page_index)
-    if (outputOrder === undefined) {
-      throw new ApprovedSourceExportError(`Missing legacy order for Final page ${reviewPage.page_index}`)
-    }
+    if (!metadata) throw new ApprovedSourceExportError(`Missing V3 metadata for Final page ${reviewPage.page_index}`)
     return {
       page_index: reviewPage.page_index,
-      output_order: outputOrder,
-      role: 'legacy_page' as const,
-      spread_index: null,
-      side: null,
-      page_number: outputOrder + 1,
+      output_order: metadata.output_order,
+      role: metadata.role,
+      spread_index: metadata.spread_index,
+      side: metadata.side,
+      page_number: metadata.page_number,
       approved_source: reviewPage.approved_source,
       reviewed_at: reviewPage.reviewed_at,
-      entry_base_name: `${pad(outputOrder + 1)}_page_${pad(outputOrder + 1)}`,
+      entry_base_name: structuredEntryBaseName(metadata),
       storage_path: String(reviewPage.approved_output_path),
     }
   })

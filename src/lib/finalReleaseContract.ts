@@ -1,4 +1,7 @@
-import { parseFinalPageMetadataContract } from '@/lib/final-page-metadata'
+import {
+  FINAL_PAGE_SCHEMA_VERSION,
+  parseFinalPageMetadataContract,
+} from '@/lib/final-page-metadata'
 
 type FinalOutputAssets = Record<string, unknown> | null | undefined
 
@@ -8,8 +11,8 @@ type ApprovedFinalPage = {
 }
 
 export type StructuredFinalPdfReleaseProof = {
-  schema_version: 2
-  mode: 'v2-spread-pages'
+  schema_version: typeof FINAL_PAGE_SCHEMA_VERSION
+  mode: 'v3-front-cover-plus-interior-spreads'
   source_page_count: number
   expected_pdf_page_count: number
   pdf_page_count: number
@@ -21,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function isStructuredFinalOutputAssets(outputAssets: FinalOutputAssets): boolean {
   const assets = outputAssets && typeof outputAssets === 'object' ? outputAssets : {}
-  return Number(assets.schema_version) === 2 && assets.asset_layout === 'single-page'
+  return Number(assets.schema_version) === FINAL_PAGE_SCHEMA_VERSION && assets.asset_layout === 'single-page'
 }
 
 export function readStructuredFinalPdfReleaseProof(
@@ -31,8 +34,8 @@ export function readStructuredFinalPdfReleaseProof(
   const value = assets.pdf_composition
   if (!isRecord(value)) return null
   if (
-    value.schema_version !== 2 ||
-    value.mode !== 'v2-spread-pages' ||
+    value.schema_version !== FINAL_PAGE_SCHEMA_VERSION ||
+    value.mode !== 'v3-front-cover-plus-interior-spreads' ||
     !Number.isInteger(value.source_page_count) ||
     Number(value.source_page_count) <= 0 ||
     !Number.isInteger(value.expected_pdf_page_count) ||
@@ -43,8 +46,8 @@ export function readStructuredFinalPdfReleaseProof(
     return null
   }
   return {
-    schema_version: 2,
-    mode: 'v2-spread-pages',
+    schema_version: FINAL_PAGE_SCHEMA_VERSION,
+    mode: 'v3-front-cover-plus-interior-spreads',
     source_page_count: Number(value.source_page_count),
     expected_pdf_page_count: Number(value.expected_pdf_page_count),
     pdf_page_count: Number(value.pdf_page_count),
@@ -79,8 +82,8 @@ export function isStructuredFinalPdfReleaseProofValid(
   const expectedPdfPageCount = getStructuredFinalPdfExpectedPageCount(assets)
   return Boolean(
     structuredPdfProof &&
-      structuredPdfProof.schema_version === 2 &&
-      structuredPdfProof.mode === 'v2-spread-pages' &&
+      structuredPdfProof.schema_version === FINAL_PAGE_SCHEMA_VERSION &&
+      structuredPdfProof.mode === 'v3-front-cover-plus-interior-spreads' &&
       structuredPdfProof.source_page_count === sourcePageCount &&
       expectedPdfPageCount !== null &&
       structuredPdfProof.expected_pdf_page_count === expectedPdfPageCount &&
@@ -99,14 +102,12 @@ export function assertFinalOutputAssetsReleasable(
   if (assets.pdf_fallback === true) {
     throw new Error('Final job contains a fallback PDF marker and must be regenerated before release')
   }
-  const hasStructuredMarker = schemaVersion === 2 || assetLayout === 'single-page'
-  if (!hasStructuredMarker) return
-  if (schemaVersion !== 2 || assetLayout !== 'single-page') {
-    throw new Error('Final job has incomplete V2 single-page output markers')
+  if (schemaVersion !== FINAL_PAGE_SCHEMA_VERSION || assetLayout !== 'single-page') {
+    throw new Error('Final job requires complete V3 single-page output markers')
   }
 
   if (!isStructuredFinalPdfReleaseProofValid(assets, structuredPdfProof)) {
-    throw new Error('Single-page V2 Final jobs require a successful structured PDF composition')
+    throw new Error('Single-page V3 Final jobs require a successful structured PDF composition')
   }
 }
 
