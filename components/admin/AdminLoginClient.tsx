@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useTransition } from 'react'
+import React, { useCallback, useRef, useState, useTransition } from 'react'
 import Image from 'next/image'
 import {
   ArrowRight,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { login as loginAction } from '@/app/actions/auth'
 import { supabase } from '@/lib/supabase'
+import { useOAuthReturnRecovery } from '@/lib/oauth-return-recovery'
 
 const OPERATION_AREAS = [
   { icon: BookOpenCheck, label: 'Final review and releases' },
@@ -32,7 +33,17 @@ export function AdminLoginClient() {
   const [info, setInfo] = useState('')
   const [isGooglePending, setIsGooglePending] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const googleOAuthInFlightRef = useRef(false)
   const isBusy = isPending || isGooglePending
+
+  const recoverOAuthReturn = useCallback(() => {
+    googleOAuthInFlightRef.current = false
+    setIsGooglePending(false)
+    setError('')
+    setInfo('Google sign-in was not completed. You can try again or use your password.')
+  }, [])
+
+  useOAuthReturnRecovery(googleOAuthInFlightRef, recoverOAuthReturn)
 
   const handleLogin = (event: React.FormEvent) => {
     event.preventDefault()
@@ -57,19 +68,27 @@ export function AdminLoginClient() {
   }
 
   const handleGoogleLogin = async () => {
-    if (isBusy) return
+    if (isBusy || googleOAuthInFlightRef.current) return
+    googleOAuthInFlightRef.current = true
     setError('')
     setInfo('Redirecting to Google...')
     setIsGooglePending(true)
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(ADMIN_LANDING_PATH)}`
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo },
-    })
-    if (oauthError) {
+    try {
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      })
+      if (!oauthError) return
       setInfo('')
       setError(oauthError.message)
       setIsGooglePending(false)
+      googleOAuthInFlightRef.current = false
+    } catch (oauthError) {
+      setInfo('')
+      setError(oauthError instanceof Error ? oauthError.message : 'Google sign-in failed. Please try again.')
+      setIsGooglePending(false)
+      googleOAuthInFlightRef.current = false
     }
   }
 

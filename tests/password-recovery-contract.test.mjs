@@ -56,7 +56,7 @@ test('customer login exposes recovery without changing the Admin login surface',
   assert.match(modal, /login\.forgotPassword/)
   assert.match(context, /suspendAuthSync/)
   assert.match(shell, /suspendAuthSync=\{isPasswordRecoveryRoute\}/)
-  assert.doesNotMatch(adminLogin, /requestPasswordReset|forgotPassword|recovery/i)
+  assert.doesNotMatch(adminLogin, /requestPasswordReset|forgotPassword|reset-password|auth\/recovery/i)
 })
 
 test('reset page is noindex and never receives a recovery credential prop', async () => {

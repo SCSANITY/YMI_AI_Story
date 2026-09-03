@@ -188,6 +188,7 @@ const en: MessageDictionary = {
   'login.continueWithGoogle': 'Continue with Google',
   'login.redirectingToGoogle': 'Redirecting to Google...',
   'login.googleLoginFailed': 'Google login failed.',
+  'login.socialLoginNotCompleted': 'Social sign-in was not completed. You can try again or use your password.',
   'login.continueWithFacebook': 'Continue with Facebook',
   'login.redirectingToFacebook': 'Redirecting to Facebook...',
   'login.facebookLoginFailed': 'Facebook login failed.',

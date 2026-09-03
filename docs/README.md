@@ -20,6 +20,8 @@ repository:
   Saved Preview, owned Reader, and direct-checkout customer journey.
 - [`EMAIL_CENTER.md`](EMAIL_CENTER.md): Admin outbound-email inventory,
   ownership, preview, and read-only security boundary.
+- [`OAUTH_RETURN_RECOVERY.md`](OAUTH_RETURN_RECOVERY.md): customer and Admin
+  Google OAuth return-state recovery without changing authentication authority.
 - `../tests/`: runtime and source-contract coverage.
 - `../tests/fixtures/external-contracts/`: versioned SQL and Worker contract
   snapshots required for isolated CI.

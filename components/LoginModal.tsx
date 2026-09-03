@@ -1,10 +1,11 @@
 ﻿'use client';
 
-import React, { useEffect, useRef, useState, useTransition } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { Eye, EyeOff, X, Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useI18n } from '@/lib/useI18n';
+import { useOAuthReturnRecovery } from '@/lib/oauth-return-recovery';
 
 const SIGNUP_OTP_LENGTH = 8;
 type OAuthProvider = 'google' | 'facebook' | 'apple';
@@ -73,6 +74,15 @@ export function LoginModal() {
   const authSubmitInFlightRef = useRef(false);
   const oauthInFlightRef = useRef<OAuthProvider | null>(null);
   const enabledSocialLogins = SOCIAL_LOGIN_OPTIONS.filter((option) => option.enabled);
+
+  const recoverOAuthReturn = useCallback(() => {
+    oauthInFlightRef.current = null;
+    setPendingOAuthProvider(null);
+    setError(null);
+    setInfo(t('login.socialLoginNotCompleted'));
+  }, [t]);
+
+  useOAuthReturnRecovery(oauthInFlightRef, recoverOAuthReturn);
 
   useEffect(() => {
     if (!isLoginModalOpen) return;
@@ -169,9 +179,16 @@ export function LoginModal() {
     setInfo(t(option.redirectingKey));
     setPendingOAuthProvider(option.provider);
 
-    const result = await Promise.resolve(loginWithOAuth(option.provider));
-    if (result?.error) {
+    try {
+      const result = await Promise.resolve(loginWithOAuth(option.provider));
+      if (!result?.error) return;
       setError(`${t(option.failedKey)} ${result.error}`);
+      setInfo(null);
+      setPendingOAuthProvider(null);
+      oauthInFlightRef.current = null;
+    } catch (oauthError) {
+      const message = oauthError instanceof Error ? oauthError.message : 'Please try again.';
+      setError(`${t(option.failedKey)} ${message}`);
       setInfo(null);
       setPendingOAuthProvider(null);
       oauthInFlightRef.current = null;

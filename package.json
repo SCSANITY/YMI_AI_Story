@@ -12,6 +12,7 @@
     "cart:contracts": "node --test tests/cart-title-contract.test.mjs",
     "checkout:tests": "tsx --test src/lib/checkout-step-navigation.test.ts tests/checkout-*.test.mjs",
     "guest-order:tests": "tsx --test tests/guest-order-continuity-contract.test.mjs src/lib/purchase-ownership-recovery.test.ts components/emails/OrderAccessNotice.test.tsx",
+    "auth:tests": "tsx --test src/lib/oauth-return-recovery.test.ts tests/auth-oauth-return-contract.test.mjs",
     "kol:tests": "tsx --test src/lib/kol-partnership-email.test.ts tests/kol-partnership-*.test.mjs",
     "legal:tests": "tsx --test src/lib/legal-publishing.test.ts src/lib/published-legal-content.test.ts",
     "tracking:tests": "tsx --test src/lib/tracking-policy.test.ts",
