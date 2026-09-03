@@ -34,7 +34,7 @@ export const adminNavigationItems: AdminNavigationItem[] = [
   { label: 'General Inbox', shortLabel: 'Inbox', icon: Mails, href: '/admin/inbox', group: 'Communication' },
   { label: 'KOL Partnerships', shortLabel: 'Partners', icon: Handshake, href: '/admin/partnerships', group: 'Growth', attention: 'kol-partnerships' },
   { label: 'Discounts', shortLabel: 'Discounts', icon: TicketPercent, href: '/admin/discounts', group: 'Growth' },
-  { label: 'Email Events', shortLabel: 'Emails', icon: Mail, href: '/admin/emails', group: 'Growth' },
+  { label: 'Email Center', shortLabel: 'Emails', icon: Mail, href: '/admin/emails', group: 'Growth' },
   { label: 'Announcements', shortLabel: 'News', icon: Megaphone, href: '/admin/announcements', group: 'Growth' },
   { label: 'Service Control', shortLabel: 'Services', icon: ToggleLeft, href: '/admin/service', group: 'System' },
   { label: 'Legal Content', shortLabel: 'Legal', icon: ScrollText, href: '/admin/legal', group: 'System' },

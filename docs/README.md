@@ -18,6 +18,8 @@ repository:
 - `../package.json`: authoritative development, test, and build commands.
 - [`MY_BOOKS_CUSTOMER_JOURNEY.md`](MY_BOOKS_CUSTOMER_JOURNEY.md): My Books,
   Saved Preview, owned Reader, and direct-checkout customer journey.
+- [`EMAIL_CENTER.md`](EMAIL_CENTER.md): Admin outbound-email inventory,
+  ownership, preview, and read-only security boundary.
 - `../tests/`: runtime and source-contract coverage.
 - `../tests/fixtures/external-contracts/`: versioned SQL and Worker contract
   snapshots required for isolated CI.

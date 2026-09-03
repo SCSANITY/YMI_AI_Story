@@ -120,7 +120,6 @@ export async function reconcileResendDeliveryEvent(
     if (emailEventError) throw new Error(`Failed to inspect email event: ${emailEventError.message}`)
     if (
       emailEvent?.email_key === 'general_mail_message'
-      || emailEvent?.email_key === 'general_inbox_reply'
     ) {
       workspaceRequired = true
       generalMail = await reconcileGeneralMailDeliveryEvent({

@@ -15,10 +15,6 @@ import {
   SupportReplyEmail,
 } from '@/components/emails/SupportReplyEmail'
 import {
-  buildGeneralInboxReplyEmailText,
-  GeneralInboxReplyEmail,
-} from '@/components/emails/GeneralInboxReplyEmail'
-import {
   buildKolPartnershipEmailText,
   KolPartnershipEmail,
 } from '@/components/emails/KolPartnershipEmail'
@@ -664,77 +660,6 @@ async function retrieveResendMessageMetadata(providerMessageId: string) {
       error: error instanceof Error ? error.message : String(error),
     })
     return { internetMessageId: null, providerLastEvent: null }
-  }
-}
-
-type SendGeneralInboxReplyEmailParams = {
-  to: string
-  recipientName?: string | null
-  inboundEmailId: string
-  replyId: string
-  replyBody: string
-  replyTo: string
-  senderKey: GeneralInboxSenderKey
-  subject: string
-  inReplyTo?: string | null
-  references?: string | null
-}
-
-export async function sendGeneralInboxReplyEmail(params: SendGeneralInboxReplyEmailParams) {
-  const headers: Record<string, string> = {}
-  if (params.inReplyTo) headers['In-Reply-To'] = params.inReplyTo
-  if (params.references) headers.References = params.references
-
-  const emailResult = await sendManagedEmail({
-    emailKey: 'general_inbox_reply',
-    idempotencyKey: `general_inbox_reply:${params.replyId}`,
-    to: params.to,
-    from: getGeneralInboxSenderAddress(params.senderKey),
-    fromEnvName: getGeneralInboxSenderEnvName(params.senderKey),
-    replyTo: params.replyTo,
-    headers,
-    subject: params.subject,
-    context: {
-      inboundEmailId: params.inboundEmailId,
-      replyId: params.replyId,
-      senderKey: params.senderKey,
-      replyToLocalPart: params.replyTo.split('@')[0] || null,
-    },
-    retryFailed: true,
-    retryPendingAfterMs: 2 * 60 * 1000,
-    react: (
-      <GeneralInboxReplyEmail
-        recipientName={params.recipientName}
-        replyBody={params.replyBody}
-      />
-    ),
-    text: buildGeneralInboxReplyEmailText({
-      recipientName: params.recipientName,
-      replyBody: params.replyBody,
-    }),
-  })
-
-  const response = emailResult.response as
-    | { data?: { id?: string | null } | null; id?: string | null }
-    | null
-    | undefined
-
-  if (emailResult.skipped && emailResult.event?.status !== 'sent') {
-    throw new Error('General Inbox email is still pending and cannot be reconciled yet')
-  }
-
-  const providerMessageId =
-    response?.data?.id || response?.id || emailResult.event?.resend_message_id || null
-  const metadata = providerMessageId
-    ? await retrieveResendMessageMetadata(providerMessageId)
-    : { internetMessageId: null, providerLastEvent: null }
-
-  return {
-    skipped: emailResult.skipped,
-    emailEventId: emailResult.event?.email_event_id ?? null,
-    providerMessageId,
-    internetMessageId: metadata.internetMessageId,
-    providerLastEvent: metadata.providerLastEvent,
   }
 }
 

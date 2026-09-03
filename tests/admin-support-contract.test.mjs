@@ -288,7 +288,7 @@ test('General mail S3 threads only by mailbox RFC headers and keeps send state s
   assert.match(email, /resend\.emails\.get\(providerMessageId\)/)
   assert.match(email, /general_mail_message:/)
   assert.match(webhookEvents, /email_key === ['"]general_mail_message['"]/)
-  assert.match(webhookEvents, /email_key === ['"]general_inbox_reply['"]/)
+  assert.doesNotMatch(webhookEvents, /email_key === ['"]general_inbox_reply['"]/)
   assert.match(legacyReply, /status:\s*410/)
   assert.doesNotMatch(legacyReply, /projectGeneralMailLegacyReply|sendGeneralInboxReplyEmail/)
 

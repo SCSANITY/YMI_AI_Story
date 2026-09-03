@@ -7,9 +7,7 @@
  * Each template is rendered with realistic sample data. The index page
  * provides a sidebar to switch templates and a desktop/mobile width toggle.
  */
-import * as React from 'react'
-import { render } from '@react-email/render'
-import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -17,22 +15,16 @@ import { fileURLToPath } from 'node:url'
 // emailAsset() reads this env at render time, so setting it here (before main runs) works.
 process.env.EMAIL_ASSET_BASE = '.'
 
-import { OtpEmail } from '../components/emails/OtpEmail'
-import { OrderReceiptEmail } from '../components/emails/OrderReceiptEmail'
-import { DeliveryEmail } from '../components/emails/DeliveryEmail'
-import { AbandonmentEmail } from '../components/emails/AbandonmentEmail'
-import { LogisticsUpdateEmail } from '../components/emails/LogisticsUpdateEmail'
+import {
+  EMAIL_TEMPLATE_CATALOG,
+  renderEmailTemplatePreview,
+} from '../src/lib/email-template-catalog'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = join(__dirname, '..', 'email-previews')
 
-const SAMPLE_ORDER_URL = 'https://www.ymistory.com/orders/a1b2c3d4'
 /** Stand-in for the real face-swapped cover (relative to email-previews/) */
 const SAMPLE_COVER = 'sample-cover.webp'
-const SAMPLE_ITEMS = [
-  { name: 'The Musical Adventure — Personalized Storybook (eBook)', quantity: 1, unitPrice: 29.99 },
-  { name: 'The Little Seed — Personalized Storybook (eBook)', quantity: 1, unitPrice: 29.99 },
-]
 
 type Variant = {
   /** filename without extension */
@@ -41,107 +33,19 @@ type Variant = {
   label: string
   /** which trigger node sends it */
   trigger: string
-  node: React.ReactElement
+  templateId: string
+  variantId: string
 }
 
-const variants: Variant[] = [
-  {
-    slug: 'otp',
-    label: 'OTP Verification',
-    trigger: 'Guest requests checkout verification code',
-    node: <OtpEmail code="482916" expiresInMinutes={10} />,
-  },
-  {
-    slug: 'order-receipt',
-    label: 'Order Confirmation',
-    trigger: 'Payment succeeds (finalizeOrderPayment)',
-    node: (
-      <OrderReceiptEmail
-        orderId="a1b2c3d4-0000-0000-0000-000000000000"
-        displayId="YMI-2026-0611"
-        items={SAMPLE_ITEMS}
-        total={59.98}
-        currency="USD"
-        address={{ firstName: 'Sophie', lastName: 'Walker', address: '12 Bookbinder Lane', city: 'London', zip: 'N1 9GU' }}
-        trackUrl={SAMPLE_ORDER_URL}
-      />
-    ),
-  },
-  {
-    slug: 'logistics-production',
-    label: 'Logistics — Printing',
-    trigger: 'Admin sets order_status → production',
-    node: (
-      <LogisticsUpdateEmail
-        orderUrl={SAMPLE_ORDER_URL}
-        status="production"
-        statusLabel="Printing"
-        displayId="YMI-2026-0611"
-        coverImageUrl={SAMPLE_COVER}
-      />
-    ),
-  },
-  {
-    slug: 'logistics-shipped',
-    label: 'Logistics — Shipped',
-    trigger: 'Admin sets order_status → shipped',
-    node: (
-      <LogisticsUpdateEmail
-        orderUrl={SAMPLE_ORDER_URL}
-        status="shipped"
-        statusLabel="Shipped"
-        displayId="YMI-2026-0611"
-        trackingCarrier="DHL Express"
-        trackingNumber="JD014600003756123456"
-        trackingUrl="https://www.dhl.com/track?id=JD014600003756123456"
-        note="Your package left our print partner today."
-        coverImageUrl={SAMPLE_COVER}
-      />
-    ),
-  },
-  {
-    slug: 'logistics-delivered',
-    label: 'Logistics — Delivered',
-    trigger: 'Admin sets order_status → delivered',
-    node: (
-      <LogisticsUpdateEmail
-        orderUrl={SAMPLE_ORDER_URL}
-        status="delivered"
-        statusLabel="Delivered"
-        displayId="YMI-2026-0611"
-        coverImageUrl={SAMPLE_COVER}
-      />
-    ),
-  },
-  {
-    slug: 'delivery',
-    label: 'Final PDF Delivery',
-    trigger: 'Admin releases final job (/admin/finals)',
-    node: (
-      <DeliveryEmail
-        orderUrl={SAMPLE_ORDER_URL}
-        displayId="YMI-2026-0611"
-        downloadUrl="https://www.ymistory.com/api/orders/a1b2c3d4/download"
-        coverImageUrl={SAMPLE_COVER}
-      />
-    ),
-  },
-  {
-    slug: 'abandonment',
-    label: 'Unpaid Reminder',
-    trigger: 'Cron: order unpaid past reminder threshold',
-    node: (
-      <AbandonmentEmail
-        resumeUrl="https://www.ymistory.com/checkout?resume=a1b2c3d4"
-        items={[
-          { name: SAMPLE_ITEMS[0].name, quantity: 1, coverImageUrl: SAMPLE_COVER },
-          { name: SAMPLE_ITEMS[1].name, quantity: 1 },
-        ]}
-        displayId="YMI-2026-0611"
-      />
-    ),
-  },
-]
+const variants: Variant[] = EMAIL_TEMPLATE_CATALOG.flatMap((template) =>
+  template.variants.map((variant) => ({
+    slug: `${template.id}-${variant.id}`,
+    label: template.variants.length > 1 ? `${template.name} — ${variant.label}` : template.name,
+    trigger: template.trigger,
+    templateId: template.id,
+    variantId: variant.id,
+  }))
+)
 
 function viewerHtml(list: Variant[]): string {
   const nav = list
@@ -195,7 +99,7 @@ function viewerHtml(list: Variant[]): string {
   <aside>
     <div class="side-head">
       <h1>YMI STORY EMAILS</h1>
-      <p>7 variants · 5 trigger nodes</p>
+      <p>${list.length} previews · ${EMAIL_TEMPLATE_CATALOG.length} active families</p>
     </div>
     <nav>${nav}</nav>
   </aside>
@@ -254,6 +158,9 @@ function viewerHtml(list: Variant[]): string {
 
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true })
+  for (const file of readdirSync(OUT_DIR)) {
+    if (file.endsWith('.html')) unlinkSync(join(OUT_DIR, file))
+  }
   copyFileSync(join(__dirname, '..', 'public', 'hero-poster.webp'), join(OUT_DIR, SAMPLE_COVER))
   // Mirror production email assets so relative URLs resolve in the preview iframes.
   const assetsDir = join(__dirname, '..', 'public', 'email-assets')
@@ -261,7 +168,10 @@ async function main() {
     copyFileSync(join(assetsDir, f), join(OUT_DIR, f))
   }
   for (const v of variants) {
-    const html = await render(v.node)
+    const html = await renderEmailTemplatePreview(v.templateId, v.variantId, {
+      coverImageUrl: SAMPLE_COVER,
+    })
+    if (!html) continue
     writeFileSync(join(OUT_DIR, `${v.slug}.html`), html, 'utf8')
     console.log(`  rendered ${v.slug}.html`)
   }

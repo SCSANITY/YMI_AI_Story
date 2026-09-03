@@ -52,12 +52,12 @@ function formatOption(value: string) {
 }
 
 function buildEmailEventsHref(filters: EmailEventFilters) {
-  const params = new URLSearchParams()
+  const params = new URLSearchParams({ view: 'events' })
   if (filters.status !== 'all') params.set('status', filters.status)
   if (filters.provider !== 'all') params.set('provider', filters.provider)
   if (filters.emailKey !== 'all') params.set('email_key', filters.emailKey)
   const query = params.toString()
-  return query ? `/admin/emails?${query}` : '/admin/emails'
+  return `/admin/emails?${query}`
 }
 
 function eventActivityAt(event: EmailEventRow) {
