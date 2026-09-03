@@ -176,7 +176,6 @@ export async function normalizeFinalFrontCover(args: {
 async function normalizeInteriorPage(args: {
   buffer: Buffer
   label: string
-  expectedSource: { width: number; height: number } | null
   maxPageEdge: number
   minSourceEdge: number
 }) {
@@ -184,20 +183,15 @@ async function normalizeInteriorPage(args: {
   if (!isApproximatelySquareFinalSource(source)) {
     throw new StructuredFinalPdfError(`${args.label} must be square`)
   }
-  if (
-    args.expectedSource &&
-    (source.width !== args.expectedSource.width || source.height !== args.expectedSource.height)
-  ) {
-    throw new StructuredFinalPdfError(`${args.label} geometry does not match the other interiors`)
-  }
 
   const { data, info } = await sharp(args.buffer, { failOn: 'error' })
     .rotate()
     .resize({
-      width: source.width > args.maxPageEdge ? args.maxPageEdge : undefined,
-      height: source.height > args.maxPageEdge ? args.maxPageEdge : undefined,
-      fit: 'inside',
-      withoutEnlargement: true,
+      width: args.maxPageEdge,
+      height: args.maxPageEdge,
+      fit: 'contain',
+      position: 'centre',
+      background: '#ffffff',
     })
     .flatten({ background: '#ffffff' })
     .png()
@@ -210,7 +204,6 @@ export async function composeFinalInteriorSpread(args: {
   leftBuffer: Buffer
   rightBuffer: Buffer
   spreadIndex: number
-  expectedSource: { width: number; height: number } | null
   maxImageEdge: number
   jpegQuality: number
   minSourceEdge: number
@@ -223,14 +216,12 @@ export async function composeFinalInteriorSpread(args: {
   const left = await normalizeInteriorPage({
     buffer: args.leftBuffer,
     label: `Final interior spread ${args.spreadIndex} left page`,
-    expectedSource: args.expectedSource,
     maxPageEdge,
     minSourceEdge: args.minSourceEdge,
   })
   const right = await normalizeInteriorPage({
     buffer: args.rightBuffer,
     label: `Final interior spread ${args.spreadIndex} right page`,
-    expectedSource: left.source,
     maxPageEdge,
     minSourceEdge: args.minSourceEdge,
   })
@@ -309,7 +300,6 @@ export async function buildStructuredFinalPdf(args: {
   const coverPage = pdf.addPage([cover.width, cover.height])
   coverPage.drawImage(coverImage, { x: 0, y: 0, width: cover.width, height: cover.height })
 
-  let expectedInteriorSource: { width: number; height: number } | null = null
   let interiorSpreadOutput = { width: 0, height: 0, gutter: interiorGutter }
   for (const spread of plan.interiorSpreads) {
     const [leftBuffer, rightBuffer] = await Promise.all([
@@ -320,13 +310,11 @@ export async function buildStructuredFinalPdf(args: {
       leftBuffer,
       rightBuffer,
       spreadIndex: spread.spreadIndex,
-      expectedSource: expectedInteriorSource,
       maxImageEdge,
       jpegQuality,
       minSourceEdge,
       gutter: interiorGutter,
     })
-    expectedInteriorSource ??= composed.source
     interiorSpreadOutput = {
       width: composed.width,
       height: composed.height,

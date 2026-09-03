@@ -59,6 +59,30 @@ describe('structured Final customer PDF', () => {
     assert.ok(result.buffer.length < 50 * 1024 * 1024)
   })
 
+  it('normalizes mixed valid interior source sizes into consistent spread geometry', async () => {
+    const fixture = birthdaygirlFixture()
+    const buffers = new Map<number, Buffer>()
+    buffers.set(8, await solidPng(2048, 2078, '#0000ff'))
+    for (let pageNumber = 1; pageNumber <= 30; pageNumber += 1) {
+      const edge = pageNumber % 2 === 1 ? 2048 : 2197
+      buffers.set(100 + pageNumber * 3, await solidPng(edge, edge, `rgb(${pageNumber}, 80, 120)`))
+    }
+
+    const result = await buildStructuredFinalPdf({
+      ...fixture,
+      totalPages: 31,
+      maxImageEdge: 1800,
+      loadPage: async (pageIndex) => {
+        const buffer = buffers.get(pageIndex)
+        if (!buffer) throw new Error(`Missing fixture ${pageIndex}`)
+        return buffer
+      },
+    })
+
+    assert.equal(result.pdfPageCount, 16)
+    assert.deepEqual(result.interiorSpread, { width: 1800, height: 888, gutter: 24 })
+  })
+
   it('requires deterministic cover-first and physical interior output order', () => {
     const fixture = birthdaygirlFixture()
     const assets = structuredClone(fixture.outputAssets)
@@ -88,7 +112,6 @@ describe('structured Final customer PDF', () => {
       leftBuffer: await solidPng(100, 100, '#ff0000'),
       rightBuffer: await solidPng(100, 100, '#0000ff'),
       spreadIndex: 1,
-      expectedSource: null,
       maxImageEdge: 224,
       jpegQuality: 95,
       minSourceEdge: 64,

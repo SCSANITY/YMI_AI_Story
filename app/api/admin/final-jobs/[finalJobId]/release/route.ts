@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { releaseFinalJob, type FinalReleaseMode } from '@/lib/finalReview'
 
+export const maxDuration = 300
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ finalJobId: string }> | { finalJobId: string } }

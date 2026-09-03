@@ -11,10 +11,7 @@ import {
 import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
 import {
   FinalSourceImageError,
-  inspectFinalSourceImage,
-  isApproximatelySquareFinalSource,
   prepareFinalReplacementImage,
-  type FinalSourceDimensions,
 } from '@/lib/final-source-image'
 import {
   FINAL_REPLACEMENT_UPLOAD_BUCKET,
@@ -61,49 +58,6 @@ async function discardFinalReplacementStaging(args: {
     .delete()
     .eq('asset_id', args.reviewIntentId)
     .eq('storage_path', args.storagePath)
-}
-
-async function loadInteriorGeometryReference(args: {
-  finalJobId: string
-  targetPageIndex: number
-  plan: FinalReviewMutationPlan
-}): Promise<FinalSourceDimensions | null> {
-  if (args.plan.schema_version !== 3) return null
-
-  const interiorIndices = new Set(
-    args.plan.pages
-      .filter((page) => page.role === 'final_interior' && page.page_index !== args.targetPageIndex)
-      .map((page) => page.page_index)
-  )
-  const { data: pages, error } = await supabaseAdmin
-    .from('final_job_pages')
-    .select('page_index, approved_output_path, manual_output_path, ai_output_path')
-    .eq('final_job_id', args.finalJobId)
-  if (error) {
-    throw new Error(error.message || 'Failed to load Final interior geometry reference')
-  }
-
-  for (const page of pages || []) {
-    if (!interiorIndices.has(Number(page.page_index))) continue
-    const path = page.approved_output_path || page.manual_output_path || page.ai_output_path
-    if (!path) continue
-
-    const { data, error: downloadError } = await supabaseAdmin.storage.from('raw-private').download(path)
-    if (downloadError || !data) continue
-    try {
-      const source = await inspectFinalSourceImage({
-        buffer: Buffer.from(await data.arrayBuffer()),
-        label: 'Existing Final interior reference',
-      })
-      if (isApproximatelySquareFinalSource(source)) {
-        return { width: source.width, height: source.height }
-      }
-    } catch {
-      // Try the next real output. Release remains the final authority for older invalid assets.
-    }
-  }
-
-  return null
 }
 
 export async function POST(
@@ -173,18 +127,15 @@ export async function POST(
     return jsonNoStore({ error: 'Final page not found' }, { status: 404 })
   }
 
-  let mutationPlan: FinalReviewMutationPlan
   let storagePageNumber: number
-  let targetRole: FinalReviewMutationPlan['pages'][number]['role']
   try {
-    mutationPlan = await loadFinalReviewMutationPlan({
+    const mutationPlan: FinalReviewMutationPlan = await loadFinalReviewMutationPlan({
       finalJobId,
       jobId: finalJob.job_id,
       totalPages: Number(finalJob.total_pages),
     })
     const targetPage = resolveFinalReviewMutationPage(mutationPlan, pageIndex)
     storagePageNumber = targetPage.storage_page_number
-    targetRole = targetPage.role
   } catch (error) {
     if (error instanceof FinalReviewMutationContractError) {
       await discardFinalReplacementStaging({
@@ -254,13 +205,9 @@ export async function POST(
     if (rawBuffer.length !== upload.sizeBytes) {
       throw new FinalSourceImageError('Uploaded replacement image byte length changed')
     }
-    const expectedInteriorSource = targetRole === 'final_interior'
-      ? await loadInteriorGeometryReference({ finalJobId, targetPageIndex: pageIndex, plan: mutationPlan })
-      : null
     const prepared = await prepareFinalReplacementImage({
       buffer: rawBuffer,
       label: `Final page ${pageIndex}`,
-      expectedInteriorSource,
     })
     assertFinalReplacementSourceFormat(upload.contentType, prepared.source.format)
     fileBuffer = prepared.buffer

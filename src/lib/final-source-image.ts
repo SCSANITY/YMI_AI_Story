@@ -68,7 +68,6 @@ export async function inspectFinalSourceImage(args: {
 export async function prepareFinalReplacementImage(args: {
   buffer: Buffer
   label: string
-  expectedInteriorSource?: FinalSourceDimensions | null
 }) {
   const source = await inspectFinalSourceImage({
     buffer: args.buffer,
@@ -81,15 +80,6 @@ export async function prepareFinalReplacementImage(args: {
       `${args.label} must be approximately square (received ${source.width}x${source.height})`
     )
   }
-  if (
-    args.expectedInteriorSource &&
-    (source.width !== args.expectedInteriorSource.width || source.height !== args.expectedInteriorSource.height)
-  ) {
-    throw new FinalSourceImageError(
-      `${args.label} geometry must match the other Final interiors (${args.expectedInteriorSource.width}x${args.expectedInteriorSource.height})`
-    )
-  }
-
   const buffer = await sharp(args.buffer, { failOn: 'error' })
     .rotate()
     .flatten({ background: '#ffffff' })
