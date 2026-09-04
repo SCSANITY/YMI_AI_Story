@@ -1,6 +1,7 @@
 import {
   CANONICAL_LEGAL_DOCUMENT_KEYS,
   getCanonicalLegalDocuments,
+  getCanonicalLegalDocumentEffectiveDateIso,
   type CanonicalLegalDocumentKey,
 } from '@/lib/legal-documents'
 import {
@@ -256,7 +257,7 @@ export async function bootstrapAdminLegalDocuments(actorCustomerId: string) {
     const content = normalizeLegalRevisionContent({
       en: {
         sections: document.sections,
-        effectiveDate: document.version,
+        effectiveDate: getCanonicalLegalDocumentEffectiveDateIso(document),
         version: document.version,
       },
     })

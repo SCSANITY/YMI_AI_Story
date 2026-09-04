@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getCanonicalLegalDocuments } from './legal-documents'
+import {
+  getCanonicalLegalDocumentEffectiveDateIso,
+  getCanonicalLegalDocuments,
+} from './legal-documents'
 import {
   LegalPublishingConflictError,
   LegalPublishingValidationError,
@@ -20,7 +23,7 @@ test('all code-owned canonical policies are valid bootstrap content', () => {
     const content = normalizeLegalRevisionContent({
       en: {
         sections: document.sections,
-        effectiveDate: document.version,
+        effectiveDate: getCanonicalLegalDocumentEffectiveDateIso(document),
         version: document.version,
       },
     })

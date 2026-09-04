@@ -96,6 +96,14 @@ export function getCanonicalLegalDocuments() {
   return CANONICAL_LEGAL_DOCUMENT_KEYS.map(getCanonicalLegalDocument)
 }
 
+export function getCanonicalLegalDocumentEffectiveDateIso(
+  document: Pick<CanonicalLegalDocument, 'version'>,
+) {
+  const effectiveDate = document.version.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+  if (!effectiveDate) throw new Error('Canonical legal version must begin with YYYY-MM-DD')
+  return effectiveDate
+}
+
 export function legalDocumentMetadata(key: CanonicalLegalDocumentKey): Metadata {
   const document = getCanonicalLegalDocumentDefinition(key)
 
