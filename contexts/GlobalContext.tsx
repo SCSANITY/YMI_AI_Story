@@ -303,7 +303,6 @@ export const GlobalProvider: React.FC<{
         const templateId = row?.template_id ?? template?.template_id;
         if (!templateId) return null;
 
-        const fallbackBook = BOOKS.find((b) => b.bookID === templateId);
         return catalogTemplateToBook(templateId, template);
       })
       .filter((book: Book | null): book is Book => Boolean(book));

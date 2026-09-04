@@ -1,11 +1,10 @@
 ﻿'use client';
 
-import React, { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, ChevronLeft } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
-import { Button } from '@/components/Button';
 import { AddressFormSection } from './AddressFormSection';
 import { CheckoutEmailOwnershipHint } from './CheckoutEmailOwnershipHint';
 import { CheckoutItemsSection } from './CheckoutItemsSection';

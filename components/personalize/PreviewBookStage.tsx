@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, type CSSProperties, type ReactNode } from 'react'
+import { memo, type CSSProperties, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 type PreviewBookStageProps = {

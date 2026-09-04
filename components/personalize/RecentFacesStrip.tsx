@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo } from 'react'
+import { memo } from 'react'
 import { X } from 'lucide-react'
 
 export type RecentFaceItem = {

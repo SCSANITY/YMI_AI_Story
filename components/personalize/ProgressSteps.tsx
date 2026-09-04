@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { Book, Check, Package, Sparkles, Wand2 } from 'lucide-react'
 
 type ProgressStepsProps = {

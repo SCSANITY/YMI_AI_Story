@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo } from 'react'
+import { memo } from 'react'
 import dynamic from 'next/dynamic'
 
 const ShareDialog = dynamic(() => import('@/components/ShareDialog').then((module) => module.ShareDialog), {

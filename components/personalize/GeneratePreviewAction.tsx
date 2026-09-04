@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, Sparkles } from 'lucide-react'
 

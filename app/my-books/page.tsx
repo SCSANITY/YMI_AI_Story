@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { AlertCircle, BookOpen, CheckCircle2, LogIn, RotateCw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'

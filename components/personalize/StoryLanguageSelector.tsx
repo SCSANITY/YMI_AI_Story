@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { StoryLanguage } from '@/types'
 import styles from '@/components/personalize/customizeControls.module.css'

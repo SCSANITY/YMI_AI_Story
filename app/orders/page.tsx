@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogIn, Package, UserPlus } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';

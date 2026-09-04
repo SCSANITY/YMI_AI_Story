@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { AudioLines, BookOpen, Check, ChevronDown, Cloud, Star } from 'lucide-react'
 import styles from '@/components/personalize/customizeControls.module.css'
 

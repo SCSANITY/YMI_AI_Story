@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { CheckoutCurrency } from '@/lib/locale-pricing';
 

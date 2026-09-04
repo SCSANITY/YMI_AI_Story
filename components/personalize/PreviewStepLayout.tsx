@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronsDown } from 'lucide-react'
 
 type PreviewStepLayoutProps = {

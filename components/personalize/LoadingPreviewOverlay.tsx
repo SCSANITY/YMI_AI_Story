@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo } from 'react'
+import { memo } from 'react'
 import dynamic from 'next/dynamic'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, Info, Sparkles } from 'lucide-react'

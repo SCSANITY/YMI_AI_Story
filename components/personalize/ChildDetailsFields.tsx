@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import styles from '@/components/personalize/customizeControls.module.css'
 

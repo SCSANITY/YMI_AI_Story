@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import * as React from 'react'
 import { render } from '@react-email/render'
 import { AbandonmentEmail } from './AbandonmentEmail'
 import { DeliveryEmail } from './DeliveryEmail'

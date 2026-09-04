@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, type CSSProperties } from 'react'
+import { memo, type CSSProperties } from 'react'
 import { BookOpen, ChevronLeft, ChevronRight, Lock, Wand2 } from 'lucide-react'
 import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector'
 import { BookLeafImage } from '@/components/personalize/BookLeafImage'

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Mic, Square, Play, Pause, RotateCcw, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'

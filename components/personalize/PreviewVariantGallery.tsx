@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo } from 'react'
+import { memo } from 'react'
 import { Loader2, X } from 'lucide-react'
 
 export type PreviewVariantGalleryItem = {

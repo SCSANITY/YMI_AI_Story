@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useState } from 'react'
+import { memo, useState } from 'react'
 import { Check, ChevronDown, CircleHelp, Heart, Shield, Sparkles, Star, type LucideIcon } from 'lucide-react'
 import type { MagicAttribute } from '@/types'
 

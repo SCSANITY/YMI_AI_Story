@@ -22,6 +22,8 @@ repository:
   ownership, preview, and read-only security boundary.
 - [`OAUTH_RETURN_RECOVERY.md`](OAUTH_RETURN_RECOVERY.md): customer and Admin
   Google OAuth return-state recovery without changing authentication authority.
+- [`NEXTJS_RUNTIME_ARCHITECTURE.md`](NEXTJS_RUNTIME_ARCHITECTURE.md): current
+  application-level runtime authorities and Server/Client boundaries.
 - `../tests/`: runtime and source-contract coverage.
 - `../tests/fixtures/external-contracts/`: versioned SQL and Worker contract
   snapshots required for isolated CI.
