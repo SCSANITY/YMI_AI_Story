@@ -16,7 +16,7 @@ describe('Worker queue wake-up external contract', () => {
     assert.match(runtime, /QUEUE_WAKE_RETRY_DELAYS_MS = \[5000, 15000, 30000, 60000, 300000\]/)
   })
 
-  it('uses Broadcast only to interrupt the one serial claim loop', async () => {
+  it('uses Broadcast only to interrupt the one bounded claim scheduler', async () => {
     const worker = await readFixture('index.ts')
     const handlerStart = worker.indexOf(".on('broadcast'")
     const handlerEnd = worker.indexOf('channel.subscribe', handlerStart)
@@ -28,8 +28,9 @@ describe('Worker queue wake-up external contract', () => {
     assert.match(worker, /config: \{ private: true \}/)
     assert.match(broadcastHandler, /claimWakeSignal\.wake\(\)/)
     assert.doesNotMatch(broadcastHandler, /claim_next_job/)
-    assert.equal(worker.match(/supabase\.rpc\('claim_next_job'\)/g)?.length, 1)
+    assert.equal(worker.match(/supabase\.rpc\('claim_next_job'/g)?.length, 1)
     assert.match(worker, /claimWakeSignal\.wait\(idleMs, observedWakeGeneration\)/)
+    assert.match(worker, /for \(const jobType of WORKER_CLAIM_LANE_ORDER\)/)
   })
 
   it('retains bounded fallback polling and exposes wake degradation in health', async () => {
@@ -42,6 +43,6 @@ describe('Worker queue wake-up external contract', () => {
     assert.match(worker, /queueWakeNextRetryAt/)
     assert.match(worker, /reconnectAfterMs: resolveQueueWakeRetryDelayMs/)
     assert.match(worker, /void removeChannel\(failedChannel\)/)
-    assert.match(worker, /idleMs = Math\.min\(Math\.round\(idleMs \* idleBackoff\), maxIdleMs\)/)
+    assert.match(worker, /Math\.round\(idleMs \* WORKER_CLAIM_IDLE_BACKOFF_MULTIPLIER\)/)
   })
 })

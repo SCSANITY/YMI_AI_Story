@@ -104,8 +104,9 @@ test('full Final retry cannot downgrade a newer approved manual revision', async
   ])
 
   assert.match(workerIndex, /shouldProtectApprovedFinalRevision\(isFinalPageRerun\)/)
-  assert.match(workerIndex, /updateQuery\s*=\s*updateQuery\.is\(['"]approved_output_path['"],\s*null\)/)
-  assert.match(workerIndex, /page\.ai_output_path\s*\|\|\s*page\.approved_output_path/)
+  assert.match(workerIndex, /checkpoint_final_job_pages_v1/)
+  assert.match(workerIndex, /p_protect_approved:\s*patch\.protectApproved === true/)
+  assert.match(recoveryPolicy, /aiOutputPath\s*\|\|\s*approvedOutputPath/)
   assert.doesNotMatch(
     workerIndex.slice(workerIndex.indexOf("status: 'processing'"), workerIndex.indexOf('const outputPages')),
     /error_message:\s*null/
@@ -196,7 +197,8 @@ test('single-page rerun preserves the stored job contract and leaves A/B provide
   assert.match(workerIndex, /selectSinglePageJobManifest/)
   assert.match(workerIndex, /job\.job_type === 'final' && !hasSinglePageMarker[\s\S]*Final jobs require the V3 single-page template contract/)
   assert.match(workerIndex, /finalPageOverrideIndices:\s*normalizeOverridePageIndices\(input\)/)
-  assert.match(workerIndex, /const mergedPages = isFinalPageRerun/)
+  assert.match(workerIndex, /const mergedPages = Array\.from/)
+  assert.match(workerIndex, /\.\.\.existingPagesByIndex\.entries\(\)/)
   assert.match(workerIndex, /existingPagesByIndex/)
   assert.match(pagePolicy, /page\.enable_face_swap\s*===\s*false/)
   assert.match(contract, /enable_face_swap must be explicitly true or false/)

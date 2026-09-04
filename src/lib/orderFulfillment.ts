@@ -1,6 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendOrderConfirmationEmail } from '@/lib/email'
-import { checkJobQueueGuard } from '@/lib/jobQueue'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import { normalizeOrderStatus, type OrderStatus } from '@/lib/order-status'
@@ -98,6 +97,19 @@ type CartItemForFinal = {
       name?: string | null
     } | null
   } | null
+}
+
+type OrderCoverLookupRow = {
+  creations: { preview_job_id: string | null } | null
+}
+
+type OrderItemCoverLookupRow = {
+  quantity: number | null
+  creations:
+    | (NonNullable<CartItemForFinal['creations']> & {
+        preview_job_id: string | null
+      })
+    | null
 }
 
 type CustomizeSnapshot = {
@@ -350,9 +362,9 @@ export async function loadOrderCoverUrl(orderId: string): Promise<string | undef
     .select('creations:creations ( preview_job_id )')
     .eq('order_id', orderId)
 
-  const previewJobId = (items ?? [])
-    .map((row: any) => row.creations?.preview_job_id)
-    .find((value: string | null) => Boolean(value)) as string | undefined
+  const previewJobId = ((items ?? []) as unknown as OrderCoverLookupRow[])
+    .map((row) => row.creations?.preview_job_id)
+    .find((value): value is string => Boolean(value))
   if (!previewJobId) return undefined
 
   const { data: job } = await supabaseAdmin
@@ -401,7 +413,7 @@ export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderIt
     )
     .eq('order_id', orderId)
 
-  const items = (rows ?? []) as any[]
+  const items = (rows ?? []) as unknown as OrderItemCoverLookupRow[]
   if (items.length === 0) return []
 
   // Batch-resolve cover URLs for all preview jobs in one pass.
@@ -721,92 +733,78 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     }
 
     if (missingJobItems.length > 0) {
-    const finalQueueGuard = await checkJobQueueGuard({
-      jobType: 'final',
-      incomingJobs: missingJobItems.length,
-    })
-    if (!finalQueueGuard.allowed) {
-      const err = new Error(finalQueueGuard.message) as Error & {
-        code?: string
-        guard?: typeof finalQueueGuard
+      const jobsToInsert: Record<string, unknown>[] = []
+
+      for (const item of missingJobItems) {
+        const creation = item.creations
+        if (!creation?.template_id) {
+          throw new Error('Missing creation template')
+        }
+
+        const storagePath = creation?.customize_snapshot?.storagePath ?? null
+        const configUrl = configUrlByTemplateId.get(creation.template_id)
+        if (!configUrl) throw new Error('Failed to resolve config URL')
+        const rawTextOverrides =
+          creation?.customize_snapshot?.textOverrides ??
+          creation?.customize_snapshot?.text_overrides ??
+          null
+        const finalTextOverrides = forceEnglishTextOverrides(rawTextOverrides)
+
+        jobsToInsert.push({
+          owner_type: 'customer',
+          customer_id: customerId,
+          cart_item_id: item.cart_item_id,
+          creation_id: item.creation_id,
+          template_id: creation.template_id,
+          job_type: 'final',
+          story_language: normalizeStoryLanguage(finalTextOverrides?.language),
+          selected_book_type: mapBookTypeToDisplay(
+            creation?.customize_snapshot?.textOverrides?.book_type ??
+              creation?.customize_snapshot?.text_overrides?.book_type ??
+              creation?.customize_snapshot?.bookType
+          ),
+          status: 'queued',
+          input_snapshot: {
+            face_source_path: storagePath ? `raw-private/${storagePath}` : null,
+            config_url: configUrl,
+            text_overrides: finalTextOverrides,
+            params: creation?.customize_snapshot?.params ?? null,
+          },
+        })
       }
-      err.code = 'final_queue_overloaded'
-      err.guard = finalQueueGuard
-      throw err
-    }
 
-    const jobsToInsert: Record<string, unknown>[] = []
+      const { data: jobs, error: jobsError } = await supabaseAdmin
+        .from('jobs')
+        .insert(jobsToInsert)
+        .select('job_id, cart_item_id')
 
-    for (const item of missingJobItems) {
-      const creation = item.creations
-      if (!creation?.template_id) {
-        throw new Error('Missing creation template')
+      if (jobsError || !jobs) {
+        if (!isUniqueViolation(jobsError)) {
+          throw new Error(`Failed to create final jobs: ${jobsError?.message || 'unknown error'}`)
+        }
+        const conflictedCartItemIds = missingJobItems.map((item) => item.cart_item_id)
+        const existingJobsByCartItem = await loadFinalJobIdsByCartItem(conflictedCartItemIds)
+        for (const [cartItemId, jobId] of existingJobsByCartItem.entries()) {
+          jobIdByCartItem.set(cartItemId, jobId)
+        }
+      } else {
+        for (const job of jobs) {
+          if (!job?.cart_item_id) continue
+          jobIdByCartItem.set(job.cart_item_id, job.job_id)
+        }
       }
 
-      const storagePath = creation?.customize_snapshot?.storagePath ?? null
-      const configUrl = configUrlByTemplateId.get(creation.template_id)
-      if (!configUrl) throw new Error('Failed to resolve config URL')
-      const rawTextOverrides =
-        creation?.customize_snapshot?.textOverrides ??
-        creation?.customize_snapshot?.text_overrides ??
-        null
-      const finalTextOverrides = forceEnglishTextOverrides(rawTextOverrides)
-
-      jobsToInsert.push({
-        owner_type: 'customer',
-        customer_id: customerId,
-        cart_item_id: item.cart_item_id,
-        creation_id: item.creation_id,
-        template_id: creation.template_id,
-        job_type: 'final',
-        story_language: normalizeStoryLanguage(finalTextOverrides?.language),
-        selected_book_type: mapBookTypeToDisplay(
-          creation?.customize_snapshot?.textOverrides?.book_type ??
-            creation?.customize_snapshot?.text_overrides?.book_type ??
-            creation?.customize_snapshot?.bookType
-        ),
-        status: 'queued',
-        input_snapshot: {
-          face_source_path: storagePath ? `raw-private/${storagePath}` : null,
-          config_url: configUrl,
-          text_overrides: finalTextOverrides,
-          params: creation?.customize_snapshot?.params ?? null,
-        },
-      })
-    }
-
-    const { data: jobs, error: jobsError } = await supabaseAdmin
-      .from('jobs')
-      .insert(jobsToInsert)
-      .select('job_id, cart_item_id')
-
-    if (jobsError || !jobs) {
-      if (!isUniqueViolation(jobsError)) {
-        throw new Error(`Failed to create final jobs: ${jobsError?.message || 'unknown error'}`)
-      }
-      const conflictedCartItemIds = missingJobItems.map((item) => item.cart_item_id)
-      const existingJobsByCartItem = await loadFinalJobIdsByCartItem(conflictedCartItemIds)
-      for (const [cartItemId, jobId] of existingJobsByCartItem.entries()) {
-        jobIdByCartItem.set(cartItemId, jobId)
-      }
-    } else {
-      for (const job of jobs) {
-        if (!job?.cart_item_id) continue
-        jobIdByCartItem.set(job.cart_item_id, job.job_id)
+      for (const item of missingJobItems) {
+        const jobId = jobIdByCartItem.get(item.cart_item_id)
+        if (!jobId) {
+          throw new Error(`Failed to resolve final job for cart item ${item.cart_item_id}`)
+        }
+        await supabaseAdmin
+          .from('cart_items')
+          .update({ final_job_id: jobId, updated_at: new Date().toISOString() })
+          .eq('cart_item_id', item.cart_item_id)
       }
     }
-
-    for (const item of missingJobItems) {
-      const jobId = jobIdByCartItem.get(item.cart_item_id)
-      if (!jobId) {
-        throw new Error(`Failed to resolve final job for cart item ${item.cart_item_id}`)
-      }
-      await supabaseAdmin
-        .from('cart_items')
-        .update({ final_job_id: jobId, updated_at: new Date().toISOString() })
-        .eq('cart_item_id', item.cart_item_id)
-    }
-  }
 
     const allJobIds = Array.from(jobIdByCartItem.values()).filter(Boolean)
     const existingFinalJobsByJobId = new Map<string, { final_job_id: string }>()

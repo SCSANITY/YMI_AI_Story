@@ -25,6 +25,7 @@
     "preview-pages:tests": "tsx --test src/lib/preview-page-contract.test.ts",
     "book-leaves:tests": "tsx --test src/lib/book-presentation.test.tsx src/lib/preview-book-presentation.test.ts src/lib/template-final-preview.test.ts src/lib/template-locked-preview.test.ts tests/preview-locked-pages-contract.test.mjs",
     "reader-pages:tests": "tsx --test src/lib/reader-page-contract.test.ts",
+    "worker-cloud:tests": "tsx --test src/lib/jobQueue.test.ts tests/worker-cloud-contract.test.mjs tests/worker-queue-wakeup-contract.test.mjs",
     "test:contracts": "node --test tests/*.test.mjs",
     "covers:normalize": "node scripts/normalize-template-covers.mjs",
     "images:optimize": "node scripts/optimize-images.mjs",

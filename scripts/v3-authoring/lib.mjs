@@ -425,19 +425,41 @@ export function validateSubtitleDocument({ document, templatePath, authoredPages
 }
 
 async function validateWithWorkerContract({ config, subtitleDocuments, authoredPages }) {
-  const workerRoot = process.env.YMI_WORKER_ROOT
-    ? path.resolve(process.env.YMI_WORKER_ROOT)
-    : path.resolve(PROJECT_ROOT, '..', 'worker')
-  const contractPath = path.join(workerRoot, 'bookPageContract.ts')
-  try {
-    await fs.access(contractPath)
-  } catch {
-    throw new V3AuthoringError([`Active Worker contract not found: ${contractPath}`])
+  const explicitWorkerRoot = String(process.env.YMI_WORKER_ROOT || '').trim()
+  const projectParent = path.dirname(PROJECT_ROOT)
+  const contractCandidates = explicitWorkerRoot
+    ? [path.join(path.resolve(explicitWorkerRoot), 'bookPageContract.ts')]
+    : [
+        path.join(projectParent, 'worker', 'bookPageContract.ts'),
+        ...(path.basename(projectParent) === '.worktrees'
+          ? [path.join(path.dirname(projectParent), 'worker', 'bookPageContract.ts')]
+          : []),
+        path.join(
+          PROJECT_ROOT,
+          'tests',
+          'fixtures',
+          'external-contracts',
+          'worker',
+          'bookPageContract.ts'
+        ),
+      ]
+  let contractPath = null
+  for (const candidate of contractCandidates) {
+    const exists = await fs.access(candidate).then(() => true, () => false)
+    if (exists) {
+      contractPath = candidate
+      break
+    }
+  }
+  if (!contractPath) {
+    throw new V3AuthoringError([
+      `Worker contract not found; checked ${contractCandidates.join(', ')}`,
+    ])
   }
 
   const workerContract = await tsImport(pathToFileURL(contractPath).href, import.meta.url)
   if (typeof workerContract.validateSinglePageTemplateContract !== 'function') {
-    throw new V3AuthoringError([`Active Worker contract does not export validateSinglePageTemplateContract`])
+    throw new V3AuthoringError([`Worker contract does not export validateSinglePageTemplateContract`])
   }
   const availableStorageFiles = authoredPages.map((page) => page.assetPath)
   const results = []
@@ -455,7 +477,7 @@ async function validateWithWorkerContract({ config, subtitleDocuments, authoredP
       })
     } catch (error) {
       const message = Array.isArray(error?.issues) ? error.issues.join('; ') : error instanceof Error ? error.message : String(error)
-      throw new V3AuthoringError([`Active Worker rejected ${subtitle.path}: ${message}`])
+      throw new V3AuthoringError([`Worker contract rejected ${subtitle.path}: ${message}`])
     }
   }
   return results

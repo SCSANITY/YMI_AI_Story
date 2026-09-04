@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getJobQueueGuardConfig, getJobQueueStats } from '@/lib/jobQueue'
+import { JOB_QUEUE_ADMISSION_LIMITS, getJobQueueStats } from '@/lib/jobQueue'
 import { isInternalRequestAuthorized } from '@/lib/internal-request-auth'
 
 async function run(request: Request) {
@@ -9,19 +9,16 @@ async function run(request: Request) {
 
   try {
     const stats = await getJobQueueStats()
-    const guard = getJobQueueGuardConfig()
+    const admission = JOB_QUEUE_ADMISSION_LIMITS
 
     const remaining = {
-      queuedTotal: Math.max(0, guard.maxQueuedTotal - stats.totals.queued),
-      queuedPreview: Math.max(0, guard.maxQueuedPreview - stats.byType.preview.queued),
-      queuedFinal: Math.max(0, guard.maxQueuedFinal - stats.byType.final.queued),
-      runningTotal: Math.max(0, guard.maxRunningTotal - stats.totals.running),
+      queuedPreview: Math.max(0, admission.maxQueuedPreview - stats.byType.preview.queued),
     }
 
     return NextResponse.json({
       ok: true,
       stats,
-      guard,
+      admission,
       remaining,
     })
   } catch (error: unknown) {

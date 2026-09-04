@@ -19,7 +19,16 @@ not a second Worker source.
   and every upload, owner, authorization and binding control. It is a pending
   external contract until the database migration ledger records production
   application.
-- `SHA256SUMS` records the source byte identity at capture time.
+- WC-001 refreshed the Worker execution snapshots from private Worker commit
+  `683fe5d` and added the queue-orchestration migration from private Database
+  commit `bb81394` on 2026-09-04. The snapshots include the provider adapter and
+  its input contract so lease handoff and RunPod request recovery remain
+  testable from an isolated Web clone. The migration fixture is not evidence
+  that production SQL was executed; it pins the typed claim, locked owned
+  lease/checkpoint, and atomic queue admission contracts that the Web and cloud
+  Worker are being prepared to use.
+- `SHA256SUMS` records the repository-normalized UTF-8/LF identity of every
+  fixture and this README, so the same manifest verifies on Windows and Linux.
 
 The fixtures let this repository's contract suite run from an isolated clone.
 When an upstream SQL or Worker contract changes, update the affected fixture and

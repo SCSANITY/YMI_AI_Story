@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { checkJobQueueGuard } from '@/lib/jobQueue'
+import { parseJobQueueAdmissionError } from '@/lib/jobQueueAdmission'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { getCustomizeAccessSettings } from '@/lib/customize-access-server'
 import {
@@ -161,21 +161,6 @@ export async function POST(request) {
         code: 'customize_access_closed',
       },
       { status: 403 }
-    )
-  }
-
-  const queueGuard = await checkJobQueueGuard({
-    jobType: 'preview',
-    incomingJobs: 1,
-  })
-  if (!queueGuard.allowed) {
-    return NextResponse.json(
-      {
-        error: queueGuard.message,
-        code: 'queue_overloaded',
-        guard: queueGuard,
-      },
-      { status: 429 }
     )
   }
 
@@ -346,6 +331,10 @@ export async function POST(request) {
   const { data: previewJob, error } = previewJobResult
 
   if (error || !previewJob) {
+    const admissionError = parseJobQueueAdmissionError(error)
+    if (admissionError) {
+      return NextResponse.json(admissionError, { status: 429 })
+    }
     return NextResponse.json(
       { error: 'Failed to create preview job', details: error?.message ?? null },
       { status: 500 }

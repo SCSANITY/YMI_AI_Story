@@ -38,6 +38,12 @@ governance repository.
   derived from that state machine. `usePersonalizeState` owns the form and
   `usePreviewController` owns Preview jobs, assets, versions, refresh, errors,
   cancellation, and its single per-job watcher.
+- Preview creation routes map the database admission contract through
+  `src/lib/jobQueueAdmission.ts`. `src/lib/jobQueue.ts` is a read-only Admin
+  operations snapshot and is never an admission authority.
+- Payment finalization always persists paid Final jobs. Provider throughput is
+  bounded by the Worker lane and one-page-at-a-time submission, not by rejecting
+  fulfillment after payment.
 - Legal bootstrap dates are derived from the date prefix of the canonical legal
   version; the immutable version string remains unchanged.
 
@@ -51,6 +57,19 @@ governance repository.
   Auth lifecycle, signed uploads, and active job refresh behavior.
 - Large files are split only when doing so removes duplicate state or moves a
   stable business rule to its single authority.
+
+## Worker queue boundary
+
+The browser never calls the Node Worker or RunPod. Web routes create durable
+`jobs` rows in Supabase, and the existing private Broadcast trigger provides
+only a best-effort wake hint. PostgreSQL atomically caps repeatable Preview
+creation at insertion time; Final jobs created after payment remain durably
+admissible regardless of backlog.
+
+The Web repository does not own claim order, endpoint selection, leases, or
+provider retries. Those are Worker and database contracts pinned under
+`tests/fixtures/external-contracts/` so an isolated Web clone can verify the
+integration without carrying a second executable Worker.
 
 ## Compatibility policy
 

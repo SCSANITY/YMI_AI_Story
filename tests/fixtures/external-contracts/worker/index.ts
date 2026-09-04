@@ -27,8 +27,10 @@ import {
   validateSinglePageTemplateContract,
 } from './bookPageContract'
 import {
+  buildFinalPageRecoveryPlan,
   buildFinalReviewCompletionState,
   shouldProtectApprovedFinalRevision,
+  type FinalReviewPageCheckpoint,
 } from './finalReviewRecovery'
 import {
   encodePreviewDisplayWebp,
@@ -44,6 +46,7 @@ import {
 import {
   normalizeWorkflowProvider,
   resolveProviderAdapter,
+  resolveProviderDeploymentId,
   type ProviderRunState,
   type ProviderStageConfig,
   type WorkflowStageKey,
@@ -71,6 +74,14 @@ import {
   isSubtitleRenderEnabled,
   renderSubtitlePage,
 } from './subtitleRenderer'
+import {
+  availableClaimSlots,
+  buildWorkerInstanceId,
+  resolveWorkerOrchestrationPolicy,
+  validateWorkerStartupEnvironment,
+  WORKER_CLAIM_LANE_ORDER,
+} from './workerOrchestration'
+import { logEvent, redactLogText, toSafeError } from './safeLogging'
 
 dotenv.config()
 
@@ -91,6 +102,7 @@ const PREVIEW_WEBP_QUALITY = Number.parseInt(process.env.PREVIEW_WEBP_QUALITY ||
 const EXECUTION_MODE_RESOLUTION = resolveWorkerExecutionMode(process.env.WORKER_EXECUTION_MODE)
 const WORKER_EXECUTION_MODE = EXECUTION_MODE_RESOLUTION.mode
 const IS_MOCK_MODE = WORKER_EXECUTION_MODE === 'mock'
+validateWorkerStartupEnvironment({ env: process.env, executionMode: WORKER_EXECUTION_MODE })
 const MOCK_FINAL_PAGE_LIMIT = Number.parseInt(process.env.MOCK_FINAL_PAGE_LIMIT || '0', 10)
 const MOCK_FINAL_PDF_MAX_WIDTH = Number.parseInt(process.env.MOCK_FINAL_PDF_MAX_WIDTH || '1400', 10)
 const WORKFLOW_INPUT_MAX_BYTES = Number.parseInt(
@@ -119,12 +131,12 @@ const WORKFLOW_INPUT_FIT_INITIAL_QUALITY = Number.parseInt(
   process.env.WORKFLOW_INPUT_FIT_INITIAL_QUALITY || '96',
   10
 )
-const RUNCOMFY_INPUT_SIGN_TTL_PREVIEW_SEC = Number.parseInt(
-  process.env.RUNCOMFY_INPUT_SIGN_TTL_PREVIEW_SEC || '21600',
+const WORKFLOW_INPUT_SIGN_TTL_PREVIEW_SEC = Number.parseInt(
+  process.env.WORKFLOW_INPUT_SIGN_TTL_PREVIEW_SEC || '21600',
   10
 )
-const RUNCOMFY_INPUT_SIGN_TTL_FINAL_SEC = Number.parseInt(
-  process.env.RUNCOMFY_INPUT_SIGN_TTL_FINAL_SEC || '86400',
+const WORKFLOW_INPUT_SIGN_TTL_FINAL_SEC = Number.parseInt(
+  process.env.WORKFLOW_INPUT_SIGN_TTL_FINAL_SEC || '86400',
   10
 )
 const WORKFLOW_FORCE_RUNTIME_TARGET_UPLOAD = process.env.WORKFLOW_FORCE_RUNTIME_TARGET_UPLOAD === 'true'
@@ -157,22 +169,6 @@ const FINAL_PDF_FIT_WIDTH_SCALE = Number.parseFloat(process.env.FINAL_PDF_FIT_WI
 const FINAL_PDF_FIT_QUALITY_STEP = Number.parseInt(process.env.FINAL_PDF_FIT_QUALITY_STEP || '4', 10)
 const FINAL_PDF_FIT_MIN_WIDTH = Number.parseInt(process.env.FINAL_PDF_FIT_MIN_WIDTH || '1400', 10)
 const FINAL_PDF_FIT_MIN_QUALITY = Number.parseInt(process.env.FINAL_PDF_FIT_MIN_QUALITY || '70', 10)
-const RUNCOMFY_POLL_INTERVAL_PREVIEW_MS = Number.parseInt(
-  process.env.RUNCOMFY_POLL_INTERVAL_PREVIEW_MS || '5000',
-  10
-)
-const RUNCOMFY_POLL_INTERVAL_FINAL_MS = Number.parseInt(
-  process.env.RUNCOMFY_POLL_INTERVAL_FINAL_MS || '12000',
-  10
-)
-const RUNCOMFY_POLL_TIMEOUT_PREVIEW_MS = Number.parseInt(
-  process.env.RUNCOMFY_POLL_TIMEOUT_PREVIEW_MS || process.env.RUNCOMFY_POLL_TIMEOUT_MS || '210000',
-  10
-)
-const RUNCOMFY_POLL_TIMEOUT_FINAL_MS = Number.parseInt(
-  process.env.RUNCOMFY_POLL_TIMEOUT_FINAL_MS || process.env.RUNCOMFY_POLL_TIMEOUT_MS || '7200000',
-  10
-)
 const RUNPOD_POLL_INTERVAL_MS = Number.parseInt(process.env.RUNPOD_POLL_INTERVAL_MS || '2500', 10)
 const RUNPOD_POLL_TIMEOUT_PREVIEW_MS = Number.parseInt(
   process.env.RUNPOD_POLL_TIMEOUT_PREVIEW_MS || '600000',
@@ -190,35 +186,16 @@ const WORKER_CLAIM_IDLE_BACKOFF_MULTIPLIER = WORKER_POLLING_POLICY.backoffMultip
 const WORKER_QUEUE_WAKE_POLICY = resolveWorkerQueueWakePolicy(process.env)
 const WORKER_QUEUE_WAKE_ENABLED = WORKER_QUEUE_WAKE_POLICY.enabled
 const WORKER_QUEUE_WAKE_HEALTH_GRACE_MS = WORKER_QUEUE_WAKE_POLICY.healthGraceMs
-const WORKER_HEALTH_PORT = Number.parseInt(process.env.WORKER_HEALTH_PORT || '8787', 10)
+const WORKER_ORCHESTRATION_POLICY = resolveWorkerOrchestrationPolicy(process.env)
+const WORKER_INSTANCE_ID = buildWorkerInstanceId(process.env)
+const WORKER_HEALTH_PORT = Number.parseInt(process.env.PORT || process.env.WORKER_HEALTH_PORT || '8787', 10)
 const WORKER_HEALTH_HOST = process.env.WORKER_HEALTH_HOST || '127.0.0.1'
 const HEALTHCHECKS_URL = (process.env.HEALTHCHECKS_URL || '').trim()
 const HEALTHCHECK_INTERVAL_MS = Number.parseInt(process.env.HEALTHCHECK_INTERVAL_MS || '120000', 10)
 const HEALTHCHECK_SUPABASE_STALE_MS = Number.parseInt(process.env.HEALTHCHECK_SUPABASE_STALE_MS || '300000', 10)
 const HEALTHCHECK_MAX_JOB_RUNTIME_MS = Number.parseInt(process.env.HEALTHCHECK_MAX_JOB_RUNTIME_MS || '1800000', 10)
-const PREVIEW_POLL_TIMEOUT_HARD_CAP_MS = Number.parseInt(
-  process.env.PREVIEW_POLL_TIMEOUT_HARD_CAP_MS || '240000',
-  10
-)
-const PREVIEW_PAGE_CONCURRENCY = Number.parseInt(process.env.PREVIEW_PAGE_CONCURRENCY || '1', 10)
 const PREVIEW_PAGE_MAX_ATTEMPTS = Number.parseInt(process.env.PREVIEW_PAGE_MAX_ATTEMPTS || '1', 10)
 const FINAL_PAGE_MAX_ATTEMPTS = Number.parseInt(process.env.FINAL_PAGE_MAX_ATTEMPTS || String(PAGE_WORKFLOW_MAX_ATTEMPTS), 10)
-const RUNCOMFY_STATUS_RETRY_MAX_PREVIEW = Number.parseInt(
-  process.env.RUNCOMFY_STATUS_RETRY_MAX_PREVIEW || '2',
-  10
-)
-const RUNCOMFY_STATUS_RETRY_MAX_FINAL = Number.parseInt(
-  process.env.RUNCOMFY_STATUS_RETRY_MAX_FINAL || '2',
-  10
-)
-const RUNCOMFY_RESULT_RETRY_MAX_PREVIEW = Number.parseInt(
-  process.env.RUNCOMFY_RESULT_RETRY_MAX_PREVIEW || '2',
-  10
-)
-const RUNCOMFY_RESULT_RETRY_MAX_FINAL = Number.parseInt(
-  process.env.RUNCOMFY_RESULT_RETRY_MAX_FINAL || '2',
-  10
-)
 const WORKER_DEBUG_PROMPTS = process.env.WORKER_DEBUG_PROMPTS === 'true'
 const PREVIEW_DISPLAY_COVER_NAME = (process.env.PREVIEW_DISPLAY_COVER_NAME || 'Display.png').trim() || 'Display.png'
 
@@ -238,9 +215,15 @@ type ProcessingJobState = {
   job_id: string
   job_type: JobType
   startedAt: string
+  leaseRenewedAt: string | null
+  leaseErrorAt: string | null
+  leaseLostAt: string | null
 }
 
 const currentlyProcessing = new Map<string, ProcessingJobState>()
+const activeJobPromises = new Map<string, Promise<void>>()
+const leaseHeartbeatTimers = new Map<string, NodeJS.Timeout>()
+const lostJobLeases = new Set<string>()
 const claimWakeSignal = new ClaimWakeSignal()
 let lastClaimPollAt: string | null = null
 let lastSupabaseOkAt: string | null = null
@@ -283,6 +266,10 @@ type JobRow = {
   provider_runs?: Record<string, unknown> | null
   render_runs?: Record<string, unknown> | null
   created_at?: string
+  claimed_by?: string | null
+  claimed_at?: string | null
+  lease_expires_at?: string | null
+  claim_attempts?: number | null
 }
 
 type OutputPage = {
@@ -377,9 +364,20 @@ type FinalReviewJob = {
 }
 
 class JobCancelledError extends Error {
+  readonly cancelProviderRun = true
+
   constructor(jobId: string) {
     super(`Preview cancelled by user (job ${jobId})`)
     this.name = 'JobCancelledError'
+  }
+}
+
+class JobLeaseLostError extends Error {
+  readonly cancelProviderRun = false
+
+  constructor(jobId: string) {
+    super(`Worker no longer owns the lease for job ${jobId}`)
+    this.name = 'JobLeaseLostError'
   }
 }
 
@@ -401,8 +399,9 @@ function nowIso() {
 }
 
 function rememberError(error: unknown) {
+  const safeError = toSafeError(error)
   lastError = {
-    message: error instanceof Error ? error.message : String(error || 'Unknown worker error'),
+    message: safeError.message,
     at: nowIso(),
   }
 }
@@ -412,10 +411,156 @@ function markJobStarted(job: JobRow) {
     job_id: job.job_id,
     job_type: job.job_type,
     startedAt: nowIso(),
+    leaseRenewedAt: null,
+    leaseErrorAt: null,
+    leaseLostAt: null,
   })
 }
 
+function assertJobLease(jobId: string) {
+  if (lostJobLeases.has(jobId)) {
+    throw new JobLeaseLostError(jobId)
+  }
+}
+
+async function updateOwnedJob(jobId: string, patch: Record<string, unknown>) {
+  assertJobLease(jobId)
+  const { data, error } = await supabase
+    .from('jobs')
+    .update(patch)
+    .eq('job_id', jobId)
+    .eq('claimed_by', WORKER_INSTANCE_ID)
+    .select('job_id')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to update owned job ${jobId}: ${error.message}`)
+  }
+  if (!data?.job_id) {
+    lostJobLeases.add(jobId)
+    const state = currentlyProcessing.get(jobId)
+    if (state) state.leaseLostAt = nowIso()
+    throw new JobLeaseLostError(jobId)
+  }
+  lastSupabaseOkAt = nowIso()
+}
+
+function markLeaseLost(jobId: string) {
+  lostJobLeases.add(jobId)
+  const state = currentlyProcessing.get(jobId)
+  if (state) state.leaseLostAt = nowIso()
+}
+
+function throwOwnedCheckpointError(jobId: string, operation: string, error: { message?: string | null; code?: string | null }) {
+  const message = String(error.message || operation)
+  if (error.code === '55000' || message.includes('job_lease_not_owned')) {
+    markLeaseLost(jobId)
+    throw new JobLeaseLostError(jobId)
+  }
+  throw new Error(`${operation}: ${message}`)
+}
+
+async function updateOwnedFinalJob(
+  jobId: string,
+  patch: {
+    status?: string | null
+    reviewStatus?: string | null
+    totalPages?: number | null
+    approvedPages?: number | null
+    errorMessage?: string | null
+    clearError?: boolean
+  }
+) {
+  assertJobLease(jobId)
+  const { error } = await supabase.rpc('checkpoint_final_job_v1', {
+    p_job_id: jobId,
+    p_worker_id: WORKER_INSTANCE_ID,
+    p_status: patch.status ?? null,
+    p_review_status: patch.reviewStatus ?? null,
+    p_total_pages: patch.totalPages ?? null,
+    p_approved_pages: patch.approvedPages ?? null,
+    p_error_message: patch.errorMessage ?? null,
+    p_clear_error: patch.clearError === true,
+  })
+  if (error) throwOwnedCheckpointError(jobId, 'Failed to checkpoint Final job', error)
+  lastSupabaseOkAt = nowIso()
+}
+
+async function updateOwnedFinalPages(
+  jobId: string,
+  pageIndices: number[],
+  patch: {
+    status?: string | null
+    aiOutputPath?: string | null
+    errorMessage?: string | null
+    protectApproved?: boolean
+  }
+) {
+  assertJobLease(jobId)
+  const { error } = await supabase.rpc('checkpoint_final_job_pages_v1', {
+    p_job_id: jobId,
+    p_worker_id: WORKER_INSTANCE_ID,
+    p_page_indices: pageIndices,
+    p_status: patch.status ?? null,
+    p_ai_output_path: patch.aiOutputPath ?? null,
+    p_error_message: patch.errorMessage ?? null,
+    p_protect_approved: patch.protectApproved === true,
+  })
+  if (error) throwOwnedCheckpointError(jobId, 'Failed to checkpoint Final pages', error)
+  lastSupabaseOkAt = nowIso()
+}
+
+function startLeaseHeartbeat(job: JobRow) {
+  let renewalInFlight = false
+  const renew = async () => {
+    if (renewalInFlight || !currentlyProcessing.has(job.job_id)) return
+    renewalInFlight = true
+    try {
+      const { data, error } = await supabase.rpc('renew_job_lease', {
+        p_job_id: job.job_id,
+        p_worker_id: WORKER_INSTANCE_ID,
+        p_lease_seconds: WORKER_ORCHESTRATION_POLICY.leaseSeconds,
+      })
+      if (error) {
+        rememberError(error)
+        const state = currentlyProcessing.get(job.job_id)
+        if (state) state.leaseErrorAt = nowIso()
+        console.error(`[lease] renewal failed job=${job.job_id}: ${error.message}`)
+        return
+      }
+      const renewed = Array.isArray(data) ? data[0] : data
+      if (!renewed?.job_id) {
+        lostJobLeases.add(job.job_id)
+        const state = currentlyProcessing.get(job.job_id)
+        if (state) state.leaseLostAt = nowIso()
+        console.error(`[lease] ownership lost job=${job.job_id}; stale attempt will stop at its next fence`)
+        return
+      }
+      lastSupabaseOkAt = nowIso()
+      const state = currentlyProcessing.get(job.job_id)
+      if (state) {
+        state.leaseRenewedAt = nowIso()
+        state.leaseErrorAt = null
+      }
+    } finally {
+      renewalInFlight = false
+    }
+  }
+
+  const timer = setInterval(() => void renew(), WORKER_ORCHESTRATION_POLICY.leaseRenewIntervalMs)
+  timer.unref()
+  leaseHeartbeatTimers.set(job.job_id, timer)
+}
+
+function getActiveJobCount(jobType: JobType) {
+  return Array.from(currentlyProcessing.values()).filter((job) => job.job_type === jobType).length
+}
+
 function markJobFinished(jobId: string) {
+  const heartbeatTimer = leaseHeartbeatTimers.get(jobId)
+  if (heartbeatTimer) clearInterval(heartbeatTimer)
+  leaseHeartbeatTimers.delete(jobId)
+  lostJobLeases.delete(jobId)
   currentlyProcessing.delete(jobId)
   lastJobProcessedAt = nowIso()
 }
@@ -444,6 +589,9 @@ function getHealthSnapshot() {
   const hasActiveJob = currentlyProcessing.size > 0
   const longestProcessingMs = getLongestProcessingMs()
   const activeJobStale = hasActiveJob && longestProcessingMs > HEALTHCHECK_MAX_JOB_RUNTIME_MS
+  const leaseDegraded = Array.from(currentlyProcessing.values()).some(
+    (job) => Boolean(job.leaseLostAt || job.leaseErrorAt)
+  )
   const claimPollStale =
     !hasActiveJob && (!claimPollMs || !Number.isFinite(claimPollMs) || claimPollMs > HEALTHCHECK_SUPABASE_STALE_MS)
   const supabaseStale =
@@ -459,7 +607,7 @@ function getHealthSnapshot() {
     status = 'paused'
   } else if (!lastClaimPollAt && !hasActiveJob) {
     status = 'starting'
-  } else if (activeJobStale || claimPollStale || supabaseStale || queueWakeDegraded) {
+  } else if (activeJobStale || leaseDegraded || claimPollStale || supabaseStale || queueWakeDegraded) {
     status = 'degraded'
   }
 
@@ -477,12 +625,26 @@ function getHealthSnapshot() {
     queueWakeReconnectAttempts,
     queueWakeNextRetryAt,
     fallbackClaimIdleMaxMs: WORKER_CLAIM_IDLE_MAX_MS,
+    orchestration: {
+      previewConcurrency: WORKER_ORCHESTRATION_POLICY.previewConcurrency,
+      finalConcurrency: WORKER_ORCHESTRATION_POLICY.finalConcurrency,
+      activePreview: Array.from(currentlyProcessing.values()).filter((job) => job.job_type === 'preview').length,
+      activeFinal: Array.from(currentlyProcessing.values()).filter((job) => job.job_type === 'final').length,
+      leaseSeconds: WORKER_ORCHESTRATION_POLICY.leaseSeconds,
+      leaseRenewIntervalMs: WORKER_ORCHESTRATION_POLICY.leaseRenewIntervalMs,
+    },
     uptimeSec: Math.round((now - workerStartedAt) / 1000),
     lastClaimPollAt,
     lastSupabaseOkAt,
     lastJobProcessedAt,
     minutesSinceLastJob: minutesSince(lastJobProcessedAt),
-    currentlyProcessing: Array.from(currentlyProcessing.values()),
+    activeJobs: Array.from(currentlyProcessing.values()).map((job) => ({
+      jobType: job.job_type,
+      startedAt: job.startedAt,
+      leaseRenewedAt: job.leaseRenewedAt,
+      leaseErrorAt: job.leaseErrorAt,
+      leaseLostAt: job.leaseLostAt,
+    })),
     lastError,
   }
 }
@@ -496,7 +658,7 @@ function setQueueWakeStatus(status: QueueWakeStatus, error?: unknown) {
   }
   if (!error) return
   queueWakeLastError = {
-    message: error instanceof Error ? error.message : String(error || status),
+    message: toSafeError(error).message,
     at: queueWakeStatusAt,
   }
 }
@@ -521,7 +683,7 @@ async function startQueueWakeSubscription(): Promise<QueueWakeSubscription | nul
     try {
       await supabase.removeChannel(channel)
     } catch (error) {
-      console.error('[queue-wake] failed to remove channel', error)
+      logEvent('error', 'queue_wake_remove_failed', { error: toSafeError(error) })
     }
   }
 
@@ -573,11 +735,11 @@ async function startQueueWakeSubscription(): Promise<QueueWakeSubscription | nul
           )
         } else if (status === 'TIMED_OUT') {
           setQueueWakeStatus('timed_out', error)
-          console.error('[queue-wake] subscription timed out; fallback polling remains active', error)
+          logEvent('error', 'queue_wake_timed_out', { error: toSafeError(error), fallbackPolling: true })
           scheduleRetry(channel)
         } else if (status === 'CHANNEL_ERROR') {
           setQueueWakeStatus('channel_error', error)
-          console.error('[queue-wake] channel error; fallback polling remains active', error)
+          logEvent('error', 'queue_wake_channel_error', { error: toSafeError(error), fallbackPolling: true })
           scheduleRetry(channel)
         } else if (status === 'CLOSED') {
           setQueueWakeStatus('closed', error)
@@ -587,7 +749,7 @@ async function startQueueWakeSubscription(): Promise<QueueWakeSubscription | nul
       })
     } catch (error) {
       setQueueWakeStatus('channel_error', error)
-      console.error('[queue-wake] startup failed; fallback polling remains active', error)
+      logEvent('error', 'queue_wake_startup_failed', { error: toSafeError(error), fallbackPolling: true })
       scheduleRetry(activeChannel)
     } finally {
       connecting = false
@@ -642,7 +804,7 @@ async function startHealthServer(): Promise<http.Server | null> {
 
   server.on('error', (error) => {
     rememberError(error)
-    console.error('[health] runtime server error:', error)
+    logEvent('error', 'health_server_error', { error: toSafeError(error) })
   })
 
   console.log(`[health] listening on http://${WORKER_HEALTH_HOST}:${WORKER_HEALTH_PORT}/health`)
@@ -676,7 +838,7 @@ function startHealthchecksPing(): NodeJS.Timeout | null {
       }
     } catch (error) {
       rememberError(error)
-      console.error('[healthchecks] ping failed:', error)
+      logEvent('error', 'healthcheck_ping_failed', { error: toSafeError(error) })
     } finally {
       pingInFlight = false
     }
@@ -1196,6 +1358,7 @@ async function prepareWorkflowImageUrl(args: {
   sourceContentType?: string
   jobId: string
   jobDatePath: string
+  attemptNumber: number
   pageIndex: number
   kind: 'template' | 'intermediate'
   forceRuntimeUpload?: boolean
@@ -1207,6 +1370,7 @@ async function prepareWorkflowImageUrl(args: {
     sourceBuffer,
     jobId,
     jobDatePath,
+    attemptNumber,
     pageIndex,
     kind,
     forceRuntimeUpload = false,
@@ -1290,7 +1454,7 @@ async function prepareWorkflowImageUrl(args: {
   const finalContentType =
     optimizationMode === 'optimized' || optimizationMode === 'fitted' ? 'image/jpeg' : contentType
 
-  const runtimePath = `jobs/${jobDatePath}/${jobId}/runtime/${kind}_${padPageIndex(pageIndex)}.${finalExt}`
+  const runtimePath = `jobs/${jobDatePath}/${jobId}/attempt_${String(attemptNumber).padStart(3, '0')}/runtime/${kind}_${padPageIndex(pageIndex)}.${finalExt}`
   await uploadBuffer(RAW_BUCKET, runtimePath, uploadPayload, finalContentType)
 
   const { data, error } = await supabase.storage
@@ -1347,10 +1511,14 @@ async function buildPdf(pages: { page_index: number; buffer: Buffer }[]): Promis
 
 async function requeueJob(jobId: string, reason: string) {
   console.log('[job] requeue', jobId, reason)
-  await supabase
-    .from('jobs')
-    .update({ status: 'queued', progress: 0, updated_at: new Date().toISOString() })
-    .eq('job_id', jobId)
+  await updateOwnedJob(jobId, {
+    status: 'queued',
+    progress: 0,
+    claimed_by: null,
+    claimed_at: null,
+    lease_expires_at: null,
+    updated_at: new Date().toISOString(),
+  })
 }
 
 function getPageByIndex(pages: TemplatePage[]): Map<number, TemplatePage> {
@@ -1501,7 +1669,8 @@ async function preparePageInputs(args: {
   const workflowJsonCache = new Map<string, Record<string, unknown>>()
   const allowInputOptimization = job.job_type !== 'final' || !FINAL_DISABLE_INPUT_OPTIMIZATION
   const inputSignTtlSec =
-    job.job_type === 'final' ? RUNCOMFY_INPUT_SIGN_TTL_FINAL_SEC : RUNCOMFY_INPUT_SIGN_TTL_PREVIEW_SEC
+    job.job_type === 'final' ? WORKFLOW_INPUT_SIGN_TTL_FINAL_SEC : WORKFLOW_INPUT_SIGN_TTL_PREVIEW_SEC
+  const attemptNumber = Math.max(1, Math.floor(Number(job.claim_attempts) || 1))
   for (const pageIndex of pageIndexList) {
     const page = pageMap.get(pageIndex)
     if (!page) {
@@ -1550,6 +1719,7 @@ async function preparePageInputs(args: {
             sourceUrl: rawTemplateUrl,
             jobId: job.job_id,
             jobDatePath,
+            attemptNumber,
             pageIndex: page.index,
             kind: 'template',
             forceRuntimeUpload: WORKFLOW_FORCE_RUNTIME_TARGET_UPLOAD,
@@ -1607,8 +1777,6 @@ function isRetriablePageError(error: unknown): boolean {
   return (
     message.includes('cannot identify image file') ||
     message.includes('unsupported workflow image format') ||
-    message.includes('runcomfy status failed') ||
-    message.includes('runcomfy poll timeout') ||
     message.includes('runpod') ||
     message.includes('result missing output image url') ||
     message.includes('timeout') ||
@@ -1677,7 +1845,7 @@ async function processJob(job: JobRow): Promise<void> {
   // One uncached immutable read binds this process invocation to a single config.
   const config = await loadJobTemplateConfigSnapshot(String(input.config_url))
   const basePath = normalizeBasePath(config.base_path, job.template_id)
-  const workflowProvider = resolveWorkflowProvider(config)
+  resolveWorkflowProvider(config)
   const hasSinglePageMarker = hasSinglePageTemplateMarker(config)
   const isSinglePageContract = isSinglePageTemplateConfig(config)
   if (job.job_type === 'final' && !hasSinglePageMarker) {
@@ -1728,7 +1896,9 @@ async function processJob(job: JobRow): Promise<void> {
   )
   const pageMap = getPageByIndex(config.pages)
   const jobDatePath = getJobDatePath(job.created_at)
-  const outputRoot = `jobs/${jobDatePath}/${job.job_id}/output`
+  const attemptNumber = Math.max(1, Math.floor(Number(job.claim_attempts) || 1))
+  const attemptSegment = `attempt_${String(attemptNumber).padStart(3, '0')}`
+  const outputRoot = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/output`
   const isFinalPageRerun = job.job_type === 'final' && hasFinalPageOverride(input)
   if (singlePageContract) {
     const finalContractPages = buildSinglePageFinalContractOutputPages({
@@ -1741,16 +1911,10 @@ async function processJob(job: JobRow): Promise<void> {
       asset_layout: singlePageContract.asset_layout,
       ...(job.job_type === 'final' ? { pages: finalContractPages } : {}),
     }
-    const { error: contractMarkerError } = await supabase
-      .from('jobs')
-      .update({
-        output_assets: contractMarkedOutputAssets,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('job_id', job.job_id)
-    if (contractMarkerError) {
-      throw new Error(`Failed to persist V3 output contract marker: ${contractMarkerError.message}`)
-    }
+    await updateOwnedJob(job.job_id, {
+      output_assets: contractMarkedOutputAssets,
+      updated_at: new Date().toISOString(),
+    })
     job.output_assets = contractMarkedOutputAssets
   }
   const finalReviewJob: FinalReviewJob | null =
@@ -1787,6 +1951,7 @@ async function processJob(job: JobRow): Promise<void> {
     throw new Error(`No pages to process for template ${job.template_id}`)
   }
 
+  let finalReviewPageCheckpoints: FinalReviewPageCheckpoint[] = []
   if (finalReviewJob && !isFinalPageRerun) {
     if (finalReviewJob.total_pages !== pageIndexList.length) {
       throw new Error(
@@ -1795,7 +1960,7 @@ async function processJob(job: JobRow): Promise<void> {
     }
     const { data: finalReviewPages, error: finalReviewPagesError } = await supabase
       .from('final_job_pages')
-      .select('page_index')
+      .select('page_index, status, ai_output_path, approved_output_path')
       .eq('final_job_id', finalReviewJob.final_job_id)
     if (finalReviewPagesError) {
       throw new Error(`Failed to load final review page coverage: ${finalReviewPagesError.message}`)
@@ -1804,12 +1969,25 @@ async function processJob(job: JobRow): Promise<void> {
       pageIndexList,
       (finalReviewPages || []).map((page) => Number(page.page_index))
     )
+    finalReviewPageCheckpoints = (finalReviewPages || []) as FinalReviewPageCheckpoint[]
   }
+
+  const finalPageRecoveryPlan = buildFinalPageRecoveryPlan({
+    expectedPageIndices: pageIndexList,
+    checkpoints: finalReviewPageCheckpoints,
+    isExplicitPageRerun: isFinalPageRerun,
+  })
+  const pageIndicesToProcess = finalReviewJob
+    ? finalPageRecoveryPlan.remainingPageIndices
+    : pageIndexList
 
   if (selectedSinglePageManifest) {
     try {
       validateSinglePageJobAssets({
-        manifest: selectedSinglePageManifest,
+        manifest:
+          finalReviewJob && !isFinalPageRerun
+            ? selectedSinglePageManifest.filter((entry) => pageIndicesToProcess.includes(entry.page_index))
+            : selectedSinglePageManifest,
         availableStorageFiles: templateFileSet,
       })
     } catch (error) {
@@ -1830,53 +2008,31 @@ async function processJob(job: JobRow): Promise<void> {
         'Automatic Final generation paused because required story assets are missing. Upload a manual replacement or retry after fixing the story package.'
       const now = new Date().toISOString()
 
-      const [jobUpdate, finalJobUpdate, pageUpdate] = await Promise.all([
-        supabase
-          .from('jobs')
-          .update({
-            status: 'failed',
-            error_message: summary,
-            updated_at: now,
-          })
-          .eq('job_id', job.job_id),
-        supabase
-          .from('final_jobs')
-          .update({
-            status: 'needs_fix',
-            review_status: 'needs_fix',
-            error_message: summary,
-            updated_at: now,
-          })
-          .eq('final_job_id', finalReviewJob.final_job_id),
-        supabase
-          .from('final_job_pages')
-          .update({
-            status: 'needs_fix',
-            error_message: pageSummary,
-            updated_at: now,
-          })
-          .eq('final_job_id', finalReviewJob.final_job_id)
-          .is('approved_output_path', null),
-      ])
-      const transitionError = jobUpdate.error || finalJobUpdate.error || pageUpdate.error
-      if (transitionError) {
-        throw new Error(`Failed to create manual Final handoff: ${transitionError.message}`)
-      }
+      await updateOwnedFinalJob(job.job_id, {
+        status: 'needs_fix',
+        reviewStatus: 'needs_fix',
+        errorMessage: summary,
+      })
+      await updateOwnedFinalPages(job.job_id, pageIndexList, {
+        status: 'needs_fix',
+        errorMessage: pageSummary,
+        protectApproved: true,
+      })
 
       for (const missingAsset of error.missingAssets) {
-        const { error: pageDiagnosticError } = await supabase
-          .from('final_job_pages')
-          .update({
-            error_message: `Missing Final source asset: ${missingAsset.storage_path}`,
-            updated_at: now,
-          })
-          .eq('final_job_id', finalReviewJob.final_job_id)
-          .eq('page_index', missingAsset.page_index)
-          .is('approved_output_path', null)
-        if (pageDiagnosticError) {
-          throw new Error(`Failed to persist Final page diagnostic: ${pageDiagnosticError.message}`)
-        }
+        await updateOwnedFinalPages(job.job_id, [missingAsset.page_index], {
+          status: 'needs_fix',
+          errorMessage: `Missing Final source asset: ${missingAsset.storage_path}`,
+          protectApproved: true,
+        })
       }
+
+      await updateOwnedJob(job.job_id, {
+        status: 'failed',
+        error_message: summary,
+        lease_expires_at: null,
+        updated_at: now,
+      })
 
       console.warn(`[job:${job.job_id}] ${summary}`)
       return
@@ -1886,29 +2042,14 @@ async function processJob(job: JobRow): Promise<void> {
   const rawFacePath = String(input.face_source_path)
   const facePath = rawFacePath.replace(/^raw-private\//, '')
   const faceTtlSec =
-    job.job_type === 'final' ? RUNCOMFY_INPUT_SIGN_TTL_FINAL_SEC : RUNCOMFY_INPUT_SIGN_TTL_PREVIEW_SEC
+    job.job_type === 'final' ? WORKFLOW_INPUT_SIGN_TTL_FINAL_SEC : WORKFLOW_INPUT_SIGN_TTL_PREVIEW_SEC
   const allowInputOptimization = job.job_type !== 'final' || !FINAL_DISABLE_INPUT_OPTIMIZATION
   const inputSignTtlSec =
-    job.job_type === 'final' ? RUNCOMFY_INPUT_SIGN_TTL_FINAL_SEC : RUNCOMFY_INPUT_SIGN_TTL_PREVIEW_SEC
-  const pagePollIntervalMs =
-    workflowProvider === 'runpod'
-      ? RUNPOD_POLL_INTERVAL_MS
-      : job.job_type === 'final'
-        ? RUNCOMFY_POLL_INTERVAL_FINAL_MS
-        : RUNCOMFY_POLL_INTERVAL_PREVIEW_MS
+    job.job_type === 'final' ? WORKFLOW_INPUT_SIGN_TTL_FINAL_SEC : WORKFLOW_INPUT_SIGN_TTL_PREVIEW_SEC
+  const pagePollIntervalMs = RUNPOD_POLL_INTERVAL_MS
   const pagePollTimeoutMs =
-    workflowProvider === 'runpod'
-      ? job.job_type === 'final'
-        ? RUNPOD_POLL_TIMEOUT_FINAL_MS
-        : RUNPOD_POLL_TIMEOUT_PREVIEW_MS
-      : job.job_type === 'final'
-        ? RUNCOMFY_POLL_TIMEOUT_FINAL_MS
-        : Math.min(RUNCOMFY_POLL_TIMEOUT_PREVIEW_MS, PREVIEW_POLL_TIMEOUT_HARD_CAP_MS)
+    job.job_type === 'final' ? RUNPOD_POLL_TIMEOUT_FINAL_MS : RUNPOD_POLL_TIMEOUT_PREVIEW_MS
   const pageMaxAttempts = job.job_type === 'final' ? FINAL_PAGE_MAX_ATTEMPTS : PREVIEW_PAGE_MAX_ATTEMPTS
-  const statusRetryMax =
-    job.job_type === 'final' ? RUNCOMFY_STATUS_RETRY_MAX_FINAL : RUNCOMFY_STATUS_RETRY_MAX_PREVIEW
-  const resultRetryMax =
-    job.job_type === 'final' ? RUNCOMFY_RESULT_RETRY_MAX_FINAL : RUNCOMFY_RESULT_RETRY_MAX_PREVIEW
   const jobStartedAt = Date.now()
   let lastProgressUpdateAt = 0
   let cachedFaceSignedUrl: string | null = null
@@ -1923,6 +2064,7 @@ async function processJob(job: JobRow): Promise<void> {
   let cachedCancelStatus: JobStatus | '' = ''
 
   const throwIfCancelled = async () => {
+    assertJobLease(job.job_id)
     if (job.job_type !== 'preview') return
     const now = Date.now()
     if (cachedCancelStatus === 'cancel_requested' || cachedCancelStatus === 'cancelled') {
@@ -1967,17 +2109,17 @@ async function processJob(job: JobRow): Promise<void> {
   }
 
   const persistProviderRuns = async () => {
-    await supabase
-      .from('jobs')
-      .update({ provider_runs: providerRuns, updated_at: new Date().toISOString() })
-      .eq('job_id', job.job_id)
+    await updateOwnedJob(job.job_id, {
+      provider_runs: providerRuns,
+      updated_at: new Date().toISOString(),
+    })
   }
 
   const persistRenderRuns = async () => {
-    await supabase
-      .from('jobs')
-      .update({ render_runs: renderRuns, updated_at: new Date().toISOString() })
-      .eq('job_id', job.job_id)
+    await updateOwnedJob(job.job_id, {
+      render_runs: renderRuns,
+      updated_at: new Date().toISOString(),
+    })
   }
 
   const updateRuntimeManifestPage = (pageIndex: number, patch: Partial<RuntimeManifestPage>) => {
@@ -1999,7 +2141,7 @@ async function processJob(job: JobRow): Promise<void> {
         'application/json'
       )
     } catch (error) {
-      console.warn(`[job:${job.job_id}] failed to upload runtime manifest:`, (error as any)?.message || error)
+      console.warn(`[job:${job.job_id}] failed to upload runtime manifest: ${redactLogText((error as any)?.message || error)}`)
     }
   }
 
@@ -2009,6 +2151,7 @@ async function processJob(job: JobRow): Promise<void> {
     providerRuns[pageKey][state.stage] = {
       ...(providerRuns[pageKey][state.stage] ?? {}),
       ...state,
+      error: state.error ?? null,
     }
     await persistProviderRuns()
   }
@@ -2025,36 +2168,28 @@ async function processJob(job: JobRow): Promise<void> {
   }
 
   const finalizeCancelledPreviewJob = async () => {
-    await supabase
-      .from('jobs')
-      .update({
-        status: 'cancelled',
-        error_message: 'Preview cancelled by user',
-        provider_runs: providerRuns,
-        render_runs: renderRuns,
-        output_assets: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('job_id', job.job_id)
+    await updateOwnedJob(job.job_id, {
+      status: 'cancelled',
+      error_message: 'Preview cancelled by user',
+      provider_runs: providerRuns,
+      render_runs: renderRuns,
+      output_assets: null,
+      lease_expires_at: null,
+      updated_at: new Date().toISOString(),
+    })
   }
 
   try {
     await throwIfCancelled()
 
   if (finalReviewJob) {
-    await supabase
-      .from('final_jobs')
-      .update({
-        status: 'processing',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('final_job_id', finalReviewJob.final_job_id)
+    await updateOwnedFinalJob(job.job_id, { status: 'processing' })
   }
 
   const outputPages: OutputPage[] = []
   const subtitlePages: SubtitleOutputPage[] = []
   const outputBuffers: { page_index: number; buffer: Buffer }[] = []
-  let completedPages = 0
+  let completedPages = finalPageRecoveryPlan.completed.size
   const existingOutputAssets = (job.output_assets || {}) as {
     pages?: OutputPage[]
     runtime_manifest_path?: string | null
@@ -2065,28 +2200,39 @@ async function processJob(job: JobRow): Promise<void> {
   for (const page of Array.isArray(existingOutputAssets.pages) ? existingOutputAssets.pages : []) {
     existingPagesByIndex.set(page.page_index, page)
   }
+  for (const [pageIndex, checkpoint] of finalPageRecoveryPlan.completed.entries()) {
+    const presentation = singlePageManifestByIndex.get(pageIndex)
+    const existingPage = existingPagesByIndex.get(pageIndex)
+    outputPages.push({
+      ...existingPage,
+      page_index: pageIndex,
+      ...(presentation ? toBookPageOutputMetadata(presentation) : {}),
+      storage_path: existingPage?.storage_path || checkpoint.storagePath,
+    })
+  }
+  if (finalPageRecoveryPlan.completed.size > 0) {
+    console.log(
+      `[job:${job.job_id}] resumed ${finalPageRecoveryPlan.completed.size}/${pageIndexList.length} durable Final page checkpoint(s)`
+    )
+  }
   const buildOutputAssets = (): Record<string, unknown> => {
-    const mergedPages = isFinalPageRerun
-      ? Array.from(
-          new Map(
-            [...existingPagesByIndex.entries(), ...outputPages.map((page) => [page.page_index, page] as const)]
-          ).values()
-        ).sort((a, b) => a.page_index - b.page_index)
-      : outputPages
-    const mergedSubtitlePages = isFinalPageRerun
-      ? Array.from(
-          new Map(
-            [
-              ...(
-                Array.isArray(existingOutputAssets.subtitle_pages)
-                  ? existingOutputAssets.subtitle_pages
-                  : []
-              ).map((page) => [page.page_index, page] as const),
-              ...subtitlePages.map((page) => [page.page_index, page] as const),
-            ]
-          ).values()
-        ).sort((a, b) => a.page_index - b.page_index)
-      : subtitlePages
+    const mergedPages = Array.from(
+      new Map(
+        [...existingPagesByIndex.entries(), ...outputPages.map((page) => [page.page_index, page] as const)]
+      ).values()
+    ).sort((a, b) => a.page_index - b.page_index)
+    const mergedSubtitlePages = Array.from(
+      new Map(
+        [
+          ...(
+            Array.isArray(existingOutputAssets.subtitle_pages)
+              ? existingOutputAssets.subtitle_pages
+              : []
+          ).map((page) => [page.page_index, page] as const),
+          ...subtitlePages.map((page) => [page.page_index, page] as const),
+        ]
+      ).values()
+    ).sort((a, b) => a.page_index - b.page_index)
 
     return {
       ...existingOutputAssets,
@@ -2106,15 +2252,12 @@ async function processJob(job: JobRow): Promise<void> {
   }
   const persistPreviewPartialOutput = async () => {
     if (job.job_type !== 'preview' || outputPages.length === 0) return
-    await supabase
-      .from('jobs')
-      .update({
-        output_assets: buildOutputAssets(),
-        provider_runs: providerRuns,
-        render_runs: renderRuns,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('job_id', job.job_id)
+    await updateOwnedJob(job.job_id, {
+      output_assets: buildOutputAssets(),
+      provider_runs: providerRuns,
+      render_runs: renderRuns,
+      updated_at: new Date().toISOString(),
+    })
   }
   const preparedPages = await preparePageInputs({
     job,
@@ -2129,7 +2272,7 @@ async function processJob(job: JobRow): Promise<void> {
   })
   const preparedPageMap = new Map(preparedPages.map((item) => [item.pageIndex, item]))
   const previewOrderMap = new Map(pageIndexList.map((pageIndex, order) => [pageIndex, order]))
-  runtimeManifestPath = `jobs/${jobDatePath}/${job.job_id}/runtime/manifest.json`
+  runtimeManifestPath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/manifest.json`
   runtimeManifest = {
     generated_at: new Date().toISOString(),
     job_id: job.job_id,
@@ -2154,6 +2297,12 @@ async function processJob(job: JobRow): Promise<void> {
         },
     pages: preparedPages.map((item) => {
       const presentation = singlePageManifestByIndex.get(item.pageIndex)
+      const deploymentId = resolveProviderDeploymentId({
+        provider: item.provider,
+        stageKey: item.stageKey,
+        stage: item.stage,
+        isMockMode: IS_MOCK_MODE,
+      })
       return {
         page_index: item.pageIndex,
         ...(presentation
@@ -2161,7 +2310,7 @@ async function processJob(job: JobRow): Promise<void> {
           : {}),
         provider: item.provider,
         stage: item.stageKey,
-        deployment_id: item.stage.deployment_id || null,
+        deployment_id: deploymentId,
         workflow_json_path: item.workflowJsonPath || null,
         template_image: item.templateImageName,
         subtitle_render_enabled: item.subtitleEnabled,
@@ -2182,10 +2331,10 @@ async function processJob(job: JobRow): Promise<void> {
       completedPages === pageIndexList.length ||
       progress >= 95
     ) {
-      await supabase
-        .from('jobs')
-        .update({ progress, updated_at: new Date().toISOString() })
-        .eq('job_id', job.job_id)
+      await updateOwnedJob(job.job_id, {
+        progress,
+        updated_at: new Date().toISOString(),
+      })
       lastProgressUpdateAt = now
     }
 
@@ -2200,18 +2349,12 @@ async function processJob(job: JobRow): Promise<void> {
     payload: Record<string, unknown>
   ) => {
     if (!finalReviewJob) return
-    let updateQuery = supabase
-      .from('final_job_pages')
-      .update({
-        ...payload,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('final_job_id', finalReviewJob.final_job_id)
-      .eq('page_index', pageIndex)
-    if (shouldProtectApprovedFinalRevision(isFinalPageRerun)) {
-      updateQuery = updateQuery.is('approved_output_path', null)
-    }
-    await updateQuery
+    await updateOwnedFinalPages(job.job_id, [pageIndex], {
+      status: typeof payload.status === 'string' ? payload.status : null,
+      aiOutputPath: typeof payload.ai_output_path === 'string' ? payload.ai_output_path : null,
+      errorMessage: typeof payload.error_message === 'string' ? payload.error_message : null,
+      protectApproved: shouldProtectApprovedFinalRevision(isFinalPageRerun),
+    })
   }
 
   const processSinglePage = async (pageIndex: number) => {
@@ -2279,7 +2422,7 @@ async function processJob(job: JobRow): Promise<void> {
           ? ({ ext: 'png', contentType: 'image/png' } as const)
           : resolveStoredImageFormat(renderedSubtitleBuffer)
 
-        const subtitleStoragePath = `jobs/${jobDatePath}/${job.job_id}/runtime/subtitles/page_${padPageIndex(
+        const subtitleStoragePath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/subtitles/page_${padPageIndex(
           page.index
         )}.${subtitleOutputFormat.ext}`
         const subtitleUploadStartedAt = Date.now()
@@ -2309,6 +2452,7 @@ async function processJob(job: JobRow): Promise<void> {
             sourceContentType: subtitleOutputFormat.contentType,
             jobId: job.job_id,
             jobDatePath,
+            attemptNumber,
             pageIndex: page.index,
             kind: 'intermediate',
             forceRuntimeUpload: WORKFLOW_FORCE_RUNTIME_TARGET_UPLOAD,
@@ -2383,9 +2527,13 @@ async function processJob(job: JobRow): Promise<void> {
               workflowJson: prepared.workflowJson,
               pageWorkflowOverride: prepared.pageWorkflowOverride,
             }).payload
-        console.log(
-          `[job:${job.job_id}] page=${page.index} deployment=${prepared.stage.deployment_id || 'missing'}`
-        )
+        const deploymentId = resolveProviderDeploymentId({
+          provider: prepared.provider,
+          stageKey: prepared.stageKey,
+          stage: prepared.stage,
+          isMockMode: IS_MOCK_MODE,
+        })
+        console.log(`[job:${job.job_id}] page=${page.index} deployment=${deploymentId}`)
 
         if (WORKER_DEBUG_PROMPTS) {
           console.log(`[job:${job.job_id}] page=${page.index} enable_face_swap=${page.enable_face_swap !== false}`)
@@ -2408,8 +2556,7 @@ async function processJob(job: JobRow): Promise<void> {
           throwIfCancelled,
           pollTimeoutMs: pagePollTimeoutMs,
           pollIntervalMs: pagePollIntervalMs,
-          statusRetryMax,
-          resultRetryMax,
+          resumeProviderRun: providerRuns[String(page.index)]?.[prepared.stageKey] ?? null,
           onProviderEvent: async (state) => setProviderRunState(page.index, state),
         }).finally(() => {
           pageTimings.provider_handoff_ms = Date.now() - providerStartedAt
@@ -2417,7 +2564,7 @@ async function processJob(job: JobRow): Promise<void> {
         buffer = workflowResult.buffer
         break
         } catch (error) {
-          if (error instanceof JobCancelledError) {
+          if (error instanceof JobCancelledError || error instanceof JobLeaseLostError) {
             throw error
           }
           lastPageError = error
@@ -2428,7 +2575,7 @@ async function processJob(job: JobRow): Promise<void> {
           const waitMs = attempt * 1200 + Math.floor(Math.random() * 400)
           console.warn(
             `[job:${job.job_id}] page ${page.index} attempt ${attempt}/${pageMaxAttempts} failed; retrying in ${waitMs}ms:`,
-            (error as any)?.message || error
+            redactLogText((error as any)?.message || error)
           )
           await sleep(waitMs)
         }
@@ -2437,11 +2584,17 @@ async function processJob(job: JobRow): Promise<void> {
 
     if (!buffer) {
       const detail = (lastPageError as any)?.message ? `: ${(lastPageError as any).message}` : ''
-        if (lastPageError) {
+        const persistedProviderRun = providerRuns[String(page.index)]?.[prepared.stageKey]
+        if (lastPageError && !persistedProviderRun?.request_id) {
           await setProviderRunState(page.index, {
           provider: prepared.provider,
           stage: prepared.stageKey,
-          deployment_id: prepared.stage.deployment_id?.trim() || '',
+          deployment_id: resolveProviderDeploymentId({
+            provider: prepared.provider,
+            stageKey: prepared.stageKey,
+            stage: prepared.stage,
+            isMockMode: IS_MOCK_MODE,
+          }),
           request_id: null,
           status_url: null,
           result_url: null,
@@ -2507,7 +2660,7 @@ async function processJob(job: JobRow): Promise<void> {
         : null
     const outputBase =
       finalReviewJob && job.job_type === 'final'
-        ? `orders/${finalReviewJob.order_id}/final/pages/ai/page_${padFinalPageNumber(finalPageNumber ?? 1)}`
+        ? `orders/${finalReviewJob.order_id}/final/pages/ai/${attemptSegment}/page_${padFinalPageNumber(finalPageNumber ?? 1)}`
         : `${outputRoot}/page_${padPageIndex(page.index)}`
     const outputPath = `${outputBase}.${displayExt}`
     const fullPath = `${outputBase}_full.${ext}`
@@ -2560,27 +2713,8 @@ async function processJob(job: JobRow): Promise<void> {
     await markPageCompleted(page.index, pageStartedAt)
   }
 
-  const previewParallelism = Math.max(1, Math.min(PREVIEW_PAGE_CONCURRENCY, pageIndexList.length))
-  const shouldRunPreviewParallel = job.job_type === 'preview' && workflowProvider !== 'runpod' && previewParallelism > 1
-
-  if (shouldRunPreviewParallel) {
-    console.log(
-      `[job:${job.job_id}] preview parallel enabled: concurrency=${previewParallelism}, pages=${pageIndexList.length}`
-    )
-    let cursor = 0
-    const workers = Array.from({ length: previewParallelism }, async () => {
-      while (true) {
-        const next = cursor
-        cursor += 1
-        if (next >= pageIndexList.length) break
-        await processSinglePage(pageIndexList[next])
-      }
-    })
-    await Promise.all(workers)
-  } else {
-    for (const pageIndex of pageIndexList) {
-      await processSinglePage(pageIndex)
-    }
+  for (const pageIndex of pageIndicesToProcess) {
+    await processSinglePage(pageIndex)
   }
 
   await throwIfCancelled()
@@ -2615,25 +2749,21 @@ async function processJob(job: JobRow): Promise<void> {
       totalPages: finalReviewJob.total_pages || pageIndexList.length,
     })
 
-    await supabase
-      .from('final_jobs')
-      .update({
-        status: 'review_pending',
-        review_status: completionState.reviewStatus,
-        total_pages: finalReviewJob.total_pages || pageIndexList.length,
-        approved_pages: completionState.approvedPages,
-        ...(completionState.clearManualWarning ? { error_message: null } : {}),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('final_job_id', finalReviewJob.final_job_id)
+    await updateOwnedFinalJob(job.job_id, {
+      status: 'review_pending',
+      reviewStatus: completionState.reviewStatus,
+      totalPages: finalReviewJob.total_pages || pageIndexList.length,
+      approvedPages: completionState.approvedPages,
+      clearError: completionState.clearManualWarning,
+    })
   }
 
   let pdfPath: string | null = null
   if (job.job_type === 'final' && !finalReviewJob) {
-    await supabase
-      .from('jobs')
-      .update({ progress: 95, updated_at: new Date().toISOString() })
-      .eq('job_id', job.job_id)
+    await updateOwnedJob(job.job_id, {
+      progress: 95,
+      updated_at: new Date().toISOString(),
+    })
 
     let pdfBuffer = await buildPdf(outputBuffers)
     console.log(`[job:${job.job_id}] final pdf bytes=${pdfBuffer.length}`)
@@ -2660,10 +2790,10 @@ async function processJob(job: JobRow): Promise<void> {
       )
     }
 
-    await supabase
-      .from('jobs')
-      .update({ progress: 97, updated_at: new Date().toISOString() })
-      .eq('job_id', job.job_id)
+    await updateOwnedJob(job.job_id, {
+      progress: 97,
+      updated_at: new Date().toISOString(),
+    })
 
     pdfPath = `${outputRoot}/final_book.pdf`
     try {
@@ -2688,25 +2818,23 @@ async function processJob(job: JobRow): Promise<void> {
     }
     outputAssets.pdf_path = pdfPath
 
-    await supabase
-      .from('jobs')
-      .update({ progress: 99, updated_at: new Date().toISOString() })
-      .eq('job_id', job.job_id)
+    await updateOwnedJob(job.job_id, {
+      progress: 99,
+      updated_at: new Date().toISOString(),
+    })
   }
 
   await throwIfCancelled()
 
-  await supabase
-    .from('jobs')
-    .update({
-      status: 'done',
-      progress: 100,
-      provider_runs: providerRuns,
-      render_runs: renderRuns,
-      output_assets: outputAssets,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('job_id', job.job_id)
+  await updateOwnedJob(job.job_id, {
+    status: 'done',
+    progress: 100,
+    provider_runs: providerRuns,
+    render_runs: renderRuns,
+    output_assets: outputAssets,
+    lease_expires_at: null,
+    updated_at: new Date().toISOString(),
+  })
 
   console.log(
     `[job:${job.job_id}] completed type=${job.job_type} pages=${pageIndexList.length} total_ms=${Date.now() - jobStartedAt}`
@@ -2734,10 +2862,13 @@ async function processJob(job: JobRow): Promise<void> {
       })
       if (!callbackResponse.ok) {
         const text = await callbackResponse.text()
-        console.error('[worker-callback] failed response:', callbackResponse.status, text)
+        logEvent('error', 'worker_callback_failed_response', {
+          status: callbackResponse.status,
+          response: redactLogText(text),
+        })
       }
     } catch (error) {
-      console.error('[worker-callback] failed:', error)
+      logEvent('error', 'worker_callback_failed', { error: toSafeError(error) })
     }
   }
   } catch (error) {
@@ -2747,18 +2878,142 @@ async function processJob(job: JobRow): Promise<void> {
       return
     }
     if (finalReviewJob) {
-      await supabase
-        .from('final_jobs')
-        .update({
-          status: 'failed',
-          error_message: (error as any)?.message || 'Unknown final job error',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('final_job_id', finalReviewJob.final_job_id)
+      await updateOwnedFinalJob(job.job_id, {
+        status: 'failed',
+        errorMessage: (error as any)?.message || 'Unknown final job error',
+      })
     }
     throw error
   } finally {
     await persistRuntimeManifest()
+  }
+}
+
+type ClaimAttempt = {
+  job: JobRow | null
+  failed: boolean
+}
+
+async function claimNextJobForLane(jobType: JobType): Promise<ClaimAttempt> {
+  lastClaimPollAt = nowIso()
+  const { data, error } = await supabase.rpc('claim_next_job', {
+    p_worker_id: WORKER_INSTANCE_ID,
+    p_job_types: [jobType],
+    p_lease_seconds: WORKER_ORCHESTRATION_POLICY.leaseSeconds,
+  })
+
+  if (error) {
+    rememberError(error)
+    console.error(`[claim] lane=${jobType} failed: ${error.message}`)
+    return { job: null, failed: true }
+  }
+
+  lastSupabaseOkAt = nowIso()
+  const job = (Array.isArray(data) ? data[0] : data) as JobRow | null
+  if (!job) return { job: null, failed: false }
+  if (job.job_type !== jobType) {
+    throw new Error(`Claim RPC returned ${job.job_type} to the ${jobType} lane`)
+  }
+  if (job.claimed_by !== WORKER_INSTANCE_ID) {
+    throw new Error(`Claim RPC did not bind job ${job.job_id} to this Worker instance`)
+  }
+  return { job, failed: false }
+}
+
+function launchClaimedJob(job: JobRow) {
+  markJobStarted(job)
+  startLeaseHeartbeat(job)
+
+  const task = (async () => {
+    try {
+      await processJob(job)
+    } catch (error: any) {
+      if (error instanceof JobLeaseLostError) {
+        console.warn(`[job:${job.job_id}] stopped because its lease is no longer owned`)
+        return
+      }
+
+      rememberError(error)
+      logEvent('error', 'job_failed', { jobId: job.job_id, jobType: job.job_type, error: toSafeError(error) })
+      try {
+        await updateOwnedJob(job.job_id, {
+          status: 'failed',
+          error_message: error?.message ?? 'Unknown worker error',
+          lease_expires_at: null,
+          updated_at: new Date().toISOString(),
+        })
+      } catch (updateError) {
+        if (updateError instanceof JobLeaseLostError) {
+          console.warn(`[job:${job.job_id}] failure result discarded after lease ownership changed`)
+        } else {
+          rememberError(updateError)
+          logEvent('error', 'job_terminal_state_failed', {
+            jobId: job.job_id,
+            error: toSafeError(updateError),
+          })
+        }
+      }
+    } finally {
+      markJobFinished(job.job_id)
+      activeJobPromises.delete(job.job_id)
+      claimWakeSignal.wake()
+    }
+  })()
+
+  activeJobPromises.set(job.job_id, task)
+}
+
+async function fillAvailableLane(jobType: JobType): Promise<{ claimed: number; failed: boolean }> {
+  const available = availableClaimSlots({
+    jobType,
+    activePreview: getActiveJobCount('preview'),
+    activeFinal: getActiveJobCount('final'),
+    policy: WORKER_ORCHESTRATION_POLICY,
+  })
+  let claimed = 0
+
+  for (let slot = 0; slot < available && !shutdownRequested; slot += 1) {
+    const attempt = await claimNextJobForLane(jobType)
+    if (attempt.failed) return { claimed, failed: true }
+    if (!attempt.job) break
+    launchClaimedJob(attempt.job)
+    claimed += 1
+  }
+
+  return { claimed, failed: false }
+}
+
+async function runClaimScheduler() {
+  let idleMs = WORKER_CLAIM_IDLE_INITIAL_MS
+
+  while (!shutdownRequested) {
+    const observedWakeGeneration = claimWakeSignal.getGeneration()
+    let claimed = 0
+    for (const jobType of WORKER_CLAIM_LANE_ORDER) {
+      const lane = await fillAvailableLane(jobType)
+      claimed += lane.claimed
+      if (lane.failed) break
+    }
+
+    if (claimed > 0) {
+      idleMs = WORKER_CLAIM_IDLE_INITIAL_MS
+      continue
+    }
+
+    const waitResult = await claimWakeSignal.wait(idleMs, observedWakeGeneration)
+    if (waitResult === 'wake') {
+      idleMs = WORKER_CLAIM_IDLE_INITIAL_MS
+    } else {
+      idleMs = Math.min(
+        Math.round(idleMs * WORKER_CLAIM_IDLE_BACKOFF_MULTIPLIER),
+        WORKER_CLAIM_IDLE_MAX_MS
+      )
+    }
+  }
+
+  if (activeJobPromises.size > 0) {
+    console.log(`[worker] waiting for ${activeJobPromises.size} active job(s) before shutdown`)
+    await Promise.allSettled(Array.from(activeJobPromises.values()))
   }
 }
 
@@ -2779,18 +3034,16 @@ async function main() {
     console.log(
       `[worker] queue_wake_enabled=${WORKER_QUEUE_WAKE_ENABLED} status=${queueWakeStatus} fallback_max_ms=${WORKER_CLAIM_IDLE_MAX_MS}`
     )
+    console.log(
+      `[worker] lanes preview=${WORKER_ORCHESTRATION_POLICY.previewConcurrency} final=${WORKER_ORCHESTRATION_POLICY.finalConcurrency} ` +
+        `lease_seconds=${WORKER_ORCHESTRATION_POLICY.leaseSeconds} renew_ms=${WORKER_ORCHESTRATION_POLICY.leaseRenewIntervalMs}`
+    )
     if (EXECUTION_MODE_RESOLUTION.source === 'default') {
       console.log('[worker] WORKER_EXECUTION_MODE is unset; defaulting safely to provider')
     } else if (EXECUTION_MODE_RESOLUTION.source === 'invalid') {
       console.warn('[worker] WORKER_EXECUTION_MODE is invalid; defaulting safely to provider')
     }
-    console.log(
-      `[worker] poll_interval_ms preview=${RUNCOMFY_POLL_INTERVAL_PREVIEW_MS} final=${RUNCOMFY_POLL_INTERVAL_FINAL_MS}`
-    )
     console.log(`[worker] runpod_poll_interval_ms=${RUNPOD_POLL_INTERVAL_MS}`)
-    console.log(
-      `[worker] poll_timeout_ms preview=${RUNCOMFY_POLL_TIMEOUT_PREVIEW_MS} final=${RUNCOMFY_POLL_TIMEOUT_FINAL_MS}`
-    )
     console.log(
       `[worker] runpod_poll_timeout_ms preview=${RUNPOD_POLL_TIMEOUT_PREVIEW_MS} final=${RUNPOD_POLL_TIMEOUT_FINAL_MS}`
     )
@@ -2798,19 +3051,10 @@ async function main() {
       `[worker] claim_idle_ms initial=${WORKER_CLAIM_IDLE_INITIAL_MS} max=${WORKER_CLAIM_IDLE_MAX_MS} backoff=${WORKER_CLAIM_IDLE_BACKOFF_MULTIPLIER}`
     )
     console.log(
-      `[worker] preview_poll_timeout_hard_cap_ms=${PREVIEW_POLL_TIMEOUT_HARD_CAP_MS}`
-    )
-    console.log(
       `[worker] page_attempts preview=${PREVIEW_PAGE_MAX_ATTEMPTS} final=${FINAL_PAGE_MAX_ATTEMPTS}`
     )
     console.log(
-      `[worker] status_retry_max preview=${RUNCOMFY_STATUS_RETRY_MAX_PREVIEW} final=${RUNCOMFY_STATUS_RETRY_MAX_FINAL}`
-    )
-    console.log(
-      `[worker] result_retry_max preview=${RUNCOMFY_RESULT_RETRY_MAX_PREVIEW} final=${RUNCOMFY_RESULT_RETRY_MAX_FINAL}`
-    )
-    console.log(
-      `[worker] input_sign_ttl_sec preview=${RUNCOMFY_INPUT_SIGN_TTL_PREVIEW_SEC} final=${RUNCOMFY_INPUT_SIGN_TTL_FINAL_SEC}`
+      `[worker] input_sign_ttl_sec preview=${WORKFLOW_INPUT_SIGN_TTL_PREVIEW_SEC} final=${WORKFLOW_INPUT_SIGN_TTL_FINAL_SEC}`
     )
     console.log(
       `[worker] storage_max_object_bytes=${STORAGE_MAX_OBJECT_BYTES} upload_target_bytes=${FINAL_PDF_MAX_UPLOAD_BYTES}`
@@ -2819,10 +3063,12 @@ async function main() {
       `[worker] final_pdf_retry width=${FINAL_PDF_RETRY_MAX_WIDTH} jpeg_quality=${FINAL_PDF_RETRY_JPEG_QUALITY}`
     )
     if (!IS_MOCK_MODE) {
-      const hasRunComfyApiKey = Boolean(process.env.RUNCOMFY_API_TOKEN)
       const hasRunPodApiKey = Boolean(process.env.RUNPOD_API_KEY)
-      console.log(`[worker] runcomfy_api_token=${hasRunComfyApiKey ? 'configured' : 'missing'}`)
       console.log(`[worker] runpod_api_key=${hasRunPodApiKey ? 'configured' : 'missing'}`)
+      console.log(
+        `[worker] runpod_pools preview=${process.env.RUNPOD_PREVIEW_ENDPOINT_ID ? 'configured' : 'missing'} ` +
+          `final=${process.env.RUNPOD_FINAL_ENDPOINT_ID ? 'configured' : 'missing'}`
+      )
     }
 
     if (!WORKER_POLL_ENABLED) {
@@ -2833,56 +3079,7 @@ async function main() {
       return
     }
 
-    let idleMs = WORKER_CLAIM_IDLE_INITIAL_MS
-    const maxIdleMs = WORKER_CLAIM_IDLE_MAX_MS
-    const idleBackoff = WORKER_CLAIM_IDLE_BACKOFF_MULTIPLIER
-
-    while (!shutdownRequested) {
-      const observedWakeGeneration = claimWakeSignal.getGeneration()
-      lastClaimPollAt = nowIso()
-      const { data, error } = await supabase.rpc('claim_next_job')
-
-      if (error) {
-        rememberError(error)
-        console.error('Job claim error:', error.message)
-        await sleep(idleMs)
-        idleMs = Math.min(Math.round(idleMs * idleBackoff), maxIdleMs)
-        continue
-      }
-
-      lastSupabaseOkAt = nowIso()
-      const job = Array.isArray(data) ? data[0] : data
-
-      if (!job) {
-        const waitResult = await claimWakeSignal.wait(idleMs, observedWakeGeneration)
-        if (waitResult === 'wake') {
-          idleMs = WORKER_CLAIM_IDLE_INITIAL_MS
-        } else {
-          idleMs = Math.min(Math.round(idleMs * idleBackoff), maxIdleMs)
-        }
-        continue
-      }
-
-      idleMs = WORKER_CLAIM_IDLE_INITIAL_MS
-
-      markJobStarted(job as JobRow)
-      try {
-        await processJob(job as JobRow)
-      } catch (error: any) {
-        rememberError(error)
-        console.error('Job failed:', error)
-        await supabase
-          .from('jobs')
-          .update({
-            status: 'failed',
-            error_message: error?.message ?? 'Unknown worker error',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('job_id', job.job_id)
-      } finally {
-        markJobFinished(job.job_id)
-      }
-    }
+    await runClaimScheduler()
   } finally {
     if (healthchecksTimer) clearInterval(healthchecksTimer)
     await queueWakeSubscription?.stop()
@@ -2892,6 +3089,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Worker crashed:', error)
+  logEvent('error', 'worker_crashed', { error: toSafeError(error) })
   process.exit(1)
 })

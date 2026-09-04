@@ -11,7 +11,7 @@ import {
   normalizePendingFaceAsset,
   type FaceAssetOwner,
 } from '@/lib/face-assets-server'
-import { checkJobQueueGuard } from '@/lib/jobQueue'
+import { parseJobQueueAdmissionError } from '@/lib/jobQueueAdmission'
 import { loadCreationPhotoLockState } from '@/lib/purchase-state'
 import {
   getDiscardedPreviewVariantStatus,
@@ -376,18 +376,6 @@ export async function POST(
     )
   }
 
-  const queueGuard = await checkJobQueueGuard({ jobType: 'preview', incomingJobs: 1 })
-  if (!queueGuard.allowed) {
-    return jsonNoStore(
-      {
-        error: queueGuard.message,
-        code: 'queue_overloaded',
-        guard: queueGuard,
-      },
-      429
-    )
-  }
-
   const assetOwner = faceAssetOwner(owner)
   let faceAsset
   try {
@@ -448,6 +436,10 @@ export async function POST(
     .single()
 
   if (insertError || !inserted?.job_id) {
+    const admissionError = parseJobQueueAdmissionError(insertError)
+    if (admissionError) {
+      return jsonNoStore(admissionError, 429)
+    }
     if (isUniqueViolation(insertError)) {
       const { data: raced } = await supabaseAdmin
         .from('jobs')
