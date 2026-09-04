@@ -25,13 +25,13 @@ governance repository.
 
 ## Current domain owners
 
-- Catalog reads enter through `src/lib/catalog-server.ts` and are normalized by
-  `src/lib/book-catalog.ts`. `data/books.ts` is build-time route and SEO input
-  only.
+- Catalog reads enter through `src/lib/template-catalog-server.ts` and are
+  normalized by `src/lib/book-catalog.ts`. `data/books.ts` is build-time route
+  and SEO input only.
 - Checkout identity and owner-scoped queries enter through
   `src/lib/checkout-owner.ts`; customer order collection and detail reads enter
-  through `src/lib/customer-orders.ts`.
-- Route Handlers use `src/lib/server-json-response.ts` for private/no-store JSON
+  through `src/lib/customer-orders-server.ts`.
+- Route Handlers use `src/lib/http-response.ts` for private/no-store JSON
   responses and `src/lib/internal-request-auth.ts` for internal-secret or cron
   authorization.
 - Customize lifecycle belongs to `usePersonalizeStage`; persisted steps are
