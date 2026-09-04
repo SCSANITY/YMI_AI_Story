@@ -129,6 +129,8 @@ test('retired compatibility surfaces cannot re-enter the production runtime', as
   assert.doesNotMatch(globalContext, /ymi_language|setLanguage|migrateLegacyLanguageToCurrency/)
   assert.doesNotMatch(i18n, /UI_MESSAGES|Record<Language/)
   assert.match(useI18n, /getUiMessage\(key, vars\)/)
+  assert.match(useI18n, /const englishUi = Object\.freeze/)
+  assert.match(useI18n, /return englishUi/)
   assert.doesNotMatch(useI18n, /useGlobalContext|\blanguage\b/)
   assert.doesNotMatch(myBooks, /baseSelect|fallbackQuery|Backward compatibility/)
   assert.doesNotMatch(previewRoute, /legacyStoragePath|outputAssets\?\.storage_path/)
