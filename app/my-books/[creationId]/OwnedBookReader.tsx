@@ -27,8 +27,6 @@ const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
 const PREVIEW_HEIGHT = PAGE_HEIGHT + 40
 const ANIMATION_DURATION = 0.8
-const EMPTY_POSITIONAL_BOOK_SPREADS: string[] = []
-
 type ReaderTemplate = TemplateCatalogRow
 
 type ReaderCreation = {
@@ -429,7 +427,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       side={side}
       spreadIndex={spreadIndex}
       bookType={cartContext?.personalization.bookType || 'basic'}
-      previewPages={EMPTY_POSITIONAL_BOOK_SPREADS}
       previewImageErrors={imageErrors}
       bookPresentation={bookDisplay?.presentation}
       currentSpread={currentSpread}

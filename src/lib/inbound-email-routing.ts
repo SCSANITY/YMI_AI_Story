@@ -41,10 +41,8 @@ function localPart(address: string) {
   return address.slice(0, address.lastIndexOf('@'))
 }
 
-function replyIdentityKey(identity: { replyAlias: string | null; replyToken: string | null }) {
-  if (identity.replyAlias) return `alias:${identity.replyAlias.toLowerCase()}`
-  if (identity.replyToken) return `token:${identity.replyToken.toLowerCase()}`
-  return 'invalid'
+function replyIdentityKey(identity: { replyAlias: string }) {
+  return identity.replyAlias.toLowerCase()
 }
 
 export function classifyInboundRecipients(

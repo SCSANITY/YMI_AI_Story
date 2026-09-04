@@ -1,7 +1,7 @@
 'use client'
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
-import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData, type DisplayCurrency } from '@/types';
+import { User, Book, CartItem, GlobalContextType, ToggleFavoriteResult, PersonalizationData, type DisplayCurrency } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { templateRowToBook } from '@/lib/book-catalog';
 import { normalizeStoryLanguage } from '@/lib/story-language';
@@ -83,16 +83,6 @@ const normalizeDisplayCurrency = (value: unknown): DisplayCurrency => {
   return DISPLAY_CURRENCIES.includes(raw as DisplayCurrency) ? (raw as DisplayCurrency) : 'USD';
 };
 
-const migrateLegacyLanguageToCurrency = (value: unknown): DisplayCurrency => {
-  const raw = String(value ?? '').trim().toLowerCase();
-  if (raw === 'ja') return 'JPY';
-  if (raw === 'ko') return 'KRW';
-  if (raw === 'cn_t') return 'HKD';
-  if (raw === 'cn_s') return 'CNY';
-  if (raw === 'es') return 'EUR';
-  return 'USD';
-};
-
 const catalogTemplateToBook = (templateId: string, template: any): Book | null => {
   try {
     return templateRowToBook({ ...template, template_id: templateId });
@@ -111,7 +101,6 @@ export const GlobalProvider: React.FC<{
   const authSyncPromiseRef = useRef<Promise<void> | null>(null);
   const authResolutionRunIdRef = useRef(0);
   const favoriteTogglePendingRef = useRef(false);
-  const [language] = useState<Language>('en');
   const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
   const [displayRegion, setDisplayRegionState] = useState('US');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -164,14 +153,12 @@ export const GlobalProvider: React.FC<{
       });
     }
 
-    const savedLanguage = localStorage.getItem('ymi_language') as Language | null;
-
     const savedDisplayCurrency = localStorage.getItem('ymi_currency');
     const initialCurrencyRegion = resolveInitialCurrencyRegionOption({
       savedCurrency: savedDisplayCurrency,
       savedRegion: localStorage.getItem('ymi_currency_region'),
       geoRegion: readCookieValue(document.cookie, CURRENCY_GEO_COOKIE),
-      fallbackCurrency: migrateLegacyLanguageToCurrency(savedLanguage),
+      fallbackCurrency: 'USD',
       preferSaved: localStorage.getItem(CURRENCY_USER_SELECTED_KEY) === '1',
     });
     setDisplayCurrencyState(initialCurrencyRegion.currency);
@@ -1090,10 +1077,6 @@ export const GlobalProvider: React.FC<{
     return { success: true };
   }, [favorites, user?.customerId]);
 
-  const setLanguage = useCallback((_lang: Language) => {
-    // UI translation is retired; keep a no-op setter until Phase 2 removes the legacy type surface.
-  }, []);
-
   const setDisplayCurrency = useCallback((currency: DisplayCurrency) => {
     const normalizedCurrency = normalizeDisplayCurrency(currency);
     setDisplayCurrencyState(normalizedCurrency);
@@ -1128,7 +1111,6 @@ export const GlobalProvider: React.FC<{
 
   const value: GlobalContextType = useMemo(() => ({
     user,
-    language,
     displayCurrency,
     displayRegion,
     cart,
@@ -1166,7 +1148,6 @@ export const GlobalProvider: React.FC<{
     refreshCart: refreshCartFromDb,
     refreshUserProfile,
     toggleFavorite,
-    setLanguage,
     setDisplayCurrency,
     setCurrencyRegion,
     setCheckoutEmail,
@@ -1174,7 +1155,6 @@ export const GlobalProvider: React.FC<{
     closeLoginModal,
   }), [
     user,
-    language,
     displayCurrency,
     displayRegion,
     cart,
@@ -1210,7 +1190,6 @@ export const GlobalProvider: React.FC<{
     refreshCartFromDb,
     refreshUserProfile,
     toggleFavorite,
-    setLanguage,
     setDisplayCurrency,
     setCurrencyRegion,
     setCheckoutEmail,

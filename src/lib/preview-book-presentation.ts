@@ -55,14 +55,6 @@ function toPreviewLeaf(page: SignedPreviewPage): BookLeaf {
 }
 
 export function resolvePreviewDisplayAssets(assets: SignedPreviewAssets): PreviewDisplayAssets {
-  if (assets.schemaVersion !== 3 || assets.assetLayout !== 'single-page') {
-    return {
-      ...assets,
-      coverUrl: assets.urls[0] ?? null,
-      presentation: null,
-    }
-  }
-
   const sourcePresentation = buildBookPresentation(assets.pages.map(toPreviewLeaf), {
     coverRole: 'preview_cover',
     interiorRole: 'preview_interior',
@@ -84,7 +76,7 @@ export function resolvePreviewDisplayAssets(assets: SignedPreviewAssets): Previe
 export function isPreviewDisplayComplete(
   assets: Pick<PreviewDisplayAssets, 'urls' | 'presentation'>
 ): boolean {
-  if (!assets.presentation) return assets.urls.length >= 2
+  if (!assets.presentation) return false
   return Boolean(
     assets.presentation.cover &&
     assets.presentation.spreads.length > 0 &&
@@ -96,7 +88,7 @@ export function getPreviewSpreadUrls(
   assets: Pick<PreviewDisplayAssets, 'urls' | 'presentation'>,
   spreadIndex: number
 ): string[] {
-  if (!assets.presentation) return assets.urls[spreadIndex] ? [assets.urls[spreadIndex]] : []
+  if (!assets.presentation) return []
   if (spreadIndex === 0) return assets.presentation.cover?.url ? [assets.presentation.cover.url] : []
   const spread = assets.presentation.spreads.find(
     (candidate) => (candidate.displayIndex ?? candidate.spreadIndex) === spreadIndex
@@ -107,7 +99,7 @@ export function getPreviewSpreadUrls(
 export function getPreviewMaxSpreadIndex(
   assets: Pick<PreviewDisplayAssets, 'urls' | 'presentation'>
 ): number {
-  if (!assets.presentation) return Math.max(0, assets.urls.length - 1)
+  if (!assets.presentation) return 0
   return assets.presentation.spreads.reduce(
     (maximum, spread) => Math.max(maximum, spread.displayIndex ?? spread.spreadIndex),
     0
@@ -117,7 +109,7 @@ export function getPreviewMaxSpreadIndex(
 export function getAllPreviewDisplayUrls(
   assets: Pick<PreviewDisplayAssets, 'urls' | 'presentation'>
 ): string[] {
-  if (!assets.presentation) return assets.urls
+  if (!assets.presentation) return []
   return [
     assets.presentation.cover?.url,
     ...assets.presentation.spreads.flatMap((spread) => [spread.left?.url, spread.right?.url]),

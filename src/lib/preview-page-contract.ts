@@ -29,14 +29,14 @@ export type SignedPreviewPage = {
 export type SignedPreviewAssets = {
   urls: string[]
   pages: SignedPreviewPage[]
-  schemaVersion: 3 | null
-  assetLayout: 'single-page' | null
+  schemaVersion: 3
+  assetLayout: 'single-page'
 }
 
 export type PreviewSignTarget = {
   storagePath: string
   assetSize: 'small' | 'full'
-  page: StoredPreviewPage | null
+  page: StoredPreviewPage
 }
 
 export function sortPreviewPages(pages: StoredPreviewPage[]) {
@@ -69,40 +69,29 @@ export function selectPreviewSignTargets(args: {
   pagesParam: string | null
   limitParam: string | null
   sizeParam: string
-  legacyStoragePath?: string | null
 }): PreviewSignTarget[] {
   const sortedPages = sortPreviewPages(args.pages)
-  let requestedIndices: number[] | null = null
+  let selectedPages = sortedPages
 
   if (args.pagesParam) {
-    requestedIndices = args.pagesParam
+    const requestedIndices = args.pagesParam
       .split(',')
       .map((value) => Number.parseInt(value.trim(), 10))
       .filter((value) => Number.isFinite(value))
+    selectedPages = requestedIndices
+      .map((index) => sortedPages.find((page) => page.page_index === index))
+      .filter((page): page is StoredPreviewPage => Boolean(page))
   } else if (args.limitParam) {
     const limit = Number.parseInt(args.limitParam, 10)
     if (Number.isFinite(limit) && limit > 0) {
-      requestedIndices = sortedPages.slice(0, limit).map((page) => page.page_index)
+      selectedPages = sortedPages.slice(0, limit)
     }
   }
 
-  const requestedPages = requestedIndices?.length
-    ? requestedIndices
-        .map((index) => sortedPages.find((page) => page.page_index === index))
-        .filter((page): page is StoredPreviewPage => Boolean(page))
-    : []
-
-  if (requestedPages.length > 0) {
-    return requestedPages.map((page) => resolvePageTarget(page, args.sizeParam))
-  }
-  if (args.legacyStoragePath) {
-    return [{ storagePath: args.legacyStoragePath, assetSize: 'small', page: null }]
-  }
-  return sortedPages.map((page) => resolvePageTarget(page, args.sizeParam))
+  return selectedPages.map((page) => resolvePageTarget(page, args.sizeParam))
 }
 
-export function toSignedPreviewPage(target: PreviewSignTarget, url: string): SignedPreviewPage | null {
-  if (!target.page) return null
+export function toSignedPreviewPage(target: PreviewSignTarget, url: string): SignedPreviewPage {
   const page = target.page
   const role = page.role === 'preview_cover' || page.role === 'preview_interior' ? page.role : null
   const side = page.side === 'left' || page.side === 'right' || page.side === null ? page.side : undefined
@@ -129,25 +118,19 @@ export function toSignedPreviewPage(target: PreviewSignTarget, url: string): Sig
 export function buildSignedPreviewResponse(args: {
   targets: PreviewSignTarget[]
   signedUrls: string[]
-  schemaVersion?: unknown
-  assetLayout?: unknown
 }) {
   if (args.targets.length !== args.signedUrls.length) {
     throw new Error('Signed Preview target count mismatch')
   }
-  const pages = args.targets.flatMap((target, index) => {
-    const page = toSignedPreviewPage(target, args.signedUrls[index])
-    return page ? [page] : []
-  })
+  const pages = args.targets.map((target, index) =>
+    toSignedPreviewPage(target, args.signedUrls[index])
+  )
   const contract = {
-    ...(Number(args.schemaVersion) === 3 ? { schema_version: 3 } : {}),
-    ...(args.assetLayout === 'single-page' ? { asset_layout: 'single-page' as const } : {}),
+    schema_version: 3 as const,
+    asset_layout: 'single-page' as const,
     pages,
   }
-
-  return args.signedUrls.length === 1
-    ? { ...contract, url: args.signedUrls[0] }
-    : { ...contract, urls: args.signedUrls }
+  return contract
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -197,20 +180,13 @@ function parseSignedPreviewPage(value: unknown): SignedPreviewPage {
 
 export function parseSignedPreviewAssets(value: unknown): SignedPreviewAssets {
   if (!isRecord(value)) throw new Error('Invalid signed Preview response')
-  const schemaVersion = value.schema_version === 3 ? 3 : null
-  const assetLayout = value.asset_layout === 'single-page' ? 'single-page' : null
-  if (Boolean(schemaVersion) !== Boolean(assetLayout)) {
-    throw new Error('Incomplete signed Preview contract marker')
+  if (value.schema_version !== 3 || value.asset_layout !== 'single-page') {
+    throw new Error('Unsupported signed Preview contract')
   }
 
-  const urls = Array.isArray(value.urls)
-    ? value.urls.map((url) => typeof url === 'string' ? url.trim() : '').filter(Boolean)
-    : typeof value.url === 'string' && value.url.trim()
-      ? [value.url.trim()]
-      : []
-  const pages = Array.isArray(value.pages)
-    ? value.pages.map(parseSignedPreviewPage)
-    : []
+  if (!Array.isArray(value.pages)) throw new Error('Signed Preview pages are missing')
+  const pages = value.pages.map(parseSignedPreviewPage)
+  const urls = pages.map((page) => page.url)
 
-  return { urls, pages, schemaVersion, assetLayout }
+  return { urls, pages, schemaVersion: 3, assetLayout: 'single-page' }
 }

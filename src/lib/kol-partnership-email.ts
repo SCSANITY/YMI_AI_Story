@@ -1,5 +1,3 @@
-import { timingSafeEqual } from 'node:crypto'
-import { decodeEmailRouteToken } from '@/lib/email-route-token'
 import { getSupportInboundDomain } from '@/lib/support-ticket'
 import {
   formatEmailRouteAlias,
@@ -17,9 +15,7 @@ export function buildKolPartnershipReplyAddress(params: {
 }
 
 export type KolPartnershipReplyIdentity = {
-  leadCode: string | null
-  replyAlias: string | null
-  replyToken: string | null
+  replyAlias: string
 }
 
 export function parseKolPartnershipReplyAddress(
@@ -36,36 +32,9 @@ export function parseKolPartnershipReplyAddress(
   const aliasMatch = localPart.match(
     /^partner-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})$/
   )
-  if (aliasMatch) {
-    return {
-      leadCode: null,
-      replyAlias: `${aliasMatch[1]}${aliasMatch[2]}${aliasMatch[3]}`,
-      replyToken: null,
-    }
-  }
-
-  const currentMatch = localPart.match(/^partners\+([a-z2-7]{26})$/)
-  if (currentMatch) {
-    const replyToken = decodeEmailRouteToken(currentMatch[1], 32)
-    return replyToken ? { leadCode: null, replyAlias: null, replyToken } : null
-  }
-
-  const legacyMatch = localPart.match(/^collab-([a-f0-9]{10})-([a-f0-9]{32})$/)
-  if (!legacyMatch) return null
-  return {
-    leadCode: legacyMatch[1].toUpperCase(),
-    replyAlias: null,
-    replyToken: legacyMatch[2],
-  }
-}
-
-export function matchesKolPartnershipReplyToken(expected: string, candidate: string) {
-  const expectedBytes = Buffer.from(expected.trim().toLowerCase(), 'utf8')
-  const candidateBytes = Buffer.from(candidate.trim().toLowerCase(), 'utf8')
-  return (
-    expectedBytes.length === candidateBytes.length &&
-    timingSafeEqual(expectedBytes, candidateBytes)
-  )
+  return aliasMatch
+    ? { replyAlias: `${aliasMatch[1]}${aliasMatch[2]}${aliasMatch[3]}` }
+    : null
 }
 
 export function classifyKolPartnershipSender(

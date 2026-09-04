@@ -4,18 +4,13 @@ import { memo, type CSSProperties } from 'react'
 import { BookOpen, ChevronLeft, ChevronRight, Lock, Wand2 } from 'lucide-react'
 import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector'
 import { BookLeafImage } from '@/components/personalize/BookLeafImage'
-import {
-  createLegacySpreadLeaf,
-  resolveBookLeaf,
-  type BookPresentation,
-} from '@/lib/book-presentation'
+import { resolveBookLeaf, type BookPresentation } from '@/lib/book-presentation'
 
 type PreviewBookPageContentProps = {
   mode?: 'preview' | 'reader'
   side: 'left' | 'right'
   spreadIndex: number
   bookType: PersonalizeBookType
-  previewPages: string[]
   previewImageErrors: Set<string>
   bookPresentation?: BookPresentation | null
   previewFirstSpreadPresentation?: BookPresentation | null
@@ -43,7 +38,6 @@ function PreviewBookPageContentComponent({
   side,
   spreadIndex,
   bookType,
-  previewPages,
   previewImageErrors,
   bookPresentation,
   previewFirstSpreadPresentation,
@@ -76,9 +70,7 @@ function PreviewBookPageContentComponent({
   }
 
   if (spreadIndex === 0 && side === 'right') {
-    const generatedCover = bookPresentation
-      ? bookPresentation.cover?.url || ''
-      : previewPages[0] || ''
+    const generatedCover = bookPresentation?.cover?.url || ''
     const canShowGeneratedCover = Boolean(generatedCover) && !previewImageErrors.has(generatedCover)
 
     return (
@@ -121,18 +113,11 @@ function PreviewBookPageContentComponent({
 
   if (spreadIndex > 0) {
     const mayUseGeneratedLeaf = mode === 'reader' || spreadIndex === 1
-    const usesStructuredLeaves = Boolean(bookPresentation)
     const structuredLeaf = mayUseGeneratedLeaf
       ? resolveBookLeaf(bookPresentation, spreadIndex, side)
       : null
     const usableStructuredLeaf = structuredLeaf && !previewImageErrors.has(structuredLeaf.url)
       ? structuredLeaf
-      : null
-    const legacySpreadImage = mayUseGeneratedLeaf && !usesStructuredLeaves
-      ? previewPages[spreadIndex] || ''
-      : ''
-    const usableLegacyLeaf = legacySpreadImage && !previewImageErrors.has(legacySpreadImage)
-      ? createLegacySpreadLeaf(legacySpreadImage, spreadIndex, side)
       : null
     const firstSpreadUnderlayLeaf = mode === 'preview' && spreadIndex === 1
       ? resolveBookLeaf(previewFirstSpreadPresentation, spreadIndex, side)
@@ -146,12 +131,11 @@ function PreviewBookPageContentComponent({
     const usableLockedLeaf = lockedStructuredLeaf && !previewImageErrors.has(lockedStructuredLeaf.url)
       ? lockedStructuredLeaf
       : null
-    const displayLeaf = usableStructuredLeaf || usableLegacyLeaf || usableFirstSpreadUnderlay || usableLockedLeaf
+    const displayLeaf = usableStructuredLeaf || usableFirstSpreadUnderlay || usableLockedLeaf
     const isLockedPreview = mode === 'preview' && spreadIndex >= 2
     const isGeneratingWithUnderlay = mode === 'preview'
       && spreadIndex === 1
       && !usableStructuredLeaf
-      && !usableLegacyLeaf
       && Boolean(usableFirstSpreadUnderlay)
     const isMaskedPreview = isLockedPreview || isGeneratingWithUnderlay
     const isLeftSide = side === 'left'
@@ -171,7 +155,7 @@ function PreviewBookPageContentComponent({
               loading={isNearbySpread ? 'eager' : 'lazy'}
               fetchPriority={isNearbySpread ? 'high' : 'auto'}
               onError={() => onImageError(displayLeaf.url, {
-                refreshGenerated: Boolean(usableStructuredLeaf || usableLegacyLeaf),
+                refreshGenerated: Boolean(usableStructuredLeaf),
               })}
             />
           </div>

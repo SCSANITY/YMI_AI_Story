@@ -17,7 +17,7 @@ test('Customize reuses the global account menu without bypassing Preview cleanup
   assert.match(personalizePage, /onNavigate=\{\(path\) => void navigateAwayFromPreview\(path\)\}/)
   assert.match(personalizePage, /await cleanupCurrentPreviewVariantSession\(\)/)
 
-  for (const destination of ['/account', '/favorites', '/orders', '/my-books', '/admin']) {
+  for (const destination of ['/account', '/favorites', '/orders', '/my-books', '/admin/finals']) {
     assert.match(globalMenu, new RegExp(destination.replace('/', '\\/')))
   }
   assert.match(globalMenu, /onOpenRewards/)

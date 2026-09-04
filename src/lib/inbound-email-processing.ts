@@ -10,7 +10,6 @@ import {
 import type { InboundRecipientRoute, InboundRouteKind } from '@/lib/inbound-email-routing'
 import {
   classifyKolPartnershipSender,
-  matchesKolPartnershipReplyToken,
   parseKolPartnershipReplyAddress,
 } from '@/lib/kol-partnership-email'
 import {
@@ -251,20 +250,10 @@ async function routeTicketReply(envelope: InboundEnvelopeRow) {
     return undefined
   }
 
-  let ticketQuery = supabaseAdmin
+  const ticketQuery = supabaseAdmin
     .from('support_questions')
-    .select('question_id, ticket_code, email, display_name')
-  if (routedAddress.replyAlias) {
-    ticketQuery = ticketQuery.eq('reply_alias', routedAddress.replyAlias)
-  } else if (routedAddress.replyToken) {
-    ticketQuery = ticketQuery.eq('reply_token', routedAddress.replyToken)
-  } else {
-    await rejectEnvelope(envelope, 'ticket_identity_invalid')
-    return undefined
-  }
-  if (routedAddress.ticketCode) {
-    ticketQuery = ticketQuery.eq('ticket_code', routedAddress.ticketCode)
-  }
+    .select('question_id, email, display_name')
+    .eq('reply_alias', routedAddress.replyAlias)
   const { data: ticket, error: ticketError } = await ticketQuery.maybeSingle()
   if (ticketError) throw new Error(ticketError.message)
   if (!ticket) {
@@ -343,28 +332,14 @@ async function routeKolReply(envelope: InboundEnvelopeRow) {
     return undefined
   }
 
-  let leadQuery = supabaseAdmin
+  const leadQuery = supabaseAdmin
     .from('kol_collaboration_leads')
-    .select('lead_id, lead_code, customer_id, nickname, account_email_snapshot, contact_email, reply_alias, reply_token')
-  if (routedAddress.replyAlias) {
-    leadQuery = leadQuery.eq('reply_alias', routedAddress.replyAlias)
-  } else if (routedAddress.replyToken) {
-    leadQuery = leadQuery.eq('reply_token', routedAddress.replyToken)
-  } else {
-    await rejectEnvelope(envelope, 'kol_identity_invalid')
-    return undefined
-  }
-  if (routedAddress.leadCode) {
-    leadQuery = leadQuery.eq('lead_code', routedAddress.leadCode)
-  }
+    .select('lead_id, customer_id, nickname, account_email_snapshot, contact_email, reply_alias')
+    .eq('reply_alias', routedAddress.replyAlias)
   const { data: lead, error: leadError } = await leadQuery.maybeSingle()
   if (leadError) throw new Error(leadError.message)
   if (
-    !lead ||
-    (routedAddress.replyAlias
-      ? lead.reply_alias !== routedAddress.replyAlias
-      : !routedAddress.replyToken ||
-        !matchesKolPartnershipReplyToken(lead.reply_token, routedAddress.replyToken))
+    !lead || lead.reply_alias !== routedAddress.replyAlias
   ) {
     await rejectEnvelope(envelope, 'kol_identity_not_found')
     return undefined

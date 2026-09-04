@@ -96,3 +96,57 @@ test('Customize has one lifecycle authority and one Preview controller', async (
     (error) => error?.code === 'ENOENT'
   )
 })
+
+test('retired compatibility surfaces cannot re-enter the production runtime', async () => {
+  const [
+    globalContext,
+    i18n,
+    useI18n,
+    myBooks,
+    previewRoute,
+    previewContract,
+    signatureVoice,
+    jobsRoute,
+    userAssetsRoute,
+    navbarMenu,
+    supportReply,
+    kolReply,
+  ] = await Promise.all([
+    read('contexts/GlobalContext.tsx'),
+    read('src/lib/i18n-messages.ts'),
+    read('src/lib/useI18n.ts'),
+    read('app/api/my-books/route.ts'),
+    read('app/api/jobs/[jobId]/preview-url/route.ts'),
+    read('src/lib/preview-page-contract.ts'),
+    read('src/lib/signature-voice.ts'),
+    read('app/api/jobs/route.js'),
+    read('app/api/user-assets/route.ts'),
+    read('components/navbar/NavbarUserMenu.tsx'),
+    read('src/lib/support-ticket.ts'),
+    read('src/lib/kol-partnership-email.ts'),
+  ])
+
+  assert.doesNotMatch(globalContext, /ymi_language|setLanguage|migrateLegacyLanguageToCurrency/)
+  assert.doesNotMatch(i18n, /UI_MESSAGES|Record<Language/)
+  assert.match(useI18n, /getUiMessage\(key, vars\)/)
+  assert.doesNotMatch(useI18n, /useGlobalContext|\blanguage\b/)
+  assert.doesNotMatch(myBooks, /baseSelect|fallbackQuery|Backward compatibility/)
+  assert.doesNotMatch(previewRoute, /legacyStoragePath|outputAssets\?\.storage_path/)
+  assert.doesNotMatch(previewContract, /legacyStoragePath|Array\.isArray\(value\.urls\)/)
+  assert.doesNotMatch(signatureVoice + jobsRoute + userAssetsRoute, /signature-voice-consent-v[12]/)
+  assert.match(navbarMenu, /onNavigate\('\/admin\/finals'\)/)
+  assert.doesNotMatch(supportReply, /support\\\+|ticket-|replyToken/)
+  assert.doesNotMatch(kolReply, /partners\\\+|collab-|replyToken/)
+
+  for (const retiredPath of [
+    'app/admin/page.tsx',
+    'app/api/admin/inbox/messages/[inboundEmailId]/replies/route.ts',
+    'src/lib/email-route-token.ts',
+    'src/lib/footer-legal-content-traditional.ts',
+  ]) {
+    await assert.rejects(
+      access(path.join(root, retiredPath)),
+      (error) => error?.code === 'ENOENT'
+    )
+  }
+})

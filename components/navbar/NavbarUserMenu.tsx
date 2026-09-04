@@ -152,7 +152,7 @@ export function NavbarUserMenu({
           {user.role === 'admin' ? (
             <button
               onClick={() => {
-                onNavigate('/admin')
+                onNavigate('/admin/finals')
                 onClose()
               }}
               className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-amber-50"

@@ -66,19 +66,6 @@ describe('Personalize structured Preview presentation', () => {
     assert.equal(isPreviewDisplayComplete(display), false)
   })
 
-  it('preserves V1 positional assets without constructing a structured model', () => {
-    const display = resolvePreviewDisplayAssets({
-      urls: ['legacy-cover.png', 'legacy-spread.png'],
-      pages: [],
-      schemaVersion: null,
-      assetLayout: null,
-    })
-
-    assert.equal(display.presentation, null)
-    assert.equal(display.coverUrl, 'legacy-cover.png')
-    assert.equal(isPreviewDisplayComplete(display), true)
-  })
-
   it('rejects V3 pages whose required presentation metadata was filtered away', () => {
     const malformed = {
       ...structuredAssets,

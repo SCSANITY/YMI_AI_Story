@@ -44,7 +44,7 @@ test('all public legal surfaces use the shared published-content boundary', asyn
   const footer = await read('components/Footer.tsx')
   const checkout = await read('app/checkout/page.tsx')
 
-  assert.match(publishedLoader, /getFooterLegalContent\('en'\)/)
+  assert.match(publishedLoader, /getFooterLegalContent\(\)/)
   assert.match(publishedLoader, /current_published_revision_id/)
   assert.match(publishedLoader, /\.eq\('status', 'published'\)/)
   assert.match(publicApi, /getPublishedLegalContentSnapshot/)

@@ -21,9 +21,7 @@ test('routes one opaque ticket identity ahead of copied general recipients', () 
   assert.equal(route.kind, 'ticket_reply')
   assert.equal(route.address, replyAddress.toLowerCase())
   assert.deepEqual(route.ticketIdentity, {
-    ticketCode: null,
     replyAlias: ALIAS_A,
-    replyToken: null,
   })
   assert.equal(route.shouldLoadContent, true)
 })
@@ -51,9 +49,7 @@ test('routes one opaque KOL identity and rejects cross-namespace ambiguity', () 
   )
   assert.equal(route.kind, 'kol_reply')
   assert.deepEqual(route.kolIdentity, {
-    leadCode: null,
     replyAlias: ALIAS_A,
-    replyToken: null,
   })
   assert.equal(route.shouldLoadContent, true)
 

@@ -1,4 +1,3 @@
-import { decodeEmailRouteToken } from '@/lib/email-route-token'
 export { isUuid } from '@/lib/validators'
 
 const DEFAULT_INBOUND_DOMAIN = 'reply.ymistory.com'
@@ -49,9 +48,7 @@ export function buildSupportReplyAddress(params: {
 }
 
 export type SupportReplyIdentity = {
-  ticketCode: string | null
-  replyAlias: string | null
-  replyToken: string | null
+  replyAlias: string
 }
 
 export function parseSupportReplyAddress(
@@ -68,27 +65,9 @@ export function parseSupportReplyAddress(
   const aliasMatch = localPart.match(
     /^case-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})-([23456789abcdefghjkmnpqrstuvwxyz]{4})$/
   )
-  if (aliasMatch) {
-    return {
-      ticketCode: null,
-      replyAlias: `${aliasMatch[1]}${aliasMatch[2]}${aliasMatch[3]}`,
-      replyToken: null,
-    }
-  }
-
-  const currentMatch = localPart.match(/^support\+([a-z2-7]{20})$/)
-  if (currentMatch) {
-    const replyToken = decodeEmailRouteToken(currentMatch[1], 24)
-    return replyToken ? { ticketCode: null, replyAlias: null, replyToken } : null
-  }
-
-  const legacyMatch = localPart.match(/^ticket-([a-f0-9]{10})-([a-f0-9]{24})$/)
-  if (!legacyMatch) return null
-  return {
-    ticketCode: legacyMatch[1].toUpperCase(),
-    replyAlias: null,
-    replyToken: legacyMatch[2],
-  }
+  return aliasMatch
+    ? { replyAlias: `${aliasMatch[1]}${aliasMatch[2]}${aliasMatch[3]}` }
+    : null
 }
 
 export function normalizeEmailRouteAlias(value: string): string {

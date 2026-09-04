@@ -45,7 +45,7 @@ function buildCodeOwnedFallback(): PublishedLegalContentSnapshot {
 
   return {
     documents: documentRecord,
-    footerContent: getFooterLegalContent('en'),
+    footerContent: getFooterLegalContent(),
     footerEffectiveDates: { ...FALLBACK_EFFECTIVE_DATES },
   }
 }

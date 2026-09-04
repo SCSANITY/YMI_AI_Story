@@ -109,7 +109,7 @@ function checkoutItemRequiresShipping(item: CartItem) {
 
 function CheckoutPageContent() {
   const router = useRouter();
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const {
     user,
@@ -1377,7 +1377,6 @@ function CheckoutPageContent() {
             <AddressFormSection
               initialForm={form}
               checkoutEmail={checkoutEmail}
-              language={language}
               selectedCurrency={selectedCurrency}
               userCustomerId={user?.customerId ?? null}
               isAuthResolved={isAuthResolved}

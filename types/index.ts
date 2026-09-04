@@ -156,8 +156,6 @@ export interface Order {
   };
 }
 
-export type Language = 'en' | 'cn_s' | 'cn_t' | 'ja' | 'es' | 'ko';
-
 export type DisplayCurrency =
   | 'USD'
   | 'EUR'
@@ -198,7 +196,6 @@ export type ViewState = 'home' | 'personalize' | 'cart' | 'checkout' | 'success'
 
 export interface GlobalContextType {
   user: User | null;
-  language: Language;
   displayCurrency: DisplayCurrency;
   displayRegion: string;
   cart: CartItem[];
@@ -238,7 +235,6 @@ export interface GlobalContextType {
   refreshCart: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   toggleFavorite: (book: Book) => ToggleFavoriteResult;
-  setLanguage: (lang: Language) => void;
   setDisplayCurrency: (currency: DisplayCurrency) => void;
   setCurrencyRegion: (region: string) => void;
   setCheckoutEmail: (email: string) => void;

@@ -8,7 +8,6 @@ import {
   requireSignatureVoiceAssetId,
   isVerifiedSignatureVoiceDuration,
   SIGNATURE_VOICE_CONSENT_VERSION,
-  SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SignatureVoiceContractError,
 } from './signature-voice'
 
@@ -62,7 +61,7 @@ test('accepts only the unified server-stampable capture authorization v3', () =>
   }), /missing or unsupported/)
   assert.throws(() => parseSignatureVoiceCaptureAuthorization({
     accepted: true,
-    version: SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
+    version: 'signature-voice-consent-v2',
     speaker_kind: 'adult',
   }), /missing or unsupported/)
   assert.throws(() => parseSignatureVoiceCaptureAuthorization({
@@ -107,16 +106,13 @@ test('accepts a complete same-owner Signature Voice binding', () => {
   })
 })
 
-test('keeps an already-captured v2 authorization valid for historical fulfilment', () => {
-  assert.deepEqual(assertSignatureVoicePurchaseBinding({
+test('rejects an already-captured v2 authorization at the production purchase boundary', () => {
+  assert.throws(() => assertSignatureVoicePurchaseBinding({
     ...customerCreation,
-    voice_consent_version: SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
+    voice_consent_version: 'signature-voice-consent-v2',
     voice_subject_name: 'Adult narrator',
     voice_subject_relationship: 'self',
-  }, customerAsset), {
-    voiceAssetId: 'voice-asset-1',
-    durationSeconds: 15,
-  })
+  }, customerAsset), /consent/)
 })
 
 test('fails closed when the Creation has no authoritative voice association', () => {

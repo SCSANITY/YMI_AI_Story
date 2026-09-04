@@ -56,7 +56,7 @@ describe('structured signed Preview page contract', () => {
     assert.deepEqual(targets.map((target) => target.assetSize), ['full', 'small'])
   })
 
-  it('keeps legacy preview ordering and limit behavior', () => {
+  it('keeps structured preview ordering and limit behavior', () => {
     const targets = selectPreviewSignTargets({
       pages,
       pagesParam: null,
@@ -66,15 +66,14 @@ describe('structured signed Preview page contract', () => {
     assert.deepEqual(targets.map((target) => target.page?.page_index), [0, 1])
   })
 
-  it('keeps the legacy storage_path fallback when no requested page resolves', () => {
+  it('returns no targets when explicitly requested structured pages do not exist', () => {
     const targets = selectPreviewSignTargets({
       pages,
       pagesParam: '999',
       limitParam: null,
       sizeParam: 'small',
-      legacyStoragePath: 'legacy.png',
     })
-    assert.deepEqual(targets, [{ storagePath: 'legacy.png', assetSize: 'small', page: null }])
+    assert.deepEqual(targets, [])
   })
 
   it('adds allowlisted page metadata without exposing private Storage paths', () => {
@@ -87,11 +86,10 @@ describe('structured signed Preview page contract', () => {
     const response = buildSignedPreviewResponse({
       targets,
       signedUrls: ['https://signed.example/cover'],
-      schemaVersion: 3,
-      assetLayout: 'single-page',
     })
 
-    assert.equal('url' in response ? response.url : null, 'https://signed.example/cover')
+    assert.equal('url' in response, false)
+    assert.equal('urls' in response, false)
     assert.deepEqual(response.pages[0], {
       page_index: 0,
       preview_order: 0,
@@ -108,7 +106,7 @@ describe('structured signed Preview page contract', () => {
     assert.equal(response.asset_layout, 'single-page')
   })
 
-  it('retains the legacy urls field for multi-page callers', () => {
+  it('returns only structured pages for multi-page callers', () => {
     const targets = selectPreviewSignTargets({
       pages,
       pagesParam: null,
@@ -118,7 +116,8 @@ describe('structured signed Preview page contract', () => {
     const signedUrls = targets.map((target) => `https://signed.example/${target.page?.page_index}`)
     const response = buildSignedPreviewResponse({ targets, signedUrls })
 
-    assert.deepEqual('urls' in response ? response.urls : null, signedUrls)
+    assert.equal('url' in response, false)
+    assert.equal('urls' in response, false)
     assert.deepEqual(response.pages.map((page) => page.page_index), [0, 1, 2])
   })
 
@@ -147,11 +146,10 @@ describe('structured signed Preview page contract', () => {
     assert.equal('page_number' in response.pages[0], false)
   })
 
-  it('parses the additive client response without changing legacy URL order', () => {
+  it('parses structured pages and derives URL order from them', () => {
     const parsed = parseSignedPreviewAssets({
       schema_version: 3,
       asset_layout: 'single-page',
-      urls: ['cover.webp', 'left.webp', 'right.webp'],
       pages: [
         {
           page_index: 0,
@@ -160,6 +158,22 @@ describe('structured signed Preview page contract', () => {
           side: null,
           asset_size: 'small',
           url: 'cover.webp',
+        },
+        {
+          page_index: 1,
+          role: 'preview_interior',
+          spread_index: 1,
+          side: 'left',
+          asset_size: 'small',
+          url: 'left.webp',
+        },
+        {
+          page_index: 2,
+          role: 'preview_interior',
+          spread_index: 1,
+          side: 'right',
+          asset_size: 'small',
+          url: 'right.webp',
         },
       ],
     })
@@ -170,11 +184,10 @@ describe('structured signed Preview page contract', () => {
     assert.equal(parsed.pages[0].role, 'preview_cover')
   })
 
-  it('rejects a partial V3 marker instead of silently treating it as legacy', () => {
+  it('rejects any response outside the V3 structured contract', () => {
     assert.throws(() => parseSignedPreviewAssets({
       schema_version: 3,
-      url: 'cover.webp',
       pages: [],
-    }), /Incomplete signed Preview contract marker/)
+    }), /Unsupported signed Preview contract/)
   })
 })

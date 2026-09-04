@@ -101,7 +101,6 @@ type ShippingQuoteApiOption = {
 type AddressFormSectionProps = {
   initialForm: CheckoutAddressForm;
   checkoutEmail: string;
-  language: string;
   selectedCurrency: CheckoutCurrency;
   userCustomerId?: string | null;
   isAuthResolved: boolean;
@@ -193,17 +192,12 @@ function isValidCheckoutEmail(email: string) {
   return EMAIL_FORMAT_PATTERN.test(email.trim());
 }
 
-function getDestinationLabel(destination: ShippingDestinationOption | null | undefined, language: string) {
+function getDestinationLabel(destination: ShippingDestinationOption | null | undefined) {
   if (!destination) return '';
-  if (language === 'cn_s') return destination.label.cn_s || destination.label.en;
-  if (language === 'cn_t') return destination.label.cn_t || destination.label.cn_s || destination.label.en;
-  if (language === 'ja') return destination.label.ja || destination.label.en;
-  if (language === 'es') return destination.label.es || destination.label.en;
-  if (language === 'ko') return destination.label.ko || destination.label.en;
   return destination.label.en;
 }
 
-function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDestinationOption | null, language: string) {
+function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDestinationOption | null) {
   return {
     ...form,
     firstName: form.firstName.trim(),
@@ -211,7 +205,7 @@ function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDe
     email: form.email.trim(),
     country: form.country.trim().toUpperCase(),
     shippingRegionKey: form.shippingRegionKey.trim(),
-    shippingDestinationLabel: getDestinationLabel(destination, language) || form.shippingDestinationLabel.trim(),
+    shippingDestinationLabel: getDestinationLabel(destination) || form.shippingDestinationLabel.trim(),
     region: form.region.trim(),
     city: form.city.trim(),
     addressLine1: form.addressLine1.trim(),
@@ -225,7 +219,6 @@ function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDe
 function AddressFormSectionComponent({
   initialForm,
   checkoutEmail,
-  language,
   selectedCurrency,
   userCustomerId,
   isAuthResolved,
@@ -264,13 +257,13 @@ function AddressFormSectionComponent({
   );
 
   const selectedShippingDestinationLabel =
-    getDestinationLabel(selectedShippingDestination, language) ||
+    getDestinationLabel(selectedShippingDestination) ||
     form.shippingDestinationLabel ||
     t('checkout.countryPlaceholder');
 
   const shippingAddressPayload = useMemo(
-    () => normalizeAddressForm(form, selectedShippingDestination, language),
-    [form, language, selectedShippingDestination]
+    () => normalizeAddressForm(form, selectedShippingDestination),
+    [form, selectedShippingDestination]
   );
 
   const isShippingAddressComplete = useMemo(
@@ -524,7 +517,7 @@ function AddressFormSectionComponent({
   };
 
   const handleShippingDestinationSelect = useCallback((destination: ShippingDestinationOption) => {
-    const label = getDestinationLabel(destination, language);
+    const label = getDestinationLabel(destination);
     hasLocalEditsRef.current = true;
     setFormError('');
     setForm((prev) => ({
@@ -534,7 +527,7 @@ function AddressFormSectionComponent({
       shippingDestinationLabel: label,
     }));
     setIsShippingDestinationOpen(false);
-  }, [language]);
+  }, []);
 
   const handleShippingMethodSelect = useCallback((methodCode: ShippingMethodCode) => {
     selectedShippingMethodRef.current = methodCode;
@@ -562,7 +555,7 @@ function AddressFormSectionComponent({
       return;
     }
 
-    const normalizedForm = normalizeAddressForm(form, selectedShippingDestination, language);
+    const normalizedForm = normalizeAddressForm(form, selectedShippingDestination);
     const normalizedEmail = normalizedForm.email;
     setEmailHistory((prev) => {
       const next = [normalizedEmail, ...prev.filter((item) => item !== normalizedEmail)].slice(0, 6);
@@ -834,7 +827,7 @@ function AddressFormSectionComponent({
                 className="absolute z-40 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-white/80 bg-white/95 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur-xl"
               >
                 {availableShippingDestinations.map((destination) => {
-                  const label = getDestinationLabel(destination, language);
+                  const label = getDestinationLabel(destination);
                   const isSelected =
                     destination.countryCode === form.country &&
                     String(destination.shippingRegionKey || '') === String(form.shippingRegionKey || '');

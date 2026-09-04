@@ -17,15 +17,6 @@ type JobOutputAssets = {
 } | null
 
 async function loadCreationsWithArchive(owner: CheckoutOwner) {
-  const baseSelect = `
-    creation_id,
-    template_id,
-    customize_snapshot,
-    preview_job_id,
-    created_at,
-    templates:templates (*, package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at))
-  `
-
   const archiveSelect = `
     creation_id,
     template_id,
@@ -37,22 +28,11 @@ async function loadCreationsWithArchive(owner: CheckoutOwner) {
     templates:templates (*, package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at))
   `
 
-  const primaryQuery = scopeCheckoutOwnerQuery(
+  const query = scopeCheckoutOwnerQuery(
     supabaseAdmin.from('creations').select(archiveSelect).order('created_at', { ascending: false }),
     owner
   )
-  const primary = await primaryQuery
-
-  // Backward compatibility: if DB migration not applied yet, fallback to old select.
-  if (primary.error && (primary.error.message?.includes('is_archived') || primary.error.code === '42703')) {
-    const fallbackQuery = scopeCheckoutOwnerQuery(
-      supabaseAdmin.from('creations').select(baseSelect).order('created_at', { ascending: false }),
-      owner
-    )
-    return await fallbackQuery
-  }
-
-  return primary
+  return await query
 }
 
 export async function GET(request: Request) {

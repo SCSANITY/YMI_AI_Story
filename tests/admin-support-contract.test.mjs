@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import test from 'node:test'
 
@@ -160,14 +160,13 @@ test('Support SQL migrates existing questions into messages and locks tables to 
 })
 
 test('General Inbox consumes recognized aliases through the canonical envelope', async () => {
-  const [sql, processor, mailboxApi, threadsApi, threadApi, draftApi, legacyReplyApi, page, workspace, navigation] = await Promise.all([
+  const [sql, processor, mailboxApi, threadsApi, threadApi, draftApi, page, workspace, navigation] = await Promise.all([
     read('sql_root_email_general_inbox.sql', templates),
     read('src/lib/inbound-email-processing.ts'),
     read('app/api/admin/mail/mailboxes/route.ts'),
     read('app/api/admin/mail/threads/route.ts'),
     read('app/api/admin/mail/threads/[threadId]/route.ts'),
     read('app/api/admin/mail/drafts/[messageId]/route.ts'),
-    read('app/api/admin/inbox/messages/[inboundEmailId]/replies/route.ts'),
     read('app/admin/(protected)/inbox/page.tsx'),
     read('components/admin/sections/inbox/GeneralInbox.tsx'),
     read('components/admin/adminNavigation.ts'),
@@ -189,13 +188,13 @@ test('General Inbox consumes recognized aliases through the canonical envelope',
     assert.match(api, /requireAdminCustomer/)
     assert.match(api, /noStoreJson as (?:jsonNoStore|privateJson)/)
   }
-  assert.match(legacyReplyApi, /requireAdminCustomer/)
-  assert.match(legacyReplyApi, /Cache-Control/)
   assert.match(mailboxApi, /loadGeneralMailMailboxCounts/)
   assert.match(threadsApi, /loadGeneralMailThreadSummaries/)
   assert.match(threadApi, /loadGeneralMailThreadDetail/)
-  assert.match(legacyReplyApi, /status:\s*410/)
-  assert.doesNotMatch(legacyReplyApi, /sendGeneralInboxReplyEmail|projectGeneralMailLegacyReply/)
+  await assert.rejects(
+    access(path.join(root, 'app/api/admin/inbox/messages/[inboundEmailId]/replies/route.ts')),
+    (error) => error?.code === 'ENOENT'
+  )
   assert.match(page, /GeneralInbox/)
   assert.match(page, /AdminPage/)
   assert.match(page, /AdminPageHeader/)
@@ -248,7 +247,7 @@ test('General Inbox workspace SQL is additive, private, and rerun-convergent', a
 })
 
 test('General mail S3 threads only by mailbox RFC headers and keeps send state server-owned', async () => {
-  const [sql, processor, mailServer, mailPolicy, email, webhookEvents, legacyReply, ...adminApis] =
+  const [sql, processor, mailServer, mailPolicy, email, webhookEvents, ...adminApis] =
     await Promise.all([
       read('sql_general_inbox_standard_mail_backend.sql', templates),
       read('src/lib/inbound-email-processing.ts'),
@@ -256,7 +255,6 @@ test('General mail S3 threads only by mailbox RFC headers and keeps send state s
       read('src/lib/general-mail.ts'),
       read('src/lib/email.tsx'),
       read('src/lib/resend-webhook-events.ts'),
-      read('app/api/admin/inbox/messages/[inboundEmailId]/replies/route.ts'),
       read('app/api/admin/mail/drafts/route.ts'),
       read('app/api/admin/mail/drafts/[messageId]/route.ts'),
       read('app/api/admin/mail/drafts/[messageId]/send/route.ts'),
@@ -290,8 +288,6 @@ test('General mail S3 threads only by mailbox RFC headers and keeps send state s
   assert.match(email, /general_mail_message:/)
   assert.match(webhookEvents, /email_key === ['"]general_mail_message['"]/)
   assert.doesNotMatch(webhookEvents, /email_key === ['"]general_inbox_reply['"]/)
-  assert.match(legacyReply, /status:\s*410/)
-  assert.doesNotMatch(legacyReply, /projectGeneralMailLegacyReply|sendGeneralInboxReplyEmail/)
 
   for (const api of adminApis) {
     assert.match(api, /requireAdminCustomer/)
@@ -301,13 +297,12 @@ test('General mail S3 threads only by mailbox RFC headers and keeps send state s
 })
 
 test('General mail S5 exposes one mailbox workspace writer without leaking BCC or inbound HTML', async () => {
-  const [server, workspace, composer, richText, legacyReply, mailboxApi, threadsApi, threadApi, draftApi] =
+  const [server, workspace, composer, richText, mailboxApi, threadsApi, threadApi, draftApi] =
     await Promise.all([
       read('src/lib/general-mail-server.ts'),
       read('components/admin/sections/inbox/GeneralInbox.tsx'),
       read('components/admin/sections/inbox/GeneralMailComposer.tsx'),
       read('components/admin/sections/inbox/GeneralMailRichText.tsx'),
-      read('app/api/admin/inbox/messages/[inboundEmailId]/replies/route.ts'),
       read('app/api/admin/mail/mailboxes/route.ts'),
       read('app/api/admin/mail/threads/route.ts'),
       read('app/api/admin/mail/threads/[threadId]/route.ts'),
@@ -345,8 +340,7 @@ test('General mail S5 exposes one mailbox workspace writer without leaking BCC o
   assert.doesNotMatch(richText, /execCommand/)
   assert.doesNotMatch(richText, /window\.prompt/)
   assert.doesNotMatch(richText, /dangerouslySetInnerHTML/)
-  assert.match(legacyReply, /status:\s*410/)
-  assert.doesNotMatch(legacyReply + server, /projectGeneralMailLegacyReply/)
+  assert.doesNotMatch(server, /projectGeneralMailLegacyReply/)
 
   for (const api of [mailboxApi, threadsApi, threadApi, draftApi]) {
     assert.match(api, /requireAdminCustomer/)

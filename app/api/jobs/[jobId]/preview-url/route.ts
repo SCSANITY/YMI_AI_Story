@@ -53,7 +53,6 @@ export async function GET(
 
   const outputAssets = job.output_assets as
     | {
-        storage_path?: string
         bucket?: string
         schema_version?: number
         asset_layout?: string
@@ -68,8 +67,11 @@ export async function GET(
     return jsonNoStore({ error: 'Job not completed' }, 400)
   }
 
-  if (job.status === 'running' && !pages.length && !outputAssets?.storage_path) {
+  if (job.status === 'running' && !pages.length) {
     return jsonNoStore({ error: 'Preview not ready' }, 400)
+  }
+  if (outputAssets?.schema_version !== 3 || outputAssets?.asset_layout !== 'single-page') {
+    return jsonNoStore({ error: 'Unsupported Preview asset contract' }, 400)
   }
 
   const signTargets = selectPreviewSignTargets({
@@ -77,7 +79,6 @@ export async function GET(
     pagesParam,
     limitParam,
     sizeParam,
-    legacyStoragePath: outputAssets?.storage_path,
   })
 
   if (!signTargets.length) {
@@ -103,8 +104,6 @@ export async function GET(
     buildSignedPreviewResponse({
       targets: signTargets,
       signedUrls: signedResults,
-      schemaVersion: outputAssets?.schema_version,
-      assetLayout: outputAssets?.asset_layout,
     })
   )
 }

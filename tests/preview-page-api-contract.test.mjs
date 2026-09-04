@@ -34,10 +34,10 @@ test('structured Personalize pages leave variant, share, cart, and Reader contra
     readFile(readerPath, 'utf8'),
   ])
 
-  assert.match(jobsService, /getPreviewPages[\s\S]*getPreviewPageAssets[\s\S]*return assets\.urls/)
   assert.match(jobsService, /return parseSignedPreviewAssets\(await response\.json\(\)\)/)
-  assert.match(previewContract, /Array\.isArray\(value\.urls\)/)
-  assert.match(previewContract, /typeof value\.url === ['"]string['"]/)
+  assert.doesNotMatch(jobsService, /getPreviewUrl|getPreviewPages/)
+  assert.doesNotMatch(previewContract, /Array\.isArray\(value\.urls\)|value\.urls\.map/)
+  assert.match(previewContract, /const urls = pages\.map\(\(page\) => page\.url\)/)
   assert.match(personalize, /usePreviewController/)
   assert.doesNotMatch(personalize, /getPreviewPageAssets/)
   assert.match(previewController, /setPreviewBookPresentation\(assets\.presentation\)/)

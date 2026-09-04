@@ -6,9 +6,7 @@ export type BookLeafRole =
   | 'final_front_cover'
   | 'final_interior'
 
-export type BookLeafSource =
-  | { layout: 'single-page' }
-  | { layout: 'spread-crop'; side: BookLeafSide }
+export type BookLeafSource = { layout: 'single-page' }
 
 export type BookLeaf = {
   id: string
@@ -53,10 +51,6 @@ export function buildBookPresentation(
     if (!leaf.side || leaf.spreadIndex < 1) {
       throw new Error(`Invalid ${options.interiorRole} leaf ${leaf.id}`)
     }
-    if (leaf.source.layout === 'spread-crop' && leaf.source.side !== leaf.side) {
-      throw new Error(`Mismatched crop side for leaf ${leaf.id}`)
-    }
-
     const spread = spreads.get(leaf.spreadIndex) ?? {
       spreadIndex: leaf.spreadIndex,
       left: null,
@@ -86,20 +80,4 @@ export function resolveBookLeaf(
     (candidate) => (candidate.displayIndex ?? candidate.spreadIndex) === spreadIndex
   )
   return spread?.[side] ?? null
-}
-
-export function createLegacySpreadLeaf(
-  url: string,
-  spreadIndex: number,
-  side: BookLeafSide,
-  role: 'preview_interior' | 'final_interior' = 'preview_interior'
-): BookLeaf {
-  return {
-    id: `legacy-spread-${spreadIndex}-${side}`,
-    url,
-    role,
-    spreadIndex,
-    side,
-    source: { layout: 'spread-crop', side },
-  }
 }

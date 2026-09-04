@@ -1,5 +1,3 @@
-import type { Language } from '@/types'
-
 type MessageDictionary = Record<string, string>
 
 const en: MessageDictionary = {
@@ -838,21 +836,11 @@ const en: MessageDictionary = {
   'maintenance.contactSuffix': '.',
 }
 
-export const UI_MESSAGES: Record<Language, MessageDictionary> = {
-  en,
-  cn_s: en,
-  cn_t: en,
-  ja: en,
-  es: en,
-  ko: en,
-}
-
 export const getUiMessage = (
-  language: Language,
   key: string,
   vars?: Record<string, string | number | null | undefined>
 ) => {
-  const template = UI_MESSAGES[language]?.[key] ?? UI_MESSAGES.en[key] ?? key
+  const template = en[key] ?? key
   if (!vars) return template
   return Object.entries(vars).reduce((result, [name, value]) => {
     return result.replace(new RegExp(`{{${name}}}`, 'g'), String(value ?? ''))

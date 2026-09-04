@@ -37,8 +37,8 @@ const alternate: PreviewVariantView = {
 const refreshedAssets: PreviewDisplayAssets = {
   urls: ['alternate-cover', 'alternate-left', 'alternate-right'],
   pages: [],
-  schemaVersion: null,
-  assetLayout: null,
+  schemaVersion: 3,
+  assetLayout: 'single-page',
   coverUrl: 'alternate-cover',
   presentation: null,
 }

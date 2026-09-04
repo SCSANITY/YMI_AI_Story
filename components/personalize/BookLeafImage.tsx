@@ -1,6 +1,5 @@
 'use client'
 
-import type { CSSProperties } from 'react'
 import type { BookLeaf } from '@/lib/book-presentation'
 
 type BookLeafImageProps = {
@@ -10,17 +9,6 @@ type BookLeafImageProps = {
   loading?: 'eager' | 'lazy'
   fetchPriority?: 'high' | 'low' | 'auto'
   onError?: () => void
-}
-
-export function getBookLeafImageStyle(leaf: BookLeaf): CSSProperties {
-  if (leaf.source.layout === 'single-page') {
-    return { left: '0%', width: '100%' }
-  }
-
-  return {
-    left: leaf.source.side === 'left' ? '0%' : '-100%',
-    width: '200%',
-  }
 }
 
 export function BookLeafImage({
@@ -40,7 +28,7 @@ export function BookLeafImage({
       loading={loading}
       fetchPriority={fetchPriority}
       onError={onError}
-      style={getBookLeafImageStyle(leaf)}
+      style={{ left: '0%', width: '100%' }}
       data-book-leaf-layout={leaf.source.layout}
       data-book-leaf-side={leaf.side ?? undefined}
     />

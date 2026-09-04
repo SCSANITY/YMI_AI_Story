@@ -2,11 +2,10 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { BookLeafImage, getBookLeafImageStyle } from '@/components/personalize/BookLeafImage'
+import { BookLeafImage } from '@/components/personalize/BookLeafImage'
 import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent'
 import {
   buildBookPresentation,
-  createLegacySpreadLeaf,
   resolveBookLeaf,
   type BookLeaf,
 } from './book-presentation'
@@ -75,7 +74,7 @@ describe('physical-book leaf presentation', () => {
     assert.doesNotMatch(html, /left:-100%/)
   })
 
-  it('keeps structured page content isolated from legacy positional URLs', () => {
+  it('renders structured page content without a positional image channel', () => {
     const left = singlePageLeaf('left', 'https://signed.example/left.webp', 1, 'left')
     const right = singlePageLeaf('right', 'https://signed.example/right.webp', 1, 'right')
     const presentation = buildBookPresentation([left, right], {
@@ -85,7 +84,6 @@ describe('physical-book leaf presentation', () => {
     const commonProps = {
       spreadIndex: 1,
       bookType: 'basic' as const,
-      previewPages: ['legacy-cover.png', 'legacy-spread.png'],
       previewImageErrors: new Set<string>(),
       bookPresentation: presentation,
       currentSpread: 1,
@@ -114,7 +112,6 @@ describe('physical-book leaf presentation', () => {
 
     assert.match(html, /https:\/\/signed\.example\/left\.webp/)
     assert.match(html, /https:\/\/signed\.example\/right\.webp/)
-    assert.doesNotMatch(html, /legacy-spread\.png/)
     assert.doesNotMatch(html, /width:200%/)
   })
 
@@ -135,7 +132,6 @@ describe('physical-book leaf presentation', () => {
     const commonProps = {
       spreadIndex: 1,
       bookType: 'basic' as const,
-      previewPages: ['cover.webp'],
       previewImageErrors: new Set<string>(),
       bookPresentation: generatedPresentation,
       previewFirstSpreadPresentation,
@@ -176,7 +172,6 @@ describe('physical-book leaf presentation', () => {
         side="left"
         spreadIndex={1}
         bookType="basic"
-        previewPages={['cover.webp']}
         previewImageErrors={new Set<string>()}
         bookPresentation={null}
         previewFirstSpreadPresentation={null}
@@ -213,7 +208,6 @@ describe('physical-book leaf presentation', () => {
     const commonProps = {
       spreadIndex: 2,
       bookType: 'basic' as const,
-      previewPages: ['cover.webp'],
       previewImageErrors: new Set<string>(),
       bookPresentation: null,
       lockedPreviewPresentation: lockedPresentation,
@@ -260,7 +254,6 @@ describe('physical-book leaf presentation', () => {
         side="right"
         spreadIndex={2}
         bookType="basic"
-        previewPages={[]}
         previewImageErrors={new Set<string>()}
         bookPresentation={presentation}
         currentSpread={2}
@@ -288,14 +281,6 @@ describe('physical-book leaf presentation', () => {
     assert.doesNotMatch(html, /aria-label="Next page"/)
   })
 
-  it('keeps the current landscape spread crop behind an explicit adapter', () => {
-    const left = createLegacySpreadLeaf('legacy-spread.png', 1, 'left')
-    const right = createLegacySpreadLeaf('legacy-spread.png', 1, 'right')
-
-    assert.deepEqual(getBookLeafImageStyle(left), { left: '0%', width: '200%' })
-    assert.deepEqual(getBookLeafImageStyle(right), { left: '-100%', width: '200%' })
-  })
-
   it('rejects duplicate presentation slots', () => {
     const first = singlePageLeaf('first', 'one.webp', 1, 'left')
     const duplicate = singlePageLeaf('duplicate', 'two.webp', 1, 'left')
@@ -304,16 +289,6 @@ describe('physical-book leaf presentation', () => {
       coverRole: 'preview_cover',
       interiorRole: 'preview_interior',
     }), /Duplicate spread 1 left leaf/)
-  })
-
-  it('rejects a legacy crop side that disagrees with the explicit leaf side', () => {
-    const leaf = createLegacySpreadLeaf('legacy-spread.png', 1, 'left')
-    leaf.source = { layout: 'spread-crop', side: 'right' }
-
-    assert.throws(() => buildBookPresentation([leaf], {
-      coverRole: 'preview_cover',
-      interiorRole: 'preview_interior',
-    }), /Mismatched crop side/)
   })
 
   it('resolves a physical Preview spread through its contiguous display index', () => {

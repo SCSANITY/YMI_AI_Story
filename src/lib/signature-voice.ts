@@ -1,11 +1,4 @@
-export const SIGNATURE_VOICE_ADULT_CONSENT_VERSION = 'signature-voice-consent-v1'
-export const SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION = 'signature-voice-consent-v2'
 export const SIGNATURE_VOICE_CONSENT_VERSION = 'signature-voice-consent-v3'
-export const SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS = [
-  SIGNATURE_VOICE_ADULT_CONSENT_VERSION,
-  SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
-  SIGNATURE_VOICE_CONSENT_VERSION,
-] as const
 
 export function isVerifiedSignatureVoiceDuration(value: unknown) {
   const durationSeconds = Number(value)
@@ -143,9 +136,7 @@ export function assertSignatureVoicePurchaseBinding(
     throw new SignatureVoiceContractError('Signature Voice recording duration is invalid')
   }
 
-  if (!SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS.includes(
-    requiredString(creation.voice_consent_version) as (typeof SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS)[number]
-  )) {
+  if (requiredString(creation.voice_consent_version) !== SIGNATURE_VOICE_CONSENT_VERSION) {
     throw new SignatureVoiceContractError('Signature Voice consent is missing or unsupported')
   }
 

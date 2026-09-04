@@ -7,7 +7,6 @@ import {
   normalizeSupportEmail,
   parseSupportReplyAddress,
 } from './support-ticket'
-import { encodeEmailRouteToken } from './email-route-token'
 
 test('support reply addresses use a grouped customer-facing case identity', () => {
   const replyAlias = '2345abcdefgh'
@@ -18,28 +17,16 @@ test('support reply addresses use a grouped customer-facing case identity', () =
 
   assert.equal(address, 'case-2345-ABCD-EFGH@reply.ymistory.com')
   assert.deepEqual(parseSupportReplyAddress(address, 'reply.ymistory.com'), {
-    ticketCode: null,
     replyAlias,
-    replyToken: null,
   })
   assert.equal(parseSupportReplyAddress(address, 'other.ymistory.com'), null)
 })
 
-test('support keeps old reply addresses routable without emitting them again', () => {
-  const replyToken = '0123456789abcdef01234567'
-  const compactAddress = `support+${encodeEmailRouteToken(replyToken, 24)}@reply.ymistory.com`
-  assert.deepEqual(parseSupportReplyAddress(compactAddress, 'reply.ymistory.com'), {
-    ticketCode: null,
-    replyAlias: null,
-    replyToken,
-  })
-
+test('support rejects every retired token-based reply address', () => {
+  const compactAddress = 'support+abcdefghijklmnopqrstuvwxyz234567@reply.ymistory.com'
   const legacyAddress = 'ticket-a1b2c3d4e5-0123456789abcdef01234567@reply.ymistory.com'
-  assert.deepEqual(parseSupportReplyAddress(legacyAddress, 'reply.ymistory.com'), {
-    ticketCode: 'A1B2C3D4E5',
-    replyAlias: null,
-    replyToken: '0123456789abcdef01234567',
-  })
+  assert.equal(parseSupportReplyAddress(compactAddress, 'reply.ymistory.com'), null)
+  assert.equal(parseSupportReplyAddress(legacyAddress, 'reply.ymistory.com'), null)
   assert.equal(parseSupportReplyAddress('support+invalid@reply.ymistory.com'), null)
   assert.equal(parseSupportReplyAddress('ticket-a1b2c3d4e5@reply.ymistory.com'), null)
 })

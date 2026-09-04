@@ -84,7 +84,7 @@ export function getCanonicalLegalDocument(
   key: CanonicalLegalDocumentKey,
 ): CanonicalLegalDocument {
   const definition = getCanonicalLegalDocumentDefinition(key)
-  const content = getFooterLegalContent('en')
+  const content = getFooterLegalContent()
 
   return {
     ...definition,

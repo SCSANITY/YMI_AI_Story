@@ -403,34 +403,6 @@ export async function cancelPreviewJob(
   }
 }
 
-export async function getPreviewUrl(jobId: string, customerId?: string | null): Promise<string> {
-  if (!jobId) {
-    throw new Error('Missing job ID')
-  }
-  if (!isUuid(jobId)) {
-    throw new Error(`Invalid job ID: ${jobId}`)
-  }
-  const response = await fetchWithTimeout(
-    appendCustomerId(`/api/jobs/${jobId}/preview-url`, customerId),
-    { credentials: 'include', cache: 'no-store' },
-    15000
-  )
-  if (!response.ok) {
-    throw new Error('Failed to fetch preview URL')
-  }
-  const data = await response.json()
-  return data.url as string
-}
-
-export async function getPreviewPages(
-  jobId: string,
-  pageIndices?: number[],
-  options?: { size?: 'small' | 'full'; customerId?: string | null }
-): Promise<string[]> {
-  const assets = await getPreviewPageAssets(jobId, pageIndices, options)
-  return assets.urls
-}
-
 export async function getPreviewPageAssets(
   jobId: string,
   pageIndices?: number[],

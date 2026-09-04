@@ -1468,10 +1468,6 @@ export default function PersonalizePage({
       return getPreviewSpreadUrls(previewDisplayState, spreadIndex);
     }
     if (spreadIndex === 1) {
-      if (!previewDisplayState.presentation) {
-        const legacyUrls = getPreviewSpreadUrls(previewDisplayState, spreadIndex);
-        if (legacyUrls.length) return legacyUrls;
-      }
       return getTemplatePreviewFirstSpreadDisplayUrls(
         previewDisplayState.presentation,
         previewFirstSpreadPresentation,
@@ -2642,7 +2638,6 @@ export default function PersonalizePage({
       side={side}
       spreadIndex={spreadIndex}
       bookType={bookType}
-      previewPages={previewPages}
       previewImageErrors={previewImageErrors}
       bookPresentation={previewBookPresentation}
       previewFirstSpreadPresentation={previewFirstSpreadPresentation}

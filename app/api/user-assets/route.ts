@@ -8,7 +8,6 @@ import {
 import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 import {
   SIGNATURE_VOICE_CONSENT_VERSION,
-  SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   isVerifiedSignatureVoiceDuration,
 } from '@/lib/signature-voice'
 
@@ -61,16 +60,8 @@ export async function GET(request: Request) {
     const metadata = row.metadata as Record<string, unknown>
     const duration = Number(metadata.duration_seconds)
     return isVerifiedSignatureVoiceDuration(duration)
-      && (
-        (
-          metadata.consent_version === SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION
-          && (metadata.speaker_kind === 'current_child' || metadata.speaker_kind === 'adult')
-        )
-        || (
-          metadata.consent_version === SIGNATURE_VOICE_CONSENT_VERSION
-          && metadata.speaker_kind === 'authorized_speaker'
-        )
-      )
+      && metadata.consent_version === SIGNATURE_VOICE_CONSENT_VERSION
+      && metadata.speaker_kind === 'authorized_speaker'
   }).slice(0, 5)
 
   const facesWithUrls = await Promise.all(
