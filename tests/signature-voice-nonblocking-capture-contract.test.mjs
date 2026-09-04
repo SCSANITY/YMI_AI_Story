@@ -34,4 +34,3 @@ test('T4-025 removes the customer duration review without weakening capture secu
   assert.match(migration, /security definer[\s\S]*set search_path = ''/)
   assert.match(migration, /grant execute on function public\.create_preview_job[\s\S]*to service_role/)
 })
-
