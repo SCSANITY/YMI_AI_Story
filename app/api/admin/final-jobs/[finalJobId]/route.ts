@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import {
   buildAdminFinalPageReadModel,
   type AdminFinalPageSource,
@@ -14,12 +14,6 @@ import {
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const SIGN_TTL_SECONDS = 60 * 20
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 async function signRawPaths(paths: Array<string | null>) {
   const uniquePaths = [...new Set(paths.filter((path): path is string => Boolean(path)))]

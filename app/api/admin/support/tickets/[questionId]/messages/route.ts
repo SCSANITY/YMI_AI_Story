@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { sendSupportReplyEmail } from '@/lib/email'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -18,13 +18,6 @@ const MESSAGE_FIELDS =
 const INTERNAL_MESSAGE_FIELDS = `${MESSAGE_FIELDS}, updated_at`
 const TICKET_FIELDS =
   'question_id, ticket_code, customer_id, order_id, email, display_name, status, last_message_at, last_message_preview, last_message_direction, unread_admin_count, assigned_admin_customer_id, created_at, updated_at, closed_at'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  })
-}
 
 async function loadPublicTicket(questionId: string) {
   const { data, error } = await supabaseAdmin

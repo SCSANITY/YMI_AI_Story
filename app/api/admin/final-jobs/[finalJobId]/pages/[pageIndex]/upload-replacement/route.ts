@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { isFinalJobReleased } from '@/lib/final-job-release'
 import {
@@ -24,12 +24,6 @@ import {
 import { refreshFinalJobApprovalState } from '@/lib/finalReview'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 async function discardFinalReplacementStaging(args: {
   reviewIntentId: string

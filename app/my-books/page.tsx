@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { AlertCircle, BookOpen, CheckCircle2, LogIn, RotateCw, X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
 import { BOOKS } from '@/data/books'
 import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
@@ -24,23 +23,12 @@ import {
   type MyBooksShelf,
 } from './myBooksShelf'
 import type { CreationItem } from './myBooksTypes'
-
-const normalizeLanguage = (value: unknown): PersonalizationData['language'] => {
-  const raw = String(value ?? '').trim().toLowerCase()
-  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
-    return 'Traditional Chinese'
-  }
-  if (raw === 'spanish' || raw === 'es') return 'Spanish'
-  return 'English'
-}
+import { normalizeStoryLanguage } from '@/lib/story-language'
+import { templateStorageUrl } from '@/lib/book-catalog'
 
 const resolveCover = (row: CreationItem) => {
   const raw = row.preview_cover_url || row.templates?.normalized_cover_image_path || row.templates?.cover_image_path || ''
-  if (!raw) return ''
-  if (raw.startsWith('http')) return raw
-  const cleaned = raw.replace(/^app-templates\//, '').replace(/^\/+/, '')
-  const { data } = supabase.storage.from('app-templates').getPublicUrl(cleaned)
-  return data?.publicUrl ?? raw
+  return templateStorageUrl(raw)
 }
 
 const resolveTemplatePackagePrice = (item: CreationItem): BookPackagePrice | null => {
@@ -84,7 +72,7 @@ const toPersonalization = (item: CreationItem): PersonalizationData => {
   return {
     childName: String(childName),
     childAge: String(childAge),
-    language: normalizeLanguage(language),
+    language: normalizeStoryLanguage(language),
     dedication: '',
     storagePath: typeof snapshot.storagePath === 'string' ? snapshot.storagePath : undefined,
     previewJobId: item.preview_job_id ?? (typeof snapshot.previewJobId === 'string' ? snapshot.previewJobId : undefined),

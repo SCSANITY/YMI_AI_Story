@@ -1,14 +1,7 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isSupportTicketStatus } from '@/lib/support-ticket'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  })
-}
 
 export async function GET(request: Request) {
   const admin = await requireAdminCustomer()

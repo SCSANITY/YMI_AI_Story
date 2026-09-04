@@ -1,3 +1,4 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -9,13 +10,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 type AuthenticatedApplicant = {
   customerId: string
   accountEmail: string
-}
-
-function jsonNoStore(body: unknown, init?: { status?: number }) {
-  return NextResponse.json(body, {
-    ...init,
-    headers: { 'Cache-Control': 'no-store' },
-  })
 }
 
 function cleanOptional(value: unknown, maxLength: number) {

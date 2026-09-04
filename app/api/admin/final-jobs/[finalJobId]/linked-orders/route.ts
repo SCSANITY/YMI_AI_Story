@@ -1,14 +1,8 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import type { AdminLinkedOrder } from '@/lib/admin-order-production'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 export async function GET(
   _request: Request,

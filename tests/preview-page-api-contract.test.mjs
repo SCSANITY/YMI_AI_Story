@@ -10,12 +10,12 @@ const sharePreviewPath = new URL('../src/lib/share-preview.ts', import.meta.url)
 const orderFulfillmentPath = new URL('../src/lib/orderFulfillment.ts', import.meta.url)
 const readerPath = new URL('../app/api/my-books/[creationId]/reader/route.ts', import.meta.url)
 
-test('structured Preview signing preserves authorization, no-store, and legacy response fields', async () => {
+test('structured Preview signing preserves authorization and no-store responses', async () => {
   const source = await readFile(routePath, 'utf8')
 
-  assert.match(source, /buildOwnerScopedQuery\([\s\S]*\.from\(['"]jobs['"]\)/)
+  assert.match(source, /scopeCheckoutOwnerQuery\([\s\S]*\.from\(['"]jobs['"]\)/)
   assert.match(source, /if \(!owner\)[\s\S]*Unauthorized/)
-  assert.match(source, /Cache-Control['"]:\s*['"]no-store/)
+  assert.match(source, /noStoreJson as jsonNoStore/)
   assert.match(source, /job\.status !== ['"]done['"] && job\.status !== ['"]running['"]/)
   assert.match(source, /job\.status === ['"]running['"][\s\S]*Preview not ready/)
   assert.match(source, /createSignedUrl\(target\.storagePath, 60 \* 10\)/)

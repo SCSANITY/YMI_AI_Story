@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { signPrivateImagePaths } from '@/lib/private-image-signing'
 
 const STATUSES = new Set(['draft', 'published', 'hidden', 'archived'])
 const MAX_IMAGES = 9
@@ -41,13 +42,6 @@ function normalizeLinks(value: unknown) {
     .slice(0, 12)
 }
 
-async function signImage(storagePath: string) {
-  const { data } = await supabaseAdmin.storage
-    .from('raw-private')
-    .createSignedUrl(storagePath, IMAGE_SIGN_TTL_SECONDS)
-  return data?.signedUrl ?? null
-}
-
 async function withImageUrl(row: AdminBlogPostRow) {
   const imageStoragePaths = Array.isArray(row.image_storage_paths)
     ? row.image_storage_paths
@@ -55,7 +49,9 @@ async function withImageUrl(row: AdminBlogPostRow) {
   return {
     ...row,
     image_storage_paths: imageStoragePaths,
-    image_urls: await Promise.all(imageStoragePaths.map(signImage)),
+    image_urls: await signPrivateImagePaths(imageStoragePaths, {
+      expiresIn: IMAGE_SIGN_TTL_SECONDS,
+    }),
     links: Array.isArray(row.links)
       ? row.links
           .map((link) => ({

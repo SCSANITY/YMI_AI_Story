@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as privateJson } from '@/lib/http-response'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { checkoutOwnerErrorResponse, resolveCheckoutOwner } from '@/lib/checkout-owner'
 import {
@@ -6,14 +6,6 @@ import {
   getOrderDisplayCurrency,
   getOrderDisplayTotal,
 } from '@/lib/order-display'
-
-const ORDERS_LIST_CACHE_CONTROL = 'private, no-store, max-age=0'
-
-function privateJson(body: unknown) {
-  const response = NextResponse.json(body)
-  response.headers.set('Cache-Control', ORDERS_LIST_CACHE_CONTROL)
-  return response
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)

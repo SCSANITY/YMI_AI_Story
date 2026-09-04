@@ -1,3 +1,4 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
@@ -7,13 +8,6 @@ import {
 } from '@/lib/checkout-owner'
 import { isUuid } from '@/lib/validators'
 import { normalizeUserAssetContentType } from '@/lib/userAssetsStorage'
-
-function jsonNoStore(body: unknown, status: number) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'private, no-store', Pragma: 'no-cache' },
-  })
-}
 
 export async function GET(
   request: Request,

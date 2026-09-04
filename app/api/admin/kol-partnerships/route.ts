@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   hydrateKolLeads,
@@ -11,13 +11,6 @@ import {
   type KolPartnershipCounts,
 } from '@/lib/kol-partnerships'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  })
-}
 
 function countLeads(
   rows: Array<{ lead_id: string; review_status: string; unread_admin_count: number | null }>,

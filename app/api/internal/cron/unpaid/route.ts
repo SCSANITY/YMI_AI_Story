@@ -3,10 +3,8 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendUnpaidReminderEmail } from '@/lib/email'
 import { loadOrderItemsWithCovers } from '@/lib/orderFulfillment'
 import { releaseStaleDiscountRedemptions } from '@/lib/discounts'
-import { matchesSecret } from '@/lib/secret-compare'
+import { isInternalRequestAuthorized } from '@/lib/internal-request-auth'
 
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
-const CRON_SECRET = process.env.CRON_SECRET
 const REPEAT_REMINDER_DAYS = Number(process.env.UNPAID_REMINDER_REPEAT_DAYS ?? 3)
 const SCAN_LIMIT = Number(process.env.UNPAID_REMINDER_SCAN_LIMIT ?? 100)
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || ''
@@ -36,19 +34,9 @@ function buildResumeUrl(orderId: string): string {
   return `${SITE_URL.replace(/\/+$/, '')}/checkout?orderId=${orderId}`
 }
 
-function isAuthorized(request: Request): boolean {
-  const internalSecret = request.headers.get('x-internal-secret')
-  if (matchesSecret(internalSecret, INTERNAL_SECRET)) return true
-
-  const authHeader = request.headers.get('authorization') || ''
-  if (CRON_SECRET && matchesSecret(authHeader, `Bearer ${CRON_SECRET}`)) return true
-
-  return false
-}
-
 async function runCron(request: Request) {
   try {
-    if (!isAuthorized(request)) {
+    if (!isInternalRequestAuthorized(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

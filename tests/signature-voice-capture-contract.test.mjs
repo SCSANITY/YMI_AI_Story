@@ -178,7 +178,7 @@ test('S2 orphan cleanup includes historical rows but cannot select a bound recor
   assert.match(enqueue, /insert into public\.user_asset_cleanup_outbox[\s\S]*delete from public\.user_assets/)
   assert.match(cleanupServer, /orphanAgeDays \?\? 30/)
   assert.match(cleanupServer, /claim_user_asset_cleanup/)
-  assert.match(cleanupRoute, /INTERNAL_API_SECRET[\s\S]*CRON_SECRET/)
+  assert.match(cleanupRoute, /isInternalRequestAuthorized/)
   assert.match(vercel, /\/api\/internal\/user-assets\/cleanup/)
 })
 

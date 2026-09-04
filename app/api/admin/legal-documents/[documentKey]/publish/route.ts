@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   LegalPublishingConflictError,
@@ -9,21 +9,10 @@ import {
   publishAdminLegalDraft,
 } from '@/lib/legal-publishing-store'
 import { invalidatePublishedLegalContent } from '@/lib/legal-content-cache'
+import { isUuid } from '@/lib/validators'
 
 type RouteContext = {
   params: Promise<{ documentKey: string }> | { documentKey: string }
-}
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  })
-}
-
-function isUuid(value: unknown) {
-  return typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 export async function POST(request: Request, context: RouteContext) {

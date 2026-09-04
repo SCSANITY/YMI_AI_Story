@@ -9,7 +9,7 @@ import {
 
 export const HOMEPAGE_BANNER_BUCKET = 'site-public'
 
-function resolveAssetUrl(source: HomepageBannerAssetSource, path: string) {
+export function resolveHomepageBannerAssetUrl(source: HomepageBannerAssetSource, path: string) {
   if (source === 'builtin') return `/${path.replace(/^\/+/, '')}`
   return supabaseAdmin.storage.from(HOMEPAGE_BANNER_BUCKET).getPublicUrl(path).data.publicUrl
 }
@@ -41,7 +41,7 @@ const loadPublishedHomepageBanners = unstable_cache(
 
     return resolvePublishedHomepageBanners(
       (data ?? []) as unknown as HomepageBannerSlotRow[],
-      resolveAssetUrl,
+      resolveHomepageBannerAssetUrl,
       (row, bannerError) => {
         console.error('[homepage-banners] skipped invalid slot', {
           slotKey: row.slot_key,

@@ -1,3 +1,4 @@
+import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { releaseOrderDiscount } from '@/lib/discounts'
@@ -25,15 +26,8 @@ import {
   resolveLatestReleasedFinalPdfAsset,
 } from '@/lib/purchase-state'
 
-const ORDER_DETAIL_CACHE_CONTROL = 'private, no-store, max-age=0'
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
-
-function privateJson(body: unknown) {
-  const response = NextResponse.json(body)
-  response.headers.set('Cache-Control', ORDER_DETAIL_CACHE_CONTROL)
-  return response
-}
 
 export async function GET(
   request: Request,

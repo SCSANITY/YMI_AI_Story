@@ -131,7 +131,7 @@ test('Final Review detail uses the protected no-store V3 page read model', async
   ])
 
   assert.match(route, /await\s+requireAdminCustomer\s*\(\s*\)/)
-  assert.match(route, /Cache-Control['"],\s*['"]no-store/)
+  assert.match(route, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.match(route, /\.from\(['"]jobs['"]\)[\s\S]*\.select\(['"]output_assets['"]\)/)
   assert.match(route, /buildAdminFinalPageReadModel/)
   assert.match(route, /page_contract:\s*readModel\.page_contract/)
@@ -228,7 +228,7 @@ test('Legal Content preserves draft isolation, atomic publishing, and immutable 
   assert.match(store, /getCanonicalLegalDocuments\(\)/)
 
   for (const api of [rootApi, documentApi, publishApi, rollbackApi]) {
-    assert.match(api, /['"]Cache-Control['"]:\s*['"]no-store['"]/)
+    assert.match(api, /noStoreJson as (?:jsonNoStore|privateJson)/)
   }
   assert.match(documentApi, /saveAdminLegalDraft/)
   assert.match(publishApi, /publishAdminLegalDraft/)
@@ -551,7 +551,7 @@ test('Discounts keeps create, list, and row mutations in independent state islan
   assert.match(card, /setDisplayInstrument\(previous\)/)
   assert.match(card, /requestIntentRef/)
   assert.doesNotMatch(card, /reloadDiscounts/)
-  assert.match(discountsApi, /['"]Cache-Control['"]:\s*['"]no-store['"]/)
+  assert.match(discountsApi, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.match(discountsApi, /Provide exactly one discount offer or instrument id/)
   assert.match(discountsApi, /\.select\(['"]instrument_id, is_active['"]\)/)
   assert.match(discountsApi, /instrument:\s*\{/)
@@ -577,7 +577,7 @@ test('Orders keeps drafts row-scoped and reconciles logistics side effects from 
   assert.match(card, /data\.emailStatus\s*===\s*['"]failed['"]/)
   assert.doesNotMatch(card, /reloadOrders/)
   assert.match(types, /READONLY_GROUPS/)
-  assert.match(ordersApi, /['"]Cache-Control['"]:\s*['"]no-store['"]/)
+  assert.match(ordersApi, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.match(logisticsApi, /sendLogisticsUpdateEmail/)
   assert.match(logisticsApi, /persisted:\s*true/)
   assert.match(logisticsApi, /order:\s*updatedOrder/)
@@ -672,9 +672,9 @@ test('Announcements separates list, status rows, and the editor upload workspace
   assert.match(listItem, /requestIntentRef/)
   assert.match(listItem, /onStatusCommitted\(data\.post\)/)
   assert.doesNotMatch(listItem, /loadPosts/)
-  assert.match(blogApi, /['"]Cache-Control['"]:\s*['"]no-store['"]/)
-  assert.match(blogApi, /image_urls:\s*await Promise\.all/)
-  assert.match(postApi, /image_urls:\s*await Promise\.all/)
+  assert.match(blogApi, /noStoreJson as (?:jsonNoStore|privateJson)/)
+  assert.match(blogApi, /image_urls:\s*await signPrivateImagePaths/)
+  assert.match(postApi, /image_urls:\s*await signPrivateImagePaths/)
   assert.match(postApi, /Announcement not found/)
 })
 

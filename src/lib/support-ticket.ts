@@ -1,8 +1,8 @@
 import { decodeEmailRouteToken } from '@/lib/email-route-token'
+export { isUuid } from '@/lib/validators'
 
 const DEFAULT_INBOUND_DOMAIN = 'reply.ymistory.com'
 const REPLY_ALIAS_PATTERN = /^[23456789abcdefghjkmnpqrstuvwxyz]{12}$/
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export const SUPPORT_TICKET_STATUSES = [
   'new',
@@ -16,10 +16,6 @@ export type SupportTicketStatus = (typeof SUPPORT_TICKET_STATUSES)[number]
 
 export function isSupportTicketStatus(value: unknown): value is SupportTicketStatus {
   return SUPPORT_TICKET_STATUSES.includes(value as SupportTicketStatus)
-}
-
-export function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID_PATTERN.test(value)
 }
 
 export function normalizeSupportEmail(value: unknown): string | null {

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   buildHomepageBannerStoragePath,
@@ -6,12 +6,6 @@ import {
 } from '@/lib/homepage-banner-admin'
 import { HOMEPAGE_BANNER_BUCKET } from '@/lib/homepage-banners'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 export async function POST(request: Request) {
   const admin = await requireAdminCustomer()

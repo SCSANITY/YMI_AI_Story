@@ -1,12 +1,8 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { loadGeneralMailThreadSummaries } from '@/lib/general-mail-server'
 import { isGeneralMailboxKey } from '@/lib/general-inbox-mailboxes'
 import { isGeneralMailFolder } from '@/lib/general-mail-workspace'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
-}
 
 function readBoundedInteger(value: string | null, fallback: number, maximum: number) {
   if (value === null) return fallback

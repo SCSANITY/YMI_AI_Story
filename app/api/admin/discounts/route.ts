@@ -1,18 +1,10 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 const EFFECT_TYPES = new Set(['free_shipping', 'fixed_amount', 'percentage'])
 const INSTRUMENT_TYPES = new Set(['promo_code', 'voucher'])
-
-function jsonNoStore(body: unknown, init?: { status?: number }) {
-  return NextResponse.json(body, {
-    ...init,
-    headers: {
-      'Cache-Control': 'no-store',
-    },
-  })
-}
 
 function normalizeCode(value: unknown) {
   return String(value || '').trim().toUpperCase()

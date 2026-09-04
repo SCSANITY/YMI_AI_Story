@@ -1,5 +1,5 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { createHash } from 'node:crypto'
-import { NextResponse } from 'next/server'
 import { parseBuffer } from 'music-metadata'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
@@ -19,12 +19,6 @@ import { validateStoredUserAssetMetadata } from '@/lib/userAssetsStorage'
 import { isUuid } from '@/lib/validators'
 
 export const runtime = 'nodejs'
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 async function discardNarrationUpload(assetId: string, storagePath: string, errorMessage: string) {
   const { data: binding, error: bindingError } = await supabaseAdmin

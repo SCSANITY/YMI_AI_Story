@@ -20,9 +20,12 @@ import {
   SignatureVoiceContractError,
   parseSignatureVoiceBindingRequest,
 } from '@/lib/signature-voice'
+import {
+  forceEnglishTextOverrides,
+  normalizeStoryLanguage,
+} from '@/lib/story-language'
 
 const MAX_TEXT_PROFILES = 5
-const DEFAULT_STORY_LANGUAGE = 'English'
 const CONTENT_GENERATION_CONSENT_VERSIONS = new Set(['content-generation-consent-v1'])
 
 function validateAndStampPreviewConsent(params) {
@@ -43,20 +46,6 @@ function validateAndStampPreviewConsent(params) {
         version: contentGeneration.version,
       },
     },
-  }
-}
-
-function normalizeStoryLanguage() {
-  return DEFAULT_STORY_LANGUAGE
-}
-
-function forceEnglishTextOverrides(textOverrides) {
-  if (!textOverrides || typeof textOverrides !== 'object' || Array.isArray(textOverrides)) {
-    return null
-  }
-  return {
-    ...textOverrides,
-    language: DEFAULT_STORY_LANGUAGE,
   }
 }
 

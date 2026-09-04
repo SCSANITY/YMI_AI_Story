@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { classifyGeneralMailError } from '@/lib/general-mail-api'
 import {
@@ -7,10 +7,6 @@ import {
 } from '@/lib/general-mail-attachment-server'
 import { loadGeneralMailMessage } from '@/lib/general-mail-server'
 import { isUuid } from '@/lib/support-ticket'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
-}
 
 async function readIds(context: {
   params: Promise<{ messageId: string; attachmentId: string }>

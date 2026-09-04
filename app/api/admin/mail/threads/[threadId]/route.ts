@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   loadGeneralMailThreadDetail,
@@ -6,9 +6,6 @@ import {
 } from '@/lib/general-mail-server'
 import { isUuid } from '@/lib/support-ticket'
 
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
-}
 async function readThreadId(context: { params: Promise<{ threadId: string }> }) {
   const { threadId } = await context.params
   return isUuid(threadId) ? threadId : null

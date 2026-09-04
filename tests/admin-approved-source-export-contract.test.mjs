@@ -23,7 +23,7 @@ test('approved-source export revalidates server facts and exposes signed URLs wi
   assert.match(route, /approved_output_path/)
   assert.match(route, /const \{ storage_path, \.\.\.file \}/)
   assert.match(route, /signed_url:\s*signedUrl/)
-  assert.match(route, /Cache-Control['"],\s*['"]no-store/)
+  assert.match(route, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.doesNotMatch(route, /\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
 
   assert.match(contract, /parseFinalPageMetadataContract/)

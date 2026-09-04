@@ -16,7 +16,6 @@ import {
   getPreviewPageAssets,
   PreviewVariantRequestError,
 } from '@/services/jobs';
-import { supabase } from '@/lib/supabase';
 import { usePersonalizeStage } from '@/components/personalize/usePersonalizeStage';
 import { isUuid } from '@/lib/validators';
 import { useI18n } from '@/lib/useI18n';
@@ -52,8 +51,8 @@ import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGa
 import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
 import { useBookCatalog } from '@/components/useBookCatalog';
-import type { CatalogBook } from '@/lib/book-catalog';
-import type { CartItem, StoryLanguage } from '@/types';
+import { templateStorageUrl, type CatalogBook } from '@/lib/book-catalog';
+import type { CartItem } from '@/types';
 import type { BookPresentation } from '@/lib/book-presentation';
 import {
   buildTemplateLockedPreviewPresentation,
@@ -74,6 +73,7 @@ import {
   type PreviewVariantView,
 } from '@/lib/preview-variant-view';
 import { emitYmiTrackingEvent, resolveTrackingFormat } from '@/lib/tracking-policy';
+import { normalizeStoryLanguage } from '@/lib/story-language';
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
 
@@ -97,20 +97,6 @@ const createGenerateTimer = () => {
       ...(details ?? {}),
     });
   };
-};
-
-const normalizeStoryLanguage = (value: unknown): StoryLanguage => {
-  const raw = String(value ?? '').trim().toLowerCase();
-  if (raw === 'simplified chinese' || raw === 'chinese simplified' || raw === 'cn_s' || raw === 'zh-cn' || raw === 'simplified') {
-    return 'Simplified Chinese';
-  }
-  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
-    return 'Traditional Chinese';
-  }
-  if (raw === 'spanish' || raw === 'es') {
-    return 'Spanish';
-  }
-  return 'English';
 };
 
 const normalizePersonalizeBookType = (value: unknown): PersonalizeBookType => {
@@ -1050,15 +1036,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                 if (!templateCoverUrl && creation.templates?.cover_image_path) {
                   const rawPath = String(creation.templates.cover_image_path || '').trim()
                   if (rawPath) {
-                    if (rawPath.startsWith('http')) {
-                      setTemplateCoverUrl(rawPath)
-                    } else {
-                      const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '')
-                      const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned)
-                      if (publicUrl?.publicUrl) {
-                        setTemplateCoverUrl(publicUrl.publicUrl)
-                      }
-                    }
+                    setTemplateCoverUrl(templateStorageUrl(rawPath))
                   }
                 }
               }
@@ -1137,15 +1115,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         if (!templateCoverUrl && creation.templates?.cover_image_path) {
           const rawPath = String(creation.templates.cover_image_path || '').trim()
           if (rawPath) {
-            if (rawPath.startsWith('http')) {
-              setTemplateCoverUrl(rawPath)
-            } else {
-              const cleaned = rawPath.replace(/^app-templates\//, '').replace(/^\/+/, '')
-              const { data: publicUrl } = supabase.storage.from('app-templates').getPublicUrl(cleaned)
-              if (publicUrl?.publicUrl) {
-                setTemplateCoverUrl(publicUrl.publicUrl)
-              }
-            }
+            setTemplateCoverUrl(templateStorageUrl(rawPath))
           }
         }
       } catch {

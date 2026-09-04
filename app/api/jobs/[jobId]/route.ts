@@ -2,24 +2,14 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   checkoutOwnerErrorResponse,
-  ownerFilter,
   resolveCheckoutOwner,
-  type CheckoutOwner,
+  scopeCheckoutOwnerQuery,
 } from '@/lib/checkout-owner'
 
 type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancel_requested' | 'cancelled'
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-}
-
-function buildOwnerScopedQuery(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  query: any,
-  owner: CheckoutOwner
-) {
-  const filter = ownerFilter(owner)
-  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
 async function readJsonSafely(request: Request) {
@@ -51,7 +41,7 @@ export async function GET(
   }
   if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE_HEADERS })
 
-  const { data: job, error } = await buildOwnerScopedQuery(
+  const { data: job, error } = await scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('jobs')
       .select(
@@ -87,7 +77,7 @@ export async function DELETE(
   }
   if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: job, error } = await buildOwnerScopedQuery(
+  const { data: job, error } = await scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('jobs')
       .select('job_id, job_type, status, creation_id')
@@ -113,7 +103,7 @@ export async function DELETE(
     (typeof body?.creationId === 'string' ? body.creationId : null)
 
   if (targetCreationId) {
-    const { error: archiveError } = await buildOwnerScopedQuery(
+    const { error: archiveError } = await scopeCheckoutOwnerQuery(
       supabaseAdmin
         .from('creations')
         .update({

@@ -8,7 +8,7 @@ const releasePath = new URL('../src/lib/finalReview.ts', import.meta.url)
 
 test('released Reader keeps ownership, purchase, and release gates before signing', async () => {
   const source = await readFile(routePath, 'utf8')
-  const ownerGate = source.indexOf('const scopedCreationQuery = buildOwnerScopedQuery')
+  const ownerGate = source.indexOf('const scopedCreationQuery = scopeCheckoutOwnerQuery')
   const purchaseGate = source.indexOf("purchaseState !== 'purchased'")
   const releaseGate = source.indexOf('const finalReady = isFinalJobReleased(finalJob)')
   const signing = source.indexOf('const signedPages = await createSignedStorageUrlMap')
@@ -16,7 +16,7 @@ test('released Reader keeps ownership, purchase, and release gates before signin
   assert.ok(ownerGate >= 0 && ownerGate < purchaseGate)
   assert.ok(purchaseGate < releaseGate)
   assert.ok(releaseGate < signing)
-  assert.match(source, /Cache-Control['"], MY_BOOK_READER_CACHE_CONTROL/)
+  assert.match(source, /noStoreJson as privateJson/)
   assert.match(source, /buildReleasedReaderContract\(\{[\s\S]*outputAssets: linkedJob\?\.output_assets/)
   assert.match(source, /\.eq\(['"]job_id['"], finalJob\.job_id\)[\s\S]*\.eq\(['"]job_type['"], ['"]final['"]\)/)
 })

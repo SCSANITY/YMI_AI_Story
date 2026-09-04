@@ -1,5 +1,5 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { randomUUID } from 'crypto'
-import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   MANUAL_PRINT_PDF_BUCKET,
@@ -8,12 +8,6 @@ import {
   validateManualPrintUpload,
 } from '@/lib/manual-print-artifact'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 export async function POST(
   request: Request,

@@ -11,7 +11,7 @@ test('order references are validated and bound without raw PostgREST or filters'
   ])
 
   assert.match(ownerStore, /export function parseOrderReference/)
-  assert.match(ownerStore, /UUID_PATTERN/)
+  assert.match(ownerStore, /UUID_REGEX/)
   assert.match(ownerStore, /DISPLAY_ID_PATTERN/)
   assert.match(ownerStore, /\.eq\(reference\.column, reference\.value\)/)
   assert.doesNotMatch(ownerStore, /\.or\(`/)
@@ -77,8 +77,9 @@ test('cart and order creation reject non-positive or non-integer quantities', as
 })
 
 test('internal route secrets use constant-time comparison', async () => {
-  const [secretStore, ...routes] = await Promise.all([
+  const [secretStore, internalAuth, workerCallback, ...routes] = await Promise.all([
     read('src/lib/secret-compare.ts'),
+    read('src/lib/internal-request-auth.ts'),
     read('app/api/internal/worker-callback/route.ts'),
     read('app/api/internal/cron/unpaid/route.ts'),
     read('app/api/internal/jobs/stats/route.ts'),
@@ -86,7 +87,9 @@ test('internal route secrets use constant-time comparison', async () => {
   ])
 
   assert.match(secretStore, /timingSafeEqual/)
-  for (const route of routes) assert.match(route, /matchesSecret/)
+  assert.match(internalAuth, /matchesSecret/)
+  assert.match(workerCallback, /matchesSecret/)
+  for (const route of routes) assert.match(route, /isInternalRequestAuthorized/)
 })
 
 test('raw face voice and avatar signed URLs expire within one hour', async () => {

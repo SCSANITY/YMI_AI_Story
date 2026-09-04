@@ -1,3 +1,4 @@
+import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
@@ -5,14 +6,6 @@ import {
   resolveCheckoutOwner,
   type CheckoutOwner,
 } from '@/lib/checkout-owner'
-
-const FAVOURITES_CACHE_CONTROL = 'private, no-store, max-age=0'
-
-function privateJson(body: unknown) {
-  const response = NextResponse.json(body)
-  response.headers.set('Cache-Control', FAVOURITES_CACHE_CONTROL)
-  return response
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url)

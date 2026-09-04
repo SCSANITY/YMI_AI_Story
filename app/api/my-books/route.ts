@@ -1,34 +1,20 @@
+import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import { getEmptyPurchaseSummary, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
 import {
   checkoutOwnerErrorResponse,
-  ownerFilter,
   resolveCheckoutOwner,
+  scopeCheckoutOwnerQuery,
   type CheckoutOwner,
 } from '@/lib/checkout-owner'
-
-const MY_BOOKS_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 type JobOutputAssets = {
   bucket?: string
   pages?: Array<{ page_index: number; storage_path: string; storage_path_full?: string }>
   pdf_path?: string
 } | null
-
-// Supabase query builders have very deep generated types here; keep this helper dynamic.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildOwnerScopedQuery(query: any, owner: CheckoutOwner): any {
-  const filter = ownerFilter(owner)
-  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
-}
-
-function privateJson(body: unknown, init?: { status?: number }) {
-  const response = NextResponse.json(body, init)
-  response.headers.set('Cache-Control', MY_BOOKS_CACHE_CONTROL)
-  return response
-}
 
 async function loadCreationsWithArchive(owner: CheckoutOwner) {
   const baseSelect = `
@@ -51,7 +37,7 @@ async function loadCreationsWithArchive(owner: CheckoutOwner) {
     templates:templates (*, package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at))
   `
 
-  const primaryQuery = buildOwnerScopedQuery(
+  const primaryQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin.from('creations').select(archiveSelect).order('created_at', { ascending: false }),
     owner
   )
@@ -59,7 +45,7 @@ async function loadCreationsWithArchive(owner: CheckoutOwner) {
 
   // Backward compatibility: if DB migration not applied yet, fallback to old select.
   if (primary.error && (primary.error.message?.includes('is_archived') || primary.error.code === '42703')) {
-    const fallbackQuery = buildOwnerScopedQuery(
+    const fallbackQuery = scopeCheckoutOwnerQuery(
       supabaseAdmin.from('creations').select(baseSelect).order('created_at', { ascending: false }),
       owner
     )
@@ -175,7 +161,7 @@ export async function DELETE(request: Request) {
   }
   if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const scopedCreationQuery = buildOwnerScopedQuery(
+  const scopedCreationQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin.from('creations').select('creation_id').eq('creation_id', creationId),
     owner
   )
@@ -184,7 +170,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Creation not found' }, { status: 404 })
   }
 
-  const scopedCartQuery = buildOwnerScopedQuery(
+  const scopedCartQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('cart_items')
       .select('cart_item_id, status, payment_id, order_id')
@@ -204,7 +190,7 @@ export async function DELETE(request: Request) {
 
   // Scenario A: creation already entered transaction flow -> soft delete only.
   if (hasTransactionHistory) {
-    const scopedArchiveQuery = buildOwnerScopedQuery(
+    const scopedArchiveQuery = scopeCheckoutOwnerQuery(
       supabaseAdmin
         .from('creations')
         .update({
@@ -234,7 +220,7 @@ export async function DELETE(request: Request) {
   }
 
   // Scenario B: only draft/cart references -> hard delete + storage cleanup.
-  const scopedJobsQuery = buildOwnerScopedQuery(
+  const scopedJobsQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('jobs')
       .select('job_id, output_assets')
@@ -269,7 +255,7 @@ export async function DELETE(request: Request) {
     await supabaseAdmin.storage.from(bucket).remove(toRemove)
   }
 
-  const scopedJobsDeleteQuery = buildOwnerScopedQuery(
+  const scopedJobsDeleteQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('jobs')
       .delete()
@@ -278,7 +264,7 @@ export async function DELETE(request: Request) {
   )
   await scopedJobsDeleteQuery
 
-  const scopedCartDeleteQuery = buildOwnerScopedQuery(
+  const scopedCartDeleteQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('cart_items')
       .delete()
@@ -287,7 +273,7 @@ export async function DELETE(request: Request) {
   )
   await scopedCartDeleteQuery
 
-  const scopedCreationDeleteQuery = buildOwnerScopedQuery(
+  const scopedCreationDeleteQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('creations')
       .delete()

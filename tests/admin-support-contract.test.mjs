@@ -50,7 +50,7 @@ test('Support APIs keep Admin authority server-side and expose no cached private
 
   for (const source of [listApi, detailApi, replyApi]) {
     assert.match(source, /requireAdminCustomer/)
-    assert.match(source, /Cache-Control['"]:\s*['"]no-store/)
+    assert.match(source, /noStoreJson as (?:jsonNoStore|privateJson)/)
   }
   assert.doesNotMatch(listApi + detailApi, /reply_token/)
   assert.match(replyApi, /buildSupportReplyAddress/)
@@ -97,8 +97,7 @@ test('Resend Inbound persists before deferred processing and keeps ticket author
   assert.match(mailboxes, /abuse/)
   assert.doesNotMatch(mailboxes, /['"]dmarc['"]|['"]noreply['"]|['"]no-reply['"]/)
   assert.match(routing, /rejected_ambiguous/)
-  assert.match(recovery, /INTERNAL_API_SECRET/)
-  assert.match(recovery, /CRON_SECRET/)
+  assert.match(recovery, /isInternalRequestAuthorized/)
   assert.match(recovery, /processInboundEmailBacklog/)
   assert.match(rootSql, /create table if not exists public\.inbound_email_envelopes/)
   assert.match(rootSql, /inbound_email_envelopes_provider_email_id_key/)
@@ -186,10 +185,12 @@ test('General Inbox consumes recognized aliases through the canonical envelope',
   assert.match(processor, /readInboundHeader/)
   assert.match(processor, /normalizeInternetMessageReferences/)
 
-  for (const api of [mailboxApi, threadsApi, threadApi, draftApi, legacyReplyApi]) {
+  for (const api of [mailboxApi, threadsApi, threadApi, draftApi]) {
     assert.match(api, /requireAdminCustomer/)
-    assert.match(api, /Cache-Control['"]:\s*['"]no-store/)
+    assert.match(api, /noStoreJson as (?:jsonNoStore|privateJson)/)
   }
+  assert.match(legacyReplyApi, /requireAdminCustomer/)
+  assert.match(legacyReplyApi, /Cache-Control/)
   assert.match(mailboxApi, /loadGeneralMailMailboxCounts/)
   assert.match(threadsApi, /loadGeneralMailThreadSummaries/)
   assert.match(threadApi, /loadGeneralMailThreadDetail/)
@@ -294,7 +295,7 @@ test('General mail S3 threads only by mailbox RFC headers and keeps send state s
 
   for (const api of adminApis) {
     assert.match(api, /requireAdminCustomer/)
-    assert.match(api, /Cache-Control['"]:\s*['"]no-store/)
+    assert.match(api, /noStoreJson as (?:jsonNoStore|privateJson)/)
     assert.doesNotMatch(api, /body\?\.(from|fromAddress|replyTo|sender)/)
   }
 })
@@ -349,7 +350,7 @@ test('General mail S5 exposes one mailbox workspace writer without leaking BCC o
 
   for (const api of [mailboxApi, threadsApi, threadApi, draftApi]) {
     assert.match(api, /requireAdminCustomer/)
-    assert.match(api, /Cache-Control['"]:\s*['"]no-store/)
+    assert.match(api, /noStoreJson as (?:jsonNoStore|privateJson)/)
   }
 })
 
@@ -451,14 +452,14 @@ test('General mail S4 keeps rich text server-generated and attachments private a
 
   for (const api of [uploadApi, attachmentApi, downloadApi]) {
     assert.match(api, /requireAdminCustomer/)
-    assert.match(api, /Cache-Control/)
+    assert.match(api, /noStoreJson as (?:jsonNoStore|privateJson)/)
   }
   assert.match(uploadApi, /registerGeneralMailAttachmentUpload/)
   assert.match(attachmentApi, /confirmGeneralMailAttachmentUpload/)
   assert.match(downloadApi, /application\/octet-stream/)
   assert.match(downloadApi, /X-Content-Type-Options/)
   assert.doesNotMatch(downloadApi, /createSignedUrl|signedUrl/)
-  assert.match(cleanupApi, /CRON_SECRET/)
+  assert.match(cleanupApi, /isInternalRequestAuthorized/)
   assert.match(cleanupApi, /processAbandonedGeneralMailAttachments/)
   const config = JSON.parse(vercel)
   assert.ok(config.crons.some((entry) => entry.path === '/api/internal/email/general-mail/cleanup'))

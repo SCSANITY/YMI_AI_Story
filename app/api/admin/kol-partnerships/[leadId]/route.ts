@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   hydrateKolLeads,
@@ -22,13 +22,6 @@ const STATUS_TIMESTAMP_FIELDS = {
   declined: 'declined_at',
   archived: 'archived_at',
 } as const
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  })
-}
 
 export async function GET(
   _request: Request,

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   ADMIN_ORDER_VIEW_STATUSES,
@@ -33,15 +33,6 @@ const ORDER_SELECT = `
   delivered_at,
   logistics_updated_at
 `
-
-function jsonNoStore(body: unknown, init?: { status?: number }) {
-  return NextResponse.json(body, {
-    ...init,
-    headers: {
-      'Cache-Control': 'no-store',
-    },
-  })
-}
 
 export async function GET(request: Request) {
   const admin = await requireAdminCustomer()

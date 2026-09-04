@@ -1,19 +1,12 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { signPrivateImagePaths } from '@/lib/private-image-signing'
 
 const STATUSES = new Set(['draft', 'published', 'hidden', 'archived'])
 const MAX_IMAGES = 9
 const IMAGE_SIGN_TTL_SECONDS = 60 * 20
-
-function jsonNoStore(body: unknown, init?: { status?: number }) {
-  return NextResponse.json(body, {
-    ...init,
-    headers: {
-      'Cache-Control': 'no-store',
-    },
-  })
-}
 
 type AdminBlogPostRow = {
   post_id: string
@@ -53,13 +46,6 @@ function normalizeLinks(value: unknown) {
     .slice(0, 12)
 }
 
-async function signImage(storagePath: string) {
-  const { data } = await supabaseAdmin.storage
-    .from('raw-private')
-    .createSignedUrl(storagePath, IMAGE_SIGN_TTL_SECONDS)
-  return data?.signedUrl ?? null
-}
-
 async function withImageUrls<T extends AdminBlogPostRow>(rows: T[]) {
   return Promise.all(
     rows.map(async (row) => {
@@ -69,7 +55,9 @@ async function withImageUrls<T extends AdminBlogPostRow>(rows: T[]) {
       return {
         ...row,
         image_storage_paths: imageStoragePaths,
-        image_urls: await Promise.all(imageStoragePaths.map(signImage)),
+        image_urls: await signPrivateImagePaths(imageStoragePaths, {
+          expiresIn: IMAGE_SIGN_TTL_SECONDS,
+        }),
         links: Array.isArray(row.links)
           ? row.links
               .map((link) => ({

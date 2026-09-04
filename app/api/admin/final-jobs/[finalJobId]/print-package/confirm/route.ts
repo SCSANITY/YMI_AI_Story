@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   MANUAL_PRINT_PDF_BUCKET,
@@ -13,12 +13,6 @@ import {
   type ManualPrintArtifactRow,
 } from '@/lib/manual-print-artifact-server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 async function rejectArtifact(finalJobId: string, artifactId: string, reason: string, adminId: string) {
   await supabaseAdmin.rpc('reject_final_print_artifact', {

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import {
   getKolPartnershipSenderAddress,
   sendKolPartnershipEmail,
@@ -33,13 +33,6 @@ type InternalMessageRow = {
   delivery_status: 'received' | 'pending' | 'sent' | 'failed'
   created_at: string
   updated_at: string
-}
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  })
 }
 
 async function reconcileLeadAfterOutbound(params: {

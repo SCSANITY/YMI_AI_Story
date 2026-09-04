@@ -1,3 +1,4 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
@@ -7,13 +8,6 @@ import { loadGeneralMailAttachment } from '@/lib/general-mail-attachment-server'
 import { INBOUND_ATTACHMENT_BUCKET } from '@/lib/inbound-email-attachments'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/support-ticket'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'private, no-store', Pragma: 'no-cache' },
-  })
-}
 
 export async function GET(
   _request: Request,

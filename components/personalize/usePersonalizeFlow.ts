@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { Book, StoryLanguage } from '@/types';
 import { isUuid } from '@/lib/validators';
+import { normalizeStoryLanguage } from '@/lib/story-language';
 
 export type PersonalizeStep = 1 | 2 | 2.5 | 3;
 
@@ -13,29 +14,6 @@ const normalizeStep = (step: number | undefined): PersonalizeStep => {
     return step;
   }
   return 2;
-};
-
-const normalizeLanguage = (value: string | undefined): StoryLanguage => {
-  switch (value) {
-    case 'English':
-      return 'English';
-    case 'Simplified Chinese':
-    case 'cn_s':
-    case 'zh-cn':
-    case 'simplified':
-      return 'Simplified Chinese';
-    case 'Traditional Chinese':
-    case 'Chinese':
-    case 'cn_t':
-    case 'zh-hk':
-    case 'traditional':
-      return 'Traditional Chinese';
-    case 'Spanish':
-    case 'es':
-      return 'Spanish';
-    default:
-      return 'English';
-  }
 };
 
 export type PersonalizeDraft = {
@@ -77,7 +55,7 @@ export function usePersonalizeFlow(book: Book | undefined) {
         personalization: {
           childName: resumeData.personalization?.childName ?? '',
           childAge: resumeData.personalization?.childAge ?? '',
-          language: normalizeLanguage(resumeData.personalization?.language),
+          language: normalizeStoryLanguage(resumeData.personalization?.language),
           bookType: resumeData.personalization?.bookType ?? 'basic',
           dedication: resumeData.personalization?.dedication ?? '',
           assetId: resumeData.personalization?.assetId,

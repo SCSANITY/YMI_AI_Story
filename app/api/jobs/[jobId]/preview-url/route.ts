@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import {
   buildSignedPreviewResponse,
   selectPreviewSignTargets,
@@ -7,25 +7,12 @@ import {
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   checkoutOwnerErrorResponse,
-  ownerFilter,
   resolveCheckoutOwner,
-  type CheckoutOwner,
+  scopeCheckoutOwnerQuery,
 } from '@/lib/checkout-owner'
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-}
-
-const jsonNoStore = (body: unknown, status = 200) =>
-  NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
-
-function buildOwnerScopedQuery(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  query: any,
-  owner: CheckoutOwner
-) {
-  const filter = ownerFilter(owner)
-  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
 export async function GET(
@@ -52,7 +39,7 @@ export async function GET(
   }
   if (!owner) return jsonNoStore({ error: 'Unauthorized' }, 401)
 
-  const { data: job, error } = await buildOwnerScopedQuery(
+  const { data: job, error } = await scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('jobs')
       .select('status, output_assets')

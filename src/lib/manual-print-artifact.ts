@@ -5,7 +5,9 @@ export const MANUAL_PRINT_PDF_HEADER_TIMEOUT_MS = 12_000
 export const MANUAL_PRINT_PDF_HEADER_ATTEMPTS = 2
 
 const PDF_HEADER = '%PDF-'
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+import { isUuid } from '@/lib/validators'
+
+export { isUuid }
 
 export class ManualPrintArtifactError extends Error {}
 
@@ -19,10 +21,6 @@ export type ManualPrintArtifactClient = {
   verified_at: string
   released_at: string | null
   download_url: string | null
-}
-
-export function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID_PATTERN.test(value)
 }
 
 export function sanitizeManualPrintFileName(value: unknown) {

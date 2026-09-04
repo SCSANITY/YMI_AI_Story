@@ -1,3 +1,4 @@
+import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
@@ -26,14 +27,6 @@ import {
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
-const ORDERS_CACHE_CONTROL = 'private, no-store, max-age=0'
-
-function privateJson(body: unknown) {
-  const response = NextResponse.json(body)
-  response.headers.set('Cache-Control', ORDERS_CACHE_CONTROL)
-  return response
-}
-
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const orderId = url.searchParams.get('orderId')

@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import {
   HOMEPAGE_BANNER_BUCKET,
+  resolveHomepageBannerAssetUrl,
 } from '@/lib/homepage-banners'
 import {
   isHomepageBannerSlotKey,
   type AdminHomepageBannerAsset,
   type AdminHomepageBannerSlot,
-  type HomepageBannerAssetSource,
   type HomepageBannerSlotKey,
   type HomepageBannerSlotRow,
 } from '@/lib/homepage-banners-core'
@@ -59,11 +59,6 @@ function parseInteger(value: unknown, label: string) {
   return parsed
 }
 
-function resolveAdminAssetUrl(source: HomepageBannerAssetSource, path: string) {
-  if (source === 'builtin') return `/${path.replace(/^\/+/, '')}`
-  return supabaseAdmin.storage.from(HOMEPAGE_BANNER_BUCKET).getPublicUrl(path).data.publicUrl
-}
-
 function buildWarnings(desktop: { width: number }, mobile: { width: number }) {
   const warnings: string[] = []
   if (desktop.width < 1920) warnings.push('Desktop image is below the recommended 1920px width.')
@@ -89,7 +84,7 @@ function parseAdminAsset(
   return {
     source,
     path,
-    src: resolveAdminAssetUrl(source, path),
+    src: resolveHomepageBannerAssetUrl(source, path),
     width,
     height,
   }
@@ -189,7 +184,7 @@ export async function verifyStoredHomepageBannerAsset(
   return {
     source: 'storage',
     path: storagePath,
-    src: resolveAdminAssetUrl('storage', storagePath),
+    src: resolveHomepageBannerAssetUrl('storage', storagePath),
     width,
     height,
   }

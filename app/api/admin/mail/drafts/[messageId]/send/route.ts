@@ -1,12 +1,8 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { classifyGeneralMailError } from '@/lib/general-mail-api'
 import { sendGeneralMailDraft } from '@/lib/general-mail-server'
 import { isUuid } from '@/lib/support-ticket'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
-}
 
 export async function POST(
   request: Request,

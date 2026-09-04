@@ -4,6 +4,7 @@ import {
   checkoutOwnerErrorResponse,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
+import { signPrivateImagePaths } from '@/lib/private-image-signing'
 
 const MAX_POST_IMAGES = 9
 
@@ -52,14 +53,10 @@ async function resolveOwner(request: Request, expectedCustomerId?: string | null
 }
 
 async function signImages(storagePaths: string[]) {
-  return Promise.all(
-    storagePaths.slice(0, MAX_POST_IMAGES).map(async (storagePath) => {
-      const { data } = await supabaseAdmin.storage
-        .from('raw-private')
-        .createSignedUrl(storagePath, 60 * 15)
-      return data?.signedUrl ?? null
-    })
-  )
+  return signPrivateImagePaths(storagePaths, {
+    expiresIn: 60 * 15,
+    limit: MAX_POST_IMAGES,
+  })
 }
 
 async function withSignedImages(posts: CommunityPostRow[], actorKey: string) {

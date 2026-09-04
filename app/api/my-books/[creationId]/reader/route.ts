@@ -1,16 +1,17 @@
-import { NextResponse } from 'next/server'
+import {
+  noStoreJson as privateJson,
+  PRIVATE_NO_STORE_CACHE_CONTROL,
+} from '@/lib/http-response'
 import { getEmptyPurchaseSummary, isFinalJobReleased, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
 import { buildReleasedReaderContract, type ReleasedReaderContract } from '@/lib/reader-page-contract'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import {
   checkoutOwnerErrorResponse,
-  ownerFilter,
   resolveCheckoutOwner,
-  type CheckoutOwner,
+  scopeCheckoutOwnerQuery,
 } from '@/lib/checkout-owner'
 
-const MY_BOOK_READER_CACHE_CONTROL = 'private, no-store, max-age=0'
 const STORAGE_BUCKET = 'raw-private'
 
 type FinalJobRow = {
@@ -41,19 +42,6 @@ type PreviewJobOutputAssets = {
     storage_path?: string | null
     storage_path_full?: string | null
   }>
-}
-
-function privateJson(body: unknown, init?: ResponseInit) {
-  const response = NextResponse.json(body, init)
-  response.headers.set('Cache-Control', MY_BOOK_READER_CACHE_CONTROL)
-  return response
-}
-
-// Supabase query builders have very deep generated types here; keep this helper dynamic.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildOwnerScopedQuery(query: any, owner: CheckoutOwner): any {
-  const filter = ownerFilter(owner)
-  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
 function pickLatestFinalJob(finalJobs: FinalJobRow[]) {
@@ -87,14 +75,14 @@ export async function GET(
   } catch (error) {
     const response = checkoutOwnerErrorResponse(error)
     if (response) {
-      response.headers.set('Cache-Control', MY_BOOK_READER_CACHE_CONTROL)
+      response.headers.set('Cache-Control', PRIVATE_NO_STORE_CACHE_CONTROL)
       return response
     }
     return privateJson({ error: 'Failed to resolve owner' }, { status: 500 })
   }
   if (!owner) return privateJson({ error: 'Reader access requires the current session' }, { status: 401 })
 
-  const scopedCreationQuery = buildOwnerScopedQuery(
+  const scopedCreationQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('creations')
       .select(

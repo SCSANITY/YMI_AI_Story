@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import {
   checkoutOwnerErrorResponse,
   ownerFilter,
@@ -17,9 +17,6 @@ import { isUuid } from '@/lib/validators'
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
 }
-
-const jsonNoStore = (body: unknown, status = 200) =>
-  NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)

@@ -5,6 +5,7 @@ import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult
 import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
 import { templateRowToBook } from '@/lib/book-catalog';
+import { normalizeStoryLanguage } from '@/lib/story-language';
 import {
   resolveChildNameFromCustomization,
   resolvePersonalizedBookTitle,
@@ -65,17 +66,6 @@ const applyAccountProfileToUser = (
   avatarAssetId: profile?.avatarAssetId ?? undefined,
   avatarStoragePath: profile?.avatarStoragePath ?? undefined,
 });
-const normalizeStoryLanguage = (value: unknown) => {
-  const raw = String(value ?? '').trim().toLowerCase();
-  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
-    return 'Traditional Chinese';
-  }
-  if (raw === 'spanish' || raw === 'es') {
-    return 'Spanish';
-  }
-  return 'English';
-};
-
 const DISPLAY_CURRENCIES: DisplayCurrency[] = [
   'USD',
   'EUR',

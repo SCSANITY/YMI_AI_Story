@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -30,12 +30,6 @@ const FINAL_JOB_SELECT = `
     templates:templates(name)
   )
 `
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 export async function GET(request: Request) {
   const admin = await requireAdminCustomer()

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   HOMEPAGE_BANNER_ADMIN_SELECT,
@@ -11,12 +11,6 @@ import {
 } from '@/lib/homepage-banner-admin'
 import { invalidateHomepageBanners } from '@/lib/homepage-banner-cache'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 async function loadSlots() {
   const { data, error } = await supabaseAdmin

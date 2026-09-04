@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { processInboundEmailEnvelope } from '@/lib/inbound-email-processing'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -10,10 +10,6 @@ const REPLY_FIELDS =
   'reply_id, inbound_email_id, admin_customer_id, from_email, to_email, reply_to, subject, body_text, delivery_status, delivery_error, provider_email_id, created_at, sent_at, failed_at'
 const ATTACHMENT_FIELDS =
   'attachment_id, inbound_email_id, provider_attachment_id, original_filename, safe_filename, declared_content_type, served_content_type, content_disposition, declared_size_bytes, stored_size_bytes, sha256, status, rejection_reason, attempt_count, created_at, updated_at, stored_at'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
-}
 
 async function loadMessage(inboundEmailId: string) {
   const { data, error } = await supabaseAdmin

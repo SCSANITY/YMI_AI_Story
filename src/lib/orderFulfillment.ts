@@ -8,22 +8,10 @@ import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production
 import { shippingStreet } from '@/lib/shipping-address'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import { isFinalJobReleased } from '@/lib/purchase-state'
-
-type StoryLanguage = 'English'
-
-const DEFAULT_STORY_LANGUAGE: StoryLanguage = 'English'
-
-function normalizeStoryLanguage(): StoryLanguage {
-  return DEFAULT_STORY_LANGUAGE
-}
-
-function forceEnglishTextOverrides(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  return {
-    ...(value as Record<string, unknown>),
-    language: DEFAULT_STORY_LANGUAGE,
-  }
-}
+import {
+  forceEnglishTextOverrides,
+  normalizeStoryLanguage,
+} from '@/lib/story-language'
 
 export type CheckoutItemInput = {
   id: string
@@ -771,7 +759,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         creation_id: item.creation_id,
         template_id: creation.template_id,
         job_type: 'final',
-        story_language: normalizeStoryLanguage(),
+        story_language: normalizeStoryLanguage(finalTextOverrides?.language),
         selected_book_type: mapBookTypeToDisplay(
           creation?.customize_snapshot?.textOverrides?.book_type ??
             creation?.customize_snapshot?.text_overrides?.book_type ??

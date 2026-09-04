@@ -1,9 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createServerSupabase } from '@/lib/supabaseServer'
 import { getOrCreateAnonSession } from '@/lib/session'
+import { UUID_REGEX } from '@/lib/validators'
 
 const ANON_COOKIE_NAME = 'ymi_anon_session'
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const DISPLAY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 
 export type CheckoutOwner =
@@ -34,7 +34,7 @@ export class CheckoutOwnerError extends Error {
 
 export function parseOrderReference(value: unknown) {
   const normalized = String(value ?? '').trim()
-  if (UUID_PATTERN.test(normalized)) return { column: 'order_id' as const, value: normalized }
+  if (UUID_REGEX.test(normalized)) return { column: 'order_id' as const, value: normalized }
   if (DISPLAY_ID_PATTERN.test(normalized)) return { column: 'display_id' as const, value: normalized }
   throw new CheckoutOwnerError('Invalid order reference', 400)
 }
@@ -139,6 +139,15 @@ export function ownerFilter(owner: CheckoutOwner) {
   return owner.ownerType === 'customer'
     ? { owner_type: 'customer', column: 'customer_id', value: owner.customerId } as const
     : { owner_type: 'anon', column: 'anon_session_id', value: owner.anonSessionId } as const
+}
+
+// Supabase's generated query-builder type becomes prohibitively deep when it is
+// threaded through a shared helper. Keep the dynamic boundary in this one
+// server-owned authority instead of repeating it in every route.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function scopeCheckoutOwnerQuery(query: any, owner: CheckoutOwner): any {
+  const filter = ownerFilter(owner)
+  return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
 }
 
 export function ownerJson(owner: CheckoutOwner | null) {

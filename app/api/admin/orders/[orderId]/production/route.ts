@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import {
   countFinalPageIssues,
   preferredFinalPagePath,
@@ -11,12 +11,6 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
 
 const THUMBNAIL_TTL_SECONDS = 60 * 20
-
-function jsonNoStore(body: unknown, init?: ResponseInit) {
-  const headers = new Headers(init?.headers)
-  headers.set('Cache-Control', 'no-store')
-  return NextResponse.json(body, { ...init, headers })
-}
 
 type CartItemRow = {
   cart_item_id: string

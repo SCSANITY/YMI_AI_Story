@@ -1,29 +1,11 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { applyVoucherToOrder, getOrderDiscountSummary } from '@/lib/discounts'
+import { updateUnpaidOrderShippingContext } from '@/lib/checkout-shipping-context'
 import {
   checkoutOwnerErrorResponse,
   requireCheckoutOrderAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
-
-async function updateOrderShippingContext(orderId: string, body: any) {
-  const updates: Record<string, unknown> = {}
-  if (body?.shippingAmountUsd !== undefined) {
-    updates.shipping_amount_usd = Math.max(0, Number(body.shippingAmountUsd ?? 0))
-  }
-  if (body?.shippingRateSnapshot !== undefined) {
-    updates.shipping_rate_snapshot = body.shippingRateSnapshot ?? null
-  }
-  if (body?.shippingMethod !== undefined) {
-    updates.shipping_method = body.shippingMethod ? String(body.shippingMethod) : null
-  }
-  if (body?.shippingZoneCode !== undefined) {
-    updates.shipping_zone_code = body.shippingZoneCode ? String(body.shippingZoneCode) : null
-  }
-  if (Object.keys(updates).length === 0) return
-  await supabaseAdmin.from('orders').update(updates).eq('order_id', orderId).eq('order_status', 'unpaid')
-}
 
 export async function POST(request: Request) {
   try {
@@ -45,7 +27,7 @@ export async function POST(request: Request) {
     }
     await requireCheckoutOrderAccess(orderId, owner, { requireUnpaid: true })
 
-    await updateOrderShippingContext(orderId, body)
+    await updateUnpaidOrderShippingContext(orderId, body)
     const applied = await applyVoucherToOrder({
       orderId,
       instrumentId,

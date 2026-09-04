@@ -21,8 +21,8 @@ test('Admin KOL queue is protected, uncached, filtered, and attention-counted', 
 
   assert.match(listRoute, /await\s+requireAdminCustomer\s*\(\s*\)/)
   assert.match(detailRoute, /await\s+requireAdminCustomer\s*\(\s*\)/g)
-  assert.match(listRoute, /Cache-Control['"]:\s*['"]no-store/)
-  assert.match(detailRoute, /Cache-Control['"]:\s*['"]no-store/)
+  assert.match(listRoute, /noStoreJson as (?:jsonNoStore|privateJson)/)
+  assert.match(detailRoute, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.match(listRoute, /view['"]\) === ['"]attention_count/)
   assert.match(listRoute, /review_status\.eq\.new,unread_admin_count\.gt\.0/)
   assert.match(listRoute, /KOL_OPEN_STATUSES/)
@@ -82,7 +82,7 @@ test('KOL Admin keeps public profiles inert and Code management lead-scoped', as
     2,
     'POST and PATCH must authorize independently'
   )
-  assert.match(codeRoute, /Cache-Control['"]:\s*['"]no-store/)
+  assert.match(codeRoute, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.doesNotMatch(codeRoute, /body\.(customerId|ownerCustomerId|collaborationLeadId)/)
 })
 
@@ -96,7 +96,7 @@ test('S4a partnership email is Admin-only, idempotent, threaded, and delivery-ob
   ])
 
   assert.match(route, /await\s+requireAdminCustomer\s*\(\s*\)/)
-  assert.match(route, /Cache-Control['"]:\s*['"]no-store/)
+  assert.match(route, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.match(route, /requestId/)
   assert.match(route, /insertError\?\.code === ['"]23505['"]/)
   assert.match(route, /PENDING_STALE_MS/)
@@ -150,7 +150,7 @@ test('S4b KOL replies use opaque routing, sender quarantine, and Admin-only asso
   assert.match(processor, /kol_reply_quarantined/)
 
   assert.match(associationRoute, /await\s+requireAdminCustomer\s*\(\s*\)/)
-  assert.match(associationRoute, /Cache-Control['"]:\s*['"]no-store/)
+  assert.match(associationRoute, /noStoreJson as (?:jsonNoStore|privateJson)/)
   assert.match(associationRoute, /source !== ['"]email_inbound['"]/)
   assert.match(associationRoute, /\.eq\(['"]association_state['"],\s*['"]pending['"]\)/)
   assert.match(associationRoute, /association_reviewed_by:\s*admin\.customer_id/)

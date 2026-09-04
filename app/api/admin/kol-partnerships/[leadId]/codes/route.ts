@@ -1,17 +1,10 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { loadAdminKolCodes } from '@/lib/admin-kol-codes-server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/support-ticket'
 
 type EffectType = 'fixed_amount' | 'percentage'
-
-function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  })
-}
 
 function parseEffectType(value: unknown): EffectType | null {
   return value === 'fixed_amount' || value === 'percentage' ? value : null

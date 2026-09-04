@@ -1,3 +1,4 @@
+import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { firstRpcRow } from '@/lib/signature-voice-admin-server'
@@ -21,13 +22,6 @@ function audioFileExtension(contentType: string) {
   if (contentType === 'audio/ogg') return 'ogg'
   if (contentType === 'audio/webm') return 'webm'
   return 'bin'
-}
-
-function jsonNoStore(body: unknown, status: number) {
-  return NextResponse.json(body, {
-    status,
-    headers: { 'Cache-Control': 'private, no-store', Pragma: 'no-cache' },
-  })
 }
 
 export async function GET(
