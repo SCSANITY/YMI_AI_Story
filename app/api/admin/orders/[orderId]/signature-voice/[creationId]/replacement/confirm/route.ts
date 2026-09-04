@@ -6,15 +6,13 @@ import {
   assertSignatureVoiceAudioContainer,
   isSignatureVoiceReplacementStoragePath,
   parseSignatureVoiceReplacementConfirmRequest,
+  SIGNATURE_VOICE_REPLACEMENT_MAX_SECONDS,
+  SIGNATURE_VOICE_REPLACEMENT_MIN_SECONDS,
 } from '@/lib/signature-voice-admin'
 import {
   firstRpcRow,
   loadAdminSignatureVoiceWorkspace,
 } from '@/lib/signature-voice-admin-server'
-import {
-  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
-  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
-} from '@/lib/signature-voice'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { validateStoredUserAssetMetadata } from '@/lib/userAssetsStorage'
 import { isUuid } from '@/lib/validators'
@@ -161,11 +159,11 @@ export async function POST(
     const duration = Number(metadata.format.duration)
     if (
       !Number.isFinite(duration)
-      || duration < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
-      || duration > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
+      || duration < SIGNATURE_VOICE_REPLACEMENT_MIN_SECONDS
+      || duration > SIGNATURE_VOICE_REPLACEMENT_MAX_SECONDS
     ) {
       throw new Error(
-        `Recording must be between ${SIGNATURE_VOICE_MIN_SAMPLE_SECONDS} and ${SIGNATURE_VOICE_MAX_SAMPLE_SECONDS} seconds`
+        `Recording must be between ${SIGNATURE_VOICE_REPLACEMENT_MIN_SECONDS} and ${SIGNATURE_VOICE_REPLACEMENT_MAX_SECONDS} seconds`
       )
     }
     durationSeconds = Math.round(duration * 100) / 100

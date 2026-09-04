@@ -8,6 +8,8 @@ import { isUuid } from '@/lib/validators'
 export const SIGNATURE_VOICE_TRIAGE_STATUSES = ['pending', 'accepted', 'rejected'] as const
 export const SIGNATURE_VOICE_NARRATION_MIN_SECONDS = 3
 export const SIGNATURE_VOICE_NARRATION_MAX_SECONDS = 600
+export const SIGNATURE_VOICE_REPLACEMENT_MIN_SECONDS = 10
+export const SIGNATURE_VOICE_REPLACEMENT_MAX_SECONDS = 20
 export const SIGNATURE_VOICE_NARRATION_SLOTS = Array.from(
   { length: 15 },
   (_, index) => `narration_${String(index + 1).padStart(2, '0')}`

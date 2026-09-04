@@ -6,6 +6,7 @@ import {
   parseSignatureVoiceCaptureAuthorization,
   parseSignatureVoiceBindingRequest,
   requireSignatureVoiceAssetId,
+  isVerifiedSignatureVoiceDuration,
   SIGNATURE_VOICE_CONSENT_VERSION,
   SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SignatureVoiceContractError,
@@ -16,6 +17,13 @@ test('recognizes only the Signature Voice package identifier', () => {
   assert.equal(isSignatureVoicePackage(' Signature Voice '), false)
   assert.equal(isSignatureVoicePackage('basic'), false)
   assert.equal(isSignatureVoicePackage(null), false)
+})
+
+test('accepts any positive server-derived recording duration without a quality range', () => {
+  assert.equal(isVerifiedSignatureVoiceDuration(0.25), true)
+  assert.equal(isVerifiedSignatureVoiceDuration(120), true)
+  assert.equal(isVerifiedSignatureVoiceDuration(0), false)
+  assert.equal(isVerifiedSignatureVoiceDuration(Number.NaN), false)
 })
 
 const bindingRequest = {

@@ -6,8 +6,11 @@ export const SIGNATURE_VOICE_SUPPORTED_CONSENT_VERSIONS = [
   SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SIGNATURE_VOICE_CONSENT_VERSION,
 ] as const
-export const SIGNATURE_VOICE_MIN_SAMPLE_SECONDS = 10
-export const SIGNATURE_VOICE_MAX_SAMPLE_SECONDS = 20
+
+export function isVerifiedSignatureVoiceDuration(value: unknown) {
+  const durationSeconds = Number(value)
+  return Number.isFinite(durationSeconds) && durationSeconds > 0
+}
 
 export function isSignatureVoicePackage(value: unknown) {
   return typeof value === 'string' && value.trim().toLowerCase() === 'supreme'
@@ -136,11 +139,7 @@ export function assertSignatureVoicePurchaseBinding(
 ) {
   const voiceAssetId = requireSignatureVoiceAssetId(creation)
   const durationSeconds = Number(creation.voice_sample_duration_seconds)
-  if (
-    !Number.isFinite(durationSeconds)
-    || durationSeconds < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
-    || durationSeconds > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
-  ) {
+  if (!isVerifiedSignatureVoiceDuration(durationSeconds)) {
     throw new SignatureVoiceContractError('Signature Voice recording duration is invalid')
   }
 

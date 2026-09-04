@@ -14,8 +14,7 @@ import {
   normalizePendingFaceAsset,
 } from '@/lib/face-assets-server'
 import {
-  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
-  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
+  isVerifiedSignatureVoiceDuration,
   SIGNATURE_VOICE_CONSENT_VERSION,
   SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
   SignatureVoiceContractError,
@@ -226,11 +225,7 @@ export async function POST(request) {
         throw new SignatureVoiceContractError('Signature Voice recording is invalid')
       }
       const durationSeconds = Number(voiceAsset.metadata?.duration_seconds)
-      if (
-        !Number.isFinite(durationSeconds)
-        || durationSeconds < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
-        || durationSeconds > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
-      ) {
+      if (!isVerifiedSignatureVoiceDuration(durationSeconds)) {
         throw new SignatureVoiceContractError('Signature Voice recording duration is invalid')
       }
       const { data: voiceAuthorization, error: voiceAuthorizationError } = await supabaseAdmin

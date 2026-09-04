@@ -95,7 +95,6 @@ type CustomizeFormFieldsProps = {
   voiceAssetId: string | null
   voicePlaybackUrl: string | null
   voiceDurationSeconds: number | null
-  onVoiceReadinessChange: (ready: boolean) => void
   voiceValidationError: string | null
   onVoiceRecordingSelected: (recording: PendingVoiceRecording | null) => void
   onClearVoiceValidation: () => void
@@ -134,7 +133,6 @@ function CustomizeFormFieldsComponent({
   voiceAssetId,
   voicePlaybackUrl,
   voiceDurationSeconds,
-  onVoiceReadinessChange,
   voiceValidationError,
   onVoiceRecordingSelected,
   onClearVoiceValidation,
@@ -190,7 +188,6 @@ function CustomizeFormFieldsComponent({
             existingDurationSeconds={voiceDurationSeconds}
             validationError={voiceValidationError}
             onRecordingSelected={onVoiceRecordingSelected}
-            onReadinessChange={onVoiceReadinessChange}
             onClearValidation={onClearVoiceValidation}
           />
         </div>

@@ -11,10 +11,7 @@ import {
   ownerFilter,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
-import {
-  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
-  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
-} from '@/lib/signature-voice'
+import { isVerifiedSignatureVoiceDuration } from '@/lib/signature-voice'
 
 export const runtime = 'nodejs'
 
@@ -102,14 +99,8 @@ export async function POST(request: Request) {
         size: verifiedUpload.sizeBytes,
       })
       const duration = Number(audioMetadata.format.duration)
-      if (
-        !Number.isFinite(duration)
-        || duration < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
-        || duration > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
-      ) {
-        throw new Error(
-          `Recording must be between ${SIGNATURE_VOICE_MIN_SAMPLE_SECONDS} and ${SIGNATURE_VOICE_MAX_SAMPLE_SECONDS} seconds`
-        )
+      if (!isVerifiedSignatureVoiceDuration(duration)) {
+        throw new Error('Uploaded recording duration could not be verified')
       }
       verifiedVoiceDuration = Math.round(duration * 100) / 100
     }

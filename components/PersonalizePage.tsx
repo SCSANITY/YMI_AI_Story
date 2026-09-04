@@ -378,7 +378,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [voiceDurationSeconds, setVoiceDurationSeconds] = useState<number | null>(null);
-  const [isVoiceReadyForPreview, setIsVoiceReadyForPreview] = useState(false);
   const [pendingVoiceRecording, setPendingVoiceRecording] = useState<PendingVoiceRecording | null>(null);
   const pendingVoiceRecordingRef = useRef<PendingVoiceRecording | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
@@ -910,7 +909,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setVoiceStoragePath(data.voiceStoragePath || null)
     setVoicePlaybackUrl(null)
     setVoiceDurationSeconds(null)
-    setIsVoiceReadyForPreview(false)
     pendingVoiceRecordingRef.current = null
     setPendingVoiceRecording(null)
     setPreviewJobId(isUuid(data.previewJobId) ? data.previewJobId : null)
@@ -1198,7 +1196,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setVoiceStoragePath(null)
     setVoicePlaybackUrl(null)
     setVoiceDurationSeconds(null)
-    setIsVoiceReadyForPreview(false)
     pendingVoiceRecordingRef.current = null
     setPendingVoiceRecording(null)
     setVoiceValidationError(null)
@@ -1361,7 +1358,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
         if (bookType === 'supreme' && !hasSignatureVoiceAuthorization) {
           throw new Error(t('personalize.voiceAuthorizationRequired'))
         }
-        if (bookType === 'supreme' && (!isVoiceReadyForPreview || (!currentVoiceAssetId && !selectedVoiceRecording))) {
+        if (bookType === 'supreme' && !currentVoiceAssetId && !selectedVoiceRecording) {
           throw new Error(t('personalize.voiceSampleRequired'))
         }
 
@@ -1418,7 +1415,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
           setVoiceDurationSeconds(
             Number(voiceAsset.metadata?.duration_seconds) || selectedVoiceRecording.durationSeconds
           )
-          setIsVoiceReadyForPreview(true)
         }
 
         const parsedAge = Number.parseInt(currentAge, 10)
@@ -1625,7 +1621,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType, trackPreviewReady, isVoiceReadyForPreview, voiceAssetId, applyPreviewDisplayAssetsForJob]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType, trackPreviewReady, voiceAssetId, applyPreviewDisplayAssetsForJob]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -2231,16 +2227,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       pendingVoiceRecordingRef.current = recording;
       setPendingVoiceRecording(recording);
       if (!recording) return;
-      setIsVoiceReadyForPreview(true);
       setVoiceValidationError(null);
     },
     []
   );
-
-  const handleVoiceReadinessChange = useCallback((ready: boolean) => {
-    setIsVoiceReadyForPreview(ready);
-    if (ready) setVoiceValidationError(null);
-  }, []);
 
   const handleDiscardPreviewVariant = useCallback(async (jobId: string) => {
     const variant = previewVariantsRef.current.find((item) => item.jobId === jobId);
@@ -3251,7 +3241,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                               isFacePreparing={isFacePreparing}
                               isPhotoFailed={facePrepareStatus === 'failed'}
                               isSupreme={isSupreme}
-                              isVoiceReady={!isSupreme || (Boolean(voiceAssetId || pendingVoiceRecording) && isVoiceReadyForPreview)}
+                              isVoiceReady={!isSupreme || Boolean(voiceAssetId || pendingVoiceRecording)}
                               previewError={previewError}
                               labels={{
                                 dataConsentRequired: t('personalize.dataConsentRequiredLabel'),
@@ -3363,7 +3353,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
                       voiceAssetId={voiceAssetId}
                       voicePlaybackUrl={resolvedVoicePlaybackUrl}
                       voiceDurationSeconds={resolvedVoiceDurationSeconds}
-                      onVoiceReadinessChange={handleVoiceReadinessChange}
                       voiceValidationError={voiceValidationError}
                       onVoiceRecordingSelected={handleVoiceRecordingSelected}
                       onClearVoiceValidation={() => setVoiceValidationError(null)}

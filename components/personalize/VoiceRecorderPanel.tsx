@@ -1,15 +1,11 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Mic, Square, Play, Pause, RotateCcw, Check, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react'
+import { Mic, Square, Play, Pause, RotateCcw, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { useI18n } from '@/lib/useI18n'
-import {
-  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
-  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
-} from '@/lib/signature-voice'
 
-type RecorderPhase = 'idle' | 'recording' | 'recorded' | 'selected' | 'error'
+type RecorderPhase = 'idle' | 'recording' | 'selected' | 'error'
 
 export type PendingVoiceRecording = {
   file: File
@@ -22,15 +18,11 @@ type VoiceRecorderPanelProps = {
   existingDurationSeconds?: number | null
   validationError?: string | null
   onRecordingSelected: (recording: PendingVoiceRecording | null) => void
-  onReadinessChange?: (ready: boolean) => void
   onClearValidation?: () => void
 }
 
 const PROMPT_TEXT =
   'Tonight, we begin a magical story made just for you. Every page is filled with love, wonder, courage, and gentle dreams, and my voice will always be here to guide you through each adventure.'
-
-const MIN_SECONDS = SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
-const MAX_SECONDS = SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
 
 function getPreferredMimeType() {
   if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') return ''
@@ -58,7 +50,6 @@ export function VoiceRecorderPanel({
   existingDurationSeconds,
   validationError,
   onRecordingSelected,
-  onReadinessChange,
   onClearValidation,
 }: VoiceRecorderPanelProps) {
   const { t } = useI18n()
@@ -86,11 +77,6 @@ export function VoiceRecorderPanel({
         : !existingAssetId && phase === 'selected'
           ? 'idle'
           : phase
-  const canSaveRecording =
-    effectivePhase === 'recorded'
-    && seconds >= MIN_SECONDS
-    && seconds <= MAX_SECONDS
-    && Boolean(recordedBlob)
   const showPlayback = Boolean(playbackUrl)
   const showReset = Boolean(recordedBlob || existingAssetId || seconds > 0)
 
@@ -99,16 +85,13 @@ export function VoiceRecorderPanel({
       case 'recording':
         return t('voiceRecorder.statusRecording', {
           current: formatTimer(seconds),
-          max: formatTimer(MAX_SECONDS),
         })
-      case 'recorded':
-        return t('voiceRecorder.statusRecorded', { seconds: formatTimer(seconds) })
       case 'selected':
         return t('voiceRecorder.statusReady')
       case 'error':
         return combinedError || t('voiceRecorder.statusFailed')
       default:
-        return t('voiceRecorder.statusIdle', { min: MIN_SECONDS, max: MAX_SECONDS })
+        return t('voiceRecorder.statusIdle')
     }
   }, [combinedError, effectivePhase, seconds, t])
 
@@ -124,7 +107,7 @@ export function VoiceRecorderPanel({
     }
   }, [])
 
-  const resetLocalRecording = useCallback((preserveExistingAsset: boolean) => {
+  const resetLocalRecording = useCallback(() => {
     if (recordedUrl) {
       URL.revokeObjectURL(recordedUrl)
     }
@@ -134,8 +117,7 @@ export function VoiceRecorderPanel({
     setLocalError(null)
     setIsPlaying(false)
     onRecordingSelected(null)
-    onReadinessChange?.(preserveExistingAsset && Boolean(existingAssetId))
-  }, [existingAssetId, onReadinessChange, onRecordingSelected, recordedUrl])
+  }, [onRecordingSelected, recordedUrl])
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -150,7 +132,7 @@ export function VoiceRecorderPanel({
     setLocalError(null)
     setIsPlaying(false)
     audioRef.current?.pause()
-    resetLocalRecording(false)
+    resetLocalRecording()
 
     if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setPhase('error')
@@ -191,28 +173,28 @@ export function VoiceRecorderPanel({
         setRecordedBlob(blob)
         setRecordedUrl(url)
         setSeconds(durationSeconds)
-        setPhase('recorded')
-        if (durationSeconds < MIN_SECONDS) {
-          setLocalError(t('voiceRecorder.errorMinSeconds', { seconds: MIN_SECONDS }))
-        } else if (durationSeconds > MAX_SECONDS) {
-          setLocalError(t('voiceRecorder.errorMaxSeconds', { seconds: MAX_SECONDS }))
-        }
+
+        const recordedMimeType = blob.type || 'audio/webm'
+        const extension = getFileExtension(recordedMimeType)
+        const file = new File([blob], `voice-sample.${extension}`, {
+          type: recordedMimeType,
+          lastModified: Date.now(),
+        })
+        setPhase('selected')
+        onRecordingSelected({ file, durationSeconds })
       }
 
       recorder.start()
       timerRef.current = window.setInterval(() => {
         const elapsed = Math.max(0, Math.floor((Date.now() - startAtRef.current) / 1000))
         setSeconds(elapsed)
-        if (Date.now() - startAtRef.current >= (MAX_SECONDS - 0.5) * 1000) {
-          stopRecording()
-        }
       }, 250)
     } catch {
       setPhase('error')
       setLocalError(t('voiceRecorder.errorPermission'))
       stopTracks()
     }
-  }, [clearTimer, onClearValidation, resetLocalRecording, stopRecording, stopTracks, t])
+  }, [clearTimer, onClearValidation, onRecordingSelected, resetLocalRecording, stopTracks, t])
 
   const handleTogglePlayback = useCallback(() => {
     if (!audioRef.current || !playbackUrl) return
@@ -225,32 +207,6 @@ export function VoiceRecorderPanel({
       setIsPlaying(false)
     }
   }, [onClearValidation, playbackUrl])
-
-  const handleSelectRecording = useCallback(() => {
-    if (!recordedBlob) return
-    onClearValidation?.()
-
-    if (seconds < MIN_SECONDS) {
-      setLocalError(t('voiceRecorder.errorMinSeconds', { seconds: MIN_SECONDS }))
-      setPhase('recorded')
-      return
-    }
-    if (seconds > MAX_SECONDS) {
-      setLocalError(t('voiceRecorder.errorMaxSeconds', { seconds: MAX_SECONDS }))
-      setPhase('recorded')
-      return
-    }
-    const mimeType = recordedBlob.type || 'audio/webm'
-    const extension = getFileExtension(mimeType)
-    const file = new File([recordedBlob], `voice-sample.${extension}`, {
-      type: mimeType,
-      lastModified: Date.now(),
-    })
-    setLocalError(null)
-    setPhase('selected')
-    onRecordingSelected({ file, durationSeconds: seconds })
-    onReadinessChange?.(true)
-  }, [onClearValidation, onReadinessChange, onRecordingSelected, recordedBlob, seconds, t])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -272,8 +228,7 @@ export function VoiceRecorderPanel({
     // The selected asset can be restored or replaced by the parent workflow.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSeconds(Math.max(0, Number(existingDurationSeconds) || 0))
-    onReadinessChange?.(Boolean(existingAssetId))
-  }, [existingAssetId, existingDurationSeconds, onReadinessChange])
+  }, [existingAssetId, existingDurationSeconds])
 
   useEffect(() => {
     return () => {
@@ -298,21 +253,6 @@ export function VoiceRecorderPanel({
       </div>
 
       <div className="space-y-4 px-4 py-4 sm:px-5">
-        <div className="grid gap-2 sm:grid-cols-3">
-          {[
-            t('voiceRecorder.stepRecord'),
-            t('voiceRecorder.stepSave'),
-            t('voiceRecorder.stepNarration'),
-          ].map((item, index) => (
-            <div key={item} className="flex items-start gap-2 rounded-2xl border border-white/80 bg-white/72 px-3 py-3 text-xs font-semibold leading-5 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[11px] font-bold text-orange-700">
-                {index + 1}
-              </span>
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
-
         <div className="rounded-3xl border border-amber-100/90 bg-gradient-to-br from-amber-50/95 via-white/90 to-orange-50/80 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.94)]">
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">{t('voiceRecorder.promptIntro')}</div>
           <p className="text-sm font-semibold leading-7 text-slate-800">{PROMPT_TEXT}</p>
@@ -385,7 +325,7 @@ export function VoiceRecorderPanel({
                   setLocalError(null)
                   audioRef.current?.pause()
                   setIsPlaying(false)
-                  resetLocalRecording(true)
+                  resetLocalRecording()
                   if (!existingAssetId) {
                     setPhase('idle')
                   } else {
@@ -400,20 +340,6 @@ export function VoiceRecorderPanel({
               </Button>
             ) : null}
           </div>
-
-          {effectivePhase === 'recorded' ? (
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={handleSelectRecording}
-              disabled={!canSaveRecording}
-              className="glass-action-btn glass-action-btn--brand mt-3 h-11 w-full rounded-2xl text-sm font-semibold sm:h-12"
-            >
-              <Check className="mr-2 h-4 w-4" />
-              {t('voiceRecorder.useThisRecording')}
-            </Button>
-          ) : null}
         </div>
       </div>
 

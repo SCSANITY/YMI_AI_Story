@@ -9,8 +9,7 @@ import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 import {
   SIGNATURE_VOICE_CONSENT_VERSION,
   SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION,
-  SIGNATURE_VOICE_MAX_SAMPLE_SECONDS,
-  SIGNATURE_VOICE_MIN_SAMPLE_SECONDS,
+  isVerifiedSignatureVoiceDuration,
 } from '@/lib/signature-voice'
 
 type UserAssetDeletionResult = {
@@ -61,9 +60,7 @@ export async function GET(request: Request) {
     if (!row.metadata || typeof row.metadata !== 'object' || Array.isArray(row.metadata)) return false
     const metadata = row.metadata as Record<string, unknown>
     const duration = Number(metadata.duration_seconds)
-    return Number.isFinite(duration)
-      && duration >= SIGNATURE_VOICE_MIN_SAMPLE_SECONDS
-      && duration <= SIGNATURE_VOICE_MAX_SAMPLE_SECONDS
+    return isVerifiedSignatureVoiceDuration(duration)
       && (
         (
           metadata.consent_version === SIGNATURE_VOICE_LEGACY_CAPTURE_CONSENT_VERSION

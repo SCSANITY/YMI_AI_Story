@@ -58,7 +58,7 @@ test('S3 replacement re-verifies private bytes and atomically resets source tria
   assert.match(confirmRoute, /assertSignatureVoiceAudioContainer/)
   assert.match(confirmRoute, /bytes\.length !== verified\.sizeBytes/)
   assert.match(confirmRoute, /createHash\('sha256'\)/)
-  assert.match(confirmRoute, /duration < SIGNATURE_VOICE_MIN_SAMPLE_SECONDS[\s\S]*duration > SIGNATURE_VOICE_MAX_SAMPLE_SECONDS/)
+  assert.match(confirmRoute, /duration < SIGNATURE_VOICE_REPLACEMENT_MIN_SECONDS[\s\S]*duration > SIGNATURE_VOICE_REPLACEMENT_MAX_SECONDS/)
   assert.match(confirmRoute, /reconcileReplacementResult[\s\S]*status === 'committed'[\s\S]*status === 'unknown'[\s\S]*discardReplacementUpload/)
   const discard = confirmRoute.match(/async function discardReplacementUpload[\s\S]*?\n}/)?.[0] ?? ''
   assert.match(discard, /\.from\('creations'\)[\s\S]*\.eq\('voice_asset_id', assetId\)[\s\S]*bindingError \|\| binding[\s\S]*return[\s\S]*\.remove\(\[storagePath\]\)/)
