@@ -72,11 +72,12 @@ describe('WC-001 external contracts', () => {
   })
 
   it('bounds repeatable Preview admission atomically without rejecting paid Final work', async () => {
-    const [jobsRoute, variantRoute, fulfillment, migration] = await Promise.all([
+    const [jobsRoute, variantRoute, fulfillment, migration, admissionAclCorrection] = await Promise.all([
       readFile(new URL('../app/api/jobs/route.js', import.meta.url), 'utf8'),
       readFile(new URL('../app/api/creations/[creationId]/preview-variants/route.ts', import.meta.url), 'utf8'),
       readFile(new URL('../src/lib/orderFulfillment.ts', import.meta.url), 'utf8'),
       readFixture('sql/20260904_205500_wc_001_worker_orchestration.sql'),
+      readFixture('sql/20260904_233000_wc_001_revoke_admission_rpc.sql'),
     ])
 
     for (const source of [jobsRoute, variantRoute]) {
@@ -88,6 +89,10 @@ describe('WC-001 external contracts', () => {
     assert.match(migration, /jobs_enforce_queue_admission_v1/)
     assert.match(migration, /preview_owner_active/)
     assert.match(migration, /Final jobs represent paid fulfillment and must remain durably admissible/)
+    assert.match(
+      admissionAclCorrection,
+      /revoke all on function public\.enforce_job_queue_admission_v1\(\)[\s\S]*service_role/,
+    )
   })
 
   it('does not expose job identifiers or transport credentials through health and logs', async () => {

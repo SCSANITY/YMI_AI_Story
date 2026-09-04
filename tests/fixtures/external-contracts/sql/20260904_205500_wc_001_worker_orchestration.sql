@@ -205,6 +205,14 @@ before insert on public.jobs
 for each row
 execute function public.enforce_job_queue_admission_v1();
 
+-- The existing typed claim and renewal RPCs carry legacy parameter defaults.
+-- PostgreSQL cannot remove those defaults with CREATE OR REPLACE, so replace
+-- the three dependency-free overloads explicitly. DROP without CASCADE keeps
+-- this migration fail-closed if an unexpected database dependency appears.
+drop function public.claim_next_job();
+drop function public.claim_next_job(text, text[], integer);
+drop function public.renew_job_lease(uuid, text, integer);
+
 create or replace function public.claim_next_job(
   p_worker_id text,
   p_job_types text[],
