@@ -16,8 +16,8 @@ test('catalog and personalization events are anchored to successful customer sta
 
   assert.match(catalog, /!hasCatalogResolved \|\| catalogError[\s\S]*emitYmiTrackingEvent\('view_catalog'\)/)
   assert.match(personalize, /stage !== 'FORM'[\s\S]*emitYmiTrackingEvent\('start_personalization'\)/)
-  assert.match(personalize, /applyPreviewDisplayAssets\(previewAssets\)[\s\S]*trackPreviewReady\(created\.jobId\)/)
-  assert.match(personalize, /partialPreviewAssets\?\.coverUrl[\s\S]*if \(applyPreviewDisplayAssets\(partialPreviewAssets\)\)[\s\S]*trackPreviewReady\(created\.jobId\)/)
+  assert.match(personalize, /applyPreviewDisplayAssetsForJob\(created\.jobId, previewAssets\)[\s\S]*trackPreviewReady\(created\.jobId\)/)
+  assert.match(personalize, /partialPreviewAssets\?\.coverUrl[\s\S]*if \(applyPreviewDisplayAssetsForJob\(created\.jobId, partialPreviewAssets\)\)[\s\S]*trackPreviewReady\(created\.jobId\)/)
   assert.match(personalize, /const item = await addToCart[\s\S]*if \(item\)[\s\S]*emitYmiTrackingEvent\('add_to_cart'/)
 })
 
