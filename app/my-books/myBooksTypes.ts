@@ -16,19 +16,6 @@ export type CreationItem = {
   finalReady?: boolean
   finalReviewStatus?: string | null
   finalReleasedAt?: string | null
-  templates?: {
-    template_id?: string
-    name?: string
-    description?: string
-    cover_image_path?: string
-    normalized_cover_image_path?: string
-    story_type?: string
-    package_prices?: Array<{
-      package_type?: string | null
-      list_price_usd?: number | null
-      sale_price_usd?: number | null
-      display_discount_percent?: number | null
-      row_version?: number | null
-    }> | null
-  }
+  templates?: TemplateCatalogRow
 }
+import type { TemplateCatalogRow } from '@/lib/book-catalog'

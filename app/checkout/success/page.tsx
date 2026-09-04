@@ -94,16 +94,15 @@ function CheckoutSuccessPageContent() {
 
       try {
         const orderUrl = sessionId
-          ? `/api/orders?orderId=${encodeURIComponent(orderId)}&session_id=${encodeURIComponent(sessionId)}`
-          : `/api/orders?orderId=${encodeURIComponent(orderId)}`
+          ? `/api/orders/${encodeURIComponent(orderId)}?session_id=${encodeURIComponent(sessionId)}`
+          : `/api/orders/${encodeURIComponent(orderId)}`
         const res = await fetch(orderUrl, {
           credentials: 'include',
           cache: 'no-store',
         })
-        const data = res.ok ? await res.json() : { orders: [] }
+        const data = res.ok ? await res.json() : { order: null }
         if (cancelled) return
-        const rows = Array.isArray(data?.orders) ? data.orders : []
-        const current = rows[0] ?? null
+        const current = data?.order ?? null
         setOrder(current)
 
         if (shouldStopPolling(current?.order_status) || attempts >= maxAttempts) {
@@ -206,12 +205,11 @@ function CheckoutSuccessPageContent() {
   }, [order])
 
   useEffect(() => {
-    const customerId = user?.customerId
     const targetOrderId = order?.order_id || orderId
-    if (!customerId || !targetOrderId) return
+    if (!user?.customerId || !targetOrderId) return
 
     let cancelled = false
-    const url = `/api/orders?orderId=${encodeURIComponent(targetOrderId)}&customerId=${encodeURIComponent(customerId)}`
+    const url = `/api/orders/${encodeURIComponent(targetOrderId)}`
     void fetch(url, {
       credentials: 'include',
       cache: 'no-store',
@@ -219,7 +217,7 @@ function CheckoutSuccessPageContent() {
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (cancelled) return
-        const refreshedOrder = Array.isArray(data?.orders) ? data.orders[0] ?? null : null
+        const refreshedOrder = data?.order ?? null
         if (refreshedOrder?.order_id) setOrder(refreshedOrder)
       })
       .catch(() => {

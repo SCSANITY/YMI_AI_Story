@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { AlertCircle, BookOpen, CheckCircle2, LogIn, RotateCw, X } from 'lucide-react'
-import { BOOKS } from '@/data/books'
 import { Book, PersonalizationData } from '@/types'
 import { useRouter } from 'next/navigation'
 import { useI18n } from '@/lib/useI18n'
@@ -24,7 +23,7 @@ import {
 } from './myBooksShelf'
 import type { CreationItem } from './myBooksTypes'
 import { normalizeStoryLanguage } from '@/lib/story-language'
-import { templateStorageUrl } from '@/lib/book-catalog'
+import { templateRowToBook, templateStorageUrl } from '@/lib/book-catalog'
 
 const resolveCover = (row: CreationItem) => {
   const raw = row.preview_cover_url || row.templates?.normalized_cover_image_path || row.templates?.cover_image_path || ''
@@ -198,21 +197,38 @@ export default function MyBooksPage() {
     setNotice(null)
     setPendingAction({ creationId: item.creation_id, action: 'add' })
     const coverUrl = resolveCover(item)
-    const fallbackBook = BOOKS.find((b) => b.bookID === item.template_id)
+    let catalogBook: Book | null = null
+    try {
+      catalogBook = templateRowToBook({
+        ...(item.templates ?? {}),
+        template_id: item.template_id,
+      })
+    } catch {
+      // The add-to-cart API remains the authority for current Catalog pricing.
+    }
     const packagePrice = resolveTemplatePackagePrice(item)
-    const book: Book = {
-      bookID: item.template_id,
-      title: item.templates?.name || fallbackBook?.title || item.template_id,
-      author: fallbackBook?.author || 'YMI',
+    const book: Book = catalogBook ? {
+      ...catalogBook,
+      title: item.templates?.name || catalogBook.title,
       price: packagePrice?.effectivePriceUsd ?? 0,
       compareAtPrice: packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd,
       discountPercent: packagePrice?.discountPercent ?? null,
       coverUrl,
-      showcaseImages: fallbackBook?.showcaseImages || [coverUrl],
-      description: item.templates?.description || fallbackBook?.description || '',
-      category: fallbackBook?.category || 'Adventure',
-      ageRange: fallbackBook?.ageRange || '3-5',
-      gender: fallbackBook?.gender || 'Neutral',
+      showcaseImages: coverUrl ? [coverUrl] : catalogBook.showcaseImages,
+      isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
+    } : {
+      bookID: item.template_id,
+      title: item.templates?.name || item.template_id,
+      author: 'YMI',
+      price: packagePrice?.effectivePriceUsd ?? 0,
+      compareAtPrice: packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd,
+      discountPercent: packagePrice?.discountPercent ?? null,
+      coverUrl,
+      showcaseImages: coverUrl ? [coverUrl] : [],
+      description: item.templates?.description || '',
+      category: item.templates?.story_type || 'Story',
+      ageRange: item.templates?.age_group === 'ages_6_plus' ? 'Ages 6+' : 'Ages 2+',
+      gender: item.templates?.target_gender || 'Neutral',
       isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
     }
     const personalization = toPersonalization(item)

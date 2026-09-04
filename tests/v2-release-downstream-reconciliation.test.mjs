@@ -16,6 +16,7 @@ test('one released customer PDF fact drives delivery, download, and Printing sta
   const purchaseState = await read('src/lib/purchase-state.ts')
   const ordersList = await read('app/api/orders/route.ts')
   const orderDetail = await read('app/api/orders/[orderId]/route.ts')
+  const customerOrderReadModel = await read('src/lib/customer-orders-server.ts')
 
   const releaseWrite = finalReview.indexOf("review_status: 'released'")
   const signedDownload = finalReview.indexOf('.createSignedUrl(pdfPath')
@@ -32,10 +33,10 @@ test('one released customer PDF fact drives delivery, download, and Printing sta
   assert.match(transitionStore, /\.eq\(['"]order_status['"], ['"]paid['"]\)/)
 
   assert.match(purchaseState, /loadReleasedFinalPdfAssetsByJobId[\s\S]*isFinalJobReleased\(finalJob\)/)
-  assert.match(ordersList, /loadReleasedFinalPdfAssetsByJobId\(finalJobIds\)/)
-  assert.match(ordersList, /final_pdf_url:\s*finalPdfUrlMap/)
-  assert.match(orderDetail, /loadReleasedFinalPdfAssetsByJobId\(finalJobIds\)/)
-  assert.match(orderDetail, /finalPdfUrl/)
+  assert.match(ordersList, /loadCustomerOrders/)
+  assert.match(orderDetail, /loadCustomerOrders/)
+  assert.match(customerOrderReadModel, /loadReleasedFinalPdfAssetsByJobId\(finalJobIds\)/)
+  assert.match(customerOrderReadModel, /final_pdf_url:\s*finalPdfUrlMap/)
 })
 
 test('manual Print Release records the print artifact without changing customer order state', async () => {

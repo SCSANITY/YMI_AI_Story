@@ -50,7 +50,6 @@ import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGallery';
 import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
-import { useBookCatalog } from '@/components/useBookCatalog';
 import { templateStorageUrl, type CatalogBook } from '@/lib/book-catalog';
 import type { CartItem } from '@/types';
 import type { BookPresentation } from '@/lib/book-presentation';
@@ -206,17 +205,20 @@ function forgetPreviewVariantSession(creationId: string, sessionId: string) {
   );
 }
 
-export default function PersonalizePage({ bookID }: { bookID: string }) {
+export default function PersonalizePage({
+  bookID,
+  initialBook,
+}: {
+  bookID: string
+  initialBook: CatalogBook
+}) {
 
   const fsm = usePersonalizeStage()
   const { t } = useI18n()
 
   const { user, openLoginModal, logout, addToCart, removeFromCart, updateCartQuantity, prepareCheckout, resumeData, resumePersonalization, displayCurrency, cart, isHydrated } = useGlobalContext();
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-  const { books: catalogBooks, isLoading: isBookCatalogLoading } = useBookCatalog();
-  const [templateDetailBook, setTemplateDetailBook] = useState<CatalogBook | null>(null);
-  const catalogBook = catalogBooks.find(b => b.bookID === bookID);
-  const book = templateDetailBook ?? (isBookCatalogLoading ? undefined : catalogBook);
+  const book = initialBook;
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewMode = searchParams?.get('view') || 'edit';
@@ -399,10 +401,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   const preloadedPreviewImagesRef = useRef<Set<string>>(new Set());
   const previewRefreshInFlightRef = useRef(false);
   const lastPreviewRefreshAtRef = useRef(0);
-  const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(null);
-  const [templateTitle, setTemplateTitle] = useState<string | null>(null);
-  const [templateDescription, setTemplateDescription] = useState<string | null>(null);
-  const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(null);
+  const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(initialBook?.coverUrl || null);
+  const [templateTitle, setTemplateTitle] = useState<string | null>(initialBook?.title || null);
+  const [templateDescription, setTemplateDescription] = useState<string | null>(initialBook?.description || null);
+  const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(initialBook?.innerDescription || null);
   const [recentFaces, setRecentFaces] = useState<RecentFaceItem[]>([]);
   const [recentVoices, setRecentVoices] = useState<Array<{ asset_id: string; storage_path?: string | null; playback_url?: string | null; metadata?: { duration_seconds?: number | null; speaker_kind?: SignatureVoiceSpeakerKind | null } }>>([]);
   const [voicePlaybackUrl, setVoicePlaybackUrl] = useState<string | null>(null);
@@ -1156,11 +1158,10 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setFacePrepareError(null)
     setFaceAutoCropped(false)
     facePrepareRunIdRef.current += 1
-    setTemplateCoverUrl(null)
-    setTemplateTitle(null)
-    setTemplateDescription(null)
-    setTemplateInnerDescription(null)
-    setTemplateDetailBook(null)
+    setTemplateCoverUrl(initialBook?.coverUrl || null)
+    setTemplateTitle(initialBook?.title || null)
+    setTemplateDescription(initialBook?.description || null)
+    setTemplateInnerDescription(initialBook?.innerDescription || null)
     setRecentFaces([])
     setVoiceAssetId(null)
     setVoiceStoragePath(null)
@@ -1174,7 +1175,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
     setPreviewUrl(null)
     setPreviewPages([])
     setPreviewBookPresentation(null)
-  }, [bookID, resumeData, viewMode, creationIdParam, creationId, previewJobIdParam, previewJobId, stage, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, setPreviewUrl, setTemplateCoverUrl, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription])
+  }, [bookID, initialBook, resumeData, viewMode, creationIdParam, creationId, previewJobIdParam, previewJobId, stage, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, setPreviewUrl, setTemplateCoverUrl, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription])
 
   const replacePersonalizeUrl = useCallback((params?: URLSearchParams | null) => {
     if (typeof window === 'undefined') return;
@@ -1678,34 +1679,6 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
       window.removeEventListener('focus', handleFocus);
     };
   }, [displayedPreviewJobId, refreshPreviewImages, viewState.showPreview]);
-
-  useEffect(() => {
-    if (!bookID) return;
-
-    let isActive = true;
-
-    const loadTemplateInfo = async () => {
-      const response = await fetch(`/api/templates/${encodeURIComponent(bookID)}`, {
-        credentials: 'same-origin',
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (!isActive || !response.ok || !data?.template) return;
-
-      const template = data.template as CatalogBook;
-      setTemplateDetailBook(template);
-      setTemplateCoverUrl(template.coverUrl || null);
-      setTemplateTitle(template.title || null);
-      setTemplateDescription(template.description || null);
-      setTemplateInnerDescription(template.innerDescription || null);
-    };
-
-    loadTemplateInfo();
-
-    return () => {
-      isActive = false;
-    };
-  }, [bookID]);
 
   const loadUserAssets = useCallback(async (options?: { signal?: AbortSignal }) => {
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
@@ -3061,7 +3034,7 @@ export default function PersonalizePage({ bookID }: { bookID: string }) {
   if (!book) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#fffaf3] px-4 text-center text-sm font-medium text-gray-500">
-        {isBookCatalogLoading ? t('common.loading') : t('common.unknown')}
+        {t('common.unknown')}
       </div>
     );
   }

@@ -6,13 +6,17 @@ import test from 'node:test'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-test('protected previews keep internal catalog requests on the same origin', () => {
+test('Customize receives one server-loaded template without a duplicate client Catalog request', () => {
   const catalog = read('components/useBookCatalog.ts')
   const personalize = read('components/PersonalizePage.tsx')
+  const page = read('app/personalize/[bookID]/page.tsx')
 
   assert.match(catalog, /credentials:\s*'same-origin'/)
   assert.doesNotMatch(catalog, /credentials:\s*'omit'/)
-  assert.match(personalize, /fetch\(`\/api\/templates\/\$\{encodeURIComponent\(bookID\)\}`,[\s\S]*?credentials:\s*'same-origin'/)
+  assert.match(page, /loadActiveTemplateDetail\(bookID\)/)
+  assert.match(page, /initialBook=\{initialBook\}/)
+  assert.match(personalize, /initialBook:\s*CatalogBook/)
+  assert.doesNotMatch(personalize, /\/api\/templates|useBookCatalog/)
 })
 
 test('runtime callbacks use the preview deployment origin without changing canonical SEO URLs', () => {

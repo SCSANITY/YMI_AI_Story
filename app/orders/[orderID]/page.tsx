@@ -160,25 +160,26 @@ export default function OrderDetailPage() {
           setLoadResult({ requestKey, loadState: 'not_found', order: null })
           return
         }
+        const order = data.data.order
         setLoadResult({
           requestKey,
           loadState: 'ready',
           order: {
-            order_id: data.data.order.id,
-            display_id: data.data.order.displayId,
-            order_status: data.data.order.status,
-            created_at: data.data.order.createdAt,
-            email: data.data.order.email,
-            total: data.data.total,
-            final_pdf_url: data.data.order.finalPdfUrl,
-            display_currency: data.data.displayCurrency,
-            shipping_address: data.data.order.shippingAddress,
-            tracking_number: data.data.order.trackingNumber,
-            tracking_carrier: data.data.order.trackingCarrier,
-            tracking_url: data.data.order.trackingUrl,
-            logistics_note: data.data.order.logisticsNote,
-            logistics_updated_at: data.data.order.logisticsUpdatedAt,
-            items: Array.isArray(data.data.items) ? data.data.items : [],
+            order_id: order.order_id,
+            display_id: order.display_id,
+            order_status: order.order_status,
+            created_at: order.created_at,
+            email: order.email,
+            total: order.total,
+            final_pdf_url: order.final_pdf_url,
+            display_currency: order.display_currency,
+            shipping_address: order.shipping_address,
+            tracking_number: order.tracking_number,
+            tracking_carrier: order.tracking_carrier,
+            tracking_url: order.tracking_url,
+            logistics_note: order.logistics_note,
+            logistics_updated_at: order.logistics_updated_at,
+            items: Array.isArray(order.items) ? order.items : [],
           },
         })
       })

@@ -7,7 +7,7 @@ import { ArrowLeft, BookOpen, Clock3, CreditCard, RefreshCw } from 'lucide-react
 import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent'
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage'
 import { useGlobalContext } from '@/contexts/GlobalContext'
-import { BOOKS } from '@/data/books'
+import { templateRowToBook, type TemplateCatalogRow } from '@/lib/book-catalog'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import { packagePriceRowsToPricing } from '@/lib/package-pricing'
 import {
@@ -17,10 +17,11 @@ import {
   type SignedReaderPage,
 } from '@/lib/reader-page-contract'
 import { useI18n } from '@/lib/useI18n'
-import type { Book, BookPackagePricing, PersonalizationData, StoryLanguage } from '@/types'
+import type { Book, BookPackagePricing, PersonalizationData } from '@/types'
 import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
 import { startOwnedCreationCheckout } from '@/lib/owned-creation-checkout-client'
+import { normalizeStoryLanguage } from '@/lib/story-language'
 
 const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
@@ -28,18 +29,7 @@ const PREVIEW_HEIGHT = PAGE_HEIGHT + 40
 const ANIMATION_DURATION = 0.8
 const EMPTY_POSITIONAL_BOOK_SPREADS: string[] = []
 
-type ReaderTemplate = {
-  name?: string | null
-  description?: string | null
-  story_type?: string | null
-  package_prices?: Array<{
-    package_type?: string | null
-    list_price_usd?: number | null
-    sale_price_usd?: number | null
-    display_discount_percent?: number | null
-    row_version?: number | null
-  }> | null
-}
+type ReaderTemplate = TemplateCatalogRow
 
 type ReaderCreation = {
   creationId: string
@@ -74,15 +64,6 @@ function resolveReaderLoadIssue(status: number, response: ReaderResponse): Reade
   return 'service'
 }
 
-function normalizeLanguage(value: unknown): StoryLanguage {
-  const raw = String(value ?? '').trim().toLowerCase()
-  if (raw === 'traditional chinese' || raw === 'chinese' || raw === 'cn_t' || raw === 'zh-hk' || raw === 'traditional') {
-    return 'Traditional Chinese'
-  }
-  if (raw === 'spanish' || raw === 'es') return 'Spanish'
-  return 'English'
-}
-
 function normalizeBookType(value: unknown): PersonalizationData['bookType'] {
   return value === 'digital' || value === 'premium' || value === 'supreme' ? value : 'basic'
 }
@@ -99,7 +80,6 @@ function getSnapshotParts(snapshotValue: unknown) {
 }
 
 function buildCartContext(creation: ReaderCreation, purchasedPackageType?: string | null): { book: Book; personalization: PersonalizationData } {
-  const fallbackBook = BOOKS.find((book) => book.bookID === creation.templateId)
   const { snapshot, textOverrides } = getSnapshotParts(creation.customizeSnapshot)
   const childName = textOverrides.child_name ?? textOverrides.childName ?? ''
   const childAge = textOverrides.child_age ?? textOverrides.childAge ?? textOverrides.age ?? ''
@@ -115,32 +95,49 @@ function buildCartContext(creation: ReaderCreation, purchasedPackageType?: strin
   const compareAtPrice = packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd
   const discountPercent = packagePrice?.discountPercent ?? 0
   const coverUrl = creation.coverUrl || ''
+  let catalogBook: Book | null = null
+  try {
+    catalogBook = templateRowToBook({
+      ...(creation.template ?? {}),
+      template_id: creation.templateId,
+    })
+  } catch {
+    // The server-authoritative add-to-cart path still validates live Catalog pricing.
+  }
+
+  const baseBook: Book = catalogBook ?? {
+    bookID: creation.templateId,
+    title: creation.template?.name || creation.templateId,
+    author: 'YMI',
+    price: basePrice,
+    coverUrl,
+    showcaseImages: coverUrl ? [coverUrl] : [],
+    description: creation.template?.description || '',
+    category: creation.template?.story_type || 'Story',
+    ageRange: creation.template?.age_group === 'ages_6_plus' ? 'Ages 6+' : 'Ages 2+',
+    gender: creation.template?.target_gender || 'Neutral',
+  }
 
   return {
     book: {
-      bookID: creation.templateId,
+      ...baseBook,
       title: resolvePersonalizedBookTitle({
         templateId: creation.templateId,
         templateName: creation.template?.name,
         customizeSnapshot: creation.customizeSnapshot,
       }),
-      author: fallbackBook?.author || 'YMI',
       price: basePrice,
       compareAtPrice,
       discountPercent: Number.isFinite(discountPercent) && discountPercent > 0 ? discountPercent : null,
       packagePricing,
       coverUrl,
       showcaseImages: coverUrl ? [coverUrl] : [],
-      description: creation.template?.description || fallbackBook?.description || '',
-      category: fallbackBook?.category || 'Adventure',
-      ageRange: fallbackBook?.ageRange || '3-5',
-      gender: fallbackBook?.gender || 'Neutral',
       isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
     },
     personalization: {
       childName: String(childName),
       childAge: String(childAge),
-      language: normalizeLanguage(textOverrides.language),
+      language: normalizeStoryLanguage(textOverrides.language),
       dedication: '',
       storagePath: typeof snapshot.storagePath === 'string' ? snapshot.storagePath : undefined,
       previewJobId: creation.previewJobId || (typeof snapshot.previewJobId === 'string' ? snapshot.previewJobId : undefined),

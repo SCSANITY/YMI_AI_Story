@@ -41,7 +41,7 @@ async function fetchNoticeCounts(customerId: string): Promise<NavNoticeCounts> {
         credentials: 'include',
         cache: 'no-store',
       }).then((res) => (res.ok ? res.json() : { active: [] })),
-      fetch(`/api/orders/list?customerId=${encodedCustomerId}`, {
+      fetch('/api/orders?limit=10', {
         credentials: 'include',
         cache: 'no-store',
       }).then((res) => (res.ok ? res.json() : { orders: [], count: 0 })),

@@ -52,10 +52,11 @@ test('Admin Catalog pricing is admin-only and uses row-version CAS', async () =>
   assert.doesNotMatch(navigation, /label: 'Catalog Pricing'[^\n]+soon: true/)
 })
 
-test('new templates are seeded while one invalid list row stays isolated', async () => {
-  const [sql, catalogRoute] = await Promise.all([
+test('new templates are seeded while one invalid Catalog row stays isolated', async () => {
+  const [sql, catalogRoute, catalogLoader] = await Promise.all([
     readTemplateSql('sql_template_package_pricing.sql'),
     read('app/api/templates/route.ts'),
+    read('src/lib/template-catalog-server.ts'),
   ])
 
   assert.match(sql, /create trigger template_package_prices_seed_after_insert/)
@@ -63,8 +64,9 @@ test('new templates are seeded while one invalid list row stays isolated', async
   assert.match(sql, /'digital'::text/)
   assert.match(sql, /'basic'::text/)
   assert.match(sql, /'supreme'::text/)
-  assert.match(catalogRoute, /templateRowsToBooks\(rows, \(row, pricingError\) =>/)
-  assert.match(catalogRoute, /skipped template with invalid package pricing/)
+  assert.match(catalogRoute, /loadActiveTemplateCatalog/)
+  assert.match(catalogLoader, /templateRowsToBooks/)
+  assert.match(catalogLoader, /skipped template with invalid package pricing/)
   assert.doesNotMatch(catalogRoute, /return NextResponse\.json\(\{ error: 'Template pricing is not configured' \}, \{ status: 503 \}\)/)
 })
 

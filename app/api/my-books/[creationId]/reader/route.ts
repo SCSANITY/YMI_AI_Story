@@ -99,6 +99,10 @@ export async function GET(
             cover_image_path,
             normalized_cover_image_path,
             story_type,
+            age_group,
+            target_gender,
+            catalog_display_package_type,
+            magic_attributes,
             package_prices:template_package_prices(
               package_type,
               list_price_usd,

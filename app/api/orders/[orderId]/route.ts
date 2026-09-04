@@ -1,5 +1,5 @@
-import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
+import { noStoreJson } from '@/lib/http-response'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { releaseOrderDiscount } from '@/lib/discounts'
 import {
@@ -8,26 +8,11 @@ import {
   requireCheckoutOrderAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
-import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
+import {
+  CustomerOrderReadError,
+  loadCustomerOrders,
+} from '@/lib/customer-orders-server'
 import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
-import {
-  getDisplayUnitPrice,
-  getOrderCheckoutCurrency,
-  getOrderDisplayCurrency,
-  getOrderDisplayTotal,
-} from '@/lib/order-display'
-import {
-  buildPersonalizedBookPdfFileName,
-  resolveFinalJobDisplayTitle,
-  resolvePersonalizedBookTitle,
-} from '@/lib/personalized-book-title'
-import {
-  loadReleasedFinalPdfAssetsByJobId,
-  resolveLatestReleasedFinalPdfAsset,
-} from '@/lib/purchase-state'
-
-const STORAGE_BUCKET = 'raw-private'
-const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
 
 export async function GET(
   request: Request,
@@ -37,6 +22,7 @@ export async function GET(
   if (!rawOrderId) {
     return NextResponse.json({ error: 'Missing orderId' }, { status: 400 })
   }
+
   let orderReference
   try {
     orderReference = parseOrderReference(rawOrderId)
@@ -59,15 +45,17 @@ export async function GET(
       return NextResponse.json({ error: 'Order mismatch for this session' }, { status: 403 })
     }
   } else {
-    let owner
     try {
-      owner = await resolveCheckoutOwner(request, {
+      const owner = await resolveCheckoutOwner(request, {
         allowAnon: true,
         createAnonIfMissing: false,
         optional: true,
       })
       if (!owner) {
-        return NextResponse.json({ error: 'Order access requires the current session' }, { status: 401 })
+        return NextResponse.json(
+          { error: 'Order access requires the current session' },
+          { status: 401 }
+        )
       }
       await requireCheckoutOrderAccess(rawOrderId, owner)
     } catch (error) {
@@ -77,155 +65,19 @@ export async function GET(
     }
   }
 
-  const { data: order, error: orderError } = await supabaseAdmin
-    .from('orders')
-    .select(
-      'order_id, display_id, order_status, payment_id, customer_id, email, shipping_address, billing_address, checkout_currency, discount_amount_usd, shipping_discount_amount_usd, shipping_amount_usd, tracking_number, tracking_carrier, tracking_url, logistics_note, shipped_at, delivered_at, logistics_updated_at, created_at'
-    )
-    .eq(orderReference.column, orderReference.value)
-    .maybeSingle()
-
-  if (orderError || !order?.order_id) {
-    return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-  }
-
-  const [itemsResult, payment] = await Promise.all([
-    supabaseAdmin
-      .from('cart_items')
-      .select(
-        `
-          cart_item_id,
-          owner_type,
-          anon_session_id,
-          customer_id,
-          status,
-          creation_id,
-          final_job_id,
-          package_type,
-          quantity,
-          price_at_purchase,
-          creations:creations (
-            template_id,
-            customize_snapshot,
-            preview_job_id,
-            templates:templates (
-              template_id,
-              name,
-              description,
-              cover_image_path,
-              story_type
-            )
-          )
-        `
-      )
-      .eq('order_id', order.order_id),
-    order.payment_id
-      ? supabaseAdmin
-          .from('payments')
-          .select('payment_id, amount, currency')
-          .eq('payment_id', order.payment_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null as any }),
-  ])
-
-  if (itemsResult.error) {
-    return NextResponse.json({ error: 'Failed to load order items' }, { status: 500 })
-  }
-
-  const cartItems = itemsResult.data ?? []
-  const jobIds = cartItems
-    .map((row: any) => row.creations?.preview_job_id)
-    .filter((value: string | null) => Boolean(value))
-
-  const finalJobIds = cartItems
-    .map((row: any) => row.final_job_id)
-    .filter((value: string | null) => Boolean(value)) as string[]
-  const [previewCoverMap, finalPdfAssetsByJobId] = await Promise.all([
-    createGeneratedPreviewCoverMap(jobIds as string[]),
-    loadReleasedFinalPdfAssetsByJobId(finalJobIds),
-  ])
-
-  const displayCurrency = getOrderDisplayCurrency(
-    order.checkout_currency,
-    payment.data?.currency
-  )
-
-  const enrichedItems = cartItems.map((row: any) => {
-    const cover = getGeneratedPreviewCover(previewCoverMap, row.creations?.preview_job_id ?? null)
-    return {
-      ...row,
-      template_name: resolvePersonalizedBookTitle({
-        templateId: row.creations?.template_id,
-        templateName: row.creations?.templates?.name,
-        customizeSnapshot: row.creations?.customize_snapshot,
-      }),
-      preview_cover_url: cover.url,
-      preview_cover_status: cover.status,
-      display_currency: displayCurrency,
-      display_unit_price: getDisplayUnitPrice(Number(row.price_at_purchase ?? 0), displayCurrency),
+  try {
+    const { orders } = await loadCustomerOrders({ reference: orderReference })
+    const order = orders[0] ?? null
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
-  })
-
-  const baseUsdTotal = enrichedItems.reduce((sum: number, item: any) => {
-    const price = Number(item.price_at_purchase ?? 0)
-    const quantity = Number(item.quantity ?? 1)
-    return sum + price * quantity
-  }, 0)
-  const total = getOrderDisplayTotal({
-    baseUsdTotal,
-    discountUsd: Number(order.discount_amount_usd ?? 0),
-    shippingUsd: Number(order.shipping_amount_usd ?? 0),
-    shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
-    checkoutCurrency: order.checkout_currency,
-    paymentAmount: payment.data?.amount ?? null,
-    paymentCurrency: payment.data?.currency,
-  })
-
-  let finalPdfUrl: string | null = null
-  const finalPdfAsset = resolveLatestReleasedFinalPdfAsset(finalJobIds, finalPdfAssetsByJobId)
-
-  if (finalPdfAsset) {
-    const finalPdfItem = cartItems.find((item: any) => item.final_job_id === finalPdfAsset.jobId)
-    const finalPdfTitle = resolveFinalJobDisplayTitle({
-      creations: finalPdfItem?.creations,
-    })
-    const { data: signedPdf } = await supabaseAdmin.storage
-      .from(STORAGE_BUCKET)
-      .createSignedUrl(finalPdfAsset.pdfPath, FINAL_PDF_SIGN_TTL_SECONDS, {
-        download: buildPersonalizedBookPdfFileName(finalPdfTitle),
-      })
-    finalPdfUrl = signedPdf?.signedUrl ?? null
+    return noStoreJson({ order })
+  } catch (error) {
+    if (error instanceof CustomerOrderReadError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+    throw error
   }
-
-  return privateJson({
-    order: {
-      id: order.order_id,
-      displayId: order.display_id ?? null,
-      status: order.order_status,
-      paymentId: order.payment_id ?? null,
-      customerId: order.customer_id ?? null,
-      email: order.email ?? null,
-      checkoutCurrency: getOrderCheckoutCurrency(order.checkout_currency),
-      discountAmountUsd: Number(order.discount_amount_usd ?? 0),
-      shippingDiscountAmountUsd: Number(order.shipping_discount_amount_usd ?? 0),
-      finalPdfUrl,
-      trackingNumber: order.tracking_number ?? null,
-      trackingCarrier: order.tracking_carrier ?? null,
-      trackingUrl: order.tracking_url ?? null,
-      logisticsNote: order.logistics_note ?? null,
-      shippedAt: order.shipped_at ?? null,
-      deliveredAt: order.delivered_at ?? null,
-      logisticsUpdatedAt: order.logistics_updated_at ?? null,
-      displayCurrency,
-      shippingAddress: order.shipping_address ?? {},
-      billingAddress: order.billing_address ?? null,
-      createdAt: order.created_at ?? null,
-    },
-    items: enrichedItems,
-    total,
-    displayTotal: total,
-    displayCurrency,
-  })
 }
 
 export async function DELETE(
@@ -245,19 +97,11 @@ export async function DELETE(
     throw error
   }
 
-  let body: { customerId?: string | null } = {}
-  try {
-    body = (await request.json()) as { customerId?: string | null }
-  } catch {
-    body = {}
-  }
-
   let owner
   try {
     owner = (await resolveCheckoutOwner(request, {
       allowAnon: true,
       createAnonIfMissing: false,
-      expectedCustomerId: body.customerId ?? null,
     }))!
   } catch (error) {
     const response = checkoutOwnerErrorResponse(error)

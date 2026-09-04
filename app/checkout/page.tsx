@@ -481,12 +481,11 @@ function CheckoutPageContent() {
     if (!queryOrderId) return;
     let cancelled = false;
 
-    fetch(`/api/orders?orderId=${encodeURIComponent(queryOrderId)}`, { credentials: 'include', cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : { orders: [] }))
+    fetch(`/api/orders/${encodeURIComponent(queryOrderId)}`, { credentials: 'include', cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { order: null }))
       .then((data) => {
         if (cancelled) return;
-        const rows = Array.isArray(data?.orders) ? data.orders : [];
-        const current = rows[0];
+        const current = data?.order;
         if (!current) return;
 
         const address = current.shipping_address ?? {};

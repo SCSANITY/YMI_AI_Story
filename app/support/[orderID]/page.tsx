@@ -35,12 +35,12 @@ export default function SupportOrderPage() {
         setLoadState({
           orderId,
           order: {
-            id: data.order.id,
-            displayId: data.order.displayId ?? null,
-            status: data.order.status ?? null,
-            total: Number(data.total ?? 0),
-            displayCurrency: (data.order.displayCurrency ?? 'USD') as CheckoutCurrency,
-            createdAt: data.order.createdAt ?? null,
+            id: data.order.order_id,
+            displayId: data.order.display_id ?? null,
+            status: data.order.order_status ?? null,
+            total: Number(data.order.total ?? 0),
+            displayCurrency: (data.order.display_currency ?? 'USD') as CheckoutCurrency,
+            createdAt: data.order.created_at ?? null,
           },
         });
       })

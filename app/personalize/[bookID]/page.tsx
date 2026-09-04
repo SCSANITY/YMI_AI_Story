@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import PersonalizePage from '@/components/PersonalizePage';
 import { CustomizeAccessGate } from '@/components/CustomizeAccessGate'
 import { BOOKS } from '@/data/books'
 import { publicPageMetadata } from '@/lib/seo'
+import { loadActiveTemplateDetail } from '@/lib/template-catalog-server'
 
 function clampDescription(value: string) {
   const normalized = value.replace(/\s+/g, ' ').trim()
@@ -46,11 +48,13 @@ export default async function Page({
   params: Promise<{ bookID: string }>;
 }) {
   const { bookID } = await params;
+  const initialBook = await loadActiveTemplateDetail(bookID)
+  if (!initialBook) notFound()
 
   return (
     <CustomizeAccessGate>
       <Suspense fallback={<main className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50" />}>
-        <PersonalizePage bookID={bookID} />
+        <PersonalizePage bookID={bookID} initialBook={initialBook} />
       </Suspense>
     </CustomizeAccessGate>
   );

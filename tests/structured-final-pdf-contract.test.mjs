@@ -40,16 +40,19 @@ test('T4-019 releases only the V3 contract through a positive composition proof'
 })
 
 test('customer PDF download names use the shared personalized safe filename boundary', async () => {
-  const [finalReview, orderList, orderDetail] = await Promise.all([
+  const [finalReview, orderList, orderDetail, orderReadModel] = await Promise.all([
     read('src/lib/finalReview.ts'),
     read('app/api/orders/route.ts'),
     read('app/api/orders/[orderId]/route.ts'),
+    read('src/lib/customer-orders-server.ts'),
   ])
 
-  for (const source of [finalReview, orderList, orderDetail]) {
+  for (const source of [finalReview, orderReadModel]) {
     assert.match(source, /buildPersonalizedBookPdfFileName/)
     assert.doesNotMatch(source, /download:\s*`final-\$\{/)
   }
+  assert.match(orderList, /loadCustomerOrders/)
+  assert.match(orderDetail, /loadCustomerOrders/)
   assert.match(finalReview, /resolveFinalJobDisplayTitle\(finalJob\)/)
 })
 

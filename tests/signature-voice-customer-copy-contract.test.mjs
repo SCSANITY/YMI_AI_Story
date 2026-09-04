@@ -36,16 +36,18 @@ test('S6 Preview and Checkout identify Signature Voice from their local authorit
 })
 
 test('S6 order surfaces use the purchased cart-item package snapshot', async () => {
-  const [ordersApi, orderDetailApi, success, detail, detailTypes] = await Promise.all([
+  const [ordersApi, orderDetailApi, orderReadModel, success, detail, detailTypes] = await Promise.all([
     read('app/api/orders/route.ts'),
     read('app/api/orders/[orderId]/route.ts'),
+    read('src/lib/customer-orders-server.ts'),
     read('app/checkout/success/CheckoutSuccessCard.tsx'),
     read('app/orders/[orderID]/OrderDetailPanels.tsx'),
     read('app/orders/[orderID]/orderDetailTypes.ts'),
   ])
 
-  assert.match(ordersApi, /cart_items[\s\S]*package_type/)
-  assert.match(orderDetailApi, /cart_items[\s\S]*package_type/)
+  assert.match(ordersApi, /loadCustomerOrders/)
+  assert.match(orderDetailApi, /loadCustomerOrders/)
+  assert.match(orderReadModel, /cart_items[\s\S]*package_type/)
   assert.match(success, /order\?\.items\?\.some\([^\n]*isSignatureVoicePackage\(item\.package_type\)\)/)
   assert.match(detail, /items\.some\([^\n]*isSignatureVoicePackage\(item\.package_type\)\)/)
   assert.match(detail, /isSignatureVoicePackage\(item\.package_type\)[\s\S]*SignatureVoiceBadge/)

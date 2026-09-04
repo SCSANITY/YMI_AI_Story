@@ -2,7 +2,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
 import { User, Book, CartItem, Language, GlobalContextType, ToggleFavoriteResult, PersonalizationData, type DisplayCurrency } from '@/types';
-import { BOOKS } from '@/data/books';
 import { supabase } from '@/lib/supabase';
 import { templateRowToBook } from '@/lib/book-catalog';
 import { normalizeStoryLanguage } from '@/lib/story-language';
@@ -208,7 +207,6 @@ export const GlobalProvider: React.FC<{
     return items.map((row: any) => {
       const creation = row.creations ?? {};
       const templateId = creation.template_id || creation.templates?.template_id;
-      const fallbackBook = BOOKS.find(b => b.bookID === templateId);
       const template = {
         ...(creation.templates ?? {}),
         cover_image_path: row.preview_cover_url || '',
@@ -217,20 +215,20 @@ export const GlobalProvider: React.FC<{
       const catalogBook = catalogTemplateToBook(templateId, template);
       const baseBook: Book = catalogBook ?? {
         bookID: templateId,
-        title: template?.name || fallbackBook?.title || templateId,
-        author: fallbackBook?.author || 'YMI',
+        title: template?.name || templateId,
+        author: 'YMI',
         price: Number(row.price_at_purchase ?? 0) || 0,
-        coverUrl: row.preview_cover_url || fallbackBook?.coverUrl || '',
-        showcaseImages: row.preview_cover_url ? [row.preview_cover_url] : fallbackBook?.showcaseImages || [],
-        description: template?.description || fallbackBook?.description || '',
-        category: fallbackBook?.category || 'Story',
-        ageRange: fallbackBook?.ageRange || 'Ages 2+',
-        gender: fallbackBook?.gender || 'Neutral',
+        coverUrl: row.preview_cover_url || '',
+        showcaseImages: row.preview_cover_url ? [row.preview_cover_url] : [],
+        description: template?.description || '',
+        category: template?.story_type || 'Story',
+        ageRange: template?.age_group === 'ages_6_plus' ? 'Ages 6+' : 'Ages 2+',
+        gender: template?.target_gender || 'Neutral',
       };
       const displayTitle = resolvePersonalizedBookTitle({
         templateId,
         templateName: creation.templates?.name,
-        fallbackTitle: fallbackBook?.title,
+        fallbackTitle: template?.name,
         customizeSnapshot: creation.customize_snapshot,
       });
       const book = {

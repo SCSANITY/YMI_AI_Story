@@ -76,7 +76,7 @@ export default function OrdersPage() {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/orders?customerId=${encodeURIComponent(customerId)}`, {
+    fetch('/api/orders', {
       credentials: 'include',
       cache: 'no-store',
     })
@@ -130,11 +130,7 @@ export default function OrdersPage() {
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          customerId: user?.customerId ?? null,
-        }),
       });
 
       if (!response.ok) {

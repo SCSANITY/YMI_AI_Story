@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 test('template detail uses preview-final Storage objects instead of Final config URLs', () => {
-  const route = read('app/api/templates/[templateId]/route.ts')
+  const route = read('src/lib/template-catalog-server.ts')
 
   assert.match(route, /\.list\(`\$\{templateId\}\/preview-final`/)
   assert.match(route, /parseTemplateLockedPreviewPages/)
