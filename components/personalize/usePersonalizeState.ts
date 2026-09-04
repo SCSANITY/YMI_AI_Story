@@ -3,11 +3,8 @@
 import { useState } from 'react';
 import type { StoryLanguage } from '@/types';
 
-export type PersonalizeStep = 1 | 2 | 2.5 | 3;
-
 export function usePersonalizeState() {
   // --- Form States ---
-  const [step, setStep] = useState<PersonalizeStep>(1);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [selectedLang, setSelectedLang] = useState<StoryLanguage>('English');
@@ -27,9 +24,6 @@ export function usePersonalizeState() {
   const [progress, setProgress] = useState(0);
 
   return {
-    step,
-    setStep,
-
     name,
     setName,
 

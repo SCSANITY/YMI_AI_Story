@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const personalize = fs.readFileSync(path.join(root, 'components/PersonalizePage.tsx'), 'utf8')
+const controller = fs.readFileSync(
+  path.join(root, 'components/personalize/usePreviewController.ts'),
+  'utf8'
+)
 
 test('Photo Versions selection switches the saved book snapshot immediately', () => {
   assert.match(
@@ -21,13 +25,14 @@ test('Photo Versions selection switches the saved book snapshot immediately', ()
 
 test('late image responses cannot overwrite a different selected photo version', () => {
   assert.match(
-    personalize,
-    /selectedPreviewJobIdRef\.current && selectedPreviewJobIdRef\.current !== jobId[\s\S]*?return false/
+    controller,
+    /selectedJobIdRef\.current && selectedJobIdRef\.current !== jobId[\s\S]*?return false/
   )
   assert.match(
-    personalize,
+    controller,
     /getPreviewPageAssets\(jobId,[\s\S]*?applyPreviewDisplayAssetsForJob\(jobId, assets\)/
   )
+  assert.doesNotMatch(personalize, /getPreviewPageAssets/)
   assert.equal(
     personalize.match(/pages: previewPages,/g)?.length,
     1,

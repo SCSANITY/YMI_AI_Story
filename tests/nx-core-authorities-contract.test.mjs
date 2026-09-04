@@ -74,3 +74,25 @@ test('customer orders use one read model and one list and detail API contract', 
     (error) => error?.code === 'ENOENT'
   )
 })
+
+test('Customize has one lifecycle authority and one Preview controller', async () => {
+  const [personalize, stage, controller] = await Promise.all([
+    read('components/PersonalizePage.tsx'),
+    read('components/personalize/usePersonalizeStage.ts'),
+    read('components/personalize/usePreviewController.ts'),
+  ])
+
+  assert.match(personalize, /usePreviewController/)
+  assert.match(personalize, /getPersistedPersonalizeStep\(stage\)/)
+  assert.doesNotMatch(personalize, /getJob\(|getPreviewPageAssets|pollForRemainingPreviewPages/)
+  assert.match(stage, /export function getPersistedPersonalizeStep/)
+  assert.match(controller, /activeWatchesRef/)
+  assert.equal(controller.match(/await getJob\(/g)?.length, 1)
+  assert.match(controller, /getPollDelayMs\(startedAt, doneAssetRetries\)/)
+  assert.match(controller, /visibilitychange[\s\S]*pageshow[\s\S]*focus/)
+
+  await assert.rejects(
+    access(path.join(root, 'components/personalize/usePersonalizeFlow.ts')),
+    (error) => error?.code === 'ENOENT'
+  )
+})

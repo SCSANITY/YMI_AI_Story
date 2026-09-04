@@ -12,6 +12,10 @@ export type PersonalizeStage =
   | 'GENERATING'
   | 'PREVIEW'
 
+export function getPersistedPersonalizeStep(stage: PersonalizeStage): 2 | 3 {
+  return stage === 'PREVIEW' ? 3 : 2
+}
+
 export type ExitIntent =
   | 'NONE'
   | 'CHECKOUT'

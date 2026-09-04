@@ -6,6 +6,7 @@ const routePath = new URL('../app/api/jobs/[jobId]/preview-url/route.ts', import
 const jobsServicePath = new URL('../src/services/jobs.ts', import.meta.url)
 const previewContractPath = new URL('../src/lib/preview-page-contract.ts', import.meta.url)
 const personalizePath = new URL('../components/PersonalizePage.tsx', import.meta.url)
+const previewControllerPath = new URL('../components/personalize/usePreviewController.ts', import.meta.url)
 const sharePreviewPath = new URL('../src/lib/share-preview.ts', import.meta.url)
 const orderFulfillmentPath = new URL('../src/lib/orderFulfillment.ts', import.meta.url)
 const readerPath = new URL('../app/api/my-books/[creationId]/reader/route.ts', import.meta.url)
@@ -23,10 +24,11 @@ test('structured Preview signing preserves authorization and no-store responses'
 })
 
 test('structured Personalize pages leave variant, share, cart, and Reader contracts intact', async () => {
-  const [jobsService, previewContract, personalize, sharePreview, orderFulfillment, reader] = await Promise.all([
+  const [jobsService, previewContract, personalize, previewController, sharePreview, orderFulfillment, reader] = await Promise.all([
     readFile(jobsServicePath, 'utf8'),
     readFile(previewContractPath, 'utf8'),
     readFile(personalizePath, 'utf8'),
+    readFile(previewControllerPath, 'utf8'),
     readFile(sharePreviewPath, 'utf8'),
     readFile(orderFulfillmentPath, 'utf8'),
     readFile(readerPath, 'utf8'),
@@ -36,8 +38,9 @@ test('structured Personalize pages leave variant, share, cart, and Reader contra
   assert.match(jobsService, /return parseSignedPreviewAssets\(await response\.json\(\)\)/)
   assert.match(previewContract, /Array\.isArray\(value\.urls\)/)
   assert.match(previewContract, /typeof value\.url === ['"]string['"]/)
-  assert.match(personalize, /getPreviewPageAssets/)
-  assert.match(personalize, /presentation: assets\.presentation/)
+  assert.match(personalize, /usePreviewController/)
+  assert.doesNotMatch(personalize, /getPreviewPageAssets/)
+  assert.match(previewController, /setPreviewBookPresentation\(assets\.presentation\)/)
   assert.match(personalize, /bookPresentation=\{previewBookPresentation\}/)
   assert.match(personalize, /commitPreviewVariant\(/)
   assert.match(personalize, /previewPublicShareImageUrl \|\| previewUrl/)
