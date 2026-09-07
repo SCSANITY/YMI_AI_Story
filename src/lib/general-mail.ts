@@ -19,7 +19,6 @@ import {
 
 const MAX_RECIPIENTS = 50
 const MAX_SUBJECT_LENGTH = 1000
-const MAX_BODY_LENGTH = 50000
 
 export type GeneralMailRecipients = {
   to: string[]
@@ -90,10 +89,6 @@ export function normalizeGeneralMailSubject(value: unknown) {
     .trim()
     .slice(0, MAX_SUBJECT_LENGTH)
   return subject || '(No subject)'
-}
-
-export function normalizeGeneralMailBody(value: unknown) {
-  return normalizeGeneralMailContent({ bodyText: value }).bodyText.slice(0, MAX_BODY_LENGTH)
 }
 
 export function normalizeGeneralMailDraftInput(value: unknown): GeneralMailDraftInput {

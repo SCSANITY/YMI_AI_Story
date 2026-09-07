@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { getOrCreateAnonSession } from '@/lib/session'
 import { UUID_REGEX } from '@/lib/validators'
 
@@ -54,12 +54,9 @@ function normalizeNullable(value: unknown) {
 }
 
 async function resolveCustomerFromAuth() {
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
-  if (!user?.id) return null
+  if (!user) return null
 
   const { data: customer, error } = await supabaseAdmin
     .from('customers')
@@ -148,13 +145,6 @@ export function ownerFilter(owner: CheckoutOwner) {
 export function scopeCheckoutOwnerQuery(query: any, owner: CheckoutOwner): any {
   const filter = ownerFilter(owner)
   return query.eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
-}
-
-export function ownerJson(owner: CheckoutOwner | null) {
-  if (!owner) return null
-  return owner.ownerType === 'customer'
-    ? { ownerType: 'customer', customerId: owner.customerId, email: owner.email }
-    : { ownerType: 'anon', anonSessionId: owner.anonSessionId }
 }
 
 export async function requireCheckoutOrderAccess(

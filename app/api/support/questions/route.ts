@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/support-ticket'
 
@@ -8,13 +8,9 @@ function normalizeQuestion(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
-  if (authError || !user?.id) {
+  if (!user) {
     return NextResponse.json({ error: 'Please log in before submitting a question.' }, { status: 401 })
   }
 

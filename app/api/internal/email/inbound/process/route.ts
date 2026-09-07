@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { noStoreJson } from '@/lib/http-response'
 import { processInboundEmailBacklog } from '@/lib/inbound-email-processing'
 import { processResendDeliveryEventBacklog } from '@/lib/resend-webhook-events'
 import { isInternalRequestAuthorized } from '@/lib/internal-request-auth'
@@ -8,10 +8,7 @@ export const maxDuration = 60
 
 async function run(request: Request) {
   if (!isInternalRequestAuthorized(request)) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401, headers: { 'Cache-Control': 'no-store' } }
-    )
+    return noStoreJson({ error: 'Unauthorized' }, 401)
   }
 
   try {
@@ -25,20 +22,14 @@ async function run(request: Request) {
         delivery,
       })
     }
-    return NextResponse.json(
-      {
-        processed: true,
-        inbound,
-        delivery,
-      },
-      { headers: { 'Cache-Control': 'no-store' } }
-    )
+    return noStoreJson({
+      processed: true,
+      inbound,
+      delivery,
+    })
   } catch (error) {
     console.error('[resend-inbound] backlog processing failed', error)
-    return NextResponse.json(
-      { error: 'Inbound backlog processing failed' },
-      { status: 500, headers: { 'Cache-Control': 'no-store' } }
-    )
+    return noStoreJson({ error: 'Inbound backlog processing failed' }, 500)
   }
 }
 

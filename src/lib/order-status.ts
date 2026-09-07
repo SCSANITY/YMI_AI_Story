@@ -8,13 +8,6 @@ export type OrderStatus =
   | 'cancelled'
   | 'refunded'
 
-const TRACKING_STAGE_INDEX: Record<string, number> = {
-  paid: 0,
-  production: 1,
-  shipped: 2,
-  delivered: 3,
-}
-
 const PAID_LIKE_STATUSES = new Set(['paid', 'production', 'shipped', 'delivered'])
 const SHIPPING_STATUSES = new Set(['paid', 'production', 'shipped'])
 const FINISHED_STATUSES = new Set(['delivered', 'cancelled', 'refunded'])
@@ -47,10 +40,6 @@ export function isShippingOrderStatus(value: unknown): boolean {
 
 export function isFinishedOrderStatus(value: unknown): boolean {
   return FINISHED_STATUSES.has(normalizeOrderStatus(value))
-}
-
-export function getOrderTrackingStageIndex(value: unknown): number {
-  return TRACKING_STAGE_INDEX[normalizeOrderStatus(value)] ?? 0
 }
 
 export function getOrderStatusLabelKey(value: unknown): string {

@@ -99,14 +99,6 @@ export function getFinalPagePath(orderId: string, pageNumber: number) {
   return `orders/${orderId}/final/pages/approved/page_${String(pageNumber).padStart(2, '0')}.png`
 }
 
-export function getFinalPageAiPath(orderId: string, pageNumber: number) {
-  return `orders/${orderId}/final/pages/ai/page_${String(pageNumber).padStart(2, '0')}.png`
-}
-
-export function getFinalPageManualPath(orderId: string, pageNumber: number) {
-  return `orders/${orderId}/final/pages/manual/page_${String(pageNumber).padStart(2, '0')}.png`
-}
-
 export function getFinalPdfPath(orderId: string) {
   return `orders/${orderId}/final/pdf/final.pdf`
 }

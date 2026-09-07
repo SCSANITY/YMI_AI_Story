@@ -66,7 +66,7 @@ test('order detail waits for resolved auth and refetches against the merged cust
 test('customer merge derives claim authority from the authenticated email only', async () => {
   const route = await read('app/api/customer/merge/route.ts')
   const context = await read('contexts/GlobalContext.tsx')
-  const authLookupIndex = route.indexOf('await supabase.auth.getUser()')
+  const authLookupIndex = route.indexOf('await getAuthenticatedUser()')
   const authEmailIndex = route.indexOf("const email = String(user.email ?? '')")
   const customerLookupIndex = route.indexOf(".from('customers')")
   const finalizeStart = context.indexOf('const finalizeAuth = useCallback')

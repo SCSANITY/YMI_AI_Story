@@ -161,13 +161,6 @@ export async function loadReleasedFinalPdfAssetsByJobId(
   return assetsByJobId
 }
 
-export function resolveLatestReleasedFinalPdfPath(
-  jobIds: Array<string | null | undefined>,
-  assetsByJobId: Map<string, ReleasedFinalPdfAsset>
-) {
-  return resolveLatestReleasedFinalPdfAsset(jobIds, assetsByJobId)?.pdfPath ?? null
-}
-
 export function resolveLatestReleasedFinalPdfAsset(
   jobIds: Array<string | null | undefined>,
   assetsByJobId: Map<string, ReleasedFinalPdfAsset>

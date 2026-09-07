@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
 
 async function resolveActor() {
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
   if (user?.id) {
     const { data: customer } = await supabaseAdmin

@@ -1,6 +1,6 @@
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { CollaborationLeadCreatePayload } from '@/types'
 
@@ -46,14 +46,10 @@ async function resolveAuthenticatedApplicant(): Promise<
   | { applicant: AuthenticatedApplicant; response?: never }
   | { applicant?: never; response: NextResponse }
 > {
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
   const accountEmail = String(user?.email ?? '').trim().toLowerCase()
-  if (authError || !user?.id || !accountEmail) {
+  if (!user || !accountEmail) {
     return {
       response: jsonNoStore({ error: 'Authentication required' }, { status: 401 }),
     }

@@ -1,4 +1,4 @@
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export type AdminCustomer = {
@@ -9,13 +9,9 @@ export type AdminCustomer = {
 }
 
 export async function getAuthenticatedCustomer(): Promise<AdminCustomer | null> {
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
-  if (authError || !user?.id) return null
+  if (!user) return null
 
   const { data, error } = await supabaseAdmin
     .from('customers')

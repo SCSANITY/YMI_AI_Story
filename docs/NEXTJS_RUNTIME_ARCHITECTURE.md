@@ -13,9 +13,11 @@ governance repository.
   Preview job/asset/version controller. UI components do not create competing
   workflow state.
 - Customer order collection and detail APIs share one server read model.
-- Authentication identity and checkout ownership come from the current server
-  session. Client-supplied customer IDs may be checked for mismatch but are not
-  identity authority.
+- Supabase user verification enters through one fail-closed Server-only
+  authority. Admin, customer, optional anonymous-actor, and checkout-owner
+  policies build their own authorization semantics above that verified user.
+  Client-supplied customer IDs may be checked for mismatch but are not identity
+  authority.
 - Repeated Route Handler behavior belongs in narrowly named server-only
   modules. There is no generic catch-all utility layer.
 - UI copy is currently English-only and is separate from Story Language, which
@@ -29,8 +31,9 @@ governance repository.
   normalized by `src/lib/book-catalog.ts`. `data/books.ts` is build-time route
   and SEO input only.
 - Checkout identity and owner-scoped queries enter through
-  `src/lib/checkout-owner.ts`; customer order collection and detail reads enter
-  through `src/lib/customer-orders-server.ts`.
+  `src/lib/checkout-owner.ts`; the underlying authenticated Supabase user enters
+  through `src/lib/authenticated-user.ts`. Customer order collection and detail
+  reads enter through `src/lib/customer-orders-server.ts`.
 - Route Handlers use `src/lib/http-response.ts` for private/no-store JSON
   responses and `src/lib/internal-request-auth.ts` for internal-secret or cron
   authorization.
@@ -105,3 +108,19 @@ Finals. The common CSS inventory was 293.91 KiB, with Personalize/Preview at
 300.21 KiB. The opening audit did not retain equivalent byte-level artifacts,
 so these values are the comparison baseline for later optimization and are not
 presented as an NX-001 size reduction.
+
+## Independent post-close audit
+
+The 2026-09-07 independent audit follow-up confirmed that the runtime remained
+free of orphan modules and ceremonial layers. Its verified residue was closed
+without changing product behavior: Windows CRLF checkouts now execute every
+external-contract SHA-256 comparison, all API Route Handlers share the
+fail-closed authenticated-user authority, the remaining equivalent JSON
+no-store responses use `src/lib/http-response.ts`, eight unreferenced exports
+were removed, and the Homepage banner cache is exported directly without a
+pass-through wrapper.
+
+All package test and contract scripts passed after the correction, including
+262/262 source contracts and the 45 external fixture hashes. Strict TypeScript,
+the 122-page Next.js production build, and full ESLint passed with zero errors
+and 66 pre-existing warnings.

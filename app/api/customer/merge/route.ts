@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   PurchaseOwnershipConflictError,
@@ -29,13 +29,9 @@ function mapProductType(bookType?: string) {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}))
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
-  if (authError || !user?.id) {
+  if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 

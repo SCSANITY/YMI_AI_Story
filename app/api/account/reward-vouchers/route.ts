@@ -1,6 +1,6 @@
 import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   claimVouchersForCustomerEmail,
@@ -65,13 +65,9 @@ function toApiVoucher(row: any, voucher: CheckoutVoucher, status: 'active' | 're
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createServerSupabase()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    const user = await getAuthenticatedUser()
 
-    if (authError || !user?.id) {
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 

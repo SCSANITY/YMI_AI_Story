@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { sendNewsletterConfirmationEmail } from '@/lib/email'
 import { resolveGuestOtpClientIp } from '@/lib/guest-otp'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getOrCreateAnonSession } from '@/lib/session'
 import { getSiteUrl } from '@/lib/site-url'
@@ -64,13 +64,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, confirmationRequired: true })
   }
 
-  const [supabase, anonSessionId] = await Promise.all([
-    createServerSupabase(),
+  const [user, anonSessionId] = await Promise.all([
+    getAuthenticatedUser(),
     getOrCreateAnonSession().catch(() => null),
   ])
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
   let customerId: string | null = null
   if (user?.id) {

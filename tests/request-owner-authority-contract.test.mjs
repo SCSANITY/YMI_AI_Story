@@ -42,9 +42,13 @@ test('customer-owned routes derive authority from the server session', async () 
 })
 
 test('caller-provided customer IDs are mismatch checks, never credentials', async () => {
-  const ownerAuthority = await read('src/lib/checkout-owner.ts')
-  assert.match(ownerAuthority, /createServerSupabase\(\)/)
-  assert.match(ownerAuthority, /supabase\.auth\.getUser\(\)/)
+  const [ownerAuthority, authAuthority] = await Promise.all([
+    read('src/lib/checkout-owner.ts'),
+    read('src/lib/authenticated-user.ts'),
+  ])
+  assert.match(ownerAuthority, /getAuthenticatedUser\(\)/)
+  assert.match(authAuthority, /createServerSupabase\(\)/)
+  assert.match(authAuthority, /supabase\.auth\.getUser\(\)/)
   assert.match(ownerAuthority, /expectedCustomerId !== customer\.customerId/)
   assert.match(ownerAuthority, /Authentication required for this customer/)
 

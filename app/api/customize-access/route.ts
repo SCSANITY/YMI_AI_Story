@@ -1,15 +1,8 @@
-import { NextResponse } from 'next/server'
 import { getCustomizeAccessSettings } from '@/lib/customize-access-server'
+import { noStoreJson } from '@/lib/http-response'
 
 export async function GET() {
   const customizeAccess = await getCustomizeAccessSettings()
 
-  return NextResponse.json(
-    { customizeAccess },
-    {
-      headers: {
-        'Cache-Control': 'no-store',
-      },
-    }
-  )
+  return noStoreJson({ customizeAccess })
 }

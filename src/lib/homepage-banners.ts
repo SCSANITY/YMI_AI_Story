@@ -14,7 +14,7 @@ export function resolveHomepageBannerAssetUrl(source: HomepageBannerAssetSource,
   return supabaseAdmin.storage.from(HOMEPAGE_BANNER_BUCKET).getPublicUrl(path).data.publicUrl
 }
 
-const loadPublishedHomepageBanners = unstable_cache(
+export const getPublishedHomepageBanners = unstable_cache(
   async () => {
     const { data, error } = await supabaseAdmin
       .from('homepage_banner_slots')
@@ -56,7 +56,3 @@ const loadPublishedHomepageBanners = unstable_cache(
     tags: [HOMEPAGE_BANNER_CACHE_TAG],
   },
 )
-
-export function getPublishedHomepageBanners() {
-  return loadPublishedHomepageBanners()
-}

@@ -78,7 +78,7 @@ test('the application API authenticates before parsing input and owns customer i
   const bodyIndex = route.indexOf('request.json()', postStart)
   assert.ok(authIndex > postStart)
   assert.ok(bodyIndex > authIndex)
-  assert.match(route, /supabase\.auth\.getUser\(\)/)
+  assert.match(route, /getAuthenticatedUser\(\)/)
   assert.match(route, /\.eq\('auth_user_id', user\.id\)/)
   assert.match(route, /customer_id: auth\.applicant\.customerId/)
   assert.match(route, /account_email_snapshot: auth\.applicant\.accountEmail/)

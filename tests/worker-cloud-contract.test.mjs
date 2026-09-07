@@ -9,7 +9,7 @@ const readFixture = (path) => readFile(new URL(path, root), 'utf8')
 describe('WC-001 external contracts', () => {
   it('keeps every external fixture pinned by a platform-neutral SHA-256', async () => {
     const manifest = await readFixture('SHA256SUMS')
-    for (const line of manifest.trim().split('\n')) {
+    for (const line of manifest.trim().split(/\r?\n/)) {
       const [, expected, path] = line.match(/^([0-9A-F]{64})  (.+)$/) || []
       assert.ok(expected && path, `Invalid SHA256SUMS line: ${line}`)
       const source = await readFixture(path)

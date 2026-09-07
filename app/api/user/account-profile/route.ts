@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 
@@ -64,13 +64,9 @@ async function updateCustomerProfile(customerId: string, updates: Record<string,
 }
 
 export async function GET() {
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
-  if (authError || !user?.id) {
+  if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 
@@ -92,13 +88,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const supabase = await createServerSupabase()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
-  if (authError || !user?.id) {
+  if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
 

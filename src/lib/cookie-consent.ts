@@ -1,5 +1,3 @@
-export type CookieConsentCategory = 'necessary' | 'analytics' | 'marketing'
-
 export type CookieConsentPreferences = {
   necessary: true
   analytics: boolean
@@ -69,11 +67,6 @@ export function storeCookieConsent(consent: CookieConsentPreferences) {
     COOKIE_CONSENT_CHANGE_EVENT,
     { detail: consent },
   ))
-}
-
-export function hasCookieConsent(category: Exclude<CookieConsentCategory, 'necessary'>) {
-  const consent = readStoredCookieConsent()
-  return Boolean(consent?.[category])
 }
 
 export function openCookieSettings() {
