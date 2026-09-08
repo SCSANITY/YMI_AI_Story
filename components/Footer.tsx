@@ -438,6 +438,7 @@ export const Footer: React.FC = () => {
                   alt="YMI Story"
                   width={512}
                   height={436}
+                  sizes="47px"
                   className="h-10 w-auto"
                 />
               </div>

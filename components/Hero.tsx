@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import ReactDOM from 'react-dom'
 import { Button } from '@/components/Button'
 import {
   BookOpenCheck,
@@ -77,6 +78,12 @@ const HERO_FACTS: ReadonlyArray<{
 // ── Hero ──────────────────────────────────────────────────────────────────────
 
 export const Hero: React.FC = () => {
+  ReactDOM.preload('/hero-poster-v2.webp', {
+    as: 'image',
+    fetchPriority: 'high',
+    type: 'image/webp',
+  })
+
   const { t } = useI18n()
   const router = useRouter()
   const prefersReducedMotion = useReducedMotion()

@@ -36,10 +36,12 @@ test('public catalog covers use responsive optimization while private media stay
 
 test('Hero ships device-sized silent media with a poster and visible initial headline', async () => {
   const hero = await read('components/Hero.tsx')
+  const footer = await read('components/Footer.tsx')
   const config = await read('next.config.ts')
   const vercel = await read('vercel.json')
 
   assert.match(hero, /poster="\/hero-poster-v2\.webp"/)
+  assert.match(hero, /ReactDOM\.preload\('\/hero-poster-v2\.webp',[\s\S]{0,120}fetchPriority: 'high'/)
   assert.match(hero, /window\.matchMedia\('\(max-width: 767px\)'\)/)
   assert.match(hero, /\? '\/hero-video-mobile-v1\.mp4'/)
   assert.match(hero, /: '\/hero-video-desktop-v1\.mp4'/)
@@ -50,6 +52,7 @@ test('Hero ships device-sized silent media with a poster and visible initial hea
   assert.match(config, /max-age=31536000, immutable/)
   assert.match(config, /hero-poster-v2\.webp/)
   assert.doesNotMatch(vercel, /hero-video\.mp4|hero-poster/)
+  assert.match(footer, /src="\/logo\.webp"[\s\S]{0,160}sizes="47px"/)
 })
 
 test('consent initializes directly after hydration without waiting on unrelated global state', async () => {

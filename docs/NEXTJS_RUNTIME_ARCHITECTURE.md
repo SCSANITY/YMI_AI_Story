@@ -74,7 +74,8 @@ governance repository.
   one mobile or desktop source so a recovery render cannot speculatively fetch
   the other device asset. Both versioned files are silent, fast-start MP4
   assets with immutable cache headers; the smaller versioned
-  `hero-poster-v2.webp` provides the first visual frame.
+  `hero-poster-v2.webp` provides the first visual frame and is emitted as an
+  early high-priority React resource hint.
 - First-time or stale Cookie consent is present in server output. A small
   version-aware head bootstrap hides it before paint only when current stored
   consent is valid. Optional tracking remains unresolved until the client
