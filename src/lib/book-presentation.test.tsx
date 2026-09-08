@@ -44,6 +44,27 @@ function lockedLeaf(
   }
 }
 
+function coverLeaf(url: string): BookLeaf {
+  return {
+    id: 'cover',
+    url,
+    role: 'preview_cover',
+    spreadIndex: 0,
+    side: null,
+    pageNumber: null,
+    source: { layout: 'single-page' },
+  }
+}
+
+const pageContentLabels = {
+  previewAlt: 'Preview',
+  previewPageStillCreating: 'Creating',
+  previewPageLocked: 'Locked preview',
+  backToCover: 'Back to cover',
+  nextPage: 'Next page',
+  previousPage: 'Previous page',
+}
+
 describe('physical-book leaf presentation', () => {
   it('pairs explicit left and right leaves without inspecting filenames', () => {
     const left = singlePageLeaf('left-id', 'opaque-source-one', 4, 'left')
@@ -113,6 +134,35 @@ describe('physical-book leaf presentation', () => {
     assert.match(html, /https:\/\/signed\.example\/left\.webp/)
     assert.match(html, /https:\/\/signed\.example\/right\.webp/)
     assert.doesNotMatch(html, /width:200%/)
+  })
+
+  it('crops only the Preview physical-book cover by 13.5 percent on every edge', () => {
+    const presentation = buildBookPresentation([coverLeaf('generated-cover.webp')], {
+      coverRole: 'preview_cover',
+      interiorRole: 'preview_interior',
+    })
+    const commonProps = {
+      side: 'right' as const,
+      spreadIndex: 0,
+      bookType: 'basic' as const,
+      previewImageErrors: new Set<string>(),
+      bookPresentation: presentation,
+      currentSpread: 0,
+      isFlipping: false,
+      canTurnNext: true,
+      canTurnPrev: false,
+      resolvedTitle: 'Test book',
+      labels: pageContentLabels,
+      onImageError: () => undefined,
+      onTurnPage: () => undefined,
+      onReturnToCover: () => undefined,
+    }
+    const previewHtml = renderToStaticMarkup(<PreviewBookPageContent {...commonProps} />)
+    const readerHtml = renderToStaticMarkup(<PreviewBookPageContent {...commonProps} mode="reader" />)
+
+    assert.match(previewHtml, /data-preview-cover-crop-percent="13\.5"/)
+    assert.match(previewHtml, /transform:scale\(1\.36986301369863\)/)
+    assert.doesNotMatch(readerHtml, /data-preview-cover-crop-percent|transform:scale\(/)
   })
 
   it('replaces each masked preview1 underlay independently as its generated leaf arrives', () => {

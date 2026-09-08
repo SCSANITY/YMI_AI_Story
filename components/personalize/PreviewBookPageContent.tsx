@@ -6,6 +6,12 @@ import type { PersonalizeBookType } from '@/components/personalize/BookPackageSe
 import { BookLeafImage } from '@/components/personalize/BookLeafImage'
 import { resolveBookLeaf, type BookPresentation } from '@/lib/book-presentation'
 
+const PREVIEW_COVER_BLEED_CROP_PERCENT = 13.5
+const PREVIEW_COVER_BLEED_STYLE: CSSProperties = {
+  transform: `scale(${100 / (100 - PREVIEW_COVER_BLEED_CROP_PERCENT * 2)})`,
+  transformOrigin: 'center',
+}
+
 type PreviewBookPageContentProps = {
   mode?: 'preview' | 'reader'
   side: 'left' | 'right'
@@ -82,6 +88,8 @@ function PreviewBookPageContentComponent({
             src={generatedCover}
             alt={resolvedTitle || labels.previewAlt}
             className="relative z-10 h-full w-full object-contain"
+            style={mode === 'preview' ? PREVIEW_COVER_BLEED_STYLE : undefined}
+            data-preview-cover-crop-percent={mode === 'preview' ? PREVIEW_COVER_BLEED_CROP_PERCENT : undefined}
             decoding="async"
             loading="eager"
             fetchPriority="high"

@@ -407,7 +407,7 @@ export async function getPreviewPageAssets(
   jobId: string,
   pageIndices?: number[],
   options?: { size?: 'small' | 'full'; customerId?: string | null }
-): Promise<SignedPreviewAssets> {
+): Promise<SignedPreviewAssets | null> {
   if (!jobId) {
     throw new Error('Missing job ID')
   }
@@ -431,6 +431,7 @@ export async function getPreviewPageAssets(
     { credentials: 'include', cache: 'no-store' },
     15000
   )
+  if (response.status === 202) return null
   if (!response.ok) {
     let details = ''
     try {

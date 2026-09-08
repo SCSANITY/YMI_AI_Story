@@ -178,16 +178,17 @@ export function usePreviewController({
 
           if (job.status === 'running' || job.status === 'done') {
             try {
-              const assets = resolvePreviewDisplayAssets(
-                await getPreviewPageAssets(jobId, undefined, {
-                  size: 'small',
-                  customerId: customerId ?? null,
-                })
-              )
-              if (controller.signal.aborted) break
-              if (assets.coverUrl) {
-                latestAssets = assets
-                options.onAssets?.(jobId, assets)
+              const signedAssets = await getPreviewPageAssets(jobId, undefined, {
+                size: 'small',
+                customerId: customerId ?? null,
+              })
+              if (signedAssets) {
+                const assets = resolvePreviewDisplayAssets(signedAssets)
+                if (controller.signal.aborted) break
+                if (assets.coverUrl) {
+                  latestAssets = assets
+                  options.onAssets?.(jobId, assets)
+                }
               }
             } catch {
               // Job state remains authoritative; signed assets can lag briefly.
@@ -256,12 +257,12 @@ export function usePreviewController({
 
     const refreshPromise = (async () => {
       try {
-        const assets = resolvePreviewDisplayAssets(
-          await getPreviewPageAssets(jobId, undefined, {
-            size: 'small',
-            customerId: customerId ?? null,
-          })
-        )
+        const signedAssets = await getPreviewPageAssets(jobId, undefined, {
+          size: 'small',
+          customerId: customerId ?? null,
+        })
+        if (!signedAssets) return false
+        const assets = resolvePreviewDisplayAssets(signedAssets)
         if (activeJobIdRef.current !== jobId) return false
         if (!applyPreviewDisplayAssetsForJob(jobId, assets)) return false
         setError(null)

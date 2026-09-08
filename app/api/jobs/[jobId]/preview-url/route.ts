@@ -68,7 +68,7 @@ export async function GET(
   }
 
   if (job.status === 'running' && !pages.length) {
-    return jsonNoStore({ error: 'Preview not ready' }, 400)
+    return jsonNoStore({ status: 'pending' }, 202)
   }
   if (outputAssets?.schema_version !== 3 || outputAssets?.asset_layout !== 'single-page') {
     return jsonNoStore({ error: 'Unsupported Preview asset contract' }, 400)
