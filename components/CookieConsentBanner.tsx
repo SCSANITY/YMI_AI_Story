@@ -17,13 +17,12 @@ import { useI18n } from '@/lib/useI18n'
 const defaultDraft = createCookieConsentPreferences({ analytics: false, marketing: false })
 
 export function CookieConsentBanner() {
-  const { user, isHydrated } = useGlobalContext()
+  const { user } = useGlobalContext()
   const { t } = useI18n()
   const [consent, setConsent] = useState<CookieConsentPreferences | null>(null)
   const [draft, setDraft] = useState<CookieConsentPreferences>(defaultDraft)
-  const [isBannerVisible, setIsBannerVisible] = useState(false)
+  const [isBannerVisible, setIsBannerVisible] = useState(true)
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false)
-  const [hasInitialized, setHasInitialized] = useState(false)
 
   const syncConsentToDb = useCallback(async (nextConsent: CookieConsentPreferences) => {
     if (!user?.customerId) return
@@ -45,28 +44,29 @@ export function CookieConsentBanner() {
   }, [syncConsentToDb])
 
   useEffect(() => {
-    if (!isHydrated || hasInitialized) return
-
     const stored = readStoredCookieConsent()
-    if (stored?.version === COOKIE_CONSENT_VERSION) {
-      queueMicrotask(() => {
+    let active = true
+
+    queueMicrotask(() => {
+      if (!active) return
+      if (stored?.version === COOKIE_CONSENT_VERSION) {
         setConsent(stored)
         setDraft(stored)
         setIsBannerVisible(false)
-        setHasInitialized(true)
-      })
-      return
-    }
+        return
+      }
 
-    queueMicrotask(() => {
       setDraft(stored ?? defaultDraft)
       setIsBannerVisible(true)
-      setHasInitialized(true)
     })
-  }, [hasInitialized, isHydrated])
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
-    if (!isHydrated || !user?.customerId) return
+    if (!user?.customerId) return
 
     const stored = readStoredCookieConsent()
     if (stored?.version === COOKIE_CONSENT_VERSION) {
@@ -95,7 +95,7 @@ export function CookieConsentBanner() {
     return () => {
       active = false
     }
-  }, [isHydrated, syncConsentToDb, user?.customerId])
+  }, [syncConsentToDb, user?.customerId])
 
   useEffect(() => {
     const openSettings = () => {
@@ -143,12 +143,10 @@ export function CookieConsentBanner() {
     marketing: draft.marketing,
   }))
 
-  if (!isHydrated) return null
-
   return (
     <>
       {isBannerVisible ? (
-        <div className="fixed inset-x-0 bottom-0 z-[90] px-3 pb-3 sm:px-5 sm:pb-5">
+        <div className="ymi-cookie-consent-banner fixed inset-x-0 bottom-0 z-[90] px-3 pb-3 sm:px-5 sm:pb-5">
           <div
             role="dialog"
             aria-label={t('cookies.bannerTitle')}

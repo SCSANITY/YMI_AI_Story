@@ -30,6 +30,13 @@ const nextConfig: NextConfig = {
     }))
 
     return [
+      ...[
+        '/hero-video-mobile-v1.mp4',
+        '/hero-video-desktop-v1.mp4',
+      ].map((source) => ({
+        source,
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      })),
       {
         source: '/:path*',
         headers: [

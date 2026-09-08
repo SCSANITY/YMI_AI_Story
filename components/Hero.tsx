@@ -89,7 +89,7 @@ export const Hero: React.FC = () => {
       {/* ── Full-viewport section ─────────────────────────────────────────── */}
       <div className="relative w-full" style={{ minHeight: '100svh' }}>
 
-        {/* Instant-play video background: no poster gate, no hydration-delayed mount. */}
+        {/* The poster paints immediately while device-sized autoplay video starts. */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-[#f4d5bd] md:bg-[#f7e2d0]">
           <video
             autoPlay
@@ -97,9 +97,11 @@ export const Hero: React.FC = () => {
             loop
             playsInline
             preload="auto"
+            poster="/hero-poster.webp"
             className="absolute left-1/2 top-24 aspect-video w-[calc(100%-2rem)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-[1.35rem] border border-white/65 bg-[#f4d5bd] object-contain shadow-[0_22px_70px_rgba(120,53,15,0.22)] md:inset-0 md:left-0 md:top-0 md:h-full md:w-full md:max-w-none md:translate-x-0 md:rounded-none md:border-0 md:bg-[#f7e2d0] md:object-cover md:shadow-none"
           >
-            <source src="/hero-video.mp4" type="video/mp4" />
+            <source media="(max-width: 767px)" src="/hero-video-mobile-v1.mp4" type="video/mp4" />
+            <source src="/hero-video-desktop-v1.mp4" type="video/mp4" />
           </video>
         </div>
 
@@ -144,8 +146,8 @@ export const Hero: React.FC = () => {
                 unchanged. */}
             <h1 className="mb-4 font-cormorant leading-[1.04] sm:mb-5">
               <motion.span
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ y: 20 }}
+                animate={{ y: 0 }}
                 transition={{ delay: 0.24, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
                 className="block text-gray-900"
                 style={{ fontSize: 'clamp(2.4rem, 5.5vw, 5rem)' }}
@@ -153,8 +155,8 @@ export const Hero: React.FC = () => {
                 {t('hero.titleLine1')}
               </motion.span>
               <motion.span
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ y: 20 }}
+                animate={{ y: 0 }}
                 transition={{ delay: 0.34, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
                 className="block bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 bg-clip-text text-transparent"
                 style={{ fontSize: 'clamp(2.4rem, 5.5vw, 5rem)' }}

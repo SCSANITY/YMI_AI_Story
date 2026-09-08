@@ -26,6 +26,7 @@ import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { MiniCart } from '@/components/cart/MiniCart'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
 import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
+import { normalizeAppPathname } from '@/lib/app-pathname'
 
 const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then((module) => module.MyRewardsModal), {
   ssr: false,
@@ -34,7 +35,7 @@ const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then(
 
 export const Navbar: React.FC = () => {
   const router = useRouter()
-  const pathname = usePathname()
+  const pathname = normalizeAppPathname(usePathname())
   const {
     user,
     cart,
@@ -69,7 +70,7 @@ export const Navbar: React.FC = () => {
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
-  const isCartOpen = Boolean(pathname) && cartOpenPath === pathname
+  const isCartOpen = cartOpenPath === pathname
   const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
     customerId: user?.customerId,
     pathname,

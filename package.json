@@ -16,6 +16,7 @@
     "kol:tests": "tsx --test src/lib/kol-partnership-email.test.ts tests/kol-partnership-*.test.mjs",
     "legal:tests": "tsx --test src/lib/legal-publishing.test.ts src/lib/published-legal-content.test.ts",
     "tracking:tests": "tsx --test src/lib/tracking-policy.test.ts",
+    "homepage:tests": "tsx --test src/lib/app-pathname.test.ts src/lib/storage-images.test.ts tests/homepage-performance-contract.test.mjs",
     "email-center:tests": "tsx --test src/lib/email-template-catalog.test.tsx tests/email-center-contract.test.mjs",
     "signature-voice:tests": "tsx --test src/lib/signature-voice.test.ts tests/signature-voice-*.test.mjs",
     "pricing:tests": "tsx --test src/lib/package-pricing.test.ts tests/package-pricing-authority-contract.test.mjs",

@@ -2,7 +2,7 @@
 
 import type { CSSProperties, ReactNode } from 'react'
 import Image from 'next/image'
-import { isSupabaseStorageImage } from '@/lib/storage-images'
+import { shouldBypassNextImageOptimization } from '@/lib/storage-images'
 
 type BookCardCoverProps = {
   src: string
@@ -32,7 +32,7 @@ export function BookCardCover({
   isMuted = false,
 }: BookCardCoverProps) {
   const cutout = isCutoutImage(src)
-  const unoptimized = isSupabaseStorageImage(src)
+  const unoptimized = shouldBypassNextImageOptimization(src)
   const imageStyle: CSSProperties | undefined = coverZoom ? { transform: `scale(${coverZoom})` } : undefined
 
   if (cutout) {

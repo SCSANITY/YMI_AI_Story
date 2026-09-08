@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html[data-ymi-cookie-consent='stored'] .ymi-cookie-consent-banner {
+  display: none;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

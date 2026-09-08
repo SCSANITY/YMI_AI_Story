@@ -61,6 +61,23 @@ governance repository.
 - Large files are split only when doing so removes duplicate state or moves a
   stable business rule to its single authority.
 
+## Homepage delivery boundary
+
+- `AppShell` and `Navbar` normalize the root prerender pathname through
+  `src/lib/app-pathname.ts`, so the server and hydrated client select the same
+  Home shell. Hydration-warning suppression is not part of this contract.
+- Public Supabase catalog covers and published Homepage banners use the Next
+  Image pipeline for viewport-sized delivery. Signed and authenticated customer
+  media bypass that shared optimizer cache through
+  `src/lib/storage-images.ts`.
+- Hero autoplay remains a single `<video>` element with one mobile and one
+  desktop source. Both versioned files are silent, fast-start MP4 assets with
+  immutable cache headers; `hero-poster.webp` provides the first visual frame.
+- First-time or stale Cookie consent is present in server output. A small
+  version-aware head bootstrap hides it before paint only when current stored
+  consent is valid. Optional tracking remains unresolved until the client
+  consent authority positively loads that preference.
+
 ## Worker queue boundary
 
 The browser never calls the Node Worker or RunPod. Web routes create durable

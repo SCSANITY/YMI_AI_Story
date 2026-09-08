@@ -1,5 +1,6 @@
 import './globals.css';
 import { AppShell } from '@/components/AppShell';
+import { CookieConsentBootstrap } from '@/components/CookieConsentBootstrap';
 import { Cormorant_Garamond, Inter, Playfair_Display } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
 import { DEFAULT_OG_IMAGE, DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE, SITE_NAME, SITE_URL, absoluteUrl } from '@/lib/seo';
@@ -91,12 +92,15 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${playfair.variable} ${cormorant.variable}`}
     >
-      {supabaseOrigin ? (
-        <head>
-          <link rel="preconnect" href={supabaseOrigin} crossOrigin="" />
-          <link rel="dns-prefetch" href={supabaseOrigin} />
-        </head>
-      ) : null}
+      <head>
+        <CookieConsentBootstrap />
+        {supabaseOrigin ? (
+          <>
+            <link rel="preconnect" href={supabaseOrigin} crossOrigin="" />
+            <link rel="dns-prefetch" href={supabaseOrigin} />
+          </>
+        ) : null}
+      </head>
       <body className="min-h-screen bg-white text-gray-900 font-sans">
         <AppShell>
           {children}

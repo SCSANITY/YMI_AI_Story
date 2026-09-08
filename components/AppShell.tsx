@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { GlobalProvider, useGlobalContext } from '@/contexts/GlobalContext'
 import { Navbar } from '@/components/Navbar'
+import { normalizeAppPathname } from '@/lib/app-pathname'
 import { getTranslatedInternalNavigationHref } from '@/lib/browser-translation'
 import {
   CUSTOMIZE_ACCESS_BLOCKED_EVENT,
@@ -18,10 +19,7 @@ const LoginModal = dynamic(() => import('@/components/LoginModal').then((module)
 
 const CookieConsentBanner = dynamic(
   () => import('@/components/CookieConsentBanner').then((module) => module.CookieConsentBanner),
-  {
-    ssr: false,
-    loading: () => null,
-  },
+  { ssr: true },
 )
 
 const ConsentGatedTagAdapter = dynamic(
@@ -72,10 +70,10 @@ function CustomizeAccessBlockedModalGate({ enabled }: { enabled: boolean }) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const isMaintenanceRoute = pathname?.startsWith('/maintenance') ?? false
-  const isPersonalizeRoute = pathname?.startsWith('/personalize/') ?? false
-  const isAdminRoute = pathname?.startsWith('/admin') ?? false
+  const pathname = normalizeAppPathname(usePathname())
+  const isMaintenanceRoute = pathname.startsWith('/maintenance')
+  const isPersonalizeRoute = pathname.startsWith('/personalize/')
+  const isAdminRoute = pathname.startsWith('/admin')
   const isPasswordRecoveryRoute = pathname === '/reset-password'
   const isTrackingFrameRoute = pathname === '/tracking/meta-frame'
   const showGlobalNav = !isMaintenanceRoute && !isPersonalizeRoute && !isAdminRoute && !isPasswordRecoveryRoute
