@@ -10,11 +10,15 @@ const read = (relativePath) => readFile(path.join(root, relativePath), 'utf8')
 test('the shared shell normalizes the root prerender path and server-renders consent deterministically', async () => {
   const shell = await read('components/AppShell.tsx')
   const navbar = await read('components/Navbar.tsx')
+  const layout = await read('app/layout.tsx')
 
   assert.match(shell, /normalizeAppPathname\(usePathname\(\)\)/)
   assert.match(navbar, /normalizeAppPathname\(usePathname\(\)\)/)
   assert.match(shell, /CookieConsentBanner = dynamic/)
   assert.match(shell, /CookieConsentBanner = dynamic\([\s\S]{0,180}\{ ssr: true \}/)
+  assert.match(layout, /suppressHydrationWarning/)
+  assert.doesNotMatch(shell, /suppressHydrationWarning/)
+  assert.doesNotMatch(navbar, /suppressHydrationWarning/)
 })
 
 test('public catalog covers use responsive optimization while private media stays isolated', async () => {
@@ -33,13 +37,19 @@ test('public catalog covers use responsive optimization while private media stay
 test('Hero ships device-sized silent media with a poster and visible initial headline', async () => {
   const hero = await read('components/Hero.tsx')
   const config = await read('next.config.ts')
+  const vercel = await read('vercel.json')
 
-  assert.match(hero, /poster="\/hero-poster\.webp"/)
-  assert.match(hero, /media="\(max-width: 767px\)" src="\/hero-video-mobile-v1\.mp4"/)
-  assert.match(hero, /src="\/hero-video-desktop-v1\.mp4"/)
+  assert.match(hero, /poster="\/hero-poster-v2\.webp"/)
+  assert.match(hero, /window\.matchMedia\('\(max-width: 767px\)'\)/)
+  assert.match(hero, /\? '\/hero-video-mobile-v1\.mp4'/)
+  assert.match(hero, /: '\/hero-video-desktop-v1\.mp4'/)
+  assert.match(hero, /src=\{videoSrc \?\? undefined\}/)
+  assert.doesNotMatch(hero, /<source/)
   assert.doesNotMatch(hero, /src="\/hero-video\.mp4"/)
   assert.doesNotMatch(hero, /initial=\{\{ opacity: 0, y: 20 \}\}[\s\S]{0,160}hero\.titleLine/)
   assert.match(config, /max-age=31536000, immutable/)
+  assert.match(config, /hero-poster-v2\.webp/)
+  assert.doesNotMatch(vercel, /hero-video\.mp4|hero-poster/)
 })
 
 test('consent initializes directly after hydration without waiting on unrelated global state', async () => {

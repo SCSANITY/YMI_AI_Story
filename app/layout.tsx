@@ -87,10 +87,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // The consent bootstrap intentionally sets one data attribute before
+  // hydration. Suppression is scoped to <html>; descendant mismatches still
+  // surface and the application shell must remain structurally identical.
   return (
     <html
       lang="en"
       className={`${inter.variable} ${playfair.variable} ${cormorant.variable}`}
+      suppressHydrationWarning
     >
       <head>
         <CookieConsentBootstrap />

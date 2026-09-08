@@ -70,13 +70,18 @@ governance repository.
   Image pipeline for viewport-sized delivery. Signed and authenticated customer
   media bypass that shared optimizer cache through
   `src/lib/storage-images.ts`.
-- Hero autoplay remains a single `<video>` element with one mobile and one
-  desktop source. Both versioned files are silent, fast-start MP4 assets with
-  immutable cache headers; `hero-poster.webp` provides the first visual frame.
+- Hero autoplay remains a single `<video>` element. Hydration selects exactly
+  one mobile or desktop source so a recovery render cannot speculatively fetch
+  the other device asset. Both versioned files are silent, fast-start MP4
+  assets with immutable cache headers; the smaller versioned
+  `hero-poster-v2.webp` provides the first visual frame.
 - First-time or stale Cookie consent is present in server output. A small
   version-aware head bootstrap hides it before paint only when current stored
   consent is valid. Optional tracking remains unresolved until the client
-  consent authority positively loads that preference.
+  consent authority positively loads that preference. The bootstrap's single
+  intentional `<html>` data-attribute difference is scoped with React's
+  hydration-warning boundary; application-shell descendant mismatches remain
+  visible and are never suppressed.
 
 ## Worker queue boundary
 

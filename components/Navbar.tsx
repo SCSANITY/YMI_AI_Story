@@ -331,6 +331,7 @@ export const Navbar: React.FC = () => {
               width={512}
               height={436}
               priority={isHomePage}
+              sizes="(max-width: 767px) 38px, 38px"
               className="h-8 w-auto"
             />
           </Link>

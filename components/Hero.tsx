@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/Button'
 import {
   BookOpenCheck,
@@ -80,6 +80,24 @@ export const Hero: React.FC = () => {
   const { t } = useI18n()
   const router = useRouter()
   const prefersReducedMotion = useReducedMotion()
+  const [videoSrc, setVideoSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+
+    queueMicrotask(() => {
+      if (!active) return
+      setVideoSrc(prefersReducedMotion
+        ? null
+        : window.matchMedia('(max-width: 767px)').matches
+          ? '/hero-video-mobile-v1.mp4'
+          : '/hero-video-desktop-v1.mp4')
+    })
+
+    return () => {
+      active = false
+    }
+  }, [prefersReducedMotion])
 
   const goToBooks = () => router.push('/books')
 
@@ -92,17 +110,16 @@ export const Hero: React.FC = () => {
         {/* The poster paints immediately while device-sized autoplay video starts. */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-[#f4d5bd] md:bg-[#f7e2d0]">
           <video
-            autoPlay
+            autoPlay={Boolean(videoSrc)}
             muted
             loop
             playsInline
-            preload="auto"
-            poster="/hero-poster.webp"
+            preload={videoSrc ? 'auto' : 'none'}
+            poster="/hero-poster-v2.webp"
+            src={videoSrc ?? undefined}
+            aria-hidden="true"
             className="absolute left-1/2 top-24 aspect-video w-[calc(100%-2rem)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-[1.35rem] border border-white/65 bg-[#f4d5bd] object-contain shadow-[0_22px_70px_rgba(120,53,15,0.22)] md:inset-0 md:left-0 md:top-0 md:h-full md:w-full md:max-w-none md:translate-x-0 md:rounded-none md:border-0 md:bg-[#f7e2d0] md:object-cover md:shadow-none"
-          >
-            <source media="(max-width: 767px)" src="/hero-video-mobile-v1.mp4" type="video/mp4" />
-            <source src="/hero-video-desktop-v1.mp4" type="video/mp4" />
-          </video>
+          />
         </div>
 
         {/* ── Gradient overlays ──────────────────────────────────────────── */}
