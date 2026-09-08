@@ -63,9 +63,12 @@ governance repository.
 
 ## Homepage delivery boundary
 
-- `AppShell` and `Navbar` normalize the root prerender pathname through
-  `src/lib/app-pathname.ts`, so the server and hydrated client select the same
-  Home shell. Hydration-warning suppression is not part of this contract.
+- `AppShell` and `Navbar` derive route shape from the root layout's selected
+  segments through `src/lib/app-pathname.ts`, so the server and hydrated client
+  select the same Home shell even for Next.js bot-aware HTML streaming. Full
+  pathname hooks remain limited to consumers that do not control root-shell
+  structure. Descendant hydration-warning suppression is not part of this
+  contract.
 - Public Supabase catalog covers and published Homepage banners use the Next
   Image pipeline for viewport-sized delivery. Signed and authenticated customer
   media bypass that shared optimizer cache through

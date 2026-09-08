@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useGlobalContext } from '@/contexts/GlobalContext'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter, useSelectedLayoutSegments } from 'next/navigation'
 import {
   ArrowLeft,
   Heart,
@@ -26,7 +26,7 @@ import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { MiniCart } from '@/components/cart/MiniCart'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
 import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
-import { normalizeAppPathname } from '@/lib/app-pathname'
+import { layoutSegmentsToPathname } from '@/lib/app-pathname'
 
 const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then((module) => module.MyRewardsModal), {
   ssr: false,
@@ -35,7 +35,7 @@ const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then(
 
 export const Navbar: React.FC = () => {
   const router = useRouter()
-  const pathname = normalizeAppPathname(usePathname())
+  const pathname = layoutSegmentsToPathname(useSelectedLayoutSegments())
   const {
     user,
     cart,

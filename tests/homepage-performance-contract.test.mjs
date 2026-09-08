@@ -7,13 +7,15 @@ import test from 'node:test'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relativePath) => readFile(path.join(root, relativePath), 'utf8')
 
-test('the shared shell normalizes the root prerender path and server-renders consent deterministically', async () => {
+test('the shared shell derives route shape from layout segments and server-renders consent deterministically', async () => {
   const shell = await read('components/AppShell.tsx')
   const navbar = await read('components/Navbar.tsx')
   const layout = await read('app/layout.tsx')
 
-  assert.match(shell, /normalizeAppPathname\(usePathname\(\)\)/)
-  assert.match(navbar, /normalizeAppPathname\(usePathname\(\)\)/)
+  assert.match(shell, /layoutSegmentsToPathname\(useSelectedLayoutSegments\(\)\)/)
+  assert.match(navbar, /layoutSegmentsToPathname\(useSelectedLayoutSegments\(\)\)/)
+  assert.doesNotMatch(shell, /usePathname/)
+  assert.doesNotMatch(navbar, /usePathname/)
   assert.match(shell, /CookieConsentBanner = dynamic/)
   assert.match(shell, /CookieConsentBanner = dynamic\([\s\S]{0,180}\{ ssr: true \}/)
   assert.match(layout, /suppressHydrationWarning/)

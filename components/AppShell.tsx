@@ -2,10 +2,10 @@
 
 import React, { Suspense, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { usePathname } from 'next/navigation'
+import { useSelectedLayoutSegments } from 'next/navigation'
 import { GlobalProvider, useGlobalContext } from '@/contexts/GlobalContext'
 import { Navbar } from '@/components/Navbar'
-import { normalizeAppPathname } from '@/lib/app-pathname'
+import { layoutSegmentsToPathname } from '@/lib/app-pathname'
 import { getTranslatedInternalNavigationHref } from '@/lib/browser-translation'
 import {
   CUSTOMIZE_ACCESS_BLOCKED_EVENT,
@@ -70,7 +70,7 @@ function CustomizeAccessBlockedModalGate({ enabled }: { enabled: boolean }) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = normalizeAppPathname(usePathname())
+  const pathname = layoutSegmentsToPathname(useSelectedLayoutSegments())
   const isMaintenanceRoute = pathname.startsWith('/maintenance')
   const isPersonalizeRoute = pathname.startsWith('/personalize/')
   const isAdminRoute = pathname.startsWith('/admin')
