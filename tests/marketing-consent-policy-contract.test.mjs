@@ -51,7 +51,7 @@ test('the policy explicitly excludes child, customer, and private route data fro
   assert.match(policy, /uploaded materials for advertising profiles/)
 })
 
-test('the new disclosure version re-prompts users and names providers in Cookie Settings', async () => {
+test('the current disclosure version keeps the approved vendor boundaries and legal policy', async () => {
   const consent = await read('src/lib/cookie-consent.ts')
   const banner = await read('components/CookieConsentBanner.tsx')
   const messages = await read('src/lib/i18n-messages.ts')
@@ -61,27 +61,54 @@ test('the new disclosure version re-prompts users and names providers in Cookie 
 
   assert.match(consent, /COOKIE_CONSENT_VERSION = '2026-07-v2'/)
   assert.match(banner, /stored\?\.version === COOKIE_CONSENT_VERSION/)
-  assert.match(messages, /Allows Google Analytics to measure coarse site usage and performance/)
-  assert.match(messages, /Allows Google Ads measurement and Meta Pixel/)
-  assert.match(messages, /They stay off unless you allow them/)
+  assert.match(messages, /Help us see which pages and stories people spend time on/)
+  assert.match(messages, /Let us measure whether our ads reach families who actually want a book/)
+  assert.doesNotMatch(messages, /They stay off unless you allow them/)
   assert.match(legalDocuments, /effectiveDate: 'August 28, 2026'/)
   assert.match(legalDocuments, /version: '2026-08-28-v3'/)
   assert.match(publishedLoader, /privacy: 'August 28, 2026'/)
   assert.match(footer, /publishedLegalContent\?\.footerEffectiveDates/)
 })
 
-test('the first cookie layer requires an explicit choice without preselecting optional tracking', async () => {
+test('the first cookie layer is compact, symmetric, and does not preselect optional tracking', async () => {
   const banner = await read('components/CookieConsentBanner.tsx')
   const messages = await read('src/lib/i18n-messages.ts')
 
   assert.match(banner, /defaultDraft = createCookieConsentPreferences\(\{ analytics: false, marketing: false \}\)/)
+  assert.match(banner, /setDraft\(defaultDraft\)[\s\S]*setIsBannerVisible\(!wasCookieConsentDismissedForSession\(\)\)/)
   assert.match(banner, /onClick=\{rejectOptional\}[\s\S]*cookies\.rejectOptional/)
   assert.match(banner, /onClick=\{acceptAll\}[\s\S]*cookies\.acceptAll/)
-  assert.match(banner, /onClick=\{\(\) => setIsPreferencesOpen\(true\)\}[\s\S]*cookies\.manageChoices/)
-  assert.match(banner, /grid grid-cols-1[\s\S]*sm:grid-cols-2[\s\S]*sm:col-span-2/)
-  assert.match(messages, /Optional cookies let Google and Meta process limited device information and approved, coarse site and shopping-flow events/)
-  assert.match(messages, /never send children\\'s names, photos, recordings, customer contact details, or internal identifiers/)
-  assert.match(messages, /'cookies\.manageChoices': 'Cookie settings'/)
+  assert.match(banner, /onClick=\{openPreferences\}[\s\S]*cookies\.manageChoices/)
+  assert.match(banner, /role="dialog"[\s\S]*aria-label=\{t\('cookies\.bannerTitle'\)\}/)
+  assert.match(banner, /href="\/privacy"[\s\S]*cookies\.privacyPolicy/)
+  assert.match(messages, /We use cookies to see which stories families love most and to keep our ads relevant/)
+  assert.match(messages, /No child photos or names are ever included/)
+  assert.match(messages, /'cookies\.rejectOptional': 'Reject all'/)
+  assert.match(messages, /'cookies\.manageChoices': 'Manage preferences'/)
+})
+
+test('the detailed preference layer offers all three choices and plain-language reassurance', async () => {
+  const banner = await read('components/CookieConsentBanner.tsx')
+  const messages = await read('src/lib/i18n-messages.ts')
+
+  assert.match(banner, /onClick=\{rejectOptional\}[\s\S]*onClick=\{acceptAll\}[\s\S]*onClick=\{saveDraft\}/)
+  assert.match(banner, /cookies\.whyThisHelps/)
+  assert.match(banner, /cookies\.reassurance/)
+  assert.match(messages, /We're a small team — this is how we learn what to build next/)
+  assert.match(messages, /Better measurement means fewer wasted ads and lower prices for you/)
+  assert.match(messages, /We never share child photos, names, or uploaded media with any advertising service/)
+})
+
+test('dismissal remains unset and is scoped to the current browser session', async () => {
+  const consent = await read('src/lib/cookie-consent.ts')
+  const banner = await read('components/CookieConsentBanner.tsx')
+  const bootstrap = await read('components/CookieConsentBootstrap.tsx')
+
+  assert.match(consent, /COOKIE_CONSENT_DISMISSED_KEY/)
+  assert.match(consent, /window\.sessionStorage\.setItem\(COOKIE_CONSENT_DISMISSED_KEY, COOKIE_CONSENT_VERSION\)/)
+  assert.match(banner, /event\.key !== 'Escape'/)
+  assert.match(banner, /dismissCookieConsentForSession\(\)/)
+  assert.match(bootstrap, /window\.sessionStorage\.getItem/)
 })
 
 test('vendor runtime stays confined to the single S3 tracking boundary', async () => {

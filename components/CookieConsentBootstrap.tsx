@@ -1,4 +1,5 @@
 import {
+  COOKIE_CONSENT_DISMISSED_KEY,
   COOKIE_CONSENT_STORAGE_KEY,
   COOKIE_CONSENT_VERSION,
 } from '@/lib/cookie-consent'
@@ -10,6 +11,7 @@ const bootstrapScript = `
   try {
     var raw = window.localStorage.getItem(${JSON.stringify(COOKIE_CONSENT_STORAGE_KEY)});
     var consent = raw ? JSON.parse(raw) : null;
+    var dismissed = window.sessionStorage.getItem(${JSON.stringify(COOKIE_CONSENT_DISMISSED_KEY)});
     var isCurrent = Boolean(
       consent &&
       consent.necessary === true &&
@@ -17,7 +19,7 @@ const bootstrapScript = `
       typeof consent.marketing === 'boolean' &&
       consent.version === ${JSON.stringify(COOKIE_CONSENT_VERSION)}
     );
-    if (isCurrent) {
+    if (isCurrent || dismissed === ${JSON.stringify(COOKIE_CONSENT_VERSION)}) {
       document.documentElement.setAttribute(${JSON.stringify(COOKIE_CONSENT_DATA_ATTRIBUTE)}, 'stored');
     } else {
       document.documentElement.removeAttribute(${JSON.stringify(COOKIE_CONSENT_DATA_ATTRIBUTE)});

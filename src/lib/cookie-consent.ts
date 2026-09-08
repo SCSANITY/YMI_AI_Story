@@ -8,6 +8,7 @@ export type CookieConsentPreferences = {
 
 export const COOKIE_CONSENT_VERSION = '2026-07-v2'
 export const COOKIE_CONSENT_STORAGE_KEY = 'ymi_cookie_consent'
+export const COOKIE_CONSENT_DISMISSED_KEY = 'ymi_cookie_consent_dismissed'
 export const COOKIE_CONSENT_OPEN_EVENT = 'ymi:open-cookie-settings'
 export const COOKIE_CONSENT_CHANGE_EVENT = 'ymi:cookie-consent-change'
 
@@ -63,10 +64,21 @@ export function readCurrentCookieConsent(): CookieConsentPreferences | null {
 export function storeCookieConsent(consent: CookieConsentPreferences) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, JSON.stringify(consent))
+  window.sessionStorage.removeItem(COOKIE_CONSENT_DISMISSED_KEY)
   window.dispatchEvent(new CustomEvent<CookieConsentPreferences>(
     COOKIE_CONSENT_CHANGE_EVENT,
     { detail: consent },
   ))
+}
+
+export function dismissCookieConsentForSession() {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(COOKIE_CONSENT_DISMISSED_KEY, COOKIE_CONSENT_VERSION)
+}
+
+export function wasCookieConsentDismissedForSession() {
+  if (typeof window === 'undefined') return false
+  return window.sessionStorage.getItem(COOKIE_CONSENT_DISMISSED_KEY) === COOKIE_CONSENT_VERSION
 }
 
 export function openCookieSettings() {

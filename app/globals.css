@@ -4,6 +4,34 @@ html[data-ymi-cookie-consent='stored'] .ymi-cookie-consent-banner {
   display: none;
 }
 
+.ymi-cookie-consent-banner {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  opacity: 0;
+  transform: translateY(calc(100% + 1.5rem));
+  animation: ymi-cookie-consent-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) 800ms forwards;
+}
+
+@keyframes ymi-cookie-consent-enter {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 640px) {
+  .ymi-cookie-consent-banner {
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ymi-cookie-consent-banner {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
