@@ -48,6 +48,7 @@ type UsePreviewControllerOptions = {
 const MAX_FETCH_FAILURES = 8
 const MAX_DONE_ASSET_RETRIES = 6
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
+const CAPACITY_NOTICE_MIN_WAIT_MS = 4_000
 
 class PreviewWatchTerminalError extends Error {}
 
@@ -93,6 +94,7 @@ export function usePreviewController({
   const [previewBookPresentation, setPreviewBookPresentation] =
     useState<BookPresentation | null>(null)
   const [previewVariants, setPreviewVariants] = useState<PreviewVariantView[]>([])
+  const [capacityWaitingByJobId, setCapacityWaitingByJobId] = useState<Record<string, true>>({})
   const [error, setError] = useState<string | null>(null)
   const activeWatchesRef = useRef<Map<string, ActiveWatch>>(new Map())
   const refreshPromisesRef = useRef<Map<string, Promise<boolean>>>(new Map())
@@ -104,6 +106,7 @@ export function usePreviewController({
   })
   const activeJobIdRef = useRef(activeJobId)
   const selectedJobIdRef = useRef(selectedPreviewJobId)
+  const capacityWaitStartedAtRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     activeJobIdRef.current = activeJobId
@@ -136,10 +139,32 @@ export function usePreviewController({
     return applyPreviewDisplayAssets(assets)
   }, [applyPreviewDisplayAssets])
 
+  const syncCapacityWaiting = useCallback((jobId: string, waiting: boolean) => {
+    if (waiting) {
+      const firstObservedAt = capacityWaitStartedAtRef.current.get(jobId) ?? Date.now()
+      capacityWaitStartedAtRef.current.set(jobId, firstObservedAt)
+      if (Date.now() - firstObservedAt < CAPACITY_NOTICE_MIN_WAIT_MS) return
+
+      setCapacityWaitingByJobId((current) => (
+        current[jobId] ? current : { ...current, [jobId]: true }
+      ))
+      return
+    }
+
+    capacityWaitStartedAtRef.current.delete(jobId)
+    setCapacityWaitingByJobId((current) => {
+      if (!current[jobId]) return current
+      const next = { ...current }
+      delete next[jobId]
+      return next
+    })
+  }, [])
+
   const cancelWatch = useCallback((jobId: string | null) => {
     if (!jobId) return
     activeWatchesRef.current.get(jobId)?.controller.abort()
-  }, [])
+    syncCapacityWaiting(jobId, false)
+  }, [syncCapacityWaiting])
 
   const watchJob = useCallback((jobId: string, options: PreviewWatchOptions) => {
     const existing = activeWatchesRef.current.get(jobId)
@@ -161,6 +186,7 @@ export function usePreviewController({
           const job = await getJob(jobId, customerId ?? null)
           if (controller.signal.aborted) break
           fetchFailures = 0
+          syncCapacityWaiting(jobId, job.capacity_state === 'waiting')
 
           const progress = Number(job.progress)
           if (Number.isFinite(progress)) {
@@ -238,7 +264,7 @@ export function usePreviewController({
 
     activeWatchesRef.current.set(jobId, { controller, promise })
     return promise
-  }, [customerId])
+  }, [customerId, syncCapacityWaiting])
 
   const refresh = useCallback((
     reason: PreviewRefreshReason,
@@ -332,6 +358,7 @@ export function usePreviewController({
   useEffect(() => () => {
     activeWatchesRef.current.forEach(({ controller }) => controller.abort())
     activeWatchesRef.current.clear()
+    capacityWaitStartedAtRef.current.clear()
   }, [])
 
   return {
@@ -348,6 +375,7 @@ export function usePreviewController({
     setPreviewBookPresentation,
     previewVariants,
     setPreviewVariants,
+    capacityWaitingByJobId,
     applyPreviewDisplayAssets,
     applyPreviewDisplayAssetsForJob,
     error,

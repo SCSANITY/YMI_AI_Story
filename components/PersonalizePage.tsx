@@ -378,6 +378,7 @@ export default function PersonalizePage({
     setPreviewBookPresentation,
     previewVariants,
     setPreviewVariants,
+    capacityWaitingByJobId,
     applyPreviewDisplayAssetsForJob,
     error: previewError,
     setError: setPreviewError,
@@ -619,6 +620,14 @@ export default function PersonalizePage({
     previewVariants.some((variant) => variant.status === 'generating');
   const isPreviewVariantLimitReached =
     previewVariantSessionCount >= PREVIEW_VARIANT_SESSION_CAP;
+  const isLoadingPreviewCapacityWaiting = Boolean(
+    viewState.showLoading && previewJobId && capacityWaitingByJobId[previewJobId]
+  );
+  const isPreviewVariantCapacityWaiting = Boolean(
+    viewState.showPreview && previewVariants.some(
+      (variant) => variant.status === 'generating' && capacityWaitingByJobId[variant.jobId]
+    )
+  );
 
   const handleOpenPreviewShare = useCallback(async () => {
     if (!creationId) {
@@ -2987,6 +2996,9 @@ export default function PersonalizePage({
                       changePhotoDisabled={isPreviewVariantBusy || isPreviewVariantLimitReached}
                       changePhotoBusy={isPreviewVariantBusy}
                       changePhotoError={previewVariantError}
+                      capacityWaiting={isPreviewVariantCapacityWaiting}
+                      capacityTitle={t('personalize.capacityPhotoTitle')}
+                      capacityBody={t('personalize.capacityPhotoBody')}
                       onPhotoUpload={handlePhotoUpload}
                     />
                   }
@@ -3078,11 +3090,15 @@ export default function PersonalizePage({
           loadingText={loadingText}
           progress={progress}
           countdownSeconds={loadingCountdownSeconds}
+          capacityWaiting={isLoadingPreviewCapacityWaiting}
           labels={{
             back: t('common.back'),
             estimatedWait: t('personalize.estimatedWait', { seconds: loadingCountdownSeconds }),
             almostThere: t('personalize.almostThere'),
+            capacityWaitStatus: t('personalize.capacityWaitStatus'),
             didYouKnow: t('personalize.didYouKnow'),
+            capacityTitle: t('personalize.capacityLoadingTitle'),
+            capacityBody: t('personalize.capacityLoadingBody'),
           }}
           onBack={handleLoadingBack}
         />

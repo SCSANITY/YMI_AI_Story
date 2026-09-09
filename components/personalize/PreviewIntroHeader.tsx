@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react'
 import { Camera } from 'lucide-react'
+import { PreviewCapacityNotice } from '@/components/personalize/PreviewCapacityNotice'
 
 type PreviewIntroHeaderProps = {
   title: string
@@ -13,6 +14,9 @@ type PreviewIntroHeaderProps = {
   changePhotoDisabled: boolean
   changePhotoBusy: boolean
   changePhotoError: string | null
+  capacityWaiting: boolean
+  capacityTitle: string
+  capacityBody: string
   onPhotoUpload: (event: React.ChangeEvent<HTMLInputElement>) => void
 }
 
@@ -26,6 +30,9 @@ function PreviewIntroHeaderComponent({
   changePhotoDisabled,
   changePhotoBusy,
   changePhotoError,
+  capacityWaiting,
+  capacityTitle,
+  capacityBody,
   onPhotoUpload,
 }: PreviewIntroHeaderProps) {
   return (
@@ -55,6 +62,12 @@ function PreviewIntroHeaderComponent({
           {changePhotoError ? (
             <p className="mt-2 max-w-md text-xs font-medium text-red-600">{changePhotoError}</p>
           ) : null}
+          <PreviewCapacityNotice
+            visible={capacityWaiting}
+            variant="photo"
+            title={capacityTitle}
+            body={capacityBody}
+          />
         </div>
       ) : null}
     </div>

@@ -4,6 +4,7 @@ import { memo } from 'react'
 import dynamic from 'next/dynamic'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, Info, Sparkles } from 'lucide-react'
+import { PreviewCapacityNotice } from '@/components/personalize/PreviewCapacityNotice'
 
 const MiniGame = dynamic(() => import('@/components/MiniGame').then((module) => module.MiniGame), {
   ssr: false,
@@ -19,11 +20,15 @@ type LoadingPreviewOverlayProps = {
   loadingText: string
   progress: number
   countdownSeconds: number
+  capacityWaiting: boolean
   labels: {
     back: string
     estimatedWait: string
     almostThere: string
+    capacityWaitStatus: string
     didYouKnow: string
+    capacityTitle: string
+    capacityBody: string
   }
   onBack: () => void
 }
@@ -33,13 +38,14 @@ function LoadingPreviewOverlayComponent({
   loadingText,
   progress,
   countdownSeconds,
+  capacityWaiting,
   labels,
   onBack,
 }: LoadingPreviewOverlayProps) {
   if (!show) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[160] flex animate-in flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-amber-50/97 via-white/97 to-orange-50/97 p-5 fade-in duration-200 sm:p-8">
+    <div className="fixed inset-0 z-[160] flex animate-in flex-col items-center overflow-y-auto bg-gradient-to-br from-amber-50/97 via-white/97 to-orange-50/97 p-5 fade-in duration-200 sm:p-8">
       <button
         type="button"
         onClick={onBack}
@@ -50,7 +56,7 @@ function LoadingPreviewOverlayComponent({
         <span>{labels.back}</span>
       </button>
 
-      <div className="relative z-10 flex w-full max-w-5xl flex-col items-center text-center">
+      <div className="relative z-10 flex min-h-full w-full max-w-5xl flex-col items-center justify-center py-14 text-center sm:py-10">
         <div className="relative mb-1 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-100 bg-white/80 shadow-[0_12px_26px_rgba(217,119,6,0.12)]">
           <Sparkles className="h-8 w-8 text-amber-500" />
         </div>
@@ -60,7 +66,11 @@ function LoadingPreviewOverlayComponent({
             {loadingText}
           </h3>
           <p className="font-mono text-sm text-gray-500">
-            {countdownSeconds > 0 ? labels.estimatedWait : labels.almostThere}
+            {capacityWaiting
+              ? labels.capacityWaitStatus
+              : countdownSeconds > 0
+                ? labels.estimatedWait
+                : labels.almostThere}
           </p>
         </div>
 
@@ -68,6 +78,13 @@ function LoadingPreviewOverlayComponent({
           <div className="relative mx-auto mb-5 h-2 w-full max-w-lg overflow-hidden rounded-full bg-gray-200 shadow-inner">
             <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} />
           </div>
+
+          <PreviewCapacityNotice
+            visible={capacityWaiting}
+            variant="loading"
+            title={labels.capacityTitle}
+            body={labels.capacityBody}
+          />
 
           <div className="flex min-h-[260px] w-full items-start justify-center sm:min-h-[300px]">
             <MiniGame />

@@ -5,6 +5,7 @@ import {
   resolveCheckoutOwner,
   scopeCheckoutOwnerQuery,
 } from '@/lib/checkout-owner'
+import { resolvePreviewCapacityState } from '@/lib/preview-capacity'
 
 type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancel_requested' | 'cancelled'
 
@@ -45,7 +46,7 @@ export async function GET(
     supabaseAdmin
       .from('jobs')
       .select(
-        'job_id, job_type, story_language, selected_book_type, status, progress, error_message, input_snapshot, output_assets, created_at, updated_at'
+        'job_id, job_type, story_language, selected_book_type, status, progress, error_message, input_snapshot, output_assets, provider_runs, created_at, updated_at'
       )
       .eq('job_id', jobId),
     owner
@@ -58,7 +59,18 @@ export async function GET(
     )
   }
 
-  return NextResponse.json(job, { headers: NO_STORE_HEADERS })
+  const { provider_runs: providerRuns, ...publicJob } = job
+  return NextResponse.json(
+    {
+      ...publicJob,
+      capacity_state: resolvePreviewCapacityState({
+        jobType: job.job_type,
+        status: job.status,
+        providerRuns,
+      }),
+    },
+    { headers: NO_STORE_HEADERS }
+  )
 }
 
 export async function DELETE(

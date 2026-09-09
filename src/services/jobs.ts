@@ -1,6 +1,7 @@
 import { isUuid } from '@/lib/validators'
 import type { PendingUserAssetUpload } from '@/services/assets'
 import { parseSignedPreviewAssets, type SignedPreviewAssets } from '@/lib/preview-page-contract'
+import type { PreviewCapacityState } from '@/lib/preview-capacity'
 
 export interface JobRecord {
   job_id: string
@@ -12,6 +13,7 @@ export interface JobRecord {
   error_message?: string | null
   input_snapshot: Record<string, unknown>
   output_assets?: Record<string, unknown> | null
+  capacity_state?: PreviewCapacityState
   created_at?: string
   updated_at?: string
 }
