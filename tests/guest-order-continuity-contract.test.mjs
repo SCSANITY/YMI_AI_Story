@@ -119,6 +119,10 @@ test('exactly the three order-link emails share the secure access notice', async
   assert.match(emailService, /sendOrderDeliveryEmail[\s\S]*\/orders\/\$\{params\.orderId\}/)
   assert.match(emailService, /sendLogisticsUpdateEmail[\s\S]*\/orders\/\$\{params\.orderId\}/)
   assert.match(emailService, /sendUnpaidReminderEmail[\s\S]*\/checkout\?orderId=\$\{params\.orderId\}/)
+  assert.match(emailService, /sendUnpaidReminderEmail[\s\S]*subject: reminderCopy\.subject/)
+  assert.match(unpaid, /buildAbandonmentEmailCopy/)
+  assert.match(unpaid, /Bring \$\{childName\}'s Story Home/)
+  assert.doesNotMatch(unpaid, /Still Interested in Your Story|Resume Checkout/)
 })
 
 test('cookie-free purchase recovery stays scoped to purchased creations and generated jobs', async () => {

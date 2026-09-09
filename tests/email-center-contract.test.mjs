@@ -5,11 +5,12 @@ import test from 'node:test'
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
 test('Admin Email Center exposes overview, templates, and delivery events without editing', async () => {
-  const [page, tabs, library, navigation] = await Promise.all([
+  const [page, tabs, library, navigation, previewScript] = await Promise.all([
     read('app/admin/(protected)/emails/page.tsx'),
     read('components/admin/sections/emails/EmailCenterTabs.tsx'),
     read('components/admin/sections/emails/EmailTemplateLibrary.tsx'),
     read('components/admin/adminNavigation.ts'),
+    read('scripts/render-email-previews.tsx'),
   ])
 
   assert.match(page, /Email Center/)
@@ -22,6 +23,9 @@ test('Admin Email Center exposes overview, templates, and delivery events withou
   assert.match(library, /sandbox=""/)
   assert.doesNotMatch(`${page}\n${library}`, /contentEditable|Save Template|Publish Template|Send Test/)
   assert.match(navigation, /Email Center/)
+  assert.match(page, /hero-poster-v2\.webp/)
+  assert.match(previewScript, /hero-poster-v2\.webp/)
+  assert.doesNotMatch(`${page}\n${previewScript}`, /hero-poster\.webp/)
 })
 
 test('one catalog owns all active email families and excludes the retired General Inbox sender', async () => {

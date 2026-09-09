@@ -41,3 +41,13 @@ test('provider-owned and freeform families do not render misleading local previe
     assert.equal(await renderEmailTemplatePreview(template.id), null)
   }
 })
+
+test('unpaid reminder preview uses the personalized child-name copy', async () => {
+  const template = EMAIL_TEMPLATE_CATALOG.find((entry) => entry.id === 'unpaid-reminder')
+  const html = await renderEmailTemplatePreview('unpaid-reminder')
+
+  assert.equal(template?.subject, '{Name}’s magical journey is waiting! ✨')
+  assert.match(html ?? '', /Sophie’s magical journey is waiting! ✨/)
+  assert.match(html ?? '', /Give Sophie a gift they’ll treasure forever—your reserved copy is ready for printing!/)
+  assert.doesNotMatch(html ?? '', /Still Interested in Your Story|Resume Checkout/)
+})

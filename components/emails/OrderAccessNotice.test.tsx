@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { render } from '@react-email/render'
-import { AbandonmentEmail } from './AbandonmentEmail'
+import { AbandonmentEmail, buildAbandonmentEmailCopy } from './AbandonmentEmail'
 import { DeliveryEmail } from './DeliveryEmail'
 import { LogisticsUpdateEmail } from './LogisticsUpdateEmail'
 import { ORDER_ACCESS_NOTICE_TEXT } from './OrderAccessNotice'
@@ -52,6 +52,40 @@ test('keeps the unpaid checkout-resume email outside the order-access promise', 
 
   assert.doesNotMatch(html, noticePattern)
   assert.doesNotMatch(html, new RegExp(ORDER_ACCESS_NOTICE_TEXT, 'i'))
+})
+
+test('personalizes the unpaid checkout reminder from the story child name', async () => {
+  const items = [{ name: "Mia's Forest Adventure", quantity: 1, childName: '  Mia  ' }]
+  const copy = buildAbandonmentEmailCopy(items)
+
+  assert.deepEqual(copy, {
+    subject: 'Mia’s magical journey is waiting! ✨',
+    title: 'Mia’s magical journey is waiting! ✨',
+    body: 'You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give Mia a gift they’ll treasure forever—your reserved copy is ready for printing!',
+    cta: "Bring Mia's Story Home",
+  })
+
+  const html = await render(
+    <AbandonmentEmail
+      orderId="order-1"
+      resumeUrl="https://www.ymistory.com/checkout?orderId=order-1"
+      items={items}
+    />
+  )
+
+  assert.match(html, /Mia’s magical journey is waiting! ✨/)
+  assert.match(html, /Give Mia a gift they’ll treasure forever—your reserved copy is ready for printing!/)
+  assert.match(html, /Bring Mia(?:'|&#x27;)s Story Home/)
+  assert.doesNotMatch(html, /Still Interested in Your Story|Resume Checkout/)
+})
+
+test('uses natural unpaid-reminder copy when a legacy item has no child name', () => {
+  assert.deepEqual(buildAbandonmentEmailCopy([]), {
+    subject: 'Your magical journey is waiting! ✨',
+    title: 'Your magical journey is waiting! ✨',
+    body: 'You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give someone special a gift they’ll treasure forever—your reserved copy is ready for printing!',
+    cta: 'Bring This Story Home',
+  })
 })
 
 test('shipped email links directly to a validated carrier URL and labels tracking-only updates', async () => {

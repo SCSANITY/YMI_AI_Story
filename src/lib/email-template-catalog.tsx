@@ -116,7 +116,7 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     ownership: 'web',
     triggerMode: 'automatic',
     trigger: 'The daily secured cron finds an active reminder for an unpaid order.',
-    subject: 'Complete your checkout - {order}',
+    subject: '{Name}’s magical journey is waiting! ✨',
     sender: 'Support mailbox',
     description: 'Returns the customer to checkout and summarizes the books still waiting.',
     variants: DEFAULT_VARIANT,
@@ -278,6 +278,7 @@ export async function renderEmailTemplatePreview(
             {
               name: 'The Secret Journey Through Eight Plants',
               quantity: 1,
+              childName: 'Sophie',
               coverImageUrl,
             },
           ]}

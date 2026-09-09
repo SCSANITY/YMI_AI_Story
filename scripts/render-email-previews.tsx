@@ -161,7 +161,7 @@ async function main() {
   for (const file of readdirSync(OUT_DIR)) {
     if (file.endsWith('.html')) unlinkSync(join(OUT_DIR, file))
   }
-  copyFileSync(join(__dirname, '..', 'public', 'hero-poster.webp'), join(OUT_DIR, SAMPLE_COVER))
+  copyFileSync(join(__dirname, '..', 'public', 'hero-poster-v2.webp'), join(OUT_DIR, SAMPLE_COVER))
   // Mirror production email assets so relative URLs resolve in the preview iframes.
   const assetsDir = join(__dirname, '..', 'public', 'email-assets')
   for (const f of readdirSync(assetsDir)) {

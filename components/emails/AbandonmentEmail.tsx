@@ -5,6 +5,7 @@ import { EmailLayout, emailAsset, emailTheme, emailButtons } from './EmailLayout
 export type AbandonmentItem = {
   name: string
   quantity: number
+  childName?: string
   /** Personalized cover preview; falls back to the decorative placeholder */
   coverImageUrl?: string
 }
@@ -17,6 +18,28 @@ type AbandonmentEmailProps = {
 }
 
 const MAX_COVERS = 8
+
+export function buildAbandonmentEmailCopy(items: readonly AbandonmentItem[]) {
+  const childName = items
+    .map((item) => item.childName?.trim().replace(/\s+/g, ' '))
+    .find((name): name is string => Boolean(name))
+
+  if (!childName) {
+    return {
+      subject: 'Your magical journey is waiting! ✨',
+      title: 'Your magical journey is waiting! ✨',
+      body: 'You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give someone special a gift they’ll treasure forever—your reserved copy is ready for printing!',
+      cta: 'Bring This Story Home',
+    }
+  }
+
+  return {
+    subject: `${childName}’s magical journey is waiting! ✨`,
+    title: `${childName}’s magical journey is waiting! ✨`,
+    body: `You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give ${childName} a gift they’ll treasure forever—your reserved copy is ready for printing!`,
+    cta: `Bring ${childName}'s Story Home`,
+  }
+}
 
 /**
  * Book cover gallery: 1 book → large centered cover; 2-3 → static centered
@@ -50,11 +73,12 @@ function CoverGallery({ items }: { items: AbandonmentItem[] }) {
 
 export function AbandonmentEmail({ resumeUrl, items, displayId, orderId }: AbandonmentEmailProps) {
   const label = displayId || orderId
+  const copy = buildAbandonmentEmailCopy(items)
   return (
     <EmailLayout
       previewText="Your checkout is still waiting"
-      title="Still Interested in Your Story? ✦"
-      subtitle="You left checkout before payment. Your selected books are still reserved and ready."
+      title={copy.title}
+      subtitle={copy.body}
     >
       {label ? (
         <Text style={styles.orderLine}>
@@ -83,7 +107,7 @@ export function AbandonmentEmail({ resumeUrl, items, displayId, orderId }: Aband
 
       <Section style={styles.ctaWrap}>
         <Link href={resumeUrl} style={emailButtons.primary}>
-          Resume Checkout
+          {copy.cta}
         </Link>
       </Section>
     </EmailLayout>

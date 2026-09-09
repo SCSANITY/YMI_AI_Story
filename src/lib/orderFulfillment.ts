@@ -5,7 +5,10 @@ import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pr
 import { normalizeOrderStatus, type OrderStatus } from '@/lib/order-status'
 import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production-transition-store'
 import { shippingStreet } from '@/lib/shipping-address'
-import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import {
+  resolveChildNameFromCustomization,
+  resolvePersonalizedBookTitle,
+} from '@/lib/personalized-book-title'
 import { isFinalJobReleased } from '@/lib/purchase-state'
 import {
   forceEnglishTextOverrides,
@@ -390,6 +393,7 @@ export async function loadOrderCoverUrl(orderId: string): Promise<string | undef
 export type OrderItemWithCover = {
   name: string
   quantity: number
+  childName?: string
   coverImageUrl?: string
 }
 
@@ -443,6 +447,9 @@ export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderIt
 
   return items.map((r) => {
     const previewJobId = r.creations?.preview_job_id as string | undefined
+    const childName = resolveChildNameFromCustomization({
+      customizeSnapshot: r.creations?.customize_snapshot,
+    })
     return {
       name: resolvePersonalizedBookTitle({
         templateId: r.creations?.template_id,
@@ -450,6 +457,7 @@ export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderIt
         customizeSnapshot: r.creations?.customize_snapshot,
       }),
       quantity: Number(r.quantity ?? 1),
+      childName: childName || undefined,
       coverImageUrl: previewJobId ? coverByJob.get(previewJobId) : undefined,
     }
   })

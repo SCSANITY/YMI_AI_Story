@@ -7,7 +7,10 @@ import {
   type ReceiptItem,
 } from '@/components/emails/OrderReceiptEmail'
 import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
-import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
+import {
+  AbandonmentEmail,
+  buildAbandonmentEmailCopy,
+} from '@/components/emails/AbandonmentEmail'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { CheckoutCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import {
@@ -390,7 +393,7 @@ type SendUnpaidReminderEmailParams = {
   orderId: string
   displayId?: string | null
   resumeUrl?: string
-  items?: { name: string; quantity: number; coverImageUrl?: string }[]
+  items?: { name: string; quantity: number; childName?: string; coverImageUrl?: string }[]
   customerId?: string | null
   reminderDate?: string
 }
@@ -398,13 +401,15 @@ type SendUnpaidReminderEmailParams = {
 export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailParams) {
   const resumeUrl = params.resumeUrl || buildAbsoluteUrl(`/checkout?orderId=${params.orderId}`) || ''
   const reminderDate = params.reminderDate || new Date().toISOString().slice(0, 10)
+  const items = params.items || []
+  const reminderCopy = buildAbandonmentEmailCopy(items)
 
   return sendManagedEmail({
     emailKey: 'unpaid_reminder',
     idempotencyKey: `unpaid_reminder:${params.orderId}:${reminderDate}`,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_SUPPORT',
-    subject: `Complete your checkout - ${params.displayId || params.orderId}`,
+    subject: reminderCopy.subject,
     orderId: params.orderId,
     customerId: params.customerId ?? null,
     context: {
@@ -417,7 +422,7 @@ export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailPar
         orderId={params.orderId}
         displayId={params.displayId}
         resumeUrl={resumeUrl}
-        items={params.items || []}
+        items={items}
       />
     ),
   })

@@ -144,7 +144,7 @@ export default async function AdminEmailsPage({
       )
       const previewHtml = selectedVariant
         ? await renderEmailTemplatePreview(selectedTemplate.id, selectedVariant.id, {
-            coverImageUrl: 'https://www.ymistory.com/hero-poster.webp',
+            coverImageUrl: 'https://www.ymistory.com/hero-poster-v2.webp',
           })
         : null
 
