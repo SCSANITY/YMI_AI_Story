@@ -52,6 +52,18 @@ export function normalizeAudienceRange(value: unknown): AudienceRangeDays {
   return first === '30' || first === 30 ? 30 : 7
 }
 
+export function selectTrendLabelIndexes(length: number) {
+  const pointCount = Math.max(0, Math.floor(length))
+  if (pointCount === 0) return []
+
+  const labelCount = Math.min(pointCount, pointCount <= 7 ? 4 : 5)
+  if (labelCount === 1) return [0]
+
+  return Array.from({ length: labelCount }, (_, position) => (
+    Math.round((position * (pointCount - 1)) / (labelCount - 1))
+  ))
+}
+
 export function getAudienceDateRange(days: AudienceRangeDays, now = new Date()) {
   const untilDate = new Date(Date.UTC(
     now.getUTCFullYear(),

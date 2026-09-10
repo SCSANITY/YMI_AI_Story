@@ -5,6 +5,7 @@ import {
   getAudienceDateRange,
   normalizeAudienceRange,
   parseVisitAggregateRows,
+  selectTrendLabelIndexes,
 } from './admin-audience-analytics'
 
 test('normalizes the Admin audience range to the two supported MVP windows', () => {
@@ -18,6 +19,13 @@ test('builds inclusive UTC date windows', () => {
     getAudienceDateRange(7, new Date('2026-09-09T23:59:59.000Z')),
     { since: '2026-09-03', until: '2026-09-09' },
   )
+})
+
+test('spaces trend labels evenly while preserving the first and last dates', () => {
+  assert.deepEqual(selectTrendLabelIndexes(30), [0, 7, 15, 22, 29])
+  assert.deepEqual(selectTrendLabelIndexes(7), [0, 2, 4, 6])
+  assert.deepEqual(selectTrendLabelIndexes(1), [0])
+  assert.deepEqual(selectTrendLabelIndexes(0), [])
 })
 
 test('parses only valid aggregate rows and removes fractional counts', () => {

@@ -18,6 +18,7 @@ import {
 } from '@/components/admin/AdminUi'
 import {
   normalizeAudienceRange,
+  selectTrendLabelIndexes,
   type AudienceAnalyticsData,
   type AudienceRangeDays,
   type VisitMetricRow,
@@ -121,7 +122,7 @@ function TrafficTrend({ rows }: { rows: VisitMetricRow[] }) {
   const area = points.length > 0
     ? `0,${chartHeight - bottom} ${polyline} ${chartWidth},${chartHeight - bottom}`
     : ''
-  const labelEvery = rows.length > 7 ? 7 : 1
+  const labelIndexes = new Set(selectTrendLabelIndexes(points.length))
 
   return (
     <div>
@@ -165,7 +166,7 @@ function TrafficTrend({ rows }: { rows: VisitMetricRow[] }) {
                   vectorEffect="non-scaling-stroke"
                 />
               ) : null}
-              {index % labelEvery === 0 || index === points.length - 1 ? (
+              {labelIndexes.has(index) ? (
                 <text
                   x={point.x}
                   y={chartHeight - 8}
@@ -244,7 +245,7 @@ function AudienceDashboard({ data }: { data: AudienceAnalyticsData }) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-bold text-[var(--admin-accent-dp)]">Traffic rhythm</p>
-              <h2 className="mt-1 text-lg font-bold text-[var(--admin-page-ink)]">Daily visits</h2>
+              <h2 className="mt-1 text-lg font-bold text-[var(--admin-page-ink)]">Daily page views</h2>
             </div>
             <AdminStatusBadge tone="neutral">Production</AdminStatusBadge>
           </div>
