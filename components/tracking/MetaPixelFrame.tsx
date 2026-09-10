@@ -135,6 +135,10 @@ export function MetaPixelFrame() {
           page_path: message.page_path,
           page_title: message.page_title,
         }
+        if (event.name === 'preview_ready') {
+          window.fbq('trackSingleCustom', pixelId, metaEventName, eventPayload)
+          return
+        }
         if (event.name === 'purchase' && event.payload.transaction_id) {
           // The privacy-safe surrogate is stable across retries and future browser/server delivery.
           window.fbq('trackSingle', pixelId, metaEventName, eventPayload, {

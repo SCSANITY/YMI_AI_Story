@@ -70,6 +70,17 @@ test('Meta runs in a fixed queryless frame so its automatic document URL is not 
   assert.match(page, /noIndexMetadata/)
 })
 
+test('Meta sends PreviewReady through the custom-event method only', async () => {
+  const frame = await read('components/tracking/MetaPixelFrame.tsx')
+
+  assert.match(frame, /preview_ready: 'PreviewReady'/)
+  assert.match(
+    frame,
+    /event\.name === 'preview_ready'[\s\S]*window\.fbq\('trackSingleCustom', pixelId, metaEventName, eventPayload\)[\s\S]*return/,
+  )
+  assert.match(frame, /window\.fbq\('trackSingle', pixelId, metaEventName, eventPayload\)/)
+})
+
 test('revocation updates vendors and removes only matching first-party cookies', async () => {
   const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
   const frame = await read('components/tracking/MetaPixelFrame.tsx')
