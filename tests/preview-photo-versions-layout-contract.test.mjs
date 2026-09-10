@@ -14,7 +14,20 @@ test('wide desktop Preview centers the book independently and offsets Photo Vers
   assert.match(layout, /<aside[\s\S]*?xl:absolute[\s\S]*?xl:right-\[calc\(50%\+412px\)\][\s\S]*?xl:w-\[168px\][\s\S]*?\{gallery\}/)
   assert.match(layout, /const bookWithScrollCue = \(\s*<div[^>]*xl:mx-auto xl:w-\[760px\][^>]*>\s*\{book\}/)
   assert.doesNotMatch(layout, /grid-cols-\[168px_760px\]/)
-  assert.match(layout, /gallery \? \([\s\S]*?\) : \(\s*bookWithScrollCue\s*\)/)
+  assert.match(layout, /<div className="relative flex w-full flex-col items-center xl:block">[\s\S]*?\{gallery \? \([\s\S]*?\) : null\}[\s\S]*?\{bookWithScrollCue\}[\s\S]*?<\/div>/)
+  assert.doesNotMatch(layout, /\) : \(\s*bookWithScrollCue\s*\)/)
+})
+
+test('locking Photo Versions keeps the book ahead of the purchase actions', () => {
+  const layout = read('components/personalize/PreviewStepLayout.tsx')
+
+  const stableBookLayout = layout.indexOf('<div className="relative flex w-full flex-col items-center xl:block">')
+  const book = layout.indexOf('{bookWithScrollCue}', stableBookLayout)
+  const actions = layout.indexOf('ref={actionsRef}', book)
+
+  assert.ok(stableBookLayout >= 0)
+  assert.ok(book > stableBookLayout)
+  assert.ok(actions > book)
 })
 
 test('Photo Versions stays horizontal on compact desktops and becomes a bounded rail when space permits', () => {

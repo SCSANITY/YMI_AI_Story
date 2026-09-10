@@ -77,16 +77,14 @@ function PreviewStepLayoutComponent({ intro, book, gallery, actions, scrollCueLa
       className="mx-auto flex min-h-[600px] max-w-7xl animate-in flex-col items-center justify-center fade-in py-6 duration-200 md:py-10"
     >
       {intro}
-      {gallery ? (
-        <div className="relative flex w-full flex-col items-center xl:block">
+      <div className="relative flex w-full flex-col items-center xl:block">
+        {gallery ? (
           <aside className="order-2 w-full min-w-0 xl:absolute xl:right-[calc(50%+412px)] xl:top-0 xl:w-[168px]">
             {gallery}
           </aside>
-          {bookWithScrollCue}
-        </div>
-      ) : (
-        bookWithScrollCue
-      )}
+        ) : null}
+        {bookWithScrollCue}
+      </div>
       <div ref={actionsRef} className="flex w-full scroll-mt-6 flex-col items-center">
         {actions}
       </div>
