@@ -25,6 +25,7 @@ import {
   buildTrackingCookieDeletionStrings,
   createLocalNavigationKey,
   resolveTrackingActivation,
+  sanitizeMetaClickId,
   sanitizeTrackingEvent,
   type SafePageView,
   type SafeTrackingEvent,
@@ -228,6 +229,9 @@ export function ConsentGatedTagAdapter() {
     }),
     [consent],
   )
+  const metaClickId = consent?.marketing
+    ? sanitizeMetaClickId(searchParams.get('fbclid'))
+    : null
 
   useLayoutEffect(() => {
     pageRef.current = safePage
@@ -347,12 +351,13 @@ export function ConsentGatedTagAdapter() {
     postToMetaFrame({
       type: META_FRAME_CONSENT_MESSAGE,
       granted: consent.marketing,
+      ...(consent.marketing && metaClickId ? { click_id: metaClickId } : {}),
     })
 
     if (!consent.marketing) return
     const pending = pendingMetaEventsRef.current.splice(0)
     for (const message of pending) postToMetaFrame(message)
-  }, [consent, isMetaFrameReady, postToMetaFrame])
+  }, [consent, isMetaFrameReady, metaClickId, postToMetaFrame])
 
   useEffect(() => {
     if (!consent) return

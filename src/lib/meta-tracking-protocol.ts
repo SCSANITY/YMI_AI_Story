@@ -13,6 +13,7 @@ export type MetaFrameParentMessage =
   | {
       type: typeof META_FRAME_CONSENT_MESSAGE
       granted: boolean
+      click_id?: string
     }
   | {
       type: typeof META_FRAME_PAGE_VIEW_MESSAGE

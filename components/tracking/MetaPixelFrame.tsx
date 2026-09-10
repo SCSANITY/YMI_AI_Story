@@ -8,8 +8,12 @@ import {
   META_FRAME_READY_MESSAGE,
   type MetaFrameParentMessage,
 } from '@/lib/meta-tracking-protocol'
-import { TRACKING_CONFIG } from '@/lib/tracking-config'
-import { redactTrackingPath, sanitizeTrackingEvent } from '@/lib/tracking-policy'
+import { META_TRACKING_FRAME_PATH, TRACKING_CONFIG } from '@/lib/tracking-config'
+import {
+  redactTrackingPath,
+  sanitizeMetaClickId,
+  sanitizeTrackingEvent,
+} from '@/lib/tracking-policy'
 
 type MetaFbq = {
   (...args: unknown[]): void
@@ -102,6 +106,19 @@ function isSafePage(pagePath: unknown, pageTitle: unknown) {
   return redactTrackingPath(pagePath) === pagePath
 }
 
+function syncMetaClickIdToFrameLocation(rawClickId: unknown) {
+  const clickId = sanitizeMetaClickId(rawClickId)
+  if (window.location.pathname !== META_TRACKING_FRAME_PATH) return
+
+  const attributedUrl = new URL(META_TRACKING_FRAME_PATH, window.location.origin)
+  if (clickId) attributedUrl.searchParams.set('fbclid', clickId)
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${attributedUrl.pathname}${attributedUrl.search}`,
+  )
+}
+
 export function MetaPixelFrame() {
   useEffect(() => {
     const pixelId = TRACKING_CONFIG.metaPixelId
@@ -166,10 +183,12 @@ export function MetaPixelFrame() {
         consentGranted = message.granted === true
         if (!consentGranted) {
           pending.length = 0
+          syncMetaClickIdToFrameLocation(null)
           window.fbq?.('consent', 'revoke')
           return
         }
 
+        syncMetaClickIdToFrameLocation(message.click_id)
         void ensureMetaPixel(pixelId)
           .then(() => {
             if (!active || !consentGranted) return

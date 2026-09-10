@@ -55,7 +55,7 @@ test('Google disables automatic page views and receives only explicit safe page 
   assert.doesNotMatch(adapter, /window\.location\.href|document\.title|document\.referrer/)
 })
 
-test('Meta runs in a fixed queryless frame so its automatic document URL is not private', async () => {
+test('Meta runs in a fixed privacy frame and receives only consented click attribution', async () => {
   const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
   const frame = await read('components/tracking/MetaPixelFrame.tsx')
   const config = await read('src/lib/tracking-config.ts')
@@ -64,6 +64,12 @@ test('Meta runs in a fixed queryless frame so its automatic document URL is not 
   assert.match(config, /META_TRACKING_FRAME_PATH = '\/tracking\/meta-frame'/)
   assert.match(adapter, /src=\{META_TRACKING_FRAME_PATH\}/)
   assert.match(adapter, /referrerPolicy="origin"/)
+  assert.match(adapter, /consent\?\.marketing[\s\S]*sanitizeMetaClickId\(searchParams\.get\('fbclid'\)\)/)
+  assert.match(adapter, /consent\.marketing && metaClickId \? \{ click_id: metaClickId \} : \{\}/)
+  assert.match(frame, /syncMetaClickIdToFrameLocation\(message\.click_id\)[\s\S]*ensureMetaPixel\(pixelId\)/)
+  assert.match(frame, /if \(!consentGranted\) \{[\s\S]*syncMetaClickIdToFrameLocation\(null\)[\s\S]*fbq\?\.\('consent', 'revoke'\)/)
+  assert.match(frame, /attributedUrl\.searchParams\.set\('fbclid', clickId\)/)
+  assert.match(frame, /window\.history\.replaceState\(/)
   assert.match(frame, /fbq\('set', 'autoConfig', false, pixelId\)/)
   assert.match(frame, /'trackSingle', pixelId, 'PageView'/)
   assert.doesNotMatch(frame, /fbq\('track', 'PageView'\)/)

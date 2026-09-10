@@ -10,6 +10,7 @@ import {
   redactTrackingPath,
   resolveTrackingFormat,
   resolveTrackingActivation,
+  sanitizeMetaClickId,
   sanitizeTrackingEvent,
   isPurchaseTrackingStatus,
 } from './tracking-policy'
@@ -90,6 +91,16 @@ test('keeps every vendor denied while consent is unresolved or not granted', () 
       meta: false,
     },
   )
+})
+
+test('accepts only bounded URL-safe Meta click identifiers', () => {
+  assert.equal(sanitizeMetaClickId('TEST123'), 'TEST123')
+  assert.equal(sanitizeMetaClickId('IwY2xjaw_ab-12.3~test'), 'IwY2xjaw_ab-12.3~test')
+  assert.equal(sanitizeMetaClickId(''), null)
+  assert.equal(sanitizeMetaClickId(' TEST123'), null)
+  assert.equal(sanitizeMetaClickId('TEST123&child=Mia'), null)
+  assert.equal(sanitizeMetaClickId('a'.repeat(501)), null)
+  assert.equal(sanitizeMetaClickId(null), null)
 })
 
 test('creates a deterministic non-reversible transaction surrogate', async () => {

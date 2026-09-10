@@ -117,6 +117,7 @@ const ALLOWED_EVENT_NAMES = new Set<AllowedTrackingEventName>(
 const TRACKING_COOKIE_NAME = /^(?:_ga(?:_.+)?|_fbp|_fbc|_gcl_au)$/
 const ANALYTICS_COOKIE_NAME = /^_ga(?:_.+)?$/
 const MARKETING_COOKIE_NAME = /^(?:_fbp|_fbc|_gcl_au)$/
+const META_CLICK_ID = /^[A-Za-z0-9._~-]{1,500}$/
 
 function extractPathname(rawPath: string) {
   const trimmed = String(rawPath ?? '').trim()
@@ -167,6 +168,11 @@ export function buildSafePageView(rawPath: string, origin: string): SafePageView
 
 export function createLocalNavigationKey(pathname: string, queryString = '') {
   return `${String(pathname || '/')}\u0000${String(queryString || '')}`
+}
+
+export function sanitizeMetaClickId(value: unknown): string | null {
+  if (typeof value !== 'string' || value !== value.trim()) return null
+  return META_CLICK_ID.test(value) ? value : null
 }
 
 export function resolveTrackingActivation(
