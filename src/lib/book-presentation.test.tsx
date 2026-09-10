@@ -136,7 +136,7 @@ describe('physical-book leaf presentation', () => {
     assert.doesNotMatch(html, /width:200%/)
   })
 
-  it('crops only the Preview physical-book cover by 13.5 percent on every edge', () => {
+  it('crops and brands only a generated Preview physical-book cover', () => {
     const presentation = buildBookPresentation([coverLeaf('generated-cover.webp')], {
       coverRole: 'preview_cover',
       interiorRole: 'preview_interior',
@@ -162,7 +162,38 @@ describe('physical-book leaf presentation', () => {
 
     assert.match(previewHtml, /data-preview-cover-crop-percent="13\.5"/)
     assert.match(previewHtml, /transform:scale\(1\.36986301369863\)/)
-    assert.doesNotMatch(readerHtml, /data-preview-cover-crop-percent|transform:scale\(/)
+    assert.match(previewHtml, /data-preview-cover-logo="true"/)
+    assert.match(previewHtml, /data-preview-cover-logo-placement="visible-frame"/)
+    assert.match(previewHtml, /width:9%;height:auto;right:4\.5%;bottom:4%/)
+    assert.match(previewHtml, /brightness\(0\) invert\(1\)/)
+    assert.doesNotMatch(
+      readerHtml,
+      /data-preview-cover-crop-percent|data-preview-cover-logo|transform:scale\(/
+    )
+  })
+
+  it('does not show the Preview cover logo while the generated cover is unavailable', () => {
+    const html = renderToStaticMarkup(
+      <PreviewBookPageContent
+        side="right"
+        spreadIndex={0}
+        bookType="basic"
+        previewImageErrors={new Set<string>()}
+        bookPresentation={null}
+        currentSpread={0}
+        isFlipping={false}
+        canTurnNext={false}
+        canTurnPrev={false}
+        resolvedTitle="Test book"
+        labels={pageContentLabels}
+        onImageError={() => undefined}
+        onTurnPage={() => undefined}
+        onReturnToCover={() => undefined}
+      />
+    )
+
+    assert.match(html, /Creating/)
+    assert.doesNotMatch(html, /data-preview-cover-logo/)
   })
 
   it('replaces each masked preview1 underlay independently as its generated leaf arrives', () => {

@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { memo, type CSSProperties } from 'react'
 import { BookOpen, ChevronLeft, ChevronRight, Lock, Wand2 } from 'lucide-react'
 import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector'
@@ -10,6 +11,14 @@ const PREVIEW_COVER_BLEED_CROP_PERCENT = 13.5
 const PREVIEW_COVER_BLEED_STYLE: CSSProperties = {
   transform: `scale(${100 / (100 - PREVIEW_COVER_BLEED_CROP_PERCENT * 2)})`,
   transformOrigin: 'center',
+}
+const PREVIEW_COVER_LOGO_STYLE: CSSProperties = {
+  width: '9%',
+  height: 'auto',
+  right: '4.5%',
+  bottom: '4%',
+  filter: 'brightness(0) invert(1) drop-shadow(0 1px 2px rgba(15, 23, 42, 0.42))',
+  opacity: 0.96,
 }
 
 type PreviewBookPageContentProps = {
@@ -98,6 +107,23 @@ function PreviewBookPageContentComponent({
         ) : (
           <CreatingPlaceholder label={labels.previewPageStillCreating} />
         )}
+
+        {mode === 'preview' && canShowGeneratedCover ? (
+          <Image
+            src="/logo.webp"
+            alt=""
+            width={512}
+            height={436}
+            sizes="40px"
+            loading="eager"
+            aria-hidden="true"
+            draggable={false}
+            className="pointer-events-none absolute z-[25] select-none"
+            style={PREVIEW_COVER_LOGO_STYLE}
+            data-preview-cover-logo="true"
+            data-preview-cover-logo-placement="visible-frame"
+          />
+        ) : null}
 
         <div className="absolute bottom-0 left-0 top-0 z-30 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent" />
 
