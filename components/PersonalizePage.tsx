@@ -408,6 +408,15 @@ export default function PersonalizePage({
   const previewActionInFlightRef = useRef<'CHECKOUT' | null>(null);
   const [previewActionPending, setPreviewActionPending] = useState<'CHECKOUT' | null>(null);
   const checkoutInFlightRef = useRef(false);
+  const committedPreviewSelectionRef = useRef<{
+    creationId: string
+    selectedPreviewJobId: string
+    activePreviewJobId: string
+  } | null>(null);
+  const previewCommitInFlightRef = useRef<{
+    key: string
+    promise: ReturnType<typeof commitPreviewVariant>
+  } | null>(null);
   const preloadedPreviewImagesRef = useRef<Set<string>>(new Set());
   const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(initialBook?.coverUrl || null);
   const [templateTitle, setTemplateTitle] = useState<string | null>(initialBook?.title || null);
@@ -1505,6 +1514,11 @@ export default function PersonalizePage({
     viewState.showPreview,
   ]);
 
+  useEffect(() => {
+    if (!viewState.showPreview) return;
+    router.prefetch('/checkout');
+  }, [router, viewState.showPreview]);
+
   // --- Handlers ---
   const handleDeleteFace = useCallback(async (assetId: string) => {
     setRecentFaces((prev) => prev.filter((face) => face.asset_id !== assetId));
@@ -1939,64 +1953,106 @@ export default function PersonalizePage({
     }
 
     const variantSessionId = previewVariantSessionIdRef.current;
-    const result = await commitPreviewVariant({
-      creationId: ensuredCreationId,
+    const committedSelection = committedPreviewSelectionRef.current;
+    if (
+      committedSelection?.creationId === ensuredCreationId &&
+      committedSelection.selectedPreviewJobId === selectedJobId
+    ) {
+      return committedSelection.activePreviewJobId;
+    }
+
+    const commitKey = [
+      ensuredCreationId,
       expectedPreviewJobId,
-      selectedPreviewJobId: selectedJobId,
-      variantSessionId,
-    });
+      selectedJobId,
+      variantSessionId ?? '',
+    ].join(':');
+    const currentCommit = previewCommitInFlightRef.current;
+    const commitPromise = currentCommit?.key === commitKey
+      ? currentCommit.promise
+      : commitPreviewVariant({
+          creationId: ensuredCreationId,
+          expectedPreviewJobId,
+          selectedPreviewJobId: selectedJobId,
+          variantSessionId,
+        });
 
-    setPreviewJobId(result.activePreviewJobId);
-    selectPreviewJobId(result.activePreviewJobId);
-    setIsPreviewPhotoLocked(true);
-    setPreviewVariantSessionCount(0);
-    const selectedVariant = previewVariantsRef.current.find(
-      (variant) => variant.jobId === result.activePreviewJobId
-    );
-    previewVariantsRef.current.forEach((variant) => {
+    if (currentCommit?.key !== commitKey) {
+      previewCommitInFlightRef.current = { key: commitKey, promise: commitPromise };
+    }
+
+    try {
+      const result = await commitPromise;
+      const settledSelection = committedPreviewSelectionRef.current;
       if (
-        variant.jobId !== result.activePreviewJobId &&
-        variant.photoPreviewUrl &&
-        previewVariantPhotoUrlsRef.current.has(variant.photoPreviewUrl)
+        settledSelection?.creationId === ensuredCreationId &&
+        settledSelection.selectedPreviewJobId === selectedJobId
       ) {
-        previewVariantPhotoUrlsRef.current.delete(variant.photoPreviewUrl);
-        URL.revokeObjectURL(variant.photoPreviewUrl);
+        return settledSelection.activePreviewJobId;
       }
-    });
-    if (selectedVariant) {
-      setPreviewVariants([
-        { ...selectedVariant, original: true, countsTowardLimit: false },
-      ]);
-    }
 
-    if (variantSessionId) {
-      forgetPreviewVariantSession(ensuredCreationId, variantSessionId);
-      previewVariantSessionIdRef.current = null;
-    }
-    setPreviewShareUrl(null);
-    setPreviewPublicShareImageUrl(null);
-    setIsShareDialogOpen(false);
-    setShareError(null);
-    replacePreviewUrl(ensuredCreationId, result.activePreviewJobId);
+      committedPreviewSelectionRef.current = {
+        creationId: ensuredCreationId,
+        selectedPreviewJobId: selectedJobId,
+        activePreviewJobId: result.activePreviewJobId,
+      };
 
-    if (typeof window !== 'undefined') {
-      try {
-        window.sessionStorage.removeItem(`ymi_creation_${ensuredCreationId}`);
-        window.sessionStorage.setItem(
-          `ymi_preview_${ensuredCreationId}`,
-          JSON.stringify({
-            coverUrl: selectedVariant?.coverUrl ?? previewUrl ?? previewPages[0] ?? null,
-            jobId: result.activePreviewJobId,
-          })
-        );
-      } catch {
-        // Cache refresh is optional after the database commit succeeds.
+      setPreviewJobId(result.activePreviewJobId);
+      selectPreviewJobId(result.activePreviewJobId);
+      setIsPreviewPhotoLocked(true);
+      setPreviewVariantSessionCount(0);
+      const selectedVariant = previewVariantsRef.current.find(
+        (variant) => variant.jobId === result.activePreviewJobId
+      );
+      previewVariantsRef.current.forEach((variant) => {
+        if (
+          variant.jobId !== result.activePreviewJobId &&
+          variant.photoPreviewUrl &&
+          previewVariantPhotoUrlsRef.current.has(variant.photoPreviewUrl)
+        ) {
+          previewVariantPhotoUrlsRef.current.delete(variant.photoPreviewUrl);
+          URL.revokeObjectURL(variant.photoPreviewUrl);
+        }
+      });
+      if (selectedVariant) {
+        setPreviewVariants([
+          { ...selectedVariant, original: true, countsTowardLimit: false },
+        ]);
+      }
+
+      if (variantSessionId) {
+        forgetPreviewVariantSession(ensuredCreationId, variantSessionId);
+        previewVariantSessionIdRef.current = null;
+      }
+      setPreviewShareUrl(null);
+      setPreviewPublicShareImageUrl(null);
+      setIsShareDialogOpen(false);
+      setShareError(null);
+      replacePreviewUrl(ensuredCreationId, result.activePreviewJobId);
+
+      if (typeof window !== 'undefined') {
+        try {
+          window.sessionStorage.removeItem(`ymi_creation_${ensuredCreationId}`);
+          window.sessionStorage.setItem(
+            `ymi_preview_${ensuredCreationId}`,
+            JSON.stringify({
+              coverUrl: selectedVariant?.coverUrl ?? previewUrl ?? previewPages[0] ?? null,
+              jobId: result.activePreviewJobId,
+            })
+          );
+        } catch {
+          // Cache refresh is optional after the database commit succeeds.
+        }
+      }
+
+      void refreshPreviewImages('commit', { force: true });
+
+      return result.activePreviewJobId;
+    } finally {
+      if (previewCommitInFlightRef.current?.promise === commitPromise) {
+        previewCommitInFlightRef.current = null;
       }
     }
-
-    void refreshPreviewImages('commit', { force: true });
-
-    return result.activePreviewJobId;
   }, [previewJobId, previewPages, previewUrl, refreshPreviewImages, replacePreviewUrl, selectPreviewJobId, selectedPreviewJobId, setPreviewJobId, setPreviewVariants]);
 
 

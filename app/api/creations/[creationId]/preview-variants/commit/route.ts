@@ -165,27 +165,31 @@ export async function POST(
     )
   }
 
-  const { data: selectedJob, error: selectedJobError } = await supabaseAdmin
-    .from('jobs')
-    .select('job_id, input_snapshot')
-    .eq('job_id', selectedPreviewJobId)
-    .eq('creation_id', creationId)
-    .eq('job_type', 'preview')
-    .eq('owner_type', filter.owner_type)
-    .eq(filter.column, filter.value)
-    .maybeSingle()
+  let selectedJob = currentJob
+  if (selectedPreviewJobId !== String(creation.preview_job_id)) {
+    const { data, error } = await supabaseAdmin
+      .from('jobs')
+      .select('job_id, input_snapshot')
+      .eq('job_id', selectedPreviewJobId)
+      .eq('creation_id', creationId)
+      .eq('job_type', 'preview')
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
+      .maybeSingle()
 
-  if (selectedJobError) {
-    return jsonNoStore(
-      { error: 'Failed to load selected preview', code: 'selected_preview_lookup_failed' },
-      500
-    )
-  }
-  if (!selectedJob?.job_id) {
-    return jsonNoStore(
-      { error: 'Selected preview is not available', code: 'invalid_preview_variant' },
-      404
-    )
+    if (error) {
+      return jsonNoStore(
+        { error: 'Failed to load selected preview', code: 'selected_preview_lookup_failed' },
+        500
+      )
+    }
+    if (!data?.job_id) {
+      return jsonNoStore(
+        { error: 'Selected preview is not available', code: 'invalid_preview_variant' },
+        404
+      )
+    }
+    selectedJob = data
   }
 
   if (isPreviewVariantInvalidated(selectedJob.input_snapshot)) {
