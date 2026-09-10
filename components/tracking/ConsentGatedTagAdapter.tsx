@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
+import { Analytics, type BeforeSendEvent } from '@vercel/analytics/next'
 import {
   COOKIE_CONSENT_CHANGE_EVENT,
   COOKIE_CONSENT_STORAGE_KEY,
@@ -202,6 +203,7 @@ export function ConsentGatedTagAdapter() {
   const queryString = searchParams.toString()
   const [consent, setConsent] = useState<CookieConsentPreferences | null>(null)
   const [hasMetaStarted, setHasMetaStarted] = useState(false)
+  const [hasVercelAnalyticsStarted, setHasVercelAnalyticsStarted] = useState(false)
   const [isMetaFrameReady, setIsMetaFrameReady] = useState(false)
   const metaFrameRef = useRef<HTMLIFrameElement>(null)
   const consentRef = useRef<CookieConsentPreferences | null>(null)
@@ -235,6 +237,7 @@ export function ConsentGatedTagAdapter() {
     const applyConsent = (next: CookieConsentPreferences | null) => {
       consentRef.current = next
       if (next?.marketing && TRACKING_CONFIG.metaPixelId) setHasMetaStarted(true)
+      if (next?.analytics) setHasVercelAnalyticsStarted(true)
       setConsent(next)
     }
     const refreshConsent = () => applyConsent(readCurrentCookieConsent())
@@ -410,17 +413,30 @@ export function ConsentGatedTagAdapter() {
     return () => window.removeEventListener(YMI_TRACKING_EVENT, handleTrackingEvent)
   }, [dispatchTrackingEvent])
 
-  if (!hasMetaStarted) return null
+  const filterVercelEvent = useCallback((event: BeforeSendEvent) => {
+    if (!consentRef.current?.analytics) return null
+    return {
+      ...event,
+      url: buildSafePageView(event.url, window.location.origin).page_location,
+    }
+  }, [])
+
+  if (!hasMetaStarted && !hasVercelAnalyticsStarted) return null
 
   return (
-    <iframe
-      ref={metaFrameRef}
-      src={META_TRACKING_FRAME_PATH}
-      title="YMI privacy-safe marketing measurement"
-      aria-hidden="true"
-      tabIndex={-1}
-      referrerPolicy="origin"
-      className="hidden"
-    />
+    <>
+      {hasVercelAnalyticsStarted ? <Analytics beforeSend={filterVercelEvent} /> : null}
+      {hasMetaStarted ? (
+        <iframe
+          ref={metaFrameRef}
+          src={META_TRACKING_FRAME_PATH}
+          title="YMI privacy-safe marketing measurement"
+          aria-hidden="true"
+          tabIndex={-1}
+          referrerPolicy="origin"
+          className="hidden"
+        />
+      ) : null}
+    </>
   )
 }

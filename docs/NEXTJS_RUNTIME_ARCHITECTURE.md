@@ -24,6 +24,10 @@ governance repository.
   remains personalization data.
 - `GlobalContext` owns genuine cross-route client state. Pure catalog, order,
   and presentation mapping belongs in domain modules rather than the provider.
+- First-party audience reporting uses consent-gated Vercel Web Analytics. The
+  protected Admin page queries Vercel's aggregate API directly through a
+  server-only, project-scoped credential; YMI does not copy raw IP addresses or
+  visitor-level records into Supabase.
 
 ## Current domain owners
 

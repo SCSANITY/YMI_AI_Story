@@ -153,8 +153,9 @@ test('active and placeholder Admin pages remain explicitly separated', async () 
     ['catalog', 'CatalogPricingManager'],
     ['partnerships', 'KolPartnershipWorkspace'],
     ['banner', 'HomepageBannerManager'],
+    ['analytics', 'loadAudienceAnalytics'],
   ])
-  const placeholderPages = ['analytics']
+  const placeholderPages = []
 
   for (const [route, marker] of activePages) {
     const source = await read(`app/admin/(protected)/${route}/page.tsx`)

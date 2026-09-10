@@ -95,3 +95,19 @@ test('tracking IDs are env-only and no advertising personalization feature is en
   assert.match(adapter, /ad_personalization:\s*'denied'/)
   assert.doesNotMatch(adapter + frame, /enhanced_conversions|user_id|advanced_matching|Conversions API|CAPI/)
 })
+
+test('Vercel audience measurement shares the Analytics consent and redacted page authority', async () => {
+  const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
+  const adminPage = await read('app/admin/(protected)/analytics/page.tsx')
+  const serverAuthority = await read('src/lib/admin-audience-analytics-server.ts')
+
+  assert.match(adapter, /hasVercelAnalyticsStarted/)
+  assert.match(adapter, /if \(!consentRef\.current\?\.analytics\) return null/)
+  assert.match(adapter, /buildSafePageView\(event\.url, window\.location\.origin\)/)
+  assert.match(adapter, /<Analytics beforeSend=\{filterVercelEvent\}/)
+  assert.match(adminPage, /loadAudienceAnalytics\(days\)/)
+  assert.match(serverAuthority, /^import 'server-only'/)
+  assert.match(serverAuthority, /cache: 'no-store'/)
+  assert.match(serverAuthority, /YMI_VERCEL_ANALYTICS_TOKEN/)
+  assert.doesNotMatch(serverAuthority + adminPage, /supabaseAdmin|ip_address|clientIp/)
+})
