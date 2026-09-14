@@ -55,6 +55,17 @@ test('Google disables automatic page views and receives only explicit safe page 
   assert.doesNotMatch(adapter, /window\.location\.href|document\.title|document\.referrer/)
 })
 
+test('Google ecommerce events receive only fixed privacy-safe item metadata', async () => {
+  const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
+  const policy = await read('src/lib/tracking-policy.ts')
+
+  assert.match(adapter, /buildGoogleAnalyticsEventPayload\(event\)/)
+  assert.match(policy, /item_id: format \? `ymi_storybook_\$\{format\}` : 'ymi_storybook'/)
+  assert.match(policy, /item_name: 'Personalized Storybook'/)
+  assert.match(policy, /quantity,/)
+  assert.doesNotMatch(policy, /item_name:.*(?:child|template|title|creation|order)/i)
+})
+
 test('Meta runs in a fixed privacy frame and receives only consented click attribution', async () => {
   const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
   const frame = await read('components/tracking/MetaPixelFrame.tsx')

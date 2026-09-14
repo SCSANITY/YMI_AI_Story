@@ -20,6 +20,17 @@ export type TrackingEventPayload = {
   transaction_id?: string
 }
 
+export type GoogleAnalyticsCommerceItem = {
+  item_id: 'ymi_storybook' | 'ymi_storybook_pdf' | 'ymi_storybook_physical'
+  item_name: 'Personalized Storybook'
+  quantity: number
+  item_variant?: 'pdf' | 'physical'
+}
+
+export type GoogleAnalyticsEventPayload = TrackingEventPayload & {
+  items?: GoogleAnalyticsCommerceItem[]
+}
+
 type TrackingCommerceItem = {
   quantity?: unknown
   bookType?: unknown
@@ -113,6 +124,12 @@ const ALLOWED_PAYLOAD_KEYS: Record<AllowedTrackingEventName, ReadonlySet<keyof T
 const ALLOWED_EVENT_NAMES = new Set<AllowedTrackingEventName>(
   Object.keys(ALLOWED_PAYLOAD_KEYS) as AllowedTrackingEventName[],
 )
+
+const GOOGLE_ANALYTICS_ECOMMERCE_EVENTS = new Set<AllowedTrackingEventName>([
+  'add_to_cart',
+  'begin_checkout',
+  'purchase',
+])
 
 const TRACKING_COOKIE_NAME = /^(?:_ga(?:_.+)?|_fbp|_fbc|_gcl_au)$/
 const ANALYTICS_COOKIE_NAME = /^_ga(?:_.+)?$/
@@ -249,6 +266,27 @@ export function sanitizeTrackingEvent(
   if (eventName === 'purchase' && !payload.transaction_id) return null
 
   return { name: eventName, payload }
+}
+
+export function buildGoogleAnalyticsEventPayload(
+  event: SafeTrackingEvent,
+): GoogleAnalyticsEventPayload {
+  const payload: GoogleAnalyticsEventPayload = { ...event.payload }
+  if (!GOOGLE_ANALYTICS_ECOMMERCE_EVENTS.has(event.name)) return payload
+
+  const format = event.payload.format
+  const quantity = event.name === 'add_to_cart'
+    ? 1
+    : event.payload.item_count ?? 1
+
+  payload.items = [{
+    item_id: format ? `ymi_storybook_${format}` : 'ymi_storybook',
+    item_name: 'Personalized Storybook',
+    quantity,
+    ...(format ? { item_variant: format } : {}),
+  }]
+
+  return payload
 }
 
 export function countTrackingItems(items: TrackingCommerceItem[]): number | undefined {

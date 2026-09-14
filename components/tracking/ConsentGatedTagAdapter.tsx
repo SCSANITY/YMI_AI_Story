@@ -21,6 +21,7 @@ import { META_TRACKING_FRAME_PATH, TRACKING_CONFIG } from '@/lib/tracking-config
 import {
   PageViewDeduper,
   YMI_TRACKING_EVENT,
+  buildGoogleAnalyticsEventPayload,
   buildSafePageView,
   buildTrackingCookieDeletionStrings,
   createLocalNavigationKey,
@@ -183,7 +184,7 @@ function sendGoogleEvent(event: SafeTrackingEvent, page: SafePageView) {
   if (!ga4Id || !window.gtag) return
 
   window.gtag('event', event.name, {
-    ...event.payload,
+    ...buildGoogleAnalyticsEventPayload(event),
     ...page,
     send_to: ga4Id,
   })

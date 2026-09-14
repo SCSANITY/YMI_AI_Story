@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   PageViewDeduper,
+  buildGoogleAnalyticsEventPayload,
   buildSafePageView,
   buildTrackingCookieDeletionStrings,
   countTrackingItems,
@@ -65,6 +66,52 @@ test('allows only coarse event names and tightly constrained payload keys', () =
   assert.equal(sanitizeTrackingEvent('begin_checkout', { orderId: 'secret' }), null)
   assert.equal(sanitizeTrackingEvent('purchase', { transaction_id: 'raw-order-id' }), null)
   assert.equal(sanitizeTrackingEvent('child_photo_uploaded', {}), null)
+})
+
+test('adds only fixed privacy-safe items to Google ecommerce events', () => {
+  assert.deepEqual(
+    buildGoogleAnalyticsEventPayload({
+      name: 'add_to_cart',
+      payload: { format: 'pdf' },
+    }),
+    {
+      format: 'pdf',
+      items: [{
+        item_id: 'ymi_storybook_pdf',
+        item_name: 'Personalized Storybook',
+        item_variant: 'pdf',
+        quantity: 1,
+      }],
+    },
+  )
+
+  assert.deepEqual(
+    buildGoogleAnalyticsEventPayload({
+      name: 'purchase',
+      payload: {
+        item_count: 3,
+        currency: 'USD',
+        value: 75,
+        transaction_id: 'ymi_0123456789abcdef0123456789abcdef',
+      },
+    }),
+    {
+      item_count: 3,
+      currency: 'USD',
+      value: 75,
+      transaction_id: 'ymi_0123456789abcdef0123456789abcdef',
+      items: [{
+        item_id: 'ymi_storybook',
+        item_name: 'Personalized Storybook',
+        quantity: 3,
+      }],
+    },
+  )
+
+  assert.deepEqual(
+    buildGoogleAnalyticsEventPayload({ name: 'preview_ready', payload: {} }),
+    {},
+  )
 })
 
 test('keeps every vendor denied while consent is unresolved or not granted', () => {
