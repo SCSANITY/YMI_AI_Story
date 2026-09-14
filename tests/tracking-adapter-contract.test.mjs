@@ -46,6 +46,8 @@ test('Google disables automatic page views and receives only explicit safe page 
   const adapter = await read('components/tracking/ConsentGatedTagAdapter.tsx')
   const policy = await read('src/lib/tracking-policy.ts')
 
+  assert.match(adapter, /window\.gtag = window\.gtag \?\? function gtag\(\) \{[\s\S]*dataLayer\?\.push\(arguments\)/)
+  assert.doesNotMatch(adapter, /dataLayer\?\.push\(args\)/)
   assert.match(adapter, /send_page_view:\s*false/g)
   assert.match(adapter, /allow_google_signals:\s*false/)
   assert.match(adapter, /allow_ad_personalization_signals:\s*false/)

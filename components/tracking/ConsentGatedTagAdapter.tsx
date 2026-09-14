@@ -41,7 +41,7 @@ type PendingConsentTrackingEvent = {
 
 declare global {
   interface Window {
-    dataLayer?: unknown[][]
+    dataLayer?: unknown[]
     gtag?: Gtag
   }
 }
@@ -65,9 +65,11 @@ function googleConsentState(consent: Pick<CookieConsentPreferences, 'analytics' 
 
 function ensureGoogleQueue(consent: Pick<CookieConsentPreferences, 'analytics' | 'marketing'>) {
   window.dataLayer = window.dataLayer ?? []
-  window.gtag = window.gtag ?? ((...args: unknown[]) => {
-    window.dataLayer?.push(args)
-  })
+  window.gtag = window.gtag ?? function gtag() {
+    // Google gtag.js reads command tuples from the native Arguments object.
+    // eslint-disable-next-line prefer-rest-params
+    window.dataLayer?.push(arguments)
+  }
 
   if (!googleQueueInitialized) {
     window.gtag('consent', 'default', googleConsentState(consent))
