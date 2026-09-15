@@ -50,6 +50,10 @@ test('PX-001 refinement removes the duplicated top-bar title and restores compac
   assert.match(page, /<ProductShowcaseCarousel[\s\S]{0,80}key=\{bookID\}/)
   assert.match(formFlow, /text-\[1\.65rem\][^\n]*sm:text-\[1\.75rem\]/)
   assert.match(formFlow, /mt-1\.5 text-\[13px\][^\n]*sm:text-sm/)
+  assert.match(formFlow, /<dl[\s\S]*aria-label=\{props\.labels\.detailsSummary\}/)
+  assert.match(formFlow, /<dt[^>]*>\{props\.childLabels\.nameLabel\}<\/dt>[\s\S]*\{props\.initialName\}/)
+  assert.match(formFlow, /<dt[^>]*>\{props\.childLabels\.ageLabel\}<\/dt>[\s\S]*\{props\.initialAge\}/)
+  assert.doesNotMatch(formFlow, /\{props\.initialName\}[^\n]*\{props\.initialAge\}/)
   assert.match(generateAction, /bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600/)
 })
 

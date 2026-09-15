@@ -203,10 +203,19 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
                 </button>
               </div>
               <div className="flex items-start gap-3 border-b border-slate-200 p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.labels.detailsSummary}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{props.initialName} · {props.initialAge}</p>
-                </div>
+                <dl
+                  className="grid min-w-0 flex-1 grid-cols-2 gap-x-5"
+                  aria-label={props.labels.detailsSummary}
+                >
+                  <div className="min-w-0">
+                    <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.childLabels.nameLabel}</dt>
+                    <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{props.initialName}</dd>
+                  </div>
+                  <div className="min-w-0 border-l border-slate-200 pl-5">
+                    <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.childLabels.ageLabel}</dt>
+                    <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{props.initialAge}</dd>
+                  </div>
+                </dl>
                 <button type="button" onClick={() => props.onStepChange('DETAILS')} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" aria-label={`${props.labels.edit} ${props.labels.detailsSummary}`}>
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                 </button>
