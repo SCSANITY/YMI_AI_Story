@@ -49,3 +49,28 @@ test('Customize keeps details focused while Preview owns the image-led edition c
   assert.match(styles, /\.control\s*\{[\s\S]*?backdrop-filter:/)
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/)
 })
+
+test('Customize Review owns live values and edits each summary in place', () => {
+  const personalize = read('components/PersonalizePage.tsx')
+  const formFlow = read('components/personalize/PersonalizeFormFlow.tsx')
+  const childDetails = read('components/personalize/ChildDetailsFields.tsx')
+
+  assert.match(personalize, /setName\(details\.name\)/)
+  assert.match(personalize, /setAge\(details\.age\)/)
+  assert.doesNotMatch(personalize, /setChildDetailsSeedVersion/)
+  assert.match(personalize, /formStep !== 'PHOTO' && formStep !== 'REVIEW'/)
+
+  assert.match(childDetails, /value=\{initialName\}/)
+  assert.match(childDetails, /value=\{initialAge\}/)
+  assert.doesNotMatch(childDetails, /useState\(initialName\)|useState\(initialAge\)/)
+
+  assert.match(formFlow, /type ReviewEditField = 'name' \| 'age' \| 'language' \| null/)
+  assert.match(formFlow, /id="review-child-name"/)
+  assert.match(formFlow, /id="review-child-age"/)
+  assert.match(formFlow, /onChange=\{\(name\) => props\.onChildDetailsChange\(\{ name, age: props\.initialAge \}\)\}/)
+  assert.match(formFlow, /onChange=\{\(age\) => props\.onChildDetailsChange\(\{ name: props\.initialName, age \}\)\}/)
+  assert.match(formFlow, /type="file"[\s\S]*?onChange=\{props\.onPhotoUpload\}/)
+  assert.match(formFlow, /reviewEditField === 'language'[\s\S]*?<StoryLanguageSelector/)
+  assert.doesNotMatch(formFlow, /onClick=\{\(\) => props\.onStepChange\('PHOTO'\)\}[^\n]*aria-label=\{`\$\{props\.labels\.edit\}/)
+  assert.doesNotMatch(formFlow, /onClick=\{\(\) => props\.onStepChange\('DETAILS'\)\}[^\n]*aria-label=\{`\$\{props\.labels\.edit\}/)
+})

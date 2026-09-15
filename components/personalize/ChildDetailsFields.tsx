@@ -12,7 +12,7 @@ export type RecentProfileItem = {
 type ChildDetailsFieldsProps = {
   initialName: string
   initialAge: string
-  seedVersion: number
+  seedVersion?: number
   recentProfiles: RecentProfileItem[]
   labels: {
     nameLabel: string
@@ -32,7 +32,6 @@ type ChildDetailsFieldsProps = {
 function ChildDetailsFieldsComponent({
   initialName,
   initialAge,
-  seedVersion,
   recentProfiles,
   labels,
   ageRangeWarning,
@@ -42,18 +41,10 @@ function ChildDetailsFieldsComponent({
   onDeleteProfileValue,
   onFocusField,
 }: ChildDetailsFieldsProps) {
-  const [name, setName] = useState(initialName)
-  const [age, setAge] = useState(initialAge)
   const [showNameHistory, setShowNameHistory] = useState(false)
   const [showAgeHistory, setShowAgeHistory] = useState(false)
   const nameBoxRef = useRef<HTMLDivElement | null>(null)
   const ageBoxRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    setName(initialName)
-    setAge(initialAge)
-    onChange({ name: initialName, age: initialAge })
-  }, [initialAge, initialName, onChange, seedVersion])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -92,19 +83,17 @@ function ChildDetailsFieldsComponent({
   ), [recentProfiles])
   const shouldShowAgeRangeWarning = useMemo(() => {
     if (!ageRangeWarning || !minimumRecommendedAge) return false
-    const parsedAge = Number.parseFloat(age.trim())
+    const parsedAge = Number.parseFloat(initialAge.trim())
     return Number.isFinite(parsedAge) && parsedAge < minimumRecommendedAge
-  }, [age, ageRangeWarning, minimumRecommendedAge])
+  }, [initialAge, ageRangeWarning, minimumRecommendedAge])
 
   const handleNameChange = useCallback((value: string) => {
-    setName(value)
-    onChange({ name: value, age })
-  }, [age, onChange])
+    onChange({ name: value, age: initialAge })
+  }, [initialAge, onChange])
 
   const handleAgeChange = useCallback((value: string) => {
-    setAge(value)
-    onChange({ name, age: value })
-  }, [name, onChange])
+    onChange({ name: initialName, age: value })
+  }, [initialName, onChange])
 
   const openNameHistory = useCallback(() => {
     onLoadProfiles()
@@ -121,16 +110,14 @@ function ChildDetailsFieldsComponent({
   }, [onFocusField, onLoadProfiles])
 
   const selectName = useCallback((value: string) => {
-    setName(value)
-    onChange({ name: value, age })
+    onChange({ name: value, age: initialAge })
     setShowNameHistory(false)
-  }, [age, onChange])
+  }, [initialAge, onChange])
 
   const selectAge = useCallback((value: string) => {
-    setAge(value)
-    onChange({ name, age: value })
+    onChange({ name: initialName, age: value })
     setShowAgeHistory(false)
-  }, [name, onChange])
+  }, [initialName, onChange])
 
   return (
     <div className="grid gap-3 md:grid-cols-2 md:gap-4">
@@ -138,7 +125,7 @@ function ChildDetailsFieldsComponent({
         <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.nameLabel}</label>
         <input
           type="text"
-          value={name}
+          value={initialName}
           onChange={(event) => handleNameChange(event.target.value)}
           onFocus={openNameHistory}
           placeholder={labels.namePlaceholder}
@@ -192,7 +179,7 @@ function ChildDetailsFieldsComponent({
         <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.ageLabel}</label>
         <input
           type="number"
-          value={age}
+          value={initialAge}
           onChange={(event) => handleAgeChange(event.target.value)}
           onFocus={openAgeHistory}
           placeholder={labels.agePlaceholder}

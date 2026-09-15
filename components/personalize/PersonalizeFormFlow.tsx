@@ -1,7 +1,7 @@
 'use client'
 
-import { memo } from 'react'
-import { ArrowLeft, ArrowRight, Check, Pencil, Sparkles } from 'lucide-react'
+import { memo, useState } from 'react'
+import { ArrowLeft, ArrowRight, Check, LoaderCircle, Pencil, Sparkles, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { ChildDetailsFields, type RecentProfileItem } from '@/components/personalize/ChildDetailsFields'
 import { GeneratePreviewAction, type GeneratePreviewConsent } from '@/components/personalize/GeneratePreviewAction'
@@ -40,7 +40,6 @@ type PersonalizeFormFlowProps = {
   onDeleteFace: (assetId: string) => void
   initialName: string
   initialAge: string
-  childDetailsSeedVersion: number
   recentProfiles: RecentProfileItem[]
   childLabels: {
     nameLabel: string
@@ -98,6 +97,75 @@ type PersonalizeFormFlowProps = {
 
 const STEP_META = { PHOTO: 1, DETAILS: 2, REVIEW: 3 } as const
 
+type ReviewEditField = 'name' | 'age' | 'language' | null
+
+function ReviewInlineField({
+  id,
+  label,
+  value,
+  type,
+  isEditing,
+  editLabel,
+  className = '',
+  onStartEdit,
+  onFinishEdit,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: string
+  type: 'text' | 'number'
+  isEditing: boolean
+  editLabel: string
+  className?: string
+  onStartEdit: () => void
+  onFinishEdit: () => void
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <div className="flex items-center justify-between gap-2">
+        <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</dt>
+        <button
+          type="button"
+          aria-controls={id}
+          aria-expanded={isEditing}
+          aria-label={`${editLabel} ${label}`}
+          onMouseDown={(event) => {
+            if (isEditing) event.preventDefault()
+          }}
+          onClick={isEditing ? onFinishEdit : onStartEdit}
+          className="rounded-full p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+        >
+          {isEditing ? <Check className="h-4 w-4" aria-hidden="true" /> : <Pencil className="h-4 w-4" aria-hidden="true" />}
+        </button>
+      </div>
+      <dd className="mt-1 min-h-9">
+        {isEditing ? (
+          <input
+            id={id}
+            type={type}
+            min={type === 'number' ? 0 : undefined}
+            inputMode={type === 'number' ? 'decimal' : undefined}
+            value={value}
+            autoFocus
+            onChange={(event) => onChange(event.target.value)}
+            onBlur={onFinishEdit}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+            }}
+            className="h-9 w-full rounded-lg border border-amber-300 bg-amber-50/40 px-3 text-sm font-semibold text-slate-950 outline-none transition-shadow focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+          />
+        ) : (
+          <span id={id} className="block break-words pt-1 text-sm font-semibold text-slate-900">
+            {value.trim() || '—'}
+          </span>
+        )}
+      </dd>
+    </div>
+  )
+}
+
 function StepHeader({ current, title, body, stepLabel }: { current: number; title: string; body: string; stepLabel: string }) {
   return (
     <header>
@@ -116,9 +184,17 @@ function StepHeader({ current, title, body, stepLabel }: { current: number; titl
 }
 
 function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
+  const [reviewEditField, setReviewEditField] = useState<ReviewEditField>(null)
   const stepNumber = STEP_META[props.step]
   const title = props.step === 'PHOTO' ? props.labels.photoTitle : props.step === 'DETAILS' ? props.labels.detailsTitle : props.labels.reviewTitle
   const body = props.step === 'PHOTO' ? props.labels.photoBody : props.step === 'DETAILS' ? props.labels.detailsBody : props.labels.reviewBody
+  const reviewPhotoStatus = props.facePrepareStatus === 'checking'
+    ? props.photoLabels.photoChecking
+    : props.facePrepareStatus === 'preparing'
+      ? props.photoLabels.photoPreparing
+      : props.facePrepareStatus === 'failed'
+        ? props.facePrepareError ?? props.photoLabels.photoPrepareFailed
+        : props.photoLabels.photoReady
 
   return (
     <section className="rounded-[1.5rem] bg-white p-4 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.48)] sm:p-5 lg:p-6">
@@ -155,7 +231,6 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
             <ChildDetailsFields
               initialName={props.initialName}
               initialAge={props.initialAge}
-              seedVersion={props.childDetailsSeedVersion}
               recentProfiles={props.recentProfiles}
               labels={props.childLabels}
               ageRangeWarning={props.ageRangeWarning}
@@ -194,35 +269,80 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.labels.photoSummary}</p>
                   <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <Check className="h-4 w-4 text-amber-600" aria-hidden="true" />
-                    {props.photoLabels.photoReady}
+                    {props.isFacePreparing ? (
+                      <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-amber-600" aria-hidden="true" />
+                    ) : props.isPhotoFailed ? (
+                      <TriangleAlert className="h-4 w-4 shrink-0 text-rose-500" aria-hidden="true" />
+                    ) : (
+                      <Check className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                    )}
+                    <span className={props.isPhotoFailed ? 'text-rose-600' : undefined}>{reviewPhotoStatus}</span>
                   </p>
                 </div>
-                <button type="button" onClick={() => props.onStepChange('PHOTO')} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" aria-label={`${props.labels.edit} ${props.labels.photoSummary}`}>
+                <label className={`relative rounded-full p-2 text-slate-500 transition-colors focus-within:ring-2 focus-within:ring-amber-500 ${props.isFacePreparing ? 'cursor-wait opacity-50' : 'cursor-pointer hover:bg-slate-100 hover:text-slate-950'}`} aria-label={`${props.labels.edit} ${props.labels.photoSummary}`}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={props.isFacePreparing}
+                    onChange={props.onPhotoUpload}
+                    className="sr-only"
+                  />
                   <Pencil className="h-4 w-4" aria-hidden="true" />
-                </button>
+                </label>
               </div>
-              <div className="flex items-start gap-3 border-b border-slate-200 p-3">
+              <div className="border-b border-slate-200 p-3">
                 <dl
                   className="grid min-w-0 flex-1 grid-cols-2 gap-x-5"
                   aria-label={props.labels.detailsSummary}
                 >
-                  <div className="min-w-0">
-                    <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.childLabels.nameLabel}</dt>
-                    <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{props.initialName}</dd>
-                  </div>
-                  <div className="min-w-0 border-l border-slate-200 pl-5">
-                    <dt className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.childLabels.ageLabel}</dt>
-                    <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{props.initialAge}</dd>
-                  </div>
+                  <ReviewInlineField
+                    id="review-child-name"
+                    label={props.childLabels.nameLabel}
+                    value={props.initialName}
+                    type="text"
+                    isEditing={reviewEditField === 'name'}
+                    editLabel={props.labels.edit}
+                    onStartEdit={() => setReviewEditField('name')}
+                    onFinishEdit={() => setReviewEditField(null)}
+                    onChange={(name) => props.onChildDetailsChange({ name, age: props.initialAge })}
+                  />
+                  <ReviewInlineField
+                    id="review-child-age"
+                    label={props.childLabels.ageLabel}
+                    value={props.initialAge}
+                    type="number"
+                    isEditing={reviewEditField === 'age'}
+                    editLabel={props.labels.edit}
+                    className="border-l border-slate-200 pl-5"
+                    onStartEdit={() => setReviewEditField('age')}
+                    onFinishEdit={() => setReviewEditField(null)}
+                    onChange={(age) => props.onChildDetailsChange({ name: props.initialName, age })}
+                  />
                 </dl>
-                <button type="button" onClick={() => props.onStepChange('DETAILS')} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" aria-label={`${props.labels.edit} ${props.labels.detailsSummary}`}>
-                  <Pencil className="h-4 w-4" aria-hidden="true" />
-                </button>
               </div>
-              <div className="p-3">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.labels.languageSummary}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{props.selectedLang}</p>
+              <div className="flex items-start gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  {reviewEditField === 'language' ? (
+                    <StoryLanguageSelector value={props.selectedLang} labels={props.languageLabels} onChange={props.onLanguageChange} />
+                  ) : (
+                    <>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.labels.languageSummary}</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{props.selectedLang}</p>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-expanded={reviewEditField === 'language'}
+                  onMouseDown={(event) => {
+                    if (reviewEditField === 'language') event.preventDefault()
+                  }}
+                  onClick={() => setReviewEditField((field) => field === 'language' ? null : 'language')}
+                  className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  aria-label={`${props.labels.edit} ${props.labels.languageSummary}`}
+                >
+                  {reviewEditField === 'language' ? <Check className="h-4 w-4" aria-hidden="true" /> : <Pencil className="h-4 w-4" aria-hidden="true" />}
+                </button>
               </div>
             </div>
 

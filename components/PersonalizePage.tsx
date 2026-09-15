@@ -704,7 +704,6 @@ export default function PersonalizePage({
   const nameRef = useRef(name);
   const ageRef = useRef(age);
   const [areChildDetailsReady, setAreChildDetailsReady] = useState(false);
-  const [childDetailsSeedVersion, setChildDetailsSeedVersion] = useState(0);
   const minimumRecommendedAge = getBookMinimumAge(book);
   const ageRangeWarningText = t('personalize.ageRangeInlineWarning', {
     minAge: minimumRecommendedAge,
@@ -730,18 +729,19 @@ export default function PersonalizePage({
       const next = name.trim().length > 0 && age.trim().length > 0;
       return prev === next ? prev : next;
     });
-    setChildDetailsSeedVersion((prev) => prev + 1);
   }, [name, age]);
 
   const handleChildDetailsChange = useCallback((details: { name: string; age: string }) => {
     nameRef.current = details.name;
     ageRef.current = details.age;
+    setName(details.name);
+    setAge(details.age);
     setShowAgeRangeConfirm(false);
     setAreChildDetailsReady((prev) => {
       const next = details.name.trim().length > 0 && details.age.trim().length > 0;
       return prev === next ? prev : next;
     });
-  }, []);
+  }, [setAge, setName]);
 
   // --- Calculations ---
   const purchaseBookType: PurchasePackageType = bookType === 'digital' || bookType === 'supreme'
@@ -2999,14 +2999,11 @@ export default function PersonalizePage({
 
   useEffect(() => {
     if (!viewState.showForm || formStep === 'INTRO') return;
-    if (!hasUsablePhoto && !isFacePreparing && formStep !== 'PHOTO') {
+    if (!hasUsablePhoto && !isFacePreparing && formStep !== 'PHOTO' && formStep !== 'REVIEW') {
       setFormStep('PHOTO');
       return;
     }
-    if (formStep === 'REVIEW' && !areChildDetailsReady) {
-      setFormStep('DETAILS');
-    }
-  }, [areChildDetailsReady, formStep, hasUsablePhoto, isFacePreparing, viewState.showForm]);
+  }, [formStep, hasUsablePhoto, isFacePreparing, viewState.showForm]);
 
   const isAgeBelowRecommendedRange = useCallback((value: string) => {
     const parsedAge = parseChildAge(value);
@@ -3015,10 +3012,8 @@ export default function PersonalizePage({
 
   const startGeneratePreview = useCallback((consent: GeneratePreviewConsent) => {
     dataGenerationConsentRef.current = consent.dataGeneration;
-    setName(nameRef.current);
-    setAge(ageRef.current);
     primaryAction();
-  }, [primaryAction, setAge, setName]);
+  }, [primaryAction]);
 
   const handleGeneratePreviewAction = useCallback((consent: GeneratePreviewConsent) => {
     if (isAgeBelowRecommendedRange(ageRef.current)) {
@@ -3221,7 +3216,6 @@ export default function PersonalizePage({
                         onDeleteFace={handleDeleteFace}
                         initialName={name}
                         initialAge={age}
-                        childDetailsSeedVersion={childDetailsSeedVersion}
                         recentProfiles={recentProfiles}
                         childLabels={{
                           nameLabel: t('personalize.nameLabel'),
