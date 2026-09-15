@@ -19,12 +19,12 @@ function RecentFacesStripComponent({ faces, onSelectFace, onDeleteFace }: Recent
   if (faces.length === 0) return null
 
   return (
-    <div className="flex max-w-full flex-wrap gap-3 overflow-hidden">
+    <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
       {faces.map((face) => (
-        <div key={face.asset_id} className="relative h-12 w-12">
+        <div key={face.asset_id} className="relative h-10 w-10 shrink-0">
           <button
             type="button"
-            className="h-12 w-12 overflow-hidden rounded-full border border-white shadow-sm transition hover:ring-2 hover:ring-amber-300"
+            className="h-10 w-10 overflow-hidden rounded-full border border-white shadow-sm transition hover:ring-2 hover:ring-amber-300"
             onClick={() => onSelectFace(face)}
           >
             {face.signed_url ? (

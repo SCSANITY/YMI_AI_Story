@@ -25,7 +25,7 @@ function ProgressStepsComponent({ currentIndex, placement = 'page', labels }: Pr
   const fillPercent = Math.max(0, Math.min(100, (currentIndex / (steps.length - 1)) * 100))
 
   return (
-    <div className={`relative hidden md:block ${placement === 'preview' ? 'mb-6 w-full' : 'mx-auto mb-7 max-w-xl px-4'}`}>
+    <div className={`relative hidden md:block ${placement === 'preview' ? 'mb-5 w-full' : 'mx-auto mb-5 max-w-xl px-4'}`}>
       <div className="absolute left-7 right-7 top-5 z-0 h-1 overflow-hidden rounded-full bg-gray-100 shadow-inner">
         <div
           className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500"

@@ -109,8 +109,8 @@ function StepHeader({ current, title, body, stepLabel }: { current: number; titl
           ))}
         </div>
       </div>
-      <h1 className="mt-4 font-serif text-3xl font-bold tracking-[-0.02em] text-slate-950">{title}</h1>
-      <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-base">{body}</p>
+      <h1 className="mt-3 font-serif text-[1.65rem] font-bold leading-tight tracking-[-0.02em] text-slate-950 sm:text-[1.75rem]">{title}</h1>
+      <p className="mt-1.5 text-[13px] leading-5 text-slate-600 sm:text-sm">{body}</p>
     </header>
   )
 }
@@ -121,12 +121,12 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
   const body = props.step === 'PHOTO' ? props.labels.photoBody : props.step === 'DETAILS' ? props.labels.detailsBody : props.labels.reviewBody
 
   return (
-    <section className="rounded-[1.5rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.48)] sm:p-7 lg:p-8">
+    <section className="rounded-[1.5rem] bg-white p-4 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.48)] sm:p-5 lg:p-6">
       <StepHeader current={stepNumber} title={title} body={body} stepLabel={props.labels.stepLabel(stepNumber)} />
 
-      <div className="mt-6">
+      <div className="mt-4">
         {props.step === 'PHOTO' ? (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             <PhotoUploadPanel
               photoPreview={props.photoPreview}
               facePrepareStatus={props.facePrepareStatus}
@@ -137,12 +137,12 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
             />
             <PrivacyReassurance />
             <RecentFacesStrip faces={props.recentFaces} onSelectFace={props.onSelectFace} onDeleteFace={props.onDeleteFace} />
-            <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-between">
+            <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-between">
               <Button type="button" variant="ghost" onClick={() => props.onStepChange('INTRO')}>
                 <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
                 {props.labels.back}
               </Button>
-              <Button type="button" disabled={!props.hasUsablePhoto} onClick={() => props.onStepChange('DETAILS')} className="glass-action-btn glass-action-btn--brand min-h-12 rounded-2xl px-7">
+              <Button type="button" disabled={!props.hasUsablePhoto} onClick={() => props.onStepChange('DETAILS')} className="glass-action-btn glass-action-btn--brand h-11 rounded-xl px-6">
                 {props.labels.continue}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
@@ -151,7 +151,7 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
         ) : null}
 
         {props.step === 'DETAILS' ? (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
             <ChildDetailsFields
               initialName={props.initialName}
               initialAge={props.initialAge}
@@ -165,12 +165,12 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
               onDeleteProfileValue={props.onDeleteProfileValue}
             />
             <StoryLanguageSelector value={props.selectedLang} labels={props.languageLabels} onChange={props.onLanguageChange} />
-            <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-between">
+            <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-between">
               <Button type="button" variant="ghost" onClick={() => props.onStepChange('PHOTO')}>
                 <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
                 {props.labels.back}
               </Button>
-              <Button type="button" disabled={!props.isDetailsReady} onClick={() => props.onStepChange('REVIEW')} className="glass-action-btn glass-action-btn--brand min-h-12 rounded-2xl px-7">
+              <Button type="button" disabled={!props.isDetailsReady} onClick={() => props.onStepChange('REVIEW')} className="glass-action-btn glass-action-btn--brand h-11 rounded-xl px-6">
                 {props.labels.reviewDetails}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
@@ -181,14 +181,14 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
         {props.step === 'REVIEW' ? (
           <div>
             <div className="overflow-hidden rounded-2xl border border-slate-200">
-              <div className="flex items-center gap-4 border-b border-slate-200 p-4">
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-amber-50">
+              <div className="flex items-center gap-3 border-b border-slate-200 p-3">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-amber-50">
                   {props.photoPreview ? (
                     // Blob and signed Preview URLs are runtime values, so a native image is intentional here.
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={props.photoPreview} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <Sparkles className="m-5 h-6 w-6 text-amber-600" aria-hidden="true" />
+                    <Sparkles className="m-4 h-6 w-6 text-amber-600" aria-hidden="true" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -202,7 +202,7 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
-              <div className="flex items-start gap-4 border-b border-slate-200 p-4">
+              <div className="flex items-start gap-3 border-b border-slate-200 p-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.labels.detailsSummary}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{props.initialName} · {props.initialAge}</p>
@@ -211,7 +211,7 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
-              <div className="p-4">
+              <div className="p-3">
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{props.labels.languageSummary}</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">{props.selectedLang}</p>
               </div>

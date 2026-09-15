@@ -133,7 +133,7 @@ function ChildDetailsFieldsComponent({
   }, [name, onChange])
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 md:gap-6">
+    <div className="grid gap-3 md:grid-cols-2 md:gap-4">
       <div ref={nameBoxRef} className="space-y-2 relative">
         <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.nameLabel}</label>
         <input
@@ -142,7 +142,7 @@ function ChildDetailsFieldsComponent({
           onChange={(event) => handleNameChange(event.target.value)}
           onFocus={openNameHistory}
           placeholder={labels.namePlaceholder}
-          className={`${styles.control} h-12 w-full rounded-2xl px-4 text-[15px] font-semibold text-slate-950 placeholder:text-slate-400/70`}
+          className={`${styles.control} h-11 w-full rounded-xl px-4 text-sm font-semibold text-slate-950 placeholder:text-slate-400/70`}
         />
         {showNameHistory && (
           <div
@@ -196,7 +196,7 @@ function ChildDetailsFieldsComponent({
           onChange={(event) => handleAgeChange(event.target.value)}
           onFocus={openAgeHistory}
           placeholder={labels.agePlaceholder}
-          className={`${styles.control} h-12 w-full rounded-2xl px-4 text-[15px] font-semibold text-slate-950 placeholder:text-slate-400/70`}
+          className={`${styles.control} h-11 w-full rounded-xl px-4 text-sm font-semibold text-slate-950 placeholder:text-slate-400/70`}
         />
         {shouldShowAgeRangeWarning ? (
           <p className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs font-medium leading-5 text-amber-700">

@@ -55,17 +55,17 @@ function PreviewPurchasePanelComponent({
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set())
 
   return (
-    <aside className="flex h-full w-full flex-col rounded-[1.5rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:min-h-[680px] xl:p-7">
+    <aside className="flex w-full flex-col rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:mx-auto xl:max-w-[380px] xl:p-5">
       <fieldset disabled={isSavingEdition}>
-        <legend className="font-serif text-2xl font-bold tracking-[-0.02em] text-slate-950">{title}</legend>
-        <div className="mt-4 flex flex-col gap-3" role="radiogroup" aria-busy={isSavingEdition}>
+        <legend className="font-serif text-xl font-bold tracking-[-0.02em] text-slate-950 sm:text-2xl xl:text-xl">{title}</legend>
+        <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-busy={isSavingEdition}>
           {options.map((option) => {
             const selected = option.value === value
             const imageFailed = failedImages.has(option.value)
             return (
               <label
                 key={option.value}
-                className={`relative grid cursor-pointer ${imageFailed ? 'grid-cols-[minmax(0,1fr)_24px]' : 'grid-cols-[86px_minmax(0,1fr)_24px]'} items-center gap-3 rounded-2xl border p-3 transition focus-within:ring-2 focus-within:ring-amber-500 focus-within:ring-offset-2 ${
+                className={`relative grid cursor-pointer ${imageFailed ? 'grid-cols-[minmax(0,1fr)_22px]' : 'grid-cols-[72px_minmax(0,1fr)_22px]'} items-center gap-2.5 rounded-xl border p-2.5 transition focus-within:ring-2 focus-within:ring-amber-500 focus-within:ring-offset-2 ${
                   selected
                     ? 'border-amber-500 bg-amber-50/70 shadow-[0_12px_28px_-22px_rgba(180,83,9,0.65)]'
                     : 'border-slate-200 bg-white hover:border-amber-300'
@@ -80,12 +80,12 @@ function PreviewPurchasePanelComponent({
                   onChange={() => onChange(option.value)}
                 />
                 {!imageFailed ? (
-                  <span className="relative block h-[68px] overflow-hidden rounded-xl bg-amber-50">
+                  <span className="relative block h-[56px] overflow-hidden rounded-lg bg-amber-50">
                     <Image
                       src={option.image}
                       alt={option.imageAlt}
                       fill
-                      sizes="86px"
+                      sizes="72px"
                       className="object-cover"
                       onError={() => setFailedImages((current) => new Set(current).add(option.value))}
                     />
@@ -95,17 +95,17 @@ function PreviewPurchasePanelComponent({
                 )}
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-slate-950">{option.title}</span>
+                    <span className="text-sm font-bold text-slate-950">{option.title}</span>
                     {option.badge ? (
                       <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.09em] text-slate-950">
                         {option.badge}
                       </span>
                     ) : null}
                   </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-slate-600">{option.subtitle}</span>
-                  <span className="mt-1 block text-sm font-extrabold text-slate-950">{option.price}</span>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">{option.subtitle}</span>
+                  <span className="mt-0.5 block text-[13px] font-extrabold text-slate-950">{option.price}</span>
                 </span>
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full border ${selected ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300 text-transparent'}`} aria-hidden="true">
+                <span className={`flex h-[22px] w-[22px] items-center justify-center rounded-full border ${selected ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300 text-transparent'}`} aria-hidden="true">
                   <Check className="h-3.5 w-3.5" />
                 </span>
               </label>
@@ -156,7 +156,7 @@ function PreviewPurchasePanelComponent({
         </section>
       ) : null}
 
-      <div className="mt-5 border-t border-slate-200 pt-5 xl:mt-auto">{actions}</div>
+      <div className="mt-4 border-t border-slate-200 pt-4">{actions}</div>
     </aside>
   )
 }

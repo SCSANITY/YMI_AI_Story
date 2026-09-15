@@ -1992,6 +1992,7 @@ export default function PersonalizePage({
   const handleEditionChange = useCallback(async (nextPackageType: PurchasePackageType) => {
     if (nextPackageType === purchaseBookType || isSavingEdition) return;
 
+    const previousPackageType = purchaseBookType;
     purchaseConfigurationAbortRef.current?.abort();
     const controller = new AbortController();
     purchaseConfigurationAbortRef.current = controller;
@@ -2000,6 +2001,7 @@ export default function PersonalizePage({
     setIsSavingEdition(true);
     setEditionError(null);
     setVoiceValidationError(null);
+    setBookType(nextPackageType);
 
     try {
       const result = await saveEditionConfiguration(nextPackageType, {
@@ -2023,6 +2025,7 @@ export default function PersonalizePage({
     } catch (error) {
       if (controller.signal.aborted) return;
       if (purchaseConfigurationRequestRef.current === requestId) {
+        setBookType(previousPackageType);
         setEditionError(resolveEditionError(error));
       }
     } finally {

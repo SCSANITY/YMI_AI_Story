@@ -23,16 +23,18 @@ test('PX-001 separates product introduction, preview inputs, and post-Preview pu
   assert.match(page, /<PreviewPurchasePanel/)
   assert.match(purchasePanel, /type="radio"/)
   assert.match(purchasePanel, /value === 'supreme'/)
-  assert.match(layout, /xl:grid-cols-\[minmax\(0,3fr\)_minmax\(380px,2fr\)\]/)
+  assert.match(layout, /xl:grid-cols-\[minmax\(0,7fr\)_minmax\(310px,3fr\)\]/)
+  assert.match(layout, /max-w-\[380px\][^>]*>\{intro\}/)
   assert.match(layout, /\{progress\}[\s\S]*?\{intro\}[\s\S]*?\{book\}/)
 })
 
-test('PX-001 refinement removes the duplicated top-bar title and restores database-driven Magic Attribute meters', async () => {
-  const [page, header, attributes, carousel, generateAction] = await Promise.all([
+test('PX-001 refinement removes the duplicated top-bar title and restores compact database-driven Magic Attribute meters', async () => {
+  const [page, header, attributes, carousel, formFlow, generateAction] = await Promise.all([
     read('components/PersonalizePage.tsx'),
     read('components/personalize/PersonalizeHeader.tsx'),
     read('components/personalize/MagicAttributesPanel.tsx'),
     read('components/personalize/ProductShowcaseCarousel.tsx'),
+    read('components/personalize/PersonalizeFormFlow.tsx'),
     read('components/personalize/GeneratePreviewAction.tsx'),
   ])
 
@@ -40,10 +42,14 @@ test('PX-001 refinement removes the duplicated top-bar title and restores databa
   assert.doesNotMatch(page, /<PersonalizeHeader[\s\S]{0,120}title=/)
   assert.match(attributes, /role="progressbar"/)
   assert.match(attributes, /style=\{\{ width: `\$\{percent\}%` \}\}/)
+  assert.match(attributes, /max-w-\[520px\]/)
+  assert.match(attributes, /h-2\.5 overflow-hidden/)
   assert.doesNotMatch(attributes, /attributes\.slice\(/)
   assert.doesNotMatch(carousel, /uploadPanelRef|uploadRect/)
   assert.doesNotMatch(carousel, /useEffect\(\(\) => \{[\s\S]{0,160}setActiveIndex\(0\)/)
   assert.match(page, /<ProductShowcaseCarousel[\s\S]{0,80}key=\{bookID\}/)
+  assert.match(formFlow, /text-\[1\.65rem\][^\n]*sm:text-\[1\.75rem\]/)
+  assert.match(formFlow, /mt-1\.5 text-\[13px\][^\n]*sm:text-sm/)
   assert.match(generateAction, /bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600/)
 })
 
@@ -94,7 +100,10 @@ test('PX-001 purchase configuration is owner-scoped, preview-guarded, lock-aware
   assert.match(route, /purchase_configuration_locked/)
   assert.match(route, /voice_configuration_locked/)
   assert.match(route, /template_package_prices/)
+  assert.match(route, /Promise\.allSettled\(\[[\s\S]*loadCreationPhotoLockState\(creationId\)[\s\S]*\.from\('template_package_prices'\)/)
   assert.match(route, /packagePriceRowToModel/)
   assert.match(service, /credentials: 'include'/)
+  assert.match(page, /const previousPackageType = purchaseBookType;[\s\S]*setBookType\(nextPackageType\);[\s\S]*await saveEditionConfiguration/)
+  assert.match(page, /catch \(error\)[\s\S]*setBookType\(previousPackageType\)/)
   assert.match(page, /await ensureCurrentPurchaseConfiguration\(\)/g)
 })

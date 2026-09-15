@@ -49,12 +49,12 @@ function PhotoUploadPanelComponent({
   const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing'
 
   return (
-    <div className="group relative cursor-pointer rounded-[1rem] border-2 border-dashed border-amber-200 bg-amber-50/60 p-3 text-center transition-colors hover:bg-amber-50 sm:p-4 md:p-[18px]">
+    <div className="group relative cursor-pointer rounded-[1rem] border-2 border-dashed border-amber-200 bg-amber-50/60 p-2.5 text-center transition-colors hover:bg-amber-50 sm:p-3">
       <input type="file" onChange={onPhotoUpload} className="absolute inset-0 z-30 cursor-pointer opacity-0" accept="image/*" />
       {photoPreview ? (
         <div className="pointer-events-none relative z-10">
-          <div className="relative mx-auto w-20 sm:w-24 md:w-28">
-            <img src={photoPreview} alt={labels.uploadChildPhoto} className="mx-auto h-20 w-20 rounded-full border-4 border-white object-cover shadow-lg sm:h-24 sm:w-24 md:h-28 md:w-28" />
+          <div className="relative mx-auto w-20 sm:w-22">
+            <img src={photoPreview} alt={labels.uploadChildPhoto} className="mx-auto h-20 w-20 rounded-full border-4 border-white object-cover shadow-lg sm:h-22 sm:w-22" />
             {isFacePreparing ? (
               <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-amber-100">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
@@ -90,20 +90,20 @@ function PhotoUploadPanelComponent({
           <p className="mt-1.5 text-xs font-medium text-amber-600">{labels.clickToChangePhoto}</p>
         </div>
       ) : (
-        <div className="pointer-events-none space-y-2">
-          <div className="relative mx-auto h-18 w-18 animate-bounce sm:h-20 sm:w-20" style={{ animationDuration: '2.4s' }}>
+        <div className="pointer-events-none flex flex-col gap-1.5">
+          <div className="relative mx-auto h-16 w-16 animate-bounce sm:h-18 sm:w-18" style={{ animationDuration: '2.4s' }}>
             <span className="absolute inset-0 animate-pulse-slow rounded-full bg-amber-300/45 blur-2xl" />
             <span className="absolute inset-3 animate-pulse rounded-full bg-orange-200/50 blur-xl" />
             <div className="absolute inset-2 rounded-full border border-amber-300/60" />
-            <div className="relative mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-white via-amber-50 to-amber-100 text-amber-600 shadow-[0_14px_34px_rgba(245,158,11,0.34)] ring-4 ring-white/80 sm:h-20 sm:w-20">
-              <Camera className="h-8 w-8 sm:h-9 sm:w-9" />
+            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-white via-amber-50 to-amber-100 text-amber-600 shadow-[0_14px_34px_rgba(245,158,11,0.34)] ring-4 ring-white/80 sm:h-18 sm:w-18">
+              <Camera className="h-7 w-7 sm:h-8 sm:w-8" />
             </div>
           </div>
           <div>
-            <h4 className="text-base font-bold text-gray-900 sm:text-lg">{labels.uploadChildPhoto}</h4>
+            <h4 className="text-sm font-bold text-gray-900 sm:text-base">{labels.uploadChildPhoto}</h4>
             <p className="mt-0.5 text-xs font-medium text-amber-700">{labels.uploadPhotoHint}</p>
           </div>
-          <div className="mx-auto w-full min-w-0 max-w-[320px] rounded-[0.85rem] border border-amber-100/90 bg-white/74 p-2 shadow-[0_10px_22px_rgba(245,158,11,0.08)] sm:max-w-[360px] sm:p-2.5 md:max-w-[380px]">
+          <div className="mx-auto w-full min-w-0 max-w-[300px] rounded-[0.85rem] border border-amber-100/90 bg-white/74 p-2 shadow-[0_10px_22px_rgba(245,158,11,0.08)] sm:max-w-[320px]">
             <div className="grid min-w-0 grid-cols-3 gap-1">
               {GOOD_PHOTO_EXAMPLES.map((item) => (
                 <div key={item.src} className="relative">

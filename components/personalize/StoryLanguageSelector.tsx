@@ -65,7 +65,7 @@ function StoryLanguageSelectorComponent({ value, labels, onChange }: StoryLangua
   }, [onChange])
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-2">
       <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.field}</label>
       <div ref={rootRef} className="relative">
         <button
@@ -73,7 +73,7 @@ function StoryLanguageSelectorComponent({ value, labels, onChange }: StoryLangua
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           onClick={() => setIsOpen((prev) => !prev)}
-          className={`${styles.control} flex h-12 w-full items-center justify-between rounded-2xl px-4 text-left text-[15px] font-semibold text-slate-950`}
+          className={`${styles.control} flex h-11 w-full items-center justify-between rounded-xl px-4 text-left text-sm font-semibold text-slate-950`}
         >
           <span>{currentLabel}</span>
         </button>

@@ -40,7 +40,7 @@ function MagicAttributesPanelComponent({
       >
         {heading}
       </h2>
-      <div className="mt-3 grid gap-x-7 gap-y-3 sm:grid-cols-2">
+      <div className="mt-3 grid w-full max-w-[520px] gap-x-6 gap-y-3 sm:grid-cols-2">
         {attributes.map((attribute) => {
           const normalized = attribute.label.trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ')
           const match = ATTRIBUTE_KEYS[normalized]
@@ -62,7 +62,7 @@ function MagicAttributesPanelComponent({
                 <span className="shrink-0 tabular-nums text-slate-500">{percent}%</span>
               </div>
               <div
-                className="h-1.5 overflow-hidden rounded-full bg-slate-200"
+                className="h-2.5 overflow-hidden rounded-full bg-slate-200"
                 role="progressbar"
                 aria-label={label}
                 aria-valuemin={0}

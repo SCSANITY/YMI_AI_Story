@@ -60,8 +60,8 @@ function GeneratePreviewActionComponent({
   }, [isDataGenerationConsentChecked, onGenerate])
 
   return (
-    <div className="mt-6 border-t border-slate-200 pt-5">
-      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/55 p-4 text-sm leading-6 text-slate-700">
+    <div className="mt-4 border-t border-slate-200 pt-4">
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-100 bg-amber-50/55 p-3 text-xs leading-5 text-slate-700">
         <input
           type="checkbox"
           checked={isDataGenerationConsentChecked}
@@ -84,7 +84,7 @@ function GeneratePreviewActionComponent({
         type="button"
         onClick={handleGenerate}
         disabled={!isFormValid}
-        className="group relative isolate mt-4 flex h-14 w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600 px-5 text-base font-bold text-white shadow-[0_18px_34px_-20px_rgba(234,88,12,0.75)] transition duration-300 before:pointer-events-none before:absolute before:inset-y-0 before:-left-1/3 before:w-1/3 before:-skew-x-12 before:bg-white/25 before:transition-transform before:duration-500 hover:-translate-y-0.5 hover:from-amber-400 hover:via-orange-500 hover:to-orange-500 hover:shadow-[0_22px_38px_-20px_rgba(234,88,12,0.85)] hover:before:translate-x-[420%] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none disabled:before:hidden sm:h-16"
+        className="group relative isolate mt-3 flex h-12 w-full items-center justify-center gap-3 overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600 px-5 text-sm font-bold text-white shadow-[0_18px_34px_-20px_rgba(234,88,12,0.75)] transition duration-300 before:pointer-events-none before:absolute before:inset-y-0 before:-left-1/3 before:w-1/3 before:-skew-x-12 before:bg-white/25 before:transition-transform before:duration-500 hover:-translate-y-0.5 hover:from-amber-400 hover:via-orange-500 hover:to-orange-500 hover:shadow-[0_22px_38px_-20px_rgba(234,88,12,0.85)] hover:before:translate-x-[420%] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none disabled:before:hidden sm:h-13 sm:text-base"
       >
         <Sparkles className="h-5 w-5" aria-hidden="true" />
         {buttonLabel}

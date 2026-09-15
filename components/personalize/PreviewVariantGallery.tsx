@@ -56,7 +56,7 @@ function PreviewVariantGalleryComponent({
           return (
             <div
               key={item.jobId}
-              className="flex shrink-0 snap-start flex-col xl:w-full xl:flex-row xl:items-center xl:gap-2"
+              className="flex shrink-0 snap-start flex-col items-center xl:w-full"
             >
               <div className="relative shrink-0">
                 <button
@@ -113,7 +113,7 @@ function PreviewVariantGalleryComponent({
                   </button>
                 ) : null}
               </div>
-              <p className="mt-1 w-[76px] truncate text-center text-[10px] font-semibold text-gray-600 xl:mt-0 xl:min-w-0 xl:flex-1 xl:text-left xl:leading-4">
+              <p className="mt-1 w-[76px] break-words text-center text-[10px] font-semibold leading-4 text-gray-600 xl:w-full xl:px-1">
                 {item.status === 'generating' ? labels.generating : itemLabel}
               </p>
             </div>

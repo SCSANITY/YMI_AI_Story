@@ -7,11 +7,12 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-test('wide desktop Preview uses a stable 60/40 book and purchase configuration split', () => {
+test('wide desktop Preview uses a stable 70/30 book and purchase configuration split', () => {
   const layout = read('components/personalize/PreviewStepLayout.tsx')
 
-  assert.match(layout, /xl:grid-cols-\[minmax\(0,3fr\)_minmax\(380px,2fr\)\]/)
-  assert.match(layout, /xl:grid-cols-\[124px_minmax\(0,1fr\)\]/)
+  assert.match(layout, /xl:grid-cols-\[minmax\(0,7fr\)_minmax\(310px,3fr\)\]/)
+  assert.match(layout, /xl:grid-cols-\[112px_minmax\(0,1fr\)\]/)
+  assert.match(layout, /max-w-\[380px\][^>]*>\{intro\}/)
   assert.match(layout, /\{progress\}[\s\S]*?\{intro\}[\s\S]*?\{book\}[\s\S]*?\{gallery\}/)
   assert.match(layout, /ref=\{purchaseRef\}[\s\S]*?\{purchase\}/)
 })
@@ -28,7 +29,7 @@ test('book and Photo Versions remain ahead of the purchase configuration in sour
   assert.ok(purchase > book)
 })
 
-test('Photo Versions stays horizontal on compact desktops and becomes a bounded rail when space permits', () => {
+test('Photo Versions stays horizontal on compact desktops and places rail labels below each card', () => {
   const gallery = read('components/personalize/PreviewVariantGallery.tsx')
 
   assert.match(gallery, /overflow-x-auto[\s\S]*?xl:flex-col/)
@@ -38,6 +39,9 @@ test('Photo Versions stays horizontal on compact desktops and becomes a bounded 
   assert.match(gallery, /snap-x snap-mandatory[\s\S]*?xl:snap-none/)
   assert.match(gallery, /h-11 w-11/)
   assert.match(gallery, /focus-visible:ring-2/)
+  assert.match(gallery, /flex shrink-0 snap-start flex-col items-center xl:w-full/)
+  assert.match(gallery, /mt-1 w-\[76px\][^\n]*text-center[^\n]*xl:w-full/)
+  assert.doesNotMatch(gallery, /xl:flex-row|truncate/)
 })
 
 test('Preview book island scales from its actual column instead of global window width', () => {

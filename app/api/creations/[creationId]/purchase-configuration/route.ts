@@ -140,15 +140,38 @@ export async function PATCH(
     )
   }
 
-  let lockState: Awaited<ReturnType<typeof loadCreationPhotoLockState>>
-  try {
-    lockState = await loadCreationPhotoLockState(creationId)
-  } catch {
+  const [lockStateResult, priceRowResult] = await Promise.allSettled([
+    loadCreationPhotoLockState(creationId),
+    supabaseAdmin
+      .from('template_package_prices')
+      .select('package_type, list_price_usd, sale_price_usd, row_version')
+      .eq('template_id', creation.template_id)
+      .eq('package_type', packageType)
+      .maybeSingle(),
+  ])
+
+  if (lockStateResult.status === 'rejected') {
     return NextResponse.json(
       { error: 'Unable to verify purchase state', code: 'purchase_state_lookup_failed' },
       { status: 500, headers: NO_STORE_HEADERS }
     )
   }
+  const lockState = lockStateResult.value
+
+  if (priceRowResult.status === 'rejected') {
+    return NextResponse.json(
+      { error: 'The selected edition price is unavailable', code: 'package_price_unavailable' },
+      { status: 409, headers: NO_STORE_HEADERS }
+    )
+  }
+  const { data: priceRow, error: priceError } = priceRowResult.value
+  if (priceError || !priceRow) {
+    return NextResponse.json(
+      { error: 'The selected edition price is unavailable', code: 'package_price_unavailable' },
+      { status: 409, headers: NO_STORE_HEADERS }
+    )
+  }
+
   const currentPackageType = resolvePurchasePackageFromSnapshot(creation.customize_snapshot)
   const isPurchaseLocked = lockState.purchaseState !== 'unpurchased' || lockState.hasCartAttachment
   const requestedVoiceAssetId = String(asRecord(body.voice_binding).asset_id ?? '').trim()
@@ -247,20 +270,6 @@ export async function PATCH(
         { status: 400, headers: NO_STORE_HEADERS }
       )
     }
-  }
-
-  const { data: priceRow, error: priceError } = await supabaseAdmin
-    .from('template_package_prices')
-    .select('package_type, list_price_usd, sale_price_usd, row_version')
-    .eq('template_id', creation.template_id)
-    .eq('package_type', packageType)
-    .maybeSingle()
-
-  if (priceError || !priceRow) {
-    return NextResponse.json(
-      { error: 'The selected edition price is unavailable', code: 'package_price_unavailable' },
-      { status: 409, headers: NO_STORE_HEADERS }
-    )
   }
 
   let price
