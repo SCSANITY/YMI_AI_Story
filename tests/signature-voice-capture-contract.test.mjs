@@ -41,7 +41,7 @@ test('Signature Voice v3 is captured after Preview and bound through the owner-s
   assert.match(page, /createPreviewJob\([\s\S]*pendingFaceAsset,[\s\S]*undefined/)
   assert.match(page, /const handleSaveVoice[\s\S]*uploadUserAsset\([\s\S]*recording\.file,[\s\S]*'voice_sample',[\s\S]*saveEditionConfiguration\('supreme'/)
   assert.match(page, /version: SIGNATURE_VOICE_CONSENT_VERSION,[\s\S]*speakerKind: 'authorized_speaker'/)
-  assert.match(purchasePanel, /value === 'supreme'/)
+  assert.match(purchasePanel, /selectedValue === 'supreme'/)
   assert.match(dialog, /aria-required="true"/)
   assert.match(dialog, /disabled=\{!pendingRecording \|\| !authorized \|\| isSaving\}/)
   assert.match(purchaseService, /method: 'PATCH'/)

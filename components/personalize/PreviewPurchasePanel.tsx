@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, startTransition, useCallback, useOptimistic, useState, type ReactNode } from 'react'
+import { memo, startTransition, useCallback, useEffect, useState, type ReactNode } from 'react'
 import Image from 'next/image'
 import { Check, Mic2, ShieldCheck } from 'lucide-react'
 import type { PurchasePackageType } from '@/lib/purchase-configuration'
@@ -53,27 +53,28 @@ function PreviewPurchasePanelComponent({
   onOpenVoice,
 }: PreviewPurchasePanelProps) {
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set())
-  const [optimisticValue, setOptimisticValue] = useOptimistic(value)
-  const [optimisticPending, setOptimisticPending] = useOptimistic(false)
-  const selectionPending = isSavingEdition || optimisticPending
+  const [selectedValue, setSelectedValue] = useState(value)
+
+  useEffect(() => {
+    setSelectedValue(value)
+  }, [value])
 
   const handleEditionChange = useCallback((nextValue: PurchasePackageType) => {
-    if (nextValue === optimisticValue || selectionPending) return
+    if (nextValue === selectedValue) return
 
-    startTransition(async () => {
-      setOptimisticValue(nextValue)
-      setOptimisticPending(true)
-      await onChange(nextValue)
+    setSelectedValue(nextValue)
+    startTransition(() => {
+      void onChange(nextValue)
     })
-  }, [onChange, optimisticValue, selectionPending, setOptimisticPending, setOptimisticValue])
+  }, [onChange, selectedValue])
 
   return (
     <aside className="flex w-full flex-col rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:mx-auto xl:max-w-[380px] xl:p-5">
-      <fieldset disabled={selectionPending}>
+      <fieldset>
         <legend className="font-serif text-xl font-bold tracking-[-0.02em] text-slate-950 sm:text-2xl xl:text-xl">{title}</legend>
-        <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-busy={selectionPending} data-pending={selectionPending ? '' : undefined}>
+        <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-busy={isSavingEdition} data-saving={isSavingEdition ? '' : undefined}>
           {options.map((option) => {
-            const selected = option.value === optimisticValue
+            const selected = option.value === selectedValue
             const imageFailed = failedImages.has(option.value)
             return (
               <label
@@ -129,7 +130,7 @@ function PreviewPurchasePanelComponent({
 
       {editionError ? <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{editionError}</p> : null}
 
-      {value === 'supreme' ? (
+      {selectedValue === 'supreme' ? (
         <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/55 p-4" aria-labelledby="signature-voice-configuration-title">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-amber-700 shadow-sm">

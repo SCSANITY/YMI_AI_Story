@@ -42,7 +42,7 @@ test('Customize keeps details focused while Preview owns the image-led edition c
   assert.match(purchasePanel, /type="radio"/)
   assert.match(purchasePanel, /name="book-edition"/)
   assert.match(purchasePanel, /option\.image/)
-  assert.match(purchasePanel, /value === 'supreme'/)
+  assert.match(purchasePanel, /selectedValue === 'supreme'/)
   assert.match(languageSelector, /styles\.control/)
   assert.match(childDetails, /styles\.control/g)
 

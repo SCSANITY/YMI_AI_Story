@@ -387,8 +387,13 @@ export default function PersonalizePage({
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isSavingEdition, setIsSavingEdition] = useState(false);
   const [editionError, setEditionError] = useState<string | null>(null);
-  const purchaseConfigurationAbortRef = useRef<AbortController | null>(null);
-  const purchaseConfigurationRequestRef = useRef(0);
+  const purchaseBookTypeRef = useRef<PurchasePackageType>(
+    bookType === 'digital' || bookType === 'supreme' ? bookType : 'basic'
+  );
+  const confirmedPurchaseBookTypeRef = useRef<PurchasePackageType>(purchaseBookTypeRef.current);
+  const queuedPurchaseBookTypeRef = useRef<PurchasePackageType | null>(null);
+  const purchaseConfigurationDrainPromiseRef = useRef<Promise<void> | null>(null);
+  const voiceAssetIdRef = useRef<string | null>(null);
   const selectedPreviewCreationIdRef = useRef<string | null>(null);
   const previewVariantSessionIdRef = useRef<string | null>(null);
   const previewVariantCleanupInFlightRef = useRef<Map<string, Promise<boolean>>>(new Map());
@@ -752,6 +757,17 @@ export default function PersonalizePage({
   const requiresVoiceSample = purchaseBookType === 'supreme';
   const isMobile = windowWidth < 768;
   const previewShareImageUrl = previewPublicShareImageUrl || previewUrl || previewPages[0] || resolvedBook?.coverUrl || null;
+
+  useEffect(() => {
+    purchaseBookTypeRef.current = purchaseBookType;
+    if (!purchaseConfigurationDrainPromiseRef.current && !queuedPurchaseBookTypeRef.current) {
+      confirmedPurchaseBookTypeRef.current = purchaseBookType;
+    }
+  }, [purchaseBookType]);
+
+  useEffect(() => {
+    voiceAssetIdRef.current = voiceAssetId;
+  }, [voiceAssetId]);
   const lockedPreviewPresentation = useMemo(
     () => buildTemplateLockedPreviewPresentation(resolvedBook?.lockedPreviewPages),
     [resolvedBook?.lockedPreviewPages],
@@ -1941,10 +1957,6 @@ export default function PersonalizePage({
     []
   );
 
-  useEffect(() => () => {
-    purchaseConfigurationAbortRef.current?.abort();
-  }, []);
-
   const resolvePurchaseConfigurationContext = useCallback(async () => {
     const ensuredCreationId =
       (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null)
@@ -1989,48 +2001,84 @@ export default function PersonalizePage({
     return t('personalize.editionSaveFailed');
   }, [t]);
 
-  const handleEditionChange = useCallback(async (nextPackageType: PurchasePackageType) => {
-    if (nextPackageType === purchaseBookType || isSavingEdition) return;
-
-    purchaseConfigurationAbortRef.current?.abort();
-    const controller = new AbortController();
-    purchaseConfigurationAbortRef.current = controller;
-    const requestId = purchaseConfigurationRequestRef.current + 1;
-    purchaseConfigurationRequestRef.current = requestId;
+  const drainEditionConfigurationQueue = useCallback(async () => {
     setIsSavingEdition(true);
+    try {
+      while (queuedPurchaseBookTypeRef.current) {
+        const requestedPackageType = queuedPurchaseBookTypeRef.current;
+        queuedPurchaseBookTypeRef.current = null;
+
+        try {
+          const result = await saveEditionConfiguration(requestedPackageType, {
+            voiceAssetId: requestedPackageType === 'supreme' ? voiceAssetIdRef.current : null,
+          });
+          confirmedPurchaseBookTypeRef.current = result.packageType;
+
+          const isLatestSelection = (
+            !queuedPurchaseBookTypeRef.current
+            && purchaseBookTypeRef.current === requestedPackageType
+          );
+          if (!isLatestSelection) continue;
+
+          purchaseBookTypeRef.current = result.packageType;
+          setBookType(result.packageType);
+          if (result.packageType !== 'supreme') {
+            voiceAssetIdRef.current = null;
+            setVoiceAssetId(null);
+            setVoiceStoragePath(null);
+            setVoicePlaybackUrl(null);
+            setVoiceDurationSeconds(null);
+            pendingVoiceRecordingRef.current = null;
+            setPendingVoiceRecording(null);
+            setIsVoiceDialogOpen(false);
+          } else if (result.voiceReady && result.voiceAssetId) {
+            voiceAssetIdRef.current = result.voiceAssetId;
+            setVoiceAssetId(result.voiceAssetId);
+          }
+        } catch (error) {
+          const isLatestSelection = (
+            !queuedPurchaseBookTypeRef.current
+            && purchaseBookTypeRef.current === requestedPackageType
+          );
+          if (!isLatestSelection) continue;
+
+          const confirmedPackageType = confirmedPurchaseBookTypeRef.current;
+          purchaseBookTypeRef.current = confirmedPackageType;
+          setBookType(confirmedPackageType);
+          setEditionError(resolveEditionError(error));
+        }
+      }
+    } finally {
+      setIsSavingEdition(false);
+    }
+  }, [resolveEditionError, saveEditionConfiguration, setBookType]);
+
+  const handleEditionChange = useCallback((nextPackageType: PurchasePackageType) => {
+    if (
+      nextPackageType === purchaseBookTypeRef.current
+      && !queuedPurchaseBookTypeRef.current
+    ) {
+      return purchaseConfigurationDrainPromiseRef.current ?? Promise.resolve();
+    }
+
+    purchaseBookTypeRef.current = nextPackageType;
+    queuedPurchaseBookTypeRef.current = nextPackageType;
+    setBookType(nextPackageType);
     setEditionError(null);
     setVoiceValidationError(null);
 
-    try {
-      const result = await saveEditionConfiguration(nextPackageType, {
-        voiceAssetId: nextPackageType === 'supreme' ? voiceAssetId : null,
-        signal: controller.signal,
+    if (!purchaseConfigurationDrainPromiseRef.current) {
+      const drainPromise = drainEditionConfigurationQueue();
+      const trackedPromise = drainPromise.finally(() => {
+        if (purchaseConfigurationDrainPromiseRef.current === trackedPromise) {
+          purchaseConfigurationDrainPromiseRef.current = null;
+        }
       });
-      if (purchaseConfigurationRequestRef.current !== requestId) return;
-
-      setBookType(result.packageType);
-      if (result.packageType !== 'supreme') {
-        setVoiceAssetId(null);
-        setVoiceStoragePath(null);
-        setVoicePlaybackUrl(null);
-        setVoiceDurationSeconds(null);
-        pendingVoiceRecordingRef.current = null;
-        setPendingVoiceRecording(null);
-        setIsVoiceDialogOpen(false);
-      } else if (result.voiceReady && result.voiceAssetId) {
-        setVoiceAssetId(result.voiceAssetId);
-      }
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      if (purchaseConfigurationRequestRef.current === requestId) {
-        setEditionError(resolveEditionError(error));
-      }
-    } finally {
-      if (purchaseConfigurationRequestRef.current === requestId) {
-        setIsSavingEdition(false);
-      }
+      purchaseConfigurationDrainPromiseRef.current = trackedPromise;
     }
-  }, [isSavingEdition, purchaseBookType, resolveEditionError, saveEditionConfiguration, setBookType, voiceAssetId]);
+
+    return purchaseConfigurationDrainPromiseRef.current;
+  }, [drainEditionConfigurationQueue, setBookType]);
 
   const handleSaveVoice = useCallback(async (recording: PendingVoiceRecording) => {
     if (isSavingVoice) return;
@@ -2039,6 +2087,7 @@ export default function PersonalizePage({
     setEditionError(null);
 
     try {
+      await purchaseConfigurationDrainPromiseRef.current;
       const voiceAsset = await uploadUserAsset(
         recording.file,
         'voice_sample',
@@ -2060,7 +2109,10 @@ export default function PersonalizePage({
         throw new Error(t('personalize.voiceSaveFailed'));
       }
 
+      purchaseBookTypeRef.current = 'supreme';
+      confirmedPurchaseBookTypeRef.current = 'supreme';
       setBookType('supreme');
+      voiceAssetIdRef.current = result.voiceAssetId;
       setVoiceAssetId(result.voiceAssetId);
       setVoiceStoragePath(voiceAsset.storage_path);
       setVoicePlaybackUrl(
@@ -2086,7 +2138,9 @@ export default function PersonalizePage({
     setIsSavingVoice(true);
     setVoiceValidationError(null);
     try {
+      await purchaseConfigurationDrainPromiseRef.current;
       await saveEditionConfiguration('supreme', { clearVoice: true });
+      voiceAssetIdRef.current = null;
       setVoiceAssetId(null);
       setVoiceStoragePath(null);
       setVoicePlaybackUrl(null);
@@ -2102,12 +2156,15 @@ export default function PersonalizePage({
 
   const ensureCurrentPurchaseConfiguration = useCallback(async () => {
     setEditionError(null);
+    await purchaseConfigurationDrainPromiseRef.current;
+    const selectedPackageType = purchaseBookTypeRef.current;
     setIsSavingEdition(true);
     try {
-      const result = await saveEditionConfiguration(purchaseBookType, {
-        voiceAssetId: purchaseBookType === 'supreme' ? voiceAssetId : null,
+      const result = await saveEditionConfiguration(selectedPackageType, {
+        voiceAssetId: selectedPackageType === 'supreme' ? voiceAssetIdRef.current : null,
       });
-      if (purchaseBookType === 'supreme' && !result.voiceReady) {
+      confirmedPurchaseBookTypeRef.current = result.packageType;
+      if (selectedPackageType === 'supreme' && !result.voiceReady) {
         setVoiceValidationError(t('personalize.voiceSampleRequired'));
         setIsVoiceDialogOpen(true);
         return false;
@@ -2119,7 +2176,7 @@ export default function PersonalizePage({
     } finally {
       setIsSavingEdition(false);
     }
-  }, [purchaseBookType, resolveEditionError, saveEditionConfiguration, t, voiceAssetId]);
+  }, [resolveEditionError, saveEditionConfiguration, t]);
 
   const handleDiscardPreviewVariant = useCallback(async (jobId: string) => {
     const variant = previewVariantsRef.current.find((item) => item.jobId === jobId);
