@@ -1,0 +1,79 @@
+import assert from 'node:assert/strict'
+import { access, readFile } from 'node:fs/promises'
+import test from 'node:test'
+
+const root = new URL('../', import.meta.url)
+const read = (relativePath) => readFile(new URL(relativePath, root), 'utf8')
+
+test('PX-001 separates product introduction, preview inputs, and post-Preview purchase choices', async () => {
+  const [page, formFlow, productIntro, purchasePanel, layout] = await Promise.all([
+    read('components/PersonalizePage.tsx'),
+    read('components/personalize/PersonalizeFormFlow.tsx'),
+    read('components/personalize/PersonalizeProductIntro.tsx'),
+    read('components/personalize/PreviewPurchasePanel.tsx'),
+    read('components/personalize/PreviewStepLayout.tsx'),
+  ])
+
+  assert.match(page, /useState<PersonalizeFormStep>\('INTRO'\)/)
+  assert.match(formFlow, /'INTRO' \| 'PHOTO' \| 'DETAILS' \| 'REVIEW'/)
+  assert.match(formFlow, /STEP_META = \{ PHOTO: 1, DETAILS: 2, REVIEW: 3 \}/)
+  assert.match(productIntro, /onStart/)
+  assert.doesNotMatch(formFlow, /BookPackageSelector|VoiceRecorderPanel|Signature Voice/)
+  assert.match(page, /book_type: 'basic'/)
+  assert.match(page, /<PreviewPurchasePanel/)
+  assert.match(purchasePanel, /type="radio"/)
+  assert.match(purchasePanel, /value === 'supreme'/)
+  assert.match(layout, /xl:grid-cols-\[minmax\(0,1\.82fr\)_minmax\(340px,1fr\)\]/)
+})
+
+test('PX-001 uses truthful edition artwork with graceful image failure behavior', async () => {
+  const purchasePanel = await read('components/personalize/PreviewPurchasePanel.tsx')
+  assert.match(purchasePanel, /failedImages/)
+  assert.match(purchasePanel, /onError=/)
+  assert.match(purchasePanel, /imageFailed \? 'grid-cols-/)
+
+  await Promise.all([
+    access(new URL('public/personalize-editions/cloud-explorer.svg', root)),
+    access(new URL('public/personalize-editions/classic-portrait.svg', root)),
+    access(new URL('public/personalize-editions/signature-voice.svg', root)),
+  ])
+})
+
+test('PX-001 keeps privacy promises exact and requires a separate Signature Voice authorization', async () => {
+  const [privacy, dialog, messages, recorder] = await Promise.all([
+    read('components/personalize/PrivacyReassurance.tsx'),
+    read('components/personalize/SignatureVoiceDialog.tsx'),
+    read('src/lib/i18n-messages.ts'),
+    read('components/personalize/VoiceRecorderPanel.tsx'),
+  ])
+
+  const reassurance = 'Private and secure. No third-party reuse.'
+  const authorization = 'I agree to use this recording to create synthetic narration for this book and confirm I have permission to use it.'
+  assert.match(privacy, new RegExp(reassurance.replaceAll('.', '\\.')))
+  assert.match(messages, new RegExp(authorization.replaceAll('.', '\\.')))
+  assert.match(recorder, /t\('voiceRecorder\.secureNote'\)/)
+  assert.match(messages, /'voiceRecorder\.secureNote': 'Private and secure\. No third-party reuse\.'/)
+  assert.match(dialog, /useState\(false\)/)
+  assert.match(dialog, /aria-required="true"/)
+  assert.match(dialog, /!pendingRecording \|\| !authorized \|\| isSaving/)
+})
+
+test('PX-001 purchase configuration is owner-scoped, preview-guarded, lock-aware, and server-priced', async () => {
+  const [route, service, page] = await Promise.all([
+    read('app/api/creations/[creationId]/purchase-configuration/route.ts'),
+    read('src/services/purchaseConfiguration.ts'),
+    read('components/PersonalizePage.tsx'),
+  ])
+
+  assert.match(route, /resolveCheckoutOwner\(request/)
+  assert.match(route, /ownerFilter\(owner\)/)
+  assert.match(route, /\.eq\('owner_type', filter\.owner_type\)[\s\S]*\.eq\(filter\.column, filter\.value\)/)
+  assert.match(route, /creation\.preview_job_id[\s\S]*expectedPreviewJobId[\s\S]*preview_conflict/)
+  assert.match(route, /loadCreationPhotoLockState/)
+  assert.match(route, /purchase_configuration_locked/)
+  assert.match(route, /voice_configuration_locked/)
+  assert.match(route, /template_package_prices/)
+  assert.match(route, /packagePriceRowToModel/)
+  assert.match(service, /credentials: 'include'/)
+  assert.match(page, /await ensureCurrentPurchaseConfiguration\(\)/g)
+})

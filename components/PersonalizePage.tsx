@@ -24,21 +24,18 @@ import { isBrowserTranslated } from '@/lib/browser-translation';
 import { buildPreviewCartHref } from '@/lib/cart-navigation';
 import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants';
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar';
-import { GeneratePreviewAction, type GeneratePreviewConsent } from '@/components/personalize/GeneratePreviewAction';
+import type { GeneratePreviewConsent } from '@/components/personalize/GeneratePreviewAction';
 import { ProductShowcaseCarousel } from '@/components/personalize/ProductShowcaseCarousel';
 import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector';
-import { StoryInfoPanel } from '@/components/personalize/StoryInfoPanel';
 import type { RecentFaceItem } from '@/components/personalize/RecentFacesStrip';
 import { ProgressSteps } from '@/components/personalize/ProgressSteps';
 import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
 import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
 import { LoadingPreviewOverlay } from '@/components/personalize/LoadingPreviewOverlay';
 import { PreviewIntroHeader } from '@/components/personalize/PreviewIntroHeader';
-import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
 import { PreviewShareDialog } from '@/components/personalize/PreviewShareDialog';
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage';
 import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent';
-import { CustomizeFormCard } from '@/components/personalize/CustomizeFormCard';
 import { StoryShowcaseCard } from '@/components/personalize/StoryShowcaseCard';
 import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayout';
 import { getBookPackagePrice } from '@/lib/package-pricing';
@@ -48,7 +45,12 @@ import {
 } from '@/lib/signature-voice';
 import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGallery';
-import { CustomizeFormFields } from '@/components/personalize/CustomizeFormFields';
+import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/personalize/PersonalizeFormFlow';
+import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
+import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
+import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePanel';
+import { SignatureVoiceDialog } from '@/components/personalize/SignatureVoiceDialog';
+import { PRIVACY_REASSURANCE_COPY } from '@/components/personalize/PrivacyReassurance';
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
 import { templateStorageUrl, type CatalogBook } from '@/lib/book-catalog';
 import type { CartItem } from '@/types';
@@ -66,6 +68,11 @@ import type { PreviewVariantView } from '@/lib/preview-variant-view';
 import { emitYmiTrackingEvent, resolveTrackingFormat } from '@/lib/tracking-policy';
 import { normalizeStoryLanguage } from '@/lib/story-language';
 import { usePreviewController } from '@/components/personalize/usePreviewController';
+import type { PurchasePackageType } from '@/lib/purchase-configuration';
+import {
+  PurchaseConfigurationRequestError,
+  savePurchaseConfiguration,
+} from '@/services/purchaseConfiguration';
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
 
@@ -154,6 +161,17 @@ const parseChildAge = (value: string) => {
 
 const previewVariantSessionStorageKey = (creationId: string) =>
   `ymi_preview_variant_sessions_${creationId}`;
+
+const personalizeFormStepStorageKey = (bookId: string) =>
+  `ymi_personalize_form_step_${bookId}`;
+
+function readPersonalizeFormStep(bookId: string): PersonalizeFormStep {
+  if (typeof window === 'undefined') return 'INTRO';
+  const stored = window.sessionStorage.getItem(personalizeFormStepStorageKey(bookId));
+  return stored === 'PHOTO' || stored === 'DETAILS' || stored === 'REVIEW'
+    ? stored
+    : 'INTRO';
+}
 
 function readPreviewVariantSessionIds(creationId: string) {
   if (typeof window === 'undefined') return [];
@@ -294,15 +312,19 @@ export default function PersonalizePage({
   const facePrepareStatusRef = useRef<FacePrepareStatus>(facePrepareStatus);
   const facePrepareErrorRef = useRef<string | null>(facePrepareError);
   const dataGenerationConsentRef = useRef(false);
-  const signatureVoiceAuthorizationRef = useRef(false);
   const personalizationStartTrackedRef = useRef(false);
   const previewReadyTrackedJobIdsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!book || viewMode === 'preview' || stage !== 'FORM' || personalizationStartTrackedRef.current) return;
+  const handleStartPersonalization = useCallback(() => {
+    setFormStep('PHOTO');
+    if (personalizationStartTrackedRef.current) return;
     personalizationStartTrackedRef.current = true;
     emitYmiTrackingEvent('start_personalization');
-  }, [book, stage, viewMode]);
+  }, []);
+
+  const handleFormStepChange = useCallback((nextStep: PersonalizeFormStep) => {
+    setFormStep(nextStep);
+  }, []);
 
   const trackPreviewReady = useCallback((jobId: string) => {
     if (!jobId || previewReadyTrackedJobIdsRef.current.has(jobId)) return;
@@ -355,12 +377,19 @@ export default function PersonalizePage({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
   const [showAddToCartConfirm, setShowAddToCartConfirm] = useState(false);
+  const [formStep, setFormStep] = useState<PersonalizeFormStep>('INTRO');
   const pendingGenerateConsentRef = useRef<GeneratePreviewConsent | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [voiceDurationSeconds, setVoiceDurationSeconds] = useState<number | null>(null);
   const [pendingVoiceRecording, setPendingVoiceRecording] = useState<PendingVoiceRecording | null>(null);
   const pendingVoiceRecordingRef = useRef<PendingVoiceRecording | null>(null);
+  const [isVoiceDialogOpen, setIsVoiceDialogOpen] = useState(false);
+  const [isSavingVoice, setIsSavingVoice] = useState(false);
+  const [isSavingEdition, setIsSavingEdition] = useState(false);
+  const [editionError, setEditionError] = useState<string | null>(null);
+  const purchaseConfigurationAbortRef = useRef<AbortController | null>(null);
+  const purchaseConfigurationRequestRef = useRef(0);
   const selectedPreviewCreationIdRef = useRef<string | null>(null);
   const previewVariantSessionIdRef = useRef<string | null>(null);
   const previewVariantCleanupInFlightRef = useRef<Map<string, Promise<boolean>>>(new Map());
@@ -672,7 +701,6 @@ export default function PersonalizePage({
     }
   }, [creationId, t, user?.customerId]);
   const [recentProfiles, setRecentProfiles] = useState<RecentProfileItem[]>([]);
-  const voicePanelRef = useRef<HTMLDivElement | null>(null);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef(name);
   const ageRef = useRef(age);
@@ -717,10 +745,12 @@ export default function PersonalizePage({
   }, []);
 
   // --- Calculations ---
-  const currentPackagePrice = book ? getBookPackagePrice(book, bookType) : null;
+  const purchaseBookType: PurchasePackageType = bookType === 'digital' || bookType === 'supreme'
+    ? bookType
+    : 'basic';
+  const currentPackagePrice = book ? getBookPackagePrice(book, purchaseBookType) : null;
   const currentPrice = currentPackagePrice?.effectivePriceUsd ?? 0;
-  const isSupreme = bookType === 'supreme';
-  const requiresVoiceSample = bookType === 'supreme';
+  const requiresVoiceSample = purchaseBookType === 'supreme';
   const isMobile = windowWidth < 768;
   const isCompactPreview = windowWidth < 1024;
   const compactPreviewScale = Math.min(1, Math.max(0.32, (windowWidth - 32) / (PAGE_WIDTH * 2)));
@@ -819,6 +849,16 @@ export default function PersonalizePage({
         hasDraft: !!resumeData.personalization,
         savedStage: viewMode === 'preview' ? 'PREVIEW' : 'FORM',
         })
+        if (viewMode !== 'preview') {
+          const personalization = resumeData.personalization
+          setFormStep(
+            personalization?.assetId || personalization?.photo
+              ? personalization.childName && personalization.childAge
+                ? 'REVIEW'
+                : 'DETAILS'
+              : 'PHOTO'
+          )
+        }
     } else if (viewMode === 'preview' && (creationIdParam || previewJobIdParam)) {
         restore({
         hasDraft: true,
@@ -826,6 +866,7 @@ export default function PersonalizePage({
         })
     } else {
         startForm()
+        setFormStep(readPersonalizeFormStep(bookID))
     }
 
     didInitFSM.current = true
@@ -857,8 +898,17 @@ export default function PersonalizePage({
     setPendingVoiceRecording(null)
     setPreviewJobId(isUuid(data.previewJobId) ? data.previewJobId : null)
     setCreationId(data.creationId ?? null)
+    if (viewMode !== 'preview') {
+      setFormStep(
+        data.assetId || data.photo
+          ? data.childName && data.childAge
+            ? 'REVIEW'
+            : 'DETAILS'
+          : 'PHOTO'
+      )
+    }
     resumePersonalization(null)
-  }, [resumeData, bookID, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization])
+  }, [resumeData, bookID, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization, viewMode])
 
   useEffect(() => {
     if (resumeData && resumeData.bookID !== bookID) {
@@ -959,6 +1009,18 @@ export default function PersonalizePage({
                 if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
                 if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
                 if (nextType) setBookType(normalizePersonalizeBookType(nextType))
+                const cachedVoiceAssetId = typeof creation.voice_asset_id === 'string'
+                  ? creation.voice_asset_id
+                  : null
+                setVoiceAssetId(cachedVoiceAssetId)
+                setVoiceDurationSeconds(
+                  Number.isFinite(Number(creation.voice_sample_duration_seconds))
+                    ? Number(creation.voice_sample_duration_seconds)
+                    : null
+                )
+                setVoicePlaybackUrl(cachedVoiceAssetId
+                  ? `/api/user-assets/${encodeURIComponent(cachedVoiceAssetId)}/download`
+                  : null)
 
                 if (!templateTitle && creation.templates?.name) {
                   setTemplateTitle(creation.templates.name)
@@ -1038,6 +1100,18 @@ export default function PersonalizePage({
         if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
         if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
         if (nextType) setBookType(normalizePersonalizeBookType(nextType))
+        const nextVoiceAssetId = typeof creation.voice_asset_id === 'string'
+          ? creation.voice_asset_id
+          : null
+        setVoiceAssetId(nextVoiceAssetId)
+        setVoiceDurationSeconds(
+          Number.isFinite(Number(creation.voice_sample_duration_seconds))
+            ? Number(creation.voice_sample_duration_seconds)
+            : null
+        )
+        setVoicePlaybackUrl(nextVoiceAssetId
+          ? `/api/user-assets/${encodeURIComponent(nextVoiceAssetId)}/download`
+          : null)
 
         if (!templateTitle && creation.templates?.name) {
           setTemplateTitle(creation.templates.name)
@@ -1192,21 +1266,12 @@ export default function PersonalizePage({
         const currentFacePrepareStatus = facePrepareStatusRef.current
         const currentFacePrepareError = facePrepareErrorRef.current
         const hasDataGenerationConsent = dataGenerationConsentRef.current
-        const hasSignatureVoiceAuthorization = signatureVoiceAuthorizationRef.current
-        const selectedVoiceRecording = pendingVoiceRecordingRef.current
-        let currentVoiceAssetId = voiceAssetId
         const currentName = nameRef.current
         const currentAge = ageRef.current
 
         if (!book) throw new Error('Book not found')
         if (!currentPhoto && !faceAssetId) throw new Error('Please upload a photo before generating the preview')
         if (!hasDataGenerationConsent) throw new Error(t('personalize.dataConsentRequired'))
-        if (bookType === 'supreme' && !hasSignatureVoiceAuthorization) {
-          throw new Error(t('personalize.voiceAuthorizationRequired'))
-        }
-        if (bookType === 'supreme' && !currentVoiceAssetId && !selectedVoiceRecording) {
-          throw new Error(t('personalize.voiceSampleRequired'))
-        }
 
         setPreviewUrl(null)
         setPreviewPages([])
@@ -1237,39 +1302,13 @@ export default function PersonalizePage({
           faceAssetId = faceAsset.asset_id
         }
 
-        if (bookType === 'supreme' && selectedVoiceRecording) {
-          const voiceAsset = await uploadUserAsset(
-            selectedVoiceRecording.file,
-            'voice_sample',
-            'voice',
-            currentCustomerId ?? undefined,
-            {
-              voiceAuthorization: {
-                accepted: true,
-                version: SIGNATURE_VOICE_CONSENT_VERSION,
-                speakerKind: 'authorized_speaker',
-              },
-            }
-          )
-          if (!isActive) return
-          currentVoiceAssetId = voiceAsset.asset_id
-          pendingVoiceRecordingRef.current = null
-          setPendingVoiceRecording(null)
-          setVoiceAssetId(voiceAsset.asset_id)
-          setVoiceStoragePath(voiceAsset.storage_path)
-          setVoicePlaybackUrl(`/api/user-assets/${encodeURIComponent(voiceAsset.asset_id)}/download`)
-          setVoiceDurationSeconds(
-            Number(voiceAsset.metadata?.duration_seconds) || selectedVoiceRecording.durationSeconds
-          )
-        }
-
         const parsedAge = Number.parseInt(currentAge, 10)
         const textOverrides = {
           child_name: currentName,
           child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
           dedication: '',
           language: selectedLang,
-          book_type: bookType,
+          book_type: 'basic',
         }
 
         if (!currentCustomerId && currentName && currentAge) {
@@ -1316,11 +1355,7 @@ export default function PersonalizePage({
           generationConsentParams,
           currentCustomerId ?? undefined,
           pendingFaceAsset,
-          bookType === 'supreme' && currentVoiceAssetId
-            ? {
-                assetId: currentVoiceAssetId,
-              }
-            : undefined
+          undefined
         )
         markGenerateTiming(pendingFaceAsset ? 'asset_confirmed/job_created' : 'job_created', {
           jobId: created?.jobId,
@@ -1330,6 +1365,13 @@ export default function PersonalizePage({
         if (!created?.jobId) {
           throw new Error('Preview job missing jobId')
         }
+        setBookType('basic')
+        setVoiceAssetId(null)
+        setVoiceStoragePath(null)
+        setVoicePlaybackUrl(null)
+        setVoiceDurationSeconds(null)
+        pendingVoiceRecordingRef.current = null
+        setPendingVoiceRecording(null)
         watchedJobId = created.jobId;
         if (pendingFaceAsset) {
           photoAssetIdRef.current = pendingFaceAsset.asset_id
@@ -1397,7 +1439,7 @@ export default function PersonalizePage({
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, bookType, trackPreviewReady, voiceAssetId, applyPreviewDisplayAssetsForJob, watchPreviewJob]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, trackPreviewReady, applyPreviewDisplayAssetsForJob, watchPreviewJob]);
 
   const loadUserAssets = useCallback(async (options?: { signal?: AbortSignal }) => {
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
@@ -1447,16 +1489,6 @@ export default function PersonalizePage({
       setVoiceValidationError(null);
     }
   }, [pendingVoiceRecording, requiresVoiceSample, voiceAssetId]);
-
-  useEffect(() => {
-    if (!voiceValidationError) return;
-    if (!requiresVoiceSample) return;
-    if (!viewState.showForm) return;
-    const id = window.setTimeout(() => {
-      voicePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 80);
-    return () => window.clearTimeout(id);
-  }, [requiresVoiceSample, viewState.showForm, voiceValidationError]);
 
   const loadProfiles = useCallback(async () => {
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
@@ -1625,6 +1657,23 @@ export default function PersonalizePage({
   const handleBack = () => {
     if (!canBack) return
 
+    if (viewState.showForm) {
+      if (formStep === 'REVIEW') {
+        setFormStep('DETAILS')
+        return
+      }
+      if (formStep === 'DETAILS') {
+        setFormStep('PHOTO')
+        return
+      }
+      if (formStep === 'PHOTO') {
+        setFormStep('INTRO')
+        return
+      }
+      router.push('/')
+      return
+    }
+
     if (viewState.showPreview && previewSource === 'my-books') {
       void (async () => {
         try {
@@ -1776,6 +1825,7 @@ export default function PersonalizePage({
       setPreviewPages([]);
       setPreviewBookPresentation(null);
       setProgress(0);
+      setFormStep('REVIEW');
       startForm();
 
       if (options?.showToast !== false) {
@@ -1849,6 +1899,7 @@ export default function PersonalizePage({
     setShowExitConfirm(false);
     await cleanupCurrentPreviewVariantSession();
     router.replace(`/personalize/${bookID}`);
+    setFormStep('REVIEW');
     startForm();
   }, [bookID, cleanupCurrentPreviewVariantSession, persistDraftForCustomizeReturn, router, startForm]);
 
@@ -1881,13 +1932,9 @@ export default function PersonalizePage({
     }
 
     setVoiceValidationError(t('personalize.voiceSampleRequired'));
-    if (stage === 'PREVIEW') {
-      void returnToCustomizeFromPreview();
-    } else {
-      voicePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    setIsVoiceDialogOpen(true);
     return false;
-  }, [requiresVoiceSample, stage, voiceAssetId, returnToCustomizeFromPreview, t]);
+  }, [requiresVoiceSample, voiceAssetId, t]);
 
   const handleVoiceRecordingSelected = useCallback(
     (recording: PendingVoiceRecording | null) => {
@@ -1898,6 +1945,186 @@ export default function PersonalizePage({
     },
     []
   );
+
+  useEffect(() => () => {
+    purchaseConfigurationAbortRef.current?.abort();
+  }, []);
+
+  const resolvePurchaseConfigurationContext = useCallback(async () => {
+    const ensuredCreationId =
+      (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null)
+      || (creationId && isUuid(creationId) ? creationId : null)
+      || (await resolveCreationId());
+    const expectedPreviewJobId = previewJobId && isUuid(previewJobId)
+      ? previewJobId
+      : previewJobIdParam && isUuid(previewJobIdParam)
+        ? previewJobIdParam
+        : null;
+
+    if (!ensuredCreationId || !expectedPreviewJobId) {
+      throw new Error(t('personalize.editionUnavailable'));
+    }
+
+    return { ensuredCreationId, expectedPreviewJobId };
+  }, [creationId, creationIdParam, previewJobId, previewJobIdParam, resolveCreationId, t]);
+
+  const saveEditionConfiguration = useCallback(async (
+    packageType: PurchasePackageType,
+    options?: {
+      voiceAssetId?: string | null
+      clearVoice?: boolean
+      signal?: AbortSignal
+    }
+  ) => {
+    const { ensuredCreationId, expectedPreviewJobId } = await resolvePurchaseConfigurationContext();
+    return savePurchaseConfiguration({
+      creationId: ensuredCreationId,
+      expectedPreviewJobId,
+      packageType,
+      voiceAssetId: options?.voiceAssetId,
+      clearVoice: options?.clearVoice,
+      customerId: user?.customerId ?? null,
+      signal: options?.signal,
+    });
+  }, [resolvePurchaseConfigurationContext, user?.customerId]);
+
+  const resolveEditionError = useCallback((error: unknown) => {
+    if (error instanceof PurchaseConfigurationRequestError) return error.message;
+    if (error instanceof Error && error.message) return error.message;
+    return t('personalize.editionSaveFailed');
+  }, [t]);
+
+  const handleEditionChange = useCallback(async (nextPackageType: PurchasePackageType) => {
+    if (nextPackageType === purchaseBookType || isSavingEdition) return;
+
+    purchaseConfigurationAbortRef.current?.abort();
+    const controller = new AbortController();
+    purchaseConfigurationAbortRef.current = controller;
+    const requestId = purchaseConfigurationRequestRef.current + 1;
+    purchaseConfigurationRequestRef.current = requestId;
+    setIsSavingEdition(true);
+    setEditionError(null);
+    setVoiceValidationError(null);
+
+    try {
+      const result = await saveEditionConfiguration(nextPackageType, {
+        voiceAssetId: nextPackageType === 'supreme' ? voiceAssetId : null,
+        signal: controller.signal,
+      });
+      if (purchaseConfigurationRequestRef.current !== requestId) return;
+
+      setBookType(result.packageType);
+      if (result.packageType !== 'supreme') {
+        setVoiceAssetId(null);
+        setVoiceStoragePath(null);
+        setVoicePlaybackUrl(null);
+        setVoiceDurationSeconds(null);
+        pendingVoiceRecordingRef.current = null;
+        setPendingVoiceRecording(null);
+        setIsVoiceDialogOpen(false);
+      } else if (result.voiceReady && result.voiceAssetId) {
+        setVoiceAssetId(result.voiceAssetId);
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (purchaseConfigurationRequestRef.current === requestId) {
+        setEditionError(resolveEditionError(error));
+      }
+    } finally {
+      if (purchaseConfigurationRequestRef.current === requestId) {
+        setIsSavingEdition(false);
+      }
+    }
+  }, [isSavingEdition, purchaseBookType, resolveEditionError, saveEditionConfiguration, setBookType, voiceAssetId]);
+
+  const handleSaveVoice = useCallback(async (recording: PendingVoiceRecording) => {
+    if (isSavingVoice) return;
+    setIsSavingVoice(true);
+    setVoiceValidationError(null);
+    setEditionError(null);
+
+    try {
+      const voiceAsset = await uploadUserAsset(
+        recording.file,
+        'voice_sample',
+        'voice',
+        user?.customerId ?? undefined,
+        {
+          metadata: { duration_seconds: recording.durationSeconds },
+          voiceAuthorization: {
+            accepted: true,
+            version: SIGNATURE_VOICE_CONSENT_VERSION,
+            speakerKind: 'authorized_speaker',
+          },
+        }
+      );
+      const result = await saveEditionConfiguration('supreme', {
+        voiceAssetId: voiceAsset.asset_id,
+      });
+      if (!result.voiceReady || !result.voiceAssetId) {
+        throw new Error(t('personalize.voiceSaveFailed'));
+      }
+
+      setBookType('supreme');
+      setVoiceAssetId(result.voiceAssetId);
+      setVoiceStoragePath(voiceAsset.storage_path);
+      setVoicePlaybackUrl(
+        voiceAsset.playback_url
+          ?? `/api/user-assets/${encodeURIComponent(result.voiceAssetId)}/download`
+      );
+      setVoiceDurationSeconds(
+        Number(voiceAsset.metadata?.duration_seconds) || recording.durationSeconds
+      );
+      pendingVoiceRecordingRef.current = null;
+      setPendingVoiceRecording(null);
+      setIsVoiceDialogOpen(false);
+      void loadUserAssets().catch(() => {});
+    } catch (error) {
+      setVoiceValidationError(resolveEditionError(error));
+    } finally {
+      setIsSavingVoice(false);
+    }
+  }, [isSavingVoice, loadUserAssets, resolveEditionError, saveEditionConfiguration, setBookType, t, user?.customerId]);
+
+  const handleRemoveVoice = useCallback(async () => {
+    if (isSavingVoice) return;
+    setIsSavingVoice(true);
+    setVoiceValidationError(null);
+    try {
+      await saveEditionConfiguration('supreme', { clearVoice: true });
+      setVoiceAssetId(null);
+      setVoiceStoragePath(null);
+      setVoicePlaybackUrl(null);
+      setVoiceDurationSeconds(null);
+      pendingVoiceRecordingRef.current = null;
+      setPendingVoiceRecording(null);
+    } catch (error) {
+      setVoiceValidationError(resolveEditionError(error));
+    } finally {
+      setIsSavingVoice(false);
+    }
+  }, [isSavingVoice, resolveEditionError, saveEditionConfiguration]);
+
+  const ensureCurrentPurchaseConfiguration = useCallback(async () => {
+    setEditionError(null);
+    setIsSavingEdition(true);
+    try {
+      const result = await saveEditionConfiguration(purchaseBookType, {
+        voiceAssetId: purchaseBookType === 'supreme' ? voiceAssetId : null,
+      });
+      if (purchaseBookType === 'supreme' && !result.voiceReady) {
+        setVoiceValidationError(t('personalize.voiceSampleRequired'));
+        setIsVoiceDialogOpen(true);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      setEditionError(resolveEditionError(error));
+      return false;
+    } finally {
+      setIsSavingEdition(false);
+    }
+  }, [purchaseBookType, resolveEditionError, saveEditionConfiguration, t, voiceAssetId]);
 
   const handleDiscardPreviewVariant = useCallback(async (jobId: string) => {
     const variant = previewVariantsRef.current.find((item) => item.jobId === jobId);
@@ -2060,6 +2287,7 @@ export default function PersonalizePage({
     if (!canAddToCart) return null
     if (!resolvedBook) return null
     if (!ensurePremiumVoiceSample()) return null
+    if (!(await ensureCurrentPurchaseConfiguration())) return null
     const currentName = nameRef.current
     const currentAge = ageRef.current
     const parsedAge = Number.parseInt(currentAge, 10)
@@ -2124,7 +2352,7 @@ export default function PersonalizePage({
     }
 
     return item ?? null;
-    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample, commitSelectedPreviewForExit]);
+    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit]);
 
   const startAddToCart = useCallback(() => {
     const promise = performAddToCart()
@@ -2156,6 +2384,7 @@ export default function PersonalizePage({
         if (!canCheckout) return
         if (checkoutInFlightRef.current) return
         if (!ensurePremiumVoiceSample()) return
+        if (!(await ensureCurrentPurchaseConfiguration())) return
         checkoutInFlightRef.current = true
 
         try {
@@ -2275,7 +2504,7 @@ export default function PersonalizePage({
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, creationId, creationIdParam, resolveCreationId, savedStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, commitSelectedPreviewForExit, previewPages, previewUrl]);
+    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, creationId, creationIdParam, resolveCreationId, savedStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit, previewPages, previewUrl]);
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;
@@ -2642,6 +2871,11 @@ export default function PersonalizePage({
     localStorage.setItem(`personalize:${bookID}:stage`, stage)
   }, [stage, bookID])
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || stage !== 'FORM') return
+    window.sessionStorage.setItem(personalizeFormStepStorageKey(bookID), formStep)
+  }, [bookID, formStep, stage])
+
 
 
   // --- Flip Logic ---
@@ -2728,6 +2962,57 @@ export default function PersonalizePage({
   const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing';
   const hasUsablePhoto = Boolean(photoAssetId || (photo && preparedFaceFile && facePrepareStatus === 'ready'));
   const isFormReady = areChildDetailsReady && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
+  const fromPrice = book
+    ? Math.min(
+        getBookPackagePrice(book, 'digital').effectivePriceUsd,
+        getBookPackagePrice(book, 'basic').effectivePriceUsd,
+        getBookPackagePrice(book, 'supreme').effectivePriceUsd,
+      )
+    : 0;
+  const editionOptions = book ? [
+    {
+      value: 'digital' as const,
+      title: t('personalize.bookTypeDigitalTitle'),
+      subtitle: t('personalize.bookTypeDigitalSubtitle'),
+      image: '/personalize-editions/cloud-explorer.svg',
+      imageAlt: t('personalize.editionDigitalImageAlt'),
+      price: formatDisplayCurrency(getBookPackagePrice(book, 'digital').effectivePriceUsd, displayCurrency),
+    },
+    {
+      value: 'basic' as const,
+      title: t('personalize.bookTypeBasicTitle'),
+      subtitle: t('personalize.bookTypeBasicSubtitle'),
+      image: '/personalize-editions/classic-portrait.svg',
+      imageAlt: t('personalize.editionBasicImageAlt'),
+      price: formatDisplayCurrency(getBookPackagePrice(book, 'basic').effectivePriceUsd, displayCurrency),
+      badge: t('personalize.mostPopular'),
+    },
+    {
+      value: 'supreme' as const,
+      title: t('personalize.bookTypeSupremeTitle'),
+      subtitle: t('personalize.bookTypeSupremeSubtitle'),
+      image: '/personalize-editions/signature-voice.svg',
+      imageAlt: t('personalize.editionSupremeImageAlt'),
+      price: formatDisplayCurrency(getBookPackagePrice(book, 'supreme').effectivePriceUsd, displayCurrency),
+    },
+  ] : [];
+  const selectedEditionTitle = purchaseBookType === 'digital'
+    ? t('personalize.bookTypeDigitalTitle')
+    : purchaseBookType === 'supreme'
+      ? t('personalize.bookTypeSupremeTitle')
+      : t('personalize.bookTypeBasicTitle');
+
+  useEffect(() => {
+    if (!viewState.showForm || formStep === 'INTRO') return;
+    if (!hasUsablePhoto && !isFacePreparing && formStep !== 'PHOTO') {
+      setFormStep('PHOTO');
+      return;
+    }
+    if (formStep === 'REVIEW' && !areChildDetailsReady) {
+      setFormStep('DETAILS');
+    }
+  }, [areChildDetailsReady, formStep, hasUsablePhoto, isFacePreparing, viewState.showForm]);
+
   const isAgeBelowRecommendedRange = useCallback((value: string) => {
     const parsedAge = parseChildAge(value);
     return parsedAge !== null && parsedAge < minimumRecommendedAge;
@@ -2735,7 +3020,6 @@ export default function PersonalizePage({
 
   const startGeneratePreview = useCallback((consent: GeneratePreviewConsent) => {
     dataGenerationConsentRef.current = consent.dataGeneration;
-    signatureVoiceAuthorizationRef.current = consent.signatureVoiceAuthorization;
     setName(nameRef.current);
     setAge(ageRef.current);
     primaryAction();
@@ -2874,168 +3158,134 @@ export default function PersonalizePage({
 
             {/* Step 2: The Rich Form */}
             {viewState.showForm && (
-                <CustomizeFormLayout
-                  showcase={
-                    <StoryShowcaseCard
-                      carousel={
-                        <ProductShowcaseCarousel
-                          bookId={bookID}
-                          title={templateTitle || book.title}
-                          coverUrl={resolvedBook?.coverUrl}
-                          images={resolvedBook?.showcaseImages}
-                          isMobile={isMobile}
-                          windowWidth={windowWidth}
-                          uploadPanelRef={uploadPanelRef}
-                        />
-                      }
-                      storyInfo={
-                        <StoryInfoPanel
-                          title={templateTitle || book.title}
-                          description={templateInnerDescription || resolvedBook?.innerDescription || templateDescription || book.description}
-                          magicAttributes={magicAttributes}
-                          faqItems={bookFaqItems}
-                          labels={{
-                            magicAttributes: t('personalize.magicAttributes'),
-                            aboutThisStory: 'About This Story',
-                          }}
-                          translateMagicAttribute={t}
-                        />
-                      }
-                    />
-                  }
-                  form={
-                    <CustomizeFormCard
-                          title={t('personalize.customize')}
-                          priceLabel={formatDisplayCurrency(currentPrice, displayCurrency)}
-                          compareAtPriceLabel={currentPackagePrice?.salePriceUsd !== null && currentPackagePrice?.salePriceUsd !== undefined
-                            ? formatDisplayCurrency(currentPackagePrice.listPriceUsd, displayCurrency)
-                            : null}
-                          discountPercent={currentPackagePrice?.discountPercent ?? null}
-                          footer={
-                            <GeneratePreviewAction
-                              isFormReady={isFormReady}
-                              isFacePreparing={isFacePreparing}
-                              isPhotoFailed={facePrepareStatus === 'failed'}
-                              isSupreme={isSupreme}
-                              isVoiceReady={!isSupreme || Boolean(voiceAssetId || pendingVoiceRecording)}
-                              previewError={previewError}
-                              labels={{
-                                dataConsentRequired: t('personalize.dataConsentRequiredLabel'),
-                                voiceAuthorizationRequired: t('personalize.voiceAuthorizationRequiredLabel'),
-                                voiceAuthorizationDetails: t('personalize.voiceAuthorizationDetails'),
-                                voiceAuthorizationRequiredShort: t('personalize.voiceAuthorizationRequired'),
-                                privacyPolicy: t('personalize.privacyPolicy'),
-                                required: t('personalize.requiredLabel'),
-                                photoPreparing: t('personalize.photoPreparing'),
-                                photoNeedsFix: t('personalize.photoNeedsFix'),
-                                dataConsentRequiredShort: t('personalize.dataConsentRequiredShort'),
-                                generateMagicPreview: t('personalize.generateMagicPreview'),
-                                completeDetails: t('personalize.completeDetails'),
-                              }}
-                              onGenerate={handleGeneratePreviewAction}
-                            />
-                          }
-                        >
-                    <CustomizeFormFields
-                      photoPreview={photoPreview}
-                      facePrepareStatus={facePrepareStatus}
-                      facePrepareError={facePrepareError}
-                      faceAutoCropped={faceAutoCropped}
-                      photoLabels={{
-                        uploadChildPhoto: t('personalize.uploadChildPhoto'),
-                        photoChecking: t('personalize.photoChecking'),
-                        photoPreparing: t('personalize.photoPreparing'),
-                        photoReady: t('personalize.photoReady'),
-                        photoAutoCentered: t('personalize.photoAutoCentered'),
-                        photoPrepareFailed: t('personalize.photoPrepareFailed'),
-                        photoQualityReason: t('personalize.photoQualityReason'),
-                        clickToChangePhoto: t('personalize.clickToChangePhoto'),
-                        uploadPhotoHint: t('personalize.uploadPhotoHint'),
-                        photoTips: t('personalize.photoTips'),
-                      }}
-                      onPhotoUpload={handlePhotoUpload}
-                      recentFaces={recentFaces}
-                      onSelectFace={handleSelectRecentFace}
-                      onDeleteFace={handleDeleteFace}
-                      initialName={name}
-                      initialAge={age}
-                      childDetailsSeedVersion={childDetailsSeedVersion}
-                      recentProfiles={recentProfiles}
-                      childLabels={{
-                        nameLabel: t('personalize.nameLabel'),
-                        namePlaceholder: t('personalize.namePlaceholder'),
-                        ageLabel: t('personalize.ageLabel'),
-                        agePlaceholder: t('personalize.agePlaceholder'),
-                        noHistory: t('personalize.noHistory'),
-                      }}
-                      ageRangeWarning={ageRangeWarningText}
-                      minimumRecommendedAge={minimumRecommendedAge}
-                      onLoadProfiles={loadProfiles}
-                      onChildDetailsChange={handleChildDetailsChange}
-                      onDeleteProfileValue={handleDeleteProfile}
-                      selectedLang={selectedLang}
-                      languageLabels={{
-                        field: t('personalize.storyLanguage'),
-                        english: t('personalize.storyLanguageEnglish'),
-                        simplifiedChinese: t('personalize.storyLanguageSimplifiedChinese'),
-                        traditionalChinese: t('personalize.storyLanguageTraditionalChinese'),
-                        comingSoon: t('common.comingSoon'),
-                      }}
-                      onLanguageChange={setSelectedLang}
-                      bookType={bookType}
-                      packageLabels={{
-                        field: t('personalize.bookType'),
-                        digitalTitle: t('personalize.bookTypeDigitalTitle'),
-                        digitalSubtitle: t('personalize.bookTypeDigitalSubtitle'),
-                        basicTitle: t('personalize.bookTypeBasicTitle'),
-                        basicSubtitle: t('personalize.bookTypeBasicSubtitle'),
-                        supremeTitle: t('personalize.bookTypeSupremeTitle'),
-                        supremeSubtitle: t('personalize.bookTypeSupremeSubtitle'),
-                        whatIncluded: t('personalize.whatIncluded'),
-                      }}
-                      includedItems={{
-                        digital: [
-                          t('personalize.included.digital1'),
-                          t('personalize.included.digital2'),
-                          t('personalize.included.digital3'),
-                          t('personalize.included.digital4'),
-                        ],
-                        basic: [
-                          t('personalize.included.basic1'),
-                          t('personalize.included.basic2'),
-                          t('personalize.included.basic3'),
-                          t('personalize.included.basic4'),
-                          t('personalize.included.basic5'),
-                          t('personalize.included.basic6'),
-                        ],
-                        supreme: [
-                          t('personalize.included.supreme1'),
-                          t('personalize.included.supreme2'),
-                          t('personalize.included.supreme3'),
-                          t('personalize.included.supreme4'),
-                          t('personalize.included.supreme5'),
-                          t('personalize.included.supreme6'),
-                          t('personalize.included.supreme7'),
-                        ],
-                      }}
-                      packagePriceLabels={book ? {
-                        digital: formatDisplayCurrency(getBookPackagePrice(book, 'digital').effectivePriceUsd, displayCurrency),
-                        basic: formatDisplayCurrency(getBookPackagePrice(book, 'basic').effectivePriceUsd, displayCurrency),
-                        supreme: formatDisplayCurrency(getBookPackagePrice(book, 'supreme').effectivePriceUsd, displayCurrency),
-                      } : undefined}
-                      onBookTypeChange={setBookType}
-                      requiresVoiceSample={requiresVoiceSample}
-                      voicePanelRef={voicePanelRef}
-                      voiceAssetId={voiceAssetId}
-                      voicePlaybackUrl={resolvedVoicePlaybackUrl}
-                      voiceDurationSeconds={resolvedVoiceDurationSeconds}
-                      voiceValidationError={voiceValidationError}
-                      onVoiceRecordingSelected={handleVoiceRecordingSelected}
-                      onClearVoiceValidation={() => setVoiceValidationError(null)}
-                    />
-                    </CustomizeFormCard>
-                  }
-                />
+              <CustomizeFormLayout
+                showcase={
+                  <StoryShowcaseCard
+                    carousel={
+                      <ProductShowcaseCarousel
+                        bookId={bookID}
+                        title={templateTitle || book.title}
+                        coverUrl={resolvedBook?.coverUrl}
+                        images={resolvedBook?.showcaseImages}
+                        isMobile={isMobile}
+                        windowWidth={windowWidth}
+                        uploadPanelRef={uploadPanelRef}
+                      />
+                    }
+                    storyInfo={
+                      <MagicAttributesPanel
+                        attributes={magicAttributes}
+                        heading={t('personalize.magicAttributes')}
+                        translateAttribute={t}
+                      />
+                    }
+                  />
+                }
+                form={
+                  <div ref={uploadPanelRef} className="scroll-mt-5">
+                    {formStep === 'INTRO' ? (
+                      <PersonalizeProductIntro
+                        eyebrow={t('personalize.productEyebrow')}
+                        title={templateTitle || book.title}
+                        description={templateDescription || resolvedBook?.description || book.description}
+                        facts={[
+                          { icon: 'age', label: t('personalize.productFactAge', { ageRange: book.ageLabel ?? `${minimumRecommendedAge}+` }) },
+                          { icon: 'personalized', label: t('personalize.productFactPersonalized') },
+                          { icon: 'preview', label: t('personalize.productFactPreview') },
+                          { icon: 'formats', label: t('personalize.productFactFormats') },
+                        ]}
+                        fromLabel={t('personalize.fromPrice')}
+                        priceLabel={formatDisplayCurrency(fromPrice, displayCurrency)}
+                        ctaLabel={t('personalize.personalizeThisBook')}
+                        faqHeading={t('personalize.aboutThisStory')}
+                        faqItems={bookFaqItems}
+                        onStart={handleStartPersonalization}
+                      />
+                    ) : (
+                      <PersonalizeFormFlow
+                        step={formStep}
+                        photoPreview={photoPreview}
+                        hasUsablePhoto={hasUsablePhoto}
+                        facePrepareStatus={facePrepareStatus}
+                        facePrepareError={facePrepareError}
+                        faceAutoCropped={faceAutoCropped}
+                        photoLabels={{
+                          uploadChildPhoto: t('personalize.uploadChildPhoto'),
+                          photoChecking: t('personalize.photoChecking'),
+                          photoPreparing: t('personalize.photoPreparing'),
+                          photoReady: t('personalize.photoReady'),
+                          photoAutoCentered: t('personalize.photoAutoCentered'),
+                          photoPrepareFailed: t('personalize.photoPrepareFailed'),
+                          photoQualityReason: t('personalize.photoQualityReason'),
+                          clickToChangePhoto: t('personalize.clickToChangePhoto'),
+                          uploadPhotoHint: t('personalize.uploadPhotoHint'),
+                          photoTips: t('personalize.photoTips'),
+                        }}
+                        onPhotoUpload={handlePhotoUpload}
+                        recentFaces={recentFaces}
+                        onSelectFace={handleSelectRecentFace}
+                        onDeleteFace={handleDeleteFace}
+                        initialName={name}
+                        initialAge={age}
+                        childDetailsSeedVersion={childDetailsSeedVersion}
+                        recentProfiles={recentProfiles}
+                        childLabels={{
+                          nameLabel: t('personalize.nameLabel'),
+                          namePlaceholder: t('personalize.namePlaceholder'),
+                          ageLabel: t('personalize.ageLabel'),
+                          agePlaceholder: t('personalize.agePlaceholder'),
+                          noHistory: t('personalize.noHistory'),
+                        }}
+                        ageRangeWarning={ageRangeWarningText}
+                        minimumRecommendedAge={minimumRecommendedAge}
+                        onLoadProfiles={loadProfiles}
+                        onChildDetailsChange={handleChildDetailsChange}
+                        onDeleteProfileValue={handleDeleteProfile}
+                        selectedLang={selectedLang}
+                        languageLabels={{
+                          field: t('personalize.storyLanguage'),
+                          english: t('personalize.storyLanguageEnglish'),
+                          simplifiedChinese: t('personalize.storyLanguageSimplifiedChinese'),
+                          traditionalChinese: t('personalize.storyLanguageTraditionalChinese'),
+                          comingSoon: t('common.comingSoon'),
+                        }}
+                        onLanguageChange={setSelectedLang}
+                        isDetailsReady={areChildDetailsReady}
+                        isFormReady={isFormReady}
+                        isFacePreparing={isFacePreparing}
+                        isPhotoFailed={facePrepareStatus === 'failed'}
+                        previewError={previewError}
+                        labels={{
+                          photoTitle: t('personalize.photoStepTitle'),
+                          photoBody: t('personalize.photoStepBody'),
+                          detailsTitle: t('personalize.detailsStepTitle'),
+                          detailsBody: t('personalize.detailsStepBody'),
+                          reviewTitle: t('personalize.reviewStepTitle'),
+                          reviewBody: t('personalize.reviewStepBody'),
+                          stepLabel: (current) => t('personalize.microStep', { current }),
+                          continue: t('personalize.continue'),
+                          reviewDetails: t('personalize.reviewDetails'),
+                          back: t('common.back'),
+                          edit: t('personalize.edit'),
+                          photoSummary: t('personalize.photoSummary'),
+                          detailsSummary: t('personalize.detailsSummary'),
+                          languageSummary: t('personalize.languageSummary'),
+                          acknowledgement: t('personalize.generationAcknowledgement'),
+                          privacyPolicy: t('personalize.privacyPolicy'),
+                          required: t('personalize.requiredLabel'),
+                          photoPreparing: t('personalize.photoPreparing'),
+                          photoNeedsFix: t('personalize.photoNeedsFix'),
+                          dataConsentRequiredShort: t('personalize.dataConsentRequiredShort'),
+                          generateMagicPreview: t('personalize.generateMagicPreview'),
+                          completeDetails: t('personalize.completeDetails'),
+                        }}
+                        onStepChange={handleFormStepChange}
+                        onGenerate={handleGeneratePreviewAction}
+                      />
+                    )}
+                  </div>
+                }
+              />
             )}
 
             {/* Step 3: Preview */}
@@ -3045,7 +3295,6 @@ export default function PersonalizePage({
                     <PreviewIntroHeader
                       title={t('personalize.previewTitle', { name })}
                       subtitle={t('personalize.previewSubtitle')}
-                      editionNotice={isSupreme ? <SignatureVoiceEditionNotice variant="preview" /> : undefined}
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
                       showChangePhoto={!isPreviewPhotoLocked}
@@ -3105,24 +3354,47 @@ export default function PersonalizePage({
                       />
                     ) : null
                   }
-                  actions={
-                    <PreviewActionBar
-                      acknowledgementLabel={t('personalize.checkoutAcknowledgement')}
-                      acknowledgementRequiredLabel={t('personalize.checkoutAcknowledgementRequired')}
-                      shareLabel={isPreparingShare ? t('common.loading') : t('share.previewButton')}
-                      shareDescription={t('share.previewDescription')}
-                      shareCopyLabel={t('share.copyLink')}
-                      addToCartLabel={t('personalize.addToCartPrice', { price: formatDisplayCurrency(currentPrice, displayCurrency) })}
-                      checkoutLabel={t('personalize.checkoutNow')}
-                      loadingLabel={t('common.loading')}
-                      shareError={shareError}
-                      canShare={Boolean(creationId)}
-                      isPreparingShare={isPreparingShare}
-                      isCheckoutPending={previewActionPending === 'CHECKOUT'}
-                      onShare={handleOpenPreviewShare}
-                      onAddToCart={handleAddToCartClick}
-                      onCheckout={handleCheckoutClick}
-                      addToCartButtonRef={addToCartBtnRef}
+                  purchase={
+                    <PreviewPurchasePanel
+                      value={purchaseBookType}
+                      options={editionOptions}
+                      title={t('personalize.chooseEdition')}
+                      voiceTitle={t('personalize.signatureVoiceTitle')}
+                      voiceBody={t('personalize.signatureVoiceBody')}
+                      voiceReadyLabel={t('personalize.voiceReady')}
+                      addVoiceLabel={t('personalize.addYourVoice')}
+                      changeVoiceLabel={t('personalize.changeVoice')}
+                      privacyCopy={PRIVACY_REASSURANCE_COPY}
+                      isSavingEdition={isSavingEdition}
+                      editionError={editionError}
+                      voiceReady={Boolean(voiceAssetId)}
+                      voiceDurationSeconds={resolvedVoiceDurationSeconds}
+                      onChange={(value) => void handleEditionChange(value)}
+                      onOpenVoice={() => setIsVoiceDialogOpen(true)}
+                      actions={
+                        <PreviewActionBar
+                          acknowledgementLabel={t('personalize.checkoutAcknowledgement')}
+                          acknowledgementRequiredLabel={t('personalize.checkoutAcknowledgementRequired')}
+                          shareLabel={isPreparingShare ? t('common.loading') : t('share.previewButton')}
+                          addToCartLabel={requiresVoiceSample && !voiceAssetId
+                            ? t('personalize.addVoiceToContinue')
+                            : t('personalize.addEditionToCart', {
+                                edition: selectedEditionTitle,
+                                price: formatDisplayCurrency(currentPrice, displayCurrency),
+                              })}
+                          checkoutLabel={t('personalize.checkoutNow')}
+                          loadingLabel={t('common.loading')}
+                          shareError={shareError}
+                          canShare={Boolean(creationId)}
+                          isPreparingShare={isPreparingShare}
+                          isCheckoutPending={previewActionPending === 'CHECKOUT'}
+                          isConfigurationPending={isSavingEdition}
+                          onShare={handleOpenPreviewShare}
+                          onAddToCart={handleAddToCartClick}
+                          onCheckout={handleCheckoutClick}
+                          addToCartButtonRef={addToCartBtnRef}
+                        />
+                      }
                     />
                   }
                   scrollCueLabel={t('personalize.scrollToPurchase')}
@@ -3139,6 +3411,32 @@ export default function PersonalizePage({
             shareText: t('share.previewTemplate'),
             note: t('share.previewNote'),
           }}
+        />
+        <SignatureVoiceDialog
+          open={isVoiceDialogOpen}
+          existingAssetId={voiceAssetId}
+          existingSignedUrl={resolvedVoicePlaybackUrl}
+          existingDurationSeconds={resolvedVoiceDurationSeconds}
+          pendingRecording={pendingVoiceRecording}
+          validationError={voiceValidationError}
+          isSaving={isSavingVoice}
+          labels={{
+            title: t('personalize.signatureVoiceDialogTitle'),
+            description: t('personalize.signatureVoiceDialogBody'),
+            authorization: t('personalize.signatureVoiceAuthorization'),
+            required: t('personalize.requiredLabel'),
+            save: t('personalize.saveVoice'),
+            saving: t('personalize.savingVoice'),
+            remove: t('personalize.removeVoice'),
+            close: t('common.close'),
+          }}
+          onClose={() => {
+            if (!isSavingVoice) setIsVoiceDialogOpen(false)
+          }}
+          onRecordingSelected={handleVoiceRecordingSelected}
+          onClearValidation={() => setVoiceValidationError(null)}
+          onSave={(recording) => void handleSaveVoice(recording)}
+          onRemove={() => void handleRemoveVoice()}
         />
 
         <LoadingPreviewOverlay

@@ -6,12 +6,15 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const readTemplateSql = (path) =>
   readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
-test('Signature Voice v3 keeps recording local until Create Preview and uses one authorization', async () => {
-  const [action, recorder, page, jobsClient, uploadRoute, confirmRoute, cleanupServer, sql, consentV3Sql, ownerHotfix] = await Promise.all([
+test('Signature Voice v3 is captured after Preview and bound through the owner-scoped purchase configuration', async () => {
+  const [action, recorder, dialog, purchasePanel, page, purchaseService, purchaseRoute, uploadRoute, confirmRoute, cleanupServer, sql, consentV3Sql, ownerHotfix] = await Promise.all([
     read('components/personalize/GeneratePreviewAction.tsx'),
     read('components/personalize/VoiceRecorderPanel.tsx'),
+    read('components/personalize/SignatureVoiceDialog.tsx'),
+    read('components/personalize/PreviewPurchasePanel.tsx'),
     read('components/PersonalizePage.tsx'),
-    read('src/services/jobs.ts'),
+    read('src/services/purchaseConfiguration.ts'),
+    read('app/api/creations/[creationId]/purchase-configuration/route.ts'),
     read('app/api/upload-url/route.ts'),
     read('app/api/user-assets/confirm/route.ts'),
     read('src/lib/user-asset-cleanup-server.ts'),
@@ -23,8 +26,8 @@ test('Signature Voice v3 keeps recording local until Create Preview and uses one
   assert.doesNotMatch(action, /Coming Soon|isDisabled\s*=\s*!isFormValid\s*\|\|\s*isSupreme/)
   assert.doesNotMatch(action, /voiceSubjectName|voiceSubjectRelationship|SIGNATURE_VOICE_CONSENT_VERSION/)
   assert.match(action, /isDataGenerationConsentChecked[\s\S]*useState\(true\)/)
-  assert.match(action, /isSignatureVoiceAuthorizationChecked[\s\S]*useState\(true\)/)
-  assert.match(action, /signatureVoiceAuthorization:[\s\S]*isSignatureVoiceAuthorizationChecked/)
+  assert.match(action, /signatureVoiceAuthorization:\s*false/)
+  assert.doesNotMatch(action, /isSignatureVoiceAuthorizationChecked|voiceAuthorizationRequired/)
   assert.match(action, /href="\/privacy"/)
   assert.match(recorder, /export type PendingVoiceRecording =/)
   assert.match(recorder, /new File\(\[blob\]/)
@@ -32,17 +35,26 @@ test('Signature Voice v3 keeps recording local until Create Preview and uses one
   assert.match(recorder, /addEventListener\('ended', handleEnded\)/)
   assert.doesNotMatch(recorder, /MIN_SECONDS|MAX_SECONDS|canSaveRecording|handleSelectRecording|useThisRecording|errorMinSeconds|errorMaxSeconds/)
   assert.doesNotMatch(recorder, /uploadUserAsset|voiceAuthorization|speakerKind|href="\/privacy"|playbackCompleted|analyzeVoiceSampleBlob|AudioContext|client_quality/)
-  assert.doesNotMatch(page, /signatureVoiceGenerateConsentRef/)
-  assert.match(page, /signatureVoiceAuthorizationRef\.current/)
+  assert.doesNotMatch(page, /signatureVoiceGenerateConsentRef|signatureVoiceAuthorizationRef/)
   assert.match(page, /pendingVoiceRecordingRef\.current/)
-  assert.match(page, /bookType === 'supreme'[\s\S]*!hasSignatureVoiceAuthorization/)
-  assert.doesNotMatch(page, /isVoiceReadyForPreview|handleVoiceReadinessChange/)
-  assert.match(page, /bookType === 'supreme' && selectedVoiceRecording[\s\S]*uploadUserAsset\([\s\S]*selectedVoiceRecording\.file[\s\S]*'voice_sample'/)
+  assert.match(page, /book_type: 'basic'/)
+  assert.match(page, /createPreviewJob\([\s\S]*pendingFaceAsset,[\s\S]*undefined/)
+  assert.match(page, /const handleSaveVoice[\s\S]*uploadUserAsset\([\s\S]*recording\.file,[\s\S]*'voice_sample',[\s\S]*saveEditionConfiguration\('supreme'/)
   assert.match(page, /version: SIGNATURE_VOICE_CONSENT_VERSION,[\s\S]*speakerKind: 'authorized_speaker'/)
-
-  const requestBody = jobsClient.match(/voice_binding: voiceBinding[\s\S]*?\n\s*: null,/)?.[0] ?? ''
-  assert.match(requestBody, /asset_id:/)
-  assert.doesNotMatch(requestBody, /consent:|subject_name:|subject_relationship:|accepted_at|duration_seconds|storage_path/)
+  assert.match(purchasePanel, /value === 'supreme'/)
+  assert.match(dialog, /aria-required="true"/)
+  assert.match(dialog, /disabled=\{!pendingRecording \|\| !authorized \|\| isSaving\}/)
+  assert.match(purchaseService, /method: 'PATCH'/)
+  assert.match(purchaseService, /expected_preview_job_id:/)
+  assert.match(purchaseRoute, /resolveCheckoutOwner\(request/)
+  assert.match(purchaseRoute, /\.eq\('owner_type', filter\.owner_type\)[\s\S]*\.eq\(filter\.column, filter\.value\)/)
+  assert.match(purchaseRoute, /String\(creation\.preview_job_id \?\? ''\) !== expectedPreviewJobId/)
+  assert.match(purchaseRoute, /isPurchaseLocked[\s\S]*purchase_configuration_locked/)
+  assert.match(purchaseRoute, /template_package_prices/)
+  assert.ok(
+    purchaseRoute.indexOf(".from('template_package_prices')") < purchaseRoute.indexOf(".from('creations')\n    .update"),
+    'server price must be validated before the creation configuration is updated',
+  )
 
   const parseAt = uploadRoute.indexOf('parseSignatureVoiceCaptureAuthorization')
   const signedUploadAt = uploadRoute.indexOf('createSignedUploadUrl')

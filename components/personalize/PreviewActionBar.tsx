@@ -8,8 +8,6 @@ type PreviewActionBarProps = {
   acknowledgementLabel: string
   acknowledgementRequiredLabel: string
   shareLabel: string
-  shareDescription: string
-  shareCopyLabel: string
   addToCartLabel: string
   checkoutLabel: string
   loadingLabel: string
@@ -17,6 +15,7 @@ type PreviewActionBarProps = {
   canShare: boolean
   isPreparingShare: boolean
   isCheckoutPending: boolean
+  isConfigurationPending?: boolean
   onShare: () => void
   onAddToCart: () => void
   onCheckout: () => void
@@ -27,8 +26,6 @@ function PreviewActionBarComponent({
   acknowledgementLabel,
   acknowledgementRequiredLabel,
   shareLabel,
-  shareDescription,
-  shareCopyLabel,
   addToCartLabel,
   checkoutLabel,
   loadingLabel,
@@ -36,6 +33,7 @@ function PreviewActionBarComponent({
   canShare,
   isPreparingShare,
   isCheckoutPending,
+  isConfigurationPending = false,
   onShare,
   onAddToCart,
   onCheckout,
@@ -47,9 +45,7 @@ function PreviewActionBarComponent({
   const handleAcknowledgementChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const checked = event.target.checked
     setIsCheckoutAcknowledged(checked)
-    if (checked) {
-      setShowAcknowledgementError(false)
-    }
+    if (checked) setShowAcknowledgementError(false)
   }, [])
 
   const handleCheckout = useCallback(() => {
@@ -57,85 +53,34 @@ function PreviewActionBarComponent({
       setShowAcknowledgementError(true)
       return
     }
-
     onCheckout()
   }, [isCheckoutAcknowledged, onCheckout])
 
+  const pending = isCheckoutPending || isConfigurationPending
+
   return (
-    <>
-      <div className="w-full max-w-3xl px-2">
-        <label className="mx-auto mb-3 flex max-w-2xl cursor-pointer items-start gap-3 rounded-2xl border border-white/60 bg-white/65 px-4 py-3 text-left shadow-[0_4px_12px_rgba(148,93,34,0.06)] backdrop-blur-sm">
-          <input
-            type="checkbox"
-            checked={isCheckoutAcknowledged}
-            onChange={handleAcknowledgementChange}
-            className="mt-1 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 accent-amber-500 focus:ring-2 focus:ring-amber-300"
-          />
-          <span className="text-xs font-medium leading-relaxed text-amber-950/80 sm:text-sm">
-            {acknowledgementLabel}
-          </span>
-        </label>
-        {showAcknowledgementError ? (
-          <p className="mb-3 text-center text-xs font-semibold text-red-500">
-            {acknowledgementRequiredLabel}
-          </p>
-        ) : null}
-      </div>
+    <div>
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left">
+        <input type="checkbox" checked={isCheckoutAcknowledged} onChange={handleAcknowledgementChange} className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-amber-600 accent-amber-500 focus:ring-2 focus:ring-amber-400" />
+        <span className="text-xs font-medium leading-5 text-slate-700">{acknowledgementLabel}</span>
+      </label>
+      {showAcknowledgementError ? <p className="mt-2 text-xs font-semibold text-red-600" role="alert">{acknowledgementRequiredLabel}</p> : null}
 
-      <div className="mb-3 w-full max-w-2xl px-2">
-        <button
-          type="button"
-          onClick={onShare}
-          disabled={isPreparingShare || !canShare}
-          className="group relative z-20 flex w-full items-center gap-3 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/90 to-orange-50/85 px-4 py-3 text-left shadow-[0_10px_28px_rgba(251,146,60,0.12),inset_0_1px_0_rgba(255,255,255,0.82)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-amber-300/80 hover:shadow-[0_14px_34px_rgba(251,146,60,0.18),inset_0_1px_0_rgba(255,255,255,0.9)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/75 bg-white/72 text-amber-600 shadow-sm transition group-hover:bg-white/90">
-            <Share2 className="h-5 w-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-bold text-amber-900">
-              {shareLabel}
-            </span>
-            <span className="mt-0.5 block text-xs font-medium leading-5 text-amber-700/75">
-              {shareDescription}
-            </span>
-          </span>
-          <span className="hidden rounded-full border border-white/70 bg-white/55 px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-amber-600 shadow-sm sm:inline-flex">
-            {shareCopyLabel}
-          </span>
-        </button>
-      </div>
+      <Button ref={addToCartButtonRef} onClick={onAddToCart} size="lg" disabled={pending} className="glass-action-btn glass-action-btn--brand mt-4 h-14 w-full rounded-2xl text-sm font-bold sm:text-base">
+        {isConfigurationPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <ShoppingCart className="mr-2 h-4 w-4" aria-hidden="true" />}
+        {addToCartLabel}
+      </Button>
+      <Button type="button" onClick={handleCheckout} size="lg" variant="outline" disabled={!isCheckoutAcknowledged || pending} className="mt-3 h-12 w-full rounded-2xl text-sm font-bold">
+        {isCheckoutPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+        {isCheckoutPending ? loadingLabel : checkoutLabel}
+      </Button>
 
-      <div className="flex w-full max-w-md flex-col justify-center gap-3 px-2 sm:max-w-none sm:flex-row sm:gap-4 md:gap-5">
-        <Button
-          ref={addToCartButtonRef}
-          onClick={onAddToCart}
-          size="lg"
-          variant="outline"
-          disabled={isCheckoutPending}
-          className="glass-action-btn glass-action-btn--amber relative z-20 h-11 w-full rounded-full px-5 text-sm font-semibold sm:w-auto sm:px-7 md:h-12 md:px-8 md:text-base"
-        >
-          <ShoppingCart className="mr-2 h-4 w-4 md:h-5 md:w-5" />
-          {addToCartLabel}
-        </Button>
-        <Button
-          onClick={handleCheckout}
-          size="lg"
-          disabled={!isCheckoutAcknowledged || isCheckoutPending}
-          className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-6 text-sm font-semibold sm:w-auto sm:px-9 md:h-12 md:px-10 md:text-base"
-        >
-          {isCheckoutPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin md:h-5 md:w-5" />
-              {loadingLabel}
-            </>
-          ) : (
-            checkoutLabel
-          )}
-        </Button>
-      </div>
-      {shareError ? <p className="mt-3 text-center text-xs text-red-500">{shareError}</p> : null}
-    </>
+      <button type="button" onClick={onShare} disabled={isPreparingShare || !canShare} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50">
+        {isPreparingShare ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
+        {shareLabel}
+      </button>
+      {shareError ? <p className="mt-2 text-center text-xs text-red-600" role="alert">{shareError}</p> : null}
+    </div>
   )
 }
 

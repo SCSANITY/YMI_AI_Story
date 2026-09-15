@@ -8,28 +8,32 @@ async function read(relativePath) {
   return readFile(new URL(relativePath, root), 'utf8')
 }
 
-test('Customize defaults both required product-generation consents on and keeps marketing separate', async () => {
-  const [action, page, messages, jobsRoute] = await Promise.all([
+test('Preview generation uses one photo/details consent and keeps voice authorization post-Preview', async () => {
+  const [action, page, voiceDialog, messages, jobsRoute] = await Promise.all([
     read('components/personalize/GeneratePreviewAction.tsx'),
     read('components/PersonalizePage.tsx'),
+    read('components/personalize/SignatureVoiceDialog.tsx'),
     read('src/lib/i18n-messages.ts'),
     read('app/api/jobs/route.js'),
   ])
 
   assert.match(action, /isDataGenerationConsentChecked, setIsDataGenerationConsentChecked\] = useState\(true\)/)
-  assert.match(action, /isSignatureVoiceAuthorizationChecked, setIsSignatureVoiceAuthorizationChecked\] = useState\(true\)/)
   assert.doesNotMatch(action, /isMarketingConsentChecked/)
   assert.match(action, /aria-required="true"/)
   assert.match(action, /labels\.required/)
   assert.match(action, /dataGeneration:\s*isDataGenerationConsentChecked/)
-  assert.match(action, /signatureVoiceAuthorization:\s*!isSupreme \|\| isSignatureVoiceAuthorizationChecked/)
-  assert.match(action, /isSupreme \? \([\s\S]*voiceAuthorizationRequired/)
+  assert.match(action, /signatureVoiceAuthorization:\s*false/)
+  assert.doesNotMatch(action, /isSupreme|voiceAuthorizationRequired|voice_sample/)
   assert.doesNotMatch(action, /marketing|Cookie Settings|onOpenMarketingPreferences/)
   assert.doesNotMatch(action, /text-amber-600">\*</)
 
   assert.match(page, /required:\s*t\('personalize\.requiredLabel'\)/)
-  assert.match(page, /voiceAuthorizationRequired:\s*t\('personalize\.voiceAuthorizationRequiredLabel'\)/)
-  assert.match(page, /signatureVoiceAuthorizationRef\.current = consent\.signatureVoiceAuthorization/)
+  assert.match(page, /book_type: 'basic'/)
+  assert.match(page, /createPreviewJob\([\s\S]*pendingFaceAsset,[\s\S]*undefined/)
+  assert.doesNotMatch(page, /signatureVoiceAuthorizationRef/)
+  assert.match(voiceDialog, /useState\(false\)/)
+  assert.match(voiceDialog, /aria-required="true"/)
+  assert.match(messages, /I agree to use this recording to create synthetic narration for this book and confirm I have permission to use it\./)
   assert.doesNotMatch(page, /openCookieSettings|marketingConsentOptional|manageMarketingPreferences|privacyUsageNote/)
   assert.doesNotMatch(page, /marketing-consent-v1/)
   assert.doesNotMatch(page, /consentRecordedAt/)

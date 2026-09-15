@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" role="img" aria-labelledby="title desc">
+  <title id="title">Classic Portrait hardcover edition</title>
+  <desc id="desc">A premium hardcover personalized storybook with a visible spine.</desc>
+  <rect width="320" height="220" rx="28" fill="#fffbeb"/>
+  <ellipse cx="160" cy="190" rx="112" ry="14" fill="#92400e" opacity=".12"/>
+  <path d="M76 42l21-14 151 18-20 16z" fill="#fdba74"/>
+  <path d="M76 42l152 20v126L76 166z" fill="#f97316"/>
+  <path d="M228 62l20-16v124l-20 18z" fill="#c2410c"/>
+  <path d="M88 55l127 17v94L88 150z" fill="#fff7ed"/>
+  <path d="M88 124c35-31 76-31 127-4v46L88 150z" fill="#fbbf24"/>
+  <circle cx="150" cy="101" r="26" fill="#fed7aa"/>
+  <path d="M133 104c9 11 27 11 35 0" fill="none" stroke="#9a3412" stroke-width="5" stroke-linecap="round"/>
+  <path d="M99 67l103 14" stroke="#f59e0b" stroke-width="8" stroke-linecap="round"/>
+  <path d="M86 48v109" stroke="#9a3412" stroke-width="5" opacity=".35"/>
+</svg>
