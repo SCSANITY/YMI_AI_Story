@@ -6,13 +6,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { isSupabaseStorageImage } from '@/lib/storage-images'
 
 type ProductShowcaseCarouselProps = {
-  bookId: string
   title: string
   coverUrl?: string | null
   images?: string[]
   isMobile: boolean
-  windowWidth: number
-  uploadPanelRef: React.RefObject<HTMLDivElement | null>
 }
 
 const toNextImagePreloadUrl = (src: string, width: 640 | 750) => {
@@ -27,23 +24,19 @@ const toNextImagePreloadUrl = (src: string, width: 640 | 750) => {
 }
 
 function ProductShowcaseCarouselComponent({
-  bookId,
   title,
   coverUrl,
   images,
   isMobile,
-  windowWidth,
-  uploadPanelRef,
 }: ProductShowcaseCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [autoCycleResetKey, setAutoCycleResetKey] = useState(0)
   const [imageErrors, setImageErrors] = useState<Set<string>>(() => new Set())
-  const [desktopThumbSize, setDesktopThumbSize] = useState(72)
-  const [desktopMainSize, setDesktopMainSize] = useState(520)
-  const [desktopThumbColumnWidth, setDesktopThumbColumnWidth] = useState(78)
+  const [desktopThumbSize, setDesktopThumbSize] = useState(64)
+  const [desktopMainSize, setDesktopMainSize] = useState(500)
+  const [desktopThumbColumnWidth, setDesktopThumbColumnWidth] = useState(70)
 
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const mainRef = useRef<HTMLDivElement | null>(null)
   const thumbViewportRef = useRef<HTMLDivElement | null>(null)
   const thumbRefs = useRef<Array<HTMLButtonElement | null>>([])
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -120,12 +113,6 @@ function ProductShowcaseCarouselComponent({
   }, [goToNext, goToPrevious, showcaseImages.length])
 
   useEffect(() => {
-    setActiveIndex(0)
-    setAutoCycleResetKey((value) => value + 1)
-    setImageErrors(new Set())
-  }, [bookId])
-
-  useEffect(() => {
     if (showcaseImages.length <= 1) return
 
     const timer = window.setTimeout(() => {
@@ -135,52 +122,33 @@ function ProductShowcaseCarouselComponent({
     return () => window.clearTimeout(timer)
   }, [activeIndex, autoCycleResetKey, showcaseImages.length])
 
-  useEffect(() => {
-    if (showcaseImages.length === 0) return
-    setActiveIndex((prev) => (prev >= showcaseImages.length ? 0 : prev))
-  }, [showcaseImages.length])
+  const resolvedActiveIndex = activeIndex < showcaseImages.length ? activeIndex : 0
 
   useEffect(() => {
     if (isMobile) return
     const rowNode = rowRef.current
-    const node = mainRef.current
-    const uploadNode = uploadPanelRef.current
-    if (!node || !rowNode || !uploadNode) return
+    if (!rowNode) return
 
     const GAP = 8
-    const MIN_THUMB_SIZE = 68
-    const MAX_THUMB_SIZE = 76
+    const MIN_THUMB_SIZE = 56
+    const MAX_THUMB_SIZE = 70
     const COLUMN_GAP = 12
     const SCROLL_SLOT = 8
-    const MIN_MAIN_SIZE = 420
+    const MIN_MAIN_SIZE = 360
+    const MAX_MAIN_SIZE = 520
 
     const recompute = () => {
-      const rowRect = rowNode.getBoundingClientRect()
-      const uploadRect = uploadNode.getBoundingClientRect()
       const rowWidth = rowNode.getBoundingClientRect().width
-      const desiredMainSize = Math.floor(uploadRect.bottom - rowRect.top)
-      if (!desiredMainSize || !rowWidth) return
+      if (!rowWidth) return
+      const nextMainSize = Math.max(
+        MIN_MAIN_SIZE,
+        Math.min(MAX_MAIN_SIZE, Math.floor(rowWidth - COLUMN_GAP - MAX_THUMB_SIZE - SCROLL_SLOT)),
+      )
+      const visibleThumbCount = Math.max(4, Math.min(6, showcaseImages.length))
+      const nextThumbSize = Math.floor((nextMainSize - GAP * (visibleThumbCount - 1)) / visibleThumbCount)
+      const clampedThumbSize = Math.min(MAX_THUMB_SIZE, Math.max(nextThumbSize, MIN_THUMB_SIZE))
 
-      const solveForVisibleCount = (count: number) => {
-        const maxSizeByWidth = Math.floor(
-          (
-            rowWidth
-            - COLUMN_GAP
-            - SCROLL_SLOT
-            + (GAP * (count - 1)) / count
-          ) / (1 + 1 / count)
-        )
-        const nextMainSize = Math.max(MIN_MAIN_SIZE, Math.min(desiredMainSize, maxSizeByWidth))
-        const nextThumbSize = Math.floor((nextMainSize - GAP * (count - 1)) / count)
-        return { mainSize: nextMainSize, thumbSize: nextThumbSize }
-      }
-
-      const optionSix = solveForVisibleCount(6)
-      const optionFive = solveForVisibleCount(5)
-      const preferred = optionSix.thumbSize >= MIN_THUMB_SIZE ? optionSix : optionFive
-      const clampedThumbSize = Math.min(MAX_THUMB_SIZE, Math.max(preferred.thumbSize, MIN_THUMB_SIZE))
-
-      setDesktopMainSize(preferred.mainSize)
+      setDesktopMainSize(nextMainSize)
       setDesktopThumbSize(clampedThumbSize)
       setDesktopThumbColumnWidth(clampedThumbSize + SCROLL_SLOT)
     }
@@ -189,15 +157,13 @@ function ProductShowcaseCarouselComponent({
 
     const observer = new ResizeObserver(recompute)
     observer.observe(rowNode)
-    observer.observe(uploadNode)
-    observer.observe(node)
 
     return () => observer.disconnect()
-  }, [isMobile, showcaseImages.length, uploadPanelRef, windowWidth])
+  }, [isMobile, showcaseImages.length])
 
   useEffect(() => {
     const viewport = thumbViewportRef.current
-    const target = thumbRefs.current[activeIndex]
+    const target = thumbRefs.current[resolvedActiveIndex]
     if (!viewport || !target) return
 
     if (isMobile) {
@@ -225,13 +191,13 @@ function ProductShowcaseCarouselComponent({
     if (nextTop !== currentTop) {
       viewport.scrollTo({ top: nextTop, behavior: 'smooth' })
     }
-  }, [activeIndex, isMobile])
+  }, [isMobile, resolvedActiveIndex])
 
   useEffect(() => {
     if (showcaseImages.length <= 1) return
 
     const timer = window.setTimeout(() => {
-      const nextIndex = (activeIndex + 1) % showcaseImages.length
+      const nextIndex = (resolvedActiveIndex + 1) % showcaseImages.length
       const url = getImageSrc(showcaseImages[nextIndex] || '')
       if (!url) return
 
@@ -239,12 +205,12 @@ function ProductShowcaseCarouselComponent({
       img.decoding = 'async'
       img.fetchPriority = 'low'
       img.src = toNextImagePreloadUrl(url, isMobile ? 640 : 750)
-    }, activeIndex === 0 ? 1200 : 180)
+    }, resolvedActiveIndex === 0 ? 1200 : 180)
 
     return () => window.clearTimeout(timer)
-  }, [activeIndex, getImageSrc, isMobile, showcaseImages])
+  }, [getImageSrc, isMobile, resolvedActiveIndex, showcaseImages])
 
-  const activeImage = showcaseImages[activeIndex] || showcaseImages[0] || coverUrl || ''
+  const activeImage = showcaseImages[resolvedActiveIndex] || showcaseImages[0] || coverUrl || ''
   const activeImageSrc = activeImage ? getImageSrc(activeImage) : ''
 
   if (showcaseImages.length === 0) {
@@ -269,7 +235,7 @@ function ProductShowcaseCarouselComponent({
             }
           >
             {showcaseImages.map((image, index) => {
-              const isActive = index === activeIndex
+              const isActive = index === resolvedActiveIndex
 
               return (
                 <button
@@ -318,7 +284,6 @@ function ProductShowcaseCarouselComponent({
 
       <div className="order-1 md:order-2 min-w-0">
         <div
-          ref={mainRef}
           className="relative mx-auto aspect-square w-full max-w-[430px] touch-pan-y overflow-hidden rounded-[0.96rem] bg-[#f6efe7] shadow-[0_16px_24px_-22px_rgba(0,0,0,0.18)] md:mx-0 md:max-w-none"
           style={isMobile ? undefined : { width: `${desktopMainSize}px`, maxWidth: '100%' }}
           onTouchStart={handleTouchStart}
@@ -334,8 +299,8 @@ function ProductShowcaseCarouselComponent({
                 alt={`${title} showcase main`}
                 fill
                 sizes={isMobile ? 'min(100vw, 430px)' : `${desktopMainSize}px`}
-                priority={activeIndex === 0}
-                fetchPriority={activeIndex === 0 ? 'high' : 'auto'}
+                priority={resolvedActiveIndex === 0}
+                fetchPriority={resolvedActiveIndex === 0 ? 'high' : 'auto'}
                 unoptimized={isSupabaseStorageImage(activeImageSrc)}
                 onError={() => markImageError(activeImage)}
                 className="object-cover"

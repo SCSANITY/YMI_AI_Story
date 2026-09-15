@@ -36,12 +36,12 @@ function PreviewIntroHeaderComponent({
   onPhotoUpload,
 }: PreviewIntroHeaderProps) {
   return (
-    <div className="mb-6 text-center text-gray-800 md:mb-10">
+    <div className="mb-5 text-center text-gray-800 sm:text-left md:mb-7">
       <h2 className="mb-2 font-serif text-2xl font-bold md:text-3xl">{title}</h2>
       <p className="text-sm text-gray-600 md:text-base">{subtitle}</p>
-      {editionNotice ? <div className="mx-auto mt-4 max-w-xl">{editionNotice}</div> : null}
+      {editionNotice ? <div className="mt-4 max-w-xl">{editionNotice}</div> : null}
       {showChangePhoto ? (
-        <div className="mt-4 flex flex-col items-center">
+        <div className="mt-4 flex flex-col items-center sm:items-start">
           <label
             className={`inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-bold text-gray-800 shadow-lg ring-1 ring-amber-100 backdrop-blur-sm transition-all ${
               changePhotoDisabled

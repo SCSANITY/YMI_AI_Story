@@ -7,12 +7,12 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-test('wide desktop Preview uses a stable 65/35 book and purchase configuration split', () => {
+test('wide desktop Preview uses a stable 60/40 book and purchase configuration split', () => {
   const layout = read('components/personalize/PreviewStepLayout.tsx')
 
-  assert.match(layout, /xl:grid-cols-\[minmax\(0,1\.82fr\)_minmax\(340px,1fr\)\]/)
-  assert.match(layout, /xl:grid-cols-\[150px_minmax\(0,1fr\)\]/)
-  assert.match(layout, /\{gallery\}[\s\S]*?\{book\}/)
+  assert.match(layout, /xl:grid-cols-\[minmax\(0,3fr\)_minmax\(380px,2fr\)\]/)
+  assert.match(layout, /xl:grid-cols-\[124px_minmax\(0,1fr\)\]/)
+  assert.match(layout, /\{progress\}[\s\S]*?\{intro\}[\s\S]*?\{book\}[\s\S]*?\{gallery\}/)
   assert.match(layout, /ref=\{purchaseRef\}[\s\S]*?\{purchase\}/)
 })
 
@@ -40,14 +40,14 @@ test('Photo Versions stays horizontal on compact desktops and becomes a bounded 
   assert.match(gallery, /focus-visible:ring-2/)
 })
 
-test('compact Preview scaling follows available width without the old phone clamp or tablet jump', () => {
+test('Preview book island scales from its actual column instead of global window width', () => {
+  const stage = read('components/personalize/PreviewBookStage.tsx')
   const personalize = read('components/PersonalizePage.tsx')
 
-  assert.match(personalize, /const isCompactPreview = windowWidth < 1024/)
-  assert.match(personalize, /\(windowWidth - 32\) \/ \(PAGE_WIDTH \* 2\)/)
-  assert.match(personalize, /const previewScale = isCompactPreview \? compactPreviewScale : 1/)
-  assert.match(personalize, /previewScale < 1/)
-  assert.doesNotMatch(personalize, /mobilePreviewScale|Math\.min\(0\.58|Math\.max\(0\.4/)
+  assert.match(stage, /new ResizeObserver\(recomputeScale\)/)
+  assert.match(stage, /stage\.getBoundingClientRect\(\)\.width/)
+  assert.match(stage, /\(availableWidth - 8\) \/ \(pageWidth \* 2\)/)
+  assert.doesNotMatch(personalize, /isCompactPreview|compactPreviewScale|previewStageHeight/)
 })
 
 test('compact Preview offers an accessible animated cue while purchase configuration remains below', () => {

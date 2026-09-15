@@ -44,41 +44,41 @@ function PersonalizeProductIntroComponent({
   const [openFaq, setOpenFaq] = useState<number | null>(null)
 
   return (
-    <section className="flex min-h-full flex-col rounded-[1.5rem] bg-white px-5 py-6 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.48)] sm:px-7 sm:py-8 lg:px-8">
+    <section className="flex flex-col py-1 lg:pl-2">
       <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-amber-700">{eyebrow}</p>
-      <h1 className="mt-3 font-serif text-[2rem] font-bold leading-[1.08] tracking-[-0.025em] text-slate-950 sm:text-[2.4rem] lg:text-[2.7rem]">
+      <h1 className="mt-2.5 font-serif text-[1.85rem] font-bold leading-[1.1] tracking-[-0.025em] text-slate-950 sm:text-[2.1rem] lg:text-[2.25rem]">
         {title}
       </h1>
-      <p className="mt-5 max-w-2xl text-[0.98rem] leading-7 text-slate-600 sm:text-base">
+      <p className="mt-4 max-w-2xl text-[0.94rem] leading-6 text-slate-600">
         {description}
       </p>
 
-      <ul className="mt-6 grid gap-3" aria-label="Book details">
+      <ul className="mt-5 grid gap-2.5" aria-label="Book details">
         {facts.slice(0, 4).map((fact) => {
           const Icon = FACT_ICONS[fact.icon]
           return (
-            <li key={`${fact.icon}-${fact.label}`} className="flex items-center gap-3 text-sm font-semibold text-slate-800 sm:text-base">
-              <Icon className="h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <li key={`${fact.icon}-${fact.label}`} className="flex items-center gap-2.5 text-sm font-semibold text-slate-800">
+              <Icon className="h-[18px] w-[18px] shrink-0 text-amber-700" aria-hidden="true" />
               <span>{fact.label}</span>
             </li>
           )
         })}
       </ul>
 
-      <div className="mt-7 border-t border-slate-200 pt-5">
+      <div className="mt-5 border-t border-slate-200 pt-4">
         <p className="text-sm font-semibold text-slate-500">{fromLabel}</p>
-        <p className="mt-1 text-3xl font-extrabold tracking-tight text-slate-950">{priceLabel}</p>
+        <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{priceLabel}</p>
         <Button
           type="button"
           size="lg"
           onClick={onStart}
-          className="glass-action-btn glass-action-btn--brand mt-5 h-14 w-full rounded-2xl text-base font-bold sm:h-16 sm:text-lg"
+          className="glass-action-btn glass-action-btn--brand mt-4 h-13 w-full rounded-xl text-base font-bold sm:h-14"
         >
           {ctaLabel}
         </Button>
       </div>
 
-      <div className="mt-7 border-t border-slate-200 pt-2">
+      <div className="mt-6 border-t border-slate-200 pt-1">
         <h2 className="sr-only">{faqHeading}</h2>
         {faqItems.map((item, index) => {
           const isOpen = openFaq === index
@@ -87,7 +87,7 @@ function PersonalizeProductIntroComponent({
             <div key={item.question} className="border-b border-slate-200">
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-bold text-slate-900 sm:text-base"
+                className="flex w-full items-center justify-between gap-4 py-3.5 text-left text-sm font-bold text-slate-900"
                 aria-expanded={isOpen}
                 aria-controls={contentId}
                 onClick={() => setOpenFaq(isOpen ? null : index)}

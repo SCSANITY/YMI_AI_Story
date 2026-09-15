@@ -367,7 +367,6 @@ export default function PersonalizePage({
   const PAGE_WIDTH = 380; 
   const PAGE_HEIGHT = 380; // Square page for preview model
   const PREVIEW_PAGE_HEIGHT = PAGE_HEIGHT;
-  const PREVIEW_HEIGHT = PAGE_HEIGHT + 40;
   const ANIMATION_DURATION = 0.8; 
   
   const [currentSpread, setCurrentSpread] = useState(0); 
@@ -752,10 +751,6 @@ export default function PersonalizePage({
   const currentPrice = currentPackagePrice?.effectivePriceUsd ?? 0;
   const requiresVoiceSample = purchaseBookType === 'supreme';
   const isMobile = windowWidth < 768;
-  const isCompactPreview = windowWidth < 1024;
-  const compactPreviewScale = Math.min(1, Math.max(0.32, (windowWidth - 32) / (PAGE_WIDTH * 2)));
-  const previewScale = isCompactPreview ? compactPreviewScale : 1;
-  const previewStageHeight = previewScale < 1 ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT;
   const previewShareImageUrl = previewPublicShareImageUrl || previewUrl || previewPages[0] || resolvedBook?.coverUrl || null;
   const lockedPreviewPresentation = useMemo(
     () => buildTemplateLockedPreviewPresentation(resolvedBook?.lockedPreviewPages),
@@ -3112,7 +3107,6 @@ export default function PersonalizePage({
       />
 
       <PersonalizeHeader
-        title={book.title}
         user={user}
         cartCount={cartCount}
         cartItems={cart}
@@ -3143,15 +3137,17 @@ export default function PersonalizePage({
       {/* Main Content */}
       <main className="relative mx-auto w-full max-w-full flex-grow overflow-hidden px-4 py-6 md:container md:py-7">
         
-        <ProgressSteps
-          currentIndex={currentProgressIndex}
-          labels={{
-            story: t('personalize.stepStory'),
-            customize: t('personalize.stepCustomize'),
-            preview: t('personalize.stepPreview'),
-            order: t('personalize.stepOrder'),
-          }}
-        />
+        {!viewState.showPreview ? (
+          <ProgressSteps
+            currentIndex={currentProgressIndex}
+            labels={{
+              story: t('personalize.stepStory'),
+              customize: t('personalize.stepCustomize'),
+              preview: t('personalize.stepPreview'),
+              order: t('personalize.stepOrder'),
+            }}
+          />
+        ) : null}
 
         {/* Step 1 (Skipped logic) */}
 
@@ -3163,13 +3159,11 @@ export default function PersonalizePage({
                   <StoryShowcaseCard
                     carousel={
                       <ProductShowcaseCarousel
-                        bookId={bookID}
+                        key={bookID}
                         title={templateTitle || book.title}
                         coverUrl={resolvedBook?.coverUrl}
                         images={resolvedBook?.showcaseImages}
                         isMobile={isMobile}
-                        windowWidth={windowWidth}
-                        uploadPanelRef={uploadPanelRef}
                       />
                     }
                     storyInfo={
@@ -3291,6 +3285,18 @@ export default function PersonalizePage({
             {/* Step 3: Preview */}
             {viewState.showPreview && (
                 <PreviewStepLayout
+                  progress={
+                    <ProgressSteps
+                      placement="preview"
+                      currentIndex={currentProgressIndex}
+                      labels={{
+                        story: t('personalize.stepStory'),
+                        customize: t('personalize.stepCustomize'),
+                        preview: t('personalize.stepPreview'),
+                        order: t('personalize.stepOrder'),
+                      }}
+                    />
+                  }
                   intro={
                     <PreviewIntroHeader
                       title={t('personalize.previewTitle', { name })}
@@ -3310,8 +3316,6 @@ export default function PersonalizePage({
                   book={
                     <PreviewBookStage
                       key={displayedPreviewJobId ?? 'preview-book'}
-                      stageHeight={previewStageHeight}
-                      previewScale={previewScale}
                       pageWidth={PAGE_WIDTH}
                       pageHeight={PREVIEW_PAGE_HEIGHT}
                       animationDuration={ANIMATION_DURATION}

@@ -18,7 +18,6 @@ const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then(
 })
 
 type PersonalizeHeaderProps = {
-  title: string
   user: User | null
   cartCount: number
   cartItems: CartItem[]
@@ -39,7 +38,6 @@ type PersonalizeHeaderProps = {
 }
 
 function PersonalizeHeaderComponent({
-  title,
   user,
   cartCount,
   cartItems,
@@ -119,10 +117,6 @@ function PersonalizeHeaderComponent({
           <ChevronLeft className="h-5 w-5" />
           <span className="text-sm font-medium">{labels.back}</span>
         </button>
-        <div className="hidden font-serif text-lg font-bold text-gray-900 sm:block">
-          {title}
-        </div>
-
         <div className="flex items-center gap-2 sm:gap-4">
           <CurrencySwitcher />
 

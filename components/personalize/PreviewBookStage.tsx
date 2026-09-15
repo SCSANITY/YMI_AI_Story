@@ -1,11 +1,11 @@
 'use client'
 
-import { memo, type CSSProperties, type ReactNode } from 'react'
+import { memo, type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 type PreviewBookStageProps = {
-  stageHeight: number
-  previewScale: number
+  stageHeight?: number
+  previewScale?: number
   pageWidth: number
   pageHeight: number
   animationDuration: number
@@ -22,8 +22,8 @@ type PreviewBookStageProps = {
 }
 
 function PreviewBookStageComponent({
-  stageHeight,
-  previewScale,
+  stageHeight: fixedStageHeight,
+  previewScale: fixedPreviewScale,
   pageWidth,
   pageHeight,
   animationDuration,
@@ -38,16 +38,39 @@ function PreviewBookStageComponent({
   previewBookShadow,
   renderPageContent,
 }: PreviewBookStageProps) {
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const [measuredPreviewScale, setMeasuredPreviewScale] = useState(1)
   const staticRightIndex =
     isFlipping && flipDirection === 'prev'
       ? currentSpread
       : isFlipping && flipDirection === 'next'
         ? currentSpread + 1
         : currentSpread
+  const previewScale = fixedPreviewScale ?? measuredPreviewScale
+  const stageHeight = fixedStageHeight
+    ?? Math.round((pageHeight + 40) * previewScale) + (previewScale < 1 ? 12 : 0)
+
+  useEffect(() => {
+    if (fixedPreviewScale !== undefined) return
+    const stage = stageRef.current
+    if (!stage) return
+
+    const recomputeScale = () => {
+      const availableWidth = stage.getBoundingClientRect().width
+      if (!availableWidth) return
+      setMeasuredPreviewScale(Math.min(1, Math.max(0.32, (availableWidth - 8) / (pageWidth * 2))))
+    }
+
+    recomputeScale()
+    const observer = new ResizeObserver(recomputeScale)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [fixedPreviewScale, pageWidth])
 
   return (
     <div
-      className="relative mb-7 flex select-none justify-center perspective-2000 md:mb-12"
+      ref={stageRef}
+      className="relative mb-7 flex w-full select-none justify-center overflow-hidden perspective-2000 md:mb-10"
       style={{ height: stageHeight }}
     >
       <div

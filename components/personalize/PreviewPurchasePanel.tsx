@@ -55,7 +55,7 @@ function PreviewPurchasePanelComponent({
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set())
 
   return (
-    <aside className="w-full rounded-[1.5rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:sticky xl:top-5">
+    <aside className="flex h-full w-full flex-col rounded-[1.5rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:min-h-[680px] xl:p-7">
       <fieldset disabled={isSavingEdition}>
         <legend className="font-serif text-2xl font-bold tracking-[-0.02em] text-slate-950">{title}</legend>
         <div className="mt-4 flex flex-col gap-3" role="radiogroup" aria-busy={isSavingEdition}>
@@ -156,7 +156,7 @@ function PreviewPurchasePanelComponent({
         </section>
       ) : null}
 
-      <div className="mt-5 border-t border-slate-200 pt-5">{actions}</div>
+      <div className="mt-5 border-t border-slate-200 pt-5 xl:mt-auto">{actions}</div>
     </aside>
   )
 }

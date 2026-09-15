@@ -4,6 +4,7 @@ import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from '
 import { ChevronsDown } from 'lucide-react'
 
 type PreviewStepLayoutProps = {
+  progress: ReactNode
   intro: ReactNode
   book: ReactNode
   gallery?: ReactNode
@@ -11,7 +12,7 @@ type PreviewStepLayoutProps = {
   scrollCueLabel: string
 }
 
-function PreviewStepLayoutComponent({ intro, book, gallery, purchase, scrollCueLabel }: PreviewStepLayoutProps) {
+function PreviewStepLayoutComponent({ progress, intro, book, gallery, purchase, scrollCueLabel }: PreviewStepLayoutProps) {
   const purchaseRef = useRef<HTMLDivElement | null>(null)
   const [showScrollCue, setShowScrollCue] = useState(false)
 
@@ -47,13 +48,16 @@ function PreviewStepLayoutComponent({ intro, book, gallery, purchase, scrollCueL
   }, [])
 
   return (
-    <div className="mx-auto min-h-[600px] w-full max-w-[1480px] animate-in fade-in py-5 duration-200 md:py-8">
-      {intro}
-      <div className="mt-5 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.82fr)_minmax(340px,1fr)] xl:items-start">
+    <div className="mx-auto min-h-[600px] w-full max-w-[1600px] animate-in fade-in py-2 duration-200 md:py-4">
+      <div className="grid min-w-0 gap-7 xl:grid-cols-[minmax(0,3fr)_minmax(380px,2fr)] xl:items-stretch xl:gap-8">
         <section className="relative min-w-0" aria-label="Book Preview">
-          <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[150px_minmax(0,1fr)] xl:items-start">
-            <div className="order-2 min-w-0 xl:order-1">{gallery}</div>
-            <div className="order-1 min-w-0 xl:order-2">{book}</div>
+          <div className="flex min-w-0 flex-col xl:grid xl:grid-cols-[124px_minmax(0,1fr)] xl:items-start xl:gap-x-4">
+            <div className="order-1 min-w-0 xl:col-start-2 xl:row-start-1">
+              {progress}
+              {intro}
+            </div>
+            <div className="order-2 min-w-0 xl:col-start-2 xl:row-start-2">{book}</div>
+            <div className="order-3 min-w-0 xl:col-start-1 xl:row-start-2">{gallery}</div>
           </div>
           <button
             type="button"
@@ -66,7 +70,7 @@ function PreviewStepLayoutComponent({ intro, book, gallery, purchase, scrollCueL
             {scrollCueLabel}
           </button>
         </section>
-        <div ref={purchaseRef} className="scroll-mt-5 xl:min-w-0">{purchase}</div>
+        <div ref={purchaseRef} className="h-full scroll-mt-5 xl:min-w-0">{purchase}</div>
       </div>
     </div>
   )

@@ -84,7 +84,7 @@ function GeneratePreviewActionComponent({
         type="button"
         onClick={handleGenerate}
         disabled={!isFormValid}
-        className="mt-4 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-slate-950 px-5 text-base font-bold text-white shadow-[0_18px_32px_-20px_rgba(15,23,42,0.72)] transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none sm:h-16"
+        className="group relative isolate mt-4 flex h-14 w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600 px-5 text-base font-bold text-white shadow-[0_18px_34px_-20px_rgba(234,88,12,0.75)] transition duration-300 before:pointer-events-none before:absolute before:inset-y-0 before:-left-1/3 before:w-1/3 before:-skew-x-12 before:bg-white/25 before:transition-transform before:duration-500 hover:-translate-y-0.5 hover:from-amber-400 hover:via-orange-500 hover:to-orange-500 hover:shadow-[0_22px_38px_-20px_rgba(234,88,12,0.85)] hover:before:translate-x-[420%] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none disabled:before:hidden sm:h-16"
       >
         <Sparkles className="h-5 w-5" aria-hidden="true" />
         {buttonLabel}

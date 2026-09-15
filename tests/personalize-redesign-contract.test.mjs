@@ -23,7 +23,28 @@ test('PX-001 separates product introduction, preview inputs, and post-Preview pu
   assert.match(page, /<PreviewPurchasePanel/)
   assert.match(purchasePanel, /type="radio"/)
   assert.match(purchasePanel, /value === 'supreme'/)
-  assert.match(layout, /xl:grid-cols-\[minmax\(0,1\.82fr\)_minmax\(340px,1fr\)\]/)
+  assert.match(layout, /xl:grid-cols-\[minmax\(0,3fr\)_minmax\(380px,2fr\)\]/)
+  assert.match(layout, /\{progress\}[\s\S]*?\{intro\}[\s\S]*?\{book\}/)
+})
+
+test('PX-001 refinement removes the duplicated top-bar title and restores database-driven Magic Attribute meters', async () => {
+  const [page, header, attributes, carousel, generateAction] = await Promise.all([
+    read('components/PersonalizePage.tsx'),
+    read('components/personalize/PersonalizeHeader.tsx'),
+    read('components/personalize/MagicAttributesPanel.tsx'),
+    read('components/personalize/ProductShowcaseCarousel.tsx'),
+    read('components/personalize/GeneratePreviewAction.tsx'),
+  ])
+
+  assert.doesNotMatch(header, /title:\s*string|\{title\}/)
+  assert.doesNotMatch(page, /<PersonalizeHeader[\s\S]{0,120}title=/)
+  assert.match(attributes, /role="progressbar"/)
+  assert.match(attributes, /style=\{\{ width: `\$\{percent\}%` \}\}/)
+  assert.doesNotMatch(attributes, /attributes\.slice\(/)
+  assert.doesNotMatch(carousel, /uploadPanelRef|uploadRect/)
+  assert.doesNotMatch(carousel, /useEffect\(\(\) => \{[\s\S]{0,160}setActiveIndex\(0\)/)
+  assert.match(page, /<ProductShowcaseCarousel[\s\S]{0,80}key=\{bookID\}/)
+  assert.match(generateAction, /bg-gradient-to-r from-amber-500 via-orange-500 to-orange-600/)
 })
 
 test('PX-001 uses truthful edition artwork with graceful image failure behavior', async () => {
