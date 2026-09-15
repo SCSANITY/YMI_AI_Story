@@ -41,9 +41,9 @@ function PreviewIntroHeaderComponent({
       <p className="text-sm text-gray-600 md:text-base">{subtitle}</p>
       {editionNotice ? <div className="mt-4 max-w-xl">{editionNotice}</div> : null}
       {showChangePhoto ? (
-        <div className="mt-4 flex flex-col items-center">
+        <div className="mt-4 flex w-full flex-col items-center">
           <label
-            className={`inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-bold text-gray-800 shadow-lg ring-1 ring-amber-100 backdrop-blur-sm transition-all ${
+            className={`mx-auto inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-bold text-gray-800 shadow-lg ring-1 ring-amber-100 backdrop-blur-sm transition-all ${
               changePhotoDisabled
                 ? 'cursor-not-allowed opacity-55'
                 : 'cursor-pointer hover:-translate-y-0.5 hover:bg-white hover:shadow-amber-200/60'

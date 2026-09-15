@@ -17,7 +17,8 @@ test('wide desktop Preview uses a stable 70/30 book and purchase configuration s
   assert.match(layout, /\{progress\}[\s\S]*?\{intro\}[\s\S]*?\{book\}[\s\S]*?\{gallery\}/)
   assert.match(layout, /ref=\{purchaseRef\}[\s\S]*?\{purchase\}/)
   assert.match(intro, /mb-5 text-center text-gray-800 md:mb-7/)
-  assert.match(intro, /mt-4 flex flex-col items-center/)
+  assert.match(intro, /mt-4 flex w-full flex-col items-center/)
+  assert.match(intro, /mx-auto inline-flex items-center/)
   assert.doesNotMatch(intro, /sm:text-left|sm:items-start/)
 })
 
