@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, type ReactNode } from 'react'
+import { memo, startTransition, useCallback, useOptimistic, useState, type ReactNode } from 'react'
 import Image from 'next/image'
 import { Check, Mic2, ShieldCheck } from 'lucide-react'
 import type { PurchasePackageType } from '@/lib/purchase-configuration'
@@ -30,7 +30,7 @@ type PreviewPurchasePanelProps = {
   voiceReady: boolean
   voiceDurationSeconds: number | null
   actions: ReactNode
-  onChange: (value: PurchasePackageType) => void
+  onChange: (value: PurchasePackageType) => Promise<void>
   onOpenVoice: () => void
 }
 
@@ -53,14 +53,27 @@ function PreviewPurchasePanelComponent({
   onOpenVoice,
 }: PreviewPurchasePanelProps) {
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set())
+  const [optimisticValue, setOptimisticValue] = useOptimistic(value)
+  const [optimisticPending, setOptimisticPending] = useOptimistic(false)
+  const selectionPending = isSavingEdition || optimisticPending
+
+  const handleEditionChange = useCallback((nextValue: PurchasePackageType) => {
+    if (nextValue === optimisticValue || selectionPending) return
+
+    startTransition(async () => {
+      setOptimisticValue(nextValue)
+      setOptimisticPending(true)
+      await onChange(nextValue)
+    })
+  }, [onChange, optimisticValue, selectionPending, setOptimisticPending, setOptimisticValue])
 
   return (
     <aside className="flex w-full flex-col rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:mx-auto xl:max-w-[380px] xl:p-5">
-      <fieldset disabled={isSavingEdition}>
+      <fieldset disabled={selectionPending}>
         <legend className="font-serif text-xl font-bold tracking-[-0.02em] text-slate-950 sm:text-2xl xl:text-xl">{title}</legend>
-        <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-busy={isSavingEdition}>
+        <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-busy={selectionPending} data-pending={selectionPending ? '' : undefined}>
           {options.map((option) => {
-            const selected = option.value === value
+            const selected = option.value === optimisticValue
             const imageFailed = failedImages.has(option.value)
             return (
               <label
@@ -77,7 +90,7 @@ function PreviewPurchasePanelComponent({
                   name="book-edition"
                   value={option.value}
                   checked={selected}
-                  onChange={() => onChange(option.value)}
+                  onChange={() => handleEditionChange(option.value)}
                 />
                 {!imageFailed ? (
                   <span className="relative block h-[56px] overflow-hidden rounded-lg bg-amber-50">

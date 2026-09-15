@@ -9,12 +9,16 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 
 test('wide desktop Preview uses a stable 70/30 book and purchase configuration split', () => {
   const layout = read('components/personalize/PreviewStepLayout.tsx')
+  const intro = read('components/personalize/PreviewIntroHeader.tsx')
 
   assert.match(layout, /xl:grid-cols-\[minmax\(0,7fr\)_minmax\(310px,3fr\)\]/)
   assert.match(layout, /xl:grid-cols-\[112px_minmax\(0,1fr\)\]/)
   assert.match(layout, /max-w-\[380px\][^>]*>\{intro\}/)
   assert.match(layout, /\{progress\}[\s\S]*?\{intro\}[\s\S]*?\{book\}[\s\S]*?\{gallery\}/)
   assert.match(layout, /ref=\{purchaseRef\}[\s\S]*?\{purchase\}/)
+  assert.match(intro, /mb-5 text-center text-gray-800 md:mb-7/)
+  assert.match(intro, /mt-4 flex flex-col items-center/)
+  assert.doesNotMatch(intro, /sm:text-left|sm:items-start/)
 })
 
 test('book and Photo Versions remain ahead of the purchase configuration in source order', () => {

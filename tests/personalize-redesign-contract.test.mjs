@@ -85,11 +85,12 @@ test('PX-001 keeps privacy promises exact and requires a separate Signature Voic
   assert.match(dialog, /!pendingRecording \|\| !authorized \|\| isSaving/)
 })
 
-test('PX-001 purchase configuration is owner-scoped, preview-guarded, lock-aware, and server-priced', async () => {
-  const [route, service, page] = await Promise.all([
+test('PX-001 purchase configuration is owner-scoped, preview-guarded, lock-aware, server-priced, and locally optimistic', async () => {
+  const [route, service, page, purchasePanel] = await Promise.all([
     read('app/api/creations/[creationId]/purchase-configuration/route.ts'),
     read('src/services/purchaseConfiguration.ts'),
     read('components/PersonalizePage.tsx'),
+    read('components/personalize/PreviewPurchasePanel.tsx'),
   ])
 
   assert.match(route, /resolveCheckoutOwner\(request/)
@@ -103,7 +104,11 @@ test('PX-001 purchase configuration is owner-scoped, preview-guarded, lock-aware
   assert.match(route, /Promise\.allSettled\(\[[\s\S]*loadCreationPhotoLockState\(creationId\)[\s\S]*\.from\('template_package_prices'\)/)
   assert.match(route, /packagePriceRowToModel/)
   assert.match(service, /credentials: 'include'/)
-  assert.match(page, /const previousPackageType = purchaseBookType;[\s\S]*setBookType\(nextPackageType\);[\s\S]*await saveEditionConfiguration/)
-  assert.match(page, /catch \(error\)[\s\S]*setBookType\(previousPackageType\)/)
+  assert.match(purchasePanel, /startTransition[\s\S]*useOptimistic/)
+  assert.match(purchasePanel, /const \[optimisticValue, setOptimisticValue\] = useOptimistic\(value\)/)
+  assert.match(purchasePanel, /setOptimisticValue\(nextValue\)[\s\S]*await onChange\(nextValue\)/)
+  assert.match(purchasePanel, /disabled=\{selectionPending\}/)
+  assert.match(page, /onChange=\{handleEditionChange\}/)
+  assert.doesNotMatch(page, /setBookType\(nextPackageType\)/)
   assert.match(page, /await ensureCurrentPurchaseConfiguration\(\)/g)
 })
