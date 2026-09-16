@@ -66,3 +66,21 @@ test('admin shipping stays inside the existing row-scoped dialog and blocks conf
   assert.match(workspace,/current!==intent.current/);assert.match(workspace,/refreshRequired/)
   assert.match(workspace,/shippingDraftDirty/);assert.match(workspace,/min-h-11/)
 })
+
+test('the actual order page preserves saved shipping details through its response mapper',async()=>{
+  const [page,model]=await Promise.all([read('app/orders/[orderID]/page.tsx'),read('app/orders/[orderID]/orderDetailModel.ts')])
+  assert.match(page,/order: createOrderDetailReadModel\(order\)/)
+  assert.match(model,/shipping_details: order.shipping_details \?\? null/)
+  assert.match(page,/shippingDetails=\{order.shipping_details\}/)
+  assert.match(page,/loadResult\?\.requestKey === requestKey/)
+})
+
+test('geography is lazy, local, static and not coupled to customer addresses or carrier requests',async()=>{
+  const [panel,map,region]=await Promise.all([read('app/orders/[orderID]/ShippingDetailsPanel.tsx'),read('app/orders/[orderID]/ShippingLocationMap.tsx'),read('src/lib/shipping-map.ts')])
+  assert.match(panel,/lazy\(\(\) => import\('\.\/ShippingLocationMap'\)/)
+  assert.match(panel,/expanded && details\?\.events/)
+  assert.doesNotMatch(panel,/shipping-world-map|SHIPPING_WORLD_LAND_PATH/)
+  assert.doesNotMatch(map+region,/fetch\(|setInterval|geolocation|shipping_address|mapbox|google\.maps/)
+  assert.match(region,/event\.source === 'dealer_send'/)
+  assert.match(map,/not live GPS or a delivery estimate/)
+})

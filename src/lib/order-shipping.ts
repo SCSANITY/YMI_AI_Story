@@ -8,6 +8,10 @@ export type ShippingEvent = {
 }
 
 export type ShippingDetails = {
+  provider?: 'dealer_send' | null
+  // Set to equivalent only after a verified API/public-portal comparison.
+  // Saved events, successful polling and delivery status alone are not proof.
+  officialTrackingCoverage?: 'unverified' | 'equivalent'
   lastSyncedAt: string | null
   unavailable: boolean
   events: ShippingEvent[]

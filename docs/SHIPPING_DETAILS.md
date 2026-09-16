@@ -21,6 +21,46 @@ international scan gaps have calm fallbacks; known history is retained. Carrier
 local times are not silently treated as UTC or used as guaranteed arrival dates.
 The display is recorded-history ordering, not a guaranteed carrier chronology.
 
+The Order detail page preserves this saved `shipping_details` projection through
+`createOrderDetailReadModel`; runtime regression tests render that projection in
+the real tracker. Do not add an allowlist mapper that silently drops the history.
+
+## Recorded-region map and official lookup
+
+Shipping Details lazily loads a static SVG world map only when expanded and a
+saved carrier event includes a two-letter country. The package marker identifies
+the latest **recorded carrier region**, selected by the saved timestamp, not the
+carrier's timezone-less local time. Manual notes and the customer's delivery
+address never position the package. Unknown countries have text-only fallbacks;
+outages preserve the last known record. No live GPS, inferred transport route,
+arrival promise, map SDK, key or third-party map request is involved.
+
+The local land outline and country label anchors are simplified from public-domain
+[Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) datasets:
+110m Admin 0 countries (land) and 50m Admin 0 countries (label anchors), pinned to
+`nvkelso/natural-earth-vector@ca96624a56bd078437bca8184e78163e5039ad19`.
+`shipping-world-map.ts` is the generated, bounded display asset; anchors are
+country labels, not parcel coordinates. It stays out of the initial order chunk.
+
+The supplementary **Official shipment lookup** lives inside Shipping Details, not
+as a competing primary tracking action. A valid saved HTTPS public URL takes
+precedence. A matching Dealer Send provider binding (or an explicitly named
+Dealer Send carrier on a manual order) and a tracking number default
+to `https://apiv2.dealer-send.com/en/Tracking` without database backfill. This is
+the general official lookup page; no undocumented parcel query parameter is
+appended. The customer enters the displayed tracking number there.
+
+Hide the redundant lookup only when the customer read contract explicitly marks
+`officialTrackingCoverage: 'equivalent'`, there is a successful saved check and
+carrier history, and no outage. Empty/manual-only history or a failed check keeps
+the fallback. A separately configured carrier-page URL is preserved: Dealer Send
+portal parity alone does not establish parity with another carrier's page.
+The server currently emits **unverified**: API integration has not
+proven public-page parity. Do not infer parity from event count, delivery status
+or a successful request. At API activation, compare the documented/sampled
+information and deliberately update this presentation contract if justified.
+This flag is not a new DB column or a customer/Admin switch.
+
 ## Admin and transaction authority
 
 - `PATCH /api/admin/orders/[orderId]/logistics` retains the existing order form
@@ -83,7 +123,7 @@ limits apply; this is not a claim of exactly-once external delivery.
 Server-only names (no credential values belong in Git or documentation):
 
 - `DEALER_SEND_SYNC_ENABLED`: explicitly `true` only after migration/verification.
-- `DEALER_SEND_API_BASE_URL`: account-approved HTTPS origin, no path/query/userinfo.
+- `DEALER_SEND_API_BASE_URL`: correct documented HTTPS origin, no path/query/userinfo.
 - `DEALER_SEND_API_KEY`: account/API session key, not portal password.
 - `DEALER_SEND_DELIVERED_CODES_JSON`: optional array, default `[]`, maximum thirty
   entries with `carrierId`, `apiType`, `status`, `reference`. Do not invent codes.
@@ -93,6 +133,9 @@ Apply the reviewed LG-001 migration **before** deploying this Web source: the
 existing Admin logistics save now depends on the transactional RPC. Follow the
 Database preflight/postcheck runbook with explicit owner SQL authorization.
 Do not enable carrier sync before verifying actual API host/key/success response.
+Follow the official `GetApiSession` instructions first. Contact support only for
+an unpublished required value (such as the production origin) or a real access
+failure; do not make a separate approval step a presumed API prerequisite.
 An actual British tracking sample is not a development gate. Automation waits
 only for trustworthy carrier-code semantics; manual Delivered remains available.
 

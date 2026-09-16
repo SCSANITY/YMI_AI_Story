@@ -1,7 +1,7 @@
 'use client'
 
 import type React from 'react'
-import { BookOpen, CircleCheck, Download, ExternalLink, Package, Truck } from 'lucide-react'
+import { BookOpen, CircleCheck, Download, Package, Truck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { normalizeOrderStatus } from '@/lib/order-status'
 import { ShippingDetailsPanel } from './ShippingDetailsPanel'
@@ -65,17 +65,6 @@ export function LogisticsTracker({
           <p className="mt-1 text-xs text-slate-400">Current order status: {statusLabel}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          {trackingUrl ? (
-            <a
-              href={trackingUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-sky-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-200/60 transition hover:-translate-y-px hover:shadow-blue-300/60"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Track shipment
-            </a>
-          ) : null}
           {pdfUrl && (
             <a
               href={pdfUrl}
@@ -164,7 +153,9 @@ export function LogisticsTracker({
           </div>
         </div>
       )}
-      {['shipped','delivered'].includes(normalizeOrderStatus(status)) ? <ShippingDetailsPanel details={shippingDetails} /> : null}
+      {['shipped','delivered'].includes(normalizeOrderStatus(status)) ? (
+        <ShippingDetailsPanel details={shippingDetails} trackingUrl={trackingUrl} trackingNumber={trackingNumber} trackingCarrier={trackingCarrier} />
+      ) : null}
     </div>
   )
 }

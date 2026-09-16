@@ -8,14 +8,15 @@ import type { AdminShippingDetails, ShippingDetails } from '@/lib/order-shipping
 const SHIPPING_STATE_SELECT = 'provider,tracking_number,binding_version,revision,auto_delivery,last_synced_at,sync_error_code,delivery_notification_pending'
 export function dealerSendConfig() { return readDealerSendConfig(process.env) }
 
-type ShippingState={tracking_number:string|null;binding_version:number;last_synced_at:string|null;sync_error_code:string|null}
+type ShippingState={provider:'dealer_send'|null;tracking_number:string|null;binding_version:number;last_synced_at:string|null;sync_error_code:string|null}
 async function savedShippingDetails(orderId:string,trackingNumber:string|null,state:ShippingState|null):Promise<ShippingDetails> {
   if (!state || state.tracking_number !== trackingNumber) return { lastSyncedAt: null, unavailable: false, events: [] }
   const { data: events, error: eventError } = await supabaseAdmin.from('order_shipping_events')
     .select('event_id,source,event_time,country_code,description,created_at')
     .eq('order_id',orderId).eq('binding_version',state.binding_version)
     .order('created_at',{ascending:false}).order('event_time',{ascending:false}).limit(100)
-  return { lastSyncedAt: state.last_synced_at, unavailable: Boolean(eventError || state.sync_error_code),
+  return { provider: state.provider, officialTrackingCoverage: 'unverified',
+    lastSyncedAt: state.last_synced_at, unavailable: Boolean(eventError || state.sync_error_code),
     events: (events ?? []).map((event) => ({ id: event.event_id, source: event.source as 'dealer_send' | 'manual',
       time: event.event_time, country: event.country_code, description: event.description, recordedAt: event.created_at })) }
 }
