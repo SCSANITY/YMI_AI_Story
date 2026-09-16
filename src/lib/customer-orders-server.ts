@@ -1,6 +1,8 @@
 import 'server-only'
 
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { readOrderShippingDetails } from '@/lib/order-shipping-server'
+import type { ShippingDetails } from '@/lib/order-shipping'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
 import {
@@ -127,6 +129,13 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
   }
 
   const orderRows = data ?? []
+  // Detail only: list/Home reads never gain per-order logistics queries or provider calls.
+  const shippingByOrderId = new Map<string,ShippingDetails>()
+  const shippingReads = options.reference
+    ? Promise.all(orderRows.filter((order)=>['shipped','delivered'].includes(order.order_status)).map(async(order)=>{
+      shippingByOrderId.set(order.order_id,await readOrderShippingDetails(order.order_id,order.tracking_number))
+    }))
+    : Promise.resolve([])
   const paymentIds = uniqueStrings(orderRows.map((order) => order.payment_id))
   const paymentMap = new Map<string, { amount: number; currency: string }>()
 
@@ -198,7 +207,7 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
     })
   }
 
-  const finalPdfUrlMap = await createSignedStorageUrlMap(finalPdfRequests)
+  const [finalPdfUrlMap] = await Promise.all([createSignedStorageUrlMap(finalPdfRequests), shippingReads])
   const orders = orderRows.map((order) => {
     const items = order.cart_items ?? []
     const baseUsdTotal = items.reduce((sum, item) => {
@@ -283,6 +292,7 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       shipped_at: order.shipped_at ?? null,
       delivered_at: order.delivered_at ?? null,
       logistics_updated_at: order.logistics_updated_at ?? null,
+      shipping_details: shippingByOrderId.get(order.order_id) ?? null,
       display_currency: displayCurrency,
       display_total: displayTotal,
       final_pdf_url: finalPdfUrlMap.get(order.order_id) ?? null,

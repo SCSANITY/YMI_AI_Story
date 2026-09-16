@@ -27,6 +27,10 @@ not a second Worker source.
   that production SQL was executed; it pins the typed claim, locked owned
   lease/checkpoint, and atomic queue admission contracts that the Web and cloud
   Worker are being prepared to use.
+- LG-001 added `20260916_173000_lg_001_shipping_details.sql` from the private
+  Database logistics branch on 2026-09-16. It pins the service-only atomic
+  logistics save, lease and guarded sync contracts. This source-reviewed
+  snapshot is not evidence of production application.
 - `SHA256SUMS` records the repository-normalized UTF-8/LF identity of every
   fixture and this README, so the same manifest verifies on Windows and Linux.
 

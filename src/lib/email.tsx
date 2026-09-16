@@ -460,6 +460,7 @@ export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailP
   return sendManagedEmail({
     emailKey: 'logistics_update',
     idempotencyKey: `logistics_update:${params.orderId}:${params.logisticsEventId}`,
+    retryFailed: true,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_DELIVERY',
     subject,

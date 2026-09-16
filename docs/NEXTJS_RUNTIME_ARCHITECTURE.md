@@ -13,6 +13,9 @@ governance repository.
   Preview job/asset/version controller. UI components do not create competing
   workflow state.
 - Customer order collection and detail APIs share one server read model.
+- Supplemental shipping history uses that detail read model only, not Home,
+  order collections or client-to-carrier requests. Existing order statuses
+  remain authoritative; shipping descriptions never infer a new lifecycle.
 - Supabase user verification enters through one fail-closed Server-only
   authority. Admin, customer, optional anonymous-actor, and checkout-owner
   policies build their own authorization semantics above that verified user.
@@ -31,6 +34,12 @@ governance repository.
 
 ## Current domain owners
 
+- Logistics writes and notifications enter through
+  `src/lib/order-logistics-server.ts`. Order fields/status audit share the
+  database transaction; Signature Voice readiness and existing email
+  idempotency remain authoritative. `order-shipping-server.ts` owns saved
+  shipping reads and service-only leased sync, with `dealer-send.ts` as its
+  bounded protocol adapter. See [`SHIPPING_DETAILS.md`](SHIPPING_DETAILS.md).
 - Catalog reads enter through `src/lib/template-catalog-server.ts` and are
   normalized by `src/lib/book-catalog.ts`. `data/books.ts` is build-time route
   and SEO input only.

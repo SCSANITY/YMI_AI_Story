@@ -16,6 +16,8 @@ repository:
 
 - `../AGENTS.md`: component-specific agent instructions.
 - `../package.json`: authoritative development, test, and build commands.
+- [`SHIPPING_DETAILS.md`](SHIPPING_DETAILS.md): supplementary order shipping
+  history, Admin interventions and service-only Dealer Send sync contracts.
 - [`MY_BOOKS_CUSTOMER_JOURNEY.md`](MY_BOOKS_CUSTOMER_JOURNEY.md): My Books,
   Saved Preview, owned Reader, and direct-checkout customer journey.
 - [`EMAIL_CENTER.md`](EMAIL_CENTER.md): Admin outbound-email inventory,

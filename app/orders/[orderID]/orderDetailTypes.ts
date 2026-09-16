@@ -1,4 +1,5 @@
 import type { CheckoutCurrency } from '@/lib/locale-pricing'
+import type { ShippingDetails } from '@/lib/order-shipping'
 
 export type OrderItem = {
   cart_item_id: string
@@ -41,5 +42,6 @@ export type OrderDetail = {
   tracking_url?: string | null
   logistics_note?: string | null
   logistics_updated_at?: string | null
+  shipping_details?: ShippingDetails | null
   items?: OrderItem[]
 }

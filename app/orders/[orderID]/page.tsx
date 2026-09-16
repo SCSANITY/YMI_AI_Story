@@ -302,6 +302,7 @@ export default function OrderDetailPage() {
             trackingUrl={order.tracking_url}
             note={order.logistics_note}
             updatedAt={order.logistics_updated_at}
+            shippingDetails={order.shipping_details}
           />
         )}
 

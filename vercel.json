@@ -30,6 +30,10 @@
   ],
   "crons": [
     {
+      "path": "/api/internal/shipping-sync",
+      "schedule": "0 2 * * *"
+    },
+    {
       "path": "/api/internal/cron/unpaid",
       "schedule": "0 0 * * *"
     },

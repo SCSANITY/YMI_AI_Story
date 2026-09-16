@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 62, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 63, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -579,7 +579,9 @@ test('Orders keeps drafts row-scoped and reconciles logistics side effects from 
   assert.doesNotMatch(card, /reloadOrders/)
   assert.match(types, /READONLY_GROUPS/)
   assert.match(ordersApi, /noStoreJson as (?:jsonNoStore|privateJson)/)
-  assert.match(logisticsApi, /sendLogisticsUpdateEmail/)
+  const logisticsServer = await read('src/lib/order-logistics-server.ts')
+  assert.match(logisticsApi, /notifyLogisticsUpdate/)
+  assert.match(logisticsServer, /sendLogisticsUpdateEmail/)
   assert.match(logisticsApi, /persisted:\s*true/)
   assert.match(logisticsApi, /order:\s*updatedOrder/)
 })

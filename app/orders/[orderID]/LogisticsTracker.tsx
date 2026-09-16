@@ -4,6 +4,8 @@ import type React from 'react'
 import { BookOpen, CircleCheck, Download, ExternalLink, Package, Truck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { normalizeOrderStatus } from '@/lib/order-status'
+import { ShippingDetailsPanel } from './ShippingDetailsPanel'
+import type { ShippingDetails } from '@/lib/order-shipping'
 
 type StageKey = 'confirmed' | 'printing' | 'shipped' | 'delivered'
 
@@ -38,6 +40,7 @@ type LogisticsTrackerProps = {
   trackingUrl?: string | null
   note?: string | null
   updatedAt?: string | null
+  shippingDetails?: ShippingDetails | null
 }
 
 export function LogisticsTracker({
@@ -48,6 +51,7 @@ export function LogisticsTracker({
   trackingUrl,
   note,
   updatedAt,
+  shippingDetails,
 }: LogisticsTrackerProps) {
   const activeIdx = STATUS_TO_STAGE_INDEX[normalizeOrderStatus(status)] ?? 0
   const statusLabel = LOGISTICS_LABELS[status] || LOGISTICS_LABELS[normalizeOrderStatus(status)] || status
@@ -160,6 +164,7 @@ export function LogisticsTracker({
           </div>
         </div>
       )}
+      {['shipped','delivered'].includes(normalizeOrderStatus(status)) ? <ShippingDetailsPanel details={shippingDetails} /> : null}
     </div>
   )
 }

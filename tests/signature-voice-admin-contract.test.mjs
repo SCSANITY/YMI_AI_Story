@@ -233,7 +233,7 @@ test('S5 verifies all fifteen private narration objects before a Signature Voice
   const [sql, fulfillment, logistics] = await Promise.all([
     readTemplateSql('sql_signature_voice_fulfillment_gates.sql'),
     read('src/lib/signature-voice-fulfillment-server.ts'),
-    read('app/api/admin/orders/[orderId]/logistics/route.ts'),
+    read('src/lib/order-logistics-server.ts'),
   ])
   const shipmentGate = sql.match(/create or replace function public\.enforce_signature_voice_shipment_readiness[\s\S]*?\n\$\$;/)?.[0] ?? ''
 
@@ -246,11 +246,15 @@ test('S5 verifies all fifteen private narration objects before a Signature Voice
   assert.match(fulfillment, /SIGNATURE_VOICE_NARRATION_MIN_SECONDS[\s\S]*SIGNATURE_VOICE_NARRATION_MAX_SECONDS/)
 
   const stampIndex = logistics.indexOf('stampSignatureVoiceShipmentIntegrity')
-  const updateIndex = logistics.indexOf(".from('orders')", stampIndex)
+  const updateIndex = logistics.indexOf(".rpc('lg_001_save_order_logistics'", stampIndex)
   assert.ok(stampIndex >= 0 && updateIndex > stampIndex, 'shipment bytes must be verified before the order update')
   assert.match(logistics, /nextStatus === 'shipped' \|\| nextStatus === 'delivered'/)
-  assert.match(logistics, /previousStatus !== 'shipped'[\s\S]*previousStatus !== 'delivered'/)
-  assert.match(logistics, /Signature Voice\|narration\|hardware\|shipment/)
+  assert.match(logistics, /order.order_status !== 'shipped'[\s\S]*order.order_status !== 'delivered'/)
+  const route=await read('app/api/admin/orders/[orderId]/logistics/route.ts')
+  assert.match(route, /saveOrderLogistics\(order,admin.customer_id/)
+  const newSql=await read('tests/fixtures/external-contracts/sql/20260916_173000_lg_001_shipping_details.sql')
+  assert.match(newSql, /UPDATE public.orders SET order_status/)
+  assert.doesNotMatch(newSql, /DROP TRIGGER|DISABLE TRIGGER/)
 
   assert.match(shipmentGate, /for v_item in[\s\S]*package_type::text[\s\S]*= 'supreme'/)
   assert.match(shipmentGate, /new\.order_status::text not in \('shipped', 'delivered'\)/)

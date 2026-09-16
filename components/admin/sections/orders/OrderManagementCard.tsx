@@ -23,6 +23,7 @@ import {
 import { OrderProductionSnapshot } from '@/components/admin/sections/orders/OrderProductionSnapshot'
 import { AdminFloatingDialog } from '@/components/admin/AdminFloatingDialog'
 import { SignatureVoiceWorkspace } from '@/components/admin/sections/orders/SignatureVoiceWorkspace'
+import { OrderShippingWorkspace } from '@/components/admin/sections/orders/OrderShippingWorkspace'
 
 function formatDate(value: string | null) {
   if (!value) return '-'
@@ -250,7 +251,7 @@ export function OrderManagementCard({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(draft),
+        body: JSON.stringify({...draft,expectedStatus:savedOrder.order_status,expectedUpdatedAt:savedOrder.logistics_updated_at}),
       })
       const data = await response.json().catch(() => ({}))
       if (requestIntentRef.current !== requestIntent) return
@@ -473,6 +474,7 @@ export function OrderManagementCard({
             </div>
           )}
 
+          {!READONLY_GROUPS.has(orderGroup) ? <OrderShippingWorkspace order={savedOrder} blocked={isDirty||saving} onCommitted={applyPersistedOrder}/> : null}
           {notice ? (
             <AdminNotice
               tone={notice.tone === 'error' ? 'danger' : notice.tone}
