@@ -58,6 +58,18 @@ governance repository.
   URL and fails back to Photo when the asset is unavailable. A newly selected
   photo remains local until the customer gives the existing Preview-generation
   consent.
+- Catalogue cards share `buildPersonalizeIntroHref` in
+  `src/lib/personalize-entry.ts`. Its one-shot entry marker opens Product Intro
+  without discarding saved inputs or confirmed face identifiers, and is removed
+  with the Next.js-integrated native History API. Unmarked reloads and explicit
+  Cart/My Books resumes retain their existing recovery semantics. Header Back
+  exits Customize to Books; only the form's own Back control changes form steps.
+- The responsive Preview book island measures its available width before
+  client paint and ignores height-only resize observations. Its closed-cover
+  centering is applied on mount without an entrance translation animation.
+  The drop shadow belongs to the outer scale group, not the inner
+  `preserve-3d` book model. Actual page-turn animations and the Reader's fixed
+  scale/height contract remain independent of responsive measurement.
 - Preview creation routes map the database admission contract through
   `src/lib/jobQueueAdmission.ts`. `src/lib/jobQueue.ts` is a read-only Admin
   operations snapshot and is never an admission authority.

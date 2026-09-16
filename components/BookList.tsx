@@ -15,6 +15,7 @@ import {
   parseStoryTypes,
 } from '@/lib/book-catalog';
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
+import { buildPersonalizeIntroHref } from '@/lib/personalize-entry';
 import { emitYmiTrackingEvent } from '@/lib/tracking-policy';
 
 const FILTER_BAR_TOP_OFFSET = 72;
@@ -281,7 +282,7 @@ export const BookList: React.FC<BookListProps> = ({ initialGenderQuery = null })
     toggleFavorite(book);
   };
 
-const getPersonalizeHref = (bookID: string) => `/personalize/${bookID}`;
+const getPersonalizeHref = buildPersonalizeIntroHref;
 
 const handlePersonalize = (bookID: string) => {
     if (!bookID) {

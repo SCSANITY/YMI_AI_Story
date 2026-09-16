@@ -77,6 +77,7 @@ import {
   writePersonalizeFormDraft,
 } from '@/lib/personalize-form-draft';
 import { usePersonalizeHistory } from '@/components/personalize/usePersonalizeHistory';
+import { resolvePersonalizeEntryStep } from '@/lib/personalize-entry';
 import {
   PurchaseConfigurationRequestError,
   savePurchaseConfiguration,
@@ -225,6 +226,7 @@ export default function PersonalizePage({
   const creationIdParam = searchParams?.get('creationId') || null;
   const previewJobIdParam = searchParams?.get('jobId') || null;
   const previewSource = searchParams?.get('source') || null;
+  const productIntroEntryRef = useRef(viewMode !== 'preview' && searchParams?.get('entry') === 'intro');
 
   const {
     name, setName,
@@ -713,7 +715,7 @@ export default function PersonalizePage({
     ageRange: book?.ageLabel ?? `${minimumRecommendedAge}+`,
   });
   // --- Mobile Responsive State ---
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const [windowWidth, setWindowWidth] = useState(1024);
   const resolvedBook = useMemo(() => {
     if (!book) return null;
     return {
@@ -840,6 +842,7 @@ export default function PersonalizePage({
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -849,7 +852,7 @@ export default function PersonalizePage({
     if (!isHydrated) return
     if (!bookID) return
 
-    if (resumeData && resumeData.bookID === bookID) {
+    if (!productIntroEntryRef.current && resumeData && resumeData.bookID === bookID) {
         restore({
         hasDraft: !!resumeData.personalization,
         savedStage: viewMode === 'preview' ? 'PREVIEW' : 'FORM',
@@ -876,14 +879,16 @@ export default function PersonalizePage({
           personalizeDraftOwnerKey
         )
         startForm()
-        setFormStep(
-          draft?.faceAssetId || draft?.step === 'INTRO'
-            ? draft?.step ?? 'INTRO'
-            : 'PHOTO'
-        )
+        setFormStep(resolvePersonalizeEntryStep(draft, productIntroEntryRef.current))
     }
 
     didInitFSM.current = true
+    if (searchParams?.get('entry') === 'intro') {
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('entry')
+      const query = params.toString()
+      window.history.replaceState(window.history.state, '', `/personalize/${encodeURIComponent(bookID)}${query ? `?${query}` : ''}`)
+    }
   }, [
     bookID,
     creationIdParam,
@@ -892,6 +897,7 @@ export default function PersonalizePage({
     previewJobIdParam,
     restore,
     resumeData,
+    searchParams,
     startForm,
     viewMode,
   ])
@@ -901,6 +907,10 @@ export default function PersonalizePage({
   useEffect(() => {
     if (!resumeData) return
     if (resumeData.bookID !== bookID) return
+    if (productIntroEntryRef.current) {
+      resumePersonalization(null)
+      return
+    }
 
     const data = resumeData.personalization
     if (!data) return
@@ -1168,7 +1178,7 @@ export default function PersonalizePage({
 
   useEffect(() => {
     if (!isHydrated) return
-    if (resumeData && resumeData.bookID === bookID) return
+    if (!productIntroEntryRef.current && resumeData && resumeData.bookID === bookID) return
     if (
       viewMode === 'preview' &&
       (creationIdParam || creationId || previewJobIdParam || previewJobId)
@@ -1190,6 +1200,8 @@ export default function PersonalizePage({
       personalizeDraftOwnerKey
     )
 
+    setFormStep(resolvePersonalizeEntryStep(draft, productIntroEntryRef.current))
+    productIntroEntryRef.current = false
     setName(draft?.name ?? '')
     setAge(draft?.age ?? '')
     setSelectedLang(draft?.language ?? 'English')
@@ -1612,19 +1624,8 @@ export default function PersonalizePage({
     if (!canBack) return
 
     if (viewState.showForm) {
-      if (formStep === 'REVIEW') {
-        setFormStep('DETAILS')
-        return
-      }
-      if (formStep === 'DETAILS') {
-        setFormStep('PHOTO')
-        return
-      }
-      if (formStep === 'PHOTO') {
-        setFormStep('INTRO')
-        return
-      }
-      router.push('/')
+      // Header Back exits the route. Step Back belongs only to FormFlow.
+      router.push('/books')
       return
     }
 

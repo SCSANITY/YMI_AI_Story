@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { supabase } from '@/lib/supabase';
 import { useI18n } from '@/lib/useI18n';
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
+import { buildPersonalizeIntroHref } from '@/lib/personalize-entry';
 import { FavoritesGrid } from './FavoritesGrid';
 
 function FavoritesLoadingGrid() {
@@ -40,7 +41,7 @@ export default function FavoritesPage() {
   const [typeMap, setTypeMap] = useState<Record<string, string>>({});
   const [descMap, setDescMap] = useState<Record<string, string>>({});
 
-  const getPersonalizeHref = (bookID: string) => `/personalize/${bookID}`;
+  const getPersonalizeHref = buildPersonalizeIntroHref;
 
   const handlePersonalize = (bookID: string) => {
     void navigateToCustomize(getPersonalizeHref(bookID));

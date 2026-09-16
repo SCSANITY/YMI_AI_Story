@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react'
+import { memo, type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 type PreviewBookStageProps = {
@@ -50,14 +50,16 @@ function PreviewBookStageComponent({
   const stageHeight = fixedStageHeight
     ?? Math.round((pageHeight + 40) * previewScale) + (previewScale < 1 ? 12 : 0)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (fixedPreviewScale !== undefined) return
     const stage = stageRef.current
     if (!stage) return
 
+    let lastWidth = 0
     const recomputeScale = () => {
       const availableWidth = stage.getBoundingClientRect().width
-      if (!availableWidth) return
+      if (!availableWidth || Math.abs(availableWidth - lastWidth) < 0.5) return
+      lastWidth = availableWidth
       setMeasuredPreviewScale(Math.min(1, Math.max(0.32, (availableWidth - 8) / (pageWidth * 2))))
     }
 
@@ -70,18 +72,21 @@ function PreviewBookStageComponent({
   return (
     <div
       ref={stageRef}
+      data-preview-book-stage="true"
       className="relative mb-7 flex w-full select-none justify-center overflow-hidden perspective-2000 md:mb-10"
       style={{ height: stageHeight }}
     >
       <div
         className="shrink-0"
-        style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center', width: pageWidth * 2 }}
+        style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center', width: pageWidth * 2, filter: previewBookShadow }}
       >
         <motion.div
+          data-preview-book-model="true"
           className="relative flex w-full justify-center"
-          animate={{ x: (currentSpread === 0 && !isFlipping) ? -190 : 0 }}
+          initial={false}
+          animate={{ x: (currentSpread === 0 && !isFlipping) ? -pageWidth / 2 : 0 }}
           transition={{ duration: animationDuration, ease: 'easeInOut' }}
-          style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: pageHeight, filter: previewBookShadow }}
+          style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: pageHeight }}
         >
           <div
             aria-hidden="true"

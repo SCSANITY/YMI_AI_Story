@@ -14,6 +14,7 @@ import type {
 import { useI18n } from '@/lib/useI18n'
 import { useBookCatalog } from '@/components/useBookCatalog'
 import { useCustomizeNavigation } from '@/components/useCustomizeNavigation'
+import { buildPersonalizeIntroHref } from '@/lib/personalize-entry'
 
 type HomeBookCategory = {
   titleKey: string
@@ -69,7 +70,7 @@ export function HomeBookCategories({ banners }: HomeBookCategoriesProps) {
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
   const [isBooksRoutePending, setBooksRoutePending] = useState(false)
 
-  const getPersonalizeHref = (bookID: string) => `/personalize/${bookID}`
+  const getPersonalizeHref = buildPersonalizeIntroHref
 
   const handlePersonalize = (bookID: string) => {
     void navigateToCustomize(getPersonalizeHref(bookID))
