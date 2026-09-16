@@ -3010,11 +3010,15 @@ export default function PersonalizePage({
   ] : [];
   useEffect(() => {
     if (!viewState.showForm || formStep === 'INTRO') return;
+    // A confirmed face draft restores its fresh signed URL asynchronously. Do
+    // not demote the saved Details step during that owner-scoped lookup; the
+    // history resolver below moves to Photo if the asset is truly unavailable.
+    if (photoAssetId && !photoPreview && personalizeHistoryStatus !== 'error') return;
     if (!hasUsablePhoto && !isFacePreparing && formStep !== 'PHOTO' && formStep !== 'REVIEW') {
       setFormStep('PHOTO');
       return;
     }
-  }, [formStep, hasUsablePhoto, isFacePreparing, viewState.showForm]);
+  }, [formStep, hasUsablePhoto, isFacePreparing, personalizeHistoryStatus, photoAssetId, photoPreview, viewState.showForm]);
 
   const isAgeBelowRecommendedRange = useCallback((value: string) => {
     const parsedAge = parseChildAge(value);

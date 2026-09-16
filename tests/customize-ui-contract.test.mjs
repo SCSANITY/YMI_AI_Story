@@ -93,6 +93,10 @@ test('Customize history and draft recovery have one current owner', () => {
   assert.match(jobsRoute, /saveOwnedTextProfile/)
   assert.match(profilesRoute, /saveOwnedTextProfile/)
   assert.match(userAssetsRoute, /createAnonIfMissing: true/)
+  assert.match(
+    personalize,
+    /if \(photoAssetId && !photoPreview && personalizeHistoryStatus !== 'error'\) return/
+  )
 
   for (const retiredPath of [
     'components/personalize/BookPackageSelector.tsx',
