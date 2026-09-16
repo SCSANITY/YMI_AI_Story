@@ -2,6 +2,7 @@ import { isUuid } from '@/lib/validators'
 import type { PendingUserAssetUpload } from '@/services/assets'
 import { parseSignedPreviewAssets, type SignedPreviewAssets } from '@/lib/preview-page-contract'
 import type { PreviewCapacityState } from '@/lib/preview-capacity'
+import type { SaveTextProfileResult } from '@/lib/user-profile-history'
 
 export interface JobRecord {
   job_id: string
@@ -38,6 +39,12 @@ export type CreatePreviewVariantResult = {
 
 export type CreatePreviewVoiceBinding = {
   assetId: string
+}
+
+export type CreatePreviewJobResult = {
+  jobId: string
+  creationId: string
+  textProfile: SaveTextProfileResult | null
 }
 
 export type CommitPreviewVariantInput = {
@@ -106,7 +113,7 @@ export async function createPreviewJob(
   customerId?: string,
   pendingFaceAsset?: PendingUserAssetUpload,
   voiceBinding?: CreatePreviewVoiceBinding
-): Promise<{ jobId: string; creationId: string }> {
+): Promise<CreatePreviewJobResult> {
   if (!templateId || !faceAssetId) throw new Error('Template ID and face asset ID are required')
 
   const response = await fetch('/api/jobs', {
@@ -156,7 +163,11 @@ export async function createPreviewJob(
   if (!isUuid(String(creationId))) {
     throw new Error(`Invalid creationId returned: ${creationId}`)
   }
-  return { jobId: String(jobId), creationId: String(creationId) }
+  return {
+    jobId: String(jobId),
+    creationId: String(creationId),
+    textProfile: data?.text_profile ?? null,
+  }
 }
 
 export async function createPreviewVariant(

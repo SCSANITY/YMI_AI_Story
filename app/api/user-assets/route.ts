@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   try {
     owner = await resolveCheckoutOwner(request, {
       expectedCustomerId: url.searchParams.get('customerId'),
-      optional: true,
+      createAnonIfMissing: true,
     })
   } catch (error) {
     return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 
   const assetRows = assets as UserAssetRow[]
   const faces = assetRows.filter((row) => row.asset_type === 'face_image').slice(0, 8)
-  const profiles = assetRows.filter((row) => row.asset_type === 'text_profile').slice(0, 10)
+  const profiles = assetRows.filter((row) => row.asset_type === 'text_profile').slice(0, 5)
   const voices = assetRows.filter((row) => {
     if (row.asset_type !== 'voice_sample' || !row.storage_path) return false
     if (!row.metadata || typeof row.metadata !== 'object' || Array.isArray(row.metadata)) return false

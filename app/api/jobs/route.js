@@ -23,8 +23,8 @@ import {
   forceEnglishTextOverrides,
   normalizeStoryLanguage,
 } from '@/lib/story-language'
+import { saveOwnedTextProfile } from '@/lib/user-profile-history-server'
 
-const MAX_TEXT_PROFILES = 5
 const CONTENT_GENERATION_CONSENT_VERSIONS = new Set(['content-generation-consent-v1'])
 
 function validateAndStampPreviewConsent(params) {
@@ -46,93 +46,6 @@ function validateAndStampPreviewConsent(params) {
       },
     },
   }
-}
-
-async function saveTextProfile({
-  ownerType,
-  ownerId,
-  textOverrides,
-}) {
-  if (!ownerId || !textOverrides) {
-    return { saved: false, reason: 'missing_owner_or_text' }
-  }
-
-  const childName = textOverrides?.child_name || textOverrides?.childName
-  const rawAge = textOverrides?.child_age ?? textOverrides?.age
-  const gender = textOverrides?.gender
-
-  if (!childName || rawAge === undefined || rawAge === null) {
-    return { saved: false, reason: 'missing_fields' }
-  }
-
-  const ageNumber = Number.parseInt(String(rawAge), 10)
-  if (Number.isNaN(ageNumber)) {
-    return { saved: false, reason: 'invalid_age' }
-  }
-
-  const metadata = {
-    child_name: String(childName),
-    age: ageNumber,
-    ...(gender ? { gender: String(gender) } : {}),
-  }
-
-  const ownerColumn = ownerType === 'customer' ? 'customer_id' : 'anon_session_id'
-
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('user_assets')
-    .select('asset_id')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
-    .eq('asset_type', 'text_profile')
-    .eq('metadata->>child_name', metadata.child_name)
-    .eq('metadata->>age', String(metadata.age))
-    .limit(1)
-    .maybeSingle()
-
-  if (existingError) {
-    return { saved: false, reason: 'lookup_failed', error: existingError.message }
-  }
-
-  if (existing?.asset_id) {
-    const { error: updateError } = await supabaseAdmin
-      .from('user_assets')
-      .update({ created_at: new Date().toISOString(), metadata })
-      .eq('asset_id', existing.asset_id)
-    if (updateError) {
-      return { saved: false, reason: 'update_failed', error: updateError.message }
-    }
-  } else {
-    const { error: insertError } = await supabaseAdmin.from('user_assets').insert({
-      owner_type: ownerType,
-      [ownerColumn]: ownerId,
-      asset_type: 'text_profile',
-      storage_path: null,
-      metadata,
-    })
-    if (insertError) {
-      return { saved: false, reason: 'insert_failed', error: insertError.message }
-    }
-  }
-
-  const { data: assets } = await supabaseAdmin
-    .from('user_assets')
-    .select('asset_id')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
-    .eq('asset_type', 'text_profile')
-    .order('created_at', { ascending: true })
-
-  if (assets && assets.length > MAX_TEXT_PROFILES) {
-    const toRemove = assets.slice(0, assets.length - MAX_TEXT_PROFILES).map((row) => row.asset_id)
-    if (toRemove.length) {
-      const { error: deleteError } = await supabaseAdmin.from('user_assets').delete().in('asset_id', toRemove)
-      if (deleteError) {
-        return { saved: false, reason: 'cleanup_failed', error: deleteError.message }
-      }
-    }
-  }
-
-  return { saved: true }
 }
 
 export async function POST(request) {
@@ -321,10 +234,12 @@ export async function POST(request) {
         p_voice_authorization_id: voiceBinding?.authorizationId ?? null,
       })
       .single(),
-    saveTextProfile({
+    saveOwnedTextProfile({
       ownerType,
       ownerId,
-      textOverrides: effectiveTextOverrides,
+      childName: effectiveTextOverrides?.child_name ?? effectiveTextOverrides?.childName,
+      age: effectiveTextOverrides?.child_age ?? effectiveTextOverrides?.age,
+      gender: effectiveTextOverrides?.gender,
     }),
   ])
 

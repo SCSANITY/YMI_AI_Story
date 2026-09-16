@@ -7,9 +7,8 @@ import { ArrowLeft, BookOpen, Clock3, CreditCard, RefreshCw } from 'lucide-react
 import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent'
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage'
 import { useGlobalContext } from '@/contexts/GlobalContext'
-import { templateRowToBook, type TemplateCatalogRow } from '@/lib/book-catalog'
+import type { TemplateCatalogRow } from '@/lib/book-catalog'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
-import { packagePriceRowsToPricing } from '@/lib/package-pricing'
 import {
   buildReaderBookDisplay,
   getReaderSpreadUrls,
@@ -17,11 +16,9 @@ import {
   type SignedReaderPage,
 } from '@/lib/reader-page-contract'
 import { useI18n } from '@/lib/useI18n'
-import type { Book, BookPackagePricing, PersonalizationData } from '@/types'
 import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
 import { startOwnedCreationCheckout } from '@/lib/owned-creation-checkout-client'
-import { normalizeStoryLanguage } from '@/lib/story-language'
 
 const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
@@ -60,93 +57,6 @@ function resolveReaderLoadIssue(status: number, response: ReaderResponse): Reade
   if (status === 403 && response.reason === 'refunded') return 'refunded'
   if (status === 403) return 'not_purchased'
   return 'service'
-}
-
-function normalizeBookType(value: unknown): PersonalizationData['bookType'] {
-  return value === 'digital' || value === 'premium' || value === 'supreme' ? value : 'basic'
-}
-
-function getSnapshotParts(snapshotValue: unknown) {
-  const snapshot = snapshotValue && typeof snapshotValue === 'object' && !Array.isArray(snapshotValue)
-    ? snapshotValue as Record<string, unknown>
-    : {}
-  const overridesValue = snapshot.textOverrides ?? snapshot.text_overrides
-  const textOverrides = overridesValue && typeof overridesValue === 'object' && !Array.isArray(overridesValue)
-    ? overridesValue as Record<string, unknown>
-    : {}
-  return { snapshot, textOverrides }
-}
-
-function buildCartContext(creation: ReaderCreation, purchasedPackageType?: string | null): { book: Book; personalization: PersonalizationData } {
-  const { snapshot, textOverrides } = getSnapshotParts(creation.customizeSnapshot)
-  const childName = textOverrides.child_name ?? textOverrides.childName ?? ''
-  const childAge = textOverrides.child_age ?? textOverrides.childAge ?? textOverrides.age ?? ''
-  const bookType = normalizeBookType(purchasedPackageType ?? textOverrides.book_type ?? snapshot.bookType)
-  let packagePricing: BookPackagePricing | undefined
-  try {
-    packagePricing = packagePriceRowsToPricing(creation.template?.package_prices)
-  } catch {
-    // The server-authoritative add-to-cart path still resolves the live database price.
-  }
-  const packagePrice = packagePricing?.[bookType === 'digital' || bookType === 'supreme' ? bookType : 'basic']
-  const basePrice = packagePrice?.effectivePriceUsd ?? 0
-  const compareAtPrice = packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd
-  const discountPercent = packagePrice?.discountPercent ?? 0
-  const coverUrl = creation.coverUrl || ''
-  let catalogBook: Book | null = null
-  try {
-    catalogBook = templateRowToBook({
-      ...(creation.template ?? {}),
-      template_id: creation.templateId,
-    })
-  } catch {
-    // The server-authoritative add-to-cart path still validates live Catalog pricing.
-  }
-
-  const baseBook: Book = catalogBook ?? {
-    bookID: creation.templateId,
-    title: creation.template?.name || creation.templateId,
-    author: 'YMI',
-    price: basePrice,
-    coverUrl,
-    showcaseImages: coverUrl ? [coverUrl] : [],
-    description: creation.template?.description || '',
-    category: creation.template?.story_type || 'Story',
-    ageRange: creation.template?.age_group === 'ages_6_plus' ? 'Ages 6+' : 'Ages 2+',
-    gender: creation.template?.target_gender || 'Neutral',
-  }
-
-  return {
-    book: {
-      ...baseBook,
-      title: resolvePersonalizedBookTitle({
-        templateId: creation.templateId,
-        templateName: creation.template?.name,
-        customizeSnapshot: creation.customizeSnapshot,
-      }),
-      price: basePrice,
-      compareAtPrice,
-      discountPercent: Number.isFinite(discountPercent) && discountPercent > 0 ? discountPercent : null,
-      packagePricing,
-      coverUrl,
-      showcaseImages: coverUrl ? [coverUrl] : [],
-      isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
-    },
-    personalization: {
-      childName: String(childName),
-      childAge: String(childAge),
-      language: normalizeStoryLanguage(textOverrides.language),
-      dedication: '',
-      storagePath: typeof snapshot.storagePath === 'string' ? snapshot.storagePath : undefined,
-      previewJobId: creation.previewJobId || (typeof snapshot.previewJobId === 'string' ? snapshot.previewJobId : undefined),
-      creationId: creation.creationId,
-      textOverrides,
-      params: snapshot.params && typeof snapshot.params === 'object' && !Array.isArray(snapshot.params)
-        ? snapshot.params as Record<string, unknown>
-        : undefined,
-      bookType,
-    },
-  }
 }
 
 export function OwnedBookReader({ creationId }: { creationId: string }) {
@@ -257,10 +167,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   }, [])
 
   const creation = reader?.creation ?? null
-  const cartContext = useMemo(
-    () => creation ? buildCartContext(creation, reader?.latestPackageType) : null,
-    [creation, reader?.latestPackageType]
-  )
   const resolvedTitle = useMemo(() => creation
     ? resolvePersonalizedBookTitle({
         templateId: creation.templateId,
@@ -426,7 +332,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       mode="reader"
       side={side}
       spreadIndex={spreadIndex}
-      bookType={cartContext?.personalization.bookType || 'basic'}
       previewImageErrors={imageErrors}
       bookPresentation={bookDisplay?.presentation}
       currentSpread={currentSpread}

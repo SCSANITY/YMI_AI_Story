@@ -3,16 +3,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import styles from '@/components/personalize/customizeControls.module.css'
+import type { UserTextProfile } from '@/lib/user-profile-history'
 
-export type RecentProfileItem = {
-  asset_id: string
-  metadata?: { child_name?: string; child_age?: number; name?: string; age?: number; gender?: string }
-}
+export type RecentProfileItem = UserTextProfile
 
 type ChildDetailsFieldsProps = {
   initialName: string
   initialAge: string
-  seedVersion?: number
   recentProfiles: RecentProfileItem[]
   labels: {
     nameLabel: string

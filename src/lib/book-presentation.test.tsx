@@ -177,7 +177,6 @@ describe('physical-book leaf presentation', () => {
       <PreviewBookPageContent
         side="right"
         spreadIndex={0}
-        bookType="basic"
         previewImageErrors={new Set<string>()}
         bookPresentation={null}
         currentSpread={0}
@@ -252,7 +251,6 @@ describe('physical-book leaf presentation', () => {
       <PreviewBookPageContent
         side="left"
         spreadIndex={1}
-        bookType="basic"
         previewImageErrors={new Set<string>()}
         bookPresentation={null}
         previewFirstSpreadPresentation={null}
@@ -334,7 +332,6 @@ describe('physical-book leaf presentation', () => {
         mode="reader"
         side="right"
         spreadIndex={2}
-        bookType="basic"
         previewImageErrors={new Set<string>()}
         bookPresentation={presentation}
         currentSpread={2}

@@ -3,7 +3,6 @@
 import Image from 'next/image'
 import { memo, type CSSProperties } from 'react'
 import { BookOpen, ChevronLeft, ChevronRight, Lock, Wand2 } from 'lucide-react'
-import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector'
 import { BookLeafImage } from '@/components/personalize/BookLeafImage'
 import { resolveBookLeaf, type BookPresentation } from '@/lib/book-presentation'
 
@@ -25,7 +24,6 @@ type PreviewBookPageContentProps = {
   mode?: 'preview' | 'reader'
   side: 'left' | 'right'
   spreadIndex: number
-  bookType: PersonalizeBookType
   previewImageErrors: Set<string>
   bookPresentation?: BookPresentation | null
   previewFirstSpreadPresentation?: BookPresentation | null
@@ -52,7 +50,6 @@ function PreviewBookPageContentComponent({
   mode = 'preview',
   side,
   spreadIndex,
-  bookType,
   previewImageErrors,
   bookPresentation,
   previewFirstSpreadPresentation,
@@ -67,9 +64,7 @@ function PreviewBookPageContentComponent({
   onTurnPage,
   onReturnToCover,
 }: PreviewBookPageContentProps) {
-  const pageTexture = bookType === 'premium'
-    ? 'linear-gradient(to right, #f8f9fa, #e9ecef)'
-    : 'linear-gradient(to right, #fffdf5, #fefae0)'
+  const pageTexture = 'linear-gradient(to right, #fffdf5, #fefae0)'
 
   const paperNoise = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E")`
 
@@ -93,6 +88,8 @@ function PreviewBookPageContentComponent({
         <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-br from-white/30 via-transparent to-black/10" />
 
         {canShowGeneratedCover ? (
+          // Generated covers use short-lived signed URLs and native image error recovery.
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={generatedCover}
             alt={resolvedTitle || labels.previewAlt}

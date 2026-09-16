@@ -5,79 +5,10 @@ import {
   ownerFilter,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
-
-const MAX_TEXT_PROFILES = 5
-
-async function saveTextProfile({
-  ownerType,
-  ownerId,
-  metadata,
-}: {
-  ownerType: 'anon' | 'customer'
-  ownerId: string
-  metadata: { child_name: string; age: number; gender?: string }
-}) {
-  const ownerColumn = ownerType === 'customer' ? 'customer_id' : 'anon_session_id'
-
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('user_assets')
-    .select('asset_id')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
-    .eq('asset_type', 'text_profile')
-    .eq('metadata->>child_name', metadata.child_name)
-    .eq('metadata->>age', String(metadata.age))
-    .limit(1)
-    .maybeSingle()
-
-  if (existingError) {
-    return { saved: false, reason: 'lookup_failed', error: existingError.message }
-  }
-
-  if (existing?.asset_id) {
-    const { error: updateError } = await supabaseAdmin
-      .from('user_assets')
-      .update({ created_at: new Date().toISOString(), metadata })
-      .eq('asset_id', existing.asset_id)
-    if (updateError) {
-      return { saved: false, reason: 'update_failed', error: updateError.message }
-    }
-  } else {
-    const { error: insertError } = await supabaseAdmin.from('user_assets').insert({
-      owner_type: ownerType,
-      [ownerColumn]: ownerId,
-      asset_type: 'text_profile',
-      storage_path: null,
-      metadata,
-    })
-    if (insertError) {
-      return { saved: false, reason: 'insert_failed', error: insertError.message }
-    }
-  }
-
-  const { data: assets } = await supabaseAdmin
-    .from('user_assets')
-    .select('asset_id')
-    .eq('owner_type', ownerType)
-    .eq(ownerColumn, ownerId)
-    .eq('asset_type', 'text_profile')
-    .order('created_at', { ascending: true })
-
-  if (assets && assets.length > MAX_TEXT_PROFILES) {
-    const toRemove = assets.slice(0, assets.length - MAX_TEXT_PROFILES).map((row) => row.asset_id)
-    if (toRemove.length) {
-      const { error: deleteError } = await supabaseAdmin
-        .from('user_assets')
-        .delete()
-        .in('asset_id', toRemove)
-      if (deleteError) {
-        return { saved: false, reason: 'cleanup_failed', error: deleteError.message }
-      }
-    }
-  }
-
-  return { saved: true }
-}
+import {
+  MAX_TEXT_PROFILES,
+  saveOwnedTextProfile,
+} from '@/lib/user-profile-history-server'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -136,14 +67,12 @@ export async function POST(request: Request) {
   if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
   const filter = ownerFilter(owner)
 
-  const result = await saveTextProfile({
+  const result = await saveOwnedTextProfile({
     ownerType: filter.owner_type,
     ownerId: filter.value,
-    metadata: {
-      child_name: String(childName),
-      age: ageNumber,
-      ...(gender ? { gender: String(gender) } : {}),
-    },
+    childName,
+    age: ageNumber,
+    gender,
   })
 
   return NextResponse.json(result)
@@ -217,7 +146,9 @@ export async function DELETE(request: Request) {
   const valueString = String(value)
 
   for (const asset of assets) {
-    const metadata = (asset as any).metadata || {}
+    const metadata = asset.metadata && typeof asset.metadata === 'object' && !Array.isArray(asset.metadata)
+      ? asset.metadata as Record<string, unknown>
+      : {}
     const nameValue = metadata.name ?? metadata.child_name
     const ageValue = metadata.age ?? metadata.child_age
 

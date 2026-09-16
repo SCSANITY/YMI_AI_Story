@@ -45,6 +45,19 @@ governance repository.
   derived from that state machine. `usePersonalizeState` owns the form and
   `usePreviewController` owns Preview jobs, assets, versions, refresh, errors,
   cancellation, and its single per-job watcher.
+- Customize history enters through the owner-scoped `/api/user-assets` read
+  model and `usePersonalizeHistory`. Confirmed face assets, child profiles, and
+  authorized voice samples therefore share one owner transition and one client
+  refresh boundary. Preview creation persists a child profile through the
+  server-only `saveOwnedTextProfile` authority; the client does not issue a
+  second profile write.
+- The current in-progress Customize draft is browser-session state scoped by
+  book and owner. It contains form values plus identifiers for an already
+  confirmed face asset, never raw photo bytes or a durable signed URL. Reload
+  recovery resolves that identifier against a fresh owner-authorized signed
+  URL and fails back to Photo when the asset is unavailable. A newly selected
+  photo remains local until the customer gives the existing Preview-generation
+  consent.
 - Preview creation routes map the database admission contract through
   `src/lib/jobQueueAdmission.ts`. `src/lib/jobQueue.ts` is a read-only Admin
   operations snapshot and is never an admission authority.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const projectRoot = new URL('../', import.meta.url)
@@ -73,4 +73,32 @@ test('Customize Review owns live values and edits each summary in place', () => 
   assert.match(formFlow, /reviewEditField === 'language'[\s\S]*?<StoryLanguageSelector/)
   assert.doesNotMatch(formFlow, /onClick=\{\(\) => props\.onStepChange\('PHOTO'\)\}[^\n]*aria-label=\{`\$\{props\.labels\.edit\}/)
   assert.doesNotMatch(formFlow, /onClick=\{\(\) => props\.onStepChange\('DETAILS'\)\}[^\n]*aria-label=\{`\$\{props\.labels\.edit\}/)
+})
+
+test('Customize history and draft recovery have one current owner', () => {
+  const personalize = read('components/PersonalizePage.tsx')
+  const history = read('components/personalize/usePersonalizeHistory.ts')
+  const jobsRoute = read('app/api/jobs/route.js')
+  const profilesRoute = read('app/api/user/profiles/route.ts')
+  const userAssetsRoute = read('app/api/user-assets/route.ts')
+
+  assert.match(personalize, /usePersonalizeHistory/)
+  assert.match(personalize, /readPersonalizeFormDraft/)
+  assert.match(personalize, /writePersonalizeFormDraft/)
+  assert.doesNotMatch(
+    personalize,
+    /fetch\('\/api\/user\/profiles',\s*\{\s*method: 'POST'/
+  )
+  assert.match(history, /fetch\(`\/api\/user-assets/)
+  assert.match(jobsRoute, /saveOwnedTextProfile/)
+  assert.match(profilesRoute, /saveOwnedTextProfile/)
+  assert.match(userAssetsRoute, /createAnonIfMissing: true/)
+
+  for (const retiredPath of [
+    'components/personalize/BookPackageSelector.tsx',
+    'components/personalize/CustomizeFormCard.tsx',
+    'components/personalize/CustomizeFormFields.tsx',
+  ]) {
+    assert.equal(existsSync(new URL(retiredPath, projectRoot)), false)
+  }
 })

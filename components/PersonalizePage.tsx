@@ -26,7 +26,6 @@ import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants';
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar';
 import type { GeneratePreviewConsent } from '@/components/personalize/GeneratePreviewAction';
 import { ProductShowcaseCarousel } from '@/components/personalize/ProductShowcaseCarousel';
-import type { PersonalizeBookType } from '@/components/personalize/BookPackageSelector';
 import type { RecentFaceItem } from '@/components/personalize/RecentFacesStrip';
 import { ProgressSteps } from '@/components/personalize/ProgressSteps';
 import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
@@ -43,10 +42,7 @@ import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPage
 import { StoryShowcaseCard } from '@/components/personalize/StoryShowcaseCard';
 import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayout';
 import { getBookPackagePrice } from '@/lib/package-pricing';
-import {
-  SIGNATURE_VOICE_CONSENT_VERSION,
-  type SignatureVoiceSpeakerKind,
-} from '@/lib/signature-voice';
+import { SIGNATURE_VOICE_CONSENT_VERSION } from '@/lib/signature-voice';
 import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGallery';
 import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/personalize/PersonalizeFormFlow';
@@ -72,7 +68,15 @@ import type { PreviewVariantView } from '@/lib/preview-variant-view';
 import { emitYmiTrackingEvent, resolveTrackingFormat } from '@/lib/tracking-policy';
 import { normalizeStoryLanguage } from '@/lib/story-language';
 import { usePreviewController } from '@/components/personalize/usePreviewController';
-import type { PurchasePackageType } from '@/lib/purchase-configuration';
+import {
+  normalizePurchasePackageType,
+  type PurchasePackageType,
+} from '@/lib/purchase-configuration';
+import {
+  readPersonalizeFormDraft,
+  writePersonalizeFormDraft,
+} from '@/lib/personalize-form-draft';
+import { usePersonalizeHistory } from '@/components/personalize/usePersonalizeHistory';
 import {
   PurchaseConfigurationRequestError,
   savePurchaseConfiguration,
@@ -100,14 +104,6 @@ const createGenerateTimer = () => {
       ...(details ?? {}),
     });
   };
-};
-
-const normalizePersonalizeBookType = (value: unknown): PersonalizeBookType => {
-  const raw = String(value ?? '').trim().toLowerCase();
-  if (raw === 'digital' || raw === 'ebook') return 'digital';
-  if (raw === 'premium' || raw === 'audio') return 'premium';
-  if (raw === 'supreme') return 'supreme';
-  return 'basic';
 };
 
 const getBookMinimumAge = (book?: Pick<CatalogBook, 'ageGroup'> | null) => (
@@ -165,17 +161,6 @@ const parseChildAge = (value: string) => {
 
 const previewVariantSessionStorageKey = (creationId: string) =>
   `ymi_preview_variant_sessions_${creationId}`;
-
-const personalizeFormStepStorageKey = (bookId: string) =>
-  `ymi_personalize_form_step_${bookId}`;
-
-function readPersonalizeFormStep(bookId: string): PersonalizeFormStep {
-  if (typeof window === 'undefined') return 'INTRO';
-  const stored = window.sessionStorage.getItem(personalizeFormStepStorageKey(bookId));
-  return stored === 'PHOTO' || stored === 'DETAILS' || stored === 'REVIEW'
-    ? stored
-    : 'INTRO';
-}
 
 function readPreviewVariantSessionIds(creationId: string) {
   if (typeof window === 'undefined') return [];
@@ -279,8 +264,25 @@ export default function PersonalizePage({
     primaryAction,
     } = fsm;
   const savedStep = getPersistedPersonalizeStep(stage)
+  const personalizeDraftOwnerKey = user?.customerId
+    ? `customer:${user.customerId}`
+    : 'anonymous-session'
+  const {
+    recentFaces,
+    recentProfiles,
+    recentVoices,
+    status: personalizeHistoryStatus,
+    refresh: refreshPersonalizeHistory,
+    rememberProfile,
+    forgetFace,
+    forgetProfile,
+  } = usePersonalizeHistory({
+    customerId: user?.customerId ?? null,
+    enabled: viewState.showForm,
+  })
+  const [isPersonalizeDraftReady, setIsPersonalizeDraftReady] = useState(false)
 
-  //????Steps
+  // Customer-facing journey progress.
   const PROGRESS_MAP = {
     STORY: 0,
     CUSTOMIZE: 1,
@@ -459,15 +461,8 @@ export default function PersonalizePage({
   const [templateTitle, setTemplateTitle] = useState<string | null>(initialBook?.title || null);
   const [templateDescription, setTemplateDescription] = useState<string | null>(initialBook?.description || null);
   const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(initialBook?.innerDescription || null);
-  const [recentFaces, setRecentFaces] = useState<RecentFaceItem[]>([]);
-  const [recentVoices, setRecentVoices] = useState<Array<{ asset_id: string; storage_path?: string | null; playback_url?: string | null; metadata?: { duration_seconds?: number | null; speaker_kind?: SignatureVoiceSpeakerKind | null } }>>([]);
   const [voicePlaybackUrl, setVoicePlaybackUrl] = useState<string | null>(null);
   const [voiceValidationError, setVoiceValidationError] = useState<string | null>(null);
-  type RecentProfileItem = {
-    asset_id: string
-    metadata?: { child_name?: string; child_age?: number; name?: string; age?: number; gender?: string }
-  }
-
   useEffect(() => {
     previewVariantsRef.current = previewVariants;
   }, [previewVariants]);
@@ -708,7 +703,6 @@ export default function PersonalizePage({
       setIsPreparingShare(false);
     }
   }, [creationId, t, user?.customerId]);
-  const [recentProfiles, setRecentProfiles] = useState<RecentProfileItem[]>([]);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef(name);
   const ageRef = useRef(age);
@@ -842,6 +836,7 @@ export default function PersonalizePage({
   const isBookClosed = !isVisualBookOpen;
   // Keep the flow initialized only once per mounted personalize session.
   const didInitFSM = useRef(false);
+  const initializedPersonalizeDraftKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -851,6 +846,7 @@ export default function PersonalizePage({
 
   useEffect(() => {
     if (didInitFSM.current) return
+    if (!isHydrated) return
     if (!bookID) return
 
     if (resumeData && resumeData.bookID === bookID) {
@@ -874,12 +870,31 @@ export default function PersonalizePage({
         savedStage: 'PREVIEW',
         })
     } else {
+        const draft = readPersonalizeFormDraft(
+          window.sessionStorage,
+          bookID,
+          personalizeDraftOwnerKey
+        )
         startForm()
-        setFormStep(readPersonalizeFormStep(bookID))
+        setFormStep(
+          draft?.faceAssetId || draft?.step === 'INTRO'
+            ? draft?.step ?? 'INTRO'
+            : 'PHOTO'
+        )
     }
 
     didInitFSM.current = true
-  }, [bookID, resumeData, restore, startForm, viewMode, creationIdParam, previewJobIdParam])
+  }, [
+    bookID,
+    creationIdParam,
+    isHydrated,
+    personalizeDraftOwnerKey,
+    previewJobIdParam,
+    restore,
+    resumeData,
+    startForm,
+    viewMode,
+  ])
 
 
 
@@ -893,7 +908,7 @@ export default function PersonalizePage({
     setName(data.childName || '')
     setAge(data.childAge || '')
     setSelectedLang(normalizeStoryLanguage(data.language))
-    setBookType(data.bookType || 'basic')
+    setBookType(normalizePurchasePackageType(data.bookType) ?? 'basic')
     setPhotoPreview(data.photoUrl || null)
     setPhotoAssetId(data.assetId || null)
     setPhotoStoragePath(data.storagePath || null)
@@ -916,8 +931,10 @@ export default function PersonalizePage({
           : 'PHOTO'
       )
     }
+    initializedPersonalizeDraftKeyRef.current = `${bookID}:${personalizeDraftOwnerKey}`
+    setIsPersonalizeDraftReady(true)
     resumePersonalization(null)
-  }, [resumeData, bookID, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization, viewMode])
+  }, [resumeData, bookID, personalizeDraftOwnerKey, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization, viewMode])
 
   useEffect(() => {
     if (resumeData && resumeData.bookID !== bookID) {
@@ -1017,7 +1034,7 @@ export default function PersonalizePage({
                 if (nextName) setName(String(nextName))
                 if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
                 if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
-                if (nextType) setBookType(normalizePersonalizeBookType(nextType))
+                if (nextType) setBookType(normalizePurchasePackageType(nextType) ?? 'basic')
                 const cachedVoiceAssetId = typeof creation.voice_asset_id === 'string'
                   ? creation.voice_asset_id
                   : null
@@ -1108,7 +1125,7 @@ export default function PersonalizePage({
         if (nextName) setName(String(nextName))
         if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
         if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
-        if (nextType) setBookType(normalizePersonalizeBookType(nextType))
+        if (nextType) setBookType(normalizePurchasePackageType(nextType) ?? 'basic')
         const nextVoiceAssetId = typeof creation.voice_asset_id === 'string'
           ? creation.voice_asset_id
           : null
@@ -1150,6 +1167,7 @@ export default function PersonalizePage({
   }, [viewMode, creationId, user?.customerId, previewJobId, name, age, selectedLang, bookType, templateTitle, templateDescription, templateInnerDescription, templateCoverUrl, setName, setAge, setSelectedLang, setBookType, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription, setTemplateCoverUrl, bookID, selectPreviewJobId, setPreviewBookPresentation, setPreviewJobId, setPreviewPages, setPreviewUrl, setPreviewVariants])
 
   useEffect(() => {
+    if (!isHydrated) return
     if (resumeData && resumeData.bookID === bookID) return
     if (
       viewMode === 'preview' &&
@@ -1161,17 +1179,28 @@ export default function PersonalizePage({
       return
     }
 
-    setName('')
-    setAge('')
-    setSelectedLang('English')
-    setBookType('basic')
+    const draftKey = `${bookID}:${personalizeDraftOwnerKey}`
+    if (initializedPersonalizeDraftKeyRef.current === draftKey) return
+    initializedPersonalizeDraftKeyRef.current = draftKey
+
+    setIsPersonalizeDraftReady(false)
+    const draft = readPersonalizeFormDraft(
+      window.sessionStorage,
+      bookID,
+      personalizeDraftOwnerKey
+    )
+
+    setName(draft?.name ?? '')
+    setAge(draft?.age ?? '')
+    setSelectedLang(draft?.language ?? 'English')
+    setBookType(draft?.bookType ?? 'basic')
     setPhoto(null)
     setPhotoPreview(null)
-    setPhotoAssetId(null)
-    setPhotoStoragePath(null)
+    setPhotoAssetId(draft?.faceAssetId ?? null)
+    setPhotoStoragePath(draft?.faceStoragePath ?? null)
     setFaceImageUrl(null)
     setPreparedFaceFile(null)
-    setFacePrepareStatus('idle')
+    setFacePrepareStatus(draft?.faceAssetId ? 'ready' : 'idle')
     setFacePrepareError(null)
     setFaceAutoCropped(false)
     facePrepareRunIdRef.current += 1
@@ -1179,7 +1208,6 @@ export default function PersonalizePage({
     setTemplateTitle(initialBook?.title || null)
     setTemplateDescription(initialBook?.description || null)
     setTemplateInnerDescription(initialBook?.innerDescription || null)
-    setRecentFaces([])
     setVoiceAssetId(null)
     setVoiceStoragePath(null)
     setVoicePlaybackUrl(null)
@@ -1192,7 +1220,8 @@ export default function PersonalizePage({
     setPreviewUrl(null)
     setPreviewPages([])
     setPreviewBookPresentation(null)
-  }, [bookID, initialBook, resumeData, viewMode, creationIdParam, creationId, previewJobIdParam, previewJobId, stage, setName, setAge, setSelectedLang, setBookType, setPhoto, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, setPreviewBookPresentation, setPreviewPages, setPreviewUrl, setTemplateCoverUrl, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription])
+    setIsPersonalizeDraftReady(true)
+  }, [bookID, creationId, creationIdParam, initialBook, isHydrated, personalizeDraftOwnerKey, previewJobId, previewJobIdParam, resumeData, setAge, setBookType, setCreationId, setFaceImageUrl, setName, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, setPreviewBookPresentation, setPreviewJobId, setPreviewPages, setPreviewUrl, setSelectedLang, setTemplateCoverUrl, setTemplateDescription, setTemplateInnerDescription, setTemplateTitle, setVoiceAssetId, setVoiceStoragePath, stage, viewMode])
 
   const replacePersonalizeUrl = useCallback((params?: URLSearchParams | null) => {
     if (typeof window === 'undefined') return;
@@ -1306,30 +1335,6 @@ export default function PersonalizePage({
           book_type: 'basic',
         }
 
-        if (!currentCustomerId && currentName && currentAge) {
-          fetch('/api/user/profiles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              child_name: currentName,
-              child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
-              customerId: null,
-            }),
-            credentials: 'include',
-          }).catch(() => {})
-        } else if (currentCustomerId && currentName && currentAge) {
-          fetch('/api/user/profiles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              child_name: currentName,
-              child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
-              customerId: currentCustomerId,
-            }),
-            credentials: 'include',
-          }).catch(() => {})
-        }
-
         if (!faceAssetId) {
           throw new Error('Missing face asset for preview')
         }
@@ -1360,6 +1365,7 @@ export default function PersonalizePage({
         if (!created?.jobId) {
           throw new Error('Preview job missing jobId')
         }
+        rememberProfile(created.textProfile?.profile)
         setBookType('basic')
         setVoiceAssetId(null)
         setVoiceStoragePath(null)
@@ -1372,6 +1378,7 @@ export default function PersonalizePage({
           photoAssetIdRef.current = pendingFaceAsset.asset_id
           setPhotoAssetId(pendingFaceAsset.asset_id)
           setPhotoStoragePath(pendingFaceAsset.storage_path)
+          void refreshPersonalizeHistory().catch(() => undefined)
         }
         if (previewCancelRequestedRef.current) {
           try {
@@ -1434,44 +1441,39 @@ export default function PersonalizePage({
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, trackPreviewReady, applyPreviewDisplayAssetsForJob, watchPreviewJob]);
-
-  const loadUserAssets = useCallback(async (options?: { signal?: AbortSignal }) => {
-    const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-    const response = await fetch(`/api/user-assets${params}`, {
-      credentials: 'include',
-      cache: 'no-store',
-      signal: options?.signal,
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    const faces = Array.isArray(data?.faces) ? data.faces : [];
-    const voices = Array.isArray(data?.voices) ? data.voices : [];
-    const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
-    setRecentFaces(faces);
-    setRecentVoices(voices);
-    setRecentProfiles(profiles);
-  }, [user?.customerId]);
+  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, trackPreviewReady, applyPreviewDisplayAssetsForJob, watchPreviewJob, rememberProfile, refreshPersonalizeHistory]);
 
   useEffect(() => {
-    if (!viewState.showForm) return;
+    if (!viewState.showForm || !photoAssetId || photo || photoPreview) return
+    if (personalizeHistoryStatus !== 'ready') return
 
-    const controller = new AbortController();
-    loadUserAssets({ signal: controller.signal }).catch((error) => {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      console.warn('Failed to load user assets:', error);
-    });
+    const persistedFace = recentFaces.find((face) => face.asset_id === photoAssetId)
+    if (!persistedFace?.signed_url) {
+      setPhotoAssetId(null)
+      setPhotoStoragePath(null)
+      setFaceImageUrl(null)
+      setFacePrepareStatus('idle')
+      if (formStep !== 'INTRO') setFormStep('PHOTO')
+      return
+    }
 
-    return () => {
-      controller.abort();
-    };
-  }, [loadUserAssets, viewState.showForm]);
-
-  useEffect(() => {
-    setRecentFaces([]);
-    setRecentProfiles([]);
-    setRecentVoices([]);
-  }, [user?.customerId]);
+    setPhotoStoragePath(persistedFace.storage_path ?? null)
+    setPhotoPreview(persistedFace.signed_url)
+    setFaceImageUrl(persistedFace.signed_url)
+    setFacePrepareStatus('ready')
+  }, [
+    formStep,
+    personalizeHistoryStatus,
+    photo,
+    photoAssetId,
+    photoPreview,
+    recentFaces,
+    setFaceImageUrl,
+    setPhotoAssetId,
+    setPhotoPreview,
+    setPhotoStoragePath,
+    viewState.showForm,
+  ])
 
   useEffect(() => {
     if (voicePlaybackUrl) return;
@@ -1484,15 +1486,6 @@ export default function PersonalizePage({
       setVoiceValidationError(null);
     }
   }, [pendingVoiceRecording, requiresVoiceSample, voiceAssetId]);
-
-  const loadProfiles = useCallback(async () => {
-    const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-    const response = await fetch(`/api/user/profiles${params}`, { credentials: 'include' });
-    if (!response.ok) return;
-    const data = await response.json();
-    const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
-    setRecentProfiles(profiles);
-  }, [user?.customerId]);
 
   const preloadPreviewImage = useCallback((url?: string | null) => {
     if (!url || typeof window === 'undefined') return;
@@ -1548,22 +1541,8 @@ export default function PersonalizePage({
 
   // --- Handlers ---
   const handleDeleteFace = useCallback(async (assetId: string) => {
-    setRecentFaces((prev) => prev.filter((face) => face.asset_id !== assetId));
-    if (photoAssetId === assetId) {
-      setPhotoAssetId(null);
-      setPhotoStoragePath(null);
-      setFaceImageUrl(null);
-      setPhotoPreview(null);
-      setPhoto(null);
-      setPreparedFaceFile(null);
-      setFacePrepareStatus('idle');
-      setFacePrepareError(null);
-      setFaceAutoCropped(false);
-      facePrepareRunIdRef.current += 1;
-    }
-
     try {
-      await fetch('/api/user-assets', {
+      const response = await fetch('/api/user-assets', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1572,10 +1551,25 @@ export default function PersonalizePage({
         }),
         credentials: 'include',
       });
+      if (!response.ok) return
+
+      forgetFace(assetId)
+      if (photoAssetId === assetId) {
+        setPhotoAssetId(null)
+        setPhotoStoragePath(null)
+        setFaceImageUrl(null)
+        setPhotoPreview(null)
+        setPhoto(null)
+        setPreparedFaceFile(null)
+        setFacePrepareStatus('idle')
+        setFacePrepareError(null)
+        setFaceAutoCropped(false)
+        facePrepareRunIdRef.current += 1
+      }
     } catch {
       // no-op
     }
-  }, [user?.customerId, photoAssetId, setPhoto, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setPhotoPreview]);
+  }, [forgetFace, photoAssetId, setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, user?.customerId]);
 
   const handleSelectRecentFace = useCallback((face: RecentFaceItem) => {
     if (!face.signed_url) return;
@@ -1593,42 +1587,6 @@ export default function PersonalizePage({
   }, [setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath]);
 
   const handleDeleteProfile = useCallback(async (payload: { assetId?: string; field?: 'name' | 'age'; value?: string | number }) => {
-    if (payload.assetId) {
-      setRecentProfiles((prev) => prev.filter((profile) => profile.asset_id !== payload.assetId));
-    } else if (payload.field && payload.value !== undefined && payload.value !== null) {
-      const targetValue = String(payload.value);
-      setRecentProfiles((prev) => {
-        const next: RecentProfileItem[] = []
-        for (const profile of prev) {
-          const meta = { ...(profile.metadata || {}) } as Record<string, unknown>
-          const nameValue = meta.name ?? meta.child_name
-          const ageValue = meta.age ?? meta.child_age
-
-          if (payload.field === 'name') {
-            if (nameValue !== undefined && nameValue !== null && String(nameValue) === targetValue) {
-              delete meta.name
-              delete meta.child_name
-            }
-          } else if (payload.field === 'age') {
-            if (ageValue !== undefined && ageValue !== null && String(ageValue) === targetValue) {
-              delete meta.age
-              delete meta.child_age
-            }
-          }
-
-          const remainingName = meta.name ?? meta.child_name
-          const remainingAge = meta.age ?? meta.child_age
-          const hasName = remainingName !== undefined && remainingName !== null && String(remainingName).length > 0
-          const hasAge = remainingAge !== undefined && remainingAge !== null && String(remainingAge).length > 0
-
-          if (hasName || hasAge) {
-            next.push({ ...profile, metadata: meta as RecentProfileItem['metadata'] })
-          }
-        }
-        return next
-      });
-    }
-
     try {
       const body = payload.assetId
         ? { asset_id: payload.assetId, customerId: user?.customerId ?? null }
@@ -1644,10 +1602,11 @@ export default function PersonalizePage({
         credentials: 'include',
       });
       if (!response.ok) return;
+      forgetProfile(payload)
     } catch {
       // no-op
     }
-  }, [user?.customerId]);
+  }, [forgetProfile, user?.customerId]);
 
   const handleBack = () => {
     if (!canBack) return
@@ -2109,13 +2068,13 @@ export default function PersonalizePage({
       pendingVoiceRecordingRef.current = null;
       setPendingVoiceRecording(null);
       setIsVoiceDialogOpen(false);
-      void loadUserAssets().catch(() => {});
+      void refreshPersonalizeHistory().catch(() => {});
     } catch (error) {
       setVoiceValidationError(resolveEditionError(error));
     } finally {
       setIsSavingVoice(false);
     }
-  }, [isSavingVoice, loadUserAssets, resolveEditionError, saveEditionConfiguration, setBookType, t, user?.customerId]);
+  }, [isSavingVoice, refreshPersonalizeHistory, resolveEditionError, saveEditionConfiguration, setBookType, t, user?.customerId]);
 
   const handleRemoveVoice = useCallback(async () => {
     if (isSavingVoice) return;
@@ -2899,18 +2858,33 @@ export default function PersonalizePage({
       void startFacePreparation(file, nextRunId);
     };
 
-
-  // Persist the current form/preview stage for reload recovery.
-
   useEffect(() => {
-    if (!bookID) return
-    localStorage.setItem(`personalize:${bookID}:stage`, stage)
-  }, [stage, bookID])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || stage !== 'FORM') return
-    window.sessionStorage.setItem(personalizeFormStepStorageKey(bookID), formStep)
-  }, [bookID, formStep, stage])
+    if (!isHydrated || !isPersonalizeDraftReady || stage !== 'FORM') return
+    writePersonalizeFormDraft(window.sessionStorage, bookID, {
+      version: 1,
+      ownerKey: personalizeDraftOwnerKey,
+      step: formStep,
+      name,
+      age,
+      language: selectedLang,
+      bookType,
+      faceAssetId: photoAssetId,
+      faceStoragePath: photoStoragePath,
+    })
+  }, [
+    age,
+    bookID,
+    bookType,
+    formStep,
+    isHydrated,
+    isPersonalizeDraftReady,
+    name,
+    personalizeDraftOwnerKey,
+    photoAssetId,
+    photoStoragePath,
+    selectedLang,
+    stage,
+  ])
 
 
 
@@ -2972,7 +2946,6 @@ export default function PersonalizePage({
     <PreviewBookPageContent
       side={side}
       spreadIndex={spreadIndex}
-      bookType={bookType}
       previewImageErrors={previewImageErrors}
       bookPresentation={previewBookPresentation}
       previewFirstSpreadPresentation={previewFirstSpreadPresentation}
@@ -2996,7 +2969,10 @@ export default function PersonalizePage({
     />
   );
   const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing';
-  const hasUsablePhoto = Boolean(photoAssetId || (photo && preparedFaceFile && facePrepareStatus === 'ready'));
+  const hasUsablePhoto = Boolean(
+    (photoAssetId && photoPreview)
+    || (photo && preparedFaceFile && facePrepareStatus === 'ready')
+  );
   const isFormReady = areChildDetailsReady && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
   const fromPrice = book
     ? Math.min(
@@ -3261,7 +3237,11 @@ export default function PersonalizePage({
                         }}
                         ageRangeWarning={ageRangeWarningText}
                         minimumRecommendedAge={minimumRecommendedAge}
-                        onLoadProfiles={loadProfiles}
+                        onLoadProfiles={() => {
+                          if (personalizeHistoryStatus === 'idle' || personalizeHistoryStatus === 'error') {
+                            void refreshPersonalizeHistory().catch(() => undefined)
+                          }
+                        }}
                         onChildDetailsChange={handleChildDetailsChange}
                         onDeleteProfileValue={handleDeleteProfile}
                         selectedLang={selectedLang}
