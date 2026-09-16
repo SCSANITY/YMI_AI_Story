@@ -26,7 +26,7 @@ import { CurrencySwitcher } from '@/components/CurrencySwitcher'
 import { MiniCart } from '@/components/cart/MiniCart'
 import { NavbarUserMenu } from '@/components/navbar/NavbarUserMenu'
 import { useNavNoticeCounts } from '@/components/navbar/useNavNoticeCounts'
-import { layoutSegmentsToPathname } from '@/lib/app-pathname'
+import { isPrimaryNavigationRoute, layoutSegmentsToPathname } from '@/lib/app-pathname'
 
 const MyRewardsModal = dynamic(() => import('@/components/MyRewardsModal').then((module) => module.MyRewardsModal), {
   ssr: false,
@@ -70,6 +70,7 @@ export const Navbar: React.FC = () => {
   const isPersonalizeRoute = pathname?.startsWith('/personalize/')
   const isCheckoutRoute = pathname?.startsWith('/checkout')
   const isHomePage = pathname === '/'
+  const showBackButton = !isPrimaryNavigationRoute(pathname) && !isCheckoutRoute
   const isCartOpen = cartOpenPath === pathname
   const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
     customerId: user?.customerId,
@@ -277,7 +278,7 @@ export const Navbar: React.FC = () => {
     }`}>
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {pathname !== '/' && !isCheckoutRoute && (
+          {showBackButton && (
             pathname === '/cart' ? (
               <button
                 type="button"

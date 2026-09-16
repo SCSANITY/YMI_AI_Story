@@ -27,6 +27,13 @@ governance repository.
   remains personalization data.
 - `GlobalContext` owns genuine cross-route client state. Pure catalog, order,
   and presentation mapping belongs in domain modules rather than the provider.
+- Header Back visibility follows exact primary destinations in
+  `isPrimaryNavigationRoute` (`src/lib/app-pathname.ts`): Home, Books, Favorites,
+  My Books, Collaboration, Support, My Orders and Account do not render Back.
+  Descendants retain ordinary history navigation; Cart retains its validated
+  Preview return. Checkout and Personalize keep their dedicated Back controls.
+  The rule uses the same root-layout segments for server and client output,
+  not history length, mount-time state, CSS hiding or a second pathname hook.
 - First-party audience reporting uses consent-gated Vercel Web Analytics. The
   protected Admin page queries Vercel's aggregate API directly through a
   server-only, project-scoped credential; YMI does not copy raw IP addresses or
