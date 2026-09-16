@@ -3,8 +3,9 @@
 import { memo } from 'react'
 import dynamic from 'next/dynamic'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, Info, Sparkles } from 'lucide-react'
+import { ChevronLeft, Clock3, Info, Sparkles } from 'lucide-react'
 import { PreviewCapacityNotice } from '@/components/personalize/PreviewCapacityNotice'
+import { formatPreviewCountdown } from '@/components/personalize/loading-progress'
 
 const MiniGame = dynamic(() => import('@/components/MiniGame').then((module) => module.MiniGame), {
   ssr: false,
@@ -23,7 +24,9 @@ type LoadingPreviewOverlayProps = {
   capacityWaiting: boolean
   labels: {
     back: string
+    estimateTitle: string
     estimatedWait: string
+    estimatedProgress: string
     almostThere: string
     capacityWaitStatus: string
     didYouKnow: string
@@ -44,6 +47,9 @@ function LoadingPreviewOverlayComponent({
 }: LoadingPreviewOverlayProps) {
   if (!show) return null
 
+  const roundedProgress = Math.round(Math.max(0, Math.min(100, progress)))
+  const countdown = formatPreviewCountdown(countdownSeconds)
+
   return createPortal(
     <div className="fixed inset-0 z-[160] flex animate-in flex-col items-center overflow-y-auto bg-gradient-to-br from-amber-50/97 via-white/97 to-orange-50/97 p-5 fade-in duration-200 sm:p-8">
       <button
@@ -61,22 +67,56 @@ function LoadingPreviewOverlayComponent({
           <Sparkles className="h-8 w-8 text-amber-500" />
         </div>
 
-        <div className="flex h-[7.25rem] w-full max-w-3xl flex-col items-center justify-center px-2 sm:h-[7.5rem]">
+        <div className="flex min-h-[6.5rem] w-full max-w-3xl flex-col items-center justify-center px-2">
           <h3 className="mb-2 max-w-3xl font-serif text-2xl font-bold leading-tight text-gray-900 sm:text-3xl">
             {loadingText}
           </h3>
-          <p className="font-mono text-sm text-gray-500">
-            {capacityWaiting
-              ? labels.capacityWaitStatus
-              : countdownSeconds > 0
-                ? labels.estimatedWait
-                : labels.almostThere}
-          </p>
         </div>
 
         <div className="mx-auto w-full max-w-2xl">
-          <div className="relative mx-auto mb-5 h-2 w-full max-w-lg overflow-hidden rounded-full bg-gray-200 shadow-inner">
-            <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} />
+          <section className="mx-auto mb-5 w-full max-w-lg rounded-[1.4rem] border border-amber-100/90 bg-white/78 px-4 py-4 text-left shadow-[0_18px_44px_rgba(148,93,34,0.11)] backdrop-blur-xl sm:px-5" aria-label={labels.estimateTitle}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                  <Clock3 className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold uppercase tracking-[0.13em] text-amber-700">{labels.estimateTitle}</p>
+                  <p className="mt-0.5 text-sm font-medium text-slate-600">
+                    {capacityWaiting
+                      ? labels.capacityWaitStatus
+                      : countdownSeconds > 0
+                        ? labels.estimatedWait
+                        : labels.almostThere}
+                  </p>
+                </div>
+              </div>
+              <time className="shrink-0 font-mono text-3xl font-black tabular-nums tracking-[-0.08em] text-slate-950 sm:text-4xl" role="timer" aria-label={`${labels.estimatedWait} ${countdown}`}>
+                {countdown}
+              </time>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between text-xs font-bold text-slate-600">
+              <span>{labels.estimatedProgress}</span>
+              <span className="tabular-nums text-amber-800">{roundedProgress}%</span>
+            </div>
+            <div
+              className="relative mt-2 h-3 w-full overflow-hidden rounded-full bg-amber-100/80 shadow-inner"
+              role="progressbar"
+              aria-label={labels.estimatedProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={roundedProgress}
+            >
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-orange-500 shadow-[0_0_16px_rgba(249,115,22,0.35)] transition-[width] duration-500 ease-linear motion-reduce:transition-none"
+                style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+              />
+            </div>
+          </section>
+
+          <div aria-live="off" className="sr-only">
+            {countdownSeconds > 0 ? `${labels.estimatedWait}: ${countdown}` : labels.almostThere}
           </div>
 
           <PreviewCapacityNotice

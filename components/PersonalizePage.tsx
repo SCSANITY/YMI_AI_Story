@@ -32,6 +32,10 @@ import { ProgressSteps } from '@/components/personalize/ProgressSteps';
 import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
 import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
 import { LoadingPreviewOverlay } from '@/components/personalize/LoadingPreviewOverlay';
+import {
+  getPreviewLoadingEstimate,
+  PREVIEW_ESTIMATE_SECONDS,
+} from '@/components/personalize/loading-progress';
 import { PreviewIntroHeader } from '@/components/personalize/PreviewIntroHeader';
 import { PreviewShareDialog } from '@/components/personalize/PreviewShareDialog';
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage';
@@ -299,7 +303,7 @@ export default function PersonalizePage({
   const [pageToastMessage, setPageToastMessage] = useState<string | null>(null);
   const pageToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
-  const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(65);
+  const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(PREVIEW_ESTIMATE_SECONDS);
   const [facePrepareStatus, setFacePrepareStatus] = useState<FacePrepareStatus>('idle');
   const [preparedFaceFile, setPreparedFaceFile] = useState<File | null>(null);
   const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
@@ -825,17 +829,11 @@ export default function PersonalizePage({
 
   useEffect(() => {
     if (!viewState.showLoading) {
-      setLoadingCountdownSeconds(65);
+      setLoadingCountdownSeconds(PREVIEW_ESTIMATE_SECONDS);
       return;
     }
 
-    setLoadingCountdownSeconds(65);
-
-    const interval = window.setInterval(() => {
-      setLoadingCountdownSeconds((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-
-    return () => window.clearInterval(interval);
+    setLoadingCountdownSeconds(PREVIEW_ESTIMATE_SECONDS);
   }, [viewState.showLoading]);
 
   // Visual state used by the book animation shell.
@@ -1224,11 +1222,10 @@ export default function PersonalizePage({
     let watchedJobId: string | null = null;
     let textInterval: number | null = null;
     let progressInterval: number | null = null;
-    let progressTarget = 6;
-    let lastRampAt = Date.now();
     const startedAt = Date.now();
     setPreviewError(null);
     setProgress(0);
+    setLoadingCountdownSeconds(PREVIEW_ESTIMATE_SECONDS);
 
     const messages = [
       t('personalize.printingMagic'),
@@ -1247,23 +1244,10 @@ export default function PersonalizePage({
     }, 4200);
 
     progressInterval = window.setInterval(() => {
-      const now = Date.now();
-      if (now - lastRampAt >= 2500) {
-        const elapsed = now - startedAt;
-        const cap = elapsed < 30_000 ? 40 : elapsed < 90_000 ? 68 : elapsed < 180_000 ? 82 : 90;
-        if (progressTarget < cap) {
-          progressTarget += 1;
-        }
-        lastRampAt = now;
-      }
-
-      setProgress(prev => {
-        if (prev >= progressTarget) return prev;
-        const remaining = progressTarget - prev;
-        const step = remaining > 20 ? 3 : remaining > 8 ? 2 : 1;
-        return Math.min(progressTarget, prev + step);
-      });
-    }, 220);
+      const estimate = getPreviewLoadingEstimate(Date.now() - startedAt);
+      setProgress(estimate.progress);
+      setLoadingCountdownSeconds(estimate.countdownSeconds);
+    }, 500);
 
     const run = async () => {
       try {
@@ -1409,9 +1393,6 @@ export default function PersonalizePage({
 
         const outcome = await watchPreviewJob(created.jobId, {
           until: 'cover',
-          onProgress: (serverProgress) => {
-            progressTarget = Math.max(progressTarget, serverProgress);
-          },
           onAssets: (jobId, assets) => {
             if (!isActive) return;
             if (applyPreviewDisplayAssetsForJob(jobId, assets)) {
@@ -1423,7 +1404,10 @@ export default function PersonalizePage({
 
         replacePreviewUrl(created.creationId, created.jobId);
         setProgress(100);
+        setLoadingCountdownSeconds(0);
         logPreviewDebug('finishGenerating', { jobId: created.jobId, mode: 'cover-ready' });
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 550));
+        if (!isActive) return;
         finishGenerating();
         return;
       } catch (error: unknown) {
@@ -3048,12 +3032,6 @@ export default function PersonalizePage({
       price: formatDisplayCurrency(getBookPackagePrice(book, 'supreme').effectivePriceUsd, displayCurrency),
     },
   ] : [];
-  const selectedEditionTitle = purchaseBookType === 'digital'
-    ? t('personalize.bookTypeDigitalTitle')
-    : purchaseBookType === 'supreme'
-      ? t('personalize.bookTypeSupremeTitle')
-      : t('personalize.bookTypeBasicTitle');
-
   useEffect(() => {
     if (!viewState.showForm || formStep === 'INTRO') return;
     if (!hasUsablePhoto && !isFacePreparing && formStep !== 'PHOTO' && formStep !== 'REVIEW') {
@@ -3433,11 +3411,8 @@ export default function PersonalizePage({
                           shareLabel={isPreparingShare ? t('common.loading') : t('share.previewButton')}
                           addToCartLabel={requiresVoiceSample && !voiceAssetId
                             ? t('personalize.addVoiceToContinue')
-                            : t('personalize.addEditionToCart', {
-                                edition: selectedEditionTitle,
-                                price: formatDisplayCurrency(currentPrice, displayCurrency),
-                              })}
-                          checkoutLabel={t('personalize.checkoutNow')}
+                            : t('personalize.addToCart')}
+                          purchaseLabel={t('personalize.purchaseNow')}
                           loadingLabel={t('common.loading')}
                           shareError={shareError}
                           canShare={Boolean(creationId)}
@@ -3502,7 +3477,9 @@ export default function PersonalizePage({
           capacityWaiting={isLoadingPreviewCapacityWaiting}
           labels={{
             back: t('common.back'),
-            estimatedWait: t('personalize.estimatedWait', { seconds: loadingCountdownSeconds }),
+            estimateTitle: t('personalize.previewEstimate'),
+            estimatedWait: t('personalize.estimatedWait'),
+            estimatedProgress: t('personalize.estimatedProgress'),
             almostThere: t('personalize.almostThere'),
             capacityWaitStatus: t('personalize.capacityWaitStatus'),
             didYouKnow: t('personalize.didYouKnow'),

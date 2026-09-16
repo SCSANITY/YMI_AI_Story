@@ -1,7 +1,7 @@
 'use client'
 
 import React, { memo, useCallback, useState } from 'react'
-import { Loader2, Share2, ShoppingCart } from 'lucide-react'
+import { CreditCard, Loader2, Share2, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/Button'
 
 type PreviewActionBarProps = {
@@ -9,7 +9,7 @@ type PreviewActionBarProps = {
   acknowledgementRequiredLabel: string
   shareLabel: string
   addToCartLabel: string
-  checkoutLabel: string
+  purchaseLabel: string
   loadingLabel: string
   shareError: string | null
   canShare: boolean
@@ -27,7 +27,7 @@ function PreviewActionBarComponent({
   acknowledgementRequiredLabel,
   shareLabel,
   addToCartLabel,
-  checkoutLabel,
+  purchaseLabel,
   loadingLabel,
   shareError,
   canShare,
@@ -56,6 +56,14 @@ function PreviewActionBarComponent({
     onCheckout()
   }, [isCheckoutAcknowledged, onCheckout])
 
+  const handleAddToCart = useCallback(() => {
+    if (!isCheckoutAcknowledged) {
+      setShowAcknowledgementError(true)
+      return
+    }
+    onAddToCart()
+  }, [isCheckoutAcknowledged, onAddToCart])
+
   const pending = isCheckoutPending || isConfigurationPending
 
   return (
@@ -66,14 +74,16 @@ function PreviewActionBarComponent({
       </label>
       {showAcknowledgementError ? <p className="mt-2 text-xs font-semibold text-red-600" role="alert">{acknowledgementRequiredLabel}</p> : null}
 
-      <Button ref={addToCartButtonRef} onClick={onAddToCart} size="lg" disabled={pending} className="glass-action-btn glass-action-btn--brand mt-4 h-14 w-full rounded-2xl text-sm font-bold sm:text-base">
-        {isConfigurationPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <ShoppingCart className="mr-2 h-4 w-4" aria-hidden="true" />}
-        {addToCartLabel}
-      </Button>
-      <Button type="button" onClick={handleCheckout} size="lg" variant="outline" disabled={!isCheckoutAcknowledged || pending} className="mt-3 h-12 w-full rounded-2xl text-sm font-bold">
-        {isCheckoutPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-        {isCheckoutPending ? loadingLabel : checkoutLabel}
-      </Button>
+      <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+        <Button ref={addToCartButtonRef} onClick={handleAddToCart} size="lg" disabled={!isCheckoutAcknowledged || pending} className="glass-action-btn glass-action-btn--brand min-h-14 w-full rounded-2xl px-3 py-2 text-sm font-bold">
+          {isConfigurationPending ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" /> : <ShoppingCart className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" />}
+          <span>{addToCartLabel}</span>
+        </Button>
+        <Button type="button" onClick={handleCheckout} size="lg" disabled={!isCheckoutAcknowledged || pending} className="glass-action-btn glass-action-btn--brand min-h-14 w-full rounded-2xl px-3 py-2 text-sm font-bold">
+          {isCheckoutPending ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" /> : <CreditCard className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" />}
+          <span>{isCheckoutPending ? loadingLabel : purchaseLabel}</span>
+        </Button>
+      </div>
 
       <button type="button" onClick={onShare} disabled={isPreparingShare || !canShare} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50">
         {isPreparingShare ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}

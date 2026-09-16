@@ -51,8 +51,10 @@ test('Signature Voice v3 is captured after Preview and bound through the owner-s
   assert.match(purchaseRoute, /String\(creation\.preview_job_id \?\? ''\) !== expectedPreviewJobId/)
   assert.match(purchaseRoute, /isPurchaseLocked[\s\S]*purchase_configuration_locked/)
   assert.match(purchaseRoute, /template_package_prices/)
+  const serverPriceValidationAt = purchaseRoute.indexOf(".from('template_package_prices')")
+  const creationConfigurationUpdateAt = purchaseRoute.search(/\.from\('creations'\)\r?\n\s+\.update/)
   assert.ok(
-    purchaseRoute.indexOf(".from('template_package_prices')") < purchaseRoute.indexOf(".from('creations')\n    .update"),
+    serverPriceValidationAt >= 0 && creationConfigurationUpdateAt > serverPriceValidationAt,
     'server price must be validated before the creation configuration is updated',
   )
 
