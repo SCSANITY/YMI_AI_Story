@@ -96,9 +96,11 @@ export function parseDealerSendCountries(payload: unknown) {
     if (row.ID !== null && !Number.isSafeInteger(row.ID)) throw new DealerSendError('invalid_response', 'country_id_shape')
     try { text(row.CountryFullName) } catch { throw new DealerSendError('invalid_response', 'country_name_shape') }
     let code: string | null
-    try { code = text(row.CountryCode, 2) } catch { throw new DealerSendError('invalid_response', 'country_code_shape') }
-    if (code && !/^[A-Za-z]{2}$/.test(code)) throw new DealerSendError('invalid_response', 'country_code_shape')
-    if (code?.toUpperCase() === 'GB') ukListed = true
+    // Actual country-reference responses include codes outside the manual's
+    // two-letter assumption. They are metadata, not parcel/delivery authority.
+    // Bound strings but ignore unfamiliar codes; tracking validation is unchanged.
+    try { code = text(row.CountryCode, 500) } catch { throw new DealerSendError('invalid_response', 'country_code_shape') }
+    if (code && ['GB', 'GBR'].includes(code.toUpperCase())) ukListed = true
   }
   // Return a bounded summary, never provider rows/messages or secret config.
   return { countryCount: root.Countrys.length, ukListed }

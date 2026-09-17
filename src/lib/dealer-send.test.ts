@@ -111,7 +111,8 @@ test('country response fails closed on error codes, wrong spelling, missing fiel
     { Response: { Code: '200' }, Countrys: [] }, { Response: { Code: 200 }, Countries: [] },
     { ...countries, Countrys: null }, { ...countries, Countrys: Array(1001).fill(countries.Countrys[0]) },
     { ...countries, Countrys: [{}] }, { ...countries, Countrys: [{ ...countries.Countrys[0], ID: '1' }] },
-    { ...countries, Countrys: [{ ...countries.Countrys[0], CountryCode: 'UK?' }] },
+    { ...countries, Countrys: [{ ...countries.Countrys[0], CountryCode: { secret: config.apiKey } }] },
+    { ...countries, Countrys: [{ ...countries.Countrys[0], CountryCode: 'x'.repeat(501) }] },
     { ...countries, Countrys: [{ ...countries.Countrys[0], CountryFullName: 'x'.repeat(501) }] }]) {
     assert.throws(() => parseDealerSendCountries(value), DealerSendError)
   }
@@ -122,6 +123,18 @@ test('country schema diagnostics are fixed safe labels, never raw provider field
     error => error instanceof DealerSendError && error.diagnostic === 'country_id_shape' && !JSON.stringify(error).includes(config.apiKey))
   assert.throws(() => parseDealerSendCountries({ Response: { Code: 200 }, Countries: [] }),
     error => error instanceof DealerSendError && error.diagnostic === 'country_list_shape')
+})
+
+test('reference-country codes may be nonstandard without weakening parcel/delivery semantics',()=>{
+  assert.deepEqual(parseDealerSendCountries({ ...countries, Countrys: [
+    { ID: 1, CountryFullName: 'United States', CountryCode: 'USA' },
+    { ID: 2, CountryFullName: 'Unknown reference', CountryCode: 'UK?' },
+    { ID: 3, CountryFullName: 'Unknown reference', CountryCode: config.apiKey },
+  ] }), { countryCount: 3, ukListed: false })
+  assert.deepEqual(parseDealerSendCountries({ ...countries, Countrys: [{ ID: 1, CountryFullName: 'United Kingdom', CountryCode: 'GBR' }] }),
+    { countryCount: 1, ukListed: true })
+  assert.throws(() => parseDealerSendTracking(payload([{ ...event, CarrierApiCountryCode: 'GBR' }]), 'TRACK1'), DealerSendError)
+  assert.equal(verifiedDelivery(parseDealerSendTracking(payload(), 'TRACK1'), []), null)
 })
 
 test('country check uses only the documented read-only route with bounded private fetch',async()=>{

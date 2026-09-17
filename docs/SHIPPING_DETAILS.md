@@ -104,6 +104,10 @@ values leave the server. The shared adapter retains its ten-second timeout,
 Country-list acceptance does not prove tracking, UK service/battery approval,
 session expiry, or delivery-code semantics. Run it after a configuration deployment
 to verify saved write-only Secrets without exporting or reclassifying them.
+Actual reference-country responses contain codes outside the manual's two-letter
+assumption. Bounded nonstandard strings are ignored for GB-list detection, not
+treated as a failure of account authentication. Only `GB`/`GBR` mark that presence;
+parcel event country validation and exact Delivered mapping remain unchanged.
 
 `GET /api/internal/shipping-sync` uses existing constant-time internal/Cron
 authorization. The versioned daily schedule is `0 2 * * *` (UTC). Disabled by
