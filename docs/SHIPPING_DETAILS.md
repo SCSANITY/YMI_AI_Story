@@ -98,7 +98,7 @@ It requires the runtime switch to be explicitly `false` before using server
 credentials for `GetCountryList`. No request-supplied key/origin, Supabase/order
 access, booking, email or sync activation occurs. GET is unsupported. Responses
 are private/no-store and contain only verification/disabled flags, country count,
-GB-list presence or a safe error category; neither raw provider data nor Secret
+GB-list presence or a safe error category/fixed schema-diagnostic label; neither raw provider data nor Secret
 values leave the server. The shared adapter retains its ten-second timeout,
 256 KB stream cap and redirect denial; this route has a twenty-second limit.
 Country-list acceptance does not prove tracking, UK service/battery approval,

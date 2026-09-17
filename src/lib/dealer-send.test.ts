@@ -117,6 +117,13 @@ test('country response fails closed on error codes, wrong spelling, missing fiel
   }
 })
 
+test('country schema diagnostics are fixed safe labels, never raw provider fields',()=>{
+  assert.throws(() => parseDealerSendCountries({ ...countries, Countrys: [{ ...countries.Countrys[0], ID: config.apiKey }] }),
+    error => error instanceof DealerSendError && error.diagnostic === 'country_id_shape' && !JSON.stringify(error).includes(config.apiKey))
+  assert.throws(() => parseDealerSendCountries({ Response: { Code: 200 }, Countries: [] }),
+    error => error instanceof DealerSendError && error.diagnostic === 'country_list_shape')
+})
+
 test('country check uses only the documented read-only route with bounded private fetch',async()=>{
   let calls = 0
   const fetcher: typeof fetch = async (input, options) => {

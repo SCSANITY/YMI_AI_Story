@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     return noStoreJson({ verified: true, ...state, ...countries })
   } catch (error) {
     const errorCode = error instanceof DealerSendError ? error.code : 'provider_unavailable'
-    return noStoreJson({ verified: false, ...state, errorCode }, { status: 503 })
+    const diagnostic = error instanceof DealerSendError ? error.diagnostic : undefined
+    return noStoreJson({ verified: false, ...state, errorCode, diagnostic }, { status: 503 })
   }
 }

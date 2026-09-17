@@ -26,8 +26,12 @@ export type DealerSendConfig = DealerSendCredentials & {
   mappings: DeliveryMapping[]
 }
 
+type DealerSendDiagnostic = 'invalid_json' | 'body_too_large' | 'country_list_shape' |
+  'country_row_shape' | 'country_id_missing' | 'country_id_shape' |
+  'country_name_missing' | 'country_name_shape' | 'country_code_missing' | 'country_code_shape'
+
 export class DealerSendError extends Error {
-  constructor(public code: 'not_configured' | 'invalid_response' | 'provider_unavailable') {
+  constructor(public code: 'not_configured' | 'invalid_response' | 'provider_unavailable', public diagnostic?: DealerSendDiagnostic) {
     super(code) // never attach the credential-bearing URL, raw response or exception
   }
 }
@@ -81,15 +85,19 @@ export function parseDealerSendCountries(payload: unknown) {
   const root = object(payload)
   if (object(root.Response).Code !== 200) throw new DealerSendError('provider_unavailable')
   // "Countrys" is the exact spelling in the official GetCountryList contract.
-  if (!Array.isArray(root.Countrys) || root.Countrys.length > 1000) throw new DealerSendError('invalid_response')
+  if (!Array.isArray(root.Countrys) || root.Countrys.length > 1000) throw new DealerSendError('invalid_response', 'country_list_shape')
   let ukListed = false
   for (const value of root.Countrys) {
-    const row = object(value)
-    if (!('ID' in row) || !('CountryFullName' in row) || !('CountryCode' in row) ||
-        (row.ID !== null && !Number.isSafeInteger(row.ID))) throw new DealerSendError('invalid_response')
-    text(row.CountryFullName)
-    const code = text(row.CountryCode, 2)
-    if (code && !/^[A-Za-z]{2}$/.test(code)) throw new DealerSendError('invalid_response')
+    let row: Record<string, unknown>
+    try { row = object(value) } catch { throw new DealerSendError('invalid_response', 'country_row_shape') }
+    if (!('ID' in row)) throw new DealerSendError('invalid_response', 'country_id_missing')
+    if (!('CountryFullName' in row)) throw new DealerSendError('invalid_response', 'country_name_missing')
+    if (!('CountryCode' in row)) throw new DealerSendError('invalid_response', 'country_code_missing')
+    if (row.ID !== null && !Number.isSafeInteger(row.ID)) throw new DealerSendError('invalid_response', 'country_id_shape')
+    try { text(row.CountryFullName) } catch { throw new DealerSendError('invalid_response', 'country_name_shape') }
+    let code: string | null
+    try { code = text(row.CountryCode, 2) } catch { throw new DealerSendError('invalid_response', 'country_code_shape') }
+    if (code && !/^[A-Za-z]{2}$/.test(code)) throw new DealerSendError('invalid_response', 'country_code_shape')
     if (code?.toUpperCase() === 'GB') ukListed = true
   }
   // Return a bounded summary, never provider rows/messages or secret config.
@@ -142,14 +150,14 @@ async function fetchDealerSendJson(url: URL, fetcher: typeof fetch): Promise<unk
         const { done, value } = await reader.read()
         if (done) break
         size += value.byteLength
-        if (size > 256_000) throw new DealerSendError('invalid_response')
+        if (size > 256_000) throw new DealerSendError('invalid_response', 'body_too_large')
         body += decoder.decode(value, { stream: true })
       }
       body += decoder.decode()
     } finally { await reader.cancel().catch(() => undefined) }
     let payload: unknown
     try { payload = JSON.parse(body) as unknown }
-    catch { throw new DealerSendError('invalid_response') }
+    catch { throw new DealerSendError('invalid_response', 'invalid_json') }
     return payload
   } catch (error) {
     if (error instanceof DealerSendError) throw error
