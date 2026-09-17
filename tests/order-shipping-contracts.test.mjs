@@ -1,7 +1,94 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { runInNewContext } from 'node:vm'
+import { fileURLToPath } from 'node:url'
 const read=(path)=>readFile(new URL('../'+path,import.meta.url),'utf8')
+
+test('actual private check handler rejects unauthorized/enabled requests and returns only safe no-store summaries',async()=>{
+  // Bundle only the actual handler/adapter in memory. server-only is a Next build
+  // guard; its isolated-test stub does not replace auth or runtime assertions.
+  const require = createRequire(import.meta.url)
+  const { build } = require('esbuild') // provided by the existing tsx toolchain
+  const result = await build({
+    entryPoints: [fileURLToPath(new URL('../app/api/internal/shipping-sync/check/route.ts', import.meta.url))],
+    bundle: true, write: false, platform: 'node', format: 'cjs',
+    alias: { '@/lib': fileURLToPath(new URL('../src/lib', import.meta.url)) },
+    external: ['server-only', 'next/server', 'node:crypto'],
+  })
+  const secret = 'fixture-internal-secret'
+  const apiKey = 'x'.repeat(32)
+  const env = { INTERNAL_API_SECRET: secret, CRON_SECRET: 'fixture-cron-secret',
+    DEALER_SEND_SYNC_ENABLED: 'false', DEALER_SEND_API_BASE_URL: 'https://fixture.dealer-send.com',
+    DEALER_SEND_API_KEY: apiKey, DEALER_SEND_DELIVERED_CODES_JSON: '[]' }
+  let calls = 0
+  let fail = false
+  const runtimeModule = { exports: {} }
+  runInNewContext(result.outputFiles[0].text, {
+    module: runtimeModule, exports: runtimeModule.exports, process: { env }, URL, AbortSignal, TextDecoder, Buffer,
+    require: name => {
+      if (name === 'server-only') return {}
+      assert.ok(['next/server', 'node:crypto'].includes(name), 'No business/DB module may load')
+      return require(name)
+    },
+    fetch: async () => {
+      calls++
+      if (fail) throw new Error(`https://fixture.dealer-send.com/?ApiKey=${apiKey}`)
+      return Response.json({ Response: { Code: 200, Message: apiKey }, Countrys: [
+        { ID: 1, CountryFullName: 'United Kingdom', CountryCode: 'GB', ExtraSecret: apiKey },
+      ] })
+    },
+  })
+  const post = headers => runtimeModule.exports.POST(new Request('https://fixture.test/api/internal/shipping-sync/check', { method: 'POST', headers }))
+  for (const headers of [{}, { 'x-internal-secret': 'wrong' }, { authorization: 'Bearer wrong' }]) {
+    const response = await post(headers)
+    assert.equal(response.status, 403)
+    assert.match(response.headers.get('cache-control'), /private, no-store/)
+    assert.deepEqual(await response.json(), { error: 'Forbidden' })
+  }
+  assert.equal(calls, 0)
+  for (const flag of ['true', undefined]) {
+    env.DEALER_SEND_SYNC_ENABLED = flag
+    const response = await post({ 'x-internal-secret': secret })
+    assert.equal(response.status, 409)
+    assert.equal((await response.json()).errorCode, 'sync_not_disabled')
+  }
+  assert.equal(calls, 0)
+  env.DEALER_SEND_SYNC_ENABLED = 'false'
+  env.DEALER_SEND_API_KEY = undefined
+  const missing = await post({ 'x-internal-secret': secret })
+  assert.equal(missing.status, 503)
+  assert.equal((await missing.json()).errorCode, 'not_configured')
+  assert.equal(calls, 0)
+  env.DEALER_SEND_API_KEY = apiKey
+  for (const headers of [{ 'x-internal-secret': secret }, { authorization: 'Bearer fixture-cron-secret' }]) {
+    const response = await post(headers)
+    assert.equal(response.status, 200)
+    assert.match(response.headers.get('cache-control'), /private, no-store/)
+    assert.deepEqual(await response.json(), { verified: true, syncEnabled: false, syncExplicitlyDisabled: true, countryCount: 1, ukListed: true })
+  }
+  fail = true
+  const failure = await post({ 'x-internal-secret': secret })
+  assert.equal(failure.status, 503)
+  assert.deepEqual(await failure.json(), { verified: false, syncEnabled: false, syncExplicitlyDisabled: true, errorCode: 'provider_unavailable' })
+  assert.equal(env.DEALER_SEND_SYNC_ENABLED, 'false')
+  assert.equal(calls, 3)
+})
+
+test('private authentication POST is authorized and explicitly disabled before credential/provider work, with no business IO',async()=>{
+  const source = await read('app/api/internal/shipping-sync/check/route.ts')
+  assert.match(source, /export async function POST\(request: Request\)/)
+  assert.doesNotMatch(source, /export async function GET|request\.(json|text)|console\.|supabase|order-shipping-server|runShippingSyncBatch/)
+  const handler = source.slice(source.indexOf('export async function POST'))
+  assert.ok(handler.indexOf('isInternalRequestAuthorized(request)') < handler.indexOf('process.env.'))
+  assert.ok(handler.indexOf("DEALER_SEND_SYNC_ENABLED !== 'false'") < handler.indexOf('readDealerSendCredentials(process.env)'))
+  assert.ok(handler.indexOf('readDealerSendCredentials(process.env)') < handler.indexOf('await fetchDealerSendCountries(credentials)'))
+  assert.match(source, /syncExplicitlyDisabled: true/)
+  assert.match(source, /maxDuration = 20/)
+  assert.match(source, /noStoreJson/)
+  assert.doesNotMatch(source, /error\.message|\.apiKey|Response\.Message/)
+})
 
 test('shipping is a supplemental detail, not a new order lifecycle or client provider fetch',async()=>{
   const [tracker,panel,reader]=await Promise.all([read('app/orders/[orderID]/LogisticsTracker.tsx'),read('app/orders/[orderID]/ShippingDetailsPanel.tsx'),read('src/lib/customer-orders-server.ts')])

@@ -92,6 +92,19 @@ The conservative accepted `Response.Code` is 200; the documentation does not
 publish a success-code enum. Confirm it against an actual account response before
 enabling sync. No webhook, global status dictionary or polling quota is assumed.
 
+`POST /api/internal/shipping-sync/check` is a separate, operator-only non-order
+authentication check using the same constant-time internal/Cron authorization.
+It requires the runtime switch to be explicitly `false` before using server
+credentials for `GetCountryList`. No request-supplied key/origin, Supabase/order
+access, booking, email or sync activation occurs. GET is unsupported. Responses
+are private/no-store and contain only verification/disabled flags, country count,
+GB-list presence or a safe error category; neither raw provider data nor Secret
+values leave the server. The shared adapter retains its ten-second timeout,
+256 KB stream cap and redirect denial; this route has a twenty-second limit.
+Country-list acceptance does not prove tracking, UK service/battery approval,
+session expiry, or delivery-code semantics. Run it after a configuration deployment
+to verify saved write-only Secrets without exporting or reclassifying them.
+
 `GET /api/internal/shipping-sync` uses existing constant-time internal/Cron
 authorization. The versioned daily schedule is `0 2 * * *` (UTC). Disabled by
 default, it performs no database or provider work until explicitly enabled.

@@ -17,9 +17,12 @@ export type DeliveryMapping = {
   reference: string
 }
 
-export type DealerSendConfig = {
+export type DealerSendCredentials = {
   baseUrl: string
   apiKey: string
+}
+
+export type DealerSendConfig = DealerSendCredentials & {
   mappings: DeliveryMapping[]
 }
 
@@ -40,15 +43,25 @@ function text(value: unknown, max = 500): string | null {
   return value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim() || null
 }
 
-export function readDealerSendConfig(env: Record<string, string | undefined>): DealerSendConfig | null {
-  if (env.DEALER_SEND_SYNC_ENABLED !== 'true') return null
+// Credential validation is shared, but only the private non-order diagnostic
+// may use credentials without enabling tracking. Never expose this object.
+export function readDealerSendCredentials(env: Record<string, string | undefined>): DealerSendCredentials | null {
   const key = env.DEALER_SEND_API_KEY?.trim()
   const host = env.DEALER_SEND_API_BASE_URL?.trim()
   if (!key || !host) return null
   try {
     const url = new URL(host)
     if (url.protocol !== 'https:' || !url.hostname.endsWith('.dealer-send.com') || url.username || url.password ||
-        url.search || url.hash || url.pathname !== '/' || (url.port && url.port !== '443') || key.length !== 32) return null
+        url.search || url.hash || url.pathname !== '/' || (url.port && url.port !== '443') || key.length !== 32 || /\s/.test(key)) return null
+    return { baseUrl: url.origin, apiKey: key }
+  } catch { return null }
+}
+
+export function readDealerSendConfig(env: Record<string, string | undefined>): DealerSendConfig | null {
+  if (env.DEALER_SEND_SYNC_ENABLED !== 'true') return null
+  const credentials = readDealerSendCredentials(env)
+  if (!credentials) return null
+  try {
     const parsed: unknown = JSON.parse(env.DEALER_SEND_DELIVERED_CODES_JSON || '[]')
     if (!Array.isArray(parsed) || parsed.length > 30) return null
     const mappings = parsed.map((row: unknown) => {
@@ -60,8 +73,27 @@ export function readDealerSendConfig(env: Record<string, string | undefined>): D
       if (!carrierId || !apiType || !status || !reference) throw new Error('Invalid mapping')
       return { carrierId, apiType, status, reference }
     })
-    return { baseUrl: url.origin, apiKey: key, mappings }
+    return { ...credentials, mappings }
   } catch { return null }
+}
+
+export function parseDealerSendCountries(payload: unknown) {
+  const root = object(payload)
+  if (object(root.Response).Code !== 200) throw new DealerSendError('provider_unavailable')
+  // "Countrys" is the exact spelling in the official GetCountryList contract.
+  if (!Array.isArray(root.Countrys) || root.Countrys.length > 1000) throw new DealerSendError('invalid_response')
+  let ukListed = false
+  for (const value of root.Countrys) {
+    const row = object(value)
+    if (!('ID' in row) || !('CountryFullName' in row) || !('CountryCode' in row) ||
+        (row.ID !== null && !Number.isSafeInteger(row.ID))) throw new DealerSendError('invalid_response')
+    text(row.CountryFullName)
+    const code = text(row.CountryCode, 2)
+    if (code && !/^[A-Za-z]{2}$/.test(code)) throw new DealerSendError('invalid_response')
+    if (code?.toUpperCase() === 'GB') ukListed = true
+  }
+  // Return a bounded summary, never provider rows/messages or secret config.
+  return { countryCount: root.Countrys.length, ukListed }
 }
 
 export function parseDealerSendTracking(payload: unknown, trackingNumber: string): DealerSendEvent[] {
@@ -97,11 +129,7 @@ export function verifiedDelivery(events: DealerSendEvent[], mappings: DeliveryMa
   return null // never infer delivery from a substring or an unknown carrier
 }
 
-export async function fetchDealerSendTracking(config: DealerSendConfig, number: string, fetcher: typeof fetch = fetch) {
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(number)) throw new DealerSendError('invalid_response')
-  const url = new URL('/api/Portalapi/GetTrackingDetails', config.baseUrl)
-  url.searchParams.set('ApiKey', config.apiKey)
-  url.searchParams.set('TrackingNumber', number)
+async function fetchDealerSendJson(url: URL, fetcher: typeof fetch): Promise<unknown> {
   try {
     const response = await fetcher(url, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10_000) })
     if (!response.ok || !response.body) throw new DealerSendError('provider_unavailable')
@@ -122,9 +150,23 @@ export async function fetchDealerSendTracking(config: DealerSendConfig, number: 
     let payload: unknown
     try { payload = JSON.parse(body) as unknown }
     catch { throw new DealerSendError('invalid_response') }
-    return parseDealerSendTracking(payload, number)
+    return payload
   } catch (error) {
     if (error instanceof DealerSendError) throw error
     throw new DealerSendError('provider_unavailable')
   }
+}
+
+export async function fetchDealerSendCountries(credentials: DealerSendCredentials, fetcher: typeof fetch = fetch) {
+  const url = new URL('/api/PortalApi/GetCountryList', credentials.baseUrl)
+  url.searchParams.set('ApiKey', credentials.apiKey)
+  return parseDealerSendCountries(await fetchDealerSendJson(url, fetcher))
+}
+
+export async function fetchDealerSendTracking(config: DealerSendConfig, number: string, fetcher: typeof fetch = fetch) {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(number)) throw new DealerSendError('invalid_response')
+  const url = new URL('/api/Portalapi/GetTrackingDetails', config.baseUrl)
+  url.searchParams.set('ApiKey', config.apiKey)
+  url.searchParams.set('TrackingNumber', number)
+  return parseDealerSendTracking(await fetchDealerSendJson(url, fetcher), number)
 }

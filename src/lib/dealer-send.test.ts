@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { DealerSendError, fetchDealerSendTracking, parseDealerSendTracking, readDealerSendConfig, verifiedDelivery } from './dealer-send'
+import { DealerSendError, fetchDealerSendCountries, fetchDealerSendTracking, parseDealerSendCountries, parseDealerSendTracking, readDealerSendConfig, readDealerSendCredentials, verifiedDelivery } from './dealer-send'
 
 const env={DEALER_SEND_SYNC_ENABLED:'true',DEALER_SEND_API_BASE_URL:'https://fixture.dealer-send.com',DEALER_SEND_API_KEY:'x'.repeat(32)}
 const config=readDealerSendConfig(env)!
@@ -80,5 +80,68 @@ test('raw network exceptions, provider messages and credential URLs never escape
 test('malformed JSON and streamed oversized bodies are rejected without storing raw payload',async()=>{
   for (const body of ['not json','x'.repeat(256001)]) {
     await assert.rejects(()=>fetchDealerSendTracking(config,'TRACK1',async()=>new Response(body)),error=>error instanceof DealerSendError && error.code==='invalid_response')
+  }
+})
+
+const countries = { Response: { Code: 200, Message: 'OK' }, Countrys: [
+  { ID: 1, CountryFullName: 'United Kingdom', CountryCode: 'gb' },
+  { ID: null, CountryFullName: null, CountryCode: null },
+] }
+
+test('private credential validation does not enable tracking or depend on delivery mappings',()=>{
+  const disabled = { ...env, DEALER_SEND_SYNC_ENABLED: 'false', DEALER_SEND_DELIVERED_CODES_JSON: 'invalid' }
+  assert.ok(readDealerSendCredentials(disabled))
+  assert.equal(readDealerSendConfig(disabled), null)
+  for (const host of ['http://fixture.dealer-send.com', 'https://dealer-send.com.evil.test',
+    'https://user:secret@fixture.dealer-send.com', 'https://fixture.dealer-send.com/api', 'https://fixture.dealer-send.com/?ApiKey=x']) {
+    assert.equal(readDealerSendCredentials({ ...disabled, DEALER_SEND_API_BASE_URL: host }), null)
+  }
+  assert.equal(readDealerSendCredentials({ ...disabled, DEALER_SEND_API_KEY: 'x'.repeat(31) + ' ' }), null)
+  assert.equal(readDealerSendCredentials({ ...disabled, DEALER_SEND_API_KEY: 'x'.repeat(15) + ' ' + 'x'.repeat(16) }), null)
+})
+
+test('country authentication returns only a safe summary, not raw rows/messages/extra fields',()=>{
+  assert.deepEqual(parseDealerSendCountries({ ...countries, secret: config.apiKey }), { countryCount: 2, ukListed: true })
+  assert.deepEqual(parseDealerSendCountries({ ...countries, Countrys: [] }), { countryCount: 0, ukListed: false })
+  assert.deepEqual(parseDealerSendCountries({ ...countries, Countrys: [{ ID: 1, CountryFullName: 'Hong Kong', CountryCode: 'HK' }] }), { countryCount: 1, ukListed: false })
+})
+
+test('country response fails closed on error codes, wrong spelling, missing fields and unbounded data',()=>{
+  for (const value of [{}, { ...countries, Response: { Code: 403, Message: config.apiKey } },
+    { Response: { Code: '200' }, Countrys: [] }, { Response: { Code: 200 }, Countries: [] },
+    { ...countries, Countrys: null }, { ...countries, Countrys: Array(1001).fill(countries.Countrys[0]) },
+    { ...countries, Countrys: [{}] }, { ...countries, Countrys: [{ ...countries.Countrys[0], ID: '1' }] },
+    { ...countries, Countrys: [{ ...countries.Countrys[0], CountryCode: 'UK?' }] },
+    { ...countries, Countrys: [{ ...countries.Countrys[0], CountryFullName: 'x'.repeat(501) }] }]) {
+    assert.throws(() => parseDealerSendCountries(value), DealerSendError)
+  }
+})
+
+test('country check uses only the documented read-only route with bounded private fetch',async()=>{
+  let calls = 0
+  const fetcher: typeof fetch = async (input, options) => {
+    calls++
+    const url = new URL(String(input))
+    assert.equal(url.pathname, '/api/PortalApi/GetCountryList')
+    assert.equal(url.searchParams.get('ApiKey'), config.apiKey)
+    assert.deepEqual(Array.from(url.searchParams.keys()), ['ApiKey'])
+    assert.equal(options?.cache, 'no-store')
+    assert.equal(options?.redirect, 'error')
+    assert.ok(options?.signal)
+    return Response.json(countries)
+  }
+  assert.deepEqual(await fetchDealerSendCountries(config, fetcher), { countryCount: 2, ukListed: true })
+  assert.equal(calls, 1)
+})
+
+test('country HTTP/network/timeout/malformed/oversize failures never disclose credentials or provider text',async()=>{
+  for (const fetcher of [async () => { throw new Error(`ApiKey=${config.apiKey}`) },
+    async () => { throw new DOMException(config.apiKey, 'TimeoutError') },
+    async () => new Response(config.apiKey, { status: 403 }),
+    async () => Response.json({ ...countries, Response: { Code: 403, Message: config.apiKey } }),
+    async () => new Response('not json'), async () => new Response('x'.repeat(256001))]) {
+    await assert.rejects(() => fetchDealerSendCountries(config, fetcher), error =>
+      error instanceof DealerSendError && ['invalid_response', 'provider_unavailable'].includes(error.code) &&
+      !JSON.stringify(error).includes(config.apiKey) && !error.message.includes(config.apiKey))
   }
 })
