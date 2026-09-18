@@ -16,6 +16,7 @@ type PreviewActionBarProps = {
   isPreparingShare: boolean
   isCheckoutPending: boolean
   isConfigurationPending?: boolean
+  previewReady?: boolean
   onShare: () => void
   onAddToCart: () => void
   onCheckout: () => void
@@ -34,6 +35,7 @@ function PreviewActionBarComponent({
   isPreparingShare,
   isCheckoutPending,
   isConfigurationPending = false,
+  previewReady = true,
   onShare,
   onAddToCart,
   onCheckout,
@@ -64,7 +66,7 @@ function PreviewActionBarComponent({
     onAddToCart()
   }, [isCheckoutAcknowledged, onAddToCart])
 
-  const pending = isCheckoutPending || isConfigurationPending
+  const pending = isCheckoutPending || isConfigurationPending || !previewReady
 
   return (
     <div>

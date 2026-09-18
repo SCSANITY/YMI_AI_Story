@@ -188,8 +188,38 @@ Magic Attributes retain database-controlled, clamped fill values and accessible
 progressbar labels/values. Visible percentage labels are absent; the bars are
 14px thick on desktop and mobile.
 
-The current sellable package contract is exactly `basic` (Classic Portrait) and
-`supreme` (Signature Voice), both physical. Cloud Explorer is not a current
+Product Intro reads the catalog's full `inner_description` before its short
+card `description`. One local disclosure island clamps the full text to two
+lines until expanded; its cleaned-up ResizeObserver only decides whether the
+accessible Read more/Read less control is needed. It neither changes routes
+nor introduces another catalog fetch or private-data cache. Illustrative stars
+and counts are deterministic per book and explicitly labelled as design samples,
+not customer reviews; they are not persisted or emitted as review structured data.
+
+Preview generation has no independent Loading page, overlay, or loading URL.
+`GENERATING` remains an internal job phase but renders the Preview layout from
+the moment the customer submits. Its cover region contains an unscaled,
+mobile-legible 70-second wall-clock estimate. Zero means still working, not
+completion. The existing controller owns the one per-job watcher; fresh
+generation watches until cover availability, and restored Preview/full-page
+refresh uses that same controller after the phase transition. Actual image
+decode and the business phase gate edition selection, cart, purchase and sharing,
+never the countdown. Cancellation, navigation and logout preserve the Customize
+draft and use the owned-job cancellation path, including cancellation during
+job creation. Failed generation returns to the retained review form; restored
+cancelled jobs show an actionable inline failure.
+
+Edition cards have full-card native radio hit targets, keyboard semantics and
+urgent local selection feedback while the existing serialized/coalesced save
+queue persists configuration. Creation hydration is identity-scoped: cached or
+late reads may initialize an untouched edition, never replace a newer local
+edition/voice choice. Failed saves reconcile the card with the server-confirmed
+value. Countdown ticks are isolated from the page and purchase controller.
+
+The current sellable package contract is exactly `basic` (Hardcover) and
+`supreme` (Hardcover + Voice), both physical; historical internal product names
+and package identifiers are unchanged. The presentation badge belongs only to
+the voice edition. Cloud Explorer is not a current
 option, artwork, marketing format, Admin pricing input, creation configuration,
 job request, cart-price authority or new payment session. Catalog reads exclude
 retired digital price rows and interpret legacy catalog display metadata through

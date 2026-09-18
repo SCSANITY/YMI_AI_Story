@@ -64,6 +64,8 @@ function PreviewStepLayoutComponent({ progress, intro, book, gallery, purchase, 
             aria-label={scrollCueLabel}
             title={scrollCueLabel}
             onClick={handleScrollToPurchase}
+            disabled={!showScrollCue}
+            aria-hidden={!showScrollCue}
             className={`fixed bottom-5 left-1/2 z-30 flex h-12 -translate-x-1/2 items-center gap-2 rounded-full border border-amber-200 bg-white/95 px-4 text-sm font-bold text-amber-800 shadow-xl backdrop-blur transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 xl:hidden ${showScrollCue ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'}`}
           >
             <ChevronsDown className="h-5 w-5 motion-safe:animate-bounce" aria-hidden="true" />

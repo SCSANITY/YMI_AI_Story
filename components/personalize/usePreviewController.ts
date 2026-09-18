@@ -322,6 +322,10 @@ export function usePreviewController({
         applyPreviewDisplayAssetsForJob(jobId, assets)
         setError(null)
       },
+    }).then((outcome) => {
+      if (activeJobIdRef.current === activeJobId && outcome.status === 'cancelled' && !outcome.assets?.coverUrl) {
+        setError('This Preview was cancelled. Review your details to try again.')
+      }
     }).catch((watchError) => {
       if (activeJobIdRef.current !== activeJobId) return
       setError(

@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, startTransition, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { memo, startTransition, useCallback, useState, type ReactNode } from 'react'
 import Image from 'next/image'
 import { Check, Mic2, ShieldCheck } from 'lucide-react'
 import type { PurchasePackageType } from '@/lib/purchase-configuration'
@@ -32,6 +32,7 @@ type PreviewPurchasePanelProps = {
   actions: ReactNode
   onChange: (value: PurchasePackageType) => Promise<void>
   onOpenVoice: () => void
+  selectionDisabled?: boolean
 }
 
 function PreviewPurchasePanelComponent({
@@ -51,13 +52,19 @@ function PreviewPurchasePanelComponent({
   actions,
   onChange,
   onOpenVoice,
+  selectionDisabled = false,
 }: PreviewPurchasePanelProps) {
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set())
-  const [selectedValue, setSelectedValue] = useState(value)
-
-  useEffect(() => {
-    setSelectedValue(value)
-  }, [value])
+  const [selection, setSelection] = useState({ confirmedValue: value, editionError, value })
+  // Reconcile before commit, rather than briefly painting a stale checked card.
+  // Local optimistic edits leave confirmedValue untouched until the parent updates.
+  if (selection.confirmedValue !== value || selection.editionError !== editionError) {
+    setSelection({ confirmedValue: value, editionError, value })
+  }
+  const selectedValue = selection.value
+  const setSelectedValue = useCallback((nextValue: PurchasePackageType) => {
+    setSelection((current) => ({ ...current, value: nextValue }))
+  }, [])
 
   const handleEditionChange = useCallback((nextValue: PurchasePackageType) => {
     if (nextValue === selectedValue) return
@@ -66,11 +73,11 @@ function PreviewPurchasePanelComponent({
     startTransition(() => {
       void onChange(nextValue)
     })
-  }, [onChange, selectedValue])
+  }, [onChange, selectedValue, setSelectedValue])
 
   return (
     <aside className="flex w-full flex-col rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:mx-auto xl:max-w-[380px] xl:p-5">
-      <fieldset>
+      <fieldset disabled={selectionDisabled}>
         <legend className="font-serif text-xl font-bold tracking-[-0.02em] text-slate-950 sm:text-2xl xl:text-xl">{title}</legend>
         <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-busy={isSavingEdition} data-saving={isSavingEdition ? '' : undefined}>
           {options.map((option) => {
@@ -79,16 +86,17 @@ function PreviewPurchasePanelComponent({
             return (
               <label
                 key={option.value}
-                className={`relative grid cursor-pointer ${imageFailed ? 'grid-cols-[minmax(0,1fr)_22px]' : 'grid-cols-[72px_minmax(0,1fr)_22px]'} items-center gap-2.5 rounded-xl border p-2.5 transition focus-within:ring-2 focus-within:ring-amber-500 focus-within:ring-offset-2 ${
+                className={`relative grid min-h-20 ${selectionDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${imageFailed ? 'grid-cols-[minmax(0,1fr)_22px]' : 'grid-cols-[72px_minmax(0,1fr)_22px]'} items-center gap-2.5 rounded-xl border p-2.5 transition focus-within:ring-2 focus-within:ring-amber-500 focus-within:ring-offset-2 ${
                   selected
                     ? 'border-amber-500 bg-amber-50/70 shadow-[0_12px_28px_-22px_rgba(180,83,9,0.65)]'
                     : 'border-slate-200 bg-white hover:border-amber-300'
                 }`}
               >
                 <input
-                  className="sr-only"
+                  className="peer absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                   type="radio"
                   name="book-edition"
+                  aria-label={`${option.title}, ${option.subtitle}, ${option.price}`}
                   value={option.value}
                   checked={selected}
                   onChange={() => handleEditionChange(option.value)}
@@ -105,7 +113,7 @@ function PreviewPurchasePanelComponent({
                     />
                   </span>
                 ) : (
-                  <span aria-hidden="true" />
+                  null
                 )}
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2">
@@ -130,7 +138,7 @@ function PreviewPurchasePanelComponent({
 
       {editionError ? <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{editionError}</p> : null}
 
-      {selectedValue === 'supreme' ? (
+      {selectedValue === 'supreme' && !selectionDisabled ? (
         <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/55 p-4" aria-labelledby="signature-voice-configuration-title">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-amber-700 shadow-sm">

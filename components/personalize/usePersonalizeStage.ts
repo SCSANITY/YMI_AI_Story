@@ -83,14 +83,13 @@ export function usePersonalizeStage() {
     : stage === 'PREVIEW'
     ? 'CONFIRM_EXIT'
     : 'BLOCKED'
-  const uiProgress: 'STORY' | 'CUSTOMIZE' | 'PREVIEW' = stage === 'PREVIEW'
+  const uiProgress: 'STORY' | 'CUSTOMIZE' | 'PREVIEW' = stage === 'PREVIEW' || stage === 'GENERATING'
     ? 'PREVIEW'
     : 'CUSTOMIZE'
   const viewState = {
     showForm: stage === 'FORM',
-    showPreview: stage === 'PREVIEW',
-    showLoading: stage === 'GENERATING',
-    showBackButton: stage !== 'GENERATING',
+    showPreview: stage === 'PREVIEW' || stage === 'GENERATING',
+    showBackButton: true,
     showExitConfirmOnBack: stage === 'PREVIEW',
     primaryAction: stage === 'FORM' ? 'GENERATE_PREVIEW' : 'NONE',
   } as const

@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, BookOpen, ChevronDown, Eye, Sparkles, UserRound } from 'lucide-react'
+import { ArrowDown, BookOpen, ChevronDown, Eye, Sparkles, Star, UserRound } from 'lucide-react'
 import { Button } from '@/components/Button'
 
 type ProductFact = {
@@ -14,6 +14,9 @@ type PersonalizeProductIntroProps = {
   eyebrow: string
   title: string
   description: string
+  readMoreLabel?: string
+  readLessLabel?: string
+  reviewDesignSample?: { rating: number; countLabel: string; disclaimer: string }
   facts: ProductFact[]
   fromLabel: string
   priceLabel: string
@@ -36,6 +39,9 @@ function PersonalizeProductIntroComponent({
   eyebrow,
   title,
   description,
+  readMoreLabel = 'Read more',
+  readLessLabel = 'Read less',
+  reviewDesignSample,
   facts,
   fromLabel,
   priceLabel,
@@ -47,8 +53,28 @@ function PersonalizeProductIntroComponent({
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [needsScrollGuide, setNeedsScrollGuide] = useState(false)
   const [guideUsed, setGuideUsed] = useState(false)
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false)
+  const [descriptionOverflows, setDescriptionOverflows] = useState(false)
+  const descriptionRef = useRef<HTMLParagraphElement>(null)
+  const descriptionId = useId()
   const personalizeButtonRef = useRef<HTMLButtonElement>(null)
   const personalizeButtonId = useId()
+
+  useEffect(() => {
+    const target = descriptionRef.current
+    if (!target) return
+    let active = true
+    const measure = () => {
+      if (!active) return
+      const lineHeight = Number.parseFloat(window.getComputedStyle(target).lineHeight)
+      setDescriptionOverflows(target.scrollHeight > lineHeight * 2 + 1)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(target)
+    void document.fonts?.ready.then(measure)
+    return () => { active = false; observer.disconnect() }
+  }, [description])
 
   useEffect(() => {
     const target = personalizeButtonRef.current
@@ -74,9 +100,28 @@ function PersonalizeProductIntroComponent({
       <h1 className="mt-2.5 font-serif text-[1.85rem] font-bold leading-[1.1] tracking-[-0.025em] text-slate-950 sm:text-[2.1rem] lg:text-[2.25rem]">
         {title}
       </h1>
-      <p className="mt-4 max-w-2xl text-[0.94rem] leading-6 text-slate-600">
+      {reviewDesignSample ? (
+        <div className="mt-3" data-review-design-sample="true">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <span aria-hidden="true" className="relative flex gap-0.5 text-amber-500">
+              {[0, 1, 2, 3, 4].map((index) => <Star key={index} className="h-4 w-4" fill="currentColor" />)}
+              <span className="absolute inset-y-0 right-0 bg-[#fffaf4]/90" style={{ width: `${(5 - reviewDesignSample.rating) / 5 * 100}%` }} />
+            </span>
+            <span className="font-bold tabular-nums text-slate-800">{reviewDesignSample.rating.toFixed(1)}/5</span>
+            <span>· {reviewDesignSample.countLabel}</span>
+          </div>
+          <p className="mt-1 text-[11px] leading-4 text-slate-500">{reviewDesignSample.disclaimer}</p>
+        </div>
+      ) : null}
+      <p ref={descriptionRef} id={descriptionId} className={`mt-4 max-w-2xl whitespace-pre-line break-words text-[0.94rem] leading-6 text-slate-600 ${descriptionExpanded ? '' : 'line-clamp-2'}`}>
         {description}
       </p>
+      {descriptionOverflows ? (
+        <button type="button" aria-expanded={descriptionExpanded} aria-controls={descriptionId} onClick={() => setDescriptionExpanded((current) => !current)} className="mt-1 flex min-h-11 self-start items-center gap-1.5 rounded-lg text-sm font-bold text-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+          {descriptionExpanded ? readLessLabel : readMoreLabel}
+          <ChevronDown className={`h-4 w-4 transition-transform motion-reduce:transition-none ${descriptionExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
+      ) : null}
 
       <ul className="mt-5 grid gap-2.5" aria-label="Book details">
         {facts.slice(0, 4).map((fact) => {

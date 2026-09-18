@@ -19,6 +19,7 @@ type PreviewBookStageProps = {
   faceStyle: CSSProperties
   previewBookShadow: string
   renderPageContent: (side: 'left' | 'right', spreadIndex: number) => ReactNode
+  pendingContent?: ReactNode
 }
 
 function PreviewBookStageComponent({
@@ -37,6 +38,7 @@ function PreviewBookStageComponent({
   faceStyle,
   previewBookShadow,
   renderPageContent,
+  pendingContent,
 }: PreviewBookStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [measuredPreviewScale, setMeasuredPreviewScale] = useState(1)
@@ -76,7 +78,9 @@ function PreviewBookStageComponent({
       className="relative mb-7 flex w-full select-none justify-center overflow-hidden perspective-2000 md:mb-10"
       style={{ height: stageHeight }}
     >
-      <div
+      {pendingContent ? (
+        <div className="h-full w-full max-w-[380px]">{pendingContent}</div>
+      ) : <div
         className="shrink-0"
         style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center', width: pageWidth * 2, filter: previewBookShadow }}
       >
@@ -203,7 +207,7 @@ function PreviewBookStageComponent({
             )}
           </AnimatePresence>
         </motion.div>
-      </div>
+      </div>}
     </div>
   )
 }

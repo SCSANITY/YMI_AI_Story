@@ -18,11 +18,6 @@ export function usePersonalizeState() {
   // --- Book Type ---
   const [bookType, setBookType] = useState<PurchasePackageType>('basic');
 
-  // --- Loading State ---
-  const [loadingText, setLoadingText] =
-    useState('Initializing magic...');
-  const [progress, setProgress] = useState(0);
-
   return {
     name,
     setName,
@@ -51,10 +46,5 @@ export function usePersonalizeState() {
     bookType,
     setBookType,
 
-    loadingText,
-    setLoadingText,
-
-    progress,
-    setProgress,
   };
 }

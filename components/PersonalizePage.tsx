@@ -30,11 +30,9 @@ import type { RecentFaceItem } from '@/components/personalize/RecentFacesStrip';
 import { ProgressSteps } from '@/components/personalize/ProgressSteps';
 import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
 import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
-import { LoadingPreviewOverlay } from '@/components/personalize/LoadingPreviewOverlay';
-import {
-  getPreviewLoadingEstimate,
-  PREVIEW_ESTIMATE_SECONDS,
-} from '@/components/personalize/loading-progress';
+import { PreviewGeneratingCover } from '@/components/personalize/PreviewGeneratingCover';
+import { getBookReviewDesignSample } from '@/lib/book-review-design-sample';
+import { canHydrateEdition } from '@/lib/edition-hydration';
 import { PreviewIntroHeader } from '@/components/personalize/PreviewIntroHeader';
 import { PreviewShareDialog } from '@/components/personalize/PreviewShareDialog';
 import { PreviewBookStage } from '@/components/personalize/PreviewBookStage';
@@ -238,8 +236,6 @@ export default function PersonalizePage({
     photoStoragePath, setPhotoStoragePath,
     faceImageUrl, setFaceImageUrl,
     bookType, setBookType,
-    loadingText, setLoadingText,
-    progress, setProgress,
     } = usePersonalizeState();
 
 
@@ -258,8 +254,8 @@ export default function PersonalizePage({
     isExiting,
     viewState,
     uiProgress,
-    canAddToCart,
-    canCheckout,
+    canAddToCart: stageCanAddToCart,
+    canCheckout: stageCanCheckout,
     canBack,
     backIntent,
     requestCheckout,
@@ -307,7 +303,8 @@ export default function PersonalizePage({
   const [pageToastMessage, setPageToastMessage] = useState<string | null>(null);
   const pageToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
-  const [loadingCountdownSeconds, setLoadingCountdownSeconds] = useState(PREVIEW_ESTIMATE_SECONDS);
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [decodedPreviewCoverUrl, setDecodedPreviewCoverUrl] = useState<string | null>(null);
   const [facePrepareStatus, setFacePrepareStatus] = useState<FacePrepareStatus>('idle');
   const [preparedFaceFile, setPreparedFaceFile] = useState<File | null>(null);
   const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
@@ -400,6 +397,7 @@ export default function PersonalizePage({
   );
   const confirmedPurchaseBookTypeRef = useRef<PurchasePackageType>(purchaseBookTypeRef.current);
   const queuedPurchaseBookTypeRef = useRef<PurchasePackageType | null>(null);
+  const editionSelectionRevisionRef = useRef(0);
   const purchaseConfigurationDrainPromiseRef = useRef<Promise<void> | null>(null);
   const voiceAssetIdRef = useRef<string | null>(null);
   const selectedPreviewCreationIdRef = useRef<string | null>(null);
@@ -427,7 +425,7 @@ export default function PersonalizePage({
     watchJob: watchPreviewJob,
     cancelWatch: cancelPreviewWatch,
   } = usePreviewController({
-    active: viewState.showPreview,
+    active: stage === 'PREVIEW',
     customerId: user?.customerId ?? null,
   });
   const previewVariantsRef = useRef<PreviewVariantView[]>([]);
@@ -663,8 +661,8 @@ export default function PersonalizePage({
     previewVariants.some((variant) => variant.status === 'generating');
   const isPreviewVariantLimitReached =
     previewVariantSessionCount >= PREVIEW_VARIANT_SESSION_CAP;
-  const isLoadingPreviewCapacityWaiting = Boolean(
-    viewState.showLoading && previewJobId && capacityWaitingByJobId[previewJobId]
+  const isGeneratingPreviewCapacityWaiting = Boolean(
+    viewState.showPreview && previewJobId && capacityWaitingByJobId[previewJobId]
   );
   const isPreviewVariantCapacityWaiting = Boolean(
     viewState.showPreview && previewVariants.some(
@@ -823,14 +821,21 @@ export default function PersonalizePage({
     ];
   }, [book?.title, t, templateTitle]);
 
-  useEffect(() => {
-    if (!viewState.showLoading) {
-      setLoadingCountdownSeconds(PREVIEW_ESTIMATE_SECONDS);
-      return;
-    }
+  const hasReadyPreviewCover = Boolean(previewUrl && decodedPreviewCoverUrl === previewUrl);
+  const isPreviewCoverPending = viewState.showPreview && (stage === 'GENERATING' || !hasReadyPreviewCover);
+  const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && !previewError;
+  const canCheckout = stageCanCheckout && hasReadyPreviewCover && !previewError;
 
-    setLoadingCountdownSeconds(PREVIEW_ESTIMATE_SECONDS);
-  }, [viewState.showLoading]);
+  useEffect(() => {
+    if (!previewUrl) return;
+    let active = true;
+    void waitForImageDecode(previewUrl).then(() => {
+      if (active) setDecodedPreviewCoverUrl(previewUrl);
+    }).catch((error) => {
+      if (active) setPreviewError(error instanceof Error ? error.message : 'Preview cover could not be loaded');
+    });
+    return () => { active = false; };
+  }, [previewUrl, setPreviewError]);
 
   // Visual state used by the book animation shell.
   const isClosing = isFlipping && flipDirection === 'prev' && currentSpread === 1;
@@ -1017,8 +1022,10 @@ export default function PersonalizePage({
   useEffect(() => {
     if (viewMode !== 'preview') return
     if (!creationId) return
+    if (stage === 'GENERATING') return
 
     let isActive = true
+    const selectionRevision = editionSelectionRevisionRef.current
     const cacheKey = `ymi_creation_${creationId}`
 
     const loadCreation = async () => {
@@ -1044,19 +1051,21 @@ export default function PersonalizePage({
                 if (nextName) setName(String(nextName))
                 if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
                 if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
-                if (nextType) setBookType(normalizePurchasePackageType(nextType) ?? 'basic')
-                const cachedVoiceAssetId = typeof creation.voice_asset_id === 'string'
-                  ? creation.voice_asset_id
-                  : null
-                setVoiceAssetId(cachedVoiceAssetId)
-                setVoiceDurationSeconds(
-                  Number.isFinite(Number(creation.voice_sample_duration_seconds))
-                    ? Number(creation.voice_sample_duration_seconds)
+                if (canHydrateEdition(selectionRevision, editionSelectionRevisionRef.current)) {
+                  if (nextType) setBookType(normalizePurchasePackageType(nextType) ?? 'basic')
+                  const cachedVoiceAssetId = typeof creation.voice_asset_id === 'string'
+                    ? creation.voice_asset_id
                     : null
-                )
-                setVoicePlaybackUrl(cachedVoiceAssetId
-                  ? `/api/user-assets/${encodeURIComponent(cachedVoiceAssetId)}/download`
-                  : null)
+                  setVoiceAssetId(cachedVoiceAssetId)
+                  setVoiceDurationSeconds(
+                    Number.isFinite(Number(creation.voice_sample_duration_seconds))
+                      ? Number(creation.voice_sample_duration_seconds)
+                      : null
+                  )
+                  setVoicePlaybackUrl(cachedVoiceAssetId
+                    ? `/api/user-assets/${encodeURIComponent(cachedVoiceAssetId)}/download`
+                    : null)
+                }
 
                 if (!templateTitle && creation.templates?.name) {
                   setTemplateTitle(creation.templates.name)
@@ -1135,19 +1144,21 @@ export default function PersonalizePage({
         if (nextName) setName(String(nextName))
         if (nextAge !== undefined && nextAge !== null) setAge(String(nextAge))
         if (nextLang) setSelectedLang(normalizeStoryLanguage(nextLang))
-        if (nextType) setBookType(normalizePurchasePackageType(nextType) ?? 'basic')
-        const nextVoiceAssetId = typeof creation.voice_asset_id === 'string'
-          ? creation.voice_asset_id
-          : null
-        setVoiceAssetId(nextVoiceAssetId)
-        setVoiceDurationSeconds(
-          Number.isFinite(Number(creation.voice_sample_duration_seconds))
-            ? Number(creation.voice_sample_duration_seconds)
+        if (canHydrateEdition(selectionRevision, editionSelectionRevisionRef.current)) {
+          if (nextType) setBookType(normalizePurchasePackageType(nextType) ?? 'basic')
+          const nextVoiceAssetId = typeof creation.voice_asset_id === 'string'
+            ? creation.voice_asset_id
             : null
-        )
-        setVoicePlaybackUrl(nextVoiceAssetId
-          ? `/api/user-assets/${encodeURIComponent(nextVoiceAssetId)}/download`
-          : null)
+          setVoiceAssetId(nextVoiceAssetId)
+          setVoiceDurationSeconds(
+            Number.isFinite(Number(creation.voice_sample_duration_seconds))
+              ? Number(creation.voice_sample_duration_seconds)
+              : null
+          )
+          setVoicePlaybackUrl(nextVoiceAssetId
+            ? `/api/user-assets/${encodeURIComponent(nextVoiceAssetId)}/download`
+            : null)
+        }
 
         if (!templateTitle && creation.templates?.name) {
           setTemplateTitle(creation.templates.name)
@@ -1174,7 +1185,10 @@ export default function PersonalizePage({
     return () => {
       isActive = false
     }
-  }, [viewMode, creationId, user?.customerId, previewJobId, name, age, selectedLang, bookType, templateTitle, templateDescription, templateInnerDescription, templateCoverUrl, setName, setAge, setSelectedLang, setBookType, setTemplateTitle, setTemplateDescription, setTemplateInnerDescription, setTemplateCoverUrl, bookID, selectPreviewJobId, setPreviewBookPresentation, setPreviewJobId, setPreviewPages, setPreviewUrl, setPreviewVariants])
+  // Creation hydration is identity-scoped, not a response to editing the form/edition.
+  // Its late response must never overwrite a newer local purchase choice.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, creationId, user?.customerId, previewJobId, stage, bookID, selectPreviewJobId, setPreviewBookPresentation, setPreviewJobId, setPreviewPages, setPreviewUrl, setPreviewVariants])
 
   useEffect(() => {
     if (!isHydrated) return
@@ -1261,34 +1275,9 @@ export default function PersonalizePage({
 
     let isActive = true;
     let watchedJobId: string | null = null;
-    let textInterval: number | null = null;
-    let progressInterval: number | null = null;
-    const startedAt = Date.now();
     setPreviewError(null);
-    setProgress(0);
-    setLoadingCountdownSeconds(PREVIEW_ESTIMATE_SECONDS);
-
-    const messages = [
-      t('personalize.printingMagic'),
-      t('personalize.creatingStorybook'),
-      t('personalize.didYouKnow'),
-      t('personalize.printingMagic'),
-      t('common.loading')
-    ];
-
-    let i = 0;
-    setLoadingText(messages[0]);
-
-    textInterval = window.setInterval(() => {
-      i = (i + 1) % messages.length;
-      setLoadingText(messages[i]);
-    }, 4200);
-
-    progressInterval = window.setInterval(() => {
-      const estimate = getPreviewLoadingEstimate(Date.now() - startedAt);
-      setProgress(estimate.progress);
-      setLoadingCountdownSeconds(estimate.countdownSeconds);
-    }, 500);
+    setGenerationStartedAt(Date.now());
+    editionSelectionRevisionRef.current = 0;
 
     const run = async () => {
       try {
@@ -1408,6 +1397,7 @@ export default function PersonalizePage({
         setPreviewJobId(created.jobId)
         selectPreviewJobId(created.jobId)
         setCreationId(created.creationId)
+        replacePreviewUrl(created.creationId, created.jobId);
         if (!isActive) return
 
         const outcome = await watchPreviewJob(created.jobId, {
@@ -1419,13 +1409,13 @@ export default function PersonalizePage({
             }
           },
         });
-        if (!isActive || outcome.status === 'cancelled' || !outcome.assets?.coverUrl) return;
+        if (!isActive) return;
+        if (outcome.status === 'cancelled') throw new Error('This Preview was cancelled. Please try again.');
+        if (!outcome.assets?.coverUrl) throw new Error('Preview cover could not be loaded.');
 
         replacePreviewUrl(created.creationId, created.jobId);
-        setProgress(100);
-        setLoadingCountdownSeconds(0);
+        await waitForImageDecode(outcome.assets.coverUrl);
         logPreviewDebug('finishGenerating', { jobId: created.jobId, mode: 'cover-ready' });
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 550));
         if (!isActive) return;
         finishGenerating();
         return;
@@ -1436,7 +1426,12 @@ export default function PersonalizePage({
         }
         const message = error instanceof Error ? error.message : 'Preview generation failed.'
         setPreviewError(message)
-        setProgress(0)
+        replacePersonalizeUrl(null)
+        setPreviewJobId(null)
+        setCreationId(null)
+        setPreviewUrl(null)
+        setPreviewPages([])
+        setPreviewBookPresentation(null)
         reset()
       } finally {
         generationInFlightRef.current = false;
@@ -1448,12 +1443,10 @@ export default function PersonalizePage({
     return () => {
       isActive = false;
       cancelPreviewWatch(watchedJobId);
-      if (textInterval) window.clearInterval(textInterval);
-      if (progressInterval) window.clearInterval(progressInterval);
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, setProgress, setLoadingText, book, user?.customerId, reset, replacePreviewUrl, t, trackPreviewReady, applyPreviewDisplayAssetsForJob, watchPreviewJob, rememberProfile, refreshPersonalizeHistory]);
+  }, [stage, selectedLang, finishGenerating, book, user?.customerId, reset, replacePreviewUrl, replacePersonalizeUrl, t, trackPreviewReady, applyPreviewDisplayAssetsForJob, watchPreviewJob, rememberProfile, refreshPersonalizeHistory]);
 
   useEffect(() => {
     if (!viewState.showForm || !photoAssetId || photo || photoPreview) return
@@ -1621,6 +1614,10 @@ export default function PersonalizePage({
   }, [forgetProfile, user?.customerId]);
 
   const handleBack = () => {
+    if (stage === 'GENERATING') {
+      void requestPreviewCancellation();
+      return;
+    }
     if (!canBack) return
 
     if (viewState.showForm) {
@@ -1779,7 +1776,8 @@ export default function PersonalizePage({
       setPreviewUrl(null);
       setPreviewPages([]);
       setPreviewBookPresentation(null);
-      setProgress(0);
+      setGenerationStartedAt(null);
+      replacePersonalizeUrl(null);
       setFormStep('REVIEW');
       startForm();
 
@@ -1809,31 +1807,27 @@ export default function PersonalizePage({
       setPreviewPages,
       setPreviewError,
       setPreviewUrl,
-      setProgress,
+      replacePersonalizeUrl,
       triggerPreviewCancelledToast,
       user?.customerId,
       startForm,
     ]
   );
 
-  const handleLoadingBack = useCallback(() => {
-    void requestPreviewCancellation();
-  }, [requestPreviewCancellation]);
-
   useEffect(() => {
     if (stage !== 'GENERATING') return;
     if (typeof window === 'undefined') return;
 
     const currentParams = new URLSearchParams(window.location.search);
-    if (currentParams.get('view') !== 'loading') {
-      currentParams.set('view', 'loading');
+    if (currentParams.get('view') !== 'preview') {
+      currentParams.set('view', 'preview');
       const nextUrl = `/personalize/${bookID}?${currentParams.toString()}`;
-      window.history.pushState({ ...window.history.state, ymiPersonalizeStage: 'loading' }, '', nextUrl);
+      window.history.pushState({ ...window.history.state, ymiPersonalizeStage: 'preview' }, '', nextUrl);
     }
 
     const handlePopState = () => {
       const currentView = new URLSearchParams(window.location.search).get('view') || 'edit';
-      if (currentView === 'loading') return;
+      if (currentView === 'preview') return;
       void requestPreviewCancellation();
     };
 
@@ -1842,12 +1836,6 @@ export default function PersonalizePage({
       window.removeEventListener('popstate', handlePopState);
     };
   }, [bookID, requestPreviewCancellation, stage]);
-
-  useEffect(() => {
-    if (stage !== 'FORM') return;
-    if (viewMode !== 'loading') return;
-    replacePersonalizeUrl(null);
-  }, [replacePersonalizeUrl, stage, viewMode]);
 
   const returnToCustomizeFromPreview = useCallback(async () => {
     persistDraftForCustomizeReturn();
@@ -1859,7 +1847,9 @@ export default function PersonalizePage({
   }, [bookID, cleanupCurrentPreviewVariantSession, persistDraftForCustomizeReturn, router, startForm]);
 
   const navigateAwayFromPreview = useCallback(async (href: string) => {
-    if (viewState.showPreview) {
+    if (stage === 'GENERATING') {
+      await requestPreviewCancellation();
+    } else if (viewState.showPreview) {
       await cleanupCurrentPreviewVariantSession();
     }
     if (isBrowserTranslated()) {
@@ -1867,14 +1857,16 @@ export default function PersonalizePage({
       return;
     }
     router.push(href);
-  }, [cleanupCurrentPreviewVariantSession, router, viewState.showPreview]);
+  }, [cleanupCurrentPreviewVariantSession, requestPreviewCancellation, router, stage, viewState.showPreview]);
 
   const logoutFromPreview = useCallback(async () => {
-    if (viewState.showPreview) {
+    if (stage === 'GENERATING') {
+      await requestPreviewCancellation();
+    } else if (viewState.showPreview) {
       await cleanupCurrentPreviewVariantSession();
     }
     logout();
-  }, [cleanupCurrentPreviewVariantSession, logout, viewState.showPreview]);
+  }, [cleanupCurrentPreviewVariantSession, logout, requestPreviewCancellation, stage, viewState.showPreview]);
 
   const ensurePremiumVoiceSample = useCallback(() => {
     if (!requiresVoiceSample) {
@@ -2006,6 +1998,7 @@ export default function PersonalizePage({
     }
 
     purchaseBookTypeRef.current = nextPackageType;
+    editionSelectionRevisionRef.current += 1;
     queuedPurchaseBookTypeRef.current = nextPackageType;
     setBookType(nextPackageType);
     setEditionError(null);
@@ -2027,6 +2020,7 @@ export default function PersonalizePage({
   const handleSaveVoice = useCallback(async (recording: PendingVoiceRecording) => {
     if (isSavingVoice) return;
     setIsSavingVoice(true);
+    editionSelectionRevisionRef.current += 1;
     setVoiceValidationError(null);
     setEditionError(null);
 
@@ -2079,6 +2073,7 @@ export default function PersonalizePage({
 
   const handleRemoveVoice = useCallback(async () => {
     if (isSavingVoice) return;
+    editionSelectionRevisionRef.current += 1;
     setIsSavingVoice(true);
     setVoiceValidationError(null);
     try {
@@ -2989,7 +2984,6 @@ export default function PersonalizePage({
       image: '/personalize-editions/classic-portrait.svg',
       imageAlt: t('personalize.editionBasicImageAlt'),
       price: formatDisplayCurrency(getBookPackagePrice(book, 'basic').effectivePriceUsd, displayCurrency),
-      badge: t('personalize.mostPopular'),
     },
     {
       value: 'supreme' as const,
@@ -2998,6 +2992,7 @@ export default function PersonalizePage({
       image: '/personalize-editions/signature-voice.svg',
       imageAlt: t('personalize.editionSupremeImageAlt'),
       price: formatDisplayCurrency(getBookPackagePrice(book, 'supreme').effectivePriceUsd, displayCurrency),
+      badge: t('personalize.mostPopular'),
     },
   ] : [];
   useEffect(() => {
@@ -3123,7 +3118,7 @@ export default function PersonalizePage({
         onUpdateCartQuantity={updateCartQuantity}
         onRemoveCartItem={removeFromCart}
         onViewCart={() => void navigateAwayFromPreview(
-          viewState.showPreview
+          stage === 'PREVIEW'
             ? buildPreviewCartHref({
                 bookId: bookID,
                 creationId: creationId ?? '',
@@ -3184,7 +3179,14 @@ export default function PersonalizePage({
                         key={bookID}
                         eyebrow={t('personalize.productEyebrow')}
                         title={templateTitle || book.title}
-                        description={templateDescription || resolvedBook?.description || book.description}
+                        description={resolvedBook?.innerDescription || resolvedBook?.description || book.description}
+                        readMoreLabel={t('personalize.readMore')}
+                        readLessLabel={t('personalize.readLess')}
+                        reviewDesignSample={{
+                          rating: getBookReviewDesignSample(bookID).rating,
+                          countLabel: t('personalize.reviewSampleCount', { count: getBookReviewDesignSample(bookID).count }),
+                          disclaimer: t('personalize.reviewSampleLabel'),
+                        }}
                         facts={[
                           { icon: 'age', label: t('personalize.productFactAge', { ageRange: book.ageLabel ?? `${minimumRecommendedAge}+` }) },
                           { icon: 'personalized', label: t('personalize.productFactPersonalized') },
@@ -3309,7 +3311,7 @@ export default function PersonalizePage({
                       subtitle={t('personalize.previewSubtitle')}
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
-                      showChangePhoto={!isPreviewPhotoLocked}
+                      showChangePhoto={!isPreviewPhotoLocked && !isPreviewCoverPending}
                       changePhotoDisabled={isPreviewVariantBusy || isPreviewVariantLimitReached}
                       changePhotoBusy={isPreviewVariantBusy}
                       changePhotoError={previewVariantError}
@@ -3322,6 +3324,21 @@ export default function PersonalizePage({
                   book={
                     <PreviewBookStage
                       key={displayedPreviewJobId ?? 'preview-book'}
+                      pendingContent={isPreviewCoverPending ? (
+                        <PreviewGeneratingCover
+                          startedAt={generationStartedAt}
+                          title={t('personalize.generatingCoverTitle')}
+                          body={t('personalize.generatingCoverBody')}
+                          estimateLabel={t('personalize.generatingCoverEstimate')}
+                          stillWorking={t('personalize.generatingCoverOverrun')}
+                          error={previewError}
+                          retryLabel={t('personalize.generatingCoverRetry')}
+                          onReturnToDetails={() => void requestPreviewCancellation({ showToast: false })}
+                          capacityWaiting={isGeneratingPreviewCapacityWaiting}
+                          capacityTitle={t('personalize.capacityLoadingTitle')}
+                          capacityBody={t('personalize.capacityLoadingBody')}
+                        />
+                      ) : undefined}
                       pageWidth={PAGE_WIDTH}
                       pageHeight={PREVIEW_PAGE_HEIGHT}
                       animationDuration={ANIMATION_DURATION}
@@ -3338,7 +3355,7 @@ export default function PersonalizePage({
                     />
                   }
                   gallery={
-                    !isPreviewPhotoLocked ? (
+                    !isPreviewPhotoLocked && !isPreviewCoverPending ? (
                       <PreviewVariantGallery
                         items={previewVariants.map((variant) => ({
                           jobId: variant.jobId,
@@ -3376,6 +3393,7 @@ export default function PersonalizePage({
                       changeVoiceLabel={t('personalize.changeVoice')}
                       privacyCopy={PRIVACY_REASSURANCE_COPY}
                       isSavingEdition={isSavingEdition}
+                      selectionDisabled={isPreviewCoverPending || Boolean(previewError) || isSavingVoice}
                       editionError={editionError}
                       voiceReady={Boolean(voiceAssetId)}
                       voiceDurationSeconds={resolvedVoiceDurationSeconds}
@@ -3392,7 +3410,8 @@ export default function PersonalizePage({
                           purchaseLabel={t('personalize.purchaseNow')}
                           loadingLabel={t('common.loading')}
                           shareError={shareError}
-                          canShare={Boolean(creationId)}
+                          canShare={Boolean(creationId) && !isPreviewCoverPending && !previewError}
+                          previewReady={Boolean(canAddToCart && canCheckout)}
                           isPreparingShare={isPreparingShare}
                           isCheckoutPending={previewActionPending === 'CHECKOUT'}
                           isConfigurationPending={isSavingEdition}
@@ -3446,25 +3465,6 @@ export default function PersonalizePage({
           onRemove={() => void handleRemoveVoice()}
         />
 
-        <LoadingPreviewOverlay
-          show={viewState.showLoading}
-          loadingText={loadingText}
-          progress={progress}
-          countdownSeconds={loadingCountdownSeconds}
-          capacityWaiting={isLoadingPreviewCapacityWaiting}
-          labels={{
-            back: t('common.back'),
-            estimateTitle: t('personalize.previewEstimate'),
-            estimatedWait: t('personalize.estimatedWait'),
-            estimatedProgress: t('personalize.estimatedProgress'),
-            almostThere: t('personalize.almostThere'),
-            capacityWaitStatus: t('personalize.capacityWaitStatus'),
-            didYouKnow: t('personalize.didYouKnow'),
-            capacityTitle: t('personalize.capacityLoadingTitle'),
-            capacityBody: t('personalize.capacityLoadingBody'),
-          }}
-          onBack={handleLoadingBack}
-        />
       </main>
     </div>
   );
