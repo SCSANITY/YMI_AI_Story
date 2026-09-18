@@ -2,7 +2,6 @@
 import type { Metadata } from 'next';
 import { Hero } from '@/components/Hero';
 import { Footer } from '@/components/Footer';
-import { HomePosterBanner } from '@/components/HomePosterBanner';
 import { HomeBookCategories } from '@/components/HomeBookCategories';
 import { HomeBooksHashRedirect } from '@/components/HomeBooksHashRedirect';
 import { getPublishedHomepageBanners } from '@/lib/homepage-banners';
@@ -24,10 +23,6 @@ export default async function HomePage() {
     <>
       <HomeBooksHashRedirect />
       <Hero />
-      <HomePosterBanner
-        banner={banners.after_hero}
-        className="-mt-2 bg-[var(--color-surface-warm)] md:-mt-3"
-      />
       <HomeBookCategories banners={banners} />
       <Footer />
     </>

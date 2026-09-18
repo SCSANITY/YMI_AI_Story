@@ -108,6 +108,17 @@ governance repository.
 
 ## Homepage delivery boundary
 
+- Home renders Hero directly followed by the book-category island on both
+  desktop and mobile, with no post-Hero Banner wrapper or reserved space.
+  `HOMEPAGE_BANNER_SLOT_KEYS` is the shared runtime allowlist for the two remaining
+  positions (`after_for_boys`, `after_in_discount`). Public/Admin reads filter at
+  the database query; Admin publish, upload preparation and swaps reject any
+  other position before asset or mutation work. The Admin manager exposes only
+  those two positions and keeps desktop/mobile assets independent. The banner
+  cache uses one shared v2 key/tag with existing 300-second revalidation and
+  explicit publish invalidation. Retained historical SQL/rows and shared media
+  do not reintroduce the retired position; no database or Storage cleanup is
+  implied by the presentation change.
 - `AppShell` and `Navbar` derive route shape from the root layout's selected
   segments through `src/lib/app-pathname.ts`, so the server and hydrated client
   select the same Home shell even for Next.js bot-aware HTML streaming. Full

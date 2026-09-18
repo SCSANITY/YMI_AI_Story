@@ -6,16 +6,18 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const readTemplateSql = (path) =>
   readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
-test('Homepage banners have exactly three database-owned fixed anchors', async () => {
+test('Homepage retains two active anchors without rewriting the historical three-slot SQL fixture', async () => {
   const [sql, core] = await Promise.all([
     readTemplateSql('sql_homepage_banner_publishing.sql'),
     read('src/lib/homepage-banners-core.ts'),
   ])
 
-  for (const slot of ['after_hero', 'after_for_boys', 'after_in_discount']) {
+  for (const slot of ['after_for_boys', 'after_in_discount']) {
     assert.match(sql, new RegExp(`'${slot}'`))
     assert.match(core, new RegExp(`'${slot}'`))
   }
+  assert.match(sql, /'after_hero'/)
+  assert.doesNotMatch(core, /after_hero/)
   assert.doesNotMatch(sql, /after_brand_new|after_for_girls/)
   assert.doesNotMatch(core, /after_brand_new|after_for_girls/)
   assert.match(sql, /homepage_banner_slots_slot_key_check/)
@@ -52,6 +54,9 @@ test('the public loader is cached, invalidatable, and uses direct public asset U
 
   assert.match(loader, /unstable_cache/)
   assert.match(loader, /revalidate:\s*300/)
+  assert.match(loader, /\.in\('slot_key', HOMEPAGE_BANNER_SLOT_KEYS\)/)
+  assert.match(loader, /\[HOMEPAGE_BANNER_CACHE_TAG\]/)
+  assert.match(cache, /HOMEPAGE_BANNER_CACHE_TAG = 'ymi-homepage-banners-v2'/)
   assert.match(loader, /getPublicUrl\(path\)/)
   assert.doesNotMatch(loader, /next\/image/)
   assert.match(cache, /revalidateTag\(HOMEPAGE_BANNER_CACHE_TAG, \{ expire: 0 \}\)/)
@@ -67,6 +72,7 @@ test('Admin upload and publish verify real bytes before the CAS commit', async (
   ])
 
   assert.match(uploadRoute, /await requireAdminCustomer\(\)/)
+  assert.match(uploadRoute, /parseHomepageBannerSlotKey\(body\?\.slotKey\)/)
   assert.match(uploadRoute, /createSignedUploadUrl\(storagePath, \{ upsert: false \}\)/)
   assert.match(uploadRoute, /validateHomepageBannerUploadSpec/)
   assert.match(verifier, /HOMEPAGE_BANNER_MAX_BYTES = 5 \* 1024 \* 1024/)
@@ -104,11 +110,14 @@ test('Admin preview keeps viewport drafts independent and publishing explicit', 
   assert.match(manager, /grid min-w-0 grid-cols-1 gap-2 pt-1 sm:grid-cols-2 2xl:grid-cols-1/)
   assert.match(manager, /sm:grid-cols-\[minmax\(0,1fr\)_auto\] 2xl:grid-cols-1/)
   assert.doesNotMatch(manager, /AssetEditor|Published-output preview|quality recommendations/)
+  assert.doesNotMatch(manager, /after_hero|After Hero/)
+  assert.match(manager, /slotKey: selectedSlot\.slotKey, contentType: file\.type/)
   assert.match(swapRoute, /swap_homepage_banner_slots/)
   assert.match(swapRoute, /invalidateHomepageBanners\(\)/)
+  assert.match(swapRoute, /\.in\('slot_key', HOMEPAGE_BANNER_SLOT_KEYS\)/)
 })
 
-test('Home renders only the three published banner anchors without hard-coded campaign art', async () => {
+test('Home renders Hero directly followed by categories with no retired Banner or placeholder', async () => {
   const [page, categories, banner] = await Promise.all([
     read('app/page.tsx'),
     read('components/HomeBookCategories.tsx'),
@@ -116,7 +125,8 @@ test('Home renders only the three published banner anchors without hard-coded ca
   ])
 
   assert.match(page, /await getPublishedHomepageBanners\(\)/)
-  assert.match(page, /banner=\{banners\.after_hero\}/)
+  assert.match(page, /<Hero \/>\s*<HomeBookCategories banners=\{banners\} \/>/)
+  assert.doesNotMatch(page, /HomePosterBanner|after_hero|After Hero|-mt-2|-mt-3/)
   assert.match(categories, /banners\.after_for_boys/)
   assert.match(categories, /banners\.after_in_discount/)
   assert.doesNotMatch(page, /banners\/optimized\//)

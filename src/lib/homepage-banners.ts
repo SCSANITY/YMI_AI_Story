@@ -2,6 +2,7 @@ import { unstable_cache } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { HOMEPAGE_BANNER_CACHE_TAG } from '@/lib/homepage-banner-cache'
 import {
+  HOMEPAGE_BANNER_SLOT_KEYS,
   resolvePublishedHomepageBanners,
   type HomepageBannerAssetSource,
   type HomepageBannerSlotRow,
@@ -33,6 +34,7 @@ export const getPublishedHomepageBanners = unstable_cache(
         'href',
         'is_visible',
       ].join(', '))
+      .in('slot_key', HOMEPAGE_BANNER_SLOT_KEYS)
       .order('slot_key')
 
     if (error) {
@@ -50,7 +52,7 @@ export const getPublishedHomepageBanners = unstable_cache(
       },
     )
   },
-  ['ymi-homepage-banners-v1'],
+  [HOMEPAGE_BANNER_CACHE_TAG],
   {
     revalidate: 300,
     tags: [HOMEPAGE_BANNER_CACHE_TAG],

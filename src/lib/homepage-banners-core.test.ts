@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  HOMEPAGE_BANNER_SLOT_KEYS,
+  isHomepageBannerSlotKey,
   resolvePublishedHomepageBanner,
   resolvePublishedHomepageBanners,
   type HomepageBannerSlotRow,
 } from './homepage-banners-core'
 
 const validRow: HomepageBannerSlotRow = {
-  slot_key: 'after_hero',
+  slot_key: 'after_for_boys',
   display_name: 'How YMI Story Works',
   desktop_asset_source: 'builtin',
   desktop_asset_path: 'banners/optimized/workflow-desktop.webp',
@@ -43,6 +45,15 @@ test('keeps desktop and mobile assets and geometry independent', () => {
   )
 })
 
+test('the only active anchors exclude the retired Hero banner', () => {
+  assert.deepEqual(HOMEPAGE_BANNER_SLOT_KEYS, ['after_for_boys', 'after_in_discount'])
+  assert.equal(isHomepageBannerSlotKey('after_hero'), false)
+  assert.throws(
+    () => resolvePublishedHomepageBanner({ ...validRow, slot_key: 'after_hero' }, resolveUrl),
+    /Unsupported Homepage banner slot/,
+  )
+})
+
 test('rejects unknown anchors, cross-origin links, and square assets', () => {
   assert.throws(
     () => resolvePublishedHomepageBanner({ ...validRow, slot_key: 'after_brand_new' }, resolveUrl),
@@ -63,7 +74,7 @@ test('rejects unknown anchors, cross-origin links, and square assets', () => {
 })
 
 test('a hidden or invalid optional banner cannot take down the valid slots', () => {
-  const invalid = { ...validRow, slot_key: 'after_for_boys', desktop_height: 2400 }
+  const invalid = { ...validRow, slot_key: 'after_in_discount', desktop_height: 2400 }
   const hidden = { ...validRow, slot_key: 'after_in_discount', is_visible: false }
   const errors: string[] = []
   const banners = resolvePublishedHomepageBanners(
@@ -72,6 +83,6 @@ test('a hidden or invalid optional banner cannot take down the valid slots', () 
     (_row, error) => errors.push(error.message),
   )
 
-  assert.deepEqual(Object.keys(banners), ['after_hero'])
+  assert.deepEqual(Object.keys(banners), ['after_for_boys'])
   assert.equal(errors.length, 1)
 })

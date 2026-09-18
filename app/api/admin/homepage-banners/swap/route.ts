@@ -7,6 +7,7 @@ import {
   type HomepageBannerAdminRow,
 } from '@/lib/homepage-banner-admin'
 import { invalidateHomepageBanners } from '@/lib/homepage-banner-cache'
+import { HOMEPAGE_BANNER_SLOT_KEYS } from '@/lib/homepage-banners-core'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function POST(request: Request) {
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
   const { data, error: loadError } = await supabaseAdmin
     .from('homepage_banner_slots')
     .select(HOMEPAGE_BANNER_ADMIN_SELECT)
+    .in('slot_key', HOMEPAGE_BANNER_SLOT_KEYS)
     .order('slot_key')
   if (loadError) {
     return jsonNoStore({ error: loadError.message || 'Banners swapped but reload failed' }, { status: 500 })

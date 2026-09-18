@@ -32,7 +32,6 @@ import {
 type Viewport = 'desktop' | 'mobile'
 
 const SLOT_LABELS: Record<HomepageBannerSlotKey, string> = {
-  after_hero: 'After Hero',
   after_for_boys: 'After For Boys',
   after_in_discount: 'After In Discount',
 }
@@ -187,9 +186,9 @@ function BannerPreview({
 export function HomepageBannerManager() {
   const [slots, setSlots] = useState<AdminHomepageBannerSlot[]>([])
   const [baseline, setBaseline] = useState<AdminHomepageBannerSlot[]>([])
-  const [selectedSlotKey, setSelectedSlotKey] = useState<HomepageBannerSlotKey>('after_hero')
+  const [selectedSlotKey, setSelectedSlotKey] = useState<HomepageBannerSlotKey>('after_for_boys')
   const [previewViewport, setPreviewViewport] = useState<Viewport>('desktop')
-  const [swapTarget, setSwapTarget] = useState<HomepageBannerSlotKey>('after_for_boys')
+  const [swapTarget, setSwapTarget] = useState<HomepageBannerSlotKey>('after_in_discount')
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [swapping, setSwapping] = useState(false)
@@ -273,7 +272,7 @@ export function HomepageBannerManager() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ contentType: file.type, sizeBytes: file.size }),
+        body: JSON.stringify({ slotKey: selectedSlot.slotKey, contentType: file.type, sizeBytes: file.size }),
       })
       const spec = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(spec?.error || 'Failed to prepare Banner upload')
@@ -413,7 +412,7 @@ export function HomepageBannerManager() {
                 aria-controls="homepage-banner-editor"
                 onClick={() => {
                   setSelectedSlotKey(slotKey)
-                  setSwapTarget(HOMEPAGE_BANNER_SLOT_KEYS.find((key) => key !== slotKey) ?? 'after_hero')
+                  setSwapTarget(HOMEPAGE_BANNER_SLOT_KEYS.find((key) => key !== slotKey) ?? slotKey)
                   setFeedback(null)
                 }}
                 className={`min-w-[11.5rem] flex-1 rounded-lg px-3 py-2.5 text-left transition ${

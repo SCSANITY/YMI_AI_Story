@@ -10,12 +10,14 @@ import {
   type HomepageBannerAdminRow,
 } from '@/lib/homepage-banner-admin'
 import { invalidateHomepageBanners } from '@/lib/homepage-banner-cache'
+import { HOMEPAGE_BANNER_SLOT_KEYS } from '@/lib/homepage-banners-core'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 async function loadSlots() {
   const { data, error } = await supabaseAdmin
     .from('homepage_banner_slots')
     .select(HOMEPAGE_BANNER_ADMIN_SELECT)
+    .in('slot_key', HOMEPAGE_BANNER_SLOT_KEYS)
     .order('slot_key')
   if (error) throw new Error(error.message || 'Failed to load Homepage banners')
   return (data ?? []).map((row) => buildAdminHomepageBannerSlot(row as unknown as HomepageBannerAdminRow))

@@ -1,5 +1,4 @@
 export const HOMEPAGE_BANNER_SLOT_KEYS = [
-  'after_hero',
   'after_for_boys',
   'after_in_discount',
 ] as const

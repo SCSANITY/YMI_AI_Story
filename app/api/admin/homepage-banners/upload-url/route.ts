@@ -2,6 +2,7 @@ import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
   buildHomepageBannerStoragePath,
+  parseHomepageBannerSlotKey,
   validateHomepageBannerUploadSpec,
 } from '@/lib/homepage-banner-admin'
 import { HOMEPAGE_BANNER_BUCKET } from '@/lib/homepage-banners'
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}))
   let spec
   try {
+    parseHomepageBannerSlotKey(body?.slotKey)
     spec = validateHomepageBannerUploadSpec({
       contentType: body?.contentType,
       sizeBytes: body?.sizeBytes,
