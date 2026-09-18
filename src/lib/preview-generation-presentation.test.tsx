@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { getBookReviewDesignSample } from './book-review-design-sample'
 import { canHydrateEdition } from './edition-hydration'
 import { PreviewGeneratingCover } from '@/components/personalize/PreviewGeneratingCover'
 import { getPreviewGenerationEstimate } from '@/components/personalize/preview-generation-estimate'
 import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePanel'
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro'
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar'
+import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction'
 
 test('70-second estimate follows elapsed wall time, clamps safely, and has no completion signal', () => {
   assert.deepEqual(getPreviewGenerationEstimate(0), { countdownSeconds: 70, fraction: 0 })
@@ -21,23 +21,23 @@ test('70-second estimate follows elapsed wall time, clamps safely, and has no co
   }
 })
 
-test('sample review layouts are stable, bounded, and explicitly non-customer data', () => {
-  for (const id of ['story-one', 'story-two', '故事', ...Array.from({ length: 50 }, (_, i) => String(i))]) {
-    const result = getBookReviewDesignSample(id)
-    assert.deepEqual(result, getBookReviewDesignSample(id))
-    assert.ok(result.rating >= 4.5 && result.rating <= 5)
-    assert.ok(result.count >= 100 && result.count <= 300)
-  }
+test('rating design fixture displays just the score; production Intro has no invented reviews', () => {
   const html = renderToStaticMarkup(<PersonalizeProductIntro
     eyebrow="Story" title="A book" description="Full story description" facts={[]}
     fromLabel="From" priceLabel="$35.90" ctaLabel="Personalize" faqHeading="About" faqItems={[]} onStart={() => {}}
     reviewDesignSample={{ rating: 4.7, countLabel: '218 sample reviews', disclaimer: 'Design sample · not customer reviews' }}
   />)
-  assert.match(html, /4\.7\/5/)
+  assert.match(html, /4\.7<\/span>/)
+  assert.doesNotMatch(html, /4\.7\/5/)
   assert.match(html, /218 sample reviews/)
   assert.match(html, /not customer reviews/)
   assert.match(html, /line-clamp-2/)
   assert.match(html, /Full story description/)
+  const production = renderToStaticMarkup(<PersonalizeProductIntro
+    eyebrow="Story" title="A book" description="Full story description" facts={[]}
+    fromLabel="From" priceLabel="$35.90" ctaLabel="Personalize" faqHeading="About" faqItems={[]} onStart={() => {}}
+  />)
+  assert.doesNotMatch(production, /data-review-design-sample|sample reviews|not customer reviews/)
 })
 
 test('Creation hydration cannot revert a local selection, even when its read started later', () => {
@@ -96,4 +96,16 @@ test('pending Preview cannot add to cart or purchase even if the acknowledgement
     previewReady={false} onShare={() => {}} onAddToCart={() => {}} onCheckout={() => {}} addToCartButtonRef={null}
   />)
   assert.equal((html.match(/disabled=""/g) ?? []).length, 3)
+  assert.doesNotMatch(html, /checked=""/)
+})
+
+test('a complete form still starts with generation consent unchecked and its action disabled', () => {
+  const html = renderToStaticMarkup(<GeneratePreviewAction
+    isFormReady isFacePreparing={false} isPhotoFailed={false} previewError={null} onGenerate={() => {}}
+    labels={{ acknowledgement: 'Use my photo', privacyPolicy: 'Privacy Policy', required: 'Required', photoPreparing: 'Preparing', photoNeedsFix: 'Fix photo', dataConsentRequiredShort: 'Please agree', generateMagicPreview: 'Generate', completeDetails: 'Complete details' }}
+  />)
+  assert.match(html, /type="checkbox"/)
+  assert.doesNotMatch(html, /checked=""/)
+  assert.match(html, /disabled=""/)
+  assert.match(html, /Please agree/)
 })

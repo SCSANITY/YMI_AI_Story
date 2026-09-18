@@ -723,8 +723,6 @@ const en: MessageDictionary = {
   'personalize.generatingCoverEstimate': 'Estimated time remaining',
   'personalize.generatingCoverOverrun': 'Still creating your cover — no need to refresh',
   'personalize.generatingCoverRetry': 'Review details and retry',
-  'personalize.reviewSampleLabel': 'Design sample · not customer reviews',
-  'personalize.reviewSampleCount': '{{count}} sample reviews',
   'personalize.editionUnavailable': 'This Preview is not ready for edition selection yet.',
   'personalize.editionSaveFailed': 'We could not save this edition. Please try again.',
   'personalize.signatureVoiceTitle': 'Make it a Signature Voice book',

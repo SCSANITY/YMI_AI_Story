@@ -107,7 +107,7 @@ function PersonalizeProductIntroComponent({
               {[0, 1, 2, 3, 4].map((index) => <Star key={index} className="h-4 w-4" fill="currentColor" />)}
               <span className="absolute inset-y-0 right-0 bg-[#fffaf4]/90" style={{ width: `${(5 - reviewDesignSample.rating) / 5 * 100}%` }} />
             </span>
-            <span className="font-bold tabular-nums text-slate-800">{reviewDesignSample.rating.toFixed(1)}/5</span>
+            <span className="font-bold tabular-nums text-slate-800">{reviewDesignSample.rating.toFixed(1)}</span>
             <span>· {reviewDesignSample.countLabel}</span>
           </div>
           <p className="mt-1 text-[11px] leading-4 text-slate-500">{reviewDesignSample.disclaimer}</p>

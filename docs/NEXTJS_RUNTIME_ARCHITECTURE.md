@@ -192,9 +192,10 @@ Product Intro reads the catalog's full `inner_description` before its short
 card `description`. One local disclosure island clamps the full text to two
 lines until expanded; its cleaned-up ResizeObserver only decides whether the
 accessible Read more/Read less control is needed. It neither changes routes
-nor introduces another catalog fetch or private-data cache. Illustrative stars
-and counts are deterministic per book and explicitly labelled as design samples,
-not customer reviews; they are not persisted or emitted as review structured data.
+nor introduces another catalog fetch or private-data cache. Production does not
+display invented ratings or review counts. The optional, explicitly labelled
+review design fixture is test-only; its score has no `/5` suffix. Real review
+presentation requires verified customer-review data, not removal of a sample label.
 
 Preview generation has no independent Loading page, overlay, or loading URL.
 `GENERATING` remains an internal job phase but renders the Preview layout from
@@ -208,6 +209,19 @@ never the countdown. Cancellation, navigation and logout preserve the Customize
 draft and use the owned-job cancellation path, including cancellation during
 job creation. Failed generation returns to the retained review form; restored
 cancelled jobs show an actionable inline failure.
+
+Polling retains signed image URLs by storage-object identity, not signing-token
+identity, and merges progressive snapshots without retracting existing leaves.
+The decoded cover is scoped to its job and object; ordinary polling cannot
+remount the book or reinsert its waiting surface. Explicit image-error recovery
+validates replacement URLs offscreen before committing them, and decoded cover
+and mounted-leaf buffers keep their previous image on transient renewal failure.
+A real job/object change resets readiness instead of showing another child's
+cover. No polling, ownership, image-error, or actual-readiness gate is bypassed.
+
+Generation permission, voice authorization, purchase acknowledgement and address
+saving all begin unchecked. Form/history restoration never implies permission;
+generation also checks consent in its action handler, beyond the disabled button.
 
 Edition cards have full-card native radio hit targets, keyboard semantics and
 urgent local selection feedback while the existing serialized/coalesced save

@@ -17,7 +17,7 @@ test('Preview generation uses one photo/details consent and keeps voice authoriz
     read('app/api/jobs/route.js'),
   ])
 
-  assert.match(action, /isDataGenerationConsentChecked, setIsDataGenerationConsentChecked\] = useState\(true\)/)
+  assert.match(action, /isDataGenerationConsentChecked, setIsDataGenerationConsentChecked\] = useState\(false\)/)
   assert.doesNotMatch(action, /isMarketingConsentChecked/)
   assert.match(action, /aria-required="true"/)
   assert.match(action, /labels\.required/)

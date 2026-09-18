@@ -1,6 +1,9 @@
 'use client'
 
 import type { BookLeaf } from '@/lib/book-presentation'
+import { useEffect, useState } from 'react'
+import { previewImageIdentity } from '@/lib/preview-image-continuity'
+import { decodePreviewImage } from './useDecodedPreviewCover'
 
 type BookLeafImageProps = {
   leaf: BookLeaf
@@ -19,9 +22,25 @@ export function BookLeafImage({
   fetchPriority = 'auto',
   onError,
 }: BookLeafImageProps) {
+  const identity = previewImageIdentity(leaf.url)
+  const [visible, setVisible] = useState({ identity, url: leaf.url })
+  // Reset only for another object, never for a signing-token renewal.
+  if (visible.identity !== identity) setVisible({ identity, url: leaf.url })
+  const visibleUrl = visible.identity === identity ? visible.url : leaf.url
+  useEffect(() => {
+    if (visibleUrl === leaf.url) return
+    let active = true
+    void decodePreviewImage(leaf.url).then(() => {
+      if (active) setVisible({ identity, url: leaf.url })
+    }).catch(() => {
+      // Keep the loaded leaf on a transient renewal failure. Initial visible
+      // image errors still use the caller's signed-URL recovery below.
+    })
+    return () => { active = false }
+  }, [identity, leaf.url, visibleUrl])
   return (
     <img
-      src={leaf.url}
+      src={visibleUrl}
       alt={alt}
       className={`absolute top-0 h-full max-w-none object-cover ${className}`}
       decoding="async"

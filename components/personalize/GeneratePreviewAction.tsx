@@ -35,7 +35,7 @@ function GeneratePreviewActionComponent({
   labels,
   onGenerate,
 }: GeneratePreviewActionProps) {
-  const [isDataGenerationConsentChecked, setIsDataGenerationConsentChecked] = useState(true)
+  const [isDataGenerationConsentChecked, setIsDataGenerationConsentChecked] = useState(false)
   const isFormValid = isFormReady && isDataGenerationConsentChecked
   const buttonLabel = useMemo(() => {
     if (isFacePreparing) return labels.photoPreparing
@@ -53,11 +53,12 @@ function GeneratePreviewActionComponent({
   ])
 
   const handleGenerate = useCallback(() => {
+    if (!isFormValid) return
     onGenerate({
       dataGeneration: isDataGenerationConsentChecked,
       signatureVoiceAuthorization: false,
     })
-  }, [isDataGenerationConsentChecked, onGenerate])
+  }, [isDataGenerationConsentChecked, isFormValid, onGenerate])
 
   return (
     <div className="mt-4 border-t border-slate-200 pt-4">

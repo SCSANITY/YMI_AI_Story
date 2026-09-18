@@ -8,6 +8,8 @@ import {
   type PreviewDisplayAssets,
 } from '@/lib/preview-book-presentation'
 import type { BookPresentation } from '@/lib/book-presentation'
+import { mergePreviewPresentation, retainPreviewImageUrl } from '@/lib/preview-image-continuity'
+import { decodePreviewImageRenewal } from './useDecodedPreviewCover'
 import {
   updatePreviewVariantDisplayAssets,
   type PreviewVariantView,
@@ -119,24 +121,25 @@ export function usePreviewController({
     setSelectedPreviewJobId(jobId)
   }, [previewJobId])
 
-  const applyPreviewDisplayAssets = useCallback((assets: PreviewDisplayAssets) => {
+  const applyPreviewDisplayAssets = useCallback((assets: PreviewDisplayAssets, renew = false) => {
     if (!assets.coverUrl) return false
     setPreviewPages(assets.urls)
-    setPreviewBookPresentation(assets.presentation)
-    setPreviewUrl(assets.coverUrl)
+    setPreviewBookPresentation((current) => mergePreviewPresentation(current, assets.presentation, renew))
+    setPreviewUrl((current) => retainPreviewImageUrl(current, assets.coverUrl, renew))
     return true
   }, [])
 
   const applyPreviewDisplayAssetsForJob = useCallback((
     jobId: string,
-    assets: PreviewDisplayAssets
+    assets: PreviewDisplayAssets,
+    renew = false
   ) => {
     if (!assets.coverUrl) return false
     setPreviewVariants((current) =>
       updatePreviewVariantDisplayAssets(current, jobId, assets)
     )
-    if (selectedJobIdRef.current && selectedJobIdRef.current !== jobId) return false
-    return applyPreviewDisplayAssets(assets)
+    if (activeJobIdRef.current && activeJobIdRef.current !== jobId) return false
+    return applyPreviewDisplayAssets(assets, renew)
   }, [applyPreviewDisplayAssets])
 
   const syncCapacityWaiting = useCallback((jobId: string, waiting: boolean) => {
@@ -289,8 +292,9 @@ export function usePreviewController({
         })
         if (!signedAssets) return false
         const assets = resolvePreviewDisplayAssets(signedAssets)
+        if (reason === 'image-error') await decodePreviewImageRenewal(assets.urls)
         if (activeJobIdRef.current !== jobId) return false
-        if (!applyPreviewDisplayAssetsForJob(jobId, assets)) return false
+        if (!applyPreviewDisplayAssetsForJob(jobId, assets, reason === 'image-error')) return false
         setError(null)
         lastRefreshAtRef.current = Date.now()
         if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PREVIEW_DEBUG === 'true') {

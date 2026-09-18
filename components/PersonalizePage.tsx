@@ -31,7 +31,7 @@ import { ProgressSteps } from '@/components/personalize/ProgressSteps';
 import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
 import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
 import { PreviewGeneratingCover } from '@/components/personalize/PreviewGeneratingCover';
-import { getBookReviewDesignSample } from '@/lib/book-review-design-sample';
+import { decodePreviewImage as waitForImageDecode, useDecodedPreviewCover } from '@/components/personalize/useDecodedPreviewCover';
 import { canHydrateEdition } from '@/lib/edition-hydration';
 import { PreviewIntroHeader } from '@/components/personalize/PreviewIntroHeader';
 import { PreviewShareDialog } from '@/components/personalize/PreviewShareDialog';
@@ -127,29 +127,6 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<TimedResul
     timeout,
   ]).finally(() => {
     if (timeoutId) clearTimeout(timeoutId);
-  });
-}
-
-function waitForImageDecode(url: string, timeoutMs = 15_000) {
-  return new Promise<void>((resolve, reject) => {
-    const image = new Image();
-    const timer = window.setTimeout(() => reject(new Error('Preview cover timed out')), timeoutMs);
-    const finish = (error?: Error) => {
-      window.clearTimeout(timer);
-      image.onload = null;
-      image.onerror = null;
-      if (error) reject(error);
-      else resolve();
-    };
-    image.onload = () => {
-      if (typeof image.decode === 'function') {
-        void image.decode().catch(() => undefined).finally(() => finish());
-      } else {
-        finish();
-      }
-    };
-    image.onerror = () => finish(new Error('Preview cover failed to load'));
-    image.src = url;
   });
 }
 
@@ -304,7 +281,6 @@ export default function PersonalizePage({
   const pageToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
-  const [decodedPreviewCoverUrl, setDecodedPreviewCoverUrl] = useState<string | null>(null);
   const [facePrepareStatus, setFacePrepareStatus] = useState<FacePrepareStatus>('idle');
   const [preparedFaceFile, setPreparedFaceFile] = useState<File | null>(null);
   const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
@@ -821,21 +797,15 @@ export default function PersonalizePage({
     ];
   }, [book?.title, t, templateTitle]);
 
-  const hasReadyPreviewCover = Boolean(previewUrl && decodedPreviewCoverUrl === previewUrl);
-  const isPreviewCoverPending = viewState.showPreview && (stage === 'GENERATING' || !hasReadyPreviewCover);
+  const decodedPreviewCover = useDecodedPreviewCover(displayedPreviewJobId, previewUrl, setPreviewError);
+  const hasReadyPreviewCover = decodedPreviewCover.isReady;
+  const isPreviewCoverPending = viewState.showPreview && !hasReadyPreviewCover;
+  const visiblePreviewPresentation = useMemo(() => {
+    if (!previewBookPresentation?.cover || !decodedPreviewCover.url) return previewBookPresentation;
+    return { ...previewBookPresentation, cover: { ...previewBookPresentation.cover, url: decodedPreviewCover.url } };
+  }, [decodedPreviewCover.url, previewBookPresentation]);
   const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && !previewError;
   const canCheckout = stageCanCheckout && hasReadyPreviewCover && !previewError;
-
-  useEffect(() => {
-    if (!previewUrl) return;
-    let active = true;
-    void waitForImageDecode(previewUrl).then(() => {
-      if (active) setDecodedPreviewCoverUrl(previewUrl);
-    }).catch((error) => {
-      if (active) setPreviewError(error instanceof Error ? error.message : 'Preview cover could not be loaded');
-    });
-    return () => { active = false; };
-  }, [previewUrl, setPreviewError]);
 
   // Visual state used by the book animation shell.
   const isClosing = isFlipping && flipDirection === 'prev' && currentSpread === 1;
@@ -2943,7 +2913,7 @@ export default function PersonalizePage({
       side={side}
       spreadIndex={spreadIndex}
       previewImageErrors={previewImageErrors}
-      bookPresentation={previewBookPresentation}
+      bookPresentation={visiblePreviewPresentation}
       previewFirstSpreadPresentation={previewFirstSpreadPresentation}
       lockedPreviewPresentation={lockedPreviewPresentation}
       currentSpread={currentSpread}
@@ -3182,11 +3152,6 @@ export default function PersonalizePage({
                         description={resolvedBook?.innerDescription || resolvedBook?.description || book.description}
                         readMoreLabel={t('personalize.readMore')}
                         readLessLabel={t('personalize.readLess')}
-                        reviewDesignSample={{
-                          rating: getBookReviewDesignSample(bookID).rating,
-                          countLabel: t('personalize.reviewSampleCount', { count: getBookReviewDesignSample(bookID).count }),
-                          disclaimer: t('personalize.reviewSampleLabel'),
-                        }}
                         facts={[
                           { icon: 'age', label: t('personalize.productFactAge', { ageRange: book.ageLabel ?? `${minimumRecommendedAge}+` }) },
                           { icon: 'personalized', label: t('personalize.productFactPersonalized') },

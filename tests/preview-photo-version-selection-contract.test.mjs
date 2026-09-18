@@ -26,11 +26,11 @@ test('Photo Versions selection switches the saved book snapshot immediately', ()
 test('late image responses cannot overwrite a different selected photo version', () => {
   assert.match(
     controller,
-    /selectedJobIdRef\.current && selectedJobIdRef\.current !== jobId[\s\S]*?return false/
+    /activeJobIdRef\.current && activeJobIdRef\.current !== jobId[\s\S]*?return false/
   )
   assert.match(
     controller,
-    /getPreviewPageAssets\(jobId,[\s\S]*?applyPreviewDisplayAssetsForJob\(jobId, assets\)/
+    /getPreviewPageAssets\(jobId,[\s\S]*?applyPreviewDisplayAssetsForJob\(jobId, assets(?:, reason === 'image-error')?\)/
   )
   assert.doesNotMatch(personalize, /getPreviewPageAssets/)
   assert.equal(
