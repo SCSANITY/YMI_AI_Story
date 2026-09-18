@@ -11,7 +11,7 @@ test('Home moves the complete catalogue closer to Hero through responsive top pa
   const categories = await read('components/HomeBookCategories.tsx')
   const sectionClasses = categories.match(/<section className="([^"]+)"/)?.[1]
 
-  assert.equal(sectionClasses, 'page-surface page-surface--flush-bottom relative pt-8 pb-10 md:pt-12 md:pb-14')
+  assert.equal(sectionClasses, 'page-surface page-surface--flush-bottom relative pt-10 pb-10 md:pt-14 md:pb-14')
   assert.match(categories, /className="space-y-14 md:space-y-20"/)
   assert.match(categories, /mb-7 flex flex-col gap-4[^"\n]*md:mb-9/)
   assert.match(categories, /grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-8/)
