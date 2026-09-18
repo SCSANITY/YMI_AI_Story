@@ -15,6 +15,7 @@ import {
 import { motion, useReducedMotion } from 'framer-motion'
 import { useI18n } from '@/lib/useI18n'
 import { useRouter } from 'next/navigation'
+import styles from './MobileHomeScene.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ export const Hero: React.FC = () => {
     <div className="relative w-full overflow-x-hidden">
 
       {/* Mobile flows to content height; desktop keeps its full-viewport scene. */}
-      <div className="relative w-full bg-[#fff9f2] md:min-h-[100svh] md:bg-transparent">
+      <div className={`relative w-full md:min-h-[100svh] md:bg-transparent ${styles.mobileHero}`}>
 
         {/* The poster paints immediately while device-sized autoplay video starts. */}
         <div className="absolute inset-x-0 top-0 z-0 h-[calc(4rem+56.25vw)] overflow-hidden bg-[#fff9f2] md:inset-0 md:h-auto md:bg-[#f7e2d0]">
@@ -135,8 +136,8 @@ export const Hero: React.FC = () => {
             aria-hidden="true"
             className="absolute inset-x-0 top-16 aspect-video w-full bg-[#f4d5bd] object-cover md:inset-0 md:h-full md:bg-[#f7e2d0]"
           />
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#fff9f2] to-transparent md:hidden" />
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-16 h-4 bg-gradient-to-b from-[#fff9f2]/60 to-transparent md:hidden" />
+          <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 bottom-0 md:hidden ${styles.mobileVideoTransition}`} />
+          <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-16 h-4 md:hidden ${styles.mobileVideoTop}`} />
         </div>
 
         {/* ── Gradient overlays ──────────────────────────────────────────── */}
@@ -191,7 +192,7 @@ export const Hero: React.FC = () => {
                 initial={{ y: 20 }}
                 animate={{ y: 0 }}
                 transition={{ delay: 0.34, duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
-                className="block text-[clamp(2rem,8.2vw,2.75rem)] bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 bg-clip-text text-transparent md:text-[clamp(2.4rem,5.5vw,5rem)]"
+                className={`block text-[clamp(2rem,8.2vw,2.75rem)] bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 bg-clip-text text-transparent md:text-[clamp(2.4rem,5.5vw,5rem)] ${styles.mobileHeadlineAccent}`}
               >
                 {t('hero.titleLine2')}
               </motion.span>

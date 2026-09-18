@@ -17,7 +17,7 @@ test('Checkout applies a Stripe-cancel payment resume only once', () => {
 })
 
 test('Checkout Back consumes the payment resume marker before returning to address', () => {
-  const backHandler = checkout.match(/const goBackStep = useCallback\([\s\S]*?\n  \}, \[requiresShipping, step\]\);/)?.[0] ?? ''
+  const backHandler = checkout.match(/const goBackStep = useCallback\([\s\S]*?\n  \}, \[step\]\);/)?.[0] ?? ''
 
   assert.match(
     backHandler,

@@ -2,23 +2,42 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   getBookPackagePrice,
+  getCatalogDisplayPrice,
   packagePriceRowsToPricing,
   packageTypeToProductType,
   resolveBookPackageTypeFromSnapshot,
 } from './package-pricing'
 import { templateRowsToBooks, type TemplateCatalogRow } from './book-catalog'
 
-test('builds the required three-package pricing contract and derives markdown percent', () => {
+test('builds only two physical packages while excluding retired database rows', () => {
   const pricing = packagePriceRowsToPricing([
     { package_type: 'digital', list_price_usd: 29.99, sale_price_usd: 19.99, row_version: 2 },
     { package_type: 'basic', list_price_usd: 49.99, sale_price_usd: null, row_version: 1 },
     { package_type: 'supreme', list_price_usd: 99.99, sale_price_usd: 79.99, row_version: 4 },
   ])
 
-  assert.equal(pricing.digital.effectivePriceUsd, 19.99)
-  assert.equal(pricing.digital.discountPercent, 33)
+  assert.deepEqual(Object.keys(pricing), ['basic', 'supreme'])
   assert.equal(pricing.basic.effectivePriceUsd, 49.99)
   assert.equal(pricing.supreme.version, 4)
+})
+
+test('retired pricing cannot leak into public cards or bypass direct price validation', () => {
+  const rows = [
+    { package_type: 'digital', list_price_usd: 'invalid', row_version: null },
+    { package_type: 'basic', list_price_usd: 35.9, row_version: 1 },
+    { package_type: 'supreme', list_price_usd: 65.9, row_version: 2 },
+  ]
+  const pricing = packagePriceRowsToPricing(rows)
+  assert.equal(getCatalogDisplayPrice(pricing, 'digital').effectivePriceUsd, 35.9)
+  const [book] = templateRowsToBooks([{
+    template_id: 'retirement_story', name: 'Story',
+    catalog_display_package_type: 'digital', package_prices: rows,
+  }])
+  assert.equal(book.catalogDisplayPackageType, 'basic')
+  assert.equal(book.price, 35.9)
+  assert.throws(() => getBookPackagePrice(book, 'digital'), /Unsupported package type/)
+  assert.throws(() => packagePriceRowsToPricing([...rows, rows[1]]), /duplicate/)
+  assert.throws(() => packagePriceRowsToPricing([...rows, { package_type: 'unknown' }]), /Unsupported/)
 })
 
 test('fails closed when one sellable package is missing or sale price is invalid', () => {
@@ -28,8 +47,7 @@ test('fails closed when one sellable package is missing or sale price is invalid
   ]), /Missing supreme/)
 
   assert.throws(() => packagePriceRowsToPricing([
-    { package_type: 'digital', list_price_usd: 20, sale_price_usd: 20, row_version: 1 },
-    { package_type: 'basic', list_price_usd: 40, row_version: 1 },
+    { package_type: 'basic', list_price_usd: 40, sale_price_usd: 40, row_version: 1 },
     { package_type: 'supreme', list_price_usd: 80, row_version: 1 },
   ]), /must be below list price/)
 })
@@ -37,24 +55,22 @@ test('fails closed when one sellable package is missing or sale price is invalid
 test('keeps marketing discount display separate from the computed and charged sale price', () => {
   const pricing = packagePriceRowsToPricing([
     {
-      package_type: 'digital',
+      package_type: 'basic',
       list_price_usd: 9.9,
       sale_price_usd: 5.9,
       display_discount_percent: 45,
       row_version: 1,
     },
-    { package_type: 'basic', list_price_usd: 49.99, row_version: 1 },
     { package_type: 'supreme', list_price_usd: 99.99, row_version: 1 },
   ])
 
-  assert.equal(pricing.digital.effectivePriceUsd, 5.9)
-  assert.equal(pricing.digital.computedDiscountPercent, 40)
-  assert.equal(pricing.digital.displayDiscountPercent, 45)
-  assert.equal(pricing.digital.discountPercent, 45)
+  assert.equal(pricing.basic.effectivePriceUsd, 5.9)
+  assert.equal(pricing.basic.computedDiscountPercent, 40)
+  assert.equal(pricing.basic.displayDiscountPercent, 45)
+  assert.equal(pricing.basic.discountPercent, 45)
 
   assert.throws(() => packagePriceRowsToPricing([
-    { package_type: 'digital', list_price_usd: 9.9, display_discount_percent: 40, row_version: 1 },
-    { package_type: 'basic', list_price_usd: 49.99, row_version: 1 },
+    { package_type: 'basic', list_price_usd: 9.9, display_discount_percent: 40, row_version: 1 },
     { package_type: 'supreme', list_price_usd: 99.99, row_version: 1 },
   ]), /requires a sale price/)
 })
@@ -85,9 +101,9 @@ test('projects the selected public package and explicit Home placement positions
 
 test('reads the package from the creation snapshot and excludes legacy premium', () => {
   assert.equal(resolveBookPackageTypeFromSnapshot({ textOverrides: { book_type: 'supreme' } }), 'supreme')
-  assert.equal(resolveBookPackageTypeFromSnapshot({ bookType: 'digital' }), 'digital')
+  assert.equal(resolveBookPackageTypeFromSnapshot({ bookType: 'digital' }), null)
   assert.equal(resolveBookPackageTypeFromSnapshot({ text_overrides: { bookType: 'premium' } }), null)
-  assert.equal(packageTypeToProductType('digital'), 'ebook')
+  assert.equal(packageTypeToProductType('basic'), 'physical')
   assert.equal(packageTypeToProductType('supreme'), 'physical')
 })
 

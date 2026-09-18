@@ -6,6 +6,9 @@ import {
   recoverPurchasedCreationOwnership,
 } from '@/lib/purchase-ownership-recovery'
 import { supabasePurchaseOwnershipRecoveryStore } from '@/lib/purchase-ownership-recovery-store'
+import { loadAuthoritativeCreationPackagePrice, PackagePricingStoreError } from '@/lib/package-pricing-store'
+import { parseCartItemQuantity } from '@/lib/cart-quantity'
+import { isUuid } from '@/lib/validators'
 
 const COOKIE_NAME = 'ymi_anon_session'
 const FIRST_REMINDER_MINUTES = Number(
@@ -19,12 +22,6 @@ function getCookieValue(cookies: string, name: string) {
     .map((cookie) => cookie.trim())
     .find((cookie) => cookie.startsWith(`${name}=`))
   return entry ? entry.split('=')[1] : null
-}
-
-function mapProductType(bookType?: string) {
-  if (bookType === 'digital') return 'ebook'
-  if (bookType === 'audio') return 'audio'
-  return 'physical'
 }
 
 export async function POST(request: Request) {
@@ -293,17 +290,38 @@ export async function POST(request: Request) {
   }
 
   if (cart.length > 0 && !anonSessionId) {
-    const rows = cart
-      .map((item: any) => ({
-        owner_type: 'customer',
-        customer_id: customer.customer_id,
-        creation_id: item.creationId ?? item.personalization?.creationId ?? null,
-        product_type: mapProductType(item.personalization?.bookType),
-        status: 'cart',
-        quantity: item.quantity ?? 1,
-        price_at_purchase: item.priceAtPurchase ?? item.book?.price ?? null,
-      }))
-      .filter((row: any) => Boolean(row.creation_id))
+    const rows = []
+    // Local-cart recovery uses the same owned, server-priced physical products
+    // as Add to Cart. Never recreate a retired edition or trust a client price.
+    for (const item of cart.slice(0, 100)) {
+      const creationId = item?.creationId ?? item?.personalization?.creationId
+      if (!isUuid(creationId)) continue
+      let quantity: number
+      try { quantity = parseCartItemQuantity(item?.quantity) } catch { continue }
+      try {
+        const pricing = await loadAuthoritativeCreationPackagePrice({
+          creationId,
+          owner: {
+            ownerType: 'customer', customerId: customer.customer_id,
+            email, authUserId: user.id, anonSessionId: null,
+          },
+        })
+        rows.push({
+          owner_type: 'customer',
+          customer_id: customer.customer_id,
+          creation_id: creationId,
+          product_type: pricing.productType,
+          package_type: pricing.packageType,
+          package_price_version: pricing.packagePriceVersion,
+          status: 'cart',
+          quantity,
+          price_at_purchase: pricing.priceAtPurchase,
+        })
+      } catch (error) {
+        if (error instanceof PackagePricingStoreError && error.status < 500) continue
+        throw error
+      }
+    }
     if (rows.length) {
       await supabaseAdmin.from('cart_items').insert(rows)
     }

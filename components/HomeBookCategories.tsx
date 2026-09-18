@@ -54,7 +54,8 @@ const HOME_BOOK_CATEGORIES: HomeBookCategory[] = [
 
 function getCategoryBooks(allBooks: Book[], category: HomeBookCategory): Book[] {
   return allBooks
-    .filter((book) => book.homePlacementPositions?.[category.sectionId] !== undefined)
+    .filter((book) => book.homePlacementPositions?.[category.sectionId] !== undefined
+      && (category.sectionId !== 'in_discount' || book.isDiscount))
     .sort((left, right) => (
       (left.homePlacementPositions?.[category.sectionId] ?? 99)
       - (right.homePlacementPositions?.[category.sectionId] ?? 99)

@@ -80,7 +80,7 @@ export async function GET() {
       name: String(row.name || row.template_id),
       isActive: Boolean(row.is_active),
       coverUrl: templateStorageUrl(row.normalized_cover_image_path || row.cover_image_path),
-      catalogDisplayPackageType: normalizeBookPackageType(row.catalog_display_package_type) ?? 'digital',
+      catalogDisplayPackageType: normalizeBookPackageType(row.catalog_display_package_type) ?? 'basic',
       packagePricing: packagePriceRowsToPricing(row.package_prices),
     }))
     const homeSections = (sectionStateResult.data ?? []).map((section) => ({

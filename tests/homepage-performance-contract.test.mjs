@@ -11,7 +11,7 @@ test('mobile Hero is edge-to-edge and content-height while desktop keeps its ful
   const hero = await read('components/Hero.tsx')
 
   assert.equal((hero.match(/<video\b/g) ?? []).length, 1)
-  assert.match(hero, /className="relative w-full bg-\[#fff9f2\] md:min-h-\[100svh\] md:bg-transparent"/)
+  assert.match(hero, /relative w-full md:min-h-\[100svh\] md:bg-transparent \$\{styles.mobileHero\}/)
   assert.match(hero, /className="absolute inset-x-0 top-16 aspect-video w-full bg-\[#f4d5bd\] object-cover md:inset-0 md:h-full md:bg-\[#f7e2d0\]"/)
   assert.match(hero, /h-\[calc\(4rem\+56\.25vw\)\] shrink-0 md:hidden/)
   assert.match(hero, /className="hidden flex-1 md:block"/)
@@ -38,11 +38,20 @@ test('mobile highlights retain all six facts without floating glass bubbles or h
   assert.match(hero, /const goToBooks = \(\) => router\.push\('\/books'\)/)
 })
 
-test('the mobile Home toolbar uses the Hero cream surface without changing other route or desktop shells', async () => {
+test('mobile Home shares a warm layered material and video transition without changing desktop or other route shells', async () => {
   const navbar = await read('components/Navbar.tsx')
+  const hero = await read('components/Hero.tsx')
+  const material = await read('components/MobileHomeScene.module.css')
 
   assert.match(navbar, /const isTransparent = isHomePage && !scrolled/)
-  assert.match(navbar, /isTransparent\s*\? 'bg-\[#fff9f2\] md:bg-transparent backdrop-blur-none/)
+  assert.match(navbar, /isHomePage \? homeStyles.mobileHomeNav : ''/)
+  assert.match(navbar, /isTransparent\s*\? 'md:bg-transparent backdrop-blur-none/)
+  assert.match(material, /@media \(max-width: 767px\)/)
+  assert.match(material, /\.mobileHomeNav\.mobileHomeNav[\s\S]*backdrop-filter: blur\(16px\)/)
+  assert.match(material, /\.mobileHero[\s\S]*radial-gradient/)
+  assert.match(hero, /aria-hidden="true"[^\n]*styles.mobileVideoTransition/)
+  assert.match(material, /\.mobileVideoTransition::after[\s\S]*border-radius: 50% 65% 0 0/)
+  assert.doesNotMatch(material, /animation:|url\(/)
   assert.match(navbar, /text-gray-700 md:text-white/)
   assert.match(navbar, /md:border-white\/35 md:bg-white\/10 md:text-white/)
   assert.match(navbar, /className="container mx-auto px-4 h-16 flex items-center justify-between"/)

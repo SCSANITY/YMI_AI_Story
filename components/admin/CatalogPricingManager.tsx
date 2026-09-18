@@ -38,7 +38,6 @@ const PACKAGE_META: Array<{
   type: BookPackageType
   name: string
 }> = [
-  { type: 'digital', name: 'Cloud Explorer' },
   { type: 'basic', name: 'Classic Portrait' },
   { type: 'supreme', name: 'Signature Voice' },
 ]
@@ -69,12 +68,11 @@ export function CatalogPricingManager() {
   const [templates, setTemplates] = useState<CatalogTemplate[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<BookPackageType, PriceDraft> | null>(null)
-  const [displayPackageDraft, setDisplayPackageDraft] = useState<BookPackageType>('digital')
+  const [displayPackageDraft, setDisplayPackageDraft] = useState<BookPackageType>('basic')
   const [homeSections, setHomeSections] = useState<CatalogHomeSection[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [pendingPackages, setPendingPackages] = useState<Record<BookPackageType, boolean>>({
-    digital: false,
     basic: false,
     supreme: false,
   })
@@ -83,7 +81,7 @@ export function CatalogPricingManager() {
   const [success, setSuccess] = useState<string | null>(null)
   const loadIntentRef = useRef(0)
   const selectedTemplateIdRef = useRef<string | null>(null)
-  const saveIntentRef = useRef<Record<BookPackageType, number>>({ digital: 0, basic: 0, supreme: 0 })
+  const saveIntentRef = useRef<Record<BookPackageType, number>>({ basic: 0, supreme: 0 })
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.templateId === selectedTemplateId) ?? null,
@@ -153,7 +151,7 @@ export function CatalogPricingManager() {
       selectedTemplateIdRef.current = nextSelectedId
       setSelectedTemplateId(nextSelectedId)
       setDrafts(nextSelected ? pricingDrafts(nextSelected) : null)
-      setDisplayPackageDraft(nextSelected?.catalogDisplayPackageType ?? 'digital')
+      setDisplayPackageDraft(nextSelected?.catalogDisplayPackageType ?? 'basic')
     } catch (loadError) {
       if (loadIntentRef.current !== intent) return
       setError(loadError instanceof Error ? loadError.message : 'Failed to load catalog pricing')

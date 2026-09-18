@@ -7,9 +7,10 @@ import {
   resolvePurchasePackageFromSnapshot,
 } from './purchase-configuration'
 
-test('normalizes only the three sellable editions plus supported historical aliases', () => {
-  assert.equal(normalizePurchasePackageType('digital'), 'digital')
-  assert.equal(normalizePurchasePackageType('ebook'), 'digital')
+test('normalizes only physical editions and rejects retired products and aliases', () => {
+  assert.equal(normalizePurchasePackageType('digital'), null)
+  assert.equal(normalizePurchasePackageType('ebook'), null)
+  assert.equal(normalizePurchasePackageType('Cloud Explorer'), null)
   assert.equal(normalizePurchasePackageType('classic'), 'basic')
   assert.equal(normalizePurchasePackageType('Signature Voice'), 'supreme')
   assert.equal(normalizePurchasePackageType('premium'), null)

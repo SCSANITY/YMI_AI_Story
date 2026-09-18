@@ -79,3 +79,23 @@ test('normalizes retired package values to the current basic package', () => {
     'basic'
   )
 })
+
+test('retired digital unpaid drafts retain child details and the prepared photo', () => {
+  const storage = createStorage()
+  const draft = {
+    version: 1,
+    ownerKey: 'anonymous-session',
+    step: 'REVIEW',
+    name: 'Avery',
+    age: '7',
+    language: 'English',
+    bookType: 'digital',
+    faceAssetId: 'face-1',
+    faceStoragePath: 'faces/face-1.webp',
+  }
+  storage.setItem('ymi_personalize_form_draft_book-1', JSON.stringify(draft))
+  assert.deepEqual(
+    readPersonalizeFormDraft(storage, 'book-1', 'anonymous-session'),
+    { ...draft, bookType: 'basic' }
+  )
+})

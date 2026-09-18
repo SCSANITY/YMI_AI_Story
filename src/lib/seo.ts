@@ -4,7 +4,7 @@ export const SITE_URL = 'https://www.ymistory.com'
 export const SITE_NAME = 'YMI Story'
 export const DEFAULT_SITE_TITLE = 'YMI Story | Personalized Children\'s Storybooks'
 export const DEFAULT_SITE_DESCRIPTION =
-  'Create personalized children\'s storybooks where your child becomes the hero through AI-powered illustrations, magical previews, and beautiful digital delivery.'
+  'Create personalized children\'s storybooks where your child becomes the hero through AI-powered illustrations, magical previews, and beautifully printed hardcover keepsakes.'
 export const DEFAULT_OG_IMAGE = '/og/ymi-story-og.png'
 
 export function absoluteUrl(path: string) {

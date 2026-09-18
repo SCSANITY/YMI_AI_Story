@@ -59,10 +59,9 @@ function MagicAttributesPanelComponent({
                   <Icon className={`h-4 w-4 shrink-0 ${display.iconClassName}`} aria-hidden="true" />
                   <span className="truncate">{label}</span>
                 </span>
-                <span className="shrink-0 tabular-nums text-slate-500">{percent}%</span>
               </div>
               <div
-                className="h-2.5 overflow-hidden rounded-full bg-slate-200"
+                className="h-3.5 overflow-hidden rounded-full bg-slate-200"
                 role="progressbar"
                 aria-label={label}
                 aria-valuemin={0}

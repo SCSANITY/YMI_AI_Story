@@ -144,9 +144,12 @@ governance repository.
   early high-priority React resource hint.
 - Below 768px, Hero uses a content-height layout: the shared 64px Home toolbar,
   borderless full-width 16:9 video, warm edge fades, compact headline/CTA and
-  two-column icon/text highlights. There is no framed video, full-screen filler
-  or mobile glass/float treatment. All six existing facts and the Books action
-  remain. Only Home's unscrolled phone toolbar uses matching cream/dark controls;
+  two-column icon/text highlights. There is no framed video or full-screen filler.
+  `MobileHomeScene.module.css` owns the mobile-only translucent amber toolbar,
+  static fine-grain peach/amber paper, and curved video-to-content gradient seam.
+  These styles are scoped below 768px; they add no asset fetch or animation loop.
+  All six existing facts and the Books action remain. Only Home's unscrolled
+  phone toolbar uses the warm translucent material and dark controls;
   other routes and desktop transparent navigation retain their existing shell.
   The existing desktop Hero scene, fonts, bubbles and layout remain at `md` and
   wider. One cleaned-up breakpoint listener controls desktop-only fact floating,
@@ -159,6 +162,41 @@ governance repository.
   intentional `<html>` data-attribute difference is scoped with React's
   hydration-warning boundary; application-shell descendant mismatches remain
   visible and are never suppressed.
+
+## Personalize guidance and current editions
+
+`PersonalizeProductIntro` owns its mobile scroll guide locally, without adding
+viewport or scrolling state to the Personalize controller. One cleaned-up
+IntersectionObserver watches the original CTA. The bottom button uses the same
+brand-button class and appears only while that CTA is below the viewport. It is
+portalled outside the animated form's containing block, respects the device safe
+area, and is hidden from desktop layout. Activation only scrolls the original
+CTA into view (without smooth motion when reduced motion is preferred) and
+dismisses the guide for that book. Only the original CTA starts the form. The
+Intro is keyed by book identity so switching books resets this presentation-only
+state. No job, route, upload, consent or cache authority is added.
+
+Magic Attributes retain database-controlled, clamped fill values and accessible
+progressbar labels/values. Visible percentage labels are absent; the bars are
+14px thick on desktop and mobile.
+
+The current sellable package contract is exactly `basic` (Classic Portrait) and
+`supreme` (Signature Voice), both physical. Cloud Explorer is not a current
+option, artwork, marketing format, Admin pricing input, creation configuration,
+job request, cart-price authority or new payment session. Catalog reads exclude
+retired digital price rows and interpret legacy catalog display metadata through
+the current basic price; unknown or incomplete physical prices still fail closed.
+Home discount slots must also have an actual current physical sale price.
+Checkout always requires address and shipping. Unpaid orders containing retired
+packages are rejected before Stripe session creation or reuse, and local-cart
+recovery uses owned creation/server price authority rather than client prices.
+
+This offering change does not erase historical paid orders, stored type labels,
+customer assets or database enum values. Final Review, PDF generation/release,
+reader access, Signature Voice delivery and existing paid-payment callbacks keep
+their contracts. The catalog database default/seed/guard successor is released
+separately through the database component's migration ledger and runbook, never
+as a Web build side effect.
 
 ## Worker queue boundary
 

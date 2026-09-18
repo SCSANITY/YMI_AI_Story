@@ -43,7 +43,9 @@ test('PX-001 refinement removes the duplicated top-bar title and restores compac
   assert.match(attributes, /role="progressbar"/)
   assert.match(attributes, /style=\{\{ width: `\$\{percent\}%` \}\}/)
   assert.match(attributes, /max-w-\[520px\]/)
-  assert.match(attributes, /h-2\.5 overflow-hidden/)
+  assert.match(attributes, /h-3\.5 overflow-hidden/)
+  assert.doesNotMatch(attributes, /\{percent\}%<\/span>/)
+  assert.match(attributes, /aria-valuenow=\{percent\}/)
   assert.doesNotMatch(attributes, /attributes\.slice\(/)
   assert.doesNotMatch(carousel, /uploadPanelRef|uploadRect/)
   assert.doesNotMatch(carousel, /useEffect\(\(\) => \{[\s\S]{0,160}setActiveIndex\(0\)/)
@@ -64,7 +66,6 @@ test('PX-001 uses truthful edition artwork with graceful image failure behavior'
   assert.match(purchasePanel, /imageFailed \? 'grid-cols-/)
 
   await Promise.all([
-    access(new URL('public/personalize-editions/cloud-explorer.svg', root)),
     access(new URL('public/personalize-editions/classic-portrait.svg', root)),
     access(new URL('public/personalize-editions/signature-voice.svg', root)),
   ])

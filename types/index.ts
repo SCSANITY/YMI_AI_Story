@@ -14,7 +14,7 @@ export type MagicAttribute = {
   percent: number;
 }
 
-export type BookPackageType = 'digital' | 'basic' | 'supreme';
+export type BookPackageType = 'basic' | 'supreme';
 export type HomeBookSectionKey = 'brand_new' | 'for_boys' | 'for_girls' | 'in_discount';
 
 export type BookPackagePrice = {
@@ -109,6 +109,7 @@ export interface PersonalizationData {
   creationId?: string;
   textOverrides?: Record<string, unknown>;
   params?: Record<string, unknown>;
+  // Historical paid snapshots remain readable; only BookPackageType is sellable.
   bookType?: 'digital' | 'basic' | 'premium' | 'supreme';
 }
 

@@ -5,7 +5,7 @@ import type {
   BookPackageType,
 } from '@/types'
 
-export const SELLABLE_BOOK_PACKAGE_TYPES = ['digital', 'basic', 'supreme'] as const
+export const SELLABLE_BOOK_PACKAGE_TYPES = ['basic', 'supreme'] as const
 
 export type TemplatePackagePriceRow = {
   package_type?: unknown
@@ -63,7 +63,11 @@ export function resolveBookPackageTypeFromSnapshot(snapshotValue: unknown): Book
 }
 
 export function packageTypeToProductType(packageType: BookPackageType) {
-  return packageType === 'digital' ? ('ebook' as const) : ('physical' as const)
+  // Both current editions are physical books. PDFs are release artifacts, not products.
+  if (!normalizeBookPackageType(packageType)) {
+    throw new PackagePricingContractError('Unsupported package type')
+  }
+  return 'physical' as const
 }
 
 export function packagePriceRowToModel(row: TemplatePackagePriceRow): BookPackagePrice {
@@ -117,7 +121,11 @@ export function packagePriceRowsToPricing(rowsValue: unknown): BookPackagePricin
     throw new PackagePricingContractError('Package pricing relation is missing')
   }
 
-  const entries = rowsValue.map((row) => packagePriceRowToModel(row as TemplatePackagePriceRow))
+  // Retired rows may remain in the immutable database/history. They must never
+  // enter the public pricing model or prevent valid physical editions loading.
+  const entries = rowsValue
+    .filter((row) => String(row?.package_type ?? '').trim().toLowerCase() !== 'digital')
+    .map((row) => packagePriceRowToModel(row as TemplatePackagePriceRow))
   const byType = new Map(entries.map((entry) => [entry.packageType, entry]))
 
   for (const packageType of SELLABLE_BOOK_PACKAGE_TYPES) {
@@ -131,20 +139,20 @@ export function packagePriceRowsToPricing(rowsValue: unknown): BookPackagePricin
   }
 
   return {
-    digital: byType.get('digital')!,
     basic: byType.get('basic')!,
     supreme: byType.get('supreme')!,
   }
 }
 
 export function getBookPackagePrice(book: Book, packageTypeValue: unknown): BookPackagePrice {
-  const packageType = normalizeBookPackageType(packageTypeValue) ?? 'basic'
+  const packageType = normalizeBookPackageType(packageTypeValue)
+  if (!packageType) throw new PackagePricingContractError('Unsupported package type')
   const configured = book.packagePricing?.[packageType]
   if (configured) return configured
   throw new PackagePricingContractError(`Missing ${packageType} package price on book`)
 }
 
 export function getCatalogDisplayPrice(pricing: BookPackagePricing, packageTypeValue: unknown) {
-  const packageType = normalizeBookPackageType(packageTypeValue) ?? 'digital'
+  const packageType = normalizeBookPackageType(packageTypeValue) ?? 'basic'
   return pricing[packageType]
 }

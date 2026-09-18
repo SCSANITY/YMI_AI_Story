@@ -26,6 +26,7 @@ import {
   createOrderCheckoutFingerprint,
 } from '@/lib/checkout-session-lock'
 import { getSiteUrl } from '@/lib/site-url'
+import { normalizeBookPackageType } from '@/lib/package-pricing'
 
 function checkoutSessionMatchesSiteOrigin(
   session: { success_url?: string | null; cancel_url?: string | null },
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const orderId = String(body?.orderId || '').trim()
     const email = String(body?.email || '').trim().toLowerCase()
-    let shippingAddress = body?.shippingAddress ?? {}
+    const shippingAddress = body?.shippingAddress ?? {}
     let shippingAmountUsd = 0
     let shippingRateSnapshot: Record<string, unknown> | null = null
     let shippingMethod: string | null = null
@@ -85,6 +86,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Order is no longer payable' }, { status: 400 })
     }
 
+    // Validate current products before returning a pre-existing payment session,
+    // calculating shipping, or changing any order/Stripe state. Retired unpaid
+    // editions must be removed and reconfigured; paid history is untouched.
+    const { data: cartItemTypes, error: cartItemTypesError } = await supabaseAdmin
+      .from('cart_items')
+      .select('cart_item_id, product_type, package_type')
+      .eq('order_id', orderId)
+      .eq('status', 'ordered')
+      .eq('owner_type', filter.owner_type)
+      .eq(filter.column, filter.value)
+    if (cartItemTypesError || !cartItemTypes || cartItemTypes.length === 0) {
+      return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
+    }
+    if (cartItemTypes.some((item) => item.product_type !== 'physical' || !normalizeBookPackageType(item.package_type))) {
+      return NextResponse.json({
+        error: 'An edition in this order is no longer available. Remove it and select a hardcover edition in Preview.',
+        code: 'edition_no_longer_available',
+      }, { status: 409 })
+    }
+
     const stripe = getStripeServer()
     const baseUrl = getSiteUrl(request.url)
     if (order.checkout_session_id) {
@@ -111,29 +132,7 @@ export async function POST(request: Request) {
       await clearOrderCheckoutSessionLock(orderId, existingSession.id)
     }
 
-    const cartItemTypesQuery = supabaseAdmin
-      .from('cart_items')
-      .select('cart_item_id, product_type')
-      .eq('order_id', orderId)
-      .eq('status', 'ordered')
-      .eq('owner_type', filter.owner_type)
-      .eq(filter.column, filter.value)
-
-    const { data: cartItemTypes, error: cartItemTypesError } = await cartItemTypesQuery
-    if (cartItemTypesError || !cartItemTypes || cartItemTypes.length === 0) {
-      return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
-    }
-
-    const hasOnlyEbookItems =
-      cartItemTypes.every((item) => item.product_type === 'ebook')
-
-    if (hasOnlyEbookItems) {
-      shippingAddress = { email }
-      shippingAmountUsd = 0
-      shippingRateSnapshot = null
-      shippingMethod = null
-      shippingZoneCode = null
-    } else {
+    {
       const authoritativeQuote = await calculateShippingQuote(shippingAddress)
       if (!authoritativeQuote.available) {
         return NextResponse.json(

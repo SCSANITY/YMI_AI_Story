@@ -396,7 +396,7 @@ export default function PersonalizePage({
   const [isSavingEdition, setIsSavingEdition] = useState(false);
   const [editionError, setEditionError] = useState<string | null>(null);
   const purchaseBookTypeRef = useRef<PurchasePackageType>(
-    bookType === 'digital' || bookType === 'supreme' ? bookType : 'basic'
+    bookType === 'supreme' ? bookType : 'basic'
   );
   const confirmedPurchaseBookTypeRef = useRef<PurchasePackageType>(purchaseBookTypeRef.current);
   const queuedPurchaseBookTypeRef = useRef<PurchasePackageType | null>(null);
@@ -749,7 +749,7 @@ export default function PersonalizePage({
   }, [setAge, setName]);
 
   // --- Calculations ---
-  const purchaseBookType: PurchasePackageType = bookType === 'digital' || bookType === 'supreme'
+  const purchaseBookType: PurchasePackageType = bookType === 'supreme'
     ? bookType
     : 'basic';
   const currentPackagePrice = book ? getBookPackagePrice(book, purchaseBookType) : null;
@@ -2977,20 +2977,11 @@ export default function PersonalizePage({
   const isFormReady = areChildDetailsReady && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
   const fromPrice = book
     ? Math.min(
-        getBookPackagePrice(book, 'digital').effectivePriceUsd,
         getBookPackagePrice(book, 'basic').effectivePriceUsd,
         getBookPackagePrice(book, 'supreme').effectivePriceUsd,
       )
     : 0;
   const editionOptions = book ? [
-    {
-      value: 'digital' as const,
-      title: t('personalize.bookTypeDigitalTitle'),
-      subtitle: t('personalize.bookTypeDigitalSubtitle'),
-      image: '/personalize-editions/cloud-explorer.svg',
-      imageAlt: t('personalize.editionDigitalImageAlt'),
-      price: formatDisplayCurrency(getBookPackagePrice(book, 'digital').effectivePriceUsd, displayCurrency),
-    },
     {
       value: 'basic' as const,
       title: t('personalize.bookTypeBasicTitle'),
@@ -3190,6 +3181,7 @@ export default function PersonalizePage({
                   <div ref={uploadPanelRef} className="scroll-mt-5">
                     {formStep === 'INTRO' ? (
                       <PersonalizeProductIntro
+                        key={bookID}
                         eyebrow={t('personalize.productEyebrow')}
                         title={templateTitle || book.title}
                         description={templateDescription || resolvedBook?.description || book.description}

@@ -1,5 +1,5 @@
-export type InternalBookType = 'digital' | 'basic' | 'premium' | 'supreme'
-
+// Historical job transport labels, not the current sellable package allowlist.
+// Paid fulfillment can still finish a previously purchased retired edition.
 export type SelectedBookTypeDisplay =
   | 'Cloud Explorer'
   | 'Classic'
@@ -11,6 +11,7 @@ export function mapBookTypeToDisplay(value: unknown): SelectedBookTypeDisplay {
 
   if (raw === 'digital' || raw === 'cloud explorer') return 'Cloud Explorer'
   if (raw === 'premium' || raw === 'immersive') return 'Immersive'
+
   if (
     raw === 'supreme' ||
     raw === 'legacy signature' ||

@@ -8,7 +8,9 @@ export interface JobRecord {
   job_id: string
   job_type: 'preview' | 'final'
   story_language?: 'English' | 'Simplified Chinese' | 'Traditional Chinese' | 'Spanish' | null
-  selected_book_type?: 'Cloud Explorer' | 'Classic' | 'Immersive' | 'Signature Voice' | null
+  // Read historical provider/job labels verbatim; current purchase types live
+  // in purchase-configuration, not in this transport record.
+  selected_book_type?: string | null
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancel_requested' | 'cancelled'
   progress?: number | null
   error_message?: string | null

@@ -1,4 +1,4 @@
-export const PURCHASE_PACKAGE_TYPES = ['digital', 'basic', 'supreme'] as const
+export const PURCHASE_PACKAGE_TYPES = ['basic', 'supreme'] as const
 
 export type PurchasePackageType = (typeof PURCHASE_PACKAGE_TYPES)[number]
 
@@ -8,7 +8,6 @@ export function isPurchasePackageType(value: unknown): value is PurchasePackageT
 
 export function normalizePurchasePackageType(value: unknown): PurchasePackageType | null {
   const normalized = String(value ?? '').trim().toLowerCase()
-  if (normalized === 'ebook') return 'digital'
   if (normalized === 'classic') return 'basic'
   if (normalized === 'signature voice') return 'supreme'
   return isPurchasePackageType(normalized) ? normalized : null

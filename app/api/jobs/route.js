@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { parseJobQueueAdmissionError } from '@/lib/jobQueueAdmission'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
+import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { getCustomizeAccessSettings } from '@/lib/customize-access-server'
 import {
   checkoutOwnerErrorResponse,
@@ -57,6 +58,10 @@ export async function POST(request) {
   const params = body?.params || null
   const validatedParams = validateAndStampPreviewConsent(params)
   const isSignatureVoice = String(textOverrides?.book_type || '').trim().toLowerCase() === 'supreme'
+
+  if (textOverrides?.book_type !== undefined && !normalizeBookPackageType(textOverrides.book_type)) {
+    return NextResponse.json({ error: 'This edition is no longer available', code: 'edition_no_longer_available' }, { status: 400 })
+  }
 
   if (!templateId || (!faceAssetId && !pendingFaceAsset?.asset_id)) {
     return NextResponse.json({ error: 'Missing template_id or face_asset_id' }, { status: 400 })
@@ -345,6 +350,9 @@ export async function PATCH(request) {
   const effectiveTextOverrides = forceEnglishTextOverrides(
     textOverrides ?? (job.input_snapshot || {}).text_overrides
   )
+  if (effectiveTextOverrides?.book_type !== undefined && !normalizeBookPackageType(effectiveTextOverrides.book_type)) {
+    return NextResponse.json({ error: 'This edition is no longer available', code: 'edition_no_longer_available' }, { status: 400 })
+  }
   const inputSnapshot = {
     ...(job.input_snapshot || {}),
     ...(resolvedFaceSourcePath ? { face_source_path: resolvedFaceSourcePath } : {}),
