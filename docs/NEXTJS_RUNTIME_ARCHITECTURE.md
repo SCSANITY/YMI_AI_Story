@@ -109,7 +109,11 @@ governance repository.
 ## Homepage delivery boundary
 
 - Home renders Hero directly followed by the book-category island on both
-  desktop and mobile, with no post-Hero Banner wrapper or reserved space.
+  desktop and mobile, beginning with Brand New and its own description/cards.
+  There is no collections-level eyebrow/title/intro, post-Hero Banner wrapper
+  or reserved space. Category headings are semantic `h2` elements beneath the
+  Hero's `h1`; their visual size and the catalogue/card interaction owners stay
+  unchanged.
   `HOMEPAGE_BANNER_SLOT_KEYS` is the shared runtime allowlist for the two remaining
   positions (`after_for_boys`, `after_in_discount`). Public/Admin reads filter at
   the database query; Admin publish, upload preparation and swaps reject any

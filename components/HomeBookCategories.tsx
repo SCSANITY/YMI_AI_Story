@@ -91,18 +91,6 @@ export function HomeBookCategories({ banners }: HomeBookCategoriesProps) {
   return (
     <section className="page-surface page-surface--flush-bottom relative pt-12 pb-10 md:pt-20 md:pb-14">
       <div className="container mx-auto min-w-0 px-4 md:px-6 lg:px-12">
-        <div className="mx-auto mb-10 max-w-4xl text-center md:mb-14">
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.1em] text-amber-500">
-            {t('homeBooks.eyebrow')}
-          </p>
-          <h2 className="font-title text-3xl leading-tight text-gray-900 md:text-5xl">
-            {t('homeBooks.heading')}
-          </h2>
-          <p className="mx-auto mt-4 text-sm leading-relaxed text-gray-500 md:text-base">
-            {t('homeBooks.subheading')}
-          </p>
-        </div>
-
         <div className="space-y-14 md:space-y-20">
           {HOME_BOOK_CATEGORIES.map((category) => {
             const books = getCategoryBooks(catalogBooks, category)
@@ -116,9 +104,9 @@ export function HomeBookCategories({ banners }: HomeBookCategoriesProps) {
               <div key={category.titleKey}>
                 <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:mb-9">
                   <div>
-                    <h3 className="font-title text-2xl text-gray-900 md:text-3xl">
+                    <h2 className="font-title text-2xl text-gray-900 md:text-3xl">
                       {t(category.titleKey)}
-                    </h3>
+                    </h2>
                     <p className="mt-2 max-w-xl text-sm leading-relaxed text-gray-500">
                       {t(category.descriptionKey)}
                     </p>

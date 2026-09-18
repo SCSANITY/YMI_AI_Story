@@ -7,6 +7,26 @@ import test from 'node:test'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relativePath) => readFile(path.join(root, relativePath), 'utf8')
 
+test('Home starts its catalogue with Brand New, without a collections intro or reserved wrapper', async () => {
+  const page = await read('app/page.tsx')
+  const categories = await read('components/HomeBookCategories.tsx')
+  const messages = await read('src/lib/i18n-messages.ts')
+
+  assert.match(page, /<Hero \/>\s*<HomeBookCategories banners=\{banners\} \/>/)
+  assert.doesNotMatch(categories, /homeBooks\.(eyebrow|heading|subheading)|max-w-4xl text-center/)
+  assert.doesNotMatch(messages, /'homeBooks\.(eyebrow|heading|subheading)'/)
+  assert.match(categories, /const HOME_BOOK_CATEGORIES[^=]*=\s*\[\s*\{\s*titleKey: 'homeBooks\.category\.brandNew'/)
+  assert.match(categories, /className="container[^"\n]*">\s*<div className="space-y-14 md:space-y-20">\s*\{HOME_BOOK_CATEGORIES\.map/)
+  assert.match(categories, /<h2[^>]*>\s*\{t\(category\.titleKey\)\}\s*<\/h2>/)
+  assert.match(categories, /\{t\(category\.descriptionKey\)\}/)
+  assert.match(categories, /grid-cols-2[^"\n]*md:grid-cols-4/)
+  assert.match(categories, /onClick=\{\(\) => handlePersonalize\(book\.bookID\)\}/)
+  assert.match(categories, /onPrefetch=\{\(\) => prefetchCustomizeHref/)
+  assert.match(categories, /toggleFavorite\(book\)/)
+  assert.match(categories, /banners\.after_for_boys/)
+  assert.match(categories, /banners\.after_in_discount/)
+})
+
 test('the shared shell derives route shape from layout segments and server-renders consent deterministically', async () => {
   const shell = await read('components/AppShell.tsx')
   const navbar = await read('components/Navbar.tsx')
