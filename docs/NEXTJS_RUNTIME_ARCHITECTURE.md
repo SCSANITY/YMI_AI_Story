@@ -143,8 +143,11 @@ governance repository.
   `hero-poster-v2.webp` provides the first visual frame and is emitted as an
   early high-priority React resource hint.
 - Below 768px, Hero uses a content-height layout: the shared 64px Home toolbar,
-  borderless full-width 16:9 video, a story-page connection, compact headline/CTA and
-  two-column icon/text highlights. There is no framed video or full-screen filler.
+  borderless full-width 16:9 video, a story-page connection and compact headline/CTA.
+  The six product facts are desktop-only (`hidden md:flex`); mobile has neither
+  their layout/accessible content nor a reserved slot. Removing that normal-flow
+  block moves Brand New and all subsequent content upward without changing the
+  catalogue gutter. There is no framed video or full-screen filler.
   `MobileHomeScene.module.css` owns the mobile-only translucent amber toolbar,
   static fine-grain peach/amber paper, and an open-book video-to-content seam.
   Two shallow inline-SVG page edges and one centered gold spark cross only the
@@ -153,7 +156,7 @@ governance repository.
   mobile-only text inset separates the page crease from the headline. The old
   80px media gradient veil and pseudo-element curved lip are removed.
   These styles are scoped below 768px; they add no asset fetch or animation loop.
-  All six existing facts and the Books action remain. Only Home's unscrolled
+  All six existing desktop facts and the Books action remain. Only Home's unscrolled
   phone toolbar uses the warm translucent material and dark controls;
   other routes and desktop transparent navigation retain their existing shell.
   The existing desktop Hero scene, fonts, bubbles and layout remain at `md` and

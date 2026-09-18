@@ -237,12 +237,13 @@ export const Hero: React.FC = () => {
               </motion.div>
             </motion.div>
 
+            {/* Desktop-only facts; mobile ends at the CTA without a reserved slot. */}
             <motion.ul
               aria-label="YMI Story product highlights"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.52, duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
-              className="mt-4 grid w-full max-w-md grid-cols-2 gap-x-4 gap-y-2 text-left max-md:!opacity-100 md:mt-6 md:flex md:max-w-6xl md:flex-wrap md:items-center md:justify-center md:gap-3 lg:flex-nowrap lg:gap-2.5"
+              className="hidden w-full text-left md:mt-6 md:flex md:max-w-6xl md:flex-wrap md:items-center md:justify-center md:gap-3 lg:flex-nowrap lg:gap-2.5"
             >
               {HERO_FACTS.map(
                 ({ icon: Icon, labelKey, bubbleClass, positionClass, floatDelay }, index) => {

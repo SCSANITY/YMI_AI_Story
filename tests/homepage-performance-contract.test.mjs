@@ -19,12 +19,15 @@ test('mobile Hero is edge-to-edge and content-height while desktop keeps its ful
   assert.doesNotMatch(hero, /minHeight: '100svh'|min-h-\[330px\]|top-24|w-\[calc\(100%-2rem\)\]|object-contain/)
 })
 
-test('mobile highlights retain all six facts without floating glass bubbles or hidden copy', async () => {
+test('Hero facts occupy no mobile space while all six desktop bubbles and motion remain', async () => {
   const hero = await read('components/Hero.tsx')
 
   assert.equal((hero.match(/labelKey: 'hero\.facts\./g) ?? []).length, 6)
   assert.match(hero, /aria-label="YMI Story product highlights"/)
-  assert.match(hero, /grid-cols-2 gap-x-4 gap-y-2[^"\n]*max-md:!opacity-100[^"\n]*md:flex/)
+  const highlightsClasses = hero.match(/aria-label="YMI Story product highlights"[\s\S]*?className="([^"]+)"/)?.[1]
+  assert.equal(highlightsClasses, 'hidden w-full text-left md:mt-6 md:flex md:max-w-6xl md:flex-wrap md:items-center md:justify-center md:gap-3 lg:flex-nowrap lg:gap-2.5')
+  assert.doesNotMatch(hero, /grid-cols-2|gap-x-4 gap-y-2|max-md:!opacity-100/)
+  assert.match(hero, /style=\{\{ paddingBottom: 'clamp\(22px, 3vh, 40px\)' \}\}/)
   assert.match(hero, /setFloatFacts\(!mobileQuery\.matches && !prefersReducedMotion\)/)
   assert.match(hero, /mobileQuery\.addEventListener\('change', updateFactMotion\)/)
   assert.match(hero, /mobileQuery\.removeEventListener\('change', updateFactMotion\)/)
