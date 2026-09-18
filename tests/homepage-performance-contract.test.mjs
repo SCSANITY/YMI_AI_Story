@@ -49,14 +49,32 @@ test('mobile Home shares a warm layered material and video transition without ch
   assert.match(material, /@media \(max-width: 767px\)/)
   assert.match(material, /\.mobileHomeNav\.mobileHomeNav[\s\S]*backdrop-filter: blur\(16px\)/)
   assert.match(material, /\.mobileHero[\s\S]*radial-gradient/)
-  assert.match(hero, /aria-hidden="true"[^\n]*styles.mobileVideoTransition/)
-  assert.match(material, /\.mobileVideoTransition::after[\s\S]*border-radius: 50% 65% 0 0/)
+  assert.match(hero, /md:hidden" aria-hidden="true">[\s\S]*styles.mobileVideoTransition/)
   assert.doesNotMatch(material, /animation:|url\(/)
   assert.match(navbar, /text-gray-700 md:text-white/)
   assert.match(navbar, /md:border-white\/35 md:bg-white\/10 md:text-white/)
   assert.match(navbar, /className="container mx-auto px-4 h-16 flex items-center justify-between"/)
   assert.match(navbar, /id="navbar-mobile-navigation"/)
   assert.match(navbar, /showBackButton = !isPrimaryNavigationRoute\(pathname\) && !isCheckoutRoute/)
+})
+
+test('mobile video joins the paper through decorative open-book pages rather than a gradient veil or curved lip', async () => {
+  const hero = await read('components/Hero.tsx')
+  const material = await read('components/MobileHomeScene.module.css')
+  const transition = material.match(/\.mobileVideoTransition\s*\{([^}]+)\}/)?.[1]
+
+  assert.match(hero, /pointer-events-none absolute inset-x-0 bottom-0 \$\{styles.mobileVideoTransition\}/)
+  assert.match(hero, /<svg viewBox="0 0 390 64" preserveAspectRatio="none" focusable="false"/)
+  assert.match(hero, /styles.mobilePageBack[\s\S]*styles.mobilePageFront[\s\S]*styles.mobilePageEdge[\s\S]*styles.mobilePageCrease/)
+  assert.match(hero, /styles.mobileStorySpark/)
+  assert.match(hero, /styles.mobileStoryContent/)
+  assert.match(transition, /height: 64px/)
+  assert.match(transition, /translateY\(24px\)/)
+  assert.doesNotMatch(transition, /background:|linear-gradient/)
+  assert.doesNotMatch(material, /mobileVideoTransition::after|border-radius: 50% 65%|height: 80px/)
+  assert.match(material, /\.mobilePageFront \{ fill: var\(--hero-paper\)/)
+  assert.match(material, /\.mobileStoryContent[\s\S]*padding-top: 32px[\s\S]*linear-gradient/)
+  assert.doesNotMatch(hero, /<canvas|<image\b|<animate\b/)
 })
 
 test('Home moves the complete catalogue closer to Hero through responsive top padding only', async () => {

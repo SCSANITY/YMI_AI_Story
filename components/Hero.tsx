@@ -136,7 +136,6 @@ export const Hero: React.FC = () => {
             aria-hidden="true"
             className="absolute inset-x-0 top-16 aspect-video w-full bg-[#f4d5bd] object-cover md:inset-0 md:h-full md:bg-[#f7e2d0]"
           />
-          <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 bottom-0 md:hidden ${styles.mobileVideoTransition}`} />
           <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-16 h-4 md:hidden ${styles.mobileVideoTop}`} />
         </div>
 
@@ -165,14 +164,29 @@ export const Hero: React.FC = () => {
         <div className="relative z-20 flex flex-col md:min-h-[100svh]">
 
           {/* Reserve only the shared 64px toolbar and edge-to-edge 16:9 video. */}
-          <div className="h-[calc(4rem+56.25vw)] shrink-0 md:hidden" aria-hidden="true" />
+          <div className="relative h-[calc(4rem+56.25vw)] shrink-0 md:hidden" aria-hidden="true">
+            {/* An open storybook edge joins the film to its paper surface.
+                Decorative, server-rendered geometry: no media, state or motion. */}
+            <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${styles.mobileVideoTransition}`}>
+              <svg viewBox="0 0 390 64" preserveAspectRatio="none" focusable="false" className={styles.mobileStoryPages}>
+                <path className={styles.mobilePageBack} d="M0 14C67 2 126 9 195 27C264 9 322 2 390 14V64H0Z" />
+                <path className={styles.mobilePageFront} d="M0 23C65 9 133 16 195 34C257 16 325 9 390 23V64H0Z" />
+                <path className={styles.mobilePageEdge} d="M0 23C65 9 133 16 195 34C257 16 325 9 390 23" />
+                <path className={styles.mobilePageCrease} d="M195 35V54" />
+              </svg>
+              <svg viewBox="0 0 24 28" focusable="false" className={styles.mobileStorySpark}>
+                <path fill="currentColor" d="M12 0C13.4 8.8 15.2 11.1 24 14C15.2 16.9 13.4 19.2 12 28C10.6 19.2 8.8 16.9 0 14C8.8 11.1 10.6 8.8 12 0Z" />
+                <path fill="#fff7e9" d="M12 9L13.5 12.5L17 14L13.5 15.5L12 19L10.5 15.5L7 14L10.5 12.5Z" />
+              </svg>
+            </div>
+          </div>
 
           {/* Flex spacer — desktop video center is completely unobstructed. */}
           <div className="hidden flex-1 md:block" />
 
           {/* ── Lower-third text zone ───────────────────────────────────── */}
           <div
-            className="flex flex-col items-center px-4 text-center sm:px-8"
+            className={`flex flex-col items-center px-4 text-center sm:px-8 ${styles.mobileStoryContent}`}
             style={{ paddingBottom: 'clamp(22px, 3vh, 40px)' }}
           >
             {/* Headline — original full-width treatment, kept by owner preference.
