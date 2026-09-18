@@ -273,7 +273,7 @@ export const Navbar: React.FC = () => {
   return (
     <nav className={`fixed left-0 right-0 top-0 ${isUserMenuOpen || isCartOpen ? 'z-[150]' : 'z-40'} w-full transition-all duration-500 ${
       isTransparent
-        ? 'bg-transparent backdrop-blur-none border-b border-transparent shadow-none'
+        ? 'bg-[#fff9f2] md:bg-transparent backdrop-blur-none border-b border-transparent shadow-none'
         : 'bg-white/60 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40'
     }`}>
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -302,7 +302,7 @@ export const Navbar: React.FC = () => {
 
           <button
             type="button"
-            className={`md:hidden p-2 -ml-2 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-600'}`}
+            className={`md:hidden p-2 -ml-2 transition-colors duration-300 ${isTransparent ? 'text-gray-700' : 'text-gray-600'}`}
             aria-label={t(isMobileMenuOpen ? 'common.close' : 'common.openMenu')}
             aria-expanded={isMobileMenuOpen}
             aria-controls="navbar-mobile-navigation"
@@ -446,7 +446,7 @@ export const Navbar: React.FC = () => {
             buttonClassName={
               `border transition-colors duration-300 ease-out ${
                 isTransparent
-                  ? 'border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white'
+                  ? 'border-transparent bg-transparent text-gray-700 hover:bg-amber-50/80 hover:text-amber-800 md:border-white/35 md:bg-white/10 md:text-white md:hover:bg-white/20 md:hover:text-white'
                   : 'border-transparent bg-transparent text-gray-600 hover:bg-amber-50/80 hover:text-amber-800'
               }`
             }
@@ -463,7 +463,7 @@ export const Navbar: React.FC = () => {
             aria-controls="mini-cart"
             aria-haspopup="dialog"
           >
-            <ShoppingCart className={`h-5 w-5 transition-colors duration-300 ${isTransparent ? 'text-white' : 'text-gray-700'}`} />
+            <ShoppingCart className={`h-5 w-5 transition-colors duration-300 ${isTransparent ? 'text-gray-700 md:text-white' : 'text-gray-700'}`} />
             {cartCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm">
                 {cartCount}
@@ -510,7 +510,7 @@ export const Navbar: React.FC = () => {
                 }}
                 size="sm"
                 className={`shrink-0 whitespace-nowrap px-3 sm:px-4 ${isTransparent
-                  ? 'rounded-full border border-white/50 bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm'
+                  ? 'rounded-full md:border md:border-white/50 md:bg-white/15 md:text-white md:hover:bg-white/25 md:backdrop-blur-sm'
                   : ''}`}
               >
                 {t('navbar.logIn')}

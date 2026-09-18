@@ -142,6 +142,16 @@ governance repository.
   assets with immutable cache headers; the smaller versioned
   `hero-poster-v2.webp` provides the first visual frame and is emitted as an
   early high-priority React resource hint.
+- Below 768px, Hero uses a content-height layout: the shared 64px Home toolbar,
+  borderless full-width 16:9 video, warm edge fades, compact headline/CTA and
+  two-column icon/text highlights. There is no framed video, full-screen filler
+  or mobile glass/float treatment. All six existing facts and the Books action
+  remain. Only Home's unscrolled phone toolbar uses matching cream/dark controls;
+  other routes and desktop transparent navigation retain their existing shell.
+  The existing desktop Hero scene, fonts, bubbles and layout remain at `md` and
+  wider. One cleaned-up breakpoint listener controls desktop-only fact floating,
+  without choosing a second media asset on resize; reduced motion stops floating
+  and retains poster-only media. CSS, not mount-time viewport state, owns layout.
 - First-time or stale Cookie consent is present in server output. A small
   version-aware head bootstrap hides it before paint only when current stored
   consent is valid. Optional tracking remains unresolved until the client

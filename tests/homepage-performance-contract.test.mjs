@@ -7,6 +7,49 @@ import test from 'node:test'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relativePath) => readFile(path.join(root, relativePath), 'utf8')
 
+test('mobile Hero is edge-to-edge and content-height while desktop keeps its full-viewport scene', async () => {
+  const hero = await read('components/Hero.tsx')
+
+  assert.equal((hero.match(/<video\b/g) ?? []).length, 1)
+  assert.match(hero, /className="relative w-full bg-\[#fff9f2\] md:min-h-\[100svh\] md:bg-transparent"/)
+  assert.match(hero, /className="absolute inset-x-0 top-16 aspect-video w-full bg-\[#f4d5bd\] object-cover md:inset-0 md:h-full md:bg-\[#f7e2d0\]"/)
+  assert.match(hero, /h-\[calc\(4rem\+56\.25vw\)\] shrink-0 md:hidden/)
+  assert.match(hero, /className="hidden flex-1 md:block"/)
+  assert.match(hero, /md:text-\[clamp\(2\.4rem,5\.5vw,5rem\)\]/)
+  assert.doesNotMatch(hero, /minHeight: '100svh'|min-h-\[330px\]|top-24|w-\[calc\(100%-2rem\)\]|object-contain/)
+})
+
+test('mobile highlights retain all six facts without floating glass bubbles or hidden copy', async () => {
+  const hero = await read('components/Hero.tsx')
+
+  assert.equal((hero.match(/labelKey: 'hero\.facts\./g) ?? []).length, 6)
+  assert.match(hero, /aria-label="YMI Story product highlights"/)
+  assert.match(hero, /grid-cols-2 gap-x-4 gap-y-2[^"\n]*max-md:!opacity-100[^"\n]*md:flex/)
+  assert.match(hero, /setFloatFacts\(!mobileQuery\.matches && !prefersReducedMotion\)/)
+  assert.match(hero, /mobileQuery\.addEventListener\('change', updateFactMotion\)/)
+  assert.match(hero, /mobileQuery\.removeEventListener\('change', updateFactMotion\)/)
+  assert.match(hero, /animate=\{!floatFacts/)
+  assert.match(hero, /repeat: floatFacts \? Infinity : 0/)
+  assert.match(hero, /delay: floatFacts \? floatDelay : 0/)
+  assert.match(hero, /duration: floatFacts \? 3\.8 \+ \(index % 3\) \* 0\.45 : 0/)
+  assert.match(hero, /min-h-8[^"\n]*md:min-h-\[4\.6rem\][^"\n]*md:backdrop-blur-xl/)
+  assert.equal((hero.match(/bubbleClass: 'md:rounded-/g) ?? []).length, 6)
+  assert.match(hero, /onClick=\{goToBooks\}/)
+  assert.match(hero, /const goToBooks = \(\) => router\.push\('\/books'\)/)
+})
+
+test('the mobile Home toolbar uses the Hero cream surface without changing other route or desktop shells', async () => {
+  const navbar = await read('components/Navbar.tsx')
+
+  assert.match(navbar, /const isTransparent = isHomePage && !scrolled/)
+  assert.match(navbar, /isTransparent\s*\? 'bg-\[#fff9f2\] md:bg-transparent backdrop-blur-none/)
+  assert.match(navbar, /text-gray-700 md:text-white/)
+  assert.match(navbar, /md:border-white\/35 md:bg-white\/10 md:text-white/)
+  assert.match(navbar, /className="container mx-auto px-4 h-16 flex items-center justify-between"/)
+  assert.match(navbar, /id="navbar-mobile-navigation"/)
+  assert.match(navbar, /showBackButton = !isPrimaryNavigationRoute\(pathname\) && !isCheckoutRoute/)
+})
+
 test('Home moves the complete catalogue closer to Hero through responsive top padding only', async () => {
   const categories = await read('components/HomeBookCategories.tsx')
   const sectionClasses = categories.match(/<section className="([^"]+)"/)?.[1]
