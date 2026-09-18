@@ -89,7 +89,7 @@ export function HomeBookCategories({ banners }: HomeBookCategoriesProps) {
   }
 
   return (
-    <section className="page-surface page-surface--flush-bottom relative pt-12 pb-10 md:pt-20 md:pb-14">
+    <section className="page-surface page-surface--flush-bottom relative pt-8 pb-10 md:pt-12 md:pb-14">
       <div className="container mx-auto min-w-0 px-4 md:px-6 lg:px-12">
         <div className="space-y-14 md:space-y-20">
           {HOME_BOOK_CATEGORIES.map((category) => {

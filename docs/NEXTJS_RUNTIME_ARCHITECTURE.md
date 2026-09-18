@@ -114,6 +114,9 @@ governance repository.
   or reserved space. Category headings are semantic `h2` elements beneath the
   Hero's `h1`; their visual size and the catalogue/card interaction owners stay
   unchanged.
+  The catalogue's top gutter is 32px on mobile and 48px from the `md` breakpoint,
+  moving its entire normal-flow content closer to Hero without negative margins,
+  vertical transforms or changes to internal category/card/Banner spacing.
   `HOMEPAGE_BANNER_SLOT_KEYS` is the shared runtime allowlist for the two remaining
   positions (`after_for_boys`, `after_in_discount`). Public/Admin reads filter at
   the database query; Admin publish, upload preparation and swaps reject any

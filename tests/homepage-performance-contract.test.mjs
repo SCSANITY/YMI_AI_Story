@@ -7,6 +7,17 @@ import test from 'node:test'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relativePath) => readFile(path.join(root, relativePath), 'utf8')
 
+test('Home moves the complete catalogue closer to Hero through responsive top padding only', async () => {
+  const categories = await read('components/HomeBookCategories.tsx')
+  const sectionClasses = categories.match(/<section className="([^"]+)"/)?.[1]
+
+  assert.equal(sectionClasses, 'page-surface page-surface--flush-bottom relative pt-8 pb-10 md:pt-12 md:pb-14')
+  assert.match(categories, /className="space-y-14 md:space-y-20"/)
+  assert.match(categories, /mb-7 flex flex-col gap-4[^"\n]*md:mb-9/)
+  assert.match(categories, /grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-8/)
+  assert.match(categories, /relative left-1\/2 mt-10 mb-0 w-screen -translate-x-1\/2 md:mt-14/)
+})
+
 test('Home starts its catalogue with Brand New, without a collections intro or reserved wrapper', async () => {
   const page = await read('app/page.tsx')
   const categories = await read('components/HomeBookCategories.tsx')
