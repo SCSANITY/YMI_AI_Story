@@ -77,6 +77,7 @@ import {
 import { usePersonalizeHistory } from '@/components/personalize/usePersonalizeHistory';
 import { resolvePersonalizeEntryStep } from '@/lib/personalize-entry';
 import {
+  isRecoverablePurchaseIdentityError,
   PurchaseConfigurationRequestError,
   savePurchaseConfiguration,
 } from '@/services/purchaseConfiguration';
@@ -433,6 +434,8 @@ export default function PersonalizePage({
   const previewVariantGenerationRef = useRef(false);
   const previewVariantPhotoUrlsRef = useRef<Set<string>>(new Set());
   const [creationId, setCreationId] = useState<string | null>(null);
+  const creationIdRef = useRef<string | null>(null);
+  const previewJobIdRef = useRef<string | null>(null);
   const [previewImageErrors, setPreviewImageErrors] = useState<Set<string>>(() => new Set());
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [previewShareUrl, setPreviewShareUrl] = useState<string | null>(null);
@@ -1258,6 +1261,14 @@ export default function PersonalizePage({
   }, [replacePersonalizeUrl]);
 
   useEffect(() => {
+    creationIdRef.current = creationId;
+  }, [creationId]);
+
+  useEffect(() => {
+    previewJobIdRef.current = previewJobId;
+  }, [previewJobId]);
+
+  useEffect(() => {
     if (stage !== 'GENERATING') return;
     if (generationInFlightRef.current) return;
     generationInFlightRef.current = true;
@@ -1884,12 +1895,20 @@ export default function PersonalizePage({
   );
 
   const resolvePurchaseConfigurationContext = useCallback(async () => {
+    const locationParams = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : null;
+    const locationCreationId = locationParams?.get('creationId') ?? null;
+    const locationPreviewJobId = locationParams?.get('jobId') ?? null;
     const ensuredCreationId =
-      (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null)
-      || (creationId && isUuid(creationId) ? creationId : null)
+      (creationIdRef.current && isUuid(creationIdRef.current) ? creationIdRef.current : null)
+      || (locationCreationId && isUuid(locationCreationId) ? locationCreationId : null)
+      || (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null)
       || (await resolveCreationId());
-    const expectedPreviewJobId = previewJobId && isUuid(previewJobId)
-      ? previewJobId
+    const expectedPreviewJobId = previewJobIdRef.current && isUuid(previewJobIdRef.current)
+      ? previewJobIdRef.current
+      : locationPreviewJobId && isUuid(locationPreviewJobId)
+        ? locationPreviewJobId
       : previewJobIdParam && isUuid(previewJobIdParam)
         ? previewJobIdParam
         : null;
@@ -1899,7 +1918,40 @@ export default function PersonalizePage({
     }
 
     return { ensuredCreationId, expectedPreviewJobId };
-  }, [creationId, creationIdParam, previewJobId, previewJobIdParam, resolveCreationId, t]);
+  }, [creationIdParam, previewJobIdParam, resolveCreationId, t]);
+
+  const reconcilePurchaseConfigurationIdentity = useCallback(async (
+    expectedPreviewJobId: string
+  ) => {
+    if (!isUuid(expectedPreviewJobId)) return null;
+    const url = user?.customerId
+      ? `/api/creations/resolve?jobId=${encodeURIComponent(expectedPreviewJobId)}&customerId=${encodeURIComponent(user.customerId)}`
+      : `/api/creations/resolve?jobId=${encodeURIComponent(expectedPreviewJobId)}`;
+
+    try {
+      const response = await fetch(url, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+      const nextCreationId = String(payload?.creationId ?? '').trim();
+      const nextPreviewJobId = String(payload?.previewJobId ?? '').trim();
+      if (!isUuid(nextCreationId) || !isUuid(nextPreviewJobId)) return null;
+
+      creationIdRef.current = nextCreationId;
+      previewJobIdRef.current = nextPreviewJobId;
+      setCreationId(nextCreationId);
+      setPreviewJobId(nextPreviewJobId);
+      replacePreviewUrl(nextCreationId, nextPreviewJobId);
+      return {
+        ensuredCreationId: nextCreationId,
+        expectedPreviewJobId: nextPreviewJobId,
+      };
+    } catch {
+      return null;
+    }
+  }, [replacePreviewUrl, setPreviewJobId, user?.customerId]);
 
   const saveEditionConfiguration = useCallback(async (
     packageType: PurchasePackageType,
@@ -1909,17 +1961,31 @@ export default function PersonalizePage({
       signal?: AbortSignal
     }
   ) => {
-    const { ensuredCreationId, expectedPreviewJobId } = await resolvePurchaseConfigurationContext();
-    return savePurchaseConfiguration({
-      creationId: ensuredCreationId,
-      expectedPreviewJobId,
-      packageType,
-      voiceAssetId: options?.voiceAssetId,
-      clearVoice: options?.clearVoice,
-      customerId: user?.customerId ?? null,
-      signal: options?.signal,
+    let identity = await resolvePurchaseConfigurationContext();
+    const persist = async () => ({
+      ...(await savePurchaseConfiguration({
+        creationId: identity.ensuredCreationId,
+        expectedPreviewJobId: identity.expectedPreviewJobId,
+        packageType,
+        voiceAssetId: options?.voiceAssetId,
+        clearVoice: options?.clearVoice,
+        customerId: user?.customerId ?? null,
+        signal: options?.signal,
+      })),
+      creationId: identity.ensuredCreationId,
+      previewJobId: identity.expectedPreviewJobId,
     });
-  }, [resolvePurchaseConfigurationContext, user?.customerId]);
+
+    try {
+      return await persist();
+    } catch (error) {
+      if (!isRecoverablePurchaseIdentityError(error) || options?.signal?.aborted) throw error;
+      const reconciled = await reconcilePurchaseConfigurationIdentity(identity.expectedPreviewJobId);
+      if (!reconciled) throw error;
+      identity = reconciled;
+      return persist();
+    }
+  }, [reconcilePurchaseConfigurationIdentity, resolvePurchaseConfigurationContext, user?.customerId]);
 
   const resolveEditionError = useCallback((error: unknown) => {
     if (error instanceof PurchaseConfigurationRequestError) return error.message;
@@ -2096,12 +2162,12 @@ export default function PersonalizePage({
       if (selectedPackageType === 'supreme' && !result.voiceReady) {
         setVoiceValidationError(t('personalize.voiceSampleRequired'));
         setIsVoiceDialogOpen(true);
-        return false;
+        return null;
       }
-      return true;
+      return result;
     } catch (error) {
       setEditionError(resolveEditionError(error));
-      return false;
+      return null;
     } finally {
       setIsSavingEdition(false);
     }
@@ -2268,31 +2334,13 @@ export default function PersonalizePage({
     if (!canAddToCart) return null
     if (!resolvedBook) return null
     if (!ensurePremiumVoiceSample()) return null
-    if (!(await ensureCurrentPurchaseConfiguration())) return null
+    const purchaseConfiguration = await ensureCurrentPurchaseConfiguration()
+    if (!purchaseConfiguration) return null
     const currentName = nameRef.current
     const currentAge = ageRef.current
     const parsedAge = Number.parseInt(currentAge, 10)
 
-    const ensuredCreationId =
-      (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null) ||
-      (creationId && isUuid(creationId) ? creationId : null) ||
-      (typeof window !== 'undefined'
-        ? (() => {
-            const raw = new URLSearchParams(window.location.search).get('creationId')
-            return raw && isUuid(raw) ? raw : null
-          })()
-        : null) ||
-      (await resolveCreationId())
-    if (!ensuredCreationId) {
-      console.error('Missing creationId for cart', {
-        creationId,
-        creationIdParam,
-        previewJobId,
-        previewJobIdParam,
-        viewMode,
-      })
-      return null
-    }
+    const ensuredCreationId = purchaseConfiguration.creationId
 
     const committedPreviewJobId = await commitSelectedPreviewForExit(ensuredCreationId)
 
@@ -2333,7 +2381,7 @@ export default function PersonalizePage({
     }
 
     return item ?? null;
-    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewJobId, previewJobIdParam, viewMode, creationId, creationIdParam, resolveCreationId, previewPages, previewUrl, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit]);
+    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewPages, previewUrl, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit]);
 
   const startAddToCart = useCallback(() => {
     const promise = performAddToCart()
@@ -2365,7 +2413,8 @@ export default function PersonalizePage({
         if (!canCheckout) return
         if (checkoutInFlightRef.current) return
         if (!ensurePremiumVoiceSample()) return
-        if (!(await ensureCurrentPurchaseConfiguration())) return
+        const purchaseConfiguration = await ensureCurrentPurchaseConfiguration()
+        if (!purchaseConfiguration) return
         checkoutInFlightRef.current = true
 
         try {
@@ -2373,20 +2422,7 @@ export default function PersonalizePage({
     const currentName = nameRef.current
     const currentAge = ageRef.current
     const parsedAge = Number.parseInt(currentAge, 10)
-    const ensuredCreationId =
-      (creationIdParam && isUuid(creationIdParam) ? creationIdParam : null) ||
-      (creationId && isUuid(creationId) ? creationId : null) ||
-      (typeof window !== 'undefined'
-        ? (() => {
-            const raw = new URLSearchParams(window.location.search).get('creationId')
-            return raw && isUuid(raw) ? raw : null
-          })()
-        : null) ||
-      (await resolveCreationId())
-            if (!ensuredCreationId) {
-              console.error('Missing creationId for cart')
-              return
-            }
+    const ensuredCreationId = purchaseConfiguration.creationId
             const committedPreviewJobId = await commitSelectedPreviewForExit(ensuredCreationId)
             const personalization = {
               childName: currentName,
@@ -2485,7 +2521,7 @@ export default function PersonalizePage({
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, creationId, creationIdParam, resolveCreationId, savedStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit, previewPages, previewUrl]);
+    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, savedStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit, previewPages, previewUrl]);
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;

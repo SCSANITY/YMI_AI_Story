@@ -20,6 +20,11 @@ export class PurchaseConfigurationRequestError extends Error {
   }
 }
 
+export function isRecoverablePurchaseIdentityError(error: unknown) {
+  return error instanceof PurchaseConfigurationRequestError
+    && (error.code === 'creation_not_found' || error.code === 'preview_conflict')
+}
+
 export async function savePurchaseConfiguration(args: {
   creationId: string
   expectedPreviewJobId: string
