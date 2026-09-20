@@ -31,6 +31,7 @@ import { ProgressSteps } from '@/components/personalize/ProgressSteps';
 import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
 import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
 import { PreviewGeneratingCover } from '@/components/personalize/PreviewGeneratingCover';
+import { PreviewAccessCover } from '@/components/personalize/PreviewAccessCover';
 import { decodePreviewImage as waitForImageDecode, useDecodedPreviewCover } from '@/components/personalize/useDecodedPreviewCover';
 import { canHydrateEdition } from '@/lib/edition-hydration';
 import { PreviewIntroHeader } from '@/components/personalize/PreviewIntroHeader';
@@ -416,6 +417,7 @@ export default function PersonalizePage({
     setPreviewVariants,
     capacityWaitingByJobId,
     applyPreviewDisplayAssetsForJob,
+    previewAccessState,
     error: previewError,
     setError: setPreviewError,
     refresh: refreshPreviewImages,
@@ -445,6 +447,9 @@ export default function PersonalizePage({
   const generationInFlightRef = useRef(false);
   const previewActionInFlightRef = useRef<'CHECKOUT' | null>(null);
   const [previewActionPending, setPreviewActionPending] = useState<'CHECKOUT' | null>(null);
+  const [checkoutTransitionPhase, setCheckoutTransitionPhase] = useState<
+    'preparing' | 'securing' | 'opening' | null
+  >(null);
   const checkoutInFlightRef = useRef(false);
   const committedPreviewSelectionRef = useRef<{
     creationId: string
@@ -823,6 +828,8 @@ export default function PersonalizePage({
   const decodedPreviewCover = useDecodedPreviewCover(displayedPreviewJobId, previewUrl, setPreviewError);
   const hasReadyPreviewCover = decodedPreviewCover.isReady;
   const isPreviewCoverPending = viewState.showPreview && !hasReadyPreviewCover;
+  const isPreviewUnavailable = stage === 'PREVIEW' && isPreviewCoverPending && previewAccessState === 'unavailable';
+  const isPreviewRestoring = stage === 'PREVIEW' && isPreviewCoverPending && !isPreviewUnavailable;
   const visiblePreviewPresentation = useMemo(() => {
     if (!previewBookPresentation?.cover || !decodedPreviewCover.url) return previewBookPresentation;
     return { ...previewBookPresentation, cover: { ...previewBookPresentation.cover, url: decodedPreviewCover.url } };
@@ -1712,6 +1719,10 @@ export default function PersonalizePage({
     triggerPageToast(t('personalize.addToCartFailedToast'));
   }, [t, triggerPageToast]);
 
+  const triggerCheckoutFailedToast = useCallback(() => {
+    triggerPageToast(t('personalize.checkoutPrepareFailedToast'));
+  }, [t, triggerPageToast]);
+
   const persistDraftForCustomizeReturn = useCallback((options?: { clearPreviewRefs?: boolean }) => {
     if (!book) return;
     const clearPreviewRefs = options?.clearPreviewRefs === true
@@ -1846,6 +1857,11 @@ export default function PersonalizePage({
     setFormStep('REVIEW');
     startForm();
   }, [bookID, cleanupCurrentPreviewVariantSession, persistDraftForCustomizeReturn, router, startForm]);
+
+  const leaveUnavailablePreview = useCallback(() => {
+    cancelPreviewWatch(displayedPreviewJobId);
+    router.replace('/books');
+  }, [cancelPreviewWatch, displayedPreviewJobId, router]);
 
   const navigateAwayFromPreview = useCallback(async (href: string) => {
     if (stage === 'GENERATING') {
@@ -2410,12 +2426,13 @@ export default function PersonalizePage({
 
 
   const performCheckout = useCallback(async () => {
-        if (!canCheckout) return
-        if (checkoutInFlightRef.current) return
-        if (!ensurePremiumVoiceSample()) return
+        if (!canCheckout) return false
+        if (checkoutInFlightRef.current) return false
+        if (!ensurePremiumVoiceSample()) return false
         const purchaseConfiguration = await ensureCurrentPurchaseConfiguration()
-        if (!purchaseConfiguration) return
+        if (!purchaseConfiguration) return false
         checkoutInFlightRef.current = true
+        setCheckoutTransitionPhase('securing')
 
         try {
         if (resolvedBook) {
@@ -2480,7 +2497,8 @@ export default function PersonalizePage({
             })
 
             if (!response.ok) {
-              return
+              const failure = await response.json().catch(() => null)
+              throw new Error(typeof failure?.error === 'string' ? failure.error : 'Unable to prepare checkout')
             }
 
             const data = await response.json()
@@ -2488,7 +2506,9 @@ export default function PersonalizePage({
             const orderId = typeof data?.orderId === 'string' ? data.orderId : null
             const authoritativeItem = Array.isArray(data?.items) ? data.items[0] : null
             const authoritativePrice = Number(authoritativeItem?.priceAtPurchase)
-            if (!Number.isFinite(authoritativePrice) || authoritativePrice <= 0) return
+            if (!Number.isFinite(authoritativePrice) || authoritativePrice <= 0) {
+              throw new Error('Checkout price could not be verified')
+            }
             const checkoutPreviewCoverUrl = String(
               previewUrl || previewPages[0] || ''
             ).trim()
@@ -2513,11 +2533,14 @@ export default function PersonalizePage({
               creationId: ensuredCreationId ?? undefined,
             }
 
-            if (!checkoutItem?.id) return
+            if (!checkoutItem?.id) throw new Error('Checkout item could not be prepared')
 
+            setCheckoutTransitionPhase('opening')
             prepareCheckout([checkoutItem])
             router.push(orderId ? `/checkout?orderId=${orderId}` : '/checkout')
+            return true
         }
+        return false
         } finally {
           checkoutInFlightRef.current = false
         }
@@ -2553,6 +2576,7 @@ export default function PersonalizePage({
     setShowAddToCartConfirm(false);
     previewActionInFlightRef.current = 'CHECKOUT';
     setPreviewActionPending('CHECKOUT');
+    setCheckoutTransitionPhase('preparing');
     requestCheckout();
   };
 
@@ -2571,6 +2595,15 @@ export default function PersonalizePage({
   }, []);
 
   useEffect(() => {
+    if (checkoutTransitionPhase !== 'opening') return;
+    const timeout = window.setTimeout(() => {
+      setCheckoutTransitionPhase(null);
+      triggerCheckoutFailedToast();
+    }, 15_000);
+    return () => window.clearTimeout(timeout);
+  }, [checkoutTransitionPhase, triggerCheckoutFailedToast]);
+
+  useEffect(() => {
     if (exitPhase !== 'REQUESTED') return
 
     beginExitExecution()
@@ -2586,7 +2619,7 @@ export default function PersonalizePage({
         try {
         switch (exitIntent) {
           case 'CHECKOUT':
-            await performCheckout()
+            if (!await performCheckout()) throw new Error('Checkout could not be prepared')
             break
           case 'EXIT':
             await returnToCustomizeFromPreview()
@@ -2594,6 +2627,10 @@ export default function PersonalizePage({
         }
         completeExit()
         } catch {
+        if (exitIntent === 'CHECKOUT') {
+          setCheckoutTransitionPhase(null)
+          triggerCheckoutFailedToast()
+        }
         failExit()
         } finally {
         exitRunningRef.current = false;
@@ -2601,7 +2638,7 @@ export default function PersonalizePage({
     }
 
     run()
-    }, [exitPhase, exitIntent, completeExit, failExit, performCheckout, returnToCustomizeFromPreview])
+    }, [exitPhase, exitIntent, completeExit, failExit, performCheckout, returnToCustomizeFromPreview, triggerCheckoutFailedToast])
 
 
 
@@ -3099,6 +3136,13 @@ export default function PersonalizePage({
         showExitConfirm={showExitConfirm}
         showAgeRangeConfirm={showAgeRangeConfirm}
         showAddToCartConfirm={showAddToCartConfirm}
+        checkoutTransitionPhase={checkoutTransitionPhase}
+        checkoutTransitionLabels={{
+          preparing: t('personalize.checkoutTransitionPreparing'),
+          securing: t('personalize.checkoutTransitionSecuring'),
+          opening: t('personalize.checkoutTransitionOpening'),
+          body: t('personalize.checkoutTransitionBody'),
+        }}
         exitLabels={{
           title: t('personalize.exitConfirmTitle'),
           body: t('personalize.exitConfirmBody'),
@@ -3328,8 +3372,16 @@ export default function PersonalizePage({
                   }
                   intro={
                     <PreviewIntroHeader
-                      title={t('personalize.previewTitle', { name })}
-                      subtitle={t('personalize.previewSubtitle')}
+                      title={isPreviewUnavailable
+                        ? t('personalize.previewUnavailableTitle')
+                        : isPreviewRestoring
+                        ? t('personalize.previewRestoringTitle')
+                        : t('personalize.previewTitle', { name })}
+                      subtitle={isPreviewUnavailable
+                        ? t('personalize.previewUnavailableBody')
+                        : isPreviewRestoring
+                        ? t('personalize.previewRestoringBody')
+                        : t('personalize.previewSubtitle')}
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
                       showChangePhoto={!isPreviewPhotoLocked && !isPreviewCoverPending}
@@ -3346,19 +3398,35 @@ export default function PersonalizePage({
                     <PreviewBookStage
                       key={displayedPreviewJobId ?? 'preview-book'}
                       pendingContent={isPreviewCoverPending ? (
-                        <PreviewGeneratingCover
-                          startedAt={generationStartedAt}
-                          title={t('personalize.generatingCoverTitle')}
-                          body={t('personalize.generatingCoverBody')}
-                          estimateLabel={t('personalize.generatingCoverEstimate')}
-                          stillWorking={t('personalize.generatingCoverOverrun')}
-                          error={previewError}
-                          retryLabel={t('personalize.generatingCoverRetry')}
-                          onReturnToDetails={() => void requestPreviewCancellation({ showToast: false })}
-                          capacityWaiting={isGeneratingPreviewCapacityWaiting}
-                          capacityTitle={t('personalize.capacityLoadingTitle')}
-                          capacityBody={t('personalize.capacityLoadingBody')}
-                        />
+                        isPreviewUnavailable ? (
+                          <PreviewAccessCover
+                            mode="unavailable"
+                            title={t('personalize.previewUnavailableTitle')}
+                            body={t('personalize.previewUnavailableBody')}
+                            actionLabel={t('personalize.previewUnavailableAction')}
+                            onAction={leaveUnavailablePreview}
+                          />
+                        ) : isPreviewRestoring && !previewError ? (
+                          <PreviewAccessCover
+                            mode="restoring"
+                            title={t('personalize.previewRestoringTitle')}
+                            body={t('personalize.previewRestoringBody')}
+                          />
+                        ) : (
+                          <PreviewGeneratingCover
+                            startedAt={generationStartedAt}
+                            title={t('personalize.generatingCoverTitle')}
+                            body={t('personalize.generatingCoverBody')}
+                            estimateLabel={t('personalize.generatingCoverEstimate')}
+                            stillWorking={t('personalize.generatingCoverOverrun')}
+                            error={previewError}
+                            retryLabel={t('personalize.generatingCoverRetry')}
+                            onReturnToDetails={() => void requestPreviewCancellation({ showToast: false })}
+                            capacityWaiting={isGeneratingPreviewCapacityWaiting}
+                            capacityTitle={t('personalize.capacityLoadingTitle')}
+                            capacityBody={t('personalize.capacityLoadingBody')}
+                          />
+                        )
                       ) : undefined}
                       pageWidth={PAGE_WIDTH}
                       pageHeight={PREVIEW_PAGE_HEIGHT}

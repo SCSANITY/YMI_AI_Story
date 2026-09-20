@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getJob, getPreviewPageAssets } from '@/services/jobs'
+import { getJob, getPreviewPageAssets, isTerminalJobAccessError } from '@/services/jobs'
 import {
   isPreviewDisplayComplete,
   resolvePreviewDisplayAssets,
@@ -47,12 +47,15 @@ type UsePreviewControllerOptions = {
   customerId?: string | null
 }
 
+export type PreviewAccessState = 'idle' | 'resolving' | 'available' | 'unavailable'
+
 const MAX_FETCH_FAILURES = 8
 const MAX_DONE_ASSET_RETRIES = 6
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const CAPACITY_NOTICE_MIN_WAIT_MS = 4_000
 
 class PreviewWatchTerminalError extends Error {}
+class PreviewUnavailableError extends PreviewWatchTerminalError {}
 
 function wait(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
@@ -98,6 +101,10 @@ export function usePreviewController({
   const [previewVariants, setPreviewVariants] = useState<PreviewVariantView[]>([])
   const [capacityWaitingByJobId, setCapacityWaitingByJobId] = useState<Record<string, true>>({})
   const [error, setError] = useState<string | null>(null)
+  const [previewAccess, setPreviewAccess] = useState<{
+    jobId: string | null
+    state: PreviewAccessState
+  }>({ jobId: null, state: 'idle' })
   const activeWatchesRef = useRef<Map<string, ActiveWatch>>(new Map())
   const refreshPromisesRef = useRef<Map<string, Promise<boolean>>>(new Map())
   const lastRefreshAtRef = useRef(0)
@@ -109,11 +116,37 @@ export function usePreviewController({
   const activeJobIdRef = useRef(activeJobId)
   const selectedJobIdRef = useRef(selectedPreviewJobId)
   const capacityWaitStartedAtRef = useRef<Map<string, number>>(new Map())
+  const previewAccessRef = useRef(previewAccess)
+
+  const updatePreviewAccess = useCallback((jobId: string | null, state: PreviewAccessState) => {
+    const next = { jobId, state }
+    previewAccessRef.current = next
+    setPreviewAccess((current) => (
+      current.jobId === next.jobId && current.state === next.state ? current : next
+    ))
+  }, [])
 
   useEffect(() => {
     activeJobIdRef.current = activeJobId
     selectedJobIdRef.current = selectedPreviewJobId
   }, [activeJobId, selectedPreviewJobId])
+
+  useEffect(() => {
+    if (!active || !activeJobId) {
+      updatePreviewAccess(null, 'idle')
+      return
+    }
+    if (activeDisplayComplete) {
+      updatePreviewAccess(activeJobId, 'available')
+      return
+    }
+    if (
+      previewAccessRef.current.jobId !== activeJobId ||
+      previewAccessRef.current.state === 'idle'
+    ) {
+      updatePreviewAccess(activeJobId, 'resolving')
+    }
+  }, [active, activeDisplayComplete, activeJobId, updatePreviewAccess])
 
   const selectPreviewJobId = useCallback((jobId: string | null) => {
     selectedJobIdRef.current = jobId
@@ -188,6 +221,7 @@ export function usePreviewController({
         try {
           const job = await getJob(jobId, customerId ?? null)
           if (controller.signal.aborted) break
+          updatePreviewAccess(jobId, 'available')
           fetchFailures = 0
           syncCapacityWaiting(jobId, job.capacity_state === 'waiting')
 
@@ -219,7 +253,8 @@ export function usePreviewController({
                   options.onAssets?.(jobId, assets)
                 }
               }
-            } catch {
+            } catch (assetError) {
+              if (isTerminalJobAccessError(assetError)) throw assetError
               // Job state remains authoritative; signed assets can lag briefly.
             }
           }
@@ -248,6 +283,12 @@ export function usePreviewController({
           if (watchError instanceof PreviewWatchTerminalError) {
             throw watchError
           }
+          if (isTerminalJobAccessError(watchError)) {
+            updatePreviewAccess(jobId, 'unavailable')
+            throw new PreviewUnavailableError(
+              'This Preview is unavailable. The link may have expired or belong to another session.'
+            )
+          }
           fetchFailures += 1
           if (fetchFailures >= MAX_FETCH_FAILURES) {
             throw watchError instanceof Error
@@ -267,7 +308,7 @@ export function usePreviewController({
 
     activeWatchesRef.current.set(jobId, { controller, promise })
     return promise
-  }, [customerId, syncCapacityWaiting])
+  }, [customerId, syncCapacityWaiting, updatePreviewAccess])
 
   const refresh = useCallback((
     reason: PreviewRefreshReason,
@@ -275,6 +316,12 @@ export function usePreviewController({
   ) => {
     const jobId = activeJobIdRef.current
     if (!active || !jobId) return Promise.resolve(false)
+    if (
+      previewAccessRef.current.jobId === jobId &&
+      previewAccessRef.current.state === 'unavailable'
+    ) {
+      return Promise.resolve(false)
+    }
 
     const now = Date.now()
     if (options?.force !== true && now - lastRefreshAtRef.current < 30_000) {
@@ -295,6 +342,7 @@ export function usePreviewController({
         if (reason === 'image-error') await decodePreviewImageRenewal(assets.urls)
         if (activeJobIdRef.current !== jobId) return false
         if (!applyPreviewDisplayAssetsForJob(jobId, assets, reason === 'image-error')) return false
+        updatePreviewAccess(jobId, 'available')
         setError(null)
         lastRefreshAtRef.current = Date.now()
         if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PREVIEW_DEBUG === 'true') {
@@ -305,7 +353,10 @@ export function usePreviewController({
           })
         }
         return true
-      } catch {
+      } catch (refreshError) {
+        if (isTerminalJobAccessError(refreshError)) {
+          updatePreviewAccess(jobId, 'unavailable')
+        }
         return false
       } finally {
         refreshPromisesRef.current.delete(jobId)
@@ -314,7 +365,7 @@ export function usePreviewController({
 
     refreshPromisesRef.current.set(jobId, refreshPromise)
     return refreshPromise
-  }, [active, applyPreviewDisplayAssetsForJob, customerId])
+  }, [active, applyPreviewDisplayAssetsForJob, customerId, updatePreviewAccess])
 
   useEffect(() => {
     if (!active || !activeJobId || activeDisplayComplete) return
@@ -386,6 +437,7 @@ export function usePreviewController({
     capacityWaitingByJobId,
     applyPreviewDisplayAssets,
     applyPreviewDisplayAssetsForJob,
+    previewAccessState: previewAccess.jobId === activeJobId ? previewAccess.state : 'idle',
     error,
     setError,
     refresh,

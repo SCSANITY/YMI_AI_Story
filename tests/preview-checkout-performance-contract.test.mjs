@@ -21,6 +21,11 @@ test('Preview warms Checkout and reuses a successful preview commit', async () =
     personalize,
     /currentCommit\?\.key === commitKey[\s\S]*?currentCommit\.promise[\s\S]*?: commitPreviewVariant/
   )
+  assert.match(personalize, /setCheckoutTransitionPhase\('preparing'\)/)
+  assert.match(personalize, /router\.push\(orderId \? `\/checkout\?orderId=\$\{orderId\}` : '\/checkout'\)/)
+
+  const loading = await read('app/checkout/loading.tsx')
+  assert.match(loading, /CheckoutLoadingShell/)
 })
 
 test('Order Start schedules unpaid reminders after the checkout response path', async () => {

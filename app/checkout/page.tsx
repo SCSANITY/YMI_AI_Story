@@ -31,6 +31,7 @@ import {
   resolveCartItemPreviewCover,
   resolveCartItemPreviewCoverStatus,
 } from '@/lib/cart-cover';
+import { CheckoutLoadingShell } from './CheckoutLoadingShell';
 
 const CheckoutIdentityModal = dynamic(
   () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
@@ -1501,8 +1502,7 @@ function CheckoutPageContent() {
 }
 
 function CheckoutPageFallback() {
-  const { t } = useI18n()
-  return <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 text-sm text-gray-500">{t('checkout.loadingCheckout')}</div>
+  return <CheckoutLoadingShell />
 }
 
 export default function CheckoutPage() {

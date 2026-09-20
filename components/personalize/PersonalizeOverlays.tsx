@@ -2,7 +2,7 @@
 
 import React, { memo } from 'react'
 import { createPortal } from 'react-dom'
-import { BookOpen, X } from 'lucide-react'
+import { BookOpen, LoaderCircle, LockKeyhole, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 
 type Point = {
@@ -20,6 +20,13 @@ type PersonalizeOverlaysProps = {
   showExitConfirm: boolean
   showAgeRangeConfirm: boolean
   showAddToCartConfirm: boolean
+  checkoutTransitionPhase: 'preparing' | 'securing' | 'opening' | null
+  checkoutTransitionLabels: {
+    preparing: string
+    securing: string
+    opening: string
+    body: string
+  }
   exitLabels: {
     title: string
     body: string
@@ -57,6 +64,8 @@ function PersonalizeOverlaysComponent({
   showExitConfirm,
   showAgeRangeConfirm,
   showAddToCartConfirm,
+  checkoutTransitionPhase,
+  checkoutTransitionLabels,
   exitLabels,
   ageRangeLabels,
   addToCartConfirmLabels,
@@ -104,6 +113,33 @@ function PersonalizeOverlaysComponent({
             </div>
           </div>
       )}
+
+      {checkoutTransitionPhase ? (
+        <div
+          className="fixed inset-0 z-[170] flex items-center justify-center bg-[linear-gradient(145deg,rgba(255,250,240,0.94),rgba(255,244,226,0.9))] p-5 backdrop-blur-xl"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+          data-checkout-transition={checkoutTransitionPhase}
+        >
+          <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/85 bg-white/88 px-7 py-10 text-center shadow-[0_28px_80px_rgba(146,82,24,0.18)]">
+            <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-rose-400" />
+            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[22px] bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+              <LockKeyhole className="h-8 w-8" />
+              <LoaderCircle className="absolute -bottom-1 -right-1 h-6 w-6 animate-spin rounded-full bg-white p-1 text-orange-500 motion-reduce:animate-none" />
+            </div>
+            <h2 className="font-serif text-2xl font-bold text-slate-950">
+              {checkoutTransitionLabels[checkoutTransitionPhase]}
+            </h2>
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-600">
+              {checkoutTransitionLabels.body}
+            </p>
+            <div className="mx-auto mt-6 h-1.5 w-36 overflow-hidden rounded-full bg-amber-100">
+              <div className="h-full w-2/3 animate-pulse rounded-full bg-gradient-to-r from-amber-400 to-orange-500 motion-reduce:animate-none" />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showExitConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">

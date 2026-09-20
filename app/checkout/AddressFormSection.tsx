@@ -703,20 +703,20 @@ function AddressFormSectionComponent({
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.firstName')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.firstName')} value={form.firstName} onChange={updateField('firstName')} />
+            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.firstName')} value={form.firstName} onChange={updateField('firstName')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.lastName')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.lastName')} value={form.lastName} onChange={updateField('lastName')} />
+            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.lastName')} value={form.lastName} onChange={updateField('lastName')} />
           </label>
           <div className="relative space-y-1.5 md:col-span-2" ref={emailDropdownRef}>
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.emailRequired')} <span className="text-amber-500">*</span>
             </span>
             <input
-              className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300"
+              className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm"
               placeholder={t('checkout.emailRequired')}
               value={form.email}
               onChange={updateField('email')}
@@ -871,27 +871,27 @@ function AddressFormSectionComponent({
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.addressLine1')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.addressLine1Placeholder')} value={form.addressLine1} onChange={updateField('addressLine1')} />
+            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine1Placeholder')} value={form.addressLine1} onChange={updateField('addressLine1')} />
           </label>
           <label className="space-y-1.5 md:col-span-2">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine2')}</span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.addressLine2Placeholder')} value={form.addressLine2} onChange={updateField('addressLine2')} />
+            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine2Placeholder')} value={form.addressLine2} onChange={updateField('addressLine2')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.city')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.city')} value={form.city} onChange={updateField('city')} />
+            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.city')} value={form.city} onChange={updateField('city')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.zip')} <span className="text-amber-500">*</span>
             </span>
-            <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.zip')} value={form.zip} onChange={updateField('zip')} />
+            <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.zip')} value={form.zip} onChange={updateField('zip')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.region')}</span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.regionPlaceholder')} value={form.region} onChange={updateField('region')} />
+            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.regionPlaceholder')} value={form.region} onChange={updateField('region')} />
           </label>
         </div>
       </div>
@@ -907,11 +907,11 @@ function AddressFormSectionComponent({
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.phone')} <span className="text-amber-500">*</span>
             </span>
-            <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.phonePlaceholder')} value={form.phone} onChange={updateField('phone')} />
+            <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.phonePlaceholder')} value={form.phone} onChange={updateField('phone')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.company')}</span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-sm font-medium text-gray-900 placeholder:text-slate-300" placeholder={t('checkout.companyPlaceholder')} value={form.company} onChange={updateField('company')} />
+            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.companyPlaceholder')} value={form.company} onChange={updateField('company')} />
           </label>
         </div>
       </div>

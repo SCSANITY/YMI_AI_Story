@@ -102,11 +102,35 @@ type BookListProps = {
   initialGenderQuery?: string | null;
 };
 
+function CatalogLoadingGrid({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-10 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 8 }, (_, index) => (
+        <div key={index} className="overflow-hidden rounded-[24px] border border-white/75 bg-white/70 shadow-[0_14px_38px_rgba(97,67,33,0.08)]">
+          <div className="aspect-[4/5] animate-pulse bg-gradient-to-br from-amber-50 via-orange-50 to-stone-100" />
+          <div className="space-y-3 p-4">
+            <div className="h-3 w-2/5 animate-pulse rounded-full bg-amber-100" />
+            <div className="h-5 w-4/5 animate-pulse rounded-full bg-slate-200" />
+            <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
+          </div>
+        </div>
+      ))}
+      <span className="sr-only">{label}</span>
+    </div>
+  )
+}
+
 export const BookList: React.FC<BookListProps> = ({ initialGenderQuery = null }) => {
   const initialGender = normalizeGenderQueryValue(initialGenderQuery);
   const { toggleFavorite, favorites } = useGlobalContext();
   const { t } = useI18n();
-  const { books, hasResolved: hasCatalogResolved, error: catalogError } = useBookCatalog();
+  const {
+    books,
+    isLoading: isCatalogLoading,
+    hasResolved: hasCatalogResolved,
+    error: catalogError,
+    retry: retryCatalog,
+  } = useBookCatalog();
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
 
   // Filter States
@@ -294,6 +318,9 @@ const handlePersonalize = (bookID: string) => {
 
   
   const activeFilterCount = [effectiveCategory, age, effectiveGender].filter(x => x !== 'All').length;
+  const showInitialCatalogLoading = isCatalogLoading && !hasCatalogResolved && books.length === 0;
+  const showCatalogError = hasCatalogResolved && Boolean(catalogError) && books.length === 0;
+  const showResolvedEmpty = hasCatalogResolved && !catalogError && filteredBooks.length === 0;
 
   const categoryOptions = categories.map(c => ({ value: c, label: c === 'All' ? t('category.All') : c }))
   const ageOptions = [{ value: 'All', label: t('category.All') }, ...AGE_GROUP_OPTIONS]
@@ -381,7 +408,18 @@ const handlePersonalize = (bookID: string) => {
         </div>
 
         {/* Results Grid - Adjusted for Mobile 2-columns (4 books per view) */}
-        {filteredBooks.length === 0 ? (
+        {showInitialCatalogLoading ? (
+          <CatalogLoadingGrid label={t('bookList.loading')} />
+        ) : showCatalogError ? (
+          <div role="alert" className="mx-auto max-w-xl rounded-[28px] border border-rose-100 bg-white/85 px-6 py-14 text-center shadow-[0_18px_45px_rgba(127,29,29,0.08)] backdrop-blur-xl">
+            <Filter className="mx-auto mb-4 h-12 w-12 text-rose-200" />
+            <h3 className="text-lg font-semibold text-gray-900">{t('bookList.loadErrorTitle')}</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-500">{t('bookList.loadErrorDescription')}</p>
+            <Button variant="outline" className="mt-5" onClick={retryCatalog}>
+              {t('bookList.retry')}
+            </Button>
+          </div>
+        ) : showResolvedEmpty ? (
           <div className="text-center py-20">
             <Filter className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900">{t('bookList.noBooksTitle')}</h3>

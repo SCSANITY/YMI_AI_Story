@@ -353,6 +353,43 @@ export async function updatePreviewJobInput(
   }
 }
 
+export class JobRequestError extends Error {
+  readonly status: number
+  readonly code: string | null
+
+  constructor(message: string, status: number, code?: string | null) {
+    super(message)
+    this.name = 'JobRequestError'
+    this.status = status
+    this.code = code ?? null
+  }
+}
+
+async function readJobRequestError(
+  response: Response,
+  fallbackMessage: string
+): Promise<JobRequestError> {
+  let detail: string | null = null
+  let code: string | null = null
+  try {
+    const data = await response.json()
+    detail = typeof data?.error === 'string' ? data.error : null
+    code = typeof data?.code === 'string' ? data.code : null
+  } catch {
+    // Keep the response status even when an upstream body is not JSON.
+  }
+
+  return new JobRequestError(
+    detail ? `${fallbackMessage}: ${detail}` : fallbackMessage,
+    response.status,
+    code
+  )
+}
+
+export function isTerminalJobAccessError(error: unknown) {
+  return error instanceof JobRequestError && [401, 403, 404].includes(error.status)
+}
+
 export async function getJob(jobId: string, customerId?: string | null): Promise<JobRecord> {
   if (!jobId) throw new Error('Missing job ID')
   if (!isUuid(jobId)) {
@@ -364,16 +401,7 @@ export async function getJob(jobId: string, customerId?: string | null): Promise
     30000
   )
   if (!response.ok) {
-    let details = ''
-    try {
-      const data = await response.json()
-      if (data?.error) {
-        details = `: ${data.error}`
-      }
-    } catch {
-      // no-op
-    }
-    throw new Error(`Failed to fetch job${details}`)
+    throw await readJobRequestError(response, 'Failed to fetch job')
   }
   return (await response.json()) as JobRecord
 }
@@ -448,16 +476,7 @@ export async function getPreviewPageAssets(
   )
   if (response.status === 202) return null
   if (!response.ok) {
-    let details = ''
-    try {
-      const data = await response.json()
-      if (data?.error) {
-        details = `: ${data.error}`
-      }
-    } catch {
-      // no-op
-    }
-    throw new Error(`Failed to fetch preview URLs${details}`)
+    throw await readJobRequestError(response, 'Failed to fetch preview URLs')
   }
   return parseSignedPreviewAssets(await response.json())
 }

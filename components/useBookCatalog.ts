@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CatalogBook } from '@/lib/book-catalog'
 
 let cachedCatalog: { books: CatalogBook[]; loadedAt: number } | null = null
@@ -40,8 +40,9 @@ async function fetchCatalogBooks(): Promise<CatalogBook[]> {
 export function useBookCatalog() {
   const [books, setBooks] = useState<CatalogBook[]>(cachedCatalog?.books ?? [])
   const [isLoading, setIsLoading] = useState(!cachedCatalog)
-  const [hasResolved, setHasResolved] = useState(false)
+  const [hasResolved, setHasResolved] = useState(Boolean(cachedCatalog))
   const [error, setError] = useState<string | null>(null)
+  const [requestVersion, setRequestVersion] = useState(0)
 
   useEffect(() => {
     let isMounted = true
@@ -72,6 +73,14 @@ export function useBookCatalog() {
     return () => {
       isMounted = false
     }
+  }, [requestVersion])
+
+  const retry = useCallback(() => {
+    invalidateBookCatalogClientCache()
+    setHasResolved(false)
+    setIsLoading(true)
+    setError(null)
+    setRequestVersion((current) => current + 1)
   }, [])
 
   return useMemo(
@@ -80,7 +89,8 @@ export function useBookCatalog() {
       isLoading,
       hasResolved,
       error,
+      retry,
     }),
-    [books, error, hasResolved, isLoading]
+    [books, error, hasResolved, isLoading, retry]
   )
 }
