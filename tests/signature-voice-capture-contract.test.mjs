@@ -135,7 +135,7 @@ test('Signature Voice v3 discloses synthetic narration and retention in one auth
   assert.doesNotMatch(workspace, /Adult declaration check|Adult check/)
 })
 
-test('S2 verifies real private audio bytes and derives duration on the server', async () => {
+test('S2 keeps private audio handling while mobile parser gaps fall back to recorder duration', async () => {
   const [confirmRoute, jobsRoute] = await Promise.all([
     read('app/api/user-assets/confirm/route.ts'),
     read('app/api/jobs/route.js'),
@@ -145,6 +145,8 @@ test('S2 verifies real private audio bytes and derives duration on the server', 
   assert.match(confirmRoute, /parseBuffer\(bytes/)
   assert.match(confirmRoute, /isVerifiedSignatureVoiceDuration\(duration\)/)
   assert.doesNotMatch(confirmRoute, /SIGNATURE_VOICE_(?:MIN|MAX)_SAMPLE_SECONDS|between 10 and 20/)
+  assert.match(confirmRoute, /const acceptedDuration = parsedDuration[\s\S]*requestedVoiceDuration/)
+  assert.doesNotMatch(confirmRoute, /duration could not be verified/)
   assert.match(confirmRoute, /duration_seconds: verifiedVoiceDuration/)
   assert.doesNotMatch(confirmRoute, /client_quality|normalizeClientVoiceQuality|clientMetadata/)
 

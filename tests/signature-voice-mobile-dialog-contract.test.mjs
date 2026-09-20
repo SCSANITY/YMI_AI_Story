@@ -5,14 +5,17 @@ import test from 'node:test'
 const root = new URL('../', import.meta.url)
 const read = (relativePath) => readFile(new URL(relativePath, root), 'utf8')
 
-test('Signature Voice uses one responsive portal without native-dialog navigation side effects', async () => {
+test('Signature Voice uses one responsive mobile sheet without native-dialog navigation side effects', async () => {
   const dialog = await read('components/personalize/SignatureVoiceDialog.tsx')
 
   assert.match(dialog, /createPortal/)
   assert.match(dialog, /role="dialog"/)
   assert.match(dialog, /aria-modal="true"/)
-  assert.match(dialog, /h-\[100dvh\]/)
+  assert.match(dialog, /data-mobile-presentation="bottom-sheet"/)
+  assert.match(dialog, /max-h-\[min\(88dvh,760px\)\]/)
+  assert.doesNotMatch(dialog, /h-\[100dvh\]|max-h-\[100dvh\]/)
   assert.match(dialog, /min-h-0 flex-1 overflow-y-auto overscroll-contain/)
+  assert.match(dialog, /min-h-12 w-full[\s\S]*sm:w-auto/)
   assert.match(dialog, /body\.style\.position = 'fixed'/)
   assert.match(dialog, /window\.scrollTo\(\{ top: scrollY, left: 0, behavior: 'auto' \}\)/)
   assert.match(dialog, /focus\(\{ preventScroll: true \}\)/)
@@ -40,4 +43,12 @@ test('voice authorization and upload/save callbacks remain explicit', async () =
   assert.match(dialog, /aria-required="true"/)
   assert.match(dialog, /disabled=\{!pendingRecording \|\| !authorized \|\| isSaving\}/)
   assert.match(dialog, /pendingRecording && onSave\(pendingRecording\)/)
+})
+
+test('customer copy accepts a completed capture without a voice-quality review step', async () => {
+  const messages = await read('src/lib/i18n-messages.ts')
+
+  assert.match(messages, /No voice-quality review is required/)
+  assert.match(messages, /Recording ready\. It will be used when you save\./)
+  assert.doesNotMatch(messages, /Record the short prompt, review it/)
 })

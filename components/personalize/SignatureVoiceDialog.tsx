@@ -155,7 +155,7 @@ export function SignatureVoiceDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[190] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[190] flex items-end justify-center bg-slate-950/55 px-2 pt-12 [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !isSaving) onClose()
       }}
@@ -166,9 +166,11 @@ export function SignatureVoiceDialog({
         aria-modal="true"
         aria-labelledby="signature-voice-dialog-title"
         data-signature-voice-dialog="true"
-        className="flex h-[100dvh] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-[#fffdf9] text-slate-900 shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-2xl sm:rounded-[1.5rem]"
+        data-mobile-presentation="bottom-sheet"
+        className="flex max-h-[min(88dvh,760px)] w-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-white/70 bg-[#fffdf9] text-slate-900 shadow-[0_28px_80px_rgba(15,23,42,0.3)] sm:max-h-[calc(100dvh-2rem)] sm:max-w-2xl sm:rounded-[1.5rem]"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-amber-100/80 bg-white/95 px-4 pb-3 [padding-top:max(1rem,env(safe-area-inset-top))] backdrop-blur-xl sm:gap-4 sm:px-6 sm:py-4">
+        <div className="relative flex shrink-0 items-start justify-between gap-3 border-b border-amber-100/80 bg-white/95 px-4 pb-3 pt-6 backdrop-blur-xl sm:gap-4 sm:px-6 sm:py-4">
+          <span className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
           <div className="min-w-0 pr-1">
             <h1 id="signature-voice-dialog-title" className="font-serif text-xl font-bold leading-tight text-slate-950 sm:text-2xl">{labels.title}</h1>
             <p className="mt-1 text-sm leading-5 text-slate-600 sm:leading-6">{labels.description}</p>
@@ -209,14 +211,14 @@ export function SignatureVoiceDialog({
           <div className="mt-3"><PrivacyReassurance /></div>
         </div>
 
-        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-amber-100/80 bg-white/96 px-4 pt-3 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] shadow-[0_-12px_28px_rgba(92,43,10,0.07)] sm:flex-row sm:justify-between sm:gap-3 sm:px-6 sm:py-4">
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-amber-100/80 bg-white/96 px-4 py-3 shadow-[0_-12px_28px_rgba(92,43,10,0.07)] sm:flex-row sm:justify-between sm:gap-3 sm:px-6 sm:py-4">
           {existingAssetId ? (
             <Button type="button" variant="ghost" onClick={onRemove} disabled={isSaving} className="text-red-700">
               <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
               {labels.remove}
             </Button>
           ) : <span />}
-          <Button type="button" onClick={() => pendingRecording && onSave(pendingRecording)} disabled={!pendingRecording || !authorized || isSaving} className="glass-action-btn glass-action-btn--brand min-h-12 rounded-2xl px-7">
+          <Button type="button" onClick={() => pendingRecording && onSave(pendingRecording)} disabled={!pendingRecording || !authorized || isSaving} className="glass-action-btn glass-action-btn--brand min-h-12 w-full rounded-2xl px-7 sm:w-auto">
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
             {isSaving ? labels.saving : labels.save}
           </Button>

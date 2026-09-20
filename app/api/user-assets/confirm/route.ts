@@ -39,6 +39,7 @@ export async function POST(request: Request) {
   const contentType = body?.content_type || body?.contentType || null
   const sizeBytes = body?.size_bytes ?? body?.sizeBytes
   const voiceAuthorizationId = body?.voice_authorization_id || body?.voiceAuthorizationId || null
+  const requestedVoiceDuration = Number(body?.metadata?.duration_seconds)
   const createdFor = assetType === 'profile_avatar' ? 'profile' : 'preview'
   const source = assetType === 'profile_avatar' ? 'profile' : 'upload'
 
@@ -94,20 +95,33 @@ export async function POST(request: Request) {
         .download(storagePath)
       if (downloadError || !storedVoice) throw new Error('Uploaded recording could not be read')
       const bytes = new Uint8Array(await storedVoice.arrayBuffer())
-      const audioMetadata = await parseBuffer(bytes, {
-        mimeType: verifiedUpload.contentType,
-        size: verifiedUpload.sizeBytes,
-      })
-      const duration = Number(audioMetadata.format.duration)
-      if (!isVerifiedSignatureVoiceDuration(duration)) {
-        throw new Error('Uploaded recording duration could not be verified')
+      let parsedDuration: number | null = null
+      try {
+        const audioMetadata = await parseBuffer(bytes, {
+          mimeType: verifiedUpload.contentType,
+          size: verifiedUpload.sizeBytes,
+        })
+        const duration = Number(audioMetadata.format.duration)
+        if (isVerifiedSignatureVoiceDuration(duration)) {
+          parsedDuration = duration
+        }
+      } catch {
+        // Some mobile MediaRecorder containers do not expose parseable duration
+        // metadata. The recorder's elapsed duration keeps capture non-blocking.
       }
-      verifiedVoiceDuration = Math.round(duration * 100) / 100
+      const acceptedDuration = parsedDuration
+        ?? (isVerifiedSignatureVoiceDuration(requestedVoiceDuration)
+          ? requestedVoiceDuration
+          : null)
+      if (acceptedDuration === null) {
+        throw new Error('Uploaded recording duration is unavailable')
+      }
+      verifiedVoiceDuration = Math.round(acceptedDuration * 100) / 100
     }
   } catch (error) {
     await supabaseAdmin.storage.from('raw-private').remove([storagePath]).catch(() => undefined)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Uploaded file failed verification' },
+      { error: error instanceof Error ? error.message : 'Uploaded file could not be saved' },
       { status: 409 }
     )
   }

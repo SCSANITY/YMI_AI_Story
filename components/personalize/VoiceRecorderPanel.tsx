@@ -173,7 +173,10 @@ export function VoiceRecorderPanel({
         }
 
         const url = URL.createObjectURL(blob)
-        const durationSeconds = Math.round(((Date.now() - startAtRef.current) / 1000) * 100) / 100
+        const durationSeconds = Math.max(
+          0.01,
+          Math.round(((Date.now() - startAtRef.current) / 1000) * 100) / 100
+        )
         setRecordedBlob(blob)
         recordedBlobRef.current = blob
         setRecordedUrl(url)
@@ -286,7 +289,7 @@ export function VoiceRecorderPanel({
         <div className="rounded-2xl border border-white/80 bg-white/86 p-3.5 shadow-[0_12px_26px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.94)] sm:rounded-3xl sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <div className={`text-sm font-semibold ${combinedError ? 'text-red-600' : 'text-slate-800'}`}>{statusText}</div>
+              <div aria-live="polite" className={`text-sm font-semibold ${combinedError ? 'text-red-600' : 'text-slate-800'}`}>{statusText}</div>
               <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
                 {t('voiceRecorder.secureNote')}

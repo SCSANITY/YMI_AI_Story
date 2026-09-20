@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('T4-025 removes the customer duration review without weakening capture security', async () => {
+test('T4-025 keeps customer capture non-blocking across mobile duration metadata gaps', async () => {
   const [recorder, signatureVoice, confirmRoute, migration] = await Promise.all([
     read('components/personalize/VoiceRecorderPanel.tsx'),
     read('src/lib/signature-voice.ts'),
@@ -21,6 +21,9 @@ test('T4-025 removes the customer duration review without weakening capture secu
   assert.match(confirmRoute, /\.from\('raw-private'\)[\s\S]*\.download\(storagePath\)/)
   assert.match(confirmRoute, /parseBuffer\(bytes/)
   assert.match(confirmRoute, /isVerifiedSignatureVoiceDuration\(duration\)/)
+  assert.match(confirmRoute, /const requestedVoiceDuration = Number\(body\?\.metadata\?\.duration_seconds\)/)
+  assert.match(confirmRoute, /const acceptedDuration = parsedDuration[\s\S]*requestedVoiceDuration/)
+  assert.doesNotMatch(confirmRoute, /duration could not be verified/)
   assert.match(confirmRoute, /confirm_signature_voice_capture/)
 
   assert.match(migration, /alter column voice_sample_duration_seconds type numeric/)

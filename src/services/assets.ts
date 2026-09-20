@@ -759,7 +759,7 @@ export async function uploadUserAsset(
   })
 
   if (!confirmResponse.ok) {
-    throw new Error(await resolveUploadError(confirmResponse, `The uploaded ${uploadLabel} could not be verified. Please try again.`))
+    throw new Error(await resolveUploadError(confirmResponse, `The uploaded ${uploadLabel} could not be saved. Please try again.`))
   }
 
   return (await confirmResponse.json()) as UserAssetRecord
