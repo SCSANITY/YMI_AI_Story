@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { PrivacyReassurance } from '@/components/personalize/PrivacyReassurance'
@@ -52,63 +53,163 @@ export function SignatureVoiceDialog({
   onSave,
   onRemove,
 }: SignatureVoiceDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
+  const isSavingRef = useRef(isSaving)
+  const onCloseRef = useRef(onClose)
   const [authorized, setAuthorized] = useState(false)
 
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
-    if (!open && dialog.open) dialog.close()
+    isSavingRef.current = isSaving
+  }, [isSaving])
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    if (!open) return
+
+    const body = document.body
+    const html = document.documentElement
+    const scrollY = window.scrollY
+    const previousBodyStyles = {
+      left: body.style.left,
+      overflow: body.style.overflow,
+      position: body.style.position,
+      right: body.style.right,
+      top: body.style.top,
+      width: body.style.width,
+    }
+    const previousHtmlOverscroll = html.style.overscrollBehavior
+    returnFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.left = '0'
+    body.style.right = '0'
+    body.style.width = '100%'
+    body.style.overflow = 'hidden'
+    html.style.overscrollBehavior = 'none'
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      closeButtonRef.current?.focus({ preventScroll: true })
+    })
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        if (!isSavingRef.current) onCloseRef.current()
+        return
+      }
+
+      if (event.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), audio[controls], [tabindex]:not([tabindex="-1"])'
+      )).filter((element) => !element.hasAttribute('hidden'))
+      if (focusable.length === 0) return
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.removeEventListener('keydown', handleKeyDown)
+      body.style.position = previousBodyStyles.position
+      body.style.top = previousBodyStyles.top
+      body.style.left = previousBodyStyles.left
+      body.style.right = previousBodyStyles.right
+      body.style.width = previousBodyStyles.width
+      body.style.overflow = previousBodyStyles.overflow
+      html.style.overscrollBehavior = previousHtmlOverscroll
+      window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' })
+      window.requestAnimationFrame(() => {
+        returnFocusRef.current?.focus({ preventScroll: true })
+        returnFocusRef.current = null
+      })
+    }
   }, [open])
 
-  return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby="signature-voice-dialog-title"
-      onCancel={(event) => {
-        event.preventDefault()
-        if (!isSaving) onClose()
+  useEffect(() => {
+    // Authorization is intentionally per-open and must never carry into a later capture.
+    if (open) return
+    const frame = window.requestAnimationFrame(() => setAuthorized(false))
+    return () => window.cancelAnimationFrame(frame)
+  }, [open])
+
+  if (!open || typeof document === 'undefined') return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[190] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isSaving) onClose()
       }}
-      onClose={() => {
-        setAuthorized(false)
-        if (open) onClose()
-      }}
-      className="m-0 mt-auto max-h-[92vh] w-full max-w-none overflow-y-auto rounded-t-[1.5rem] border-0 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/55 sm:m-auto sm:max-w-2xl sm:rounded-[1.5rem]"
     >
-      <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
-        <div>
-          <h1 id="signature-voice-dialog-title" className="font-serif text-2xl font-bold text-slate-950">{labels.title}</h1>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{labels.description}</p>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="signature-voice-dialog-title"
+        data-signature-voice-dialog="true"
+        className="flex h-[100dvh] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-[#fffdf9] text-slate-900 shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-2xl sm:rounded-[1.5rem]"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-amber-100/80 bg-white/95 px-4 pb-3 [padding-top:max(1rem,env(safe-area-inset-top))] backdrop-blur-xl sm:gap-4 sm:px-6 sm:py-4">
+          <div className="min-w-0 pr-1">
+            <h1 id="signature-voice-dialog-title" className="font-serif text-xl font-bold leading-tight text-slate-950 sm:text-2xl">{labels.title}</h1>
+            <p className="mt-1 text-sm leading-5 text-slate-600 sm:leading-6">{labels.description}</p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            disabled={isSaving}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9"
+            aria-label={labels.close}
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
         </div>
-        <button type="button" onClick={onClose} disabled={isSaving} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" aria-label={labels.close}>
-          <X className="h-5 w-5" aria-hidden="true" />
-        </button>
-      </div>
 
-      <div className="p-5 sm:p-6">
-        <VoiceRecorderPanel
-          existingAssetId={existingAssetId}
-          existingSignedUrl={existingSignedUrl}
-          existingDurationSeconds={existingDurationSeconds}
-          validationError={validationError}
-          onRecordingSelected={(recording) => {
-            setAuthorized(false)
-            onRecordingSelected(recording)
-          }}
-          onClearValidation={onClearValidation}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6 sm:py-5">
+          <VoiceRecorderPanel
+            existingAssetId={existingAssetId}
+            existingSignedUrl={existingSignedUrl}
+            existingDurationSeconds={existingDurationSeconds}
+            pendingRecording={pendingRecording}
+            validationError={validationError}
+            onRecordingSelected={(recording) => {
+              setAuthorized(false)
+              onRecordingSelected(recording)
+            }}
+            onClearValidation={onClearValidation}
+          />
 
-        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/55 p-4 text-sm leading-6 text-slate-700">
-          <input type="checkbox" checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} aria-required="true" className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
-          <span>
-            <span className="mb-1 block text-xs font-extrabold uppercase tracking-[0.12em] text-amber-700">{labels.required}</span>
-            <span className="font-semibold text-slate-900">{labels.authorization}</span>
-          </span>
-        </label>
-        <div className="mt-3"><PrivacyReassurance /></div>
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/55 p-3.5 text-sm leading-5 text-slate-700 sm:mt-5 sm:p-4 sm:leading-6">
+            <input type="checkbox" checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} aria-required="true" className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-amber-600 focus:ring-amber-500 sm:h-4 sm:w-4" />
+            <span>
+              <span className="mb-1 block text-xs font-extrabold uppercase tracking-[0.12em] text-amber-700">{labels.required}</span>
+              <span className="font-semibold text-slate-900">{labels.authorization}</span>
+            </span>
+          </label>
+          <div className="mt-3"><PrivacyReassurance /></div>
+        </div>
 
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-amber-100/80 bg-white/96 px-4 pt-3 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] shadow-[0_-12px_28px_rgba(92,43,10,0.07)] sm:flex-row sm:justify-between sm:gap-3 sm:px-6 sm:py-4">
           {existingAssetId ? (
             <Button type="button" variant="ghost" onClick={onRemove} disabled={isSaving} className="text-red-700">
               <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -121,6 +222,7 @@ export function SignatureVoiceDialog({
           </Button>
         </div>
       </div>
-    </dialog>
+    </div>,
+    document.body
   )
 }

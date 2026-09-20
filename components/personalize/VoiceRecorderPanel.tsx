@@ -16,6 +16,7 @@ type VoiceRecorderPanelProps = {
   existingAssetId?: string | null
   existingSignedUrl?: string | null
   existingDurationSeconds?: number | null
+  pendingRecording?: PendingVoiceRecording | null
   validationError?: string | null
   onRecordingSelected: (recording: PendingVoiceRecording | null) => void
   onClearValidation?: () => void
@@ -48,6 +49,7 @@ export function VoiceRecorderPanel({
   existingAssetId,
   existingSignedUrl,
   existingDurationSeconds,
+  pendingRecording,
   validationError,
   onRecordingSelected,
   onClearValidation,
@@ -60,6 +62,7 @@ export function VoiceRecorderPanel({
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
 
+  const recordedBlobRef = useRef<Blob | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -112,6 +115,7 @@ export function VoiceRecorderPanel({
       URL.revokeObjectURL(recordedUrl)
     }
     setRecordedBlob(null)
+    recordedBlobRef.current = null
     setRecordedUrl(null)
     setSeconds(0)
     setLocalError(null)
@@ -171,6 +175,7 @@ export function VoiceRecorderPanel({
         const url = URL.createObjectURL(blob)
         const durationSeconds = Math.round(((Date.now() - startAtRef.current) / 1000) * 100) / 100
         setRecordedBlob(blob)
+        recordedBlobRef.current = blob
         setRecordedUrl(url)
         setSeconds(durationSeconds)
 
@@ -225,6 +230,26 @@ export function VoiceRecorderPanel({
   }, [playbackUrl])
 
   useEffect(() => {
+    if (!pendingRecording || recordedBlobRef.current) return
+
+    const restoredUrl = URL.createObjectURL(pendingRecording.file)
+    let applied = false
+    const frame = window.requestAnimationFrame(() => {
+      applied = true
+      recordedBlobRef.current = pendingRecording.file
+      setRecordedBlob(pendingRecording.file)
+      setRecordedUrl(restoredUrl)
+      setSeconds(pendingRecording.durationSeconds)
+      setPhase('selected')
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      if (!applied) URL.revokeObjectURL(restoredUrl)
+    }
+  }, [pendingRecording])
+
+  useEffect(() => {
     // The selected asset can be restored or replaced by the parent workflow.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSeconds(Math.max(0, Number(existingDurationSeconds) || 0))
@@ -241,9 +266,9 @@ export function VoiceRecorderPanel({
   }, [clearTimer, recordedUrl, stopTracks])
 
   return (
-    <div className="mt-4 overflow-hidden rounded-3xl border border-orange-100/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.92),rgba(255,246,235,0.78))] shadow-[0_18px_42px_rgba(154,95,38,0.12),inset_0_1px_0_rgba(255,255,255,0.95)]">
-      <div className="border-b border-orange-100/70 px-4 py-4 sm:px-5">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className="overflow-hidden rounded-2xl border border-orange-100/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.92),rgba(255,246,235,0.78))] shadow-[0_18px_42px_rgba(154,95,38,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] sm:rounded-3xl">
+      <div className="border-b border-orange-100/70 px-3.5 py-3 sm:px-5 sm:py-4">
+        <div className="mb-2 flex flex-wrap items-center gap-2 sm:mb-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-orange-200/80 bg-orange-50/80 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-orange-700">
             <Sparkles className="h-3.5 w-3.5" />
             {t('voiceRecorder.badge')}
@@ -252,13 +277,13 @@ export function VoiceRecorderPanel({
         <h5 className="text-base font-bold text-slate-950">{t('voiceRecorder.title')}</h5>
       </div>
 
-      <div className="space-y-4 px-4 py-4 sm:px-5">
-        <div className="rounded-3xl border border-amber-100/90 bg-gradient-to-br from-amber-50/95 via-white/90 to-orange-50/80 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.94)]">
+      <div className="space-y-3 px-3.5 py-3 sm:space-y-4 sm:px-5 sm:py-4">
+        <div className="rounded-2xl border border-amber-100/90 bg-gradient-to-br from-amber-50/95 via-white/90 to-orange-50/80 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.94)] sm:rounded-3xl sm:px-4 sm:py-4">
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-orange-700">{t('voiceRecorder.promptIntro')}</div>
-          <p className="text-sm font-semibold leading-7 text-slate-800">{PROMPT_TEXT}</p>
+          <p className="text-sm font-semibold leading-6 text-slate-800 sm:leading-7">{PROMPT_TEXT}</p>
         </div>
 
-        <div className="rounded-3xl border border-white/80 bg-white/86 p-4 shadow-[0_12px_26px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.94)]">
+        <div className="rounded-2xl border border-white/80 bg-white/86 p-3.5 shadow-[0_12px_26px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.94)] sm:rounded-3xl sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className={`text-sm font-semibold ${combinedError ? 'text-red-600' : 'text-slate-800'}`}>{statusText}</div>
