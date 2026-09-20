@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 type PreviewBookStageProps = {
   stageHeight?: number
@@ -20,6 +20,17 @@ type PreviewBookStageProps = {
   previewBookShadow: string
   renderPageContent: (side: 'left' | 'right', spreadIndex: number) => ReactNode
   pendingContent?: ReactNode
+}
+
+export function resolvePreviewBookModelTargetX({
+  currentSpread,
+  isFlipping,
+  flipDirection,
+  pageWidth,
+}: Pick<PreviewBookStageProps, 'currentSpread' | 'isFlipping' | 'flipDirection' | 'pageWidth'>): number {
+  const isClosed = currentSpread === 0 && !isFlipping
+  const isClosingToCover = currentSpread === 1 && isFlipping && flipDirection === 'prev'
+  return isClosed || isClosingToCover ? -pageWidth / 2 : 0
 }
 
 function PreviewBookStageComponent({
@@ -42,6 +53,15 @@ function PreviewBookStageComponent({
 }: PreviewBookStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [measuredPreviewScale, setMeasuredPreviewScale] = useState(1)
+  const prefersReducedMotion = useReducedMotion()
+  const isClosingToCover = currentSpread === 1 && isFlipping && flipDirection === 'prev'
+  const isClosed = currentSpread === 0 && !isFlipping
+  const modelTargetX = resolvePreviewBookModelTargetX({
+    currentSpread,
+    isFlipping,
+    flipDirection,
+    pageWidth,
+  })
   const staticRightIndex =
     isFlipping && flipDirection === 'prev'
       ? currentSpread
@@ -86,10 +106,11 @@ function PreviewBookStageComponent({
       >
         <motion.div
           data-preview-book-model="true"
+          data-preview-book-target-x={modelTargetX}
           className="relative flex w-full justify-center"
           initial={false}
-          animate={{ x: (currentSpread === 0 && !isFlipping) ? -pageWidth / 2 : 0 }}
-          transition={{ duration: animationDuration, ease: 'easeInOut' }}
+          animate={{ x: modelTargetX }}
+          transition={{ duration: prefersReducedMotion ? 0 : animationDuration, ease: 'easeInOut' }}
           style={{ transformStyle: 'preserve-3d', perspective: '2500px', height: pageHeight }}
         >
           <div
@@ -146,6 +167,30 @@ function PreviewBookStageComponent({
               {renderPageContent('right', staticRightIndex)}
             </div>
           </div>
+
+          <motion.div
+            aria-hidden="true"
+            inert
+            data-preview-cover-guard="true"
+            data-preview-cover-guard-state={isClosingToCover ? 'closing' : isClosed ? 'closed' : 'inactive'}
+            className="pointer-events-none absolute left-1/2 top-0 z-40 h-full overflow-hidden"
+            initial={false}
+            animate={{
+              opacity: isClosingToCover
+                ? prefersReducedMotion
+                  ? 1
+                  : [0, 0, 1]
+                : isClosed
+                  ? 1
+                  : 0,
+            }}
+            transition={isClosingToCover && !prefersReducedMotion
+              ? { duration: animationDuration, ease: 'easeInOut', times: [0, 0.46, 0.62] }
+              : { duration: 0 }}
+            style={{ width: pageWidth, transform: 'translateZ(0.5px)' }}
+          >
+            {renderPageContent('right', 0)}
+          </motion.div>
 
           <AnimatePresence>
             {isFlipping && flipDirection === 'next' && (
