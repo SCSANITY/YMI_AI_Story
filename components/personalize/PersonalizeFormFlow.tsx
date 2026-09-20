@@ -154,7 +154,7 @@ function ReviewInlineField({
             onKeyDown={(event) => {
               if (event.key === 'Enter') event.currentTarget.blur()
             }}
-            className="h-9 w-full rounded-lg border border-amber-300 bg-amber-50/40 px-3 text-sm font-semibold text-slate-950 outline-none transition-shadow focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+            className="h-9 w-full min-w-0 max-w-full rounded-lg border border-amber-300 bg-amber-50/40 px-3 text-base font-semibold text-slate-950 outline-none transition-shadow focus:border-amber-500 focus:ring-2 focus:ring-amber-200 md:text-sm"
           />
         ) : (
           <span id={id} className="block break-words pt-1 text-sm font-semibold text-slate-900">
@@ -197,7 +197,7 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
         : props.photoLabels.photoReady
 
   return (
-    <section className="rounded-[1.5rem] bg-white p-4 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.48)] sm:p-5 lg:p-6">
+    <section className="w-full min-w-0 max-w-full rounded-[1.5rem] bg-white p-4 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.48)] sm:p-5 lg:p-6">
       <StepHeader current={stepNumber} title={title} body={body} stepLabel={props.labels.stepLabel(stepNumber)} />
 
       <div className="mt-4">

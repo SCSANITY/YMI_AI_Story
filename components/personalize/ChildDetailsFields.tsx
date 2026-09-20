@@ -117,8 +117,8 @@ function ChildDetailsFieldsComponent({
   }, [initialName, onChange])
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 md:gap-4">
-      <div ref={nameBoxRef} className="space-y-2 relative">
+    <div className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">
+      <div ref={nameBoxRef} className="relative min-w-0 space-y-2">
         <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.nameLabel}</label>
         <input
           type="text"
@@ -126,11 +126,11 @@ function ChildDetailsFieldsComponent({
           onChange={(event) => handleNameChange(event.target.value)}
           onFocus={openNameHistory}
           placeholder={labels.namePlaceholder}
-          className={`${styles.control} h-11 w-full rounded-xl px-4 text-sm font-semibold text-slate-950 placeholder:text-slate-400/70`}
+          className={`${styles.control} h-11 w-full min-w-0 max-w-full rounded-xl px-4 text-base font-semibold text-slate-950 placeholder:text-slate-400/70 md:text-sm`}
         />
         {showNameHistory && (
           <div
-            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 max-h-44 overflow-auto"
+            className="absolute z-30 mt-2 max-h-44 w-full min-w-0 max-w-full overflow-auto rounded-2xl border border-white/70 bg-white/92 p-2 shadow-[0_18px_44px_rgba(16,24,40,0.14)] backdrop-blur-xl"
             onMouseDown={(event) => {
               event.preventDefault()
               event.stopPropagation()
@@ -146,7 +146,7 @@ function ChildDetailsFieldsComponent({
                 >
                   <button
                     type="button"
-                    className="flex-1 text-left text-sm text-gray-700"
+                    className="min-w-0 flex-1 break-words text-left text-sm text-gray-700"
                     onMouseDown={(event) => {
                       event.preventDefault()
                       selectName(value)
@@ -156,7 +156,7 @@ function ChildDetailsFieldsComponent({
                   </button>
                   <button
                     type="button"
-                    className="text-gray-400 hover:text-red-500 transition"
+                    className="shrink-0 text-gray-400 transition hover:text-red-500"
                     onMouseDown={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
@@ -172,7 +172,7 @@ function ChildDetailsFieldsComponent({
         )}
       </div>
 
-      <div ref={ageBoxRef} className="space-y-2 relative">
+      <div ref={ageBoxRef} className="relative min-w-0 space-y-2">
         <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.ageLabel}</label>
         <input
           type="number"
@@ -180,7 +180,7 @@ function ChildDetailsFieldsComponent({
           onChange={(event) => handleAgeChange(event.target.value)}
           onFocus={openAgeHistory}
           placeholder={labels.agePlaceholder}
-          className={`${styles.control} h-11 w-full rounded-xl px-4 text-sm font-semibold text-slate-950 placeholder:text-slate-400/70`}
+          className={`${styles.control} h-11 w-full min-w-0 max-w-full rounded-xl px-4 text-base font-semibold text-slate-950 placeholder:text-slate-400/70 md:text-sm`}
         />
         {shouldShowAgeRangeWarning ? (
           <p className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs font-medium leading-5 text-amber-700">
@@ -189,7 +189,7 @@ function ChildDetailsFieldsComponent({
         ) : null}
         {showAgeHistory && (
           <div
-            className="absolute z-30 mt-2 w-full rounded-2xl border border-white/70 bg-white/92 backdrop-blur-xl shadow-[0_18px_44px_rgba(16,24,40,0.14)] p-2 max-h-44 overflow-auto"
+            className="absolute z-30 mt-2 max-h-44 w-full min-w-0 max-w-full overflow-auto rounded-2xl border border-white/70 bg-white/92 p-2 shadow-[0_18px_44px_rgba(16,24,40,0.14)] backdrop-blur-xl"
             onMouseDown={(event) => {
               event.preventDefault()
               event.stopPropagation()
@@ -205,7 +205,7 @@ function ChildDetailsFieldsComponent({
                 >
                   <button
                     type="button"
-                    className="flex-1 text-left text-sm text-gray-700"
+                    className="min-w-0 flex-1 break-words text-left text-sm text-gray-700"
                     onMouseDown={(event) => {
                       event.preventDefault()
                       selectAge(value)
@@ -215,7 +215,7 @@ function ChildDetailsFieldsComponent({
                   </button>
                   <button
                     type="button"
-                    className="text-gray-400 hover:text-red-500 transition"
+                    className="shrink-0 text-gray-400 transition hover:text-red-500"
                     onMouseDown={(event) => {
                       event.preventDefault()
                       event.stopPropagation()

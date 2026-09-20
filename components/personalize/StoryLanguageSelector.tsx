@@ -65,17 +65,17 @@ function StoryLanguageSelectorComponent({ value, labels, onChange }: StoryLangua
   }, [onChange])
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 max-w-full flex-col gap-2">
       <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{labels.field}</label>
-      <div ref={rootRef} className="relative">
+      <div ref={rootRef} className="relative min-w-0 max-w-full">
         <button
           type="button"
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           onClick={() => setIsOpen((prev) => !prev)}
-          className={`${styles.control} flex h-11 w-full items-center justify-between rounded-xl px-4 text-left text-sm font-semibold text-slate-950`}
+          className={`${styles.control} flex h-11 w-full min-w-0 max-w-full items-center justify-between rounded-xl px-4 text-left text-sm font-semibold text-slate-950`}
         >
-          <span>{currentLabel}</span>
+          <span className="min-w-0 truncate">{currentLabel}</span>
         </button>
         <ChevronDown className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         {isOpen && (

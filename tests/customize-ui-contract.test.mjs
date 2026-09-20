@@ -75,6 +75,24 @@ test('Customize Review owns live values and edits each summary in place', () => 
   assert.doesNotMatch(formFlow, /onClick=\{\(\) => props\.onStepChange\('DETAILS'\)\}[^\n]*aria-label=\{`\$\{props\.labels\.edit\}/)
 })
 
+test('Customize mobile text entry stays at native page scale and within its container', () => {
+  const layout = read('app/layout.tsx')
+  const formFlow = read('components/personalize/PersonalizeFormFlow.tsx')
+  const childDetails = read('components/personalize/ChildDetailsFields.tsx')
+  const languageSelector = read('components/personalize/StoryLanguageSelector.tsx')
+
+  assert.match(layout, /width: 'device-width'/)
+  assert.match(layout, /initialScale: 1/)
+  assert.doesNotMatch(layout, /maximumScale|userScalable/)
+  assert.equal(childDetails.match(/text-base[^"`]*md:text-sm/g)?.length, 2)
+  assert.match(formFlow, /<input[\s\S]*?className="[^"]*text-base[^"]*md:text-sm[^"]*"/)
+  assert.match(formFlow, /<section className="w-full min-w-0 max-w-full/)
+  assert.match(childDetails, /grid min-w-0 gap-3/)
+  assert.equal(childDetails.match(/w-full min-w-0 max-w-full/g)?.length, 4)
+  assert.match(languageSelector, /flex min-w-0 max-w-full flex-col/)
+  assert.match(languageSelector, /className="min-w-0 truncate"/)
+})
+
 test('Customize history and draft recovery have one current owner', () => {
   const personalize = read('components/PersonalizePage.tsx')
   const history = read('components/personalize/usePersonalizeHistory.ts')
