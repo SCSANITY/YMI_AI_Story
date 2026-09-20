@@ -44,7 +44,7 @@ export function useCustomizeNavigation() {
     const cachedAccess = getCachedCustomizeAccess()
     if (cachedAccess?.enabled) {
       options?.onBeforeNavigate?.()
-      router.push(href)
+      router.push(href, { scroll: true })
       clearPendingSoon(href)
       return true
     }
@@ -59,7 +59,7 @@ export function useCustomizeNavigation() {
     }
 
     options?.onBeforeNavigate?.()
-    router.push(href)
+    router.push(href, { scroll: true })
     clearPendingSoon(href)
     return true
   }, [clearPendingSoon, router])

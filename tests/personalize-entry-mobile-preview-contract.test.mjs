@@ -36,3 +36,21 @@ test('responsive Preview settles before paint and does not replay cover centerin
   assert.match(stage, /animate=\{\{ rotateY: -180 \}\}/)
   assert.match(stage, /animate=\{\{ rotateY: 0 \}\}/)
 })
+
+test('one mobile page-level authority resets Product Intro and Preview entry without moving desktop', async () => {
+  const page = await read('components/PersonalizePage.tsx')
+  const navigation = await read('components/useCustomizeNavigation.ts')
+  const intro = await read('components/personalize/PersonalizeProductIntro.tsx')
+  const layout = await read('components/personalize/PreviewStepLayout.tsx')
+  const resetEffect = page.slice(page.indexOf('const lastMobileTopSurfaceRef'), page.indexOf('const pendingGenerateConsentRef'))
+
+  assert.match(resetEffect, /viewState\.showPreview\s*\? 'PREVIEW'/)
+  assert.match(resetEffect, /viewState\.showForm && formStep === 'INTRO'/)
+  assert.match(resetEffect, /window\.matchMedia\('\(max-width: 767px\)'\)/)
+  assert.match(resetEffect, /lastMobileTopSurfaceRef\.current === mobileTopSurface/)
+  assert.match(resetEffect, /window\.scrollTo\(\{ top: 0, left: 0, behavior: 'auto' \}\)/)
+  assert.doesNotMatch(resetEffect, /behavior: 'smooth'/)
+  assert.equal(navigation.match(/router\.push\(href, \{ scroll: true \}\)/g)?.length, 2)
+  assert.doesNotMatch(intro, /window\.scrollTo/)
+  assert.doesNotMatch(layout, /window\.scrollTo/)
+})

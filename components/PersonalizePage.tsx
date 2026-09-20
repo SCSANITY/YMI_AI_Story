@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
@@ -358,6 +358,26 @@ export default function PersonalizePage({
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
   const [showAddToCartConfirm, setShowAddToCartConfirm] = useState(false);
   const [formStep, setFormStep] = useState<PersonalizeFormStep>('INTRO');
+  const lastMobileTopSurfaceRef = useRef<'INTRO' | 'PREVIEW' | null>(null);
+  const mobileTopSurface = viewState.showPreview
+    ? 'PREVIEW'
+    : viewState.showForm && formStep === 'INTRO'
+      ? 'INTRO'
+      : null;
+
+  useLayoutEffect(() => {
+    if (!mobileTopSurface) {
+      lastMobileTopSurfaceRef.current = null;
+      return;
+    }
+
+    const mobilePersonalize = window.matchMedia('(max-width: 767px)');
+    if (!mobilePersonalize.matches || lastMobileTopSurfaceRef.current === mobileTopSurface) return;
+
+    lastMobileTopSurfaceRef.current = mobileTopSurface;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [mobileTopSurface]);
+
   const pendingGenerateConsentRef = useRef<GeneratePreviewConsent | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
