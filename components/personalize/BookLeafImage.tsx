@@ -39,15 +39,20 @@ export function BookLeafImage({
     return () => { active = false }
   }, [identity, leaf.url, visibleUrl])
   return (
+    // Signed leaf URLs stay direct so a renewed token can replace the source
+    // only after decoding without remounting the physical page face.
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={visibleUrl}
       alt={alt}
-      className={`absolute top-0 h-full max-w-none object-cover ${className}`}
+      draggable={false}
+      className={`pointer-events-none absolute top-0 h-full max-w-none select-none object-cover ${className}`}
       decoding="async"
       loading={loading}
       fetchPriority={fetchPriority}
       onError={onError}
-      style={{ left: '0%', width: '100%' }}
+      style={{ left: '0%', width: '100%', WebkitTouchCallout: 'none' }}
+      data-book-leaf-native-interaction="disabled"
       data-book-leaf-layout={leaf.source.layout}
       data-book-leaf-side={leaf.side ?? undefined}
     />

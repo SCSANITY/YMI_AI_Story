@@ -23,3 +23,18 @@ test('one physical turning leaf keeps its real front and back page images', asyn
   assert.equal((stage.match(/<motion\.div/g) ?? []).length, 2)
   assert.doesNotMatch(stage, /animate=\{\{ x: \(currentSpread === 0 && !isFlipping\)/)
 })
+
+test('book artwork cannot escape the physical page through native image interaction', async () => {
+  const page = await read('components/personalize/PreviewBookPageContent.tsx')
+  const leafImage = await read('components/personalize/BookLeafImage.tsx')
+
+  assert.match(page, /data-preview-cover-native-interaction="disabled"/)
+  assert.match(page, /data-preview-cover-surface-action="next-page"/)
+  assert.match(page, /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}/)
+  assert.match(page, /draggable=\{false\}/)
+  assert.match(page, /WebkitTouchCallout: 'none'/)
+  assert.match(leafImage, /data-book-leaf-native-interaction="disabled"/)
+  assert.match(leafImage, /draggable=\{false\}/)
+  assert.match(leafImage, /pointer-events-none/)
+  assert.match(leafImage, /WebkitTouchCallout: 'none'/)
+})

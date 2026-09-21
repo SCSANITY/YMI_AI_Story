@@ -93,9 +93,14 @@ function PreviewBookPageContentComponent({
           <img
             src={generatedCover}
             alt={resolvedTitle || labels.previewAlt}
-            className="relative z-10 h-full w-full object-contain"
-            style={mode === 'preview' ? PREVIEW_COVER_BLEED_STYLE : undefined}
+            draggable={false}
+            className="pointer-events-none relative z-10 h-full w-full select-none object-contain"
+            style={{
+              ...(mode === 'preview' ? PREVIEW_COVER_BLEED_STYLE : {}),
+              WebkitTouchCallout: 'none',
+            }}
             data-preview-cover-crop-percent={mode === 'preview' ? PREVIEW_COVER_BLEED_CROP_PERCENT : undefined}
+            data-preview-cover-native-interaction="disabled"
             decoding="async"
             loading="eager"
             fetchPriority="high"
@@ -122,20 +127,25 @@ function PreviewBookPageContentComponent({
           />
         ) : null}
 
-        <div className="absolute bottom-0 left-0 top-0 z-30 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent" />
+        <div className="pointer-events-none absolute bottom-0 left-0 top-0 z-30 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent" />
 
         {!isFlipping && canTurnNext && (
           <button
             type="button"
             aria-label={labels.nextPage}
             title={labels.nextPage}
-            className="absolute right-4 top-1/2 z-30 -translate-y-1/2 cursor-pointer rounded-full bg-black/20 p-3 text-white drop-shadow-lg transition-colors hover:bg-black/40"
+            data-preview-cover-surface-action="next-page"
+            className="group absolute inset-0 z-30 cursor-pointer rounded-r-sm bg-transparent [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400"
+            style={{ touchAction: 'manipulation' }}
+            onContextMenu={(event) => event.preventDefault()}
             onClick={(event) => {
               event.stopPropagation()
               onTurnPage('next')
             }}
           >
-            <ChevronRight className="h-8 w-8" aria-hidden="true" />
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/20 p-3 text-white drop-shadow-lg transition-colors group-hover:bg-black/40">
+              <ChevronRight className="h-8 w-8" aria-hidden="true" />
+            </span>
           </button>
         )}
       </div>

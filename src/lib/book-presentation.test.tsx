@@ -91,6 +91,8 @@ describe('physical-book leaf presentation', () => {
     assert.match(html, /https:\/\/signed\.example\/left\.webp/)
     assert.match(html, /https:\/\/signed\.example\/right\.webp/)
     assert.equal((html.match(/width:100%/g) ?? []).length, 2)
+    assert.equal((html.match(/draggable="false"/g) ?? []).length, 2)
+    assert.equal((html.match(/data-book-leaf-native-interaction="disabled"/g) ?? []).length, 2)
     assert.doesNotMatch(html, /width:200%/)
     assert.doesNotMatch(html, /left:-100%/)
   })
@@ -164,6 +166,9 @@ describe('physical-book leaf presentation', () => {
     assert.match(previewHtml, /transform:scale\(1\.36986301369863\)/)
     assert.match(previewHtml, /data-preview-cover-logo="true"/)
     assert.match(previewHtml, /data-preview-cover-logo-placement="visible-frame"/)
+    assert.match(previewHtml, /data-preview-cover-native-interaction="disabled"/)
+    assert.match(previewHtml, /data-preview-cover-surface-action="next-page"/)
+    assert.equal((previewHtml.match(/aria-label="Next page"/g) ?? []).length, 1)
     assert.match(previewHtml, /width:9%;height:auto;right:4\.5%;bottom:4%/)
     assert.match(previewHtml, /brightness\(0\) invert\(1\)/)
     assert.doesNotMatch(
