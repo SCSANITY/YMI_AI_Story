@@ -33,8 +33,9 @@ test('responsive Preview settles before paint and does not replay cover centerin
   assert.match(stage, /data-preview-book-model="true"[\s\S]*initial=\{false\}/)
   assert.match(stage, /transformOrigin: 'top center'[\s\S]*filter: previewBookShadow/)
   assert.doesNotMatch(stage, /transformStyle: 'preserve-3d'[^\n]*filter:/)
-  assert.match(stage, /animate=\{\{ rotateY: -180 \}\}/)
-  assert.match(stage, /animate=\{\{ rotateY: 0 \}\}/)
+  assert.match(stage, /initial=\{\{ rotateY: flipDirection === 'next' \? 0 : -180 \}\}/)
+  assert.match(stage, /animate=\{\{ rotateY: flipDirection === 'next' \? -180 : 0 \}\}/)
+  assert.match(stage, /resolvePreviewBookTurningLeafFaces\(currentSpread, flipDirection\)/)
 })
 
 test('one mobile page-level authority resets Product Intro and Preview entry without moving desktop', async () => {

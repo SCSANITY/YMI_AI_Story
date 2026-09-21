@@ -86,11 +86,12 @@ governance repository.
   The drop shadow belongs to the outer scale group, not the inner
   `preserve-3d` book model. Actual page-turn animations and the Reader's fixed
   scale/height contract remain independent of responsive measurement.
-- A generated Preview cover has one render owner: the static right-hand page
-  slot when spread zero is committed. Closing the first interior spread uses a
-  neutral cover backing on the rotating leaf; it never paints the generated
-  cover into the moving leaf or a duplicate transition overlay. This keeps the
-  cover image out of interior-page coordinates on phone and desktop layouts.
+- Each physical turning leaf has one explicit front/back page mapping that is
+  identical in both directions. The cover leaf is always front `right/0` and
+  back `left/1`; later leaves follow the same adjacent right/left rule. During
+  a turn, those real page images remain attached to the rotating leaf. After
+  the turn, the same page address transfers to the static slot. No duplicate
+  cover guard, neutral substitute or direction-specific content branch exists.
 - Preview creation routes map the database admission contract through
   `src/lib/jobQueueAdmission.ts`. `src/lib/jobQueue.ts` is a read-only Admin
   operations snapshot and is never an admission authority.

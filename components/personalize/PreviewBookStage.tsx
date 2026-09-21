@@ -2,6 +2,7 @@
 
 import { memo, type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { resolvePreviewBookTurningLeafFaces } from '@/lib/preview-book-turning-leaf'
 
 type PreviewBookStageProps = {
   stageHeight?: number
@@ -54,7 +55,6 @@ function PreviewBookStageComponent({
   const stageRef = useRef<HTMLDivElement | null>(null)
   const [measuredPreviewScale, setMeasuredPreviewScale] = useState(1)
   const prefersReducedMotion = useReducedMotion()
-  const isClosingToCover = currentSpread === 1 && isFlipping && flipDirection === 'prev'
   const modelTargetX = resolvePreviewBookModelTargetX({
     currentSpread,
     isFlipping,
@@ -67,6 +67,9 @@ function PreviewBookStageComponent({
       : isFlipping && flipDirection === 'next'
         ? currentSpread + 1
         : currentSpread
+  const turningLeafFaces = isFlipping
+    ? resolvePreviewBookTurningLeafFaces(currentSpread, flipDirection)
+    : null
   const previewScale = fixedPreviewScale ?? measuredPreviewScale
   const stageHeight = fixedStageHeight
     ?? Math.round((pageHeight + 40) * previewScale) + (previewScale < 1 ? 12 : 0)
@@ -167,79 +170,48 @@ function PreviewBookStageComponent({
             </div>
           </div>
 
-          <>
-            {isFlipping && flipDirection === 'next' && (
-              <motion.div
-                initial={{ rotateY: 0 }}
-                animate={{ rotateY: -180 }}
-                transition={{ duration: animationDuration, ease: 'easeInOut' }}
-                style={{ width: pageWidth, height: '100%', position: 'absolute', top: 0, left: '50%', transformOrigin: 'left center', transformStyle: 'preserve-3d', zIndex: 50 }}
+          {turningLeafFaces && flipDirection ? (
+            <motion.div
+              data-preview-turning-leaf="true"
+              data-preview-turn-direction={flipDirection}
+              initial={{ rotateY: flipDirection === 'next' ? 0 : -180 }}
+              animate={{ rotateY: flipDirection === 'next' ? -180 : 0 }}
+              transition={{ duration: animationDuration, ease: 'easeInOut' }}
+              style={{ width: pageWidth, height: '100%', position: 'absolute', top: 0, left: '50%', transformOrigin: 'left center', transformStyle: 'preserve-3d', zIndex: 50 }}
+            >
+              <div
+                className="backface-hidden"
+                data-preview-leaf-face="front"
+                data-preview-page-side={turningLeafFaces.front.side}
+                data-preview-page-spread={turningLeafFaces.front.spreadIndex}
+                style={faceStyle}
               >
-                <div className="backface-hidden" style={faceStyle}>
-                  {renderPageContent('right', currentSpread)}
-                  <motion.div
-                    className="pointer-events-none absolute inset-0 z-50"
-                    initial={{ opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                    animate={{ opacity: [0, 0.6, 0] }}
-                    transition={{ duration: animationDuration, times: [0, 0.5, 1] }}
-                  />
-                </div>
+                {renderPageContent(turningLeafFaces.front.side, turningLeafFaces.front.spreadIndex)}
+                <motion.div
+                  className="pointer-events-none absolute inset-0 z-50"
+                  initial={{ opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
+                  animate={{ opacity: [0, 0.6, 0] }}
+                  transition={{ duration: animationDuration, times: [0, 0.5, 1] }}
+                />
+              </div>
 
-                <div className="backface-hidden" style={{ ...faceStyle, transform: 'rotateY(180deg)' }}>
-                  {renderPageContent('left', currentSpread + 1)}
-                  <motion.div
-                    className="pointer-events-none absolute inset-0 z-50"
-                    initial={{ opacity: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                    animate={{ opacity: [0, 0.6, 0] }}
-                    transition={{ duration: animationDuration, times: [0, 0.5, 1] }}
-                  />
-                </div>
-              </motion.div>
-            )}
-
-            {isFlipping && flipDirection === 'prev' && (
-              <motion.div
-                initial={{ rotateY: -180 }}
-                animate={{ rotateY: 0 }}
-                transition={{ duration: animationDuration, ease: 'easeInOut' }}
-                style={{ width: pageWidth, height: '100%', position: 'absolute', top: 0, left: '50%', transformOrigin: 'left center', transformStyle: 'preserve-3d', zIndex: 50 }}
+              <div
+                className="backface-hidden"
+                data-preview-leaf-face="back"
+                data-preview-page-side={turningLeafFaces.back.side}
+                data-preview-page-spread={turningLeafFaces.back.spreadIndex}
+                style={{ ...faceStyle, transform: 'rotateY(180deg)' }}
               >
-                <div className="backface-hidden" style={{ ...faceStyle, transform: 'rotateY(180deg)' }}>
-                  {renderPageContent('left', currentSpread)}
-                  <motion.div
-                    className="pointer-events-none absolute inset-0 z-50"
-                    initial={{ opacity: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                    animate={{ opacity: [0, 0.6, 0] }}
-                    transition={{ duration: animationDuration }}
-                  />
-                </div>
-
-                <div className="backface-hidden" style={faceStyle}>
-                  {isClosingToCover ? (
-                    <div
-                      aria-hidden="true"
-                      data-preview-page-role="cover-backing"
-                      className="h-full w-full overflow-hidden rounded-r-sm"
-                      style={{
-                        background:
-                          'linear-gradient(110deg, #f6eddb 0%, #fffdf7 14%, #fffdf8 82%, #eee2cb 100%)',
-                        boxShadow:
-                          'inset 10px 0 18px rgba(120, 86, 45, 0.08), inset -2px 0 4px rgba(120, 86, 45, 0.08)',
-                      }}
-                    />
-                  ) : (
-                    renderPageContent('right', currentSpread - 1)
-                  )}
-                  <motion.div
-                    className="pointer-events-none absolute inset-0 z-50"
-                    initial={{ opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                    animate={{ opacity: [0, 0.6, 0] }}
-                    transition={{ duration: animationDuration }}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </>
+                {renderPageContent(turningLeafFaces.back.side, turningLeafFaces.back.spreadIndex)}
+                <motion.div
+                  className="pointer-events-none absolute inset-0 z-50"
+                  initial={{ opacity: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
+                  animate={{ opacity: [0, 0.6, 0] }}
+                  transition={{ duration: animationDuration, times: [0, 0.5, 1] }}
+                />
+              </div>
+            </motion.div>
+          ) : null}
         </motion.div>
       </div>}
     </div>

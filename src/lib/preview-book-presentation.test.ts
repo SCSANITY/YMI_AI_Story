@@ -10,6 +10,7 @@ import {
   isPreviewDisplayComplete,
   resolvePreviewDisplayAssets,
 } from './preview-book-presentation'
+import { resolvePreviewBookTurningLeafFaces } from './preview-book-turning-leaf'
 
 function page(overrides: Partial<SignedPreviewPage> & Pick<SignedPreviewPage, 'page_index' | 'url'>): SignedPreviewPage {
   return {
@@ -75,5 +76,35 @@ describe('Personalize structured Preview presentation', () => {
     }
 
     assert.throws(() => resolvePreviewDisplayAssets(malformed), /Invalid structured Preview page 1/)
+  })
+})
+
+describe('physical Preview turning leaf', () => {
+  it('keeps the cover and first-left page on the same two physical faces in both directions', () => {
+    const openingCover = resolvePreviewBookTurningLeafFaces(0, 'next')
+    const closingCover = resolvePreviewBookTurningLeafFaces(1, 'prev')
+
+    assert.deepEqual(openingCover, {
+      front: { side: 'right', spreadIndex: 0 },
+      back: { side: 'left', spreadIndex: 1 },
+    })
+    assert.deepEqual(closingCover, openingCover)
+  })
+
+  it('maps every later leaf to its adjacent right and left page faces', () => {
+    assert.deepEqual(resolvePreviewBookTurningLeafFaces(1, 'next'), {
+      front: { side: 'right', spreadIndex: 1 },
+      back: { side: 'left', spreadIndex: 2 },
+    })
+    assert.deepEqual(resolvePreviewBookTurningLeafFaces(2, 'prev'), {
+      front: { side: 'right', spreadIndex: 1 },
+      back: { side: 'left', spreadIndex: 2 },
+    })
+  })
+
+  it('rejects impossible or inactive page turns', () => {
+    assert.equal(resolvePreviewBookTurningLeafFaces(0, 'prev'), null)
+    assert.equal(resolvePreviewBookTurningLeafFaces(1, null), null)
+    assert.equal(resolvePreviewBookTurningLeafFaces(-1, 'next'), null)
   })
 })
