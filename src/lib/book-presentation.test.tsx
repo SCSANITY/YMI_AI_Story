@@ -317,6 +317,13 @@ describe('physical-book leaf presentation', () => {
     assert.match(html, /locked-second-left\.webp/)
     assert.equal((html.match(/Locked preview/g) ?? []).length, 2)
     assert.doesNotMatch(html, /Creating this leaf/)
+    assert.match(html, /data-preview-page-mask="stable"/)
+    assert.match(html, /data-preview-page-surface="masked"/)
+    assert.doesNotMatch(html, /scale-\[1\.02\][^\"]*(?:backdrop-blur|blur-\[|saturate-\[)/)
+    assert.match(
+      html,
+      /class="pointer-events-none absolute inset-0 z-20 (?![^\"]*backdrop-blur)[^\"]*" data-preview-page-mask="stable"/
+    )
   })
 
   it('keeps the owned-book reader free to render generated leaves after spread one', () => {

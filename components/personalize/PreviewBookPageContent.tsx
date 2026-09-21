@@ -178,11 +178,14 @@ function PreviewBookPageContentComponent({
         style={commonPageStyle}
       >
         {displayLeaf ? (
-          <div className="absolute inset-0 overflow-hidden">
+          <div
+            className="absolute inset-0 overflow-hidden"
+            data-preview-page-surface={isMaskedPreview ? 'masked' : 'clear'}
+          >
             <BookLeafImage
               leaf={displayLeaf}
               alt={labels.previewAlt}
-              className={isMaskedPreview ? 'scale-[1.035] blur-[6px] saturate-[0.72]' : ''}
+              className={isMaskedPreview ? 'scale-[1.02] opacity-35' : ''}
               loading={isNearbySpread ? 'eager' : 'lazy'}
               fetchPriority={isNearbySpread ? 'high' : 'auto'}
               onError={() => onImageError(displayLeaf.url, {
@@ -198,9 +201,12 @@ function PreviewBookPageContentComponent({
 
         {isMaskedPreview && displayLeaf ? (
           <>
-            <div className="pointer-events-none absolute inset-0 z-20 bg-white/68 backdrop-blur-[3px]" />
+            <div
+              className="pointer-events-none absolute inset-0 z-20 bg-[linear-gradient(145deg,rgba(255,253,247,0.82),rgba(255,248,235,0.9))]"
+              data-preview-page-mask="stable"
+            />
             <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center px-6 text-center">
-              <div className="rounded-full border border-white/70 bg-white/74 px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+              <div className="rounded-full border border-amber-100 bg-[#fffaf1] px-4 py-2 text-xs font-bold text-amber-900 shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
                 {isGeneratingWithUnderlay ? labels.previewPageStillCreating : labels.previewPageLocked}
               </div>
             </div>

@@ -18,7 +18,6 @@ type PreviewBookStageProps = {
   centerBindingPattern: CSSProperties
   pageStackPattern: CSSProperties
   faceStyle: CSSProperties
-  previewBookShadow: string
   renderPageContent: (side: 'left' | 'right', spreadIndex: number) => ReactNode
   pendingContent?: ReactNode
 }
@@ -48,7 +47,6 @@ function PreviewBookStageComponent({
   centerBindingPattern,
   pageStackPattern,
   faceStyle,
-  previewBookShadow,
   renderPageContent,
   pendingContent,
 }: PreviewBookStageProps) {
@@ -104,7 +102,7 @@ function PreviewBookStageComponent({
         <div className="h-full w-full max-w-[380px]">{pendingContent}</div>
       ) : <div
         className="shrink-0"
-        style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center', width: pageWidth * 2, filter: previewBookShadow }}
+        style={{ transform: `scale(${previewScale})`, transformOrigin: 'top center', width: pageWidth * 2 }}
       >
         <motion.div
           data-preview-book-model="true"
@@ -177,21 +175,19 @@ function PreviewBookStageComponent({
               initial={{ rotateY: flipDirection === 'next' ? 0 : -180 }}
               animate={{ rotateY: flipDirection === 'next' ? -180 : 0 }}
               transition={{ duration: animationDuration, ease: 'easeInOut' }}
-              style={{ width: pageWidth, height: '100%', position: 'absolute', top: 0, left: '50%', transformOrigin: 'left center', transformStyle: 'preserve-3d', zIndex: 50 }}
+              style={{ width: pageWidth, height: '100%', position: 'absolute', top: 0, left: '50%', transformOrigin: 'left center', transformStyle: 'preserve-3d', willChange: 'transform', zIndex: 50 }}
             >
               <div
                 className="backface-hidden"
                 data-preview-leaf-face="front"
                 data-preview-page-side={turningLeafFaces.front.side}
                 data-preview-page-spread={turningLeafFaces.front.spreadIndex}
-                style={faceStyle}
+                style={{ ...faceStyle, transform: 'translateZ(0.1px)' }}
               >
                 {renderPageContent(turningLeafFaces.front.side, turningLeafFaces.front.spreadIndex)}
-                <motion.div
+                <div
                   className="pointer-events-none absolute inset-0 z-50"
-                  initial={{ opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                  animate={{ opacity: [0, 0.6, 0] }}
-                  transition={{ duration: animationDuration, times: [0, 0.5, 1] }}
+                  style={{ background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.16) 100%)' }}
                 />
               </div>
 
@@ -200,14 +196,12 @@ function PreviewBookStageComponent({
                 data-preview-leaf-face="back"
                 data-preview-page-side={turningLeafFaces.back.side}
                 data-preview-page-spread={turningLeafFaces.back.spreadIndex}
-                style={{ ...faceStyle, transform: 'rotateY(180deg)' }}
+                style={{ ...faceStyle, transform: 'rotateY(180deg) translateZ(0.1px)' }}
               >
                 {renderPageContent(turningLeafFaces.back.side, turningLeafFaces.back.spreadIndex)}
-                <motion.div
+                <div
                   className="pointer-events-none absolute inset-0 z-50"
-                  initial={{ opacity: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
-                  animate={{ opacity: [0, 0.6, 0] }}
-                  transition={{ duration: animationDuration, times: [0, 0.5, 1] }}
+                  style={{ background: 'linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.16) 100%)' }}
                 />
               </div>
             </motion.div>

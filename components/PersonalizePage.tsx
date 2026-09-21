@@ -3122,8 +3122,6 @@ export default function PersonalizePage({
       backgroundColor: 'white',
       transformStyle: 'preserve-3d'
   };
-  const previewBookShadow = 'drop-shadow(10px 22px 36px rgba(0,0,0,0.16)) drop-shadow(4px 8px 14px rgba(0,0,0,0.08))';
-  
   return (
     <div className="page-surface min-h-screen flex flex-col font-sans relative z-20">
       <PersonalizeOverlays
@@ -3439,7 +3437,6 @@ export default function PersonalizePage({
                       centerBindingPattern={centerBindingPattern}
                       pageStackPattern={pageStackPattern}
                       faceStyle={faceStyle}
-                      previewBookShadow={previewBookShadow}
                       renderPageContent={renderPageContent}
                     />
                   }

@@ -382,7 +382,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
           centerBindingPattern={centerBindingPattern}
           pageStackPattern={pageStackPattern}
           faceStyle={faceStyle}
-          previewBookShadow="drop-shadow(10px 22px 36px rgba(0,0,0,0.16)) drop-shadow(4px 8px 14px rgba(0,0,0,0.08))"
           renderPageContent={renderPageContent}
         />
 
