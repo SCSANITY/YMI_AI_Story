@@ -65,8 +65,11 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
           </div>
           <div className="text-sm text-gray-700 space-y-0.5 leading-relaxed">
             <div className="font-medium text-gray-900">{`${address.firstName ?? ''} ${address.lastName ?? ''}`.trim() || '-'}</div>
-            <div>{[address.addressLine1, address.addressLine2].filter(Boolean).join(', ') || '-'}</div>
+            {address.company ? <div>{address.company}</div> : null}
+            <div>{[address.addressLine1, address.addressLine2, address.addressLine3].filter(Boolean).join(', ') || '-'}</div>
             <div>{[address.city, address.region, address.zip].filter(Boolean).join(' ') || '-'}</div>
+            {address.country ? <div>{address.country}</div> : null}
+            {address.phone ? <div>{address.phone}</div> : null}
           </div>
         </div>
 

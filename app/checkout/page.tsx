@@ -68,9 +68,14 @@ type CheckoutAddressForm = {
   city: string;
   addressLine1: string;
   addressLine2: string;
+  addressLine3: string;
   zip: string;
   phone: string;
   company: string;
+  recipientEmail: string;
+  vatNumber: string;
+  eoriNumber: string;
+  iossNumber: string;
 };
 
 type ShippingQuoteState = {
@@ -274,9 +279,14 @@ function CheckoutPageContent() {
     city: '',
     addressLine1: '',
     addressLine2: '',
+    addressLine3: '',
     zip: '',
     phone: '',
     company: '',
+    recipientEmail: '',
+    vatNumber: '',
+    eoriNumber: '',
+    iossNumber: '',
   });
   const checkoutContactEmail = useMemo(
     () => form.email.trim() || checkoutEmail.trim() || user?.email || '',
@@ -323,9 +333,14 @@ function CheckoutPageContent() {
     city: form.city.trim(),
     addressLine1: form.addressLine1.trim(),
     addressLine2: form.addressLine2.trim(),
+    addressLine3: form.addressLine3.trim(),
     zip: form.zip.trim(),
     phone: form.phone.trim(),
     company: form.company.trim(),
+    recipientEmail: form.recipientEmail.trim(),
+    vatNumber: form.vatNumber.trim(),
+    eoriNumber: form.eoriNumber.trim(),
+    iossNumber: form.iossNumber.trim(),
   }), [form]);
 
   const checkoutShippingContext = useMemo(() => {
@@ -469,10 +484,15 @@ function CheckoutPageContent() {
           region: prev.region || address.region || '',
           addressLine1: prev.addressLine1 || address.addressLine1 || '',
           addressLine2: prev.addressLine2 || address.addressLine2 || '',
+          addressLine3: prev.addressLine3 || address.addressLine3 || '',
           city: prev.city || address.city || '',
           zip: prev.zip || address.zip || '',
           phone: prev.phone || address.phone || '',
           company: prev.company || address.company || '',
+          recipientEmail: prev.recipientEmail || address.recipientEmail || '',
+          vatNumber: prev.vatNumber || address.vatNumber || '',
+          eoriNumber: prev.eoriNumber || address.eoriNumber || '',
+          iossNumber: prev.iossNumber || address.iossNumber || '',
         }));
         if (current.shipping_amount_usd && Number(current.shipping_amount_usd) > 0) {
           const snapshot = current.shipping_rate_snapshot ?? null;

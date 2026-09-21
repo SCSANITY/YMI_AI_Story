@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
+import { RECIPIENT_ADDRESS_LIMITS, recipientAddressIssue } from '@/lib/shipping-address';
 import { CheckoutEmailOwnershipHint } from './CheckoutEmailOwnershipHint';
 
 type ShippingMethodCode = 'standard' | 'speedy';
@@ -20,9 +21,14 @@ type CheckoutAddressForm = {
   city: string;
   addressLine1: string;
   addressLine2: string;
+  addressLine3: string;
   zip: string;
   phone: string;
   company: string;
+  recipientEmail: string;
+  vatNumber: string;
+  eoriNumber: string;
+  iossNumber: string;
 };
 
 type ShippingQuoteState = {
@@ -74,10 +80,15 @@ type AddressBookMetadata = {
   region?: string;
   addressLine1?: string;
   addressLine2?: string;
+  addressLine3?: string;
   city?: string;
   zip?: string;
   phone?: string;
   company?: string;
+  recipientEmail?: string;
+  vatNumber?: string;
+  eoriNumber?: string;
+  iossNumber?: string;
 };
 
 type AddressBookEntry = {
@@ -180,6 +191,7 @@ const REQUIRED_ADDRESS_FIELDS: (keyof CheckoutAddressForm)[] = [
   'lastName',
   'email',
   'country',
+  'region',
   'city',
   'addressLine1',
   'zip',
@@ -210,9 +222,14 @@ function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDe
     city: form.city.trim(),
     addressLine1: form.addressLine1.trim(),
     addressLine2: form.addressLine2.trim(),
+    addressLine3: form.addressLine3.trim(),
     zip: form.zip.trim(),
     phone: form.phone.trim(),
     company: form.company.trim(),
+    recipientEmail: form.recipientEmail.trim(),
+    vatNumber: form.vatNumber.trim(),
+    eoriNumber: form.eoriNumber.trim(),
+    iossNumber: form.iossNumber.trim(),
   };
 }
 
@@ -261,10 +278,14 @@ function AddressFormSectionComponent({
     form.shippingDestinationLabel ||
     t('checkout.countryPlaceholder');
 
-  const shippingAddressPayload = useMemo(
-    () => normalizeAddressForm(form, selectedShippingDestination),
-    [form, selectedShippingDestination]
-  );
+  const shippingQuoteInput = useMemo(() => ({
+    country: form.country,
+    shippingRegionKey: form.shippingRegionKey,
+    shippingDestinationLabel: selectedShippingDestinationLabel,
+    region: form.region,
+    city: form.city,
+    zip: form.zip,
+  }), [form.country, form.shippingRegionKey, selectedShippingDestinationLabel, form.region, form.city, form.zip]);
 
   const isShippingAddressComplete = useMemo(
     () => REQUIRED_ADDRESS_FIELDS.every((field) => String(form[field] ?? '').trim().length > 0),
@@ -403,7 +424,17 @@ function AddressFormSectionComponent({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem('ymi_checkout_form', JSON.stringify(form));
+    try {
+      // Tax identifiers are only kept in the active form or an explicitly saved address.
+      window.localStorage.setItem('ymi_checkout_form', JSON.stringify({
+        ...form,
+        vatNumber: '',
+        eoriNumber: '',
+        iossNumber: '',
+      }));
+    } catch {
+      // Checkout continues when private browsing blocks local storage.
+    }
   }, [form]);
 
   useEffect(() => {
@@ -435,7 +466,7 @@ function AddressFormSectionComponent({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         cache: 'no-store',
-        body: JSON.stringify({ shippingAddress: shippingAddressPayload }),
+        body: JSON.stringify({ shippingAddress: shippingQuoteInput }),
       })
         .then((res) => (res.ok ? res.json() : Promise.reject(new Error('quote_failed'))))
         .then((data) => {
@@ -506,11 +537,12 @@ function AddressFormSectionComponent({
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [form.city, form.country, form.region, form.shippingRegionKey, form.zip, shippingAddressPayload, t]);
+  }, [shippingQuoteInput, t]);
 
   const updateField = (key: keyof CheckoutAddressForm) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value;
-    const value = key === 'zip' || key === 'phone' ? rawValue.replace(/\D/g, '') : rawValue;
+    // International postcodes contain letters/spaces; phone numbers may start with +.
+    const value = rawValue;
     hasLocalEditsRef.current = true;
     setFormError('');
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -544,6 +576,11 @@ function AddressFormSectionComponent({
     }
     if (!isValidCheckoutEmail(form.email)) {
       setFormError(t('checkout.emailInvalidError'));
+      return;
+    }
+    const addressIssue = recipientAddressIssue(normalizeAddressForm(form, selectedShippingDestination));
+    if (addressIssue) {
+      setFormError(t('checkout.addressFieldError'));
       return;
     }
     if (!canUseShippingQuote) {
@@ -643,10 +680,15 @@ function AddressFormSectionComponent({
                             region: metadata.region ?? prev.region,
                             addressLine1: metadata.addressLine1 ?? prev.addressLine1,
                             addressLine2: metadata.addressLine2 ?? prev.addressLine2,
+                            addressLine3: metadata.addressLine3 ?? '',
                             city: metadata.city ?? prev.city,
                             zip: metadata.zip ?? prev.zip,
                             phone: metadata.phone ?? prev.phone,
                             company: metadata.company ?? prev.company,
+                            recipientEmail: metadata.recipientEmail ?? '',
+                            vatNumber: metadata.vatNumber ?? '',
+                            eoriNumber: metadata.eoriNumber ?? '',
+                            iossNumber: metadata.iossNumber ?? '',
                           }));
                           setIsAddressBookOpen(false);
                         }}
@@ -703,19 +745,22 @@ function AddressFormSectionComponent({
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.firstName')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.firstName')} value={form.firstName} onChange={updateField('firstName')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="given-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.firstName')} value={form.firstName} onChange={updateField('firstName')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.lastName')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.lastName')} value={form.lastName} onChange={updateField('lastName')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="family-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.lastName')} value={form.lastName} onChange={updateField('lastName')} />
           </label>
+          <p className="pl-3.5 text-xs text-slate-500 md:col-span-2">{t('checkout.nameLimitHint')}</p>
           <div className="relative space-y-1.5 md:col-span-2" ref={emailDropdownRef}>
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.emailRequired')} <span className="text-amber-500">*</span>
             </span>
             <input
+              type="email"
+              autoComplete="email"
               className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm"
               placeholder={t('checkout.emailRequired')}
               value={form.email}
@@ -871,27 +916,32 @@ function AddressFormSectionComponent({
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.addressLine1')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine1Placeholder')} value={form.addressLine1} onChange={updateField('addressLine1')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine1} autoComplete="address-line1" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine1Placeholder')} value={form.addressLine1} onChange={updateField('addressLine1')} />
+            <span className="block pl-3.5 text-xs text-slate-500">{t('checkout.addressLineLimitHint')}</span>
           </label>
           <label className="space-y-1.5 md:col-span-2">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine2')}</span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine2Placeholder')} value={form.addressLine2} onChange={updateField('addressLine2')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine2} autoComplete="address-line2" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine2Placeholder')} value={form.addressLine2} onChange={updateField('addressLine2')} />
+          </label>
+          <label className="space-y-1.5 md:col-span-2">
+            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine3')}</span>
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine3} autoComplete="address-line3" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine3Placeholder')} value={form.addressLine3} onChange={updateField('addressLine3')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.city')} <span className="text-amber-500">*</span>
             </span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.city')} value={form.city} onChange={updateField('city')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.city} autoComplete="address-level2" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.city')} value={form.city} onChange={updateField('city')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.zip')} <span className="text-amber-500">*</span>
             </span>
-            <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.zip')} value={form.zip} onChange={updateField('zip')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.zip} autoComplete="postal-code" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.zip')} value={form.zip} onChange={updateField('zip')} />
           </label>
           <label className="space-y-1.5">
-            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.region')}</span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.regionPlaceholder')} value={form.region} onChange={updateField('region')} />
+            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.region')} <span className="text-amber-500">*</span></span>
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.region} autoComplete="address-level1" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.regionPlaceholder')} value={form.region} onChange={updateField('region')} />
           </label>
         </div>
       </div>
@@ -907,14 +957,35 @@ function AddressFormSectionComponent({
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.phone')} <span className="text-amber-500">*</span>
             </span>
-            <input inputMode="numeric" pattern="[0-9]*" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.phonePlaceholder')} value={form.phone} onChange={updateField('phone')} />
+            <input type="tel" maxLength={RECIPIENT_ADDRESS_LIMITS.phone} autoComplete="tel" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.phonePlaceholder')} value={form.phone} onChange={updateField('phone')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.company')}</span>
-            <input className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.companyPlaceholder')} value={form.company} onChange={updateField('company')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.company} autoComplete="organization" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.companyPlaceholder')} value={form.company} onChange={updateField('company')} />
+          </label>
+          <label className="space-y-1.5 md:col-span-2">
+            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.recipientEmail')}</span>
+            <input type="email" maxLength={RECIPIENT_ADDRESS_LIMITS.recipientEmail} className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.recipientEmailPlaceholder')} value={form.recipientEmail} onChange={updateField('recipientEmail')} />
           </label>
         </div>
       </div>
+
+      <details className="rounded-2xl border border-amber-100 bg-white/65 px-4 py-3 text-sm text-slate-700">
+        <summary className="cursor-pointer font-semibold text-slate-800">{t('checkout.customsDetails')}</summary>
+        <p className="mt-2 text-xs leading-5 text-slate-500">{t('checkout.customsDetailsHint')}</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          {([
+            ['vatNumber', 'checkout.vatNumber'],
+            ['eoriNumber', 'checkout.eoriNumber'],
+            ['iossNumber', 'checkout.iossNumber'],
+          ] as const).map(([field, label]) => (
+            <label key={field} className="space-y-1.5">
+              <span className="block pl-3.5 text-xs font-medium text-gray-700">{t(label)}</span>
+              <input maxLength={RECIPIENT_ADDRESS_LIMITS[field]} className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 md:text-sm" value={form[field]} onChange={updateField(field)} />
+            </label>
+          ))}
+        </div>
+      </details>
 
       <div className={`rounded-2xl border px-4 py-3 text-sm ${
         shippingQuote.status === 'available'

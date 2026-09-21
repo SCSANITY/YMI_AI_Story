@@ -32,6 +32,9 @@ export type OrderDetail = {
     lastName?: string
     addressLine1?: string
     addressLine2?: string
+    addressLine3?: string
+    company?: string
+    phone?: string
     city?: string
     region?: string
     zip?: string

@@ -27,6 +27,7 @@ import {
 } from '@/lib/checkout-session-lock'
 import { getSiteUrl } from '@/lib/site-url'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
+import { normalizeShippingAddress, recipientAddressIssue } from '@/lib/shipping-address'
 
 function checkoutSessionMatchesSiteOrigin(
   session: { success_url?: string | null; cancel_url?: string | null },
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const orderId = String(body?.orderId || '').trim()
     const email = String(body?.email || '').trim().toLowerCase()
-    const shippingAddress = body?.shippingAddress ?? {}
+    const shippingAddress = normalizeShippingAddress(body?.shippingAddress)
     let shippingAmountUsd = 0
     let shippingRateSnapshot: Record<string, unknown> | null = null
     let shippingMethod: string | null = null
@@ -64,7 +65,6 @@ export async function POST(request: Request) {
     if (!orderId || !email) {
       return NextResponse.json({ error: 'Missing orderId or email' }, { status: 400 })
     }
-
     const owner = (await resolveCheckoutOwner(request, {
       allowAnon: true,
       createAnonIfMissing: false,
@@ -130,6 +130,11 @@ export async function POST(request: Request) {
         await stripe.checkout.sessions.expire(existingSession.id)
       }
       await clearOrderCheckoutSessionLock(orderId, existingSession.id)
+    }
+
+    const addressIssue = recipientAddressIssue(shippingAddress)
+    if (addressIssue) {
+      return NextResponse.json({ error: 'Invalid recipient address', field: addressIssue }, { status: 400 })
     }
 
     {

@@ -19,6 +19,7 @@ function load(path, dependencies = {}) {
       if (name === 'next/server') return { NextResponse: { json: Response.json } }
       if (name === '@/lib/package-pricing') return load('src/lib/package-pricing.ts')
       if (name === '@/lib/purchase-configuration') return load('src/lib/purchase-configuration.ts')
+      if (name === '@/lib/shipping-address') return load('src/lib/shipping-address.ts')
       // Unused imports can have no side effects in this isolated runtime.
       if (name.startsWith('@/lib/')) return {}
       throw new Error(`Unmocked dependency ${name}`)
