@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 
 type PreviewBookStageProps = {
   stageHeight?: number
@@ -55,7 +55,6 @@ function PreviewBookStageComponent({
   const [measuredPreviewScale, setMeasuredPreviewScale] = useState(1)
   const prefersReducedMotion = useReducedMotion()
   const isClosingToCover = currentSpread === 1 && isFlipping && flipDirection === 'prev'
-  const isClosed = currentSpread === 0 && !isFlipping
   const modelTargetX = resolvePreviewBookModelTargetX({
     currentSpread,
     isFlipping,
@@ -168,31 +167,7 @@ function PreviewBookStageComponent({
             </div>
           </div>
 
-          <motion.div
-            aria-hidden="true"
-            inert
-            data-preview-cover-guard="true"
-            data-preview-cover-guard-state={isClosingToCover ? 'closing' : isClosed ? 'closed' : 'inactive'}
-            className="pointer-events-none absolute left-1/2 top-0 z-40 h-full overflow-hidden"
-            initial={false}
-            animate={{
-              opacity: isClosingToCover
-                ? prefersReducedMotion
-                  ? 1
-                  : [0, 0, 1]
-                : isClosed
-                  ? 1
-                  : 0,
-            }}
-            transition={isClosingToCover && !prefersReducedMotion
-              ? { duration: animationDuration, ease: 'easeInOut', times: [0, 0.46, 0.62] }
-              : { duration: 0 }}
-            style={{ width: pageWidth, transform: 'translateZ(0.5px)' }}
-          >
-            {renderPageContent('right', 0)}
-          </motion.div>
-
-          <AnimatePresence>
+          <>
             {isFlipping && flipDirection === 'next' && (
               <motion.div
                 initial={{ rotateY: 0 }}
@@ -240,7 +215,21 @@ function PreviewBookStageComponent({
                 </div>
 
                 <div className="backface-hidden" style={faceStyle}>
-                  {renderPageContent('right', currentSpread - 1)}
+                  {isClosingToCover ? (
+                    <div
+                      aria-hidden="true"
+                      data-preview-page-role="cover-backing"
+                      className="h-full w-full overflow-hidden rounded-r-sm"
+                      style={{
+                        background:
+                          'linear-gradient(110deg, #f6eddb 0%, #fffdf7 14%, #fffdf8 82%, #eee2cb 100%)',
+                        boxShadow:
+                          'inset 10px 0 18px rgba(120, 86, 45, 0.08), inset -2px 0 4px rgba(120, 86, 45, 0.08)',
+                      }}
+                    />
+                  ) : (
+                    renderPageContent('right', currentSpread - 1)
+                  )}
                   <motion.div
                     className="pointer-events-none absolute inset-0 z-50"
                     initial={{ opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.3) 100%)' }}
@@ -250,7 +239,7 @@ function PreviewBookStageComponent({
                 </div>
               </motion.div>
             )}
-          </AnimatePresence>
+          </>
         </motion.div>
       </div>}
     </div>
