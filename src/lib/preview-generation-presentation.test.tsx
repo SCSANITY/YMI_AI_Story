@@ -21,23 +21,17 @@ test('70-second estimate follows elapsed wall time, clamps safely, and has no co
   }
 })
 
-test('rating design fixture displays just the score; production Intro has no invented reviews', () => {
+test('Product Intro shows decorative stars without invented ratings or reviews', () => {
   const html = renderToStaticMarkup(<PersonalizeProductIntro
     eyebrow="Story" title="A book" description="Full story description" facts={[]}
     fromLabel="From" priceLabel="$35.90" ctaLabel="Personalize" faqHeading="About" faqItems={[]} onStart={() => {}}
-    reviewDesignSample={{ rating: 4.7, countLabel: '218 sample reviews', disclaimer: 'Design sample · not customer reviews' }}
   />)
-  assert.match(html, /4\.7<\/span>/)
-  assert.doesNotMatch(html, /4\.7\/5/)
-  assert.match(html, /218 sample reviews/)
-  assert.match(html, /not customer reviews/)
+  assert.match(html, /data-product-star-motif="true"/)
+  assert.match(html, /data-product-star-motif="true"[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-product-star-motif="true"/)
+  assert.equal((html.match(/fill="currentColor"/g) ?? []).length, 5)
+  assert.doesNotMatch(html, /Reviews|rating|sample reviews|data-review-design-sample/)
   assert.match(html, /line-clamp-2/)
   assert.match(html, /Full story description/)
-  const production = renderToStaticMarkup(<PersonalizeProductIntro
-    eyebrow="Story" title="A book" description="Full story description" facts={[]}
-    fromLabel="From" priceLabel="$35.90" ctaLabel="Personalize" faqHeading="About" faqItems={[]} onStart={() => {}}
-  />)
-  assert.doesNotMatch(production, /data-review-design-sample|sample reviews|not customer reviews/)
 })
 
 test('Creation hydration cannot revert a local selection, even when its read started later', () => {

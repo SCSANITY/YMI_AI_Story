@@ -16,7 +16,6 @@ type PersonalizeProductIntroProps = {
   description: string
   readMoreLabel?: string
   readLessLabel?: string
-  reviewDesignSample?: { rating: number; countLabel: string; disclaimer: string }
   facts: ProductFact[]
   fromLabel: string
   priceLabel: string
@@ -41,7 +40,6 @@ function PersonalizeProductIntroComponent({
   description,
   readMoreLabel = 'Read more',
   readLessLabel = 'Read less',
-  reviewDesignSample,
   facts,
   fromLabel,
   priceLabel,
@@ -100,19 +98,9 @@ function PersonalizeProductIntroComponent({
       <h1 className="mt-2.5 font-serif text-[1.85rem] font-bold leading-[1.1] tracking-[-0.025em] text-slate-950 sm:text-[2.1rem] lg:text-[2.25rem]">
         {title}
       </h1>
-      {reviewDesignSample ? (
-        <div className="mt-3" data-review-design-sample="true">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-            <span aria-hidden="true" className="relative flex gap-0.5 text-amber-500">
-              {[0, 1, 2, 3, 4].map((index) => <Star key={index} className="h-4 w-4" fill="currentColor" />)}
-              <span className="absolute inset-y-0 right-0 bg-[#fffaf4]/90" style={{ width: `${(5 - reviewDesignSample.rating) / 5 * 100}%` }} />
-            </span>
-            <span className="font-bold tabular-nums text-slate-800">{reviewDesignSample.rating.toFixed(1)}</span>
-            <span>· {reviewDesignSample.countLabel}</span>
-          </div>
-          <p className="mt-1 text-[11px] leading-4 text-slate-500">{reviewDesignSample.disclaimer}</p>
-        </div>
-      ) : null}
+      <span aria-hidden="true" data-product-star-motif="true" className="mt-3 flex gap-1 text-amber-500">
+        {[0, 1, 2, 3, 4].map((index) => <Star key={index} className="h-5 w-5" fill="currentColor" />)}
+      </span>
       <p ref={descriptionRef} id={descriptionId} className={`mt-4 max-w-2xl whitespace-pre-line break-words text-[0.94rem] leading-6 text-slate-600 ${descriptionExpanded ? '' : 'line-clamp-2'}`}>
         {description}
       </p>

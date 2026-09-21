@@ -17,10 +17,12 @@ test('generation, voice, purchase confirmation and address saving require explic
   assert.match(await read('components/personalize/GeneratePreviewAction.tsx'), /if \(!isFormValid\) return/)
 })
 
-test('runtime Product Intro cannot publish invented reviews; numeric design fixture has no /5 suffix', async () => {
+test('runtime Product Intro has a decorative star motif without invented ratings or reviews', async () => {
   const page = await read('components/PersonalizePage.tsx')
   assert.doesNotMatch(page, /reviewDesignSample|getBookReviewDesignSample|reviewSampleCount/)
-  assert.doesNotMatch(await read('components/personalize/PersonalizeProductIntro.tsx'), /toFixed\(1\)\}\/5/)
+  const intro = await read('components/personalize/PersonalizeProductIntro.tsx')
+  assert.match(intro, /data-product-star-motif="true"/)
+  assert.doesNotMatch(intro, /reviewDesignSample|countLabel|toFixed\(1\)\}\/5/)
 })
 
 test('polling merges progressive assets and renews URLs only for explicit image recovery', async () => {
