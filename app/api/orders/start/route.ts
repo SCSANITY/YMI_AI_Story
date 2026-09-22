@@ -11,6 +11,7 @@ import {
   packagePricingStoreErrorResponse,
 } from '@/lib/package-pricing-store'
 import { parseCartItemQuantity } from '@/lib/cart-quantity'
+import { loadOwnedDedicationChoices } from '@/lib/dedication-server'
 
 const FIRST_REMINDER_MINUTES = Number(
   process.env.UNPAID_REMINDER_FIRST_MINUTES ?? process.env.UNPAID_REMINDER_MINUTES ?? 1
@@ -196,6 +197,48 @@ export async function POST(request: Request) {
       quantity,
       pricing,
     })
+  }
+
+  // A forged client cannot bypass the last Customize decision. Repeat
+  // purchases must acknowledge the current revision, including No Thanks.
+  let dedicationChoices
+  try {
+    dedicationChoices = await loadOwnedDedicationChoices(owner, resolvedItems.map(item => item.creationId))
+  } catch {
+    return NextResponse.json({ error: 'Unable to verify dedication choices' }, { status: 500 })
+  }
+  const choicesById = new Map(dedicationChoices.map(choice => [choice.creationId, choice]))
+  const existingSnapshots = orderId ? await supabaseAdmin
+    .from('cart_item_dedications').select('cart_item_id,creation_id,decision,source_revision')
+    .eq('order_id', orderId) : null
+  if (existingSnapshots?.error) {
+    return NextResponse.json({ error: 'Unable to verify the existing order dedication' }, { status: 500 })
+  }
+  const snapshotByItem = new Map((existingSnapshots?.data || []).map(row => [String(row.cart_item_id), row]))
+  for (let index = 0; index < resolvedItems.length; index++) {
+    const choice = choicesById.get(resolvedItems[index].creationId)
+    if (!choice || choice.decision === 'undecided') {
+      return NextResponse.json({
+        error: 'Choose a dedication or No Thanks in Preview before checkout',
+        code: 'dedication_required', creationId: resolvedItems[index].creationId,
+      }, { status: 409 })
+    }
+    if (choice.previouslyPurchased) {
+      const acknowledgement = items[index]?.dedicationAcknowledgement
+      const existingSnapshot = resolvedItems[index].cartItemId
+        ? snapshotByItem.get(resolvedItems[index].cartItemId!) : null
+      const sameAcknowledgedUnpaidOrder = existingSnapshot?.creation_id === choice.creationId &&
+        existingSnapshot?.decision === choice.decision &&
+        Number(existingSnapshot?.source_revision) === choice.revision
+      if (acknowledgement?.decision !== choice.decision ||
+        acknowledgement?.revision !== choice.revision) {
+        if (sameAcknowledgedUnpaidOrder) continue
+        return NextResponse.json({
+          error: 'Review this book’s saved dedication in Preview before buying again',
+          code: 'dedication_reconfirmation_required', creationId: choice.creationId,
+        }, { status: 409 })
+      }
+    }
   }
 
   if (!orderId) {

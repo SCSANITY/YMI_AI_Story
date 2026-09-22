@@ -97,7 +97,6 @@ export interface PersonalizationData {
   childName: string;
   childAge: string;
   language: StoryLanguage;
-  dedication: string;
   photo?: File | null;
   photoUrl?: string; // For preview display
   assetId?: string;

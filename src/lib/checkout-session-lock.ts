@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type CheckoutSnapshotOrder = {
+  order_status?: unknown
   checkout_currency?: unknown
   discount_amount_usd?: unknown
   shipping_amount_usd?: unknown
@@ -22,17 +23,25 @@ type CheckoutSnapshotItem = {
   quantity?: unknown
 }
 
+type DedicationSnapshot = {
+  cart_item_id?: unknown
+  creation_id?: unknown
+  decision?: unknown
+  body?: unknown
+  source_revision?: unknown
+}
+
 function normalizedNumber(value: unknown) {
   const parsed = Number(value ?? 0)
   return Number.isFinite(parsed) ? parsed : 0
 }
 
 export async function createOrderCheckoutFingerprint(orderId: string) {
-  const [{ data: order, error: orderError }, { data: items, error: itemsError }] = await Promise.all([
+  const [{ data: order, error: orderError }, { data: items, error: itemsError }, { data: dedications, error: dedicationError }] = await Promise.all([
     supabaseAdmin
       .from('orders')
       .select(
-        'checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id, shipping_method, shipping_zone_code'
+        'order_status, checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id, shipping_method, shipping_zone_code'
       )
       .eq('order_id', orderId)
       .maybeSingle(),
@@ -44,14 +53,41 @@ export async function createOrderCheckoutFingerprint(orderId: string) {
       .eq('order_id', orderId)
       .eq('status', 'ordered')
       .order('cart_item_id', { ascending: true }),
+    supabaseAdmin.from('cart_item_dedications')
+      .select('cart_item_id,creation_id,decision,body,source_revision')
+      .eq('order_id', orderId),
   ])
 
-  if (orderError || !order || itemsError || !items?.length) {
+  if (orderError || !order || itemsError || !items?.length || dedicationError ||
+      dedications?.length !== items.length) {
     throw new Error('Unable to capture an authoritative checkout snapshot')
   }
 
   const orderRow = order as CheckoutSnapshotOrder
   const itemRows = items as CheckoutSnapshotItem[]
+  const dedicationByItem = new Map((dedications as DedicationSnapshot[]).map(row => [String(row.cart_item_id), row]))
+  if (itemRows.some(item => {
+    const dedication = dedicationByItem.get(String(item.cart_item_id))
+    return !dedication || dedication.creation_id !== item.creation_id ||
+      !['skipped', 'confirmed'].includes(String(dedication.decision)) ||
+      (dedication.decision === 'confirmed' && !dedication.body) ||
+      (dedication.decision === 'skipped' && dedication.body !== null)
+  })) throw new Error('Dedication snapshot is incomplete')
+  if (orderRow.order_status === 'unpaid') {
+    const creationIds = [...new Set(itemRows.map(item => String(item.creation_id)))]
+    const { data: currentChoices, error: currentError } = await supabaseAdmin
+      .from('creation_dedications').select('creation_id,decision,body,revision').in('creation_id', creationIds)
+    if (currentError || currentChoices?.length !== creationIds.length) {
+      throw new Error('Current dedication choice cannot be verified')
+    }
+    const currentById = new Map(currentChoices.map(row => [String(row.creation_id), row]))
+    if (itemRows.some(item => {
+      const current = currentById.get(String(item.creation_id))
+      const snapshot = dedicationByItem.get(String(item.cart_item_id))
+      return !current || !snapshot || current.decision !== snapshot.decision ||
+        current.body !== snapshot.body || Number(current.revision) !== Number(snapshot.source_revision)
+    })) throw new Error('Dedication changed after the order snapshot was prepared')
+  }
   const snapshot = {
     order: {
       currency: String(orderRow.checkout_currency || 'USD').toUpperCase(),
@@ -71,6 +107,13 @@ export async function createOrderCheckoutFingerprint(orderId: string) {
       packagePriceVersion: normalizedNumber(item.package_price_version),
       quantity: normalizedNumber(item.quantity),
       unitPrice: normalizedNumber(item.price_at_purchase),
+      dedication: (() => {
+        const row = dedicationByItem.get(String(item.cart_item_id))!
+        return {
+          decision: String(row.decision), body: row.body === null ? null : String(row.body),
+          sourceRevision: Number(row.source_revision),
+        }
+      })(),
     })),
   }
 

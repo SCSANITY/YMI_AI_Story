@@ -48,6 +48,8 @@ import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/pers
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
 import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
 import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePanel';
+import { PreviewDedication, type DedicationAcknowledgement, type PreviewDedicationHandle } from '@/components/personalize/PreviewDedication';
+import { rememberDedicationAcknowledgement } from '@/lib/dedication';
 import { SignatureVoiceDialog } from '@/components/personalize/SignatureVoiceDialog';
 import { PRIVACY_REASSURANCE_COPY } from '@/components/personalize/PrivacyReassurance';
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
@@ -203,6 +205,9 @@ export default function PersonalizePage({
   const creationIdParam = searchParams?.get('creationId') || null;
   const previewJobIdParam = searchParams?.get('jobId') || null;
   const previewSource = searchParams?.get('source') || null;
+  const dedicationOnArrival = searchParams?.get('dedication') === '1';
+  const dedicationReturnTo = searchParams?.get('returnTo') || null;
+  const dedicationPurchaseOnArrival = searchParams?.get('purchase') === '1';
   const productIntroEntryRef = useRef(viewMode !== 'preview' && searchParams?.get('entry') === 'intro');
 
   const {
@@ -272,6 +277,9 @@ export default function PersonalizePage({
   const [showFlyAnimation, setShowFlyAnimation] = useState(false);
   const [flyAnimationId, setFlyAnimationId] = useState(0);
   const addToCartBtnRef = useRef<HTMLButtonElement>(null);
+  const dedicationRef = useRef<PreviewDedicationHandle>(null);
+  const dedicationAcknowledgementRef = useRef<DedicationAcknowledgement | null>(null);
+  const dedicationRequestInFlightRef = useRef(false);
   const cartIconRef = useRef<HTMLButtonElement>(null); 
   const [flyOrigin, setFlyOrigin] = useState({ x: 0, y: 0 });
   const [flyTarget, setFlyTarget] = useState({ x: 0, y: 0 });
@@ -1737,7 +1745,6 @@ export default function PersonalizePage({
         childName: name,
         childAge: age,
         language: selectedLang,
-        dedication: '',
         bookType,
         photo: photo ?? undefined,
         photoUrl: photoPreview ?? undefined,
@@ -2366,7 +2373,6 @@ export default function PersonalizePage({
         childName: currentName,
         childAge: currentAge,
         language: selectedLang,
-        dedication: '',
         bookType,
         photoUrl: photoPreview ?? undefined,
         assetId: photoAssetId ?? undefined,
@@ -2445,7 +2451,6 @@ export default function PersonalizePage({
               childName: currentName,
               childAge: currentAge,
               language: selectedLang,
-              dedication: '',
               bookType,
               photoUrl: photoPreview ?? undefined,
               assetId: photoAssetId ?? undefined,
@@ -2485,6 +2490,7 @@ export default function PersonalizePage({
                   cartItemId: existingItem?.id ?? null,
                   creationId: ensuredCreationId ?? null,
                   quantity,
+                  dedicationAcknowledgement: dedicationAcknowledgementRef.current,
                 },
               ],
             }
@@ -2569,7 +2575,7 @@ export default function PersonalizePage({
     }
   };
 
-  const handleCheckoutClick = () => {
+  const startPreviewCheckout = () => {
     if (isExiting) return;
     if (previewActionInFlightRef.current) return;
     if (!ensurePremiumVoiceSample()) return;
@@ -2578,6 +2584,27 @@ export default function PersonalizePage({
     setPreviewActionPending('CHECKOUT');
     setCheckoutTransitionPhase('preparing');
     requestCheckout();
+  };
+
+  const handleCheckoutClick = async () => {
+    if (isExiting || previewActionInFlightRef.current || dedicationRequestInFlightRef.current) return;
+    dedicationRequestInFlightRef.current = true;
+    try {
+      const acknowledgement = await dedicationRef.current?.ensureDecision();
+      if (!acknowledgement) return;
+      dedicationAcknowledgementRef.current = acknowledgement;
+      if (creationId) rememberDedicationAcknowledgement(creationId, acknowledgement);
+      startPreviewCheckout();
+    } finally { dedicationRequestInFlightRef.current = false; }
+  };
+
+  const handleArrivalDedicationChoice = (acknowledgement: DedicationAcknowledgement) => {
+    dedicationAcknowledgementRef.current = acknowledgement;
+    if (creationId) rememberDedicationAcknowledgement(creationId, acknowledgement);
+    if (dedicationReturnTo === 'cart' && creationId) {
+      router.push('/cart');
+    }
+    else if (dedicationPurchaseOnArrival) startPreviewCheckout();
   };
 
   useEffect(() => {
@@ -3485,6 +3512,12 @@ export default function PersonalizePage({
                       voiceDurationSeconds={resolvedVoiceDurationSeconds}
                       onChange={handleEditionChange}
                       onOpenVoice={() => setIsVoiceDialogOpen(true)}
+                      dedication={<PreviewDedication
+                        ref={dedicationRef}
+                        creationId={creationId}
+                        openOnArrival={dedicationOnArrival}
+                        onArrivalChoice={handleArrivalDedicationChoice}
+                      />}
                       actions={
                         <PreviewActionBar
                           acknowledgementLabel={t('personalize.checkoutAcknowledgement')}

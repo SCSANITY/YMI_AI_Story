@@ -828,7 +828,6 @@ export const GlobalProvider: React.FC<{
             childName: '',
             childAge: '',
             language: 'English',
-            dedication: '',
             creationId,
           }
       const newItem: CartItem = {

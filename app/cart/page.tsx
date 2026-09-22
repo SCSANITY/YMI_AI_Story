@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShoppingCart } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
@@ -10,6 +10,8 @@ import { useCustomizeNavigation } from '@/components/useCustomizeNavigation';
 import { CartItemsList } from './CartItemsList';
 import { CartSummaryPanel } from './CartSummaryPanel';
 import type { CartItem } from '@/types';
+import { useDedicationChoices } from '@/lib/use-dedication-choices';
+import { readDedicationAcknowledgement } from '@/lib/dedication';
 
 type PendingCartAction = {
   itemId: string;
@@ -80,6 +82,24 @@ export default function CartPage() {
   const [selectedIdsDraft, setSelectedIdsDraft] = useState<string[]>([]);
   const [pendingAction, setPendingAction] = useState<PendingCartAction>(null);
   const [cartActionError, setCartActionError] = useState<string | null>(null);
+  const dedicationIds = useMemo(() => cart.map(item => item.creationId || item.personalization?.creationId || '').filter(Boolean), [cart]);
+  const { choices: dedicationChoices } = useDedicationChoices(dedicationIds);
+  const [acknowledgedCreations, setAcknowledgedCreations] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const next: Record<string, boolean> = {};
+    for (const id of dedicationIds) {
+      const choice = dedicationChoices[id];
+      const ack = readDedicationAcknowledgement(id);
+      next[id] = Boolean(choice && ack?.decision === choice.decision && ack.revision === choice.revision);
+    }
+    setAcknowledgedCreations(next);
+  }, [dedicationChoices, dedicationIds]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem('ymi_cart_dedication_selection') || '[]');
+      if (Array.isArray(saved)) setSelectedIdsDraft(saved.filter((id): id is string => typeof id === 'string'));
+    } catch { /* no saved selection */ }
+  }, []);
   const selectedIds = useMemo(() => {
     const cartIds = new Set(cart.map((item) => item.id));
     return selectedIdsDraft.filter((id) => cartIds.has(id));
@@ -106,16 +126,41 @@ export default function CartPage() {
     setSelectedIdsDraft(prev => prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]);
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     const items = selectedItems;
-    if (!items.length) return;
+    if (!items.length) return false;
+    try {
+      const params = new URLSearchParams();
+      items.forEach(item => { const id = item.creationId || item.personalization?.creationId; if (id) params.append('creationId', id); });
+      const response = await fetch(`/api/dedication?${params}`, { credentials: 'include', cache: 'no-store' });
+      if (!response.ok) throw new Error('Dedication status unavailable');
+      const data = await response.json();
+      const current = new Map((data.choices || []).map((choice: { creationId: string }) => [choice.creationId, choice]));
+      const pending = items.find(item => {
+        const id = item.creationId || item.personalization?.creationId || '';
+        const choice = current.get(id) as typeof dedicationChoices[string] | undefined;
+        const ack = readDedicationAcknowledgement(id);
+        return !choice || choice.decision === 'undecided' ||
+          (choice.previouslyPurchased && (ack?.decision !== choice.decision || ack?.revision !== choice.revision));
+      });
+      if (pending) {
+        window.sessionStorage.setItem('ymi_cart_dedication_selection', JSON.stringify(selectedIds));
+        goToPreview(pending.id, pending.bookID, true);
+        return true;
+      }
+    } catch {
+      setCartActionError('Could not check your book dedications. Please try again.');
+      return false;
+    }
+    window.sessionStorage.removeItem('ymi_cart_dedication_selection');
     prepareCheckout(items);
     const ids = items.map(item => item.id).join(',');
     const suffix = ids ? `?ids=${encodeURIComponent(ids)}` : '';
     router.push(`/checkout${suffix}`);
+    return true;
   };
 
-  const goToPreview = (itemId: string, bookID: string) => {
+  const goToPreview = (itemId: string, bookID: string, dedication = false) => {
     if (pendingAction) return;
     const target = cart.find(entry => entry.id === itemId);
     const creationId = target?.creationId;
@@ -123,6 +168,7 @@ export default function CartPage() {
     const params = new URLSearchParams({ view: 'preview' });
     if (creationId) params.set('creationId', creationId);
     if (previewJobId) params.set('jobId', previewJobId);
+    if (dedication) { params.set('dedication', '1'); params.set('returnTo', 'cart'); }
     const href = `/personalize/${bookID}?${params.toString()}`;
     setPendingAction({ itemId, action: 'preview' });
     void navigateToCustomize(href, {
@@ -240,11 +286,14 @@ export default function CartPage() {
           allSelected={allSelected}
           pendingAction={pendingAction}
           pendingCustomizeHref={pendingCustomizeHref}
+          dedicationChoices={dedicationChoices}
+          acknowledgedCreations={acknowledgedCreations}
           displayCurrency={displayCurrency}
           t={t}
           onToggleSelectAll={toggleSelectAll}
           onToggleSelection={toggleSelection}
-          onPreview={goToPreview}
+          onPreview={(itemId, bookId) => goToPreview(itemId, bookId)}
+          onFinishDedication={(itemId, bookId) => goToPreview(itemId, bookId, true)}
           onPreviewHover={prefetchPreview}
           onCustomizeEdit={goToCustomizeEdit}
           onCustomizeHover={(bookId) => prefetchCustomizeHref(`/personalize/${bookId}`)}
@@ -256,6 +305,11 @@ export default function CartPage() {
           subtotal={subtotal}
           selectedTotal={selectedTotal}
           selectedItemsCount={selectedItems.length}
+          pendingDedicationCount={selectedItems.filter(item => {
+            const id = item.creationId || item.personalization?.creationId || '';
+            const choice = dedicationChoices[id];
+            return choice?.decision === 'undecided' || Boolean(choice?.previouslyPurchased && !acknowledgedCreations[id]);
+          }).length}
           displayCurrency={displayCurrency}
           t={t}
           onCheckout={handleCheckout}

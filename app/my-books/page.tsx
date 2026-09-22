@@ -24,6 +24,7 @@ import {
 import type { CreationItem } from './myBooksTypes'
 import { normalizeStoryLanguage } from '@/lib/story-language'
 import { templateRowToBook, templateStorageUrl } from '@/lib/book-catalog'
+import { useDedicationChoices } from '@/lib/use-dedication-choices'
 
 const resolveCover = (row: CreationItem) => {
   const raw = row.preview_cover_url || row.templates?.normalized_cover_image_path || row.templates?.cover_image_path || ''
@@ -72,7 +73,6 @@ const toPersonalization = (item: CreationItem): PersonalizationData => {
     childName: String(childName),
     childAge: String(childAge),
     language: normalizeStoryLanguage(language),
-    dedication: '',
     storagePath: typeof snapshot.storagePath === 'string' ? snapshot.storagePath : undefined,
     previewJobId: item.preview_job_id ?? (typeof snapshot.previewJobId === 'string' ? snapshot.previewJobId : undefined),
     creationId: item.creation_id,
@@ -156,6 +156,8 @@ export default function MyBooksPage() {
   const { user, displayCurrency, addToCart, hydrateCheckoutItems, openLoginModal } = useGlobalContext()
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
   const [items, setItems] = useState<CreationItem[]>([])
+  const dedicationIds = useMemo(() => items.filter(item => (item.purchaseState ?? 'unpurchased') === 'unpurchased').map(item => item.creation_id), [items])
+  const { choices: dedicationChoices } = useDedicationChoices(dedicationIds)
   const [loading, setLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState<{ creationId: string; action: 'add' | 'buy' | 'delete' } | null>(null)
   const [pendingReaderHref, setPendingReaderHref] = useState<string | null>(null)
@@ -246,6 +248,11 @@ export default function MyBooksPage() {
 
   const handleBuyNow = async (item: CreationItem) => {
     if (pendingAction) return
+    const choice = dedicationChoices[item.creation_id]
+    if (!choice || choice.decision === 'undecided' || choice.previouslyPurchased) {
+      goToPreview(item, { dedication: true, purchase: true })
+      return
+    }
     setNotice(null)
     setPendingAction({ creationId: item.creation_id, action: 'buy' })
     let checkoutStarted = false
@@ -293,10 +300,12 @@ export default function MyBooksPage() {
     }
   }
 
-  const buildPreviewHref = (item: CreationItem) => {
+  const buildPreviewHref = (item: CreationItem, options?: { dedication?: boolean; purchase?: boolean }) => {
     const params = new URLSearchParams({ view: 'preview', source: 'my-books' })
     params.set('creationId', item.creation_id)
     if (item.preview_job_id) params.set('jobId', item.preview_job_id)
+    if (options?.dedication) params.set('dedication', '1')
+    if (options?.purchase) params.set('purchase', '1')
     return `/personalize/${item.template_id}?${params.toString()}`
   }
 
@@ -314,9 +323,9 @@ export default function MyBooksPage() {
     router.prefetch(buildReaderHref(item))
   }
 
-  const goToPreview = (item: CreationItem) => {
+  const goToPreview = (item: CreationItem, options?: { dedication?: boolean; purchase?: boolean }) => {
     const coverUrl = resolveCover(item)
-    void navigateToCustomize(buildPreviewHref(item), {
+    void navigateToCustomize(buildPreviewHref(item, options), {
       onBeforeNavigate: () => {
         if (typeof window !== 'undefined') {
           try {
@@ -480,13 +489,15 @@ export default function MyBooksPage() {
                   displayCurrency={displayCurrency}
                   pendingCustomizeHref={pendingCustomizeHref}
                   pendingAction={pendingAction}
+                  dedicationChoices={dedicationChoices}
                   t={t}
                   resolveCover={resolveCover}
                   resolveTemplatePrice={resolveTemplatePrice}
                   resolveTemplateCompareAtPrice={resolveTemplateCompareAtPrice}
                   resolveTemplateDiscountPercent={resolveTemplateDiscountPercent}
                   buildPreviewHref={buildPreviewHref}
-                  onPreview={goToPreview}
+                  onPreview={(item) => goToPreview(item)}
+                  onFinishDedication={(item) => goToPreview(item, { dedication: true })}
                   onPrefetchPreview={prefetchCustomizeHref}
                   onDelete={handleDelete}
                   onAddToCart={(item) => void handleAddToCart(item)}

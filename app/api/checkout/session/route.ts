@@ -28,6 +28,7 @@ import {
 import { getSiteUrl } from '@/lib/site-url'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { normalizeShippingAddress, recipientAddressIssue } from '@/lib/shipping-address'
+import { prepareOrderDedications } from '@/lib/dedication-server'
 
 function checkoutSessionMatchesSiteOrigin(
   session: { success_url?: string | null; cancel_url?: string | null },
@@ -110,9 +111,19 @@ export async function POST(request: Request) {
     const baseUrl = getSiteUrl(request.url)
     if (order.checkout_session_id) {
       const existingSession = await stripe.checkout.sessions.retrieve(order.checkout_session_id)
+      let existingFingerprintMatches = false
+      if (existingSession.status === 'open') {
+        try {
+          existingFingerprintMatches = Boolean(existingSession.metadata?.checkout_fingerprint) &&
+            existingSession.metadata?.checkout_fingerprint === await createOrderCheckoutFingerprint(orderId)
+        } catch {
+          existingFingerprintMatches = false
+        }
+      }
       if (
         existingSession.status === 'open' &&
         existingSession.url &&
+        existingFingerprintMatches &&
         checkoutSessionMatchesSiteOrigin(existingSession, baseUrl)
       ) {
         return NextResponse.json({
@@ -288,6 +299,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Zero-total checkout is not supported yet' }, { status: 400 })
     }
 
+    // The RPC locks the payable order and all selected lines, then snapshots
+    // each current choice atomically immediately before Stripe can issue a URL.
+    try {
+      await prepareOrderDedications(orderId, owner)
+    } catch {
+      return NextResponse.json({ error: 'Review every book’s dedication in Preview before payment', code: 'dedication_required' }, { status: 409 })
+    }
     const checkoutFingerprint = await createOrderCheckoutFingerprint(orderId)
 
     const session = await stripe.checkout.sessions.create({
@@ -347,7 +365,7 @@ export async function POST(request: Request) {
     try {
       const lockedFingerprint = await createOrderCheckoutFingerprint(orderId)
       if (lockedFingerprint !== checkoutFingerprint) {
-        await stripe.checkout.sessions.expire(session.id).catch(() => undefined)
+        await stripe.checkout.sessions.expire(session.id)
         await clearOrderCheckoutSessionLock(orderId, session.id)
         return NextResponse.json(
           { error: 'Checkout changed while payment was starting. Please review and try again.' },
@@ -355,8 +373,9 @@ export async function POST(request: Request) {
         )
       }
     } catch (snapshotError) {
-      await stripe.checkout.sessions.expire(session.id).catch(() => undefined)
-      await clearOrderCheckoutSessionLock(orderId, session.id).catch(() => undefined)
+      // Never release a chargeable lock when expiration is uncertain.
+      await stripe.checkout.sessions.expire(session.id)
+      await clearOrderCheckoutSessionLock(orderId, session.id)
       throw snapshotError
     }
 

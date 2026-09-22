@@ -11,6 +11,7 @@ import {
   resolveCartItemPreviewCoverStatus,
 } from '@/lib/cart-cover';
 import type { CartItem, DisplayCurrency } from '@/types';
+import type { DedicationChoice } from '@/lib/dedication';
 
 type CartItemsListProps = {
   items: CartItem[];
@@ -18,11 +19,14 @@ type CartItemsListProps = {
   allSelected: boolean;
   pendingAction: PendingCartAction;
   pendingCustomizeHref: string | null;
+  dedicationChoices: Record<string, DedicationChoice>;
+  acknowledgedCreations: Record<string, boolean>;
   displayCurrency: DisplayCurrency;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   onToggleSelectAll: () => void;
   onToggleSelection: (itemId: string) => void;
   onPreview: (itemId: string, bookId: string) => void;
+  onFinishDedication: (itemId: string, bookId: string) => void;
   onPreviewHover: (item: CartItem) => void;
   onCustomizeEdit: (itemId: string) => void;
   onCustomizeHover: (bookId: string) => void;
@@ -40,10 +44,13 @@ type CartItemCardProps = {
   isSelected: boolean;
   pendingAction: PendingCartAction;
   pendingCustomizeHref: string | null;
+  dedicationChoices: Record<string, DedicationChoice>;
+  acknowledgedCreations: Record<string, boolean>;
   displayCurrency: DisplayCurrency;
   t: CartItemsListProps['t'];
   onToggleSelection: (itemId: string) => void;
   onPreview: (itemId: string, bookId: string) => void;
+  onFinishDedication: (itemId: string, bookId: string) => void;
   onPreviewHover: (item: CartItem) => void;
   onCustomizeEdit: (itemId: string) => void;
   onCustomizeHover: (bookId: string) => void;
@@ -56,10 +63,13 @@ const CartItemCard = memo(function CartItemCard({
   isSelected,
   pendingAction,
   pendingCustomizeHref,
+  dedicationChoices,
+  acknowledgedCreations,
   displayCurrency,
   t,
   onToggleSelection,
   onPreview,
+  onFinishDedication,
   onPreviewHover,
   onCustomizeEdit,
   onCustomizeHover,
@@ -71,6 +81,10 @@ const CartItemCard = memo(function CartItemCard({
   const displayTitle = resolveCartItemDisplayTitle(item);
   const activeAction = pendingAction?.itemId === item.id ? pendingAction.action : null;
   const hasPendingAction = Boolean(activeAction);
+  const dedicationId = item.creationId || item.personalization?.creationId || '';
+  const dedicationChoice = dedicationChoices[dedicationId];
+  const dedicationUndecided = dedicationChoice?.decision === 'undecided';
+  const repeatDedicationReview = Boolean(dedicationChoice?.previouslyPurchased && !acknowledgedCreations[dedicationId]);
 
   return (
     <div className="glass-panel rounded-2xl p-4 md:p-6 flex gap-3 sm:gap-4">
@@ -163,6 +177,13 @@ const CartItemCard = memo(function CartItemCard({
           <div><span className="font-semibold">{t('cart.ageLabel')}:</span> {item.personalization?.childAge || t('common.unknown')}</div>
           <div><span className="font-semibold">{t('cart.languageLabel')}:</span> {item.personalization?.language || t('language.en')}</div>
         </div>
+        {dedicationUndecided || repeatDedicationReview ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="font-semibold">{dedicationUndecided ? 'Dedication choice pending' : 'Review dedication for this purchase'}</span>
+            <button type="button" onClick={() => onFinishDedication(item.id, item.bookID)} className="font-bold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-500">{dedicationUndecided ? 'Finish in Preview' : 'Review in Preview'}</button>
+          </div>
+        ) : null}
 
         <div className="mt-4 flex flex-wrap gap-3">
           <Button
@@ -197,11 +218,14 @@ export function CartItemsList({
   allSelected,
   pendingAction,
   pendingCustomizeHref,
+  dedicationChoices,
+  acknowledgedCreations,
   displayCurrency,
   t,
   onToggleSelectAll,
   onToggleSelection,
   onPreview,
+  onFinishDedication,
   onPreviewHover,
   onCustomizeEdit,
   onCustomizeHover,
@@ -225,10 +249,13 @@ export function CartItemsList({
           isSelected={selectedIds.includes(item.id)}
           pendingAction={pendingAction}
           pendingCustomizeHref={pendingCustomizeHref}
+          dedicationChoices={dedicationChoices}
+          acknowledgedCreations={acknowledgedCreations}
           displayCurrency={displayCurrency}
           t={t}
           onToggleSelection={onToggleSelection}
           onPreview={onPreview}
+          onFinishDedication={onFinishDedication}
           onPreviewHover={onPreviewHover}
           onCustomizeEdit={onCustomizeEdit}
           onCustomizeHover={onCustomizeHover}

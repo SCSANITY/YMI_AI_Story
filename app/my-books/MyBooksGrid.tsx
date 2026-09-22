@@ -1,11 +1,12 @@
 'use client'
 
-import { ShoppingCart, Sparkles, Trash2 } from 'lucide-react'
+import { PenLine, ShoppingCart, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { BookCardCover } from '@/components/BookCardCover'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
 import type { DisplayCurrency } from '@/types'
 import type { CreationItem } from './myBooksTypes'
+import type { DedicationChoice } from '@/lib/dedication'
 
 type MyBooksGridProps = {
   items: CreationItem[]
@@ -13,6 +14,7 @@ type MyBooksGridProps = {
   displayCurrency: DisplayCurrency
   pendingCustomizeHref: string | null
   pendingAction: { creationId: string; action: 'add' | 'buy' | 'delete' } | null
+  dedicationChoices: Record<string, DedicationChoice>
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string
   resolveCover: (item: CreationItem) => string
   resolveTemplatePrice: (item: CreationItem) => number
@@ -20,6 +22,7 @@ type MyBooksGridProps = {
   resolveTemplateDiscountPercent: (item: CreationItem) => number | null
   buildPreviewHref: (item: CreationItem) => string
   onPreview: (item: CreationItem) => void
+  onFinishDedication: (item: CreationItem) => void
   onPrefetchPreview: (href: string) => void
   onDelete: (item: CreationItem) => void
   onAddToCart: (item: CreationItem) => void
@@ -32,6 +35,7 @@ export function MyBooksGrid({
   displayCurrency,
   pendingCustomizeHref,
   pendingAction,
+  dedicationChoices,
   t,
   resolveCover,
   resolveTemplatePrice,
@@ -39,6 +43,7 @@ export function MyBooksGrid({
   resolveTemplateDiscountPercent,
   buildPreviewHref,
   onPreview,
+  onFinishDedication,
   onPrefetchPreview,
   onDelete,
   onAddToCart,
@@ -127,6 +132,13 @@ export function MyBooksGrid({
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.04em] text-gray-400 md:mb-3 md:text-xs">
                   {item.templates?.story_type || ''}
                 </p>
+                {dedicationChoices[item.creation_id]?.decision === 'undecided' ? (
+                  <div className="my-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-200/80 bg-amber-50/75 px-3 py-2 text-xs text-amber-900">
+                    <PenLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span className="font-semibold">Dedication choice pending</span>
+                    <button type="button" onClick={() => onFinishDedication(item)} className="font-bold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-500">Finish in Preview</button>
+                  </div>
+                ) : null}
                 <p className="text-sm text-gray-600 leading-relaxed hidden md:block">
                   {item.templates?.description || t('common.personalizedStorybook')}
                 </p>

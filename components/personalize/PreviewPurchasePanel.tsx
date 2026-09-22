@@ -30,6 +30,7 @@ type PreviewPurchasePanelProps = {
   voiceReady: boolean
   voiceDurationSeconds: number | null
   actions: ReactNode
+  dedication?: ReactNode
   onChange: (value: PurchasePackageType) => Promise<void>
   onOpenVoice: () => void
   selectionDisabled?: boolean
@@ -50,6 +51,7 @@ function PreviewPurchasePanelComponent({
   voiceReady,
   voiceDurationSeconds,
   actions,
+  dedication,
   onChange,
   onOpenVoice,
   selectionDisabled = false,
@@ -178,6 +180,7 @@ function PreviewPurchasePanelComponent({
         </section>
       ) : null}
 
+      {dedication}
       <div className="mt-4 border-t border-slate-200 pt-4">{actions}</div>
     </aside>
   )

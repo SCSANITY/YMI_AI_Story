@@ -180,10 +180,24 @@ export async function GET(
     }
   }
 
+  // Admin print handoff reads the immutable purchased line, never the mutable
+  // current creation choice. Missing snapshots are legacy, not undecided.
+  let dedicationSnapshot: { decision: 'skipped' | 'confirmed'; body: string | null } | null = null
+  if (finalJob.cart_item_id) {
+    const { data: dedication, error: dedicationError } = await supabaseAdmin
+      .from('cart_item_dedications').select('decision,body')
+      .eq('cart_item_id', finalJob.cart_item_id).eq('order_id', finalJob.order_id).maybeSingle()
+    if (dedicationError) return jsonNoStore({ error: 'Failed to load purchased dedication' }, { status: 500 })
+    if (dedication?.decision === 'confirmed' || dedication?.decision === 'skipped') {
+      dedicationSnapshot = { decision: dedication.decision, body: dedication.body ?? null }
+    }
+  }
+
   return jsonNoStore({
     finalJob: finalJobSummary,
     page_contract: readModel.page_contract,
     pages: signedPages,
     print_artifact: printArtifact,
+    dedication_snapshot: dedicationSnapshot,
   })
 }

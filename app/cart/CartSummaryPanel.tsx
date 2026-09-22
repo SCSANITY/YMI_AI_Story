@@ -10,15 +10,17 @@ type CartSummaryPanelProps = {
   subtotal: number;
   selectedTotal: number;
   selectedItemsCount: number;
+  pendingDedicationCount: number;
   displayCurrency: DisplayCurrency;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
-  onCheckout: () => void;
+  onCheckout: () => Promise<boolean>;
 };
 
 export function CartSummaryPanel({
   subtotal,
   selectedTotal,
   selectedItemsCount,
+  pendingDedicationCount,
   displayCurrency,
   t,
   onCheckout,
@@ -26,14 +28,10 @@ export function CartSummaryPanel({
   const hasSelection = selectedItemsCount > 0;
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (!hasSelection || isCheckingOut) return;
     setIsCheckingOut(true);
-    try {
-      onCheckout();
-    } catch {
-      setIsCheckingOut(false);
-    }
+    try { await onCheckout(); } finally { setIsCheckingOut(false); }
   };
 
   return (
@@ -57,6 +55,9 @@ export function CartSummaryPanel({
           <span className="font-bold text-gray-900">{formatDisplayCurrency(hasSelection ? selectedTotal : subtotal, displayCurrency)}</span>
         </div>
       </div>
+      {pendingDedicationCount > 0 ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+        {pendingDedicationCount} {pendingDedicationCount === 1 ? 'book needs' : 'books need'} a dedication choice or review before payment.
+      </p> : null}
       <Button
         size="lg"
         className="mt-6 w-full rounded-full"

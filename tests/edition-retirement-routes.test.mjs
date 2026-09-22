@@ -82,6 +82,10 @@ function sessionHandler(items) {
       requireCheckoutOrderAccess: async () => ({}), checkoutOwnerErrorResponse: () => null,
     },
     '@/lib/locale-pricing': { normalizeCheckoutCurrency: () => 'USD' },
+    '@/lib/checkout-session-lock': { createOrderCheckoutFingerprint: async () => {
+      operations.push('snapshot:verify')
+      return 'synthetic-fingerprint'
+    } },
     '@/lib/site-url': { getSiteUrl: () => 'http://localhost' },
     '@/lib/stripe': {
       isStripeEnabled: () => true,
@@ -90,6 +94,7 @@ function sessionHandler(items) {
         return { checkout: { sessions: { async retrieve() {
           operations.push('stripe:retrieve')
           return { id: 'synthetic-session', status: 'open', url: 'https://checkout.example/fixture',
+            metadata: { checkout_fingerprint: 'synthetic-fingerprint' },
             success_url: 'http://localhost/success', cancel_url: 'http://localhost/cancel' }
         } } } }
       },
@@ -124,5 +129,5 @@ test('actual checkout handler retains open-session reuse for both current physic
   const response = await POST(sessionRequest())
   assert.equal(response.status, 200)
   assert.equal((await response.json()).reused, true)
-  assert.deepEqual(operations, ['read:orders', 'read:cart_items', 'stripe:init', 'stripe:retrieve'])
+  assert.deepEqual(operations, ['read:orders', 'read:cart_items', 'stripe:init', 'stripe:retrieve', 'snapshot:verify'])
 })

@@ -31,6 +31,11 @@ not a second Worker source.
   Database logistics branch on 2026-09-16. It pins the service-only atomic
   logistics save, lease and guarded sync contracts. This source-reviewed
   snapshot is not evidence of production application.
+- DEDICATION-001 added `20260922_080000_dedication_001.sql` from private
+  Database draft commit `715de755274080f7b6b058f726b2e99991e397e6` on
+  2026-09-22. It pins the service-only creation choice, checkout-line snapshot,
+  edit/session guard and order preparation contracts. It is **not** evidence
+  that the migration was applied or authorized for production.
 - `SHA256SUMS` records the repository-normalized UTF-8/LF identity of every
   fixture and this README, so the same manifest verifies on Windows and Linux.
 

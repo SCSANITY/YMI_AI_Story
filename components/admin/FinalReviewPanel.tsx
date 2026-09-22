@@ -1535,10 +1535,12 @@ export function FinalReviewPanel({
               />
             ) : (
               <PrintVersionReview
+                key={selectedJobId ?? 'no-final-job'}
                 loadingDetail={isDetailLoading}
                 pdfReleased={pdfReleased}
                 printReleased={printReleased}
                 artifact={printArtifact}
+                dedicationSnapshot={activeDetail?.dedication_snapshot ?? null}
                 uploading={busyAction === 'upload-print-package'}
                 uploadProgress={printUploadProgress}
                 uploadError={printUploadError}

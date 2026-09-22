@@ -18,7 +18,6 @@ import {
 import { useI18n } from '@/lib/useI18n'
 import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
-import { startOwnedCreationCheckout } from '@/lib/owned-creation-checkout-client'
 
 const PAGE_WIDTH = 380
 const PAGE_HEIGHT = 380
@@ -62,7 +61,7 @@ function resolveReaderLoadIssue(status: number, response: ReaderResponse): Reade
 export function OwnedBookReader({ creationId }: { creationId: string }) {
   const router = useRouter()
   const { t } = useI18n()
-  const { user, isHydrated, hydrateCheckoutItems, openLoginModal } = useGlobalContext()
+  const { user, isHydrated, openLoginModal } = useGlobalContext()
   const [reader, setReader] = useState<ReaderResponse | null>(null)
   const [bookDisplay, setBookDisplay] = useState<ReaderBookDisplay | null>(null)
   const [loading, setLoading] = useState(true)
@@ -206,19 +205,11 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     checkoutInFlightRef.current = true
     setCheckoutPending(true)
     setCheckoutError(null)
-    try {
-      const checkout = await startOwnedCreationCheckout({
-        creationId: creation.creationId,
-        customerId: user?.customerId,
-      })
-      if (checkout.cartItems.length > 0) hydrateCheckoutItems(checkout.cartItems)
-      router.push(checkout.checkoutHref)
-    } catch {
-      setCheckoutError(t('myBooks.checkoutFailed'))
-      checkoutInFlightRef.current = false
-      setCheckoutPending(false)
-    }
-  }, [creation, hydrateCheckoutItems, router, t, user?.customerId])
+    const params = new URLSearchParams({ view: 'preview', creationId: creation.creationId,
+      source: 'my-books', dedication: '1', purchase: '1' })
+    if (creation.previewJobId) params.set('jobId', creation.previewJobId)
+    router.push(`/personalize/${creation.templateId}?${params.toString()}`)
+  }, [creation, router])
 
   const turnPage = useCallback((direction: 'next' | 'prev') => {
     if (isFlipping) return
