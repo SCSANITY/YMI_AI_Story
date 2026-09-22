@@ -3512,6 +3512,7 @@ export default function PersonalizePage({
                       dedication={<PreviewDedication
                         ref={dedicationRef}
                         creationId={creationId}
+                        bookID={bookID}
                         openOnArrival={dedicationOnArrival}
                         onArrivalChoice={handleArrivalDedicationChoice}
                       />}

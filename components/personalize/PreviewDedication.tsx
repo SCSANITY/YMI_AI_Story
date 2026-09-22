@@ -4,18 +4,20 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, PenLine, X } from 'lucide-react'
 import {
-  DEDICATION_MAX_CHARACTERS, DEDICATION_MAX_LINE_BREAKS, DEDICATION_SAMPLE,
+  DEDICATION_MAX_CHARACTERS, DEDICATION_MAX_LINE_BREAKS,
   dedicationBodyMetrics, type DedicationChoice, validDedicationBody,
 } from '@/lib/dedication'
+import { getDedicationPreset } from '@/lib/dedication-presets'
 
 export type DedicationAcknowledgement = { decision: 'skipped' | 'confirmed'; revision: number }
 export type PreviewDedicationHandle = { ensureDecision: () => Promise<DedicationAcknowledgement | null> }
 
 export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
   creationId: string | null
+  bookID: string
   openOnArrival: boolean
   onArrivalChoice?: (acknowledgement: DedicationAcknowledgement) => void
-}>(function PreviewDedication({ creationId, openOnArrival, onArrivalChoice }, ref) {
+}>(function PreviewDedication({ creationId, bookID, openOnArrival, onArrivalChoice }, ref) {
   const [choice, setChoice] = useState<DedicationChoice | null>(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -162,6 +164,7 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
 
   const metrics = dedicationBodyMetrics(draft)
   const valid = validDedicationBody(draft)
+  const preset = getDedicationPreset(bookID)
   return <>
     <section className={`mt-5 rounded-2xl border p-4 ${choice?.decision === 'undecided' ? 'border-amber-200 bg-amber-50/75' : 'border-stone-200 bg-stone-50/80'}`} aria-label="Book dedication">
       <div className="flex items-start gap-3">
@@ -187,25 +190,33 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
           initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.88, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 8 }}
           transition={{ duration: reducedMotion ? 0 : 0.2, ease: 'easeOut' }}
-          className="max-h-[min(90dvh,720px)] w-full overflow-y-auto rounded-t-[1.5rem] bg-[#fffaf2] p-5 shadow-2xl sm:max-w-[540px] sm:rounded-[1.5rem] sm:p-7">
-          <div className="flex items-start justify-between gap-4">
+          className="flex max-h-[min(90dvh,720px)] w-full flex-col overflow-hidden rounded-t-[1.5rem] bg-[#fffaf2] p-5 shadow-2xl sm:max-w-[540px] sm:rounded-[1.5rem] sm:p-7">
+          <div className="min-h-0 overflow-y-auto">
+            <div className="flex items-start justify-between gap-4">
             <div><p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800">The finishing touch</p>
               <h2 id="dedication-dialog-title" className="mt-1 font-serif text-2xl font-semibold text-slate-950">A message inside their book</h2></div>
             <button type="button" onClick={close} disabled={saving} aria-label="Close dedication dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 focus-visible:ring-2 focus-visible:ring-amber-500"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-600">Your words will be placed on a printed insert between the cover and the story. You can also choose No Thanks.</p>
+            {choice?.previouslyPurchased ? <p className="mt-3 rounded-xl bg-amber-100/70 px-3 py-2 text-xs font-semibold text-amber-900">Buying this book again? Please review and confirm the message shown below for this new copy.</p> : null}
+            <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/80 p-4" aria-labelledby="dedication-preset-title">
+              <h3 id="dedication-preset-title" className="font-serif text-base font-semibold text-amber-950">{preset.storySpecific ? 'Inspired by this story' : 'A message to start with'}</h3>
+              <p className="mt-1 text-xs text-amber-900/80">A suggestion you can use as written or make your own.</p>
+              <p id="dedication-preset-body" className="mt-3 whitespace-pre-wrap border-l-2 border-amber-400 pl-3 text-sm leading-6 text-slate-800">{preset.body}</p>
+              <button type="button" disabled={saving} onClick={() => setDraft(preset.body)} aria-describedby="dedication-preset-body"
+                className="mt-3 min-h-10 rounded-full border border-amber-400 bg-white px-4 text-xs font-bold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50">Use this message</button>
+            </section>
+            <label htmlFor="dedication-body" className="mt-5 block text-sm font-bold text-slate-900">Your message</label>
+            <textarea ref={textareaRef} id="dedication-body" value={draft} onChange={event => setDraft(event.target.value)} rows={4} disabled={saving}
+              placeholder="Write a few words to make this book theirs…" className="mt-2 w-full resize-y rounded-xl border border-stone-300 bg-white p-3 text-sm leading-6 text-slate-900 shadow-inner focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200" />
+            <div className="mt-2 text-right text-xs text-slate-500">
+              <span className={metrics.characters > DEDICATION_MAX_CHARACTERS || metrics.lineBreaks > DEDICATION_MAX_LINE_BREAKS ? 'text-rose-700' : ''}>
+                {metrics.characters}/{DEDICATION_MAX_CHARACTERS} characters · {metrics.lineBreaks}/{DEDICATION_MAX_LINE_BREAKS} line breaks
+              </span>
+            </div>
+            {error ? <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p> : null}
           </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">Your words will be placed on a printed insert between the cover and the story. You can also choose No Thanks.</p>
-          {choice?.previouslyPurchased ? <p className="mt-3 rounded-xl bg-amber-100/70 px-3 py-2 text-xs font-semibold text-amber-900">Buying this book again? Please review and confirm the message shown below for this new copy.</p> : null}
-          <label htmlFor="dedication-body" className="mt-5 block text-sm font-bold text-slate-900">Your message</label>
-          <textarea ref={textareaRef} id="dedication-body" value={draft} onChange={event => setDraft(event.target.value)} rows={6} disabled={saving}
-            placeholder="Write a few words to make this book theirs…" className="mt-2 w-full resize-y rounded-xl border border-stone-300 bg-white p-3 text-sm leading-6 text-slate-900 shadow-inner focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200" />
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-            <button type="button" disabled={saving} onClick={() => setDraft(DEDICATION_SAMPLE)} className="font-bold text-amber-800 underline underline-offset-2">Use this message</button>
-            <span className={metrics.characters > DEDICATION_MAX_CHARACTERS || metrics.lineBreaks > DEDICATION_MAX_LINE_BREAKS ? 'text-rose-700' : ''}>
-              {metrics.characters}/{DEDICATION_MAX_CHARACTERS} characters · {metrics.lineBreaks}/{DEDICATION_MAX_LINE_BREAKS} line breaks
-            </span>
-          </div>
-          {error ? <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p> : null}
-          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+          <div className="mt-4 grid shrink-0 gap-2 border-t border-stone-200 pt-4 sm:grid-cols-2">
             <button type="button" disabled={saving} onClick={() => void decide('skipped')} className="min-h-12 rounded-full border border-stone-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-stone-100 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50">No Thanks</button>
             <button type="button" disabled={saving || !valid} onClick={() => void decide('confirmed')} className="min-h-12 rounded-full bg-amber-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-amber-700 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-600 disabled:shadow-none">
               <Check className="mr-1 inline h-4 w-4" aria-hidden="true" />Confirm
