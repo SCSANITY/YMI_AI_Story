@@ -79,7 +79,10 @@ export async function POST(request: Request) {
     const providerRef =
       (typeof session.payment_intent === 'string' ? session.payment_intent : null) || session.id
 
-    await requireMatchingCheckoutSession(orderId, session.id, session.metadata?.checkout_fingerprint)
+    await requireMatchingCheckoutSession(
+      orderId, session.id, session.metadata?.checkout_fingerprint,
+      session.metadata?.dedication_contract
+    )
     const result = await finalizeOrderPayment({
       orderId,
       customerId,

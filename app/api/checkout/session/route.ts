@@ -114,7 +114,8 @@ export async function POST(request: Request) {
       let existingFingerprintMatches = false
       if (existingSession.status === 'open') {
         try {
-          existingFingerprintMatches = Boolean(existingSession.metadata?.checkout_fingerprint) &&
+          existingFingerprintMatches = existingSession.metadata?.dedication_contract === 'v1' &&
+            Boolean(existingSession.metadata?.checkout_fingerprint) &&
             existingSession.metadata?.checkout_fingerprint === await createOrderCheckoutFingerprint(orderId)
         } catch {
           existingFingerprintMatches = false
@@ -327,6 +328,7 @@ export async function POST(request: Request) {
         discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
         shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
         shipping_amount_usd: String(shippingAmountUsd || 0),
+        dedication_contract: 'v1',
         checkout_fingerprint: checkoutFingerprint,
       },
       payment_intent_data: {
