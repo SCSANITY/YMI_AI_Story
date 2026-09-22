@@ -186,6 +186,14 @@ BEGIN
        OR (p_owner_type = 'customer' AND v_order.customer_id IS DISTINCT FROM p_owner_id) THEN
       RAISE EXCEPTION 'Dedication order not payable' USING ERRCODE = '55000';
     END IF;
+    -- A line can be returned to the cart while its unpaid order is retained.
+    -- Remove only snapshots no longer belonging to an ordered line of this
+    -- unlocked order; otherwise the checkout fingerprint sees a stale extra row.
+    DELETE FROM public.cart_item_dedications d WHERE d.order_id = p_order_id
+      AND NOT EXISTS (
+        SELECT 1 FROM public.cart_items ci WHERE ci.cart_item_id = d.cart_item_id
+          AND ci.order_id = p_order_id AND ci.status::text = 'ordered'
+      );
     FOR v_item IN SELECT * FROM public.cart_items
       WHERE order_id = p_order_id AND status::text = 'ordered'
       ORDER BY cart_item_id FOR UPDATE LOOP
