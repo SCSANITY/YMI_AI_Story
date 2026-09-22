@@ -94,7 +94,7 @@ function sessionHandler(items) {
         return { checkout: { sessions: { async retrieve() {
           operations.push('stripe:retrieve')
           return { id: 'synthetic-session', status: 'open', url: 'https://checkout.example/fixture',
-            metadata: { checkout_fingerprint: 'synthetic-fingerprint', dedication_contract: 'v1' },
+            metadata: { checkout_fingerprint: 'synthetic-fingerprint' },
             success_url: 'http://localhost/success', cancel_url: 'http://localhost/cancel' }
         } } } }
       },

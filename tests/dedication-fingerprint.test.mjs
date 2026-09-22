@@ -23,7 +23,7 @@ function fingerprintModule({ body = 'For you', snapshot = true, currentBody = bo
   const dependencies = {
     'node:crypto': { createHash },
     '@/lib/supabaseAdmin': { supabaseAdmin: { from(table) {
-      const query = { select() { return this }, eq() { return this }, in() { return this }, order() { return this }, limit() { return this },
+      const query = { select() { return this }, eq() { return this }, in() { return this }, order() { return this },
         maybeSingle: async () => rows[table], then: (resolve, reject) => Promise.resolve(rows[table]).then(resolve, reject) }
       return query
     } } },
@@ -52,8 +52,8 @@ test('missing snapshot or concurrent creation edit blocks a new unpaid checkout'
   await assert.rejects(fingerprintFor({ body: 'For you', currentBody: 'Changed after capture' }), /Dedication changed/)
 })
 
-test('a pre-release Stripe session keeps its exact legacy fingerprint but cannot carry a dedication', async () => {
-  const legacy = fingerprintModule({ snapshot: false })
+test('payment completion requires the current dedication snapshot and fingerprint', async () => {
+  const missingSnapshot = fingerprintModule({ snapshot: false })
   const oldSnapshot = {
     order: { currency: 'USD', productDiscount: 0, shipping: 0, shippingDiscount: 0,
       productInstrument: '', shippingInstrument: '', shippingMethod: '', shippingZone: '' },
@@ -61,13 +61,14 @@ test('a pre-release Stripe session keeps its exact legacy fingerprint but cannot
       packageType: 'basic', packagePriceVersion: 1, quantity: 1, unitPrice: 30 }],
   }
   const oldHash = createHash('sha256').update(JSON.stringify(oldSnapshot)).digest('hex')
-  await legacy.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash)
-  await assert.rejects(legacy.api.requireMatchingCheckoutSession('order-1', 'cs-test', 'wrong'), /Order changed/)
-  await assert.rejects(legacy.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash, 'unknown'), /Unknown dedication/)
+  await assert.rejects(
+    missingSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash),
+    /authoritative checkout snapshot/
+  )
 
   const withSnapshot = fingerprintModule()
-  await assert.rejects(withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash), /Legacy checkout cannot/)
   const newHash = await withSnapshot.api.createOrderCheckoutFingerprint('order-1')
-  await withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', newHash, 'v1')
-  await assert.rejects(withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash, 'v1'), /Order changed/)
+  await withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', newHash)
+  await assert.rejects(withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash), /Order changed/)
+  await assert.rejects(withSnapshot.api.requireMatchingCheckoutSession('order-1', 'wrong-session', newHash), /not active/)
 })

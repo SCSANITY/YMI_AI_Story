@@ -36,48 +36,6 @@ function normalizedNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-// Sessions issued by the previously deployed Web build have no dedication
-// contract marker or line snapshots. Keep its exact hash shape only for their
-// provider-verified completion paths; new sessions use the dedication hash.
-async function createLegacyOrderCheckoutFingerprint(orderId: string) {
-  const [{ data: order, error: orderError }, { data: items, error: itemsError }] = await Promise.all([
-    supabaseAdmin.from('orders')
-      .select('checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id, shipping_method, shipping_zone_code')
-      .eq('order_id', orderId).maybeSingle(),
-    supabaseAdmin.from('cart_items')
-      .select('cart_item_id, creation_id, package_type, package_price_version, price_at_purchase, product_type, quantity')
-      .eq('order_id', orderId).eq('status', 'ordered')
-      .order('cart_item_id', { ascending: true }),
-  ])
-  if (orderError || !order || itemsError || !items?.length) {
-    throw new Error('Unable to capture an authoritative legacy checkout snapshot')
-  }
-  const orderRow = order as CheckoutSnapshotOrder
-  const itemRows = items as CheckoutSnapshotItem[]
-  const snapshot = {
-    order: {
-      currency: String(orderRow.checkout_currency || 'USD').toUpperCase(),
-      productDiscount: normalizedNumber(orderRow.discount_amount_usd),
-      shipping: normalizedNumber(orderRow.shipping_amount_usd),
-      shippingDiscount: normalizedNumber(orderRow.shipping_discount_amount_usd),
-      productInstrument: String(orderRow.applied_product_discount_instrument_id || ''),
-      shippingInstrument: String(orderRow.applied_shipping_discount_instrument_id || ''),
-      shippingMethod: String(orderRow.shipping_method || ''),
-      shippingZone: String(orderRow.shipping_zone_code || ''),
-    },
-    items: itemRows.map((item) => ({
-      id: String(item.cart_item_id || ''),
-      creationId: String(item.creation_id || ''),
-      productType: String(item.product_type || ''),
-      packageType: String(item.package_type || ''),
-      packagePriceVersion: normalizedNumber(item.package_price_version),
-      quantity: normalizedNumber(item.quantity),
-      unitPrice: normalizedNumber(item.price_at_purchase),
-    })),
-  }
-  return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
-}
-
 export async function createOrderCheckoutFingerprint(orderId: string) {
   const [{ data: order, error: orderError }, { data: items, error: itemsError }, { data: dedications, error: dedicationError }] = await Promise.all([
     supabaseAdmin
@@ -176,8 +134,7 @@ export async function clearOrderCheckoutSessionLock(orderId: string, sessionId: 
 export async function requireMatchingCheckoutSession(
   orderId: string,
   sessionId: string,
-  expectedFingerprint?: string | null,
-  dedicationContract?: string | null
+  expectedFingerprint?: string | null
 ) {
   const { data: order, error } = await supabaseAdmin
     .from('orders')
@@ -191,21 +148,7 @@ export async function requireMatchingCheckoutSession(
   }
   if (!expectedFingerprint) throw new Error('Stripe checkout session has no payment snapshot')
 
-  if (dedicationContract != null && dedicationContract !== 'v1') {
-    throw new Error('Unknown dedication checkout contract')
-  }
-  let currentFingerprint: string
-  if (dedicationContract === 'v1') {
-    currentFingerprint = await createOrderCheckoutFingerprint(orderId)
-  } else {
-    const { data: snapshots, error: snapshotError } = await supabaseAdmin
-      .from('cart_item_dedications').select('cart_item_id')
-      .eq('order_id', orderId).limit(1)
-    if (snapshotError || !snapshots || snapshots.length) {
-      throw new Error('Legacy checkout cannot contain dedication snapshots')
-    }
-    currentFingerprint = await createLegacyOrderCheckoutFingerprint(orderId)
-  }
+  const currentFingerprint = await createOrderCheckoutFingerprint(orderId)
   if (currentFingerprint !== expectedFingerprint) {
     throw new Error('Order changed after the Stripe checkout session was created')
   }

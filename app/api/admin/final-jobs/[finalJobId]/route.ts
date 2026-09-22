@@ -181,7 +181,7 @@ export async function GET(
   }
 
   // Admin print handoff reads the immutable purchased line, never the mutable
-  // current creation choice. Missing snapshots are legacy, not undecided.
+  // current creation choice. A missing purchased snapshot is an integrity gap.
   let dedicationSnapshot: { decision: 'skipped' | 'confirmed'; body: string | null } | null = null
   if (finalJob.cart_item_id) {
     const { data: dedication, error: dedicationError } = await supabaseAdmin

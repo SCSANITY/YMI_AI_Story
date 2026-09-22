@@ -69,7 +69,11 @@ export function PrintVersionReview({
           </button>
           {copyStatus === 'copied' ? <p role="status" className="mt-2 text-xs text-emerald-700">Copied with line breaks.</p> : null}
           {copyStatus === 'failed' ? <p role="alert" className="mt-2 text-xs text-rose-700">Clipboard unavailable. Select the text above and copy it manually.</p> : null}
-        </> : <p className="mt-2 text-sm text-[var(--admin-muted)]">{dedicationSnapshot?.decision === 'skipped' ? 'No message selected for this order line.' : 'Not recorded (legacy order).'}</p>}
+        </> : dedicationSnapshot?.decision === 'skipped' ? (
+          <p className="mt-2 text-sm text-[var(--admin-muted)]">No message selected for this order line.</p>
+        ) : (
+          <p role="alert" className="mt-2 text-sm text-rose-700">Dedication snapshot missing. Verify this order line before preparing its print insert.</p>
+        )}
       </section>
       <section className="overflow-hidden rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)]">
         <div className="border-b border-[var(--admin-card-line)] px-5 py-4">

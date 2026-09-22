@@ -11,11 +11,11 @@ test('Stripe checkout locks the authoritative order snapshot before redirecting'
 
   assert.match(route, /createOrderCheckoutFingerprint\(orderId\)/)
   assert.match(route, /checkout_fingerprint:\s*checkoutFingerprint/)
-  assert.match(route, /dedication_contract:\s*'v1'/)
-  assert.match(route, /existingSession\.metadata\?\.dedication_contract === 'v1'/)
+  assert.doesNotMatch(route, /dedication_contract/)
   assert.match(route, /checkout_session_id:\s*session\.id/)
   assert.match(route, /\.is\('checkout_session_id', null\)/)
   assert.match(route, /lockedFingerprint !== checkoutFingerprint/)
+  assert.match(route, /if \(existingSession\.status === 'open'\) \{\s*await stripe\.checkout\.sessions\.expire\(existingSession\.id\)/)
   assert.match(route, /checkout\.sessions\.expire\(session\.id\)/)
   assert.match(route, /api\/checkout\/session\/cancel/)
 })
@@ -27,9 +27,10 @@ test('both Stripe completion paths require the active immutable session', () => 
   for (const source of [webhook, confirm]) {
     assert.match(
       source,
-      /requireMatchingCheckoutSession\(\s*orderId, session\.id, session\.metadata\?\.checkout_fingerprint,\s*session\.metadata\?\.dedication_contract\s*\)/
+      /requireMatchingCheckoutSession\(orderId, session\.id, session\.metadata\?\.checkout_fingerprint\)/
     )
   }
+  assert.doesNotMatch(read('src/lib/checkout-session-lock.ts'), /createLegacyOrderCheckoutFingerprint|dedicationContract/)
 })
 
 test('database triggers block order and cart mutation while checkout is active', () => {
