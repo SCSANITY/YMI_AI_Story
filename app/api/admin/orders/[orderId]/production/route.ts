@@ -37,7 +37,7 @@ function cartItemRequiresPrint(item: Pick<CartItemRow, 'product_type' | 'package
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ orderId: string }> | { orderId: string } }
+  context: { params: Promise<{ orderId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) return jsonNoStore({ error: 'Forbidden' }, { status: 403 })

@@ -12,7 +12,7 @@ import {
 import { isUuid } from '@/lib/validators'
 
 type RouteContext = {
-  params: Promise<{ documentKey: string }> | { documentKey: string }
+  params: Promise<{ documentKey: string }>
 }
 
 function errorResponse(error: unknown, fallback: string) {

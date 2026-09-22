@@ -4,7 +4,7 @@ import { downloadStorageAsset } from '@/lib/storage-response'
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ token: string }> | { token: string } }
+  context: { params: Promise<{ token: string }> }
 ) {
   const { token } = await Promise.resolve(context.params)
   const shareToken = String(token || '').trim()

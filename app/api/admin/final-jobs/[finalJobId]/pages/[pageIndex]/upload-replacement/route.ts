@@ -56,7 +56,7 @@ async function discardFinalReplacementStaging(args: {
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ finalJobId: string; pageIndex: string }> | { finalJobId: string; pageIndex: string } }
+  context: { params: Promise<{ finalJobId: string; pageIndex: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) {

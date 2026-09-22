@@ -12,7 +12,7 @@ import { invalidatePublishedLegalContent } from '@/lib/legal-content-cache'
 import { isUuid } from '@/lib/validators'
 
 type RouteContext = {
-  params: Promise<{ documentKey: string }> | { documentKey: string }
+  params: Promise<{ documentKey: string }>
 }
 
 export async function POST(request: Request, context: RouteContext) {

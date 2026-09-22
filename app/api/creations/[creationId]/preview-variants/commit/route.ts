@@ -32,7 +32,7 @@ type CommitRpcRow = {
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ creationId: string }> | { creationId: string } }
+  context: { params: Promise<{ creationId: string }> }
 ) {
   const { creationId } = await Promise.resolve(context.params)
   if (!isUuid(creationId)) {

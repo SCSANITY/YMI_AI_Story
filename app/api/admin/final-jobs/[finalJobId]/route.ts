@@ -31,7 +31,7 @@ async function signRawPaths(paths: Array<string | null>) {
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ finalJobId: string }> | { finalJobId: string } }
+  context: { params: Promise<{ finalJobId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) {

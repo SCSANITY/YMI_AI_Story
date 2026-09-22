@@ -59,7 +59,7 @@ function isUniqueViolation(error: { code?: string | null } | null | undefined) {
 
 export async function DELETE(
   request: Request,
-  context: { params: Promise<{ creationId: string }> | { creationId: string } }
+  context: { params: Promise<{ creationId: string }> }
 ) {
   const { creationId } = await Promise.resolve(context.params)
   if (!isUuid(creationId)) {
@@ -184,7 +184,7 @@ export async function DELETE(
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ creationId: string }> | { creationId: string } }
+  context: { params: Promise<{ creationId: string }> }
 ) {
   const { creationId } = await Promise.resolve(context.params)
   if (!isUuid(creationId)) {

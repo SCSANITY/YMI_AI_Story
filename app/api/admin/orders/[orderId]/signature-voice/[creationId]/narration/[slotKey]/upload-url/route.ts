@@ -13,9 +13,7 @@ import { isUuid } from '@/lib/validators'
 export async function POST(
   request: Request,
   context: {
-    params:
-      | Promise<{ orderId: string; creationId: string; slotKey: string }>
-      | { orderId: string; creationId: string; slotKey: string }
+    params: Promise<{ orderId: string; creationId: string; slotKey: string }>
   }
 ) {
   const admin = await requireAdminCustomer()

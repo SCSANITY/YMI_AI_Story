@@ -23,7 +23,7 @@ async function readJsonSafely(request: Request) {
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ jobId: string }> | { jobId: string } }
+  context: { params: Promise<{ jobId: string }> }
 ) {
   const { jobId } = await Promise.resolve(context.params)
   const url = new URL(request.url)
@@ -75,7 +75,7 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  context: { params: Promise<{ jobId: string }> | { jobId: string } }
+  context: { params: Promise<{ jobId: string }> }
 ) {
   const { jobId } = await Promise.resolve(context.params)
   const body = await readJsonSafely(request)

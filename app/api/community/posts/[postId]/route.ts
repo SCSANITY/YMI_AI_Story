@@ -29,7 +29,7 @@ async function signImages(storagePaths: string[]) {
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ postId: string }> | { postId: string } }
+  context: { params: Promise<{ postId: string }> }
 ) {
   const { postId } = await Promise.resolve(context.params)
   let actorKey

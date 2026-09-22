@@ -65,7 +65,7 @@ async function withImageUrl(row: AdminBlogPostRow) {
 
 export async function PATCH(
   request: Request,
-  context: { params: Promise<{ postId: string }> | { postId: string } }
+  context: { params: Promise<{ postId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) {

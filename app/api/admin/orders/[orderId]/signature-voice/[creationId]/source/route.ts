@@ -27,7 +27,7 @@ function audioFileExtension(contentType: string) {
 export async function GET(
   request: Request,
   context: {
-    params: Promise<{ orderId: string; creationId: string }> | { orderId: string; creationId: string }
+    params: Promise<{ orderId: string; creationId: string }>
   }
 ) {
   const admin = await requireAdminCustomer()

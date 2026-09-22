@@ -124,9 +124,9 @@ async function loadOperationsSummary() {
 export default async function AdminEmailsPage({
   searchParams,
 }: {
-  searchParams?: Promise<SearchParams> | SearchParams
+  searchParams?: Promise<SearchParams>
 }) {
-  const params = await Promise.resolve(searchParams ?? {})
+  const params: SearchParams = searchParams ? await searchParams : {}
   const activeView = normalizeView(firstParam(params.view))
   let content: ReactNode
 

@@ -6,7 +6,7 @@ export const maxDuration = 300
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ finalJobId: string }> | { finalJobId: string } }
+  context: { params: Promise<{ finalJobId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) {

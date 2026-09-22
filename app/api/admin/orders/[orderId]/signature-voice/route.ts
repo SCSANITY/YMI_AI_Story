@@ -10,7 +10,7 @@ import { isUuid } from '@/lib/validators'
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ orderId: string }> | { orderId: string } }
+  context: { params: Promise<{ orderId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) return jsonNoStore({ error: 'Admin access required' }, { status: 403 })
@@ -31,7 +31,7 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  context: { params: Promise<{ orderId: string }> | { orderId: string } }
+  context: { params: Promise<{ orderId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) return jsonNoStore({ error: 'Admin access required' }, { status: 403 })

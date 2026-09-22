@@ -12,7 +12,7 @@ const SIGN_TTL_SECONDS = 60 * 30
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ finalJobId: string }> | { finalJobId: string } }
+  context: { params: Promise<{ finalJobId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) return jsonNoStore({ error: 'Admin access required' }, { status: 403 })

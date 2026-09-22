@@ -25,7 +25,7 @@ async function rejectArtifact(finalJobId: string, artifactId: string, reason: st
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ finalJobId: string }> | { finalJobId: string } }
+  context: { params: Promise<{ finalJobId: string }> }
 ) {
   const admin = await requireAdminCustomer()
   if (!admin) {

@@ -27,9 +27,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export async function DELETE(
   request: Request,
   context: {
-    params:
-      | Promise<{ creationId: string; jobId: string }>
-      | { creationId: string; jobId: string }
+    params: Promise<{ creationId: string; jobId: string }>
   }
 ) {
   const { creationId, jobId } = await Promise.resolve(context.params)
