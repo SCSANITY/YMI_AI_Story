@@ -1347,7 +1347,6 @@ export default function PersonalizePage({
         const textOverrides = {
           child_name: currentName,
           child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
-          dedication: '',
           language: selectedLang,
           book_type: 'basic',
         }
@@ -2381,7 +2380,6 @@ export default function PersonalizePage({
         textOverrides: {
           child_name: currentName,
           child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
-          dedication: '',
           language: selectedLang,
           book_type: bookType,
         },
@@ -2459,7 +2457,6 @@ export default function PersonalizePage({
               textOverrides: {
                 child_name: currentName,
                 child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
-                dedication: '',
                 language: selectedLang,
                 book_type: bookType,
               },
