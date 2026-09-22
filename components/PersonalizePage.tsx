@@ -3513,6 +3513,7 @@ export default function PersonalizePage({
                         ref={dedicationRef}
                         creationId={creationId}
                         bookID={bookID}
+                        childName={name}
                         openOnArrival={dedicationOnArrival}
                         onArrivalChoice={handleArrivalDedicationChoice}
                       />}

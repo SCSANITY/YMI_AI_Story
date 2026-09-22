@@ -15,9 +15,10 @@ export type PreviewDedicationHandle = { ensureDecision: () => Promise<Dedication
 export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
   creationId: string | null
   bookID: string
+  childName: string
   openOnArrival: boolean
   onArrivalChoice?: (acknowledgement: DedicationAcknowledgement) => void
-}>(function PreviewDedication({ creationId, bookID, openOnArrival, onArrivalChoice }, ref) {
+}>(function PreviewDedication({ creationId, bookID, childName, openOnArrival, onArrivalChoice }, ref) {
   const [choice, setChoice] = useState<DedicationChoice | null>(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -166,6 +167,7 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
 
   const metrics = dedicationBodyMetrics(draft)
   const valid = validDedicationBody(draft)
+  const recipientName = childName.trim()
   return <>
     <section className={`rounded-[1.35rem] border p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.45)] sm:p-6 xl:p-5 ${choice?.decision === 'undecided' ? 'border-amber-200 bg-[#fff8eb]' : 'border-stone-200 bg-white'}`} aria-label="Book dedication">
       <div className="flex items-start gap-3">
@@ -187,16 +189,19 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
     <AnimatePresence>
       {open ? <motion.div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-5" role="presentation"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.16 }} onMouseDown={event => { if (event.target === event.currentTarget) close() }}>
-        <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="dedication-dialog-title" style={{ transformOrigin: origin }}
+        <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="dedication-dialog-title" aria-describedby="dedication-dialog-description" style={{ transformOrigin: origin }}
           initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.88, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 8 }}
           transition={{ duration: reducedMotion ? 0 : 0.2, ease: 'easeOut' }}
           className="flex max-h-[min(90dvh,720px)] w-full flex-col overflow-hidden rounded-t-[1.5rem] bg-[#fffaf2] p-5 shadow-2xl sm:max-w-[540px] sm:rounded-[1.5rem] sm:p-7">
           <div className="min-h-0 overflow-y-auto">
             <div className="flex items-start justify-between gap-4">
-            <h2 id="dedication-dialog-title" className="font-serif text-2xl font-semibold text-slate-950">A message for their book</h2>
+            <h2 id="dedication-dialog-title" className="min-w-0 break-words font-serif text-2xl font-semibold leading-tight text-slate-950">
+              {recipientName ? <>Write your own message for <bdi>{recipientName}</bdi></> : 'Write your own message for this book'}
+            </h2>
             <button type="button" onClick={close} disabled={saving} aria-label="Close dedication dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 focus-visible:ring-2 focus-visible:ring-amber-500"><X className="h-5 w-5" /></button>
             </div>
+            <p id="dedication-dialog-description" className="mt-3 text-sm leading-6 text-slate-600">Write a few words they’ll treasure. We’ll print them on a special page between the cover and the story in the finished book.</p>
             {choice?.previouslyPurchased ? <p className="mt-3 rounded-xl bg-amber-100/70 px-3 py-2 text-xs font-semibold text-amber-900">Buying again? Review this message or choose No Thanks for the new copy.</p> : null}
             <label htmlFor="dedication-body" className="mt-4 block text-sm font-bold text-slate-900">Edit your message</label>
             <textarea ref={textareaRef} id="dedication-body" value={draft} onChange={event => setDraft(event.target.value)} rows={5} disabled={saving}
