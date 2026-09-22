@@ -58,12 +58,14 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
     return () => controller.abort()
   }, [creationId, loadChoice])
 
+  const preset = getDedicationPreset(bookID)
+
   const show = useCallback((current: DedicationChoice) => {
     setOrigin('50% 50%')
-    setDraft(current.body || '')
+    setDraft(current.decision === 'confirmed' && current.body ? current.body : preset.body)
     setError(null)
     setOpen(true)
-  }, [])
+  }, [preset.body])
 
   useLayoutEffect(() => {
     if (!open || !dialogRef.current || !triggerRef.current) return
@@ -164,9 +166,8 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
 
   const metrics = dedicationBodyMetrics(draft)
   const valid = validDedicationBody(draft)
-  const preset = getDedicationPreset(bookID)
   return <>
-    <section className={`mt-5 rounded-2xl border p-4 ${choice?.decision === 'undecided' ? 'border-amber-200 bg-amber-50/75' : 'border-stone-200 bg-stone-50/80'}`} aria-label="Book dedication">
+    <section className={`rounded-[1.35rem] border p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.45)] sm:p-6 xl:p-5 ${choice?.decision === 'undecided' ? 'border-amber-200 bg-[#fff8eb]' : 'border-stone-200 bg-white'}`} aria-label="Book dedication">
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-amber-700 shadow-sm"><PenLine className="h-4 w-4" aria-hidden="true" /></span>
         <div className="min-w-0 flex-1">
@@ -193,21 +194,12 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
           className="flex max-h-[min(90dvh,720px)] w-full flex-col overflow-hidden rounded-t-[1.5rem] bg-[#fffaf2] p-5 shadow-2xl sm:max-w-[540px] sm:rounded-[1.5rem] sm:p-7">
           <div className="min-h-0 overflow-y-auto">
             <div className="flex items-start justify-between gap-4">
-            <div><p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800">The finishing touch</p>
-              <h2 id="dedication-dialog-title" className="mt-1 font-serif text-2xl font-semibold text-slate-950">A message inside their book</h2></div>
+            <h2 id="dedication-dialog-title" className="font-serif text-2xl font-semibold text-slate-950">A message for their book</h2>
             <button type="button" onClick={close} disabled={saving} aria-label="Close dedication dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 focus-visible:ring-2 focus-visible:ring-amber-500"><X className="h-5 w-5" /></button>
             </div>
-            <p className="mt-3 text-sm leading-6 text-slate-600">Your words will be placed on a printed insert between the cover and the story. You can also choose No Thanks.</p>
-            {choice?.previouslyPurchased ? <p className="mt-3 rounded-xl bg-amber-100/70 px-3 py-2 text-xs font-semibold text-amber-900">Buying this book again? Please review and confirm the message shown below for this new copy.</p> : null}
-            <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/80 p-4" aria-labelledby="dedication-preset-title">
-              <h3 id="dedication-preset-title" className="font-serif text-base font-semibold text-amber-950">{preset.storySpecific ? 'Inspired by this story' : 'A message to start with'}</h3>
-              <p className="mt-1 text-xs text-amber-900/80">A suggestion you can use as written or make your own.</p>
-              <p id="dedication-preset-body" className="mt-3 whitespace-pre-wrap border-l-2 border-amber-400 pl-3 text-sm leading-6 text-slate-800">{preset.body}</p>
-              <button type="button" disabled={saving} onClick={() => setDraft(preset.body)} aria-describedby="dedication-preset-body"
-                className="mt-3 min-h-10 rounded-full border border-amber-400 bg-white px-4 text-xs font-bold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50">Use this message</button>
-            </section>
-            <label htmlFor="dedication-body" className="mt-5 block text-sm font-bold text-slate-900">Your message</label>
-            <textarea ref={textareaRef} id="dedication-body" value={draft} onChange={event => setDraft(event.target.value)} rows={4} disabled={saving}
+            {choice?.previouslyPurchased ? <p className="mt-3 rounded-xl bg-amber-100/70 px-3 py-2 text-xs font-semibold text-amber-900">Buying again? Review this message or choose No Thanks for the new copy.</p> : null}
+            <label htmlFor="dedication-body" className="mt-4 block text-sm font-bold text-slate-900">Edit your message</label>
+            <textarea ref={textareaRef} id="dedication-body" value={draft} onChange={event => setDraft(event.target.value)} rows={5} disabled={saving}
               placeholder="Write a few words to make this book theirs…" className="mt-2 w-full resize-y rounded-xl border border-stone-300 bg-white p-3 text-sm leading-6 text-slate-900 shadow-inner focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200" />
             <div className="mt-2 text-right text-xs text-slate-500">
               <span className={metrics.characters > DEDICATION_MAX_CHARACTERS || metrics.lineBreaks > DEDICATION_MAX_LINE_BREAKS ? 'text-rose-700' : ''}>

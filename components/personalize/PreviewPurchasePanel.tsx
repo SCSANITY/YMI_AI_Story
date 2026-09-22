@@ -78,7 +78,8 @@ function PreviewPurchasePanelComponent({
   }, [onChange, selectedValue, setSelectedValue])
 
   return (
-    <aside className="flex w-full flex-col rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:mx-auto xl:max-w-[380px] xl:p-5">
+    <aside className="flex w-full flex-col gap-4 xl:mx-auto xl:max-w-[380px]">
+      <div className="rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:p-5">
       <fieldset disabled={selectionDisabled}>
         <legend className="font-serif text-xl font-bold tracking-[-0.02em] text-slate-950 sm:text-2xl xl:text-xl">{title}</legend>
         <div className="mt-4 flex flex-col gap-2.5" role="radiogroup" aria-busy={isSavingEdition} data-saving={isSavingEdition ? '' : undefined}>
@@ -180,8 +181,9 @@ function PreviewPurchasePanelComponent({
         </section>
       ) : null}
 
+      </div>
       {dedication}
-      <div className="mt-4 border-t border-slate-200 pt-4">{actions}</div>
+      <div className="rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:p-5">{actions}</div>
     </aside>
   )
 }

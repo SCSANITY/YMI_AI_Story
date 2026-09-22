@@ -3495,7 +3495,7 @@ export default function PersonalizePage({
                     <PreviewPurchasePanel
                       value={purchaseBookType}
                       options={editionOptions}
-                      title={t('personalize.chooseEdition')}
+                      title={t('personalize.bookType')}
                       voiceTitle={t('personalize.signatureVoiceTitle')}
                       voiceBody={t('personalize.signatureVoiceBody')}
                       voiceReadyLabel={t('personalize.voiceReady')}
