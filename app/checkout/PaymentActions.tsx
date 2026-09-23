@@ -24,6 +24,7 @@ type PaymentActionsProps = {
 
 type MobilePaymentBarProps = {
   visible: boolean;
+  isPriceReady: boolean;
   totalLabel: string;
   actionLabel: string;
   disabled: boolean;
@@ -149,6 +150,7 @@ function PaymentActionsComponent({
 
 function MobilePaymentBarComponent({
   visible,
+  isPriceReady,
   totalLabel,
   actionLabel,
   disabled,
@@ -164,8 +166,11 @@ function MobilePaymentBarComponent({
           <div className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">
             {t('common.total')}
           </div>
-          <div className="mt-1 text-lg font-bold tracking-tight text-slate-900">
-            {totalLabel}
+          <div
+            aria-busy={!isPriceReady}
+            className="mt-1 min-h-7 text-lg font-bold tracking-tight text-slate-900"
+          >
+            {isPriceReady ? totalLabel : null}
           </div>
         </div>
         <Button

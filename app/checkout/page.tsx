@@ -137,6 +137,7 @@ function CheckoutPageContent() {
     () => items.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0),
     [items]
   );
+  const isCheckoutPriceReady = items.length > 0;
 
   const [step, setStep] = useState<CheckoutStep>('address');
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -1388,8 +1389,11 @@ function CheckoutPageContent() {
                         <div className="text-sm text-slate-500">
                           {stripeCheckoutEnabled ? t('checkout.payWithStripe') : t('checkout.placeOrder')}
                         </div>
-                        <div className="mt-1 text-3xl font-bold tracking-tight text-slate-900 md:text-[2rem]">
-                          {formattedTotal}
+                        <div
+                          aria-busy={!isCheckoutPriceReady}
+                          className="mt-1 min-h-10 text-3xl font-bold tracking-tight text-slate-900 md:text-[2rem]"
+                        >
+                          {isCheckoutPriceReady ? formattedTotal : null}
                         </div>
                         {discountTotalUsd > 0 ? (
                           <div className="mt-2 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -1469,6 +1473,7 @@ function CheckoutPageContent() {
 
         <CheckoutSummaryPanel
           hiddenOnPaymentStep={isPaymentStep}
+          isPriceReady={isCheckoutPriceReady}
           showShipping
           shippingStatus={shippingQuote.status}
           estimatedDelivery={selectedShippingOption?.estimatedDelivery}
@@ -1486,6 +1491,7 @@ function CheckoutPageContent() {
 
       <MobilePaymentBar
         visible={shouldShowMobilePaymentBar}
+        isPriceReady={isCheckoutPriceReady}
         totalLabel={formattedTotal}
         actionLabel={mobilePaymentActionLabel}
         disabled={isPlacingOrder}

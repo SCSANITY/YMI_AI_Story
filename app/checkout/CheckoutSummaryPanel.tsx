@@ -4,6 +4,7 @@ type ShippingQuoteStatus = 'idle' | 'missing' | 'loading' | 'available' | 'unava
 
 type CheckoutSummaryPanelProps = {
   hiddenOnPaymentStep: boolean;
+  isPriceReady: boolean;
   showShipping: boolean;
   shippingStatus: ShippingQuoteStatus;
   estimatedDelivery?: string | null;
@@ -20,6 +21,7 @@ type CheckoutSummaryPanelProps = {
 
 export function CheckoutSummaryPanel({
   hiddenOnPaymentStep,
+  isPriceReady,
   showShipping,
   shippingStatus,
   estimatedDelivery,
@@ -50,7 +52,12 @@ export function CheckoutSummaryPanel({
       <div className="space-y-2 text-sm text-gray-600">
         <div className="flex items-center justify-between">
           <span>{t('checkout.subtotal')}</span>
-          <span className="text-gray-900 font-semibold">{formattedSubtotal}</span>
+          <span
+            aria-busy={!isPriceReady}
+            className="min-h-5 min-w-20 text-right font-semibold text-gray-900"
+          >
+            {isPriceReady ? formattedSubtotal : null}
+          </span>
         </div>
         {showShipping ? (
           <div className="flex items-center justify-between">
@@ -84,7 +91,12 @@ export function CheckoutSummaryPanel({
         ) : null}
         <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-base">
           <span className="font-bold text-gray-900">{t('common.total')}</span>
-          <span className="font-bold text-gray-900">{formattedTotal}</span>
+          <span
+            aria-busy={!isPriceReady}
+            className="min-h-6 min-w-20 text-right font-bold text-gray-900"
+          >
+            {isPriceReady ? formattedTotal : null}
+          </span>
         </div>
       </div>
       <p className="text-xs text-gray-500 mt-3">
