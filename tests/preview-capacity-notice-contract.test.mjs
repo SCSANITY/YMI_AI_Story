@@ -21,7 +21,7 @@ test('the single Preview watcher derives both inline-cover and photo-version not
   const controller = read('components/personalize/usePreviewController.ts')
 
   assert.match(controller, /CAPACITY_NOTICE_MIN_WAIT_MS = 4_000/)
-  assert.match(controller, /syncCapacityWaiting\(jobId, job\.capacity_state === 'waiting'\)/)
+  assert.match(controller, /syncCapacityWaiting\(jobId, job\.capacityState === 'waiting'\)/)
   assert.match(controller, /capacityWaitStartedAtRef/)
   assert.match(page, /viewState\.showPreview && previewJobId && capacityWaitingByJobId\[previewJobId\]/)
   assert.match(

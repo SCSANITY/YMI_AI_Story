@@ -739,6 +739,8 @@ const en: MessageDictionary = {
   'personalize.generatingCoverEstimate': 'Estimated time remaining',
   'personalize.generatingCoverOverrun': 'Still creating your cover — no need to refresh',
   'personalize.generatingCoverRetry': 'Review details and retry',
+  'personalize.returnToCustomize': 'Return to Customize',
+  'personalize.previewPartialFailure': 'Your cover is saved, but this Preview could not finish. Return to Customize to generate again.',
   'personalize.previewRestoringTitle': 'Restoring your Preview',
   'personalize.previewRestoringBody': 'We are securely reconnecting this page to your saved story. Your finished cover will appear here shortly.',
   'personalize.previewUnavailableTitle': 'Preview unavailable',

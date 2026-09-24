@@ -15,7 +15,7 @@ type Props = {
   capacityTitle: string
   capacityBody: string
   error: string | null
-  retryLabel: string
+  actionLabel: string
   onReturnToDetails: () => void
 }
 
@@ -38,11 +38,11 @@ function PreviewGeneratingCoverComponent(props: Props) {
         <BookOpen className="h-9 w-9" />
         <Sparkles className="absolute ms-12 -mt-10 h-5 w-5 motion-safe:animate-pulse" />
       </div>
-      <p role="status" className="max-w-[290px] font-serif text-lg font-bold leading-tight text-slate-950 md:text-2xl">{props.error ? props.retryLabel : props.capacityWaiting ? props.capacityTitle : props.title}</p>
+      <p role="status" className="max-w-[290px] font-serif text-lg font-bold leading-tight text-slate-950 md:text-2xl">{props.error ? props.actionLabel : props.capacityWaiting ? props.capacityTitle : props.title}</p>
       {!props.capacityWaiting || props.error ? <p className={`${props.error ? 'max-h-16 overflow-y-auto' : 'hidden md:block'} mt-3 max-w-[290px] text-xs leading-5 text-slate-600 md:text-sm md:leading-6`}>{props.error ?? props.body}</p> : null}
       <div className="hidden md:block"><PreviewCapacityNotice visible={props.capacityWaiting && !props.error} variant="loading" title={props.capacityTitle} body={props.capacityBody} /></div>
       {props.error ? (
-        <button type="button" onClick={props.onReturnToDetails} className="mt-5 min-h-11 rounded-full bg-amber-600 px-5 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2">{props.retryLabel}</button>
+        <button type="button" onClick={props.onReturnToDetails} className="mt-5 min-h-11 rounded-full bg-amber-600 px-5 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2">{props.actionLabel}</button>
       ) : (
         <div className="mt-3 flex flex-col items-center gap-2 md:mt-5">
           <span className="relative flex h-16 w-16 items-center justify-center">

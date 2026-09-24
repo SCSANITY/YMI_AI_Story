@@ -13,8 +13,6 @@ type Cohort = {
   maximumPersistToObserveMs: number
 }
 
-const controllerPath = new URL('../../components/personalize/usePreviewController.ts', import.meta.url)
-const previewRoutePath = new URL('../../app/api/jobs/[jobId]/preview-url/route.ts', import.meta.url)
 const expectedPath = new URL('./p0-baseline.expected.json', import.meta.url)
 
 function percentile(values: number[], fraction: number) {
@@ -62,28 +60,10 @@ test('P0 freezes at least 20 deterministic current-behavior cycles per polling c
   context.diagnostic(JSON.stringify({ cohorts, doneAssetRetryDelayMs }))
 })
 
-test('P0 freezes the current two-read serial discovery path and terminal suppression', async () => {
-  const [controller, previewRoute, expectedText] = await Promise.all([
-    readFile(controllerPath, 'utf8'),
-    readFile(previewRoutePath, 'utf8'),
-    readFile(expectedPath, 'utf8'),
-  ])
-  const expected = JSON.parse(expectedText)
-  const watchStart = controller.indexOf('const watchJob = useCallback')
-  const watchEnd = controller.indexOf('const refresh = useCallback', watchStart)
-  const watchSource = controller.slice(watchStart, watchEnd)
-  const jobReadAt = watchSource.indexOf('await getJob(')
-  const terminalFailureAt = watchSource.indexOf("job.status === 'failed'")
-  const assetReadAt = watchSource.indexOf('await getPreviewPageAssets(')
+test('P0 keeps the superseded two-read topology as frozen comparison evidence', async () => {
+  const expected = JSON.parse(await readFile(expectedPath, 'utf8'))
 
-  assert.ok(watchStart >= 0 && watchEnd > watchStart)
-  assert.ok(jobReadAt >= 0 && assetReadAt > jobReadAt)
-  assert.ok(terminalFailureAt > jobReadAt && terminalFailureAt < assetReadAt)
-  assert.match(controller, /activeWatchesRef\.current\.get\(jobId\)/)
-  assert.match(
-    previewRoute,
-    /job\.status !== 'done' && job\.status !== 'running'/
-  )
+  assert.equal(expected.baselineSourceCommit, '4e1f0691e9df5b6436bbb5071fb696a62a9f05bc')
   assert.deepEqual(expected.currentSuccessfulPollReadTopology, {
     jobStateReads: 1,
     previewAssetReads: 1,

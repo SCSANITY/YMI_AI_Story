@@ -30,7 +30,7 @@ test('late image responses cannot overwrite a different selected photo version',
   )
   assert.match(
     controller,
-    /getPreviewPageAssets\(jobId,[\s\S]*?applyPreviewDisplayAssetsForJob\(jobId, assets(?:, reason === 'image-error')?\)/
+    /getPreviewJobState\(jobId,[\s\S]*?applyPreviewDisplayAssetsForJob\(jobId, assets, reason === 'image-error'\)/
   )
   assert.doesNotMatch(personalize, /getPreviewPageAssets/)
   assert.equal(

@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { getJob, getPreviewPageAssets, isTerminalJobAccessError } from '@/services/jobs'
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
+import { getPreviewJobState, isTerminalJobAccessError } from '@/services/jobs'
 import {
   isPreviewDisplayComplete,
   resolvePreviewDisplayAssets,
@@ -10,6 +10,7 @@ import {
 import type { BookPresentation } from '@/lib/book-presentation'
 import { mergePreviewPresentation, retainPreviewImageUrl } from '@/lib/preview-image-continuity'
 import { decodePreviewImageRenewal } from './useDecodedPreviewCover'
+import type { PreviewJobPhase } from '@/lib/preview-job-state'
 import {
   updatePreviewVariantDisplayAssets,
   type PreviewVariantView,
@@ -39,7 +40,16 @@ type PreviewWatchOutcome = {
 
 type ActiveWatch = {
   controller: AbortController
-  promise: Promise<PreviewWatchOutcome>
+  subscribers: Set<PreviewWatchSubscriber>
+  latestAssets: PreviewDisplayAssets | null
+  lastProgress: number | null
+  settled: boolean
+}
+
+type PreviewWatchSubscriber = {
+  options: PreviewWatchOptions
+  resolve: (outcome: PreviewWatchOutcome) => void
+  reject: (error: unknown) => void
 }
 
 type UsePreviewControllerOptions = {
@@ -55,7 +65,20 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const CAPACITY_NOTICE_MIN_WAIT_MS = 4_000
 
 class PreviewWatchTerminalError extends Error {}
+class PreviewWatchPartialFailureError extends PreviewWatchTerminalError {
+  readonly assets: PreviewDisplayAssets
+
+  constructor(assets: PreviewDisplayAssets) {
+    super('Your cover is saved, but this Preview could not finish. Return to Customize to generate again.')
+    this.assets = assets
+  }
+}
 class PreviewUnavailableError extends PreviewWatchTerminalError {}
+
+const PARTIAL_FAILURE_MESSAGE =
+  'Your cover is saved, but this Preview could not finish. Return to Customize to generate again.'
+const TERMINAL_FAILURE_MESSAGE =
+  'This Preview could not finish. Return to Customize to generate again.'
 
 function wait(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
@@ -106,6 +129,8 @@ export function usePreviewController({
   const [previewVariants, setPreviewVariants] = useState<PreviewVariantView[]>([])
   const [capacityWaitingByJobId, setCapacityWaitingByJobId] = useState<Record<string, true>>({})
   const [error, setError] = useState<string | null>(null)
+  const [failureKind, setFailureKind] = useState<'partial' | 'terminal' | null>(null)
+  const [previewPhaseByJobId, setPreviewPhaseByJobId] = useState<Record<string, PreviewJobPhase>>({})
   const [previewAccess, setPreviewAccess] = useState<{
     jobId: string | null
     state: PreviewAccessState
@@ -203,116 +228,197 @@ export function usePreviewController({
 
   const cancelWatch = useCallback((jobId: string | null) => {
     if (!jobId) return
-    activeWatchesRef.current.get(jobId)?.controller.abort()
+    const activeWatch = activeWatchesRef.current.get(jobId)
+    if (activeWatch) {
+      activeWatch.settled = true
+      activeWatch.controller.abort()
+      activeWatch.subscribers.forEach((subscriber) => subscriber.resolve({
+        jobId,
+        status: 'cancelled',
+        assets: activeWatch.latestAssets,
+      }))
+      activeWatch.subscribers.clear()
+      activeWatchesRef.current.delete(jobId)
+    }
     syncCapacityWaiting(jobId, false)
   }, [syncCapacityWaiting])
 
   const watchJob = useCallback((jobId: string, options: PreviewWatchOptions) => {
-    const existing = activeWatchesRef.current.get(jobId)
-    if (existing) return existing.promise
+    let activeWatch = activeWatchesRef.current.get(jobId)
+    const shouldStart = !activeWatch || activeWatch.settled
+    if (shouldStart) {
+      activeWatch = {
+        controller: new AbortController(),
+        subscribers: new Set(),
+        latestAssets: null,
+        lastProgress: null,
+        settled: false,
+      }
+      activeWatchesRef.current.set(jobId, activeWatch)
+    }
+    if (!activeWatch) throw new Error('Failed to initialize Preview watcher')
+    const watch: ActiveWatch = activeWatch
 
-    const controller = new AbortController()
-    const promise = (async (): Promise<PreviewWatchOutcome> => {
+    const subscription = new Promise<PreviewWatchOutcome>((resolve, reject) => {
+      const subscriber: PreviewWatchSubscriber = { options, resolve, reject }
+      if (watch.lastProgress !== null) options.onProgress?.(watch.lastProgress)
+      if (watch.latestAssets?.coverUrl) {
+        options.onAssets?.(jobId, watch.latestAssets)
+        if (options.until === 'cover') {
+          resolve({ jobId, status: 'ready', assets: watch.latestAssets })
+          return
+        }
+      }
+      watch.subscribers.add(subscriber)
+    })
+
+    if (!shouldStart) return subscription
+
+    void (async () => {
       const startedAt = Date.now()
       let fetchFailures = 0
       let doneAssetRetries = 0
-      let latestAssets: PreviewDisplayAssets | null = null
+      const settleRemaining = (
+        settle: (subscriber: PreviewWatchSubscriber) => void
+      ) => {
+        watch.subscribers.forEach(settle)
+        watch.subscribers.clear()
+      }
 
-      while (!controller.signal.aborted) {
+      while (!watch.controller.signal.aborted && watch.subscribers.size > 0) {
         if (Date.now() - startedAt > (options.timeoutMs ?? DEFAULT_TIMEOUT_MS)) {
-          throw new Error('Preview generation timed out. Please try again.')
+          settleRemaining((subscriber) => subscriber.reject(
+            new Error('Preview generation timed out. Please try again.')
+          ))
+          break
         }
 
         try {
-          const job = await getJob(jobId, customerId ?? null)
-          if (controller.signal.aborted) break
+          const job = await getPreviewJobState(jobId, customerId ?? null)
+          if (watch.controller.signal.aborted) break
+          setPreviewPhaseByJobId((current) => (
+            current[jobId] === job.phase ? current : { ...current, [jobId]: job.phase }
+          ))
           updatePreviewAccess(jobId, 'available')
           fetchFailures = 0
-          syncCapacityWaiting(jobId, job.capacity_state === 'waiting')
+          syncCapacityWaiting(jobId, job.capacityState === 'waiting')
 
           const progress = Number(job.progress)
           if (Number.isFinite(progress)) {
-            options.onProgress?.(Math.max(0, Math.min(95, progress)))
+            watch.lastProgress = Math.max(0, Math.min(95, progress))
+            watch.subscribers.forEach((subscriber) => (
+              subscriber.options.onProgress?.(watch.lastProgress as number)
+            ))
           }
 
-          if (job.status === 'failed') {
-            throw new PreviewWatchTerminalError(
-              job.error_message || 'Preview generation failed. Please try again.'
-            )
-          }
-          if (isStoppedJob(job.status)) {
-            return { jobId, status: 'cancelled', assets: latestAssets }
-          }
-
-          if (job.status === 'running' || job.status === 'done') {
-            try {
-              const signedAssets = await getPreviewPageAssets(jobId, undefined, {
-                size: 'small',
-                customerId: customerId ?? null,
-              })
-              if (signedAssets) {
-                const assets = resolvePreviewDisplayAssets(signedAssets)
-                if (controller.signal.aborted) break
-                if (assets.coverUrl) {
-                  latestAssets = assets
-                  options.onAssets?.(jobId, assets)
+          if (job.assets) {
+            const assets = resolvePreviewDisplayAssets(job.assets)
+            if (watch.controller.signal.aborted) break
+            if (assets.coverUrl) {
+              watch.latestAssets = assets
+              for (const subscriber of [...watch.subscribers]) {
+                subscriber.options.onAssets?.(jobId, assets)
+                if (subscriber.options.until === 'cover') {
+                  watch.subscribers.delete(subscriber)
+                  subscriber.resolve({ jobId, status: 'ready', assets })
                 }
               }
-            } catch (assetError) {
-              if (isTerminalJobAccessError(assetError)) throw assetError
-              // Job state remains authoritative; signed assets can lag briefly.
             }
           }
 
-          if (latestAssets?.coverUrl) {
-            if (options.until === 'cover') {
-              return { jobId, status: 'ready', assets: latestAssets }
-            }
-            if (job.status === 'done' && isPreviewDisplayComplete(latestAssets)) {
-              return { jobId, status: 'ready', assets: latestAssets }
-            }
+          if (isStoppedJob(job.status)) {
+            settleRemaining((subscriber) => subscriber.resolve({
+              jobId,
+              status: 'cancelled',
+              assets: watch.latestAssets,
+            }))
+            break
+          }
+
+          if (job.phase === 'partial_failed' && watch.latestAssets?.coverUrl) {
+            const partialFailure = new PreviewWatchPartialFailureError(watch.latestAssets)
+            settleRemaining((subscriber) => subscriber.reject(partialFailure))
+            break
+          }
+          if (job.phase === 'failed' || job.status === 'failed') {
+            const terminalFailure = new PreviewWatchTerminalError(TERMINAL_FAILURE_MESSAGE)
+            settleRemaining((subscriber) => subscriber.reject(terminalFailure))
+            break
+          }
+
+          if (
+            job.phase === 'complete' &&
+            watch.latestAssets?.coverUrl &&
+            isPreviewDisplayComplete(watch.latestAssets)
+          ) {
+            settleRemaining((subscriber) => subscriber.resolve({
+              jobId,
+              status: 'ready',
+              assets: watch.latestAssets,
+            }))
+            break
           }
 
           if (job.status === 'done') {
             doneAssetRetries += 1
             if (doneAssetRetries >= MAX_DONE_ASSET_RETRIES) {
-              throw new PreviewWatchTerminalError(
-                latestAssets?.coverUrl
+              const terminalFailure = new PreviewWatchTerminalError(
+                watch.latestAssets?.coverUrl
                   ? 'Preview is ready but its page set is incomplete. Please refresh.'
                   : 'Preview is ready but images failed to load. Please refresh.'
               )
+              settleRemaining((subscriber) => subscriber.reject(terminalFailure))
+              break
             }
           }
         } catch (watchError) {
-          if (controller.signal.aborted) break
+          if (watch.controller.signal.aborted) break
           if (watchError instanceof PreviewWatchTerminalError) {
-            throw watchError
+            settleRemaining((subscriber) => subscriber.reject(watchError))
+            break
           }
           if (isTerminalJobAccessError(watchError)) {
             updatePreviewAccess(jobId, 'unavailable')
-            throw new PreviewUnavailableError(
+            const unavailable = new PreviewUnavailableError(
               'This Preview is unavailable. The link may have expired or belong to another session.'
             )
+            settleRemaining((subscriber) => subscriber.reject(unavailable))
+            break
           }
           fetchFailures += 1
           if (fetchFailures >= MAX_FETCH_FAILURES) {
-            throw watchError instanceof Error
+            const exhausted = watchError instanceof Error
               ? watchError
               : new Error('Preview pages could not be loaded. Please refresh.')
+            settleRemaining((subscriber) => subscriber.reject(exhausted))
+            break
           }
         }
 
-        await wait(getPollDelayMs(startedAt, doneAssetRetries), controller.signal)
+        if (watch.subscribers.size > 0) {
+          await wait(getPollDelayMs(startedAt, doneAssetRetries), watch.controller.signal)
+        }
       }
 
-      return { jobId, status: 'cancelled', assets: latestAssets }
-    })().finally(() => {
+      if (watch.controller.signal.aborted) {
+        settleRemaining((subscriber) => subscriber.resolve({
+          jobId,
+          status: 'cancelled',
+          assets: watch.latestAssets,
+        }))
+      }
+      watch.settled = true
       const current = activeWatchesRef.current.get(jobId)
-      if (current?.controller === controller) activeWatchesRef.current.delete(jobId)
+      if (current === watch) activeWatchesRef.current.delete(jobId)
+    })().catch((runnerError) => {
+      watch.settled = true
+      watch.subscribers.forEach((subscriber) => subscriber.reject(runnerError))
+      watch.subscribers.clear()
+      const current = activeWatchesRef.current.get(jobId)
+      if (current === watch) activeWatchesRef.current.delete(jobId)
     })
 
-    activeWatchesRef.current.set(jobId, { controller, promise })
-    return promise
+    return subscription
   }, [customerId, syncCapacityWaiting, updatePreviewAccess])
 
   const refresh = useCallback((
@@ -338,26 +444,38 @@ export function usePreviewController({
 
     const refreshPromise = (async () => {
       try {
-        const signedAssets = await getPreviewPageAssets(jobId, undefined, {
-          size: 'small',
-          customerId: customerId ?? null,
-        })
-        if (!signedAssets) return false
-        const assets = resolvePreviewDisplayAssets(signedAssets)
-        if (reason === 'image-error') await decodePreviewImageRenewal(assets.urls)
+        const job = await getPreviewJobState(jobId, customerId ?? null)
+        setPreviewPhaseByJobId((current) => (
+          current[jobId] === job.phase ? current : { ...current, [jobId]: job.phase }
+        ))
+        syncCapacityWaiting(jobId, job.capacityState === 'waiting')
+        const assets = job.assets ? resolvePreviewDisplayAssets(job.assets) : null
+        if (assets && reason === 'image-error') await decodePreviewImageRenewal(assets.urls)
         if (activeJobIdRef.current !== jobId) return false
-        if (!applyPreviewDisplayAssetsForJob(jobId, assets, reason === 'image-error')) return false
+        const applied = assets
+          ? applyPreviewDisplayAssetsForJob(jobId, assets, reason === 'image-error')
+          : false
         updatePreviewAccess(jobId, 'available')
-        setError(null)
+        if (job.phase === 'partial_failed' && assets?.coverUrl) {
+          setFailureKind('partial')
+          setError(PARTIAL_FAILURE_MESSAGE)
+        } else if (job.phase === 'failed' || job.status === 'failed') {
+          setFailureKind('terminal')
+          setError(TERMINAL_FAILURE_MESSAGE)
+        } else {
+          setFailureKind(null)
+          setError(null)
+        }
         lastRefreshAtRef.current = Date.now()
         if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PREVIEW_DEBUG === 'true') {
           console.info('[preview-job] preview images refreshed', {
             reason,
             jobId,
-            count: assets.urls.length,
+            count: assets?.urls.length ?? 0,
+            phase: job.phase,
           })
         }
-        return true
+        return applied
       } catch (refreshError) {
         if (isTerminalJobAccessError(refreshError)) {
           updatePreviewAccess(jobId, 'unavailable')
@@ -370,16 +488,17 @@ export function usePreviewController({
 
     refreshPromisesRef.current.set(jobId, refreshPromise)
     return refreshPromise
-  }, [active, applyPreviewDisplayAssetsForJob, customerId, updatePreviewAccess])
+  }, [active, applyPreviewDisplayAssetsForJob, customerId, syncCapacityWaiting, updatePreviewAccess])
 
   useEffect(() => {
-    if (!active || !activeJobId || activeDisplayComplete) return
+    if (!active || !activeJobId) return
 
     void watchJob(activeJobId, {
       until: 'complete',
       onAssets: (jobId, assets) => {
         if (activeJobIdRef.current !== jobId) return
         applyPreviewDisplayAssetsForJob(jobId, assets)
+        setFailureKind(null)
         setError(null)
       },
     }).then((outcome) => {
@@ -388,6 +507,13 @@ export function usePreviewController({
       }
     }).catch((watchError) => {
       if (activeJobIdRef.current !== activeJobId) return
+      if (watchError instanceof PreviewWatchPartialFailureError) {
+        applyPreviewDisplayAssetsForJob(activeJobId, watchError.assets)
+        setFailureKind('partial')
+        setError(PARTIAL_FAILURE_MESSAGE)
+        return
+      }
+      setFailureKind('terminal')
       setError(
         watchError instanceof Error
           ? watchError.message
@@ -396,7 +522,7 @@ export function usePreviewController({
     })
 
     return () => cancelWatch(activeJobId)
-  }, [active, activeDisplayComplete, activeJobId, applyPreviewDisplayAssetsForJob, cancelWatch, watchJob])
+  }, [active, activeJobId, applyPreviewDisplayAssetsForJob, cancelWatch, watchJob])
 
   useEffect(() => {
     if (!active || !activeJobId || typeof document === 'undefined') return
@@ -425,6 +551,11 @@ export function usePreviewController({
     capacityWaitStartedAtRef.current.clear()
   }, [])
 
+  const setPublicError = useCallback((next: SetStateAction<string | null>) => {
+    setFailureKind(null)
+    setError(next)
+  }, [])
+
   return {
     previewJobId,
     setPreviewJobId,
@@ -443,8 +574,15 @@ export function usePreviewController({
     applyPreviewDisplayAssets,
     applyPreviewDisplayAssetsForJob,
     previewAccessState: previewAccess.jobId === activeJobId ? previewAccess.state : 'idle',
+    previewPhase: activeJobId ? previewPhaseByJobId[activeJobId] ?? 'pending' : 'pending',
+    previewCompletionReady: Boolean(
+      activeJobId &&
+      previewPhaseByJobId[activeJobId] === 'complete' &&
+      activeDisplayComplete
+    ),
     error,
-    setError,
+    isPartialFailure: failureKind === 'partial',
+    setError: setPublicError,
     refresh,
     watchJob,
     cancelWatch,

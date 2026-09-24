@@ -426,7 +426,9 @@ export default function PersonalizePage({
     capacityWaitingByJobId,
     applyPreviewDisplayAssetsForJob,
     previewAccessState,
+    previewCompletionReady,
     error: previewError,
+    isPartialFailure: isPreviewPartialFailure,
     setError: setPreviewError,
     refresh: refreshPreviewImages,
     watchJob: watchPreviewJob,
@@ -842,8 +844,8 @@ export default function PersonalizePage({
     if (!previewBookPresentation?.cover || !decodedPreviewCover.url) return previewBookPresentation;
     return { ...previewBookPresentation, cover: { ...previewBookPresentation.cover, url: decodedPreviewCover.url } };
   }, [decodedPreviewCover.url, previewBookPresentation]);
-  const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && !previewError;
-  const canCheckout = stageCanCheckout && hasReadyPreviewCover && !previewError;
+  const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && previewCompletionReady && !previewError;
+  const canCheckout = stageCanCheckout && hasReadyPreviewCover && previewCompletionReady && !previewError;
 
   // Visual state used by the book animation shell.
   const isClosing = isFlipping && flipDirection === 'prev' && currentSpread === 1;
@@ -1291,6 +1293,7 @@ export default function PersonalizePage({
 
     let isActive = true;
     let watchedJobId: string | null = null;
+    let watchedCreationId: string | null = null;
     setPreviewError(null);
     setGenerationStartedAt(Date.now());
     editionSelectionRevisionRef.current = 0;
@@ -1390,6 +1393,7 @@ export default function PersonalizePage({
         pendingVoiceRecordingRef.current = null
         setPendingVoiceRecording(null)
         watchedJobId = created.jobId;
+        watchedCreationId = created.creationId;
         if (pendingFaceAsset) {
           photoAssetIdRef.current = pendingFaceAsset.asset_id
           setPhotoAssetId(pendingFaceAsset.asset_id)
@@ -1441,12 +1445,12 @@ export default function PersonalizePage({
         }
         const message = error instanceof Error ? error.message : 'Preview generation failed.'
         setPreviewError(message)
+        if (watchedJobId && watchedCreationId) {
+          replacePreviewUrl(watchedCreationId, watchedJobId)
+          finishGenerating()
+          return
+        }
         replacePersonalizeUrl(null)
-        setPreviewJobId(null)
-        setCreationId(null)
-        setPreviewUrl(null)
-        setPreviewPages([])
-        setPreviewBookPresentation(null)
         reset()
       } finally {
         generationInFlightRef.current = false;
@@ -3404,6 +3408,9 @@ export default function PersonalizePage({
                         : isPreviewRestoring
                         ? t('personalize.previewRestoringBody')
                         : t('personalize.previewSubtitle')}
+                      statusMessage={isPreviewPartialFailure && hasReadyPreviewCover
+                        ? t('personalize.previewPartialFailure')
+                        : null}
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
                       showChangePhoto={!isPreviewPhotoLocked && !isPreviewCoverPending}
@@ -3442,7 +3449,7 @@ export default function PersonalizePage({
                             estimateLabel={t('personalize.generatingCoverEstimate')}
                             stillWorking={t('personalize.generatingCoverOverrun')}
                             error={previewError}
-                            retryLabel={t('personalize.generatingCoverRetry')}
+                            actionLabel={t('personalize.returnToCustomize')}
                             onReturnToDetails={() => void requestPreviewCancellation({ showToast: false })}
                             capacityWaiting={isGeneratingPreviewCapacityWaiting}
                             capacityTitle={t('personalize.capacityLoadingTitle')}
@@ -3503,20 +3510,20 @@ export default function PersonalizePage({
                       changeVoiceLabel={t('personalize.changeVoice')}
                       privacyCopy={PRIVACY_REASSURANCE_COPY}
                       isSavingEdition={isSavingEdition}
-                      selectionDisabled={isPreviewCoverPending || Boolean(previewError) || isSavingVoice}
+                      selectionDisabled={!previewCompletionReady || Boolean(previewError) || isSavingVoice}
                       editionError={editionError}
                       voiceReady={Boolean(voiceAssetId)}
                       voiceDurationSeconds={resolvedVoiceDurationSeconds}
                       onChange={handleEditionChange}
                       onOpenVoice={() => setIsVoiceDialogOpen(true)}
-                      dedication={<PreviewDedication
+                      dedication={previewCompletionReady ? <PreviewDedication
                         ref={dedicationRef}
                         creationId={creationId}
                         bookID={bookID}
                         childName={name}
                         openOnArrival={dedicationOnArrival}
                         onArrivalChoice={handleArrivalDedicationChoice}
-                      />}
+                      /> : null}
                       actions={
                         <PreviewActionBar
                           acknowledgementLabel={t('personalize.checkoutAcknowledgement')}

@@ -26,6 +26,7 @@
     "final-release:tests": "tsx --test src/lib/finalReleaseContract.test.ts src/lib/structuredFinalPdf.test.ts src/lib/finalPdfRelease.test.ts tests/structured-final-pdf-contract.test.mjs",
     "preview-pages:tests": "tsx --test src/lib/preview-page-contract.test.ts src/lib/preview-capacity.test.ts tests/preview-capacity-notice-contract.test.mjs",
     "preview-reliability:baseline": "tsx --test tests/preview-reliability/p0-web-baseline.test.ts",
+    "preview-reliability:tests": "tsx --test src/lib/preview-job-state.test.ts tests/preview-reliability/*.test.ts tests/preview-reliability/*.test.mjs",
     "book-leaves:tests": "tsx --test src/lib/book-presentation.test.tsx src/lib/preview-book-presentation.test.ts src/lib/template-final-preview.test.ts src/lib/template-locked-preview.test.ts tests/preview-locked-pages-contract.test.mjs",
     "reader-pages:tests": "tsx --test src/lib/reader-page-contract.test.ts",
     "worker-cloud:tests": "tsx --test src/lib/jobQueue.test.ts tests/worker-cloud-contract.test.mjs tests/worker-queue-wakeup-contract.test.mjs",

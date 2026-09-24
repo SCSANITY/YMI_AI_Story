@@ -45,7 +45,7 @@ const pendingProps = {
   startedAt: null, title: 'Creating your cover', body: 'Your cover will appear when ready.',
   estimateLabel: 'Estimated time remaining', stillWorking: 'Still creating — no need to refresh',
   capacityWaiting: false, capacityTitle: 'Your place is saved', capacityBody: 'Please wait.',
-  error: null, retryLabel: 'Review details and retry', onReturnToDetails: () => {},
+  error: null, actionLabel: 'Return to Customize', onReturnToDetails: () => {},
 }
 
 test('pending cover is inline, has a non-announcing estimate timer, and shows an actionable failure', () => {
@@ -58,7 +58,8 @@ test('pending cover is inline, has a non-announcing estimate timer, and shows an
   const failed = renderToStaticMarkup(<PreviewGeneratingCover {...pendingProps} error="Unable to generate" />)
   assert.match(failed, /Unable to generate/)
   assert.match(failed, /type="button"/)
-  assert.match(failed, /Review details and retry/)
+  assert.match(failed, /Return to Customize/)
+  assert.doesNotMatch(failed, /retry/i)
   assert.doesNotMatch(failed, /role="timer"/)
   const queued = renderToStaticMarkup(<PreviewGeneratingCover {...pendingProps} capacityWaiting />)
   assert.match(queued, /Your place is saved/)

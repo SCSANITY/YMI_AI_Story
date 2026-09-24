@@ -29,7 +29,7 @@ test('polling merges progressive assets and renews URLs only for explicit image 
   const controller = await read('components/personalize/usePreviewController.ts')
   assert.match(controller, /mergePreviewPresentation\(current, assets\.presentation, renew\)/)
   assert.match(controller, /retainPreviewImageUrl\(current, assets\.coverUrl, renew\)/)
-  assert.match(controller, /if \(reason === 'image-error'\) await decodePreviewImageRenewal\(assets\.urls\)/)
+  assert.match(controller, /if \(assets && reason === 'image-error'\) await decodePreviewImageRenewal\(assets\.urls\)/)
   assert.match(controller, /applyPreviewDisplayAssetsForJob\(jobId, assets, reason === 'image-error'\)/)
   const cover = await read('components/personalize/useDecodedPreviewCover.ts')
   assert.match(cover, /decoded\?\.jobId === jobId && decoded\.identity === identity/)

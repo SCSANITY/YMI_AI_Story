@@ -2,6 +2,7 @@ import { isUuid } from '@/lib/validators'
 import type { PendingUserAssetUpload } from '@/services/assets'
 import { parseSignedPreviewAssets, type SignedPreviewAssets } from '@/lib/preview-page-contract'
 import type { PreviewCapacityState } from '@/lib/preview-capacity'
+import { parsePreviewJobState, type PreviewJobState } from '@/lib/preview-job-state'
 import type { SaveTextProfileResult } from '@/lib/user-profile-history'
 
 export interface JobRecord {
@@ -404,6 +405,24 @@ export async function getJob(jobId: string, customerId?: string | null): Promise
     throw await readJobRequestError(response, 'Failed to fetch job')
   }
   return (await response.json()) as JobRecord
+}
+
+export async function getPreviewJobState(
+  jobId: string,
+  customerId?: string | null
+): Promise<PreviewJobState> {
+  if (!jobId) throw new Error('Missing job ID')
+  if (!isUuid(jobId)) throw new Error(`Invalid job ID: ${jobId}`)
+
+  const response = await fetchWithTimeout(
+    appendCustomerId(`/api/jobs/${jobId}/preview-state`, customerId),
+    { credentials: 'include', cache: 'no-store' },
+    30000
+  )
+  if (!response.ok) {
+    throw await readJobRequestError(response, 'Failed to fetch Preview state')
+  }
+  return parsePreviewJobState(await response.json())
 }
 
 export async function cancelPreviewJob(

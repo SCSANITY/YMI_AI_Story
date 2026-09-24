@@ -87,7 +87,8 @@ test('Customize has one lifecycle authority and one Preview controller', async (
   assert.doesNotMatch(personalize, /getJob\(|getPreviewPageAssets|pollForRemainingPreviewPages/)
   assert.match(stage, /export function getPersistedPersonalizeStep/)
   assert.match(controller, /activeWatchesRef/)
-  assert.equal(controller.match(/await getJob\(/g)?.length, 1)
+  assert.equal(controller.match(/await getPreviewJobState\(/g)?.length, 2)
+  assert.doesNotMatch(controller, /await getJob\(|await getPreviewPageAssets\(/)
   assert.match(controller, /getPollDelayMs\(startedAt, doneAssetRetries\)/)
   assert.match(controller, /visibilitychange[\s\S]*pageshow[\s\S]*focus/)
 
