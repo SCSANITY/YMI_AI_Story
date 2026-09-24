@@ -3,6 +3,7 @@ import {
   type SignedPreviewAssets,
 } from '@/lib/preview-page-contract'
 import type { PreviewCapacityState } from '@/lib/preview-capacity'
+import type { PreviewFailureCode } from '@/lib/preview-retry'
 
 export type PreviewJobStatus =
   | 'queued'
@@ -26,7 +27,8 @@ export type PreviewJobState = {
   phase: PreviewJobPhase
   progress: number | null
   capacityState: PreviewCapacityState
-  failureCode: 'generation_failed' | null
+  failureCode: PreviewFailureCode | null
+  retryable: boolean
   assets: SignedPreviewAssets | null
 }
 
@@ -76,9 +78,12 @@ export function parsePreviewJobState(value: unknown): PreviewJobState {
     ? value.progress
     : null
   const capacityState = value.capacity_state === 'waiting' ? 'waiting' : 'normal'
-  const failureCode = value.failure_code === 'generation_failed'
-    ? 'generation_failed'
-    : null
+  const failureCode = value.failure_code === 'retryable_generation_failure'
+    ? 'retryable_generation_failure'
+    : value.failure_code === 'generation_failed'
+      ? 'generation_failed'
+      : null
+  const retryable = failureCode === 'retryable_generation_failure' && value.retryable === true
   const assets = value.assets == null ? null : parseSignedPreviewAssets(value.assets)
 
   return {
@@ -88,6 +93,7 @@ export function parsePreviewJobState(value: unknown): PreviewJobState {
     progress,
     capacityState,
     failureCode,
+    retryable,
     assets,
   }
 }

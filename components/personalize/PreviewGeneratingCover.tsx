@@ -16,6 +16,8 @@ type Props = {
   capacityBody: string
   error: string | null
   actionLabel: string
+  actionPendingLabel?: string
+  actionPending?: boolean
   onReturnToDetails: () => void
 }
 
@@ -42,7 +44,15 @@ function PreviewGeneratingCoverComponent(props: Props) {
       {!props.capacityWaiting || props.error ? <p className={`${props.error ? 'max-h-16 overflow-y-auto' : 'hidden md:block'} mt-3 max-w-[290px] text-xs leading-5 text-slate-600 md:text-sm md:leading-6`}>{props.error ?? props.body}</p> : null}
       <div className="hidden md:block"><PreviewCapacityNotice visible={props.capacityWaiting && !props.error} variant="loading" title={props.capacityTitle} body={props.capacityBody} /></div>
       {props.error ? (
-        <button type="button" onClick={props.onReturnToDetails} className="mt-5 min-h-11 rounded-full bg-amber-600 px-5 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2">{props.actionLabel}</button>
+        <button
+          type="button"
+          onClick={props.onReturnToDetails}
+          disabled={props.actionPending}
+          aria-busy={props.actionPending}
+          className="mt-5 min-h-11 rounded-full bg-amber-700 px-5 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-800 focus-visible:ring-offset-2 disabled:cursor-wait disabled:bg-amber-700 disabled:opacity-65"
+        >
+          {props.actionPending ? props.actionPendingLabel ?? props.actionLabel : props.actionLabel}
+        </button>
       ) : (
         <div className="mt-3 flex flex-col items-center gap-2 md:mt-5">
           <span className="relative flex h-16 w-16 items-center justify-center">

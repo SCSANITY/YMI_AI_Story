@@ -9,6 +9,7 @@ import {
   resolvePreviewDisplayAssets,
 } from '@/lib/preview-book-presentation'
 import { resolvePreviewCapacityState } from '@/lib/preview-capacity'
+import { resolvePreviewRetryDecision } from '@/lib/preview-retry'
 import {
   resolvePreviewJobPhase,
   type PreviewJobStatus,
@@ -100,6 +101,9 @@ export async function GET(
   }
 
   const phase = resolvePreviewJobPhase({ status, hasCover, displayComplete })
+  const retryDecision = status === 'failed'
+    ? resolvePreviewRetryDecision(job.provider_runs)
+    : { failureCode: null, retryable: false }
   return jsonNoStore({
     job_id: job.job_id,
     status,
@@ -110,7 +114,8 @@ export async function GET(
       status,
       providerRuns: job.provider_runs,
     }),
-    failure_code: status === 'failed' ? 'generation_failed' : null,
+    failure_code: retryDecision.failureCode,
+    retryable: retryDecision.retryable,
     assets,
   })
 }

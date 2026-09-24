@@ -31,7 +31,8 @@ test('client parser accepts only the redacted progressive Preview contract', () 
     phase: 'partial_failed',
     progress: 30,
     capacity_state: 'normal',
-    failure_code: 'generation_failed',
+    failure_code: 'retryable_generation_failure',
+    retryable: true,
     assets: coverAssets,
     provider_runs: { must: 'be ignored' },
     error_message: 'must be ignored',
@@ -39,8 +40,25 @@ test('client parser accepts only the redacted progressive Preview contract', () 
 
   assert.equal(state.phase, 'partial_failed')
   assert.equal(state.assets?.pages[0].role, 'preview_cover')
-  assert.equal(state.failureCode, 'generation_failed')
+  assert.equal(state.failureCode, 'retryable_generation_failure')
+  assert.equal(state.retryable, true)
   assert.equal('provider_runs' in state, false)
   assert.equal('error_message' in state, false)
   assert.throws(() => parsePreviewJobState({ status: 'failed', phase: 'unknown' }), /status|phase/)
+})
+
+test('client parser does not trust a retryable flag without the typed public code', () => {
+  const state = parsePreviewJobState({
+    job_id: '10000000-0000-4000-8000-000000000002',
+    status: 'failed',
+    phase: 'failed',
+    progress: 0,
+    capacity_state: 'normal',
+    failure_code: 'generation_failed',
+    retryable: true,
+    assets: null,
+  })
+
+  assert.equal(state.failureCode, 'generation_failed')
+  assert.equal(state.retryable, false)
 })

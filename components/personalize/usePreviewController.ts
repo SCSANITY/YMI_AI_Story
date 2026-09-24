@@ -1,7 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
-import { getPreviewJobState, isTerminalJobAccessError } from '@/services/jobs'
+import {
+  getPreviewJobState,
+  isTerminalJobAccessError,
+  retryPreviewJob,
+} from '@/services/jobs'
 import {
   isPreviewDisplayComplete,
   resolvePreviewDisplayAssets,
@@ -64,12 +68,24 @@ const MAX_DONE_ASSET_RETRIES = 6
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const CAPACITY_NOTICE_MIN_WAIT_MS = 4_000
 
-class PreviewWatchTerminalError extends Error {}
+class PreviewWatchTerminalError extends Error {
+  readonly retryable: boolean
+
+  constructor(message: string, retryable = false) {
+    super(message)
+    this.retryable = retryable
+  }
+}
 class PreviewWatchPartialFailureError extends PreviewWatchTerminalError {
   readonly assets: PreviewDisplayAssets
 
-  constructor(assets: PreviewDisplayAssets) {
-    super('Your cover is saved, but this Preview could not finish. Return to Customize to generate again.')
+  constructor(assets: PreviewDisplayAssets, retryable: boolean) {
+    super(
+      retryable
+        ? 'Your cover is saved. Retry the remaining pages without starting a new book.'
+        : 'Your cover is saved, but this Preview could not finish. Return to Customize to generate again.',
+      retryable
+    )
     this.assets = assets
   }
 }
@@ -77,8 +93,12 @@ class PreviewUnavailableError extends PreviewWatchTerminalError {}
 
 const PARTIAL_FAILURE_MESSAGE =
   'Your cover is saved, but this Preview could not finish. Return to Customize to generate again.'
+const PARTIAL_RETRY_MESSAGE =
+  'Your cover is saved. Retry the remaining pages without starting a new book.'
 const TERMINAL_FAILURE_MESSAGE =
   'This Preview could not finish. Return to Customize to generate again.'
+const TERMINAL_RETRY_MESSAGE =
+  'This Preview could not finish. Retry it without starting a new book.'
 
 function wait(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
@@ -130,6 +150,12 @@ export function usePreviewController({
   const [capacityWaitingByJobId, setCapacityWaitingByJobId] = useState<Record<string, true>>({})
   const [error, setError] = useState<string | null>(null)
   const [failureKind, setFailureKind] = useState<'partial' | 'terminal' | null>(null)
+  const [retryableFailure, setRetryableFailure] = useState<{
+    jobId: string
+    retryable: boolean
+  } | null>(null)
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null)
+  const [watchRevision, setWatchRevision] = useState(0)
   const [previewPhaseByJobId, setPreviewPhaseByJobId] = useState<Record<string, PreviewJobPhase>>({})
   const [previewAccess, setPreviewAccess] = useState<{
     jobId: string | null
@@ -137,6 +163,7 @@ export function usePreviewController({
   }>({ jobId: null, state: 'idle' })
   const activeWatchesRef = useRef<Map<string, ActiveWatch>>(new Map())
   const refreshPromisesRef = useRef<Map<string, Promise<boolean>>>(new Map())
+  const retryPromisesRef = useRef<Map<string, Promise<boolean>>>(new Map())
   const lastRefreshAtRef = useRef(0)
   const activeJobId = selectedPreviewJobId ?? previewJobId
   const activeDisplayComplete = isPreviewDisplayComplete({
@@ -336,12 +363,18 @@ export function usePreviewController({
           }
 
           if (job.phase === 'partial_failed' && watch.latestAssets?.coverUrl) {
-            const partialFailure = new PreviewWatchPartialFailureError(watch.latestAssets)
+            const partialFailure = new PreviewWatchPartialFailureError(
+              watch.latestAssets,
+              job.retryable
+            )
             settleRemaining((subscriber) => subscriber.reject(partialFailure))
             break
           }
           if (job.phase === 'failed' || job.status === 'failed') {
-            const terminalFailure = new PreviewWatchTerminalError(TERMINAL_FAILURE_MESSAGE)
+            const terminalFailure = new PreviewWatchTerminalError(
+              job.retryable ? TERMINAL_RETRY_MESSAGE : TERMINAL_FAILURE_MESSAGE,
+              job.retryable
+            )
             settleRemaining((subscriber) => subscriber.reject(terminalFailure))
             break
           }
@@ -458,12 +491,15 @@ export function usePreviewController({
         updatePreviewAccess(jobId, 'available')
         if (job.phase === 'partial_failed' && assets?.coverUrl) {
           setFailureKind('partial')
-          setError(PARTIAL_FAILURE_MESSAGE)
+          setRetryableFailure({ jobId, retryable: job.retryable })
+          setError(job.retryable ? PARTIAL_RETRY_MESSAGE : PARTIAL_FAILURE_MESSAGE)
         } else if (job.phase === 'failed' || job.status === 'failed') {
           setFailureKind('terminal')
-          setError(TERMINAL_FAILURE_MESSAGE)
+          setRetryableFailure({ jobId, retryable: job.retryable })
+          setError(job.retryable ? TERMINAL_RETRY_MESSAGE : TERMINAL_FAILURE_MESSAGE)
         } else {
           setFailureKind(null)
+          setRetryableFailure(null)
           setError(null)
         }
         lastRefreshAtRef.current = Date.now()
@@ -499,21 +535,29 @@ export function usePreviewController({
         if (activeJobIdRef.current !== jobId) return
         applyPreviewDisplayAssetsForJob(jobId, assets)
         setFailureKind(null)
+        setRetryableFailure(null)
         setError(null)
       },
     }).then((outcome) => {
+      setRetryingJobId((current) => current === activeJobId ? null : current)
       if (activeJobIdRef.current === activeJobId && outcome.status === 'cancelled' && !outcome.assets?.coverUrl) {
         setError('This Preview was cancelled. Review your details to try again.')
       }
     }).catch((watchError) => {
+      setRetryingJobId((current) => current === activeJobId ? null : current)
       if (activeJobIdRef.current !== activeJobId) return
       if (watchError instanceof PreviewWatchPartialFailureError) {
         applyPreviewDisplayAssetsForJob(activeJobId, watchError.assets)
         setFailureKind('partial')
-        setError(PARTIAL_FAILURE_MESSAGE)
+        setRetryableFailure({ jobId: activeJobId, retryable: watchError.retryable })
+        setError(watchError.message)
         return
       }
       setFailureKind('terminal')
+      setRetryableFailure({
+        jobId: activeJobId,
+        retryable: watchError instanceof PreviewWatchTerminalError && watchError.retryable,
+      })
       setError(
         watchError instanceof Error
           ? watchError.message
@@ -522,7 +566,63 @@ export function usePreviewController({
     })
 
     return () => cancelWatch(activeJobId)
-  }, [active, activeJobId, applyPreviewDisplayAssetsForJob, cancelWatch, watchJob])
+  }, [active, activeJobId, applyPreviewDisplayAssetsForJob, cancelWatch, watchJob, watchRevision])
+
+  const retry = useCallback((creationId: string | null | undefined) => {
+    const jobId = activeJobIdRef.current
+    if (!active || !jobId) return Promise.resolve(false)
+    if (!creationId) {
+      setFailureKind('terminal')
+      setRetryableFailure({ jobId, retryable: false })
+      setError('This Preview cannot be retried because its book identity is unavailable. Return to Customize.')
+      return Promise.resolve(false)
+    }
+    if (retryableFailure?.jobId !== jobId || !retryableFailure.retryable) {
+      return Promise.resolve(false)
+    }
+
+    const existing = retryPromisesRef.current.get(jobId)
+    if (existing) return existing
+
+    let watcherWillRestart = false
+    const retryPromise = (async () => {
+      setRetryingJobId(jobId)
+      try {
+        const result = await retryPreviewJob(jobId, creationId, customerId ?? null)
+        if (result.jobId !== jobId || result.creationId !== creationId) {
+          throw new Error('Preview retry identity changed unexpectedly')
+        }
+        if (activeJobIdRef.current !== jobId) return true
+
+        cancelWatch(jobId)
+        setPreviewPhaseByJobId((current) => ({ ...current, [jobId]: 'pending' }))
+        setFailureKind(null)
+        setRetryableFailure(null)
+        setError(null)
+        updatePreviewAccess(jobId, 'available')
+        watcherWillRestart = true
+        setWatchRevision((current) => current + 1)
+        return true
+      } catch (retryError) {
+        if (activeJobIdRef.current === jobId) {
+          setError(
+            retryError instanceof Error
+              ? retryError.message
+              : 'Failed to retry Preview. Please try again.'
+          )
+        }
+        return false
+      } finally {
+        retryPromisesRef.current.delete(jobId)
+        if (!watcherWillRestart) {
+          setRetryingJobId((current) => current === jobId ? null : current)
+        }
+      }
+    })()
+
+    retryPromisesRef.current.set(jobId, retryPromise)
+    return retryPromise
+  }, [active, cancelWatch, customerId, retryableFailure, updatePreviewAccess])
 
   useEffect(() => {
     if (!active || !activeJobId || typeof document === 'undefined') return
@@ -553,6 +653,7 @@ export function usePreviewController({
 
   const setPublicError = useCallback((next: SetStateAction<string | null>) => {
     setFailureKind(null)
+    setRetryableFailure(null)
     setError(next)
   }, [])
 
@@ -582,6 +683,13 @@ export function usePreviewController({
     ),
     error,
     isPartialFailure: failureKind === 'partial',
+    canRetry: Boolean(
+      activeJobId &&
+      retryableFailure?.jobId === activeJobId &&
+      retryableFailure.retryable
+    ),
+    isRetrying: Boolean(activeJobId && retryingJobId === activeJobId),
+    retry,
     setError: setPublicError,
     refresh,
     watchJob,

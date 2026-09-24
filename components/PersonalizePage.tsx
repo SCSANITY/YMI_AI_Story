@@ -429,6 +429,9 @@ export default function PersonalizePage({
     previewCompletionReady,
     error: previewError,
     isPartialFailure: isPreviewPartialFailure,
+    canRetry: canRetryPreview,
+    isRetrying: isRetryingPreview,
+    retry: retryPreview,
     setError: setPreviewError,
     refresh: refreshPreviewImages,
     watchJob: watchPreviewJob,
@@ -3408,8 +3411,20 @@ export default function PersonalizePage({
                         : isPreviewRestoring
                         ? t('personalize.previewRestoringBody')
                         : t('personalize.previewSubtitle')}
-                      statusMessage={isPreviewPartialFailure && hasReadyPreviewCover
-                        ? t('personalize.previewPartialFailure')
+                      statusMessage={hasReadyPreviewCover && isRetryingPreview
+                        ? t('personalize.previewRetrying')
+                        : isPreviewPartialFailure && hasReadyPreviewCover
+                          ? t(canRetryPreview
+                            ? 'personalize.previewPartialFailureRetry'
+                            : 'personalize.previewPartialFailure')
+                          : null}
+                      statusActionLabel={canRetryPreview || isRetryingPreview
+                        ? t('personalize.previewRetryRemaining')
+                        : null}
+                      statusActionPendingLabel={t('personalize.previewRetrying')}
+                      statusActionPending={isRetryingPreview}
+                      onStatusAction={canRetryPreview || isRetryingPreview
+                        ? () => void retryPreview(creationId)
                         : null}
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
@@ -3449,8 +3464,14 @@ export default function PersonalizePage({
                             estimateLabel={t('personalize.generatingCoverEstimate')}
                             stillWorking={t('personalize.generatingCoverOverrun')}
                             error={previewError}
-                            actionLabel={t('personalize.returnToCustomize')}
-                            onReturnToDetails={() => void requestPreviewCancellation({ showToast: false })}
+                            actionLabel={canRetryPreview
+                              ? t('personalize.previewRetryRemaining')
+                              : t('personalize.returnToCustomize')}
+                            actionPendingLabel={t('personalize.previewRetrying')}
+                            actionPending={isRetryingPreview}
+                            onReturnToDetails={canRetryPreview
+                              ? () => void retryPreview(creationId)
+                              : () => void requestPreviewCancellation({ showToast: false })}
                             capacityWaiting={isGeneratingPreviewCapacityWaiting}
                             capacityTitle={t('personalize.capacityLoadingTitle')}
                             capacityBody={t('personalize.capacityLoadingBody')}

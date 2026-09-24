@@ -62,6 +62,11 @@ function loadRoute({ owner = { ownerType: 'customer' }, job }) {
     '@/lib/preview-capacity': {
       resolvePreviewCapacityState: ({ status }) => status === 'queued' ? 'waiting' : 'normal',
     },
+    '@/lib/preview-retry': {
+      resolvePreviewRetryDecision: (providerRuns) => providerRuns?.retryable
+        ? { failureCode: 'retryable_generation_failure', retryable: true }
+        : { failureCode: 'generation_failed', retryable: false },
+    },
     '@/lib/preview-job-state': {
       resolvePreviewJobPhase: ({ status, hasCover, displayComplete }) => {
         if (status === 'failed') return hasCover ? 'partial_failed' : 'failed'
@@ -115,7 +120,7 @@ test('failed old-Worker output returns the saved cover in one redacted owned rea
       job_type: 'preview',
       status: 'failed',
       progress: 30,
-      provider_runs: { 0: { status: 'COMPLETED' } },
+      provider_runs: { retryable: true },
       output_assets: { bucket: 'private', schema_version: 3, asset_layout: 'single-page', pages: [cover] },
     },
   })
@@ -129,6 +134,8 @@ test('failed old-Worker output returns the saved cover in one redacted owned rea
   assert.equal(response.status, 200)
   assert.match(response.headers.get('Cache-Control'), /no-store/)
   assert.equal(body.phase, 'partial_failed')
+  assert.equal(body.failure_code, 'retryable_generation_failure')
+  assert.equal(body.retryable, true)
   assert.equal(body.assets.pages[0].url, 'https://signed.example/preview/job/cover.webp')
   assert.equal(calls.filter((call) => call.kind === 'from').length, 1)
   assert.equal(calls.filter((call) => call.kind === 'maybeSingle').length, 1)

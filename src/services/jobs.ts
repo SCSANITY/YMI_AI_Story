@@ -50,6 +50,13 @@ export type CreatePreviewJobResult = {
   textProfile: SaveTextProfileResult | null
 }
 
+export type RetryPreviewJobResult = {
+  jobId: string
+  creationId: string
+  status: Extract<JobRecord['status'], 'queued' | 'running' | 'done'>
+  reused: boolean
+}
+
 export type CommitPreviewVariantInput = {
   creationId: string
   expectedPreviewJobId: string
@@ -423,6 +430,45 @@ export async function getPreviewJobState(
     throw await readJobRequestError(response, 'Failed to fetch Preview state')
   }
   return parsePreviewJobState(await response.json())
+}
+
+export async function retryPreviewJob(
+  jobId: string,
+  creationId: string,
+  customerId?: string | null
+): Promise<RetryPreviewJobResult> {
+  if (!isUuid(jobId)) throw new Error('Invalid Preview job ID')
+  if (!isUuid(creationId)) throw new Error('Invalid creation ID')
+
+  const response = await fetchWithTimeout(
+    `/api/jobs/${encodeURIComponent(jobId)}/retry`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ creationId, customerId: customerId ?? null }),
+    },
+    30_000
+  )
+  if (!response.ok) {
+    throw await readJobRequestError(response, 'Failed to retry Preview')
+  }
+
+  const data = await response.json()
+  if (
+    !isUuid(data?.jobId) ||
+    !isUuid(data?.creationId) ||
+    (data?.status !== 'queued' && data?.status !== 'running' && data?.status !== 'done')
+  ) {
+    throw new Error('Preview retry response is invalid')
+  }
+
+  return {
+    jobId: data.jobId,
+    creationId: data.creationId,
+    status: data.status,
+    reused: Boolean(data.reused),
+  }
 }
 
 export async function cancelPreviewJob(

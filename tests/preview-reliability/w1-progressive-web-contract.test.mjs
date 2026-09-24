@@ -37,16 +37,17 @@ test('W1 keeps subscriber goals independent and applies assets before terminal f
   assert.doesNotMatch(watch, /existing\.promise|return existing\.promise/)
   assert.ok(applyAssetsAt >= 0 && coverReadyAt > applyAssetsAt)
   assert.ok(partialFailureAt > coverReadyAt)
-  assert.match(watch, /PreviewWatchPartialFailureError\(watch\.latestAssets\)/)
+  assert.match(watch, /PreviewWatchPartialFailureError\([\s\S]*watch\.latestAssets,[\s\S]*job\.retryable[\s\S]*\)/)
 })
 
-test('W1 preserves created identity, shows the cover-level status, and ships no Retry action', async () => {
-  const [page, header, loading, messages, route, service] = await Promise.all([
+test('W1 invariants remain intact while W2 adds Retry on a separate route', async () => {
+  const [page, header, loading, messages, route, retryRoute, service] = await Promise.all([
     read('components/PersonalizePage.tsx'),
     read('components/personalize/PreviewIntroHeader.tsx'),
     read('components/personalize/PreviewGeneratingCover.tsx'),
     read('src/lib/i18n-messages.ts'),
     read('app/api/jobs/[jobId]/preview-state/route.ts'),
+    read('app/api/jobs/[jobId]/retry/route.ts'),
     read('src/services/jobs.ts'),
   ])
   const catchStart = page.indexOf('} catch (error: unknown) {')
@@ -55,8 +56,8 @@ test('W1 preserves created identity, shows the cover-level status, and ships no 
 
   assert.match(generationCatch, /watchedJobId && watchedCreationId[\s\S]*replacePreviewUrl[\s\S]*finishGenerating\(\)/)
   assert.doesNotMatch(generationCatch, /setPreviewJobId\(null\)|setCreationId\(null\)|setPreviewPages\(\[\]\)/)
-  assert.match(header, /role="status"[\s\S]*aria-live="polite"[\s\S]*data-preview-partial-failure/)
-  assert.match(page, /statusMessage=\{isPreviewPartialFailure && hasReadyPreviewCover/)
+  assert.match(header, /data-preview-partial-failure[\s\S]*role="status"[\s\S]*aria-live="polite"/)
+  assert.match(page, /statusMessage=\{hasReadyPreviewCover && isRetryingPreview[\s\S]*isPreviewPartialFailure && hasReadyPreviewCover/)
   assert.match(page, /const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && previewCompletionReady && !previewError/)
   assert.match(page, /selectionDisabled=\{!previewCompletionReady \|\| Boolean\(previewError\) \|\| isSavingVoice\}/)
   assert.match(page, /dedication=\{previewCompletionReady \? <PreviewDedication/)
@@ -64,5 +65,8 @@ test('W1 preserves created identity, shows the cover-level status, and ships no 
   assert.match(loading, /actionLabel/)
   assert.doesNotMatch(page, /generatingCoverRetry/)
   assert.doesNotMatch(route, /export async function (POST|PATCH)/)
-  assert.doesNotMatch(service, /retryPreview|retry-preview|preview\/retry/)
+  assert.match(service, /export async function retryPreviewJob/)
+  assert.match(service, /\/api\/jobs\/\$\{encodeURIComponent\(jobId\)\}\/retry/)
+  assert.match(retryRoute, /export async function POST/)
+  assert.doesNotMatch(retryRoute, /\.insert\(|from\(['"]creations['"]\)\s*\.insert/)
 })
