@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "baselineSourceCommit": "4e1f0691e9df5b6436bbb5071fb696a62a9f05bc",
+  "acceptedAt": "2026-09-24",
+  "controlledPollDiscoveryModel": {
+    "purpose": "Isolate the current client polling tax; these values are deterministic model output, not measured customer wall time.",
+    "sampleCountPerCohort": 20,
+    "jitterSample": 0.5,
+    "ownedReadAndDecodeLatencyMs": 0,
+    "cohorts": [
+      {
+        "name": "before-20s",
+        "pollDelayMs": 1590,
+        "p50PersistToObserveMs": 715.5,
+        "p95PersistToObserveMs": 1431,
+        "maximumPersistToObserveMs": 1510.5
+      },
+      {
+        "name": "20s-to-60s",
+        "pollDelayMs": 2590,
+        "p50PersistToObserveMs": 1165.5,
+        "p95PersistToObserveMs": 2331,
+        "maximumPersistToObserveMs": 2460.5
+      },
+      {
+        "name": "after-60s",
+        "pollDelayMs": 4090,
+        "p50PersistToObserveMs": 1840.5,
+        "p95PersistToObserveMs": 3681,
+        "maximumPersistToObserveMs": 3885.5
+      }
+    ],
+    "doneAssetRetryDelayMs": [
+      545,
+      795,
+      1045,
+      1295,
+      1445,
+      1445
+    ]
+  },
+  "currentSuccessfulPollReadTopology": {
+    "jobStateReads": 1,
+    "previewAssetReads": 1,
+    "ownedReads": 2,
+    "order": [
+      "job-state",
+      "preview-assets"
+    ],
+    "sequential": true
+  },
+  "historicalProductionSample": {
+    "purpose": "Freeze the already verified seven-day provider baseline without creating new billable jobs or private artifacts.",
+    "totalPreviewJobs": 59,
+    "done": 40,
+    "failed": 12,
+    "cancelled": 7,
+    "nonCancelledTerminalJobs": 52,
+    "failureClasses": {
+      "comfyUiUnreachable": 8,
+      "historicalUnauthorized": 2,
+      "subtitleRender": 1,
+      "providerStatusFetch": 1
+    },
+    "incidentJobCount": 4,
+    "evidenceAuthority": "Root governance PREVIEW_RELIABILITY_001_ISSUE_LOG.md sections 2.1 and 2.2"
+  }
+}

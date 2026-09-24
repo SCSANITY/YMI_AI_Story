@@ -75,13 +75,18 @@ function wait(ms: number, signal: AbortSignal) {
   })
 }
 
-function getPollDelayMs(startedAt: number, doneAssetRetries: number) {
+export function getPollDelayMs(
+  startedAt: number,
+  doneAssetRetries: number,
+  nowMs = Date.now(),
+  randomUnit = Math.random()
+) {
   if (doneAssetRetries > 0) {
-    return Math.min(1_400, 250 + doneAssetRetries * 250) + Math.floor(Math.random() * 90)
+    return Math.min(1_400, 250 + doneAssetRetries * 250) + Math.floor(randomUnit * 90)
   }
-  const elapsed = Date.now() - startedAt
+  const elapsed = nowMs - startedAt
   const base = elapsed < 20_000 ? 1_500 : elapsed < 60_000 ? 2_500 : 4_000
-  return base + Math.floor(Math.random() * 180)
+  return base + Math.floor(randomUnit * 180)
 }
 
 function isStoppedJob(status: string) {
