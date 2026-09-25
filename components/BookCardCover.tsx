@@ -31,7 +31,7 @@ export function BookCardCover({
   showRipple = true,
   coverZoom,
   isMuted = false,
-  placeholderLabel = 'Preview still creating',
+  placeholderLabel = 'Cover unavailable',
 }: BookCardCoverProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
 

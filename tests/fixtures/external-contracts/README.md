@@ -36,6 +36,14 @@ not a second Worker source.
   2026-09-22. It pins the service-only creation choice, checkout-line snapshot,
   edit/session guard and order preparation contracts. It is **not** evidence
   that the migration was applied or authorized for production.
+- UX2-019 added
+  `20260925_130000_ux2_019_preview_purchase_independence.sql` byte-for-byte
+  from private Database candidate commit
+  `5ca93e6b2697d3764e4df7d8481767a5427594ab` on 2026-09-25. It pins the
+  service-only rule that the original durable Preview identity may be committed
+  while queued/running, while completed originals and Change Photo alternatives
+  still require a generated cover. It is **not** evidence of production
+  application or authorization.
 - `SHA256SUMS` records the repository-normalized UTF-8/LF identity of every
   fixture and this README, so the same manifest verifies on Windows and Linux.
 
