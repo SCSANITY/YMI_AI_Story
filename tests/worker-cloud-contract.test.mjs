@@ -1,22 +1,48 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { describe, it } from 'node:test'
 
 const root = new URL('./fixtures/external-contracts/', import.meta.url)
 const readFixture = (path) => readFile(new URL(path, root), 'utf8')
 
+async function listFixturePaths(relativeDirectory = '') {
+  const entries = await readdir(new URL(relativeDirectory || './', root), { withFileTypes: true })
+  const paths = []
+
+  for (const entry of entries) {
+    const relativePath = relativeDirectory
+      ? `${relativeDirectory}/${entry.name}`
+      : entry.name
+    if (entry.isDirectory()) {
+      paths.push(...await listFixturePaths(relativePath))
+    } else {
+      paths.push(relativePath)
+    }
+  }
+
+  return paths
+}
+
 describe('WC-001 external contracts', () => {
   it('keeps every external fixture pinned by a platform-neutral SHA-256', async () => {
     const manifest = await readFixture('SHA256SUMS')
+    const manifestPaths = []
     for (const line of manifest.trim().split(/\r?\n/)) {
       const [, expected, path] = line.match(/^([0-9A-F]{64})  (.+)$/) || []
       assert.ok(expected && path, `Invalid SHA256SUMS line: ${line}`)
+      manifestPaths.push(path)
       const source = await readFixture(path)
       const normalized = source.replace(/\r\n/g, '\n')
       const actual = createHash('sha256').update(normalized, 'utf8').digest('hex').toUpperCase()
       assert.equal(actual, expected, path)
     }
+
+    assert.equal(new Set(manifestPaths).size, manifestPaths.length, 'SHA256SUMS has duplicate paths')
+    const fixturePaths = (await listFixturePaths())
+      .filter((path) => path !== 'SHA256SUMS')
+      .sort()
+    assert.deepEqual(manifestPaths.toSorted(), fixturePaths, 'SHA256SUMS must register every fixture')
   })
 
   it('keeps Preview and Final capacity independent and claims Preview first', async () => {

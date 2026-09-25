@@ -53,6 +53,7 @@ function rpcConflictCode(error: { code?: string | null; message?: string | null 
   if (sqlState !== '55000') return null
   if (/preview_version_source_terminal/i.test(message)) return 'preview_version_source_terminal'
   if (/preview_version_source_unavailable/i.test(message)) return 'preview_version_source_unavailable'
+  if (/preview_version_source_job_missing/i.test(message)) return 'preview_version_source_job_missing'
   if (/preview_version_config_missing/i.test(message)) return 'preview_config_missing'
   return null
 }
