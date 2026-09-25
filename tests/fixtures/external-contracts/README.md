@@ -39,10 +39,17 @@ not a second Worker source.
 - UX2-019 added
   `20260925_130000_ux2_019_preview_purchase_independence.sql` byte-for-byte
   from private Database candidate commit
-  `5ca93e6b2697d3764e4df7d8481767a5427594ab` on 2026-09-25. It pins the
-  service-only rule that the original durable Preview identity may be committed
-  while queued/running, while completed originals and Change Photo alternatives
-  still require a generated cover. It is **not** evidence of production
+  `5ca93e6b2697d3764e4df7d8481767a5427594ab` on 2026-09-25. The un-applied
+  candidate was superseded by UX2-020 before release and has no current runtime
+  consumer. It remains checksum-registered historical review evidence only; it
+  is **not** a live contract, a migration dependency, or evidence of production
+  application or authorization.
+- UX2-020 added
+  `20260925_143000_ux2_020_creation_version_fork.sql` byte-for-byte from private
+  Database candidate commit `4ce796c58e7fd2efd99db89c923f15f03d2981a0` on
+  2026-09-25. It pins the service-only, owner-scoped and idempotent durable
+  Creation/Preview Job fork used by Change Photo. It is the sole planned
+  UX2-020 release migration, but this fixture is **not** evidence of production
   application or authorization.
 - `SHA256SUMS` records the repository-normalized UTF-8/LF identity of every
   fixture and this README, so the same manifest verifies on Windows and Linux.

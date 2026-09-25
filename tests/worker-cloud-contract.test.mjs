@@ -72,15 +72,15 @@ describe('WC-001 external contracts', () => {
   })
 
   it('bounds repeatable Preview admission atomically without rejecting paid Final work', async () => {
-    const [jobsRoute, variantRoute, fulfillment, migration, admissionAclCorrection] = await Promise.all([
+    const [jobsRoute, versionRoute, fulfillment, migration, admissionAclCorrection] = await Promise.all([
       readFile(new URL('../app/api/jobs/route.js', import.meta.url), 'utf8'),
-      readFile(new URL('../app/api/creations/[creationId]/preview-variants/route.ts', import.meta.url), 'utf8'),
+      readFile(new URL('../app/api/creations/[creationId]/preview-versions/route.ts', import.meta.url), 'utf8'),
       readFile(new URL('../src/lib/orderFulfillment.ts', import.meta.url), 'utf8'),
       readFixture('sql/20260904_205500_wc_001_worker_orchestration.sql'),
       readFixture('sql/20260904_233000_wc_001_revoke_admission_rpc.sql'),
     ])
 
-    for (const source of [jobsRoute, variantRoute]) {
+    for (const source of [jobsRoute, versionRoute]) {
       assert.doesNotMatch(source, /checkJobQueueGuard/)
       assert.match(source, /parseJobQueueAdmissionError/)
     }

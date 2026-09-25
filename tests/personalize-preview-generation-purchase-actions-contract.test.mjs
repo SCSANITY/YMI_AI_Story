@@ -25,7 +25,7 @@ test('pending Preview uses one 70-second estimate while durable identity unlocks
   assert.match(page, /bookPresentation=\{visiblePreviewPresentation\}/)
   assert.match(page, /hasPurchaseIdentity = isUuid\(creationId\) && isUuid\(displayedPreviewJobId\)/)
   assert.match(page, /hasTerminalPreviewFailure = previewPhase === 'failed'[\s\S]*previewPhase === 'partial_failed'[\s\S]*previewPhase === 'cancelled'/)
-  assert.match(page, /canConfigurePurchase = hasPurchaseIdentity && !hasTerminalPreviewFailure/)
+  assert.match(page, /canConfigurePurchase = hasPurchaseIdentity[\s\S]*previewAccessState !== 'unavailable'[\s\S]*!hasTerminalPreviewFailure/)
   assert.match(page, /canAddToCart = stageCanAddToCart && canConfigurePurchase/)
   assert.match(page, /canCheckout = stageCanCheckout && canConfigurePurchase/)
   assert.match(page, /active: stage === 'PREVIEW'/)

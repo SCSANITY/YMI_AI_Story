@@ -41,9 +41,16 @@ function faceAssetOwner(
     : { ownerType: 'anon', ownerId: owner.anonSessionId }
 }
 
-function rpcConflictCode(message: string) {
-  if (/preview_version_limit/i.test(message)) return 'preview_variant_limit'
-  if (/preview_version_source_conflict/i.test(message)) return 'preview_version_source_conflict'
+function rpcConflictCode(error: { code?: string | null; message?: string | null }) {
+  const sqlState = String(error.code || '')
+  const message = String(error.message || '')
+  if (sqlState === '54000' && /preview_version_limit/i.test(message)) {
+    return 'preview_variant_limit'
+  }
+  if (sqlState === '40001' && /preview_version_source_conflict/i.test(message)) {
+    return 'preview_version_source_conflict'
+  }
+  if (sqlState !== '55000') return null
   if (/preview_version_source_terminal/i.test(message)) return 'preview_version_source_terminal'
   if (/preview_version_source_unavailable/i.test(message)) return 'preview_version_source_unavailable'
   if (/preview_version_config_missing/i.test(message)) return 'preview_config_missing'
@@ -170,7 +177,7 @@ export async function POST(
     const admissionError = parseJobQueueAdmissionError(error)
     if (admissionError) return jsonNoStore(admissionError, 429)
 
-    const conflictCode = rpcConflictCode(error.message || '')
+    const conflictCode = rpcConflictCode(error)
     if (conflictCode) {
       return jsonNoStore(
         {

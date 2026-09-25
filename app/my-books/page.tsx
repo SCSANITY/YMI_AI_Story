@@ -214,8 +214,8 @@ export default function MyBooksPage() {
       price: packagePrice?.effectivePriceUsd ?? 0,
       compareAtPrice: packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd,
       discountPercent: packagePrice?.discountPercent ?? null,
-      coverUrl: coverUrl ?? catalogBook.coverUrl,
-      showcaseImages: coverUrl ? [coverUrl] : catalogBook.showcaseImages,
+      coverUrl: coverUrl ?? '',
+      showcaseImages: coverUrl ? [coverUrl] : [],
       isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
     } : {
       bookID: item.template_id,
@@ -224,9 +224,7 @@ export default function MyBooksPage() {
       price: packagePrice?.effectivePriceUsd ?? 0,
       compareAtPrice: packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd,
       discountPercent: packagePrice?.discountPercent ?? null,
-      coverUrl: coverUrl ?? templateStorageUrl(
-        item.templates?.normalized_cover_image_path || item.templates?.cover_image_path || ''
-      ),
+      coverUrl: coverUrl ?? '',
       showcaseImages: coverUrl ? [coverUrl] : [],
       description: item.templates?.description || '',
       category: item.templates?.story_type || 'Story',

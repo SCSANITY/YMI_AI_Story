@@ -9,7 +9,7 @@ test('Preview purchase controls depend on durable identity, not image availabili
   const page = await read('components/PersonalizePage.tsx')
 
   assert.match(page, /hasPurchaseIdentity = isUuid\(creationId\) && isUuid\(displayedPreviewJobId\)/)
-  assert.match(page, /canConfigurePurchase = hasPurchaseIdentity && !hasTerminalPreviewFailure/)
+  assert.match(page, /canConfigurePurchase = hasPurchaseIdentity[\s\S]*previewAccessState !== 'unavailable'[\s\S]*!hasTerminalPreviewFailure/)
   assert.match(page, /canAddToCart = stageCanAddToCart && canConfigurePurchase/)
   assert.match(page, /canCheckout = stageCanCheckout && canConfigurePurchase/)
   assert.doesNotMatch(page, /canAddToCart = [^\n]*(hasReadyPreviewCover|previewCompletionReady|previewError)/)
@@ -44,6 +44,9 @@ test('My Books never substitutes the template original for a missing generated c
 
   assert.match(page, /return row\.preview_cover_url \? templateStorageUrl\(row\.preview_cover_url\) : null/)
   assert.doesNotMatch(page, /preview_cover_url \|\| row\.templates/)
+  assert.doesNotMatch(page, /coverUrl: coverUrl \?\? catalogBook\.coverUrl/)
+  assert.doesNotMatch(page, /coverUrl: coverUrl \?\? templateStorageUrl/)
+  assert.match(page, /coverUrl: coverUrl \?\? ''/)
   assert.match(cover, /if \(!src \|\| failedSrc === src\)/)
   assert.match(cover, /Cover unavailable/)
   assert.match(savedGrid, /placeholderLabel=\{t\('myBooks\.previewPreparing'\)\}/)

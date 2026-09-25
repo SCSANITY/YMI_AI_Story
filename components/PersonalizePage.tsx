@@ -690,7 +690,9 @@ export default function PersonalizePage({
   const hasTerminalPreviewFailure = previewPhase === 'failed'
     || previewPhase === 'partial_failed'
     || previewPhase === 'cancelled';
-  const canConfigurePurchase = hasPurchaseIdentity && !hasTerminalPreviewFailure;
+  const canConfigurePurchase = hasPurchaseIdentity
+    && previewAccessState !== 'unavailable'
+    && !hasTerminalPreviewFailure;
   const canAddToCart = stageCanAddToCart && canConfigurePurchase;
   const canCheckout = stageCanCheckout && canConfigurePurchase;
 
