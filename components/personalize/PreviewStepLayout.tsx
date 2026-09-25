@@ -7,12 +7,11 @@ type PreviewStepLayoutProps = {
   progress: ReactNode
   intro: ReactNode
   book: ReactNode
-  gallery?: ReactNode
   purchase: ReactNode
   scrollCueLabel: string
 }
 
-function PreviewStepLayoutComponent({ progress, intro, book, gallery, purchase, scrollCueLabel }: PreviewStepLayoutProps) {
+function PreviewStepLayoutComponent({ progress, intro, book, purchase, scrollCueLabel }: PreviewStepLayoutProps) {
   const purchaseRef = useRef<HTMLDivElement | null>(null)
   const [showScrollCue, setShowScrollCue] = useState(false)
 
@@ -51,13 +50,12 @@ function PreviewStepLayoutComponent({ progress, intro, book, gallery, purchase, 
     <div className="mx-auto min-h-[600px] w-full max-w-[1600px] animate-in fade-in py-2 duration-200 md:py-4">
       <div className="grid min-w-0 gap-7 xl:grid-cols-[minmax(0,7fr)_minmax(310px,3fr)] xl:items-start xl:gap-10">
         <section className="relative min-w-0" aria-label="Book Preview">
-          <div className="flex min-w-0 flex-col xl:grid xl:grid-cols-[112px_minmax(0,1fr)] xl:items-start xl:gap-x-5">
-            <div className="order-1 min-w-0 xl:col-start-2 xl:row-start-1">
+          <div className="flex min-w-0 flex-col">
+            <div className="min-w-0">
               {progress}
               <div className="mx-auto w-full max-w-[380px]">{intro}</div>
             </div>
-            <div className="order-2 min-w-0 xl:col-start-2 xl:row-start-2">{book}</div>
-            <div className="order-3 min-w-0 xl:col-start-1 xl:row-start-2">{gallery}</div>
+            <div className="min-w-0">{book}</div>
           </div>
           <button
             type="button"

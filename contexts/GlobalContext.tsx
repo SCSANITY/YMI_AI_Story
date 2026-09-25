@@ -666,7 +666,13 @@ export const GlobalProvider: React.FC<{
       _finalPrice?: number,
       previewCoverUrl?: string
     ) => {
-      const shouldResume = resumeData && resumeData.bookID === book.bookID;
+      const creationId = personalization?.creationId ?? null
+      const shouldResume = Boolean(
+        resumeData &&
+        resumeData.bookID === book.bookID &&
+        creationId &&
+        resumeData.creationId === creationId
+      );
       if (resumeData && !shouldResume) {
         setResumeData(null);
       }
@@ -684,7 +690,6 @@ export const GlobalProvider: React.FC<{
         ? { ...bookWithTitle, coverUrl: previewCoverUrl }
         : bookWithTitle
 
-      const creationId = personalization?.creationId ?? null
       if (!creationId) {
         console.error('Missing creationId for cart')
         return null

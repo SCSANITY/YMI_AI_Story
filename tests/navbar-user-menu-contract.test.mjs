@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('Customize reuses the global account menu without bypassing Preview cleanup', () => {
+test('Customize reuses the global account menu while durable Preview versions survive navigation', () => {
   const personalizeHeader = read('components/personalize/PersonalizeHeader.tsx')
   const personalizePage = read('components/PersonalizePage.tsx')
   const globalMenu = read('components/navbar/NavbarUserMenu.tsx')
@@ -15,7 +15,7 @@ test('Customize reuses the global account menu without bypassing Preview cleanup
   assert.match(personalizeHeader, /style=\{\{ zIndex: isUserMenuOpen \|\| isCartOpen \? 150 : 50 \}\}/)
 
   assert.match(personalizePage, /onNavigate=\{\(path\) => void navigateAwayFromPreview\(path\)\}/)
-  assert.match(personalizePage, /await cleanupCurrentPreviewVariantSession\(\)/)
+  assert.doesNotMatch(personalizePage, /cleanupCurrentPreviewVariantSession/)
 
   for (const destination of ['/account', '/favorites', '/orders', '/my-books', '/admin/finals']) {
     assert.match(globalMenu, new RegExp(destination.replace('/', '\\/')))

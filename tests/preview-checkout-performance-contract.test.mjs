@@ -4,23 +4,15 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('Preview warms Checkout and reuses a successful preview commit', async () => {
+test('Preview warms Checkout and uses the current durable version directly', async () => {
   const personalize = await read('components/PersonalizePage.tsx')
 
   assert.match(
     personalize,
     /if \(!viewState\.showPreview\) return;\s*router\.prefetch\('\/checkout'\)/
   )
-  assert.match(personalize, /const committedPreviewSelectionRef = useRef/)
-  assert.match(personalize, /const previewCommitInFlightRef = useRef/)
-  assert.match(
-    personalize,
-    /committedSelection\?\.creationId === ensuredCreationId[\s\S]*?return committedSelection\.activePreviewJobId/
-  )
-  assert.match(
-    personalize,
-    /currentCommit\?\.key === commitKey[\s\S]*?currentCommit\.promise[\s\S]*?: commitPreviewVariant/
-  )
+  assert.match(personalize, /const currentPreviewJobId = purchaseConfiguration\.previewJobId/)
+  assert.doesNotMatch(personalize, /commitSelectedPreviewForExit|commitPreviewVariant\(/)
   assert.match(personalize, /setCheckoutTransitionPhase\('preparing'\)/)
   assert.match(personalize, /router\.push\(orderId \? `\/checkout\?orderId=\$\{orderId\}` : '\/checkout'\)/)
 
@@ -40,14 +32,10 @@ test('Order Start schedules unpaid reminders after the checkout response path', 
   assert.ok(responseIndex > deferredReminderIndex)
 })
 
-test('committing the original Preview reuses the already-loaded current job', async () => {
-  const commitRoute = await read(
-    'app/api/creations/[creationId]/preview-variants/commit/route.ts'
-  )
+test('direct Checkout only reuses a cart item for the exact current Creation', async () => {
+  const personalize = await read('components/PersonalizePage.tsx')
 
-  assert.match(commitRoute, /let selectedJob = currentJob/)
-  assert.match(
-    commitRoute,
-    /if \(selectedPreviewJobId !== String\(creation\.preview_job_id\)\) \{[\s\S]*?\.from\('jobs'\)/
-  )
+  assert.match(personalize, /cart\.find\(item => item\.creationId === ensuredCreationId\)/)
+  assert.match(personalize, /cartItemId: existingItem\?\.id \?\? null/)
+  assert.match(personalize, /creationId: ensuredCreationId \?\? null/)
 })

@@ -6,11 +6,8 @@ import { usePersonalizeState } from '@/components/personalize/usePersonalizeStat
 import { autoCropFaceImage, faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
 import {
   cancelPreviewJob,
-  commitPreviewVariant,
   createPreviewJob,
-  createPreviewVariant,
-  discardPreviewVariant,
-  discardPreviewVariantSession,
+  createPreviewVersion,
   PreviewVariantRequestError,
 } from '@/services/jobs';
 import {
@@ -43,7 +40,6 @@ import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayou
 import { getBookPackagePrice } from '@/lib/package-pricing';
 import { SIGNATURE_VOICE_CONSENT_VERSION } from '@/lib/signature-voice';
 import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
-import { PreviewVariantGallery } from '@/components/personalize/PreviewVariantGallery';
 import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/personalize/PersonalizeFormFlow';
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
 import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
@@ -135,52 +131,6 @@ const parseChildAge = (value: string) => {
   const parsed = Number.parseFloat(value.trim());
   return Number.isFinite(parsed) ? parsed : null;
 };
-
-const previewVariantSessionStorageKey = (creationId: string) =>
-  `ymi_preview_variant_sessions_${creationId}`;
-
-function readPreviewVariantSessionIds(creationId: string) {
-  if (typeof window === 'undefined') return [];
-  try {
-    const parsed = JSON.parse(
-      window.sessionStorage.getItem(previewVariantSessionStorageKey(creationId)) || '[]'
-    );
-    return Array.isArray(parsed)
-      ? Array.from(new Set(parsed.filter((value): value is string => isUuid(value))))
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePreviewVariantSessionIds(creationId: string, sessionIds: string[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    const key = previewVariantSessionStorageKey(creationId);
-    const uniqueIds = Array.from(new Set(sessionIds.filter(isUuid)));
-    if (uniqueIds.length === 0) {
-      window.sessionStorage.removeItem(key);
-      return;
-    }
-    window.sessionStorage.setItem(key, JSON.stringify(uniqueIds));
-  } catch {
-    // The in-memory session still supports cleanup when storage is unavailable.
-  }
-}
-
-function rememberPreviewVariantSession(creationId: string, sessionId: string) {
-  writePreviewVariantSessionIds(creationId, [
-    ...readPreviewVariantSessionIds(creationId),
-    sessionId,
-  ]);
-}
-
-function forgetPreviewVariantSession(creationId: string, sessionId: string) {
-  writePreviewVariantSessionIds(
-    creationId,
-    readPreviewVariantSessionIds(creationId).filter((value) => value !== sessionId)
-  );
-}
 
 export default function PersonalizePage({
   bookID,
@@ -363,7 +313,6 @@ export default function PersonalizePage({
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
-  const [showAddToCartConfirm, setShowAddToCartConfirm] = useState(false);
   const [formStep, setFormStep] = useState<PersonalizeFormStep>('INTRO');
   const lastMobileTopSurfaceRef = useRef<'INTRO' | 'PREVIEW' | null>(null);
   const mobileTopSurface = viewState.showPreview
@@ -405,11 +354,9 @@ export default function PersonalizePage({
   const voiceAssetIdRef = useRef<string | null>(null);
   const selectedPreviewCreationIdRef = useRef<string | null>(null);
   const previewVariantSessionIdRef = useRef<string | null>(null);
-  const previewVariantCleanupInFlightRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const {
     previewJobId,
     setPreviewJobId,
-    selectedPreviewJobId,
     selectPreviewJobId,
     activeJobId: displayedPreviewJobId,
     previewUrl,
@@ -436,12 +383,9 @@ export default function PersonalizePage({
     active: stage === 'PREVIEW',
     customerId: user?.customerId ?? null,
   });
-  const previewVariantsRef = useRef<PreviewVariantView[]>([]);
   const [previewVariantSessionCount, setPreviewVariantSessionCount] = useState(0);
   const [previewVariantPrepareStatus, setPreviewVariantPrepareStatus] = useState<FacePrepareStatus>('idle');
   const [previewVariantError, setPreviewVariantError] = useState<string | null>(null);
-  const [discardingPreviewVariantIds, setDiscardingPreviewVariantIds] = useState<Set<string>>(() => new Set());
-  const [isPreviewPhotoLocked, setIsPreviewPhotoLocked] = useState(false);
   const previewVariantGenerationRef = useRef(false);
   const previewVariantPhotoUrlsRef = useRef<Set<string>>(new Set());
   const [creationId, setCreationId] = useState<string | null>(null);
@@ -462,15 +406,6 @@ export default function PersonalizePage({
     'preparing' | 'securing' | 'opening' | null
   >(null);
   const checkoutInFlightRef = useRef(false);
-  const committedPreviewSelectionRef = useRef<{
-    creationId: string
-    selectedPreviewJobId: string
-    activePreviewJobId: string
-  } | null>(null);
-  const previewCommitInFlightRef = useRef<{
-    key: string
-    promise: ReturnType<typeof commitPreviewVariant>
-  } | null>(null);
   const preloadedPreviewImagesRef = useRef<Set<string>>(new Set());
   const [templateCoverUrl, setTemplateCoverUrl] = useState<string | null>(initialBook?.coverUrl || null);
   const [templateTitle, setTemplateTitle] = useState<string | null>(initialBook?.title || null);
@@ -478,10 +413,6 @@ export default function PersonalizePage({
   const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(initialBook?.innerDescription || null);
   const [voicePlaybackUrl, setVoicePlaybackUrl] = useState<string | null>(null);
   const [voiceValidationError, setVoiceValidationError] = useState<string | null>(null);
-  useEffect(() => {
-    previewVariantsRef.current = previewVariants;
-  }, [previewVariants]);
-
   useEffect(() => {
     if (!creationId || !previewJobId) {
       if (!creationId) {
@@ -491,7 +422,6 @@ export default function PersonalizePage({
         setPreviewVariants([]);
         setPreviewVariantSessionCount(0);
         setPreviewVariantError(null);
-        setIsPreviewPhotoLocked(false);
       }
       return;
     }
@@ -516,26 +446,8 @@ export default function PersonalizePage({
       ]);
       setPreviewVariantSessionCount(0);
       setPreviewVariantError(null);
-      setIsPreviewPhotoLocked(false);
     }
   }, [creationId, previewJobId, previewPages, previewBookPresentation, previewUrl, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, selectPreviewJobId, setPreviewVariants]);
-
-  useEffect(() => {
-    if (!selectedPreviewJobId) return;
-    setPreviewVariants((current) =>
-      current.map((variant) =>
-        variant.jobId === selectedPreviewJobId
-          ? {
-              ...variant,
-              photoPreviewUrl: photoPreview || variant.photoPreviewUrl,
-              faceAssetId: photoAssetId || variant.faceAssetId,
-              faceStoragePath: photoStoragePath || variant.faceStoragePath,
-              faceImageUrl: faceImageUrl || variant.faceImageUrl,
-            }
-          : variant
-      )
-    );
-  }, [selectedPreviewJobId, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, setPreviewVariants]);
 
   useEffect(() => {
     const photoUrls = previewVariantPhotoUrlsRef.current;
@@ -545,130 +457,14 @@ export default function PersonalizePage({
     };
   }, []);
 
-  const applyPreviewVariantSelection = useCallback((variant: PreviewVariantView) => {
-    if (variant.status !== 'ready' || !variant.coverUrl) return false;
-    selectPreviewJobId(variant.jobId);
-    setPreviewPages(variant.pages.length ? variant.pages : [variant.coverUrl]);
-    setPreviewBookPresentation(variant.presentation);
-    setPreviewUrl(variant.coverUrl);
-    setPreviewImageErrors(() => new Set());
-    setCurrentSpread(0);
-    setIsFlipping(false);
-    setFlipDirection(null);
-    setPhoto(null);
-    setPreparedFaceFile(null);
-    setFacePrepareStatus('ready');
-    setFacePrepareError(null);
-    setFaceAutoCropped(false);
-    setPhotoPreview(variant.photoPreviewUrl);
-    setPhotoAssetId(variant.faceAssetId);
-    setPhotoStoragePath(variant.faceStoragePath);
-    setFaceImageUrl(variant.faceImageUrl);
-    return true;
-  }, [selectPreviewJobId, setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, setPreviewBookPresentation, setPreviewPages, setPreviewUrl]);
-
-  const handleSelectPreviewVariant = useCallback((jobId: string) => {
-    const variant = previewVariants.find((item) => item.jobId === jobId);
-    if (!variant || !applyPreviewVariantSelection(variant)) return;
-
-    void refreshPreviewImages('selection', { force: true });
-  }, [applyPreviewVariantSelection, previewVariants, refreshPreviewImages]);
-
-  const cleanupPreviewVariantSession = useCallback((
-    sessionId: string,
-    options?: { keepalive?: boolean }
-  ) => {
-    if (!creationId || !isUuid(sessionId)) return Promise.resolve(true);
-    const cleanupKey = `${creationId}:${sessionId}`;
-    const existing = previewVariantCleanupInFlightRef.current.get(cleanupKey);
-    if (existing) return existing;
-
-    const cleanup = discardPreviewVariantSession({
-      creationId,
-      variantSessionId: sessionId,
-      keepalive: options?.keepalive,
-    })
-      .then(() => {
-        forgetPreviewVariantSession(creationId, sessionId);
-        return true;
-      })
-      .catch((error) => {
-        console.error('Preview variant session cleanup failed', error);
-        return false;
-      })
-      .finally(() => {
-        previewVariantCleanupInFlightRef.current.delete(cleanupKey);
-      });
-
-    previewVariantCleanupInFlightRef.current.set(cleanupKey, cleanup);
-    return cleanup;
-  }, [creationId]);
-
   const ensurePreviewVariantSession = useCallback(() => {
-    if (!creationId) throw new Error('Preview creation is unavailable');
     const current = previewVariantSessionIdRef.current;
     if (current) return current;
 
     const sessionId = window.crypto.randomUUID();
     previewVariantSessionIdRef.current = sessionId;
-    rememberPreviewVariantSession(creationId, sessionId);
     return sessionId;
-  }, [creationId]);
-
-  const resetPreviewVariantGallery = useCallback(() => {
-    const committed = previewVariantsRef.current.find((variant) => variant.original);
-    if (committed) {
-      applyPreviewVariantSelection(committed);
-      setPreviewVariants([{ ...committed, countsTowardLimit: false }]);
-    }
-    setPreviewVariantSessionCount(0);
-    setPreviewVariantError(null);
-    previewVariantGenerationRef.current = false;
-  }, [applyPreviewVariantSelection, setPreviewVariants]);
-
-  const cleanupCurrentPreviewVariantSession = useCallback(async (options?: {
-    keepalive?: boolean
-    resetGallery?: boolean
-  }) => {
-    const sessionId = previewVariantSessionIdRef.current;
-    if (!sessionId) return true;
-    if (options?.resetGallery) resetPreviewVariantGallery();
-    const cleaned = await cleanupPreviewVariantSession(sessionId, options);
-    if (cleaned && previewVariantSessionIdRef.current === sessionId) {
-      previewVariantSessionIdRef.current = null;
-    }
-    return cleaned;
-  }, [cleanupPreviewVariantSession, resetPreviewVariantGallery]);
-
-  useEffect(() => {
-    if (viewMode !== 'preview' || !creationId) return;
-    const staleSessionIds = readPreviewVariantSessionIds(creationId).filter(
-      (sessionId) => sessionId !== previewVariantSessionIdRef.current
-    );
-    staleSessionIds.forEach((sessionId) => {
-      void cleanupPreviewVariantSession(sessionId);
-    });
-  }, [cleanupPreviewVariantSession, creationId, viewMode]);
-
-  useEffect(() => {
-    if (viewMode !== 'preview' || !creationId) return;
-
-    const handlePageHide = () => {
-      void cleanupCurrentPreviewVariantSession({ keepalive: true });
-    };
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (!event.persisted || !previewVariantSessionIdRef.current) return;
-      void cleanupCurrentPreviewVariantSession({ resetGallery: true });
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('pageshow', handlePageShow);
-    return () => {
-      window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('pageshow', handlePageShow);
-      void cleanupCurrentPreviewVariantSession({ keepalive: true });
-    };
-  }, [cleanupCurrentPreviewVariantSession, creationId, viewMode]);
+  }, []);
 
   const isPreviewVariantBusy =
     previewVariantPrepareStatus === 'checking' ||
@@ -1669,13 +1465,7 @@ export default function PersonalizePage({
     }
 
     if (viewState.showPreview && previewSource === 'my-books') {
-      void (async () => {
-        try {
-          await cleanupCurrentPreviewVariantSession()
-        } finally {
-          router.push('/my-books?shelf=previews')
-        }
-      })()
+      router.push('/my-books?shelf=previews')
       return
     }
 
@@ -1885,11 +1675,10 @@ export default function PersonalizePage({
   const returnToCustomizeFromPreview = useCallback(async () => {
     persistDraftForCustomizeReturn();
     setShowExitConfirm(false);
-    await cleanupCurrentPreviewVariantSession();
     router.replace(`/personalize/${bookID}`);
     setFormStep('REVIEW');
     startForm();
-  }, [bookID, cleanupCurrentPreviewVariantSession, persistDraftForCustomizeReturn, router, startForm]);
+  }, [bookID, persistDraftForCustomizeReturn, router, startForm]);
 
   const leaveUnavailablePreview = useCallback(() => {
     cancelPreviewWatch(displayedPreviewJobId);
@@ -1899,24 +1688,20 @@ export default function PersonalizePage({
   const navigateAwayFromPreview = useCallback(async (href: string) => {
     if (stage === 'GENERATING') {
       await requestPreviewCancellation();
-    } else if (viewState.showPreview) {
-      await cleanupCurrentPreviewVariantSession();
     }
     if (isBrowserTranslated()) {
       window.location.assign(href);
       return;
     }
     router.push(href);
-  }, [cleanupCurrentPreviewVariantSession, requestPreviewCancellation, router, stage, viewState.showPreview]);
+  }, [requestPreviewCancellation, router, stage]);
 
   const logoutFromPreview = useCallback(async () => {
     if (stage === 'GENERATING') {
       await requestPreviewCancellation();
-    } else if (viewState.showPreview) {
-      await cleanupCurrentPreviewVariantSession();
     }
     logout();
-  }, [cleanupCurrentPreviewVariantSession, logout, requestPreviewCancellation, stage, viewState.showPreview]);
+  }, [logout, requestPreviewCancellation, stage]);
 
   const ensurePremiumVoiceSample = useCallback(() => {
     if (!requiresVoiceSample) {
@@ -2222,163 +2007,6 @@ export default function PersonalizePage({
     }
   }, [resolveEditionError, saveEditionConfiguration, t]);
 
-  const handleDiscardPreviewVariant = useCallback(async (jobId: string) => {
-    const variant = previewVariantsRef.current.find((item) => item.jobId === jobId);
-    const variantSessionId = previewVariantSessionIdRef.current;
-    if (!variant || variant.original || !creationId || !variantSessionId) return;
-
-    cancelPreviewWatch(jobId);
-    setDiscardingPreviewVariantIds((current) => new Set(current).add(jobId));
-    setPreviewVariantError(null);
-    try {
-      await discardPreviewVariant({ creationId, jobId, variantSessionId });
-
-      if (selectedPreviewJobId === jobId) {
-        const fallback = previewVariantsRef.current.find(
-          (item) => item.jobId !== jobId && item.original && item.status === 'ready'
-        ) ?? previewVariantsRef.current.find(
-          (item) => item.jobId !== jobId && item.status === 'ready'
-        );
-        if (fallback) applyPreviewVariantSelection(fallback);
-      }
-
-      setPreviewVariants((current) => current.filter((item) => item.jobId !== jobId));
-      if (variant.countsTowardLimit) {
-        setPreviewVariantSessionCount((count) => Math.max(0, count - 1));
-      }
-      if (variant.photoPreviewUrl && previewVariantPhotoUrlsRef.current.has(variant.photoPreviewUrl)) {
-        previewVariantPhotoUrlsRef.current.delete(variant.photoPreviewUrl);
-        URL.revokeObjectURL(variant.photoPreviewUrl);
-      }
-    } catch (error) {
-      if (error instanceof PreviewVariantRequestError) {
-        if (error.code === 'committed_preview' || error.code === 'creation_photo_locked') {
-          setIsPreviewPhotoLocked(true);
-        }
-      }
-      setPreviewVariantError(
-        error instanceof Error ? error.message : t('personalize.previewVariantDiscardFailed')
-      );
-    } finally {
-      setDiscardingPreviewVariantIds((current) => {
-        const next = new Set(current);
-        next.delete(jobId);
-        return next;
-      });
-    }
-  }, [applyPreviewVariantSelection, cancelPreviewWatch, creationId, selectedPreviewJobId, setPreviewVariants, t]);
-
-  const commitSelectedPreviewForExit = useCallback(async (ensuredCreationId: string) => {
-    const expectedPreviewJobId = previewJobId;
-    const selectedJobId = selectedPreviewJobId ?? expectedPreviewJobId;
-    if (!expectedPreviewJobId || !selectedJobId) {
-      throw new Error('Preview selection is unavailable');
-    }
-
-    const variantSessionId = previewVariantSessionIdRef.current;
-    const committedSelection = committedPreviewSelectionRef.current;
-    if (
-      committedSelection?.creationId === ensuredCreationId &&
-      committedSelection.selectedPreviewJobId === selectedJobId
-    ) {
-      return committedSelection.activePreviewJobId;
-    }
-
-    const commitKey = [
-      ensuredCreationId,
-      expectedPreviewJobId,
-      selectedJobId,
-      variantSessionId ?? '',
-    ].join(':');
-    const currentCommit = previewCommitInFlightRef.current;
-    const commitPromise = currentCommit?.key === commitKey
-      ? currentCommit.promise
-      : commitPreviewVariant({
-          creationId: ensuredCreationId,
-          expectedPreviewJobId,
-          selectedPreviewJobId: selectedJobId,
-          variantSessionId,
-        });
-
-    if (currentCommit?.key !== commitKey) {
-      previewCommitInFlightRef.current = { key: commitKey, promise: commitPromise };
-    }
-
-    try {
-      const result = await commitPromise;
-      const settledSelection = committedPreviewSelectionRef.current;
-      if (
-        settledSelection?.creationId === ensuredCreationId &&
-        settledSelection.selectedPreviewJobId === selectedJobId
-      ) {
-        return settledSelection.activePreviewJobId;
-      }
-
-      committedPreviewSelectionRef.current = {
-        creationId: ensuredCreationId,
-        selectedPreviewJobId: selectedJobId,
-        activePreviewJobId: result.activePreviewJobId,
-      };
-
-      setPreviewJobId(result.activePreviewJobId);
-      selectPreviewJobId(result.activePreviewJobId);
-      setIsPreviewPhotoLocked(true);
-      setPreviewVariantSessionCount(0);
-      const selectedVariant = previewVariantsRef.current.find(
-        (variant) => variant.jobId === result.activePreviewJobId
-      );
-      previewVariantsRef.current.forEach((variant) => {
-        if (
-          variant.jobId !== result.activePreviewJobId &&
-          variant.photoPreviewUrl &&
-          previewVariantPhotoUrlsRef.current.has(variant.photoPreviewUrl)
-        ) {
-          previewVariantPhotoUrlsRef.current.delete(variant.photoPreviewUrl);
-          URL.revokeObjectURL(variant.photoPreviewUrl);
-        }
-      });
-      if (selectedVariant) {
-        setPreviewVariants([
-          { ...selectedVariant, original: true, countsTowardLimit: false },
-        ]);
-      }
-
-      if (variantSessionId) {
-        forgetPreviewVariantSession(ensuredCreationId, variantSessionId);
-        previewVariantSessionIdRef.current = null;
-      }
-      setPreviewShareUrl(null);
-      setPreviewPublicShareImageUrl(null);
-      setIsShareDialogOpen(false);
-      setShareError(null);
-      replacePreviewUrl(ensuredCreationId, result.activePreviewJobId);
-
-      if (typeof window !== 'undefined') {
-        try {
-          window.sessionStorage.removeItem(`ymi_creation_${ensuredCreationId}`);
-          window.sessionStorage.setItem(
-            `ymi_preview_${ensuredCreationId}`,
-            JSON.stringify({
-              coverUrl: selectedVariant?.coverUrl ?? previewUrl ?? previewPages[0] ?? null,
-              jobId: result.activePreviewJobId,
-            })
-          );
-        } catch {
-          // Cache refresh is optional after the database commit succeeds.
-        }
-      }
-
-      void refreshPreviewImages('commit', { force: true });
-
-      return result.activePreviewJobId;
-    } finally {
-      if (previewCommitInFlightRef.current?.promise === commitPromise) {
-        previewCommitInFlightRef.current = null;
-      }
-    }
-  }, [previewJobId, previewPages, previewUrl, refreshPreviewImages, replacePreviewUrl, selectPreviewJobId, selectedPreviewJobId, setPreviewJobId, setPreviewVariants]);
-
-
   const performAddToCart = useCallback(async () => {
     if (!canAddToCart) return null
     if (!resolvedBook) return null
@@ -2390,8 +2018,10 @@ export default function PersonalizePage({
     const parsedAge = Number.parseInt(currentAge, 10)
 
     const ensuredCreationId = purchaseConfiguration.creationId
-
-    const committedPreviewJobId = await commitSelectedPreviewForExit(ensuredCreationId)
+    const currentPreviewJobId = purchaseConfiguration.previewJobId
+    if (!isUuid(ensuredCreationId) || !isUuid(currentPreviewJobId)) {
+      throw new Error('Preview purchase identity is unavailable')
+    }
 
     const item = await addToCart(
         resolvedBook!,
@@ -2412,7 +2042,7 @@ export default function PersonalizePage({
         },
         voiceAssetId: voiceAssetId ?? undefined,
         voiceStoragePath: voiceStoragePath ?? undefined,
-        previewJobId: committedPreviewJobId,
+        previewJobId: currentPreviewJobId,
         creationId: ensuredCreationId ?? undefined,
         },
         savedStep,
@@ -2428,7 +2058,7 @@ export default function PersonalizePage({
     }
 
     return item ?? null;
-    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewPages, previewUrl, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit]);
+    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewPages, previewUrl, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration]);
 
   const startAddToCart = useCallback(() => {
     const promise = performAddToCart()
@@ -2471,7 +2101,10 @@ export default function PersonalizePage({
     const currentAge = ageRef.current
     const parsedAge = Number.parseInt(currentAge, 10)
     const ensuredCreationId = purchaseConfiguration.creationId
-            const committedPreviewJobId = await commitSelectedPreviewForExit(ensuredCreationId)
+            const currentPreviewJobId = purchaseConfiguration.previewJobId
+            if (!isUuid(ensuredCreationId) || !isUuid(currentPreviewJobId)) {
+              throw new Error('Preview purchase identity is unavailable')
+            }
             const personalization = {
               childName: currentName,
               childAge: currentAge,
@@ -2489,7 +2122,7 @@ export default function PersonalizePage({
               },
               voiceAssetId: voiceAssetId ?? undefined,
               voiceStoragePath: voiceStoragePath ?? undefined,
-              previewJobId: committedPreviewJobId,
+              previewJobId: currentPreviewJobId,
               creationId: ensuredCreationId ?? undefined,
             }
 
@@ -2574,25 +2207,12 @@ export default function PersonalizePage({
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, savedStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, commitSelectedPreviewForExit, previewPages, previewUrl]);
+    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, savedStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, previewPages, previewUrl]);
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;
     if (previewActionInFlightRef.current === 'CHECKOUT') return;
     if (!ensurePremiumVoiceSample()) return;
-    if (!isPreviewPhotoLocked) {
-      setShowAddToCartConfirm(true);
-      return;
-    }
-    triggerFlyToCart();
-    if (!addToCartPromiseRef.current) {
-      void startAddToCart();
-    }
-  };
-
-  const handleConfirmAddToCart = () => {
-    setShowAddToCartConfirm(false);
-    if (!canAddToCart || isExiting) return;
     triggerFlyToCart();
     if (!addToCartPromiseRef.current) {
       void startAddToCart();
@@ -2603,7 +2223,6 @@ export default function PersonalizePage({
     if (isExiting) return;
     if (previewActionInFlightRef.current) return;
     if (!ensurePremiumVoiceSample()) return;
-    setShowAddToCartConfirm(false);
     previewActionInFlightRef.current = 'CHECKOUT';
     setPreviewActionPending('CHECKOUT');
     setCheckoutTransitionPhase('preparing');
@@ -2788,17 +2407,6 @@ export default function PersonalizePage({
           setPreviewVariantSessionCount(PREVIEW_VARIANT_SESSION_CAP);
           return t('personalize.previewVariantLimit');
         }
-        if (error.code === 'preview_variant_in_flight') {
-          return t('personalize.previewVariantInFlight');
-        }
-        if (
-          error.code === 'creation_photo_committed' ||
-          error.code === 'creation_cart_locked' ||
-          error.code === 'creation_purchase_locked'
-        ) {
-          setIsPreviewPhotoLocked(true);
-          return t('personalize.previewPhotoLocked');
-        }
       }
       return error instanceof Error ? error.message : t('personalize.previewVariantFailed');
     }, [t]);
@@ -2808,7 +2416,9 @@ export default function PersonalizePage({
       preparedFile: File,
       preparedPhotoUrl: string
     ) => {
-      if (!creationId || !previewJobId || previewVariantGenerationRef.current) return;
+      const sourceCreationId = creationIdRef.current ?? creationId;
+      const sourcePreviewJobId = previewJobIdRef.current ?? previewJobId;
+      if (!sourceCreationId || !sourcePreviewJobId || previewVariantGenerationRef.current) return;
       if (previewVariantSessionCount >= PREVIEW_VARIANT_SESSION_CAP) {
         setPreviewVariantError(t('personalize.previewVariantLimit'));
         return;
@@ -2837,8 +2447,9 @@ export default function PersonalizePage({
           throw new Error('Pending face upload missing upload metadata');
         }
 
-        const created = await createPreviewVariant({
-          creationId,
+        const created = await createPreviewVersion({
+          creationId: sourceCreationId,
+          expectedPreviewJobId: sourcePreviewJobId,
           variantSessionId,
           requestId,
           pendingFaceAsset,
@@ -2857,47 +2468,64 @@ export default function PersonalizePage({
           faceAssetId: pendingFaceAsset.asset_id,
           faceStoragePath: pendingFaceAsset.storage_path,
           faceImageUrl: preparedPhotoUrl,
-          original: false,
+          original: true,
           countsTowardLimit: true,
         };
-        setPreviewVariants((current) => {
-          const existingIndex = current.findIndex((item) => item.jobId === candidate.jobId);
-          if (existingIndex < 0) return [...current, candidate];
-          return current.map((item) => item.jobId === candidate.jobId ? candidate : item);
-        });
+
+        creationIdRef.current = created.creationId;
+        previewJobIdRef.current = created.jobId;
+        selectedPreviewCreationIdRef.current = created.creationId;
+        selectPreviewJobId(created.jobId);
+        cancelPreviewWatch(sourcePreviewJobId);
+        setCreationId(created.creationId);
+        setPreviewJobId(created.jobId);
+        setPreviewPages([]);
+        setPreviewBookPresentation(null);
+        setPreviewUrl(null);
+        setPreviewImageErrors(() => new Set());
+        setCurrentSpread(0);
+        setIsFlipping(false);
+        setFlipDirection(null);
+        setPhoto(null);
+        setPreparedFaceFile(null);
+        setFacePrepareStatus('ready');
+        setFacePrepareError(null);
+        setFaceAutoCropped(false);
+        setPhotoPreview(preparedPhotoUrl);
+        setPhotoAssetId(pendingFaceAsset.asset_id);
+        setPhotoStoragePath(pendingFaceAsset.storage_path);
+        setFaceImageUrl(preparedPhotoUrl);
+        setPreviewVariants([candidate]);
+        setPreviewShareUrl(null);
+        setPreviewPublicShareImageUrl(null);
+        setIsShareDialogOpen(false);
+        setShareError(null);
+        setPreviewError(null);
+        setGenerationStartedAt(Date.now());
+        replacePreviewUrl(created.creationId, created.jobId);
+        try {
+          window.sessionStorage.removeItem(`ymi_creation_${created.creationId}`);
+          window.sessionStorage.removeItem(`ymi_preview_${created.creationId}`);
+        } catch {
+          // The durable database identities remain authoritative without browser cache.
+        }
 
         const outcome = await watchPreviewJob(created.jobId, { until: 'cover' });
         if (outcome.status === 'cancelled' || !outcome.assets?.coverUrl) {
           setPreviewVariants((current) => current.map((item) =>
             item.jobId === created.jobId
-              ? { ...item, status: 'failed', countsTowardLimit: false }
+              ? { ...item, status: 'failed' }
               : item
           ));
-          setPreviewVariantSessionCount((count) => Math.max(0, count - 1));
           return;
         }
-
-        await waitForImageDecode(outcome.assets.coverUrl);
-        const readyVariant: PreviewVariantView = {
-          ...candidate,
-          status: 'ready',
-          pages: outcome.assets.urls,
-          presentation: outcome.assets.presentation,
-          coverUrl: outcome.assets.coverUrl,
-        };
-        setPreviewVariants((current) => current.map((item) =>
-          item.jobId === created.jobId ? readyVariant : item
-        ));
-        applyPreviewVariantSelection(readyVariant);
-        return;
       } catch (error) {
         if (insertedJobId) {
           setPreviewVariants((current) => current.map((item) =>
             item.jobId === insertedJobId
-              ? { ...item, status: 'failed', countsTowardLimit: false }
+              ? { ...item, status: 'failed' }
               : item
           ));
-          setPreviewVariantSessionCount((count) => Math.max(0, count - 1));
         } else {
           previewVariantPhotoUrlsRef.current.delete(preparedPhotoUrl);
           URL.revokeObjectURL(preparedPhotoUrl);
@@ -2908,13 +2536,26 @@ export default function PersonalizePage({
         previewVariantGenerationRef.current = false;
       }
     }, [
-      applyPreviewVariantSelection,
+      cancelPreviewWatch,
       creationId,
       watchPreviewJob,
       ensurePreviewVariantSession,
       previewJobId,
       previewVariantSessionCount,
+      replacePreviewUrl,
       resolvePreviewVariantError,
+      selectPreviewJobId,
+      setCreationId,
+      setFaceImageUrl,
+      setPhoto,
+      setPhotoAssetId,
+      setPhotoPreview,
+      setPhotoStoragePath,
+      setPreviewBookPresentation,
+      setPreviewError,
+      setPreviewJobId,
+      setPreviewPages,
+      setPreviewUrl,
       setPreviewVariants,
       t,
       user?.customerId,
@@ -2929,7 +2570,7 @@ export default function PersonalizePage({
       facePrepareRunIdRef.current = nextRunId;
 
       if (viewState.showPreview) {
-        if (isPreviewPhotoLocked || isPreviewVariantBusy || isPreviewVariantLimitReached) return;
+        if (isPreviewVariantBusy || isPreviewVariantLimitReached) return;
         setPreviewVariantError(null);
         setPreviewVariantPrepareStatus('checking');
         void (async () => {
@@ -3201,7 +2842,6 @@ export default function PersonalizePage({
         toastMessage={pageToastMessage}
         showExitConfirm={showExitConfirm}
         showAgeRangeConfirm={showAgeRangeConfirm}
-        showAddToCartConfirm={showAddToCartConfirm}
         checkoutTransitionPhase={checkoutTransitionPhase}
         checkoutTransitionLabels={{
           preparing: t('personalize.checkoutTransitionPreparing'),
@@ -3224,19 +2864,10 @@ export default function PersonalizePage({
           continueAnyway: t('personalize.ageRangeContinueAnyway'),
           close: t('common.close'),
         }}
-        addToCartConfirmLabels={{
-          title: t('personalize.addToCartConfirmTitle'),
-          body: t('personalize.addToCartConfirmBody'),
-          cancel: t('personalize.addToCartConfirmCancel'),
-          confirm: t('personalize.addToCartConfirmContinue'),
-          close: t('common.close'),
-        }}
         onStay={dismissExitConfirm}
         onBackToCustomize={() => void returnToCustomizeFromPreview()}
         onCloseAgeRangeConfirm={handleCloseAgeRangeConfirm}
         onContinueAgeRangeConfirm={handleContinueAgeRangeConfirm}
-        onCloseAddToCartConfirm={() => setShowAddToCartConfirm(false)}
-        onConfirmAddToCart={handleConfirmAddToCart}
       />
 
       <PersonalizeHeader
@@ -3465,7 +3096,7 @@ export default function PersonalizePage({
                         : null}
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
-                      showChangePhoto={!isPreviewPhotoLocked && !isPreviewCoverPending}
+                      showChangePhoto={!isPreviewCoverPending}
                       changePhotoDisabled={isPreviewVariantBusy || isPreviewVariantLimitReached}
                       changePhotoBusy={isPreviewVariantBusy}
                       changePhotoError={previewVariantError}
@@ -3528,33 +3159,6 @@ export default function PersonalizePage({
                       faceStyle={faceStyle}
                       renderPageContent={renderPageContent}
                     />
-                  }
-                  gallery={
-                    !isPreviewPhotoLocked && !isPreviewCoverPending ? (
-                      <PreviewVariantGallery
-                        items={previewVariants.map((variant) => ({
-                          jobId: variant.jobId,
-                          thumbnailUrl: variant.coverUrl || variant.photoPreviewUrl,
-                          status: variant.status,
-                          selected: variant.jobId === selectedPreviewJobId,
-                          original: variant.original,
-                          removing: discardingPreviewVariantIds.has(variant.jobId),
-                        }))}
-                        atLimit={isPreviewVariantLimitReached}
-                        labels={{
-                          title: t('personalize.previewVariantsTitle'),
-                          original: t('personalize.previewVariantOriginal'),
-                          version: (number) => t('personalize.previewVariantNumber', { number }),
-                          selected: t('personalize.previewVariantSelected'),
-                          generating: t('personalize.previewVariantGenerating'),
-                          failed: t('personalize.previewVariantFailedShort'),
-                          remove: t('personalize.previewVariantRemove'),
-                          limit: t('personalize.previewVariantLimit'),
-                        }}
-                        onSelect={handleSelectPreviewVariant}
-                        onRemove={(jobId) => void handleDiscardPreviewVariant(jobId)}
-                      />
-                    ) : null
                   }
                   purchase={
                     <PreviewPurchasePanel

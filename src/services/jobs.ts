@@ -40,6 +40,24 @@ export type CreatePreviewVariantResult = {
   sessionVariantCap: number
 }
 
+export type CreatePreviewVersionInput = {
+  creationId: string
+  expectedPreviewJobId: string
+  variantSessionId: string
+  requestId: string
+  faceAssetId?: string | null
+  pendingFaceAsset?: PendingUserAssetUpload
+}
+
+export type CreatePreviewVersionResult = {
+  jobId: string
+  creationId: string
+  variantSessionId: string
+  reused: boolean
+  sessionVariantCount: number
+  sessionVariantCap: number
+}
+
 export type CreatePreviewVoiceBinding = {
   assetId: string
 }
@@ -223,6 +241,56 @@ export async function createPreviewVariant(
     creationId: data.creationId,
     variantSessionId: String(data.variantSessionId || input.variantSessionId),
     status: data.status as JobRecord['status'],
+    reused: Boolean(data.reused),
+    sessionVariantCount: Number(data.sessionVariantCount || 0),
+    sessionVariantCap: Number(data.sessionVariantCap || 0),
+  }
+}
+
+export async function createPreviewVersion(
+  input: CreatePreviewVersionInput
+): Promise<CreatePreviewVersionResult> {
+  if (!isUuid(input.creationId)) throw new Error('Invalid creationId')
+  if (!isUuid(input.expectedPreviewJobId)) throw new Error('Invalid expectedPreviewJobId')
+  if (!isUuid(input.variantSessionId)) throw new Error('Invalid variantSessionId')
+  if (!isUuid(input.requestId)) throw new Error('Invalid requestId')
+  if (!input.pendingFaceAsset && !isUuid(input.faceAssetId)) {
+    throw new Error('A face asset is required')
+  }
+
+  const response = await fetch(
+    `/api/creations/${encodeURIComponent(input.creationId)}/preview-versions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        expected_preview_job_id: input.expectedPreviewJobId,
+        variant_session_id: input.variantSessionId,
+        request_id: input.requestId,
+        face_asset_id: input.faceAssetId ?? null,
+        pending_face_asset: input.pendingFaceAsset ?? null,
+      }),
+    }
+  )
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new PreviewVariantRequestError(
+      data?.error || 'Failed to create preview version',
+      response.status,
+      data?.code
+    )
+  }
+
+  if (!isUuid(data?.jobId) || !isUuid(data?.creationId)) {
+    throw new Error('Preview version response is invalid')
+  }
+
+  return {
+    jobId: data.jobId,
+    creationId: data.creationId,
+    variantSessionId: String(data.variantSessionId || input.variantSessionId),
     reused: Boolean(data.reused),
     sessionVariantCount: Number(data.sessionVariantCount || 0),
     sessionVariantCap: Number(data.sessionVariantCap || 0),
