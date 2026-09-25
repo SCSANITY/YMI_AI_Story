@@ -27,8 +27,7 @@ import { templateRowToBook, templateStorageUrl } from '@/lib/book-catalog'
 import { useDedicationChoices } from '@/lib/use-dedication-choices'
 
 const resolveCover = (row: CreationItem) => {
-  const raw = row.preview_cover_url || row.templates?.normalized_cover_image_path || row.templates?.cover_image_path || ''
-  return templateStorageUrl(raw)
+  return row.preview_cover_url ? templateStorageUrl(row.preview_cover_url) : null
 }
 
 const resolveTemplatePackagePrice = (item: CreationItem): BookPackagePrice | null => {
@@ -215,7 +214,7 @@ export default function MyBooksPage() {
       price: packagePrice?.effectivePriceUsd ?? 0,
       compareAtPrice: packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd,
       discountPercent: packagePrice?.discountPercent ?? null,
-      coverUrl,
+      coverUrl: coverUrl ?? catalogBook.coverUrl,
       showcaseImages: coverUrl ? [coverUrl] : catalogBook.showcaseImages,
       isDiscount: packagePrice?.salePriceUsd !== null && Boolean(packagePrice),
     } : {
@@ -225,7 +224,9 @@ export default function MyBooksPage() {
       price: packagePrice?.effectivePriceUsd ?? 0,
       compareAtPrice: packagePrice?.salePriceUsd === null || !packagePrice ? null : packagePrice.listPriceUsd,
       discountPercent: packagePrice?.discountPercent ?? null,
-      coverUrl,
+      coverUrl: coverUrl ?? templateStorageUrl(
+        item.templates?.normalized_cover_image_path || item.templates?.cover_image_path || ''
+      ),
       showcaseImages: coverUrl ? [coverUrl] : [],
       description: item.templates?.description || '',
       category: item.templates?.story_type || 'Story',
@@ -235,7 +236,7 @@ export default function MyBooksPage() {
     }
     const personalization = toPersonalization(item)
     try {
-      const cartItem = await addToCart(book, personalization, 3, undefined, coverUrl)
+      const cartItem = await addToCart(book, personalization, 3, undefined, coverUrl ?? undefined)
       setNotice(cartItem
         ? { tone: 'success', message: t('myBooks.addedToCart'), showCartAction: true }
         : { tone: 'error', message: t('myBooks.addToCartFailed') })

@@ -6,7 +6,7 @@ import test from 'node:test'
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
 
-test('pending Preview uses one 70-second estimate and only real decoded assets unlock the cover', () => {
+test('pending Preview uses one 70-second estimate while durable identity unlocks purchase configuration', () => {
   const page = read('components/PersonalizePage.tsx')
   const helper = read('components/personalize/preview-generation-estimate.ts')
   const cover = read('components/personalize/PreviewGeneratingCover.tsx')
@@ -19,14 +19,21 @@ test('pending Preview uses one 70-second estimate and only real decoded assets u
   assert.match(cover, /props\.stillWorking/)
   assert.match(cover, /motion-reduce:transition-none/)
   assert.match(stage, /showPreview: stage === 'PREVIEW' \|\| stage === 'GENERATING'/)
-  assert.match(page, /await waitForImageDecode\(outcome\.assets\.coverUrl\)/)
   assert.match(page, /useDecodedPreviewCover\(displayedPreviewJobId, previewUrl, setPreviewError\)/)
   assert.match(page, /hasReadyPreviewCover = decodedPreviewCover\.isReady/)
   assert.match(page, /isPreviewCoverPending = viewState\.showPreview && !hasReadyPreviewCover/)
   assert.match(page, /bookPresentation=\{visiblePreviewPresentation\}/)
-  assert.match(page, /canAddToCart = stageCanAddToCart && hasReadyPreviewCover && previewCompletionReady && !previewError/)
-  assert.match(page, /canCheckout = stageCanCheckout && hasReadyPreviewCover && previewCompletionReady && !previewError/)
+  assert.match(page, /hasPurchaseIdentity = isUuid\(creationId\) && isUuid\(displayedPreviewJobId\)/)
+  assert.match(page, /hasTerminalPreviewFailure = previewPhase === 'failed'[\s\S]*previewPhase === 'partial_failed'[\s\S]*previewPhase === 'cancelled'/)
+  assert.match(page, /canConfigurePurchase = hasPurchaseIdentity && !hasTerminalPreviewFailure/)
+  assert.match(page, /canAddToCart = stageCanAddToCart && canConfigurePurchase/)
+  assert.match(page, /canCheckout = stageCanCheckout && canConfigurePurchase/)
   assert.match(page, /active: stage === 'PREVIEW'/)
+  const initialGenerationStart = page.indexOf('const created = await createPreviewJob(')
+  const initialGenerationEnd = page.indexOf('} catch (error: unknown) {', initialGenerationStart)
+  const initialGeneration = page.slice(initialGenerationStart, initialGenerationEnd)
+  assert.match(initialGeneration, /setPreviewJobId\(created\.jobId\)[\s\S]*setCreationId\(created\.creationId\)[\s\S]*mode: 'identity-ready'[\s\S]*finishGenerating\(\)/)
+  assert.doesNotMatch(initialGeneration, /watchPreviewJob|waitForImageDecode/)
   assert.doesNotMatch(page, /showLoading|setProgress|setLoadingText|setTimeout\(resolve, 550\)/)
 })
 

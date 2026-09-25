@@ -16,7 +16,7 @@ type MyBooksGridProps = {
   pendingAction: { creationId: string; action: 'add' | 'buy' | 'delete' } | null
   dedicationChoices: Record<string, DedicationChoice>
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string
-  resolveCover: (item: CreationItem) => string
+  resolveCover: (item: CreationItem) => string | null
   resolveTemplatePrice: (item: CreationItem) => number
   resolveTemplateCompareAtPrice: (item: CreationItem) => number | null
   resolveTemplateDiscountPercent: (item: CreationItem) => number | null
@@ -73,6 +73,7 @@ export function MyBooksGrid({
             <BookCardCover
               src={resolveCover(item)}
               alt={title}
+              placeholderLabel={t('myBooks.previewPreparing')}
               loading="lazy"
               decoding="async"
             >

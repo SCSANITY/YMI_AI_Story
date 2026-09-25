@@ -39,7 +39,7 @@ test('W2 retry endpoint is owner scoped, same-identity, failed-only, and preserv
   assert.match(update, /lease_expires_at: null/)
 })
 
-test('W2 provides one accessible double-activation-resistant action and retains complete-only purchase', async () => {
+test('W2 provides one accessible double-activation-resistant action while terminal failure blocks purchase', async () => {
   const [page, controller, header, loading, messages, service] = await Promise.all([
     read('components/PersonalizePage.tsx'),
     read('components/personalize/usePreviewController.ts'),
@@ -58,6 +58,7 @@ test('W2 provides one accessible double-activation-resistant action and retains 
   assert.match(loading, /disabled=\{props\.actionPending\}/)
   assert.match(messages, /Retry remaining pages/)
   assert.match(page, /retryPreview\(creationId\)/)
-  assert.match(page, /const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && previewCompletionReady && !previewError/)
-  assert.match(page, /selectionDisabled=\{!previewCompletionReady \|\| Boolean\(previewError\) \|\| isSavingVoice\}/)
+  assert.match(page, /const hasTerminalPreviewFailure = previewPhase === 'failed'[\s\S]*previewPhase === 'partial_failed'[\s\S]*previewPhase === 'cancelled'/)
+  assert.match(page, /const canAddToCart = stageCanAddToCart && canConfigurePurchase/)
+  assert.match(page, /selectionDisabled=\{!canConfigurePurchase \|\| isSavingVoice\}/)
 })

@@ -421,9 +421,8 @@ export default function PersonalizePage({
     previewVariants,
     setPreviewVariants,
     capacityWaitingByJobId,
-    applyPreviewDisplayAssetsForJob,
     previewAccessState,
-    previewCompletionReady,
+    previewPhase,
     error: previewError,
     isPartialFailure: isPreviewPartialFailure,
     canRetry: canRetryPreview,
@@ -891,8 +890,18 @@ export default function PersonalizePage({
     refreshPreviewImages,
     viewState.showPreview,
   ]);
-  const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && previewCompletionReady && !previewError;
-  const canCheckout = stageCanCheckout && hasReadyPreviewCover && previewCompletionReady && !previewError;
+  const hasPurchaseIdentity = isUuid(creationId) && isUuid(displayedPreviewJobId);
+  const hasTerminalPreviewFailure = previewPhase === 'failed'
+    || previewPhase === 'partial_failed'
+    || previewPhase === 'cancelled';
+  const canConfigurePurchase = hasPurchaseIdentity && !hasTerminalPreviewFailure;
+  const canAddToCart = stageCanAddToCart && canConfigurePurchase;
+  const canCheckout = stageCanCheckout && canConfigurePurchase;
+
+  useEffect(() => {
+    if (!hasReadyPreviewCover || !displayedPreviewJobId) return;
+    trackPreviewReady(displayedPreviewJobId);
+  }, [displayedPreviewJobId, hasReadyPreviewCover, trackPreviewReady]);
 
   // Visual state used by the book animation shell.
   const isClosing = isFlipping && flipDirection === 'prev' && currentSpread === 1;
@@ -1339,8 +1348,6 @@ export default function PersonalizePage({
     previewCancelRequestedRef.current = false;
 
     let isActive = true;
-    let watchedJobId: string | null = null;
-    let watchedCreationId: string | null = null;
     setPreviewError(null);
     setGenerationStartedAt(Date.now());
     editionSelectionRevisionRef.current = 0;
@@ -1439,8 +1446,6 @@ export default function PersonalizePage({
         setVoiceDurationSeconds(null)
         pendingVoiceRecordingRef.current = null
         setPendingVoiceRecording(null)
-        watchedJobId = created.jobId;
-        watchedCreationId = created.creationId;
         if (pendingFaceAsset) {
           photoAssetIdRef.current = pendingFaceAsset.asset_id
           setPhotoAssetId(pendingFaceAsset.asset_id)
@@ -1465,24 +1470,7 @@ export default function PersonalizePage({
         setCreationId(created.creationId)
         replacePreviewUrl(created.creationId, created.jobId);
         if (!isActive) return
-
-        const outcome = await watchPreviewJob(created.jobId, {
-          until: 'cover',
-          onAssets: (jobId, assets) => {
-            if (!isActive) return;
-            if (applyPreviewDisplayAssetsForJob(jobId, assets)) {
-              trackPreviewReady(jobId);
-            }
-          },
-        });
-        if (!isActive) return;
-        if (outcome.status === 'cancelled') throw new Error('This Preview was cancelled. Please try again.');
-        if (!outcome.assets?.coverUrl) throw new Error('Preview cover could not be loaded.');
-
-        replacePreviewUrl(created.creationId, created.jobId);
-        await waitForImageDecode(outcome.assets.coverUrl);
-        logPreviewDebug('finishGenerating', { jobId: created.jobId, mode: 'cover-ready' });
-        if (!isActive) return;
+        logPreviewDebug('finishGenerating', { jobId: created.jobId, mode: 'identity-ready' });
         finishGenerating();
         return;
       } catch (error: unknown) {
@@ -1492,11 +1480,6 @@ export default function PersonalizePage({
         }
         const message = error instanceof Error ? error.message : 'Preview generation failed.'
         setPreviewError(message)
-        if (watchedJobId && watchedCreationId) {
-          replacePreviewUrl(watchedCreationId, watchedJobId)
-          finishGenerating()
-          return
-        }
         replacePersonalizeUrl(null)
         reset()
       } finally {
@@ -1508,11 +1491,10 @@ export default function PersonalizePage({
 
     return () => {
       isActive = false;
-      cancelPreviewWatch(watchedJobId);
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, book, user?.customerId, reset, replacePreviewUrl, replacePersonalizeUrl, t, trackPreviewReady, applyPreviewDisplayAssetsForJob, watchPreviewJob, rememberProfile, refreshPersonalizeHistory]);
+  }, [stage, selectedLang, finishGenerating, book, user?.customerId, reset, replacePreviewUrl, replacePersonalizeUrl, t, rememberProfile, refreshPersonalizeHistory]);
 
   useEffect(() => {
     if (!viewState.showForm || !photoAssetId || photo || photoPreview) return
@@ -3586,13 +3568,13 @@ export default function PersonalizePage({
                       changeVoiceLabel={t('personalize.changeVoice')}
                       privacyCopy={PRIVACY_REASSURANCE_COPY}
                       isSavingEdition={isSavingEdition}
-                      selectionDisabled={!previewCompletionReady || Boolean(previewError) || isSavingVoice}
+                      selectionDisabled={!canConfigurePurchase || isSavingVoice}
                       editionError={editionError}
                       voiceReady={Boolean(voiceAssetId)}
                       voiceDurationSeconds={resolvedVoiceDurationSeconds}
                       onChange={handleEditionChange}
                       onOpenVoice={() => setIsVoiceDialogOpen(true)}
-                      dedication={previewCompletionReady ? <PreviewDedication
+                      dedication={canConfigurePurchase ? <PreviewDedication
                         ref={dedicationRef}
                         creationId={creationId}
                         bookID={bookID}

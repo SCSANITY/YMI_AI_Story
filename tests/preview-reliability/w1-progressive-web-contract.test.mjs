@@ -40,7 +40,7 @@ test('W1 keeps subscriber goals independent and applies assets before terminal f
   assert.match(watch, /PreviewWatchPartialFailureError\([\s\S]*watch\.latestAssets,[\s\S]*job\.retryable[\s\S]*\)/)
 })
 
-test('W1 invariants remain intact while W2 adds Retry on a separate route', async () => {
+test('W1 visual recovery remains intact while purchase configuration is independent from image completion', async () => {
   const [page, header, loading, messages, route, retryRoute, service] = await Promise.all([
     read('components/PersonalizePage.tsx'),
     read('components/personalize/PreviewIntroHeader.tsx'),
@@ -50,17 +50,17 @@ test('W1 invariants remain intact while W2 adds Retry on a separate route', asyn
     read('app/api/jobs/[jobId]/retry/route.ts'),
     read('src/services/jobs.ts'),
   ])
-  const catchStart = page.indexOf('} catch (error: unknown) {')
-  const catchEnd = page.indexOf('} finally {', catchStart)
-  const generationCatch = page.slice(catchStart, catchEnd)
+  const generationStart = page.indexOf('const created = await createPreviewJob(')
+  const generationEnd = page.indexOf('} catch (error: unknown) {', generationStart)
+  const generation = page.slice(generationStart, generationEnd)
 
-  assert.match(generationCatch, /watchedJobId && watchedCreationId[\s\S]*replacePreviewUrl[\s\S]*finishGenerating\(\)/)
-  assert.doesNotMatch(generationCatch, /setPreviewJobId\(null\)|setCreationId\(null\)|setPreviewPages\(\[\]\)/)
+  assert.match(generation, /setPreviewJobId\(created\.jobId\)[\s\S]*setCreationId\(created\.creationId\)[\s\S]*finishGenerating\(\)/)
+  assert.doesNotMatch(generation, /watchPreviewJob|waitForImageDecode/)
   assert.match(header, /data-preview-partial-failure[\s\S]*role="status"[\s\S]*aria-live="polite"/)
   assert.match(page, /statusMessage=\{hasReadyPreviewCover && isRetryingPreview[\s\S]*isPreviewPartialFailure && hasReadyPreviewCover/)
-  assert.match(page, /const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && previewCompletionReady && !previewError/)
-  assert.match(page, /selectionDisabled=\{!previewCompletionReady \|\| Boolean\(previewError\) \|\| isSavingVoice\}/)
-  assert.match(page, /dedication=\{previewCompletionReady \? <PreviewDedication/)
+  assert.match(page, /const canAddToCart = stageCanAddToCart && canConfigurePurchase/)
+  assert.match(page, /selectionDisabled=\{!canConfigurePurchase \|\| isSavingVoice\}/)
+  assert.match(page, /dedication=\{canConfigurePurchase \? <PreviewDedication/)
   assert.match(messages, /Your cover is saved, but this Preview could not finish\. Return to Customize to generate again\./)
   assert.match(loading, /actionLabel/)
   assert.doesNotMatch(page, /generatingCoverRetry/)

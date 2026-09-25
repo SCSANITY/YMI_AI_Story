@@ -1,11 +1,11 @@
 'use client'
 
-import type { CSSProperties, ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import Image from 'next/image'
 import { shouldBypassNextImageOptimization } from '@/lib/storage-images'
 
 type BookCardCoverProps = {
-  src: string
+  src: string | null
   alt: string
   children?: ReactNode
   loading?: 'lazy' | 'eager'
@@ -14,6 +14,7 @@ type BookCardCoverProps = {
   showRipple?: boolean
   coverZoom?: number
   isMuted?: boolean
+  placeholderLabel?: string
 }
 
 const isCutoutImage = (src: string) => /\.(png|webp)($|\?)/i.test(src)
@@ -30,7 +31,21 @@ export function BookCardCover({
   showRipple = true,
   coverZoom,
   isMuted = false,
+  placeholderLabel = 'Preview still creating',
 }: BookCardCoverProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+
+  if (!src || failedSrc === src) {
+    return (
+      <div className="relative z-10 aspect-square overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 via-orange-50 to-stone-100 shadow-[8px_20px_44px_-2px_rgba(0,0,0,0.22),10px_10px_28px_-4px_rgba(0,0,0,0.12)] md:rounded-2xl">
+        <div className="flex h-full w-full items-center justify-center px-6 text-center text-xs font-bold uppercase tracking-[0.08em] text-amber-700/80">
+          {placeholderLabel}
+        </div>
+        {children}
+      </div>
+    )
+  }
+
   const cutout = isCutoutImage(src)
   const unoptimized = shouldBypassNextImageOptimization(src)
   const imageStyle: CSSProperties | undefined = coverZoom ? { transform: `scale(${coverZoom})` } : undefined
@@ -51,6 +66,7 @@ export function BookCardCover({
             fetchPriority={fetchPriority}
             unoptimized={unoptimized}
             style={imageStyle}
+            onError={() => setFailedSrc(src)}
             className={`block h-auto w-full select-none book-cover-img ${isMuted ? 'blur-[1.5px] opacity-65' : ''}`}
           />
           {isMuted ? (
@@ -74,6 +90,7 @@ export function BookCardCover({
         fetchPriority={fetchPriority}
         unoptimized={unoptimized}
         style={imageStyle}
+        onError={() => setFailedSrc(src)}
         className={`h-full w-full object-cover ${isMuted ? 'blur-[1.5px] opacity-65 saturate-75' : ''}`}
       />
       {isMuted ? (

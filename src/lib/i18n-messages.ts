@@ -545,6 +545,7 @@ const en: MessageDictionary = {
   'myBooks.unpurchasedSubtitle': 'Continue previewing, add to cart, or check out your saved creations.',
   'myBooks.unpurchasedTabDescription': 'Stories still in progress',
   'myBooks.previewsEmpty': 'Personalized previews you save will appear on this shelf.',
+  'myBooks.previewPreparing': 'Preview still creating',
   'myBooks.shelfSwitcherLabel': 'Choose a bookshelf',
   'myBooks.readyBadge': 'Ready',
   'myBooks.preparingBadge': 'Preparing',

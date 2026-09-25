@@ -12,7 +12,7 @@ type PurchasedBooksGridProps = {
   gridClass: string
   pendingReaderHref: string | null
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string
-  resolveCover: (item: CreationItem) => string
+  resolveCover: (item: CreationItem) => string | null
   buildReaderHref: (item: CreationItem) => string
   onPrefetchReader: (item: CreationItem) => void
   onOpenReader: (item: CreationItem) => void
@@ -64,6 +64,7 @@ export function PurchasedBooksGrid({
             <BookCardCover
               src={resolveCover(item)}
               alt={displayTitle}
+              placeholderLabel={t('myBooks.previewPreparing')}
               loading="lazy"
               decoding="async"
             >
