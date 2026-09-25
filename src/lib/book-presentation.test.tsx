@@ -109,6 +109,7 @@ describe('physical-book leaf presentation', () => {
       bookType: 'basic' as const,
       previewImageErrors: new Set<string>(),
       bookPresentation: presentation,
+      firstPreviewSpreadReady: true,
       currentSpread: 1,
       isFlipping: false,
       canTurnNext: true,
@@ -200,16 +201,9 @@ describe('physical-book leaf presentation', () => {
     assert.doesNotMatch(html, /data-preview-cover-logo/)
   })
 
-  it('replaces each masked preview1 underlay independently as its generated leaf arrives', () => {
+  it('keeps both first-spread leaves hidden until their generated pair is decoded', () => {
     const generatedPresentation = buildBookPresentation([
       singlePageLeaf('generated-left', 'generated-first-left.webp', 1, 'left'),
-    ], {
-      coverRole: 'preview_cover',
-      interiorRole: 'preview_interior',
-    })
-    const previewFirstSpreadPresentation = buildBookPresentation([
-      singlePageLeaf('underlay-left', 'preview1_L_B.webp', 1, 'left'),
-      singlePageLeaf('underlay-right', 'preview1_R_A.webp', 1, 'right'),
     ], {
       coverRole: 'preview_cover',
       interiorRole: 'preview_interior',
@@ -219,7 +213,49 @@ describe('physical-book leaf presentation', () => {
       bookType: 'basic' as const,
       previewImageErrors: new Set<string>(),
       bookPresentation: generatedPresentation,
-      previewFirstSpreadPresentation,
+      firstPreviewSpreadReady: false,
+      currentSpread: 1,
+      isFlipping: false,
+      canTurnNext: true,
+      canTurnPrev: true,
+      resolvedTitle: 'Test book',
+      labels: {
+        previewAlt: 'Preview',
+        previewPageStillCreating: 'Creating this leaf',
+        previewPageLocked: 'Locked preview',
+        backToCover: 'Back to cover',
+        nextPage: 'Next page',
+        previousPage: 'Previous page',
+      },
+      onImageError: () => undefined,
+      onTurnPage: () => undefined,
+      onReturnToCover: () => undefined,
+    }
+    const html = renderToStaticMarkup(
+      <>
+        <PreviewBookPageContent {...commonProps} side="left" />
+        <PreviewBookPageContent {...commonProps} side="right" />
+      </>
+    )
+
+    assert.doesNotMatch(html, /generated-first-left\.webp|preview1_[LR]_[AB]\.webp/)
+    assert.equal((html.match(/Creating this leaf/g) ?? []).length, 2)
+    assert.doesNotMatch(html, /Locked preview/)
+  })
+
+  it('reveals both generated first-spread leaves together after the pair is decoded', () => {
+    const generatedPresentation = buildBookPresentation([
+      singlePageLeaf('generated-left', 'generated-first-left.webp', 1, 'left'),
+      singlePageLeaf('generated-right', 'generated-first-right.webp', 1, 'right'),
+    ], {
+      coverRole: 'preview_cover',
+      interiorRole: 'preview_interior',
+    })
+    const commonProps = {
+      spreadIndex: 1,
+      previewImageErrors: new Set<string>(),
+      bookPresentation: generatedPresentation,
+      firstPreviewSpreadReady: true,
       currentSpread: 1,
       isFlipping: false,
       canTurnNext: true,
@@ -245,20 +281,19 @@ describe('physical-book leaf presentation', () => {
     )
 
     assert.match(html, /generated-first-left\.webp/)
-    assert.doesNotMatch(html, /preview1_L_B\.webp/)
-    assert.match(html, /preview1_R_A\.webp/)
-    assert.equal((html.match(/Creating this leaf/g) ?? []).length, 1)
-    assert.doesNotMatch(html, /Locked preview/)
+    assert.match(html, /generated-first-right\.webp/)
+    assert.doesNotMatch(html, /Creating this leaf|preview1_[LR]_[AB]\.webp/)
+    assert.equal((html.match(/data-preview-page-surface="clear"/g) ?? []).length, 2)
   })
 
-  it('falls back to the creation placeholder when a first-spread underlay is unavailable', () => {
+  it('fails closed to the creation placeholder when the first-spread pair is incomplete', () => {
     const html = renderToStaticMarkup(
       <PreviewBookPageContent
         side="left"
         spreadIndex={1}
         previewImageErrors={new Set<string>()}
         bookPresentation={null}
-        previewFirstSpreadPresentation={null}
+        firstPreviewSpreadReady={false}
         currentSpread={1}
         isFlipping={false}
         canTurnNext={true}

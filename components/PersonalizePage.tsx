@@ -55,16 +55,13 @@ import { PRIVACY_REASSURANCE_COPY } from '@/components/personalize/PrivacyReassu
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
 import { templateStorageUrl, type CatalogBook } from '@/lib/book-catalog';
 import type { CartItem } from '@/types';
-import {
-  buildTemplateLockedPreviewPresentation,
-  buildTemplatePreviewFirstSpreadPresentation,
-  getTemplatePreviewFirstSpreadDisplayUrls,
-} from '@/lib/template-locked-preview';
+import { buildTemplateLockedPreviewPresentation } from '@/lib/template-locked-preview';
 import {
   getPreviewMaxSpreadIndex,
   getPreviewPreloadSpreadIndexes,
   getPreviewSpreadUrls,
 } from '@/lib/preview-book-presentation';
+import { previewImageIdentity } from '@/lib/preview-image-continuity';
 import type { PreviewVariantView } from '@/lib/preview-variant-view';
 import { emitYmiTrackingEvent, resolveTrackingFormat } from '@/lib/tracking-policy';
 import { normalizeStoryLanguage } from '@/lib/story-language';
@@ -452,6 +449,8 @@ export default function PersonalizePage({
   const creationIdRef = useRef<string | null>(null);
   const previewJobIdRef = useRef<string | null>(null);
   const [previewImageErrors, setPreviewImageErrors] = useState<Set<string>>(() => new Set());
+  const [decodedFirstSpreadPairKey, setDecodedFirstSpreadPairKey] = useState<string | null>(null);
+  const firstSpreadDecodeFailureRef = useRef<string | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [previewShareUrl, setPreviewShareUrl] = useState<string | null>(null);
   const [previewPublicShareImageUrl, setPreviewPublicShareImageUrl] = useState<string | null>(null);
@@ -787,10 +786,6 @@ export default function PersonalizePage({
     () => buildTemplateLockedPreviewPresentation(resolvedBook?.lockedPreviewPages),
     [resolvedBook?.lockedPreviewPages],
   );
-  const previewFirstSpreadPresentation = useMemo(
-    () => buildTemplatePreviewFirstSpreadPresentation(resolvedBook?.previewFirstSpreadPages),
-    [resolvedBook?.previewFirstSpreadPages],
-  );
   const magicAttributes = useMemo(
     () => (Array.isArray(resolvedBook?.magicAttributes) ? resolvedBook.magicAttributes.filter((attribute) => attribute.label.trim()) : []),
     [resolvedBook],
@@ -847,6 +842,55 @@ export default function PersonalizePage({
     if (!previewBookPresentation?.cover || !decodedPreviewCover.url) return previewBookPresentation;
     return { ...previewBookPresentation, cover: { ...previewBookPresentation.cover, url: decodedPreviewCover.url } };
   }, [decodedPreviewCover.url, previewBookPresentation]);
+  const firstPreviewSpreadUrls = useMemo(
+    () => getPreviewSpreadUrls(previewDisplayState, 1),
+    [previewDisplayState],
+  );
+  const firstPreviewSpreadLeftUrl = firstPreviewSpreadUrls[0] ?? null;
+  const firstPreviewSpreadRightUrl = firstPreviewSpreadUrls[1] ?? null;
+  const firstPreviewSpreadPairKey = displayedPreviewJobId
+    && firstPreviewSpreadLeftUrl
+    && firstPreviewSpreadRightUrl
+    ? `${displayedPreviewJobId}:${previewImageIdentity(firstPreviewSpreadLeftUrl)}|${previewImageIdentity(firstPreviewSpreadRightUrl)}`
+    : null;
+  const isFirstPreviewSpreadPairReady = Boolean(
+    firstPreviewSpreadPairKey && decodedFirstSpreadPairKey === firstPreviewSpreadPairKey
+  );
+
+  useEffect(() => {
+    if (
+      !viewState.showPreview
+      || !firstPreviewSpreadPairKey
+      || !firstPreviewSpreadLeftUrl
+      || !firstPreviewSpreadRightUrl
+      || isFirstPreviewSpreadPairReady
+    ) return;
+
+    let active = true;
+    void Promise.all([
+      waitForImageDecode(firstPreviewSpreadLeftUrl),
+      waitForImageDecode(firstPreviewSpreadRightUrl),
+    ]).then(() => {
+      if (!active) return;
+      firstSpreadDecodeFailureRef.current = null;
+      setDecodedFirstSpreadPairKey(firstPreviewSpreadPairKey);
+    }).catch(() => {
+      if (!active || firstSpreadDecodeFailureRef.current === firstPreviewSpreadPairKey) return;
+      firstSpreadDecodeFailureRef.current = firstPreviewSpreadPairKey;
+      void refreshPreviewImages('image-error', { force: true });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    firstPreviewSpreadLeftUrl,
+    firstPreviewSpreadPairKey,
+    firstPreviewSpreadRightUrl,
+    isFirstPreviewSpreadPairReady,
+    refreshPreviewImages,
+    viewState.showPreview,
+  ]);
   const canAddToCart = stageCanAddToCart && hasReadyPreviewCover && previewCompletionReady && !previewError;
   const canCheckout = stageCanCheckout && hasReadyPreviewCover && previewCompletionReady && !previewError;
 
@@ -1529,21 +1573,15 @@ export default function PersonalizePage({
   }, []);
 
   const resolvePreviewSpreadImages = useCallback((spreadIndex: number) => {
-    if (spreadIndex === 0) {
+    if (spreadIndex <= 1) {
       return getPreviewSpreadUrls(previewDisplayState, spreadIndex);
-    }
-    if (spreadIndex === 1) {
-      return getTemplatePreviewFirstSpreadDisplayUrls(
-        previewDisplayState.presentation,
-        previewFirstSpreadPresentation,
-      );
     }
     const lockedSpread = lockedPreviewPresentation?.spreads.find(
       (spread) => (spread.displayIndex ?? spread.spreadIndex) === spreadIndex,
     );
     return [lockedSpread?.left?.url, lockedSpread?.right?.url]
       .filter((url): url is string => Boolean(url));
-  }, [lockedPreviewPresentation, previewDisplayState, previewFirstSpreadPresentation]);
+  }, [lockedPreviewPresentation, previewDisplayState]);
 
   useEffect(() => {
     if (!viewState.showPreview) return;
@@ -3026,11 +3064,28 @@ export default function PersonalizePage({
   };
 
   const handlePreviewBookImageError = useCallback((imageUrl: string, options?: { refreshGenerated?: boolean }) => {
+    const failedIdentity = previewImageIdentity(imageUrl);
+    if (
+      firstPreviewSpreadPairKey
+      && (
+        (firstPreviewSpreadLeftUrl && previewImageIdentity(firstPreviewSpreadLeftUrl) === failedIdentity)
+        || (firstPreviewSpreadRightUrl && previewImageIdentity(firstPreviewSpreadRightUrl) === failedIdentity)
+      )
+    ) {
+      firstSpreadDecodeFailureRef.current = firstPreviewSpreadPairKey;
+      setDecodedFirstSpreadPairKey(null);
+    }
     markPreviewImageError(imageUrl);
     if (options?.refreshGenerated) {
       void refreshPreviewImages('image-error', { force: true });
     }
-  }, [markPreviewImageError, refreshPreviewImages]);
+  }, [
+    firstPreviewSpreadLeftUrl,
+    firstPreviewSpreadPairKey,
+    firstPreviewSpreadRightUrl,
+    markPreviewImageError,
+    refreshPreviewImages,
+  ]);
 
   const renderPageContent = (side: 'left' | 'right', spreadIndex: number) => (
     <PreviewBookPageContent
@@ -3038,7 +3093,7 @@ export default function PersonalizePage({
       spreadIndex={spreadIndex}
       previewImageErrors={previewImageErrors}
       bookPresentation={visiblePreviewPresentation}
-      previewFirstSpreadPresentation={previewFirstSpreadPresentation}
+      firstPreviewSpreadReady={isFirstPreviewSpreadPairReady}
       lockedPreviewPresentation={lockedPreviewPresentation}
       currentSpread={currentSpread}
       isFlipping={isFlipping}
