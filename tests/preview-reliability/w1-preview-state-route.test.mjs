@@ -137,6 +137,16 @@ test('failed old-Worker output returns the saved cover in one redacted owned rea
   assert.equal(body.failure_code, 'retryable_generation_failure')
   assert.equal(body.retryable, true)
   assert.equal(body.assets.pages[0].url, 'https://signed.example/preview/job/cover.webp')
+  assert.deepEqual(Object.keys(body).sort(), [
+    'assets',
+    'capacity_state',
+    'failure_code',
+    'job_id',
+    'phase',
+    'progress',
+    'retryable',
+    'status',
+  ])
   assert.equal(calls.filter((call) => call.kind === 'from').length, 1)
   assert.equal(calls.filter((call) => call.kind === 'maybeSingle').length, 1)
   assert.equal(calls.filter((call) => call.kind === 'sign').length, 1)

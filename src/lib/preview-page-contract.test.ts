@@ -77,8 +77,14 @@ describe('structured signed Preview page contract', () => {
   })
 
   it('adds allowlisted page metadata without exposing private Storage paths', () => {
+    const pageWithFuturePrivateFields = {
+      ...pages[1],
+      intermediatePath: 'runtime/providers/openai/attempt/page.png',
+      objectKey: 'private-object-key',
+      provider_runs: { must_not: 'escape' },
+    } as StoredPreviewPage
     const targets = selectPreviewSignTargets({
-      pages,
+      pages: [pageWithFuturePrivateFields],
       pagesParam: '0',
       limitParam: null,
       sizeParam: 'small',
@@ -90,6 +96,18 @@ describe('structured signed Preview page contract', () => {
 
     assert.equal('url' in response, false)
     assert.equal('urls' in response, false)
+    assert.deepEqual(Object.keys(response).sort(), ['asset_layout', 'pages', 'schema_version'])
+    assert.deepEqual(Object.keys(response.pages[0]).sort(), [
+      'asset_size',
+      'output_order',
+      'page_index',
+      'page_number',
+      'preview_order',
+      'role',
+      'side',
+      'spread_index',
+      'url',
+    ])
     assert.deepEqual(response.pages[0], {
       page_index: 0,
       preview_order: 0,

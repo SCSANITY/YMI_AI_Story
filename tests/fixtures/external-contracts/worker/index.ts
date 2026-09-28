@@ -1,6 +1,7 @@
 import { createClient, type RealtimeChannel } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 import http from 'http'
+import { randomUUID } from 'node:crypto'
 import { PDFDocument } from 'pdf-lib'
 import axios from 'axios'
 import { resolveWorkerExecutionMode } from './executionMode'
@@ -33,6 +34,11 @@ import {
   type FinalReviewPageCheckpoint,
 } from './finalReviewRecovery'
 import {
+  PREVIEW_CHECKPOINT_VERSION,
+  buildPreviewRecoveryPlan,
+  createPreviewContractFingerprint,
+} from './previewRecovery'
+import {
   encodePreviewDisplayWebp,
   shouldEncodePreviewDisplayWebp,
   type PreviewDisplayStats,
@@ -44,9 +50,11 @@ import {
   TemplatePage,
 } from './processor'
 import {
+  assertWorkflowProviderAllowedForJob,
   normalizeWorkflowProvider,
   resolveProviderAdapter,
   resolveProviderDeploymentId,
+  resolveWorkflowStageProvider,
   type ProviderRunState,
   type ProviderStageConfig,
   type WorkflowStageKey,
@@ -81,6 +89,34 @@ import {
   validateWorkerStartupEnvironment,
   WORKER_CLAIM_LANE_ORDER,
 } from './workerOrchestration'
+import { mergeProviderRunState } from './runpodRuntime'
+import { isRunPodExecutionError } from './providers/runpodRecovery'
+import { isRetriablePageError } from './pageRetry'
+import {
+  executeOpenAIImageEdit,
+  validateOpenAIInputImage,
+  validateOpenAIImageEditConfig,
+  validateOpenAIOutput,
+} from './providers/openaiAdapter'
+import {
+  OpenAIExecutionError,
+  appendOpenAIDispatchIntent,
+  assertOpenAIFrozenRequestMatches,
+  canonicalJson,
+  createOpenAIConfigDigest,
+  currentOpenAIAttempt,
+  executeOpenAIWithinPageAttemptLoop,
+  imageMetadataMatches,
+  isOpenAIExecutionError,
+  normalizeOpenAIStageRunState,
+  readOpenAIIntermediate,
+  sha256Hex,
+  storeOpenAIIntermediate,
+  updateOpenAIAttempt,
+  type OpenAIAttemptRecord,
+  type OpenAIFrozenRequest,
+  type OpenAIStageRunState,
+} from './openaiRuntime'
 import { logEvent, redactLogText, toSafeError } from './safeLogging'
 
 dotenv.config()
@@ -1529,19 +1565,19 @@ function getPageByIndex(pages: TemplatePage[]): Map<number, TemplatePage> {
   return map
 }
 
-function resolveWorkflowProvider(config: TemplateConfig): WorkflowProviderName {
-  return normalizeWorkflowProvider(config.workflow?.provider)
-}
-
 function resolveStageForPage(args: {
   jobType: JobType
   page: TemplatePage
   config: TemplateConfig
 }): { provider: WorkflowProviderName; stageKey: WorkflowStageKey; stage: ProviderStageConfig } {
   const { jobType, page, config } = args
-  const provider = resolveWorkflowProvider(config)
   const stageKey: WorkflowStageKey = jobType === 'preview' ? 'preview_face' : 'final_face'
   const stage = config.workflow?.stages?.[stageKey]
+  const provider = resolveWorkflowStageProvider({
+    workflowProvider: config.workflow?.provider,
+    stageProvider: stage?.provider,
+  })
+  assertWorkflowProviderAllowedForJob({ provider, jobType })
   if (IS_MOCK_MODE) {
     return { provider, stageKey, stage: stage || {} }
   }
@@ -1706,8 +1742,13 @@ async function preparePageInputs(args: {
       throw new Error(`Template image asset missing: ${templateFileKey || assets.templateImageName || `page ${page.index}`}`)
     }
 
+    const stageConfig = resolveStageForPage({
+      jobType: job.job_type,
+      page,
+      config,
+    })
     let templateUrl: string | undefined
-    if (!pageSubtitleEnabled) {
+    if (!pageSubtitleEnabled && stageConfig.provider === 'runpod') {
       const rawTemplateUrl = supabase.storage.from(APP_TEMPLATES_BUCKET).getPublicUrl(templatePath).data?.publicUrl
       if (!rawTemplateUrl) {
         throw new Error(`Missing public URL for ${templatePath}`)
@@ -1727,11 +1768,6 @@ async function preparePageInputs(args: {
             signTtlSec: inputSignTtlSec,
           })
     }
-    const stageConfig = resolveStageForPage({
-      jobType: job.job_type,
-      page,
-      config,
-    })
     const pageWorkflowOverride = resolvePageWorkflowOverride(page, stageConfig.stageKey)
     const workflowOverrideSummary = summarizeWorkflowOverride(pageWorkflowOverride)
     let workflowJson: Record<string, unknown> | null = null
@@ -1772,18 +1808,6 @@ async function preparePageInputs(args: {
   return prepared
 }
 
-function isRetriablePageError(error: unknown): boolean {
-  const message = String((error as any)?.message || '').toLowerCase()
-  return (
-    message.includes('cannot identify image file') ||
-    message.includes('unsupported workflow image format') ||
-    message.includes('runpod') ||
-    message.includes('result missing output image url') ||
-    message.includes('timeout') ||
-    message.includes('temporarily unavailable')
-  )
-}
-
 function truncateForLog(value: unknown, maxLen: number = 220): string {
   const raw = typeof value === 'string' ? value : JSON.stringify(value)
   if (!raw) return ''
@@ -1798,7 +1822,7 @@ function resolveJobStoryLanguage(job: JobRow): string {
   return 'English'
 }
 
-function normalizeProviderRuns(job: JobRow): Record<string, Record<string, ProviderRunState>> {
+function normalizeProviderRuns(job: JobRow): Record<string, Record<string, any>> {
   const raw = job.provider_runs
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
   return JSON.parse(JSON.stringify(raw))
@@ -1845,7 +1869,7 @@ async function processJob(job: JobRow): Promise<void> {
   // One uncached immutable read binds this process invocation to a single config.
   const config = await loadJobTemplateConfigSnapshot(String(input.config_url))
   const basePath = normalizeBasePath(config.base_path, job.template_id)
-  resolveWorkflowProvider(config)
+  normalizeWorkflowProvider(config.workflow?.provider)
   const hasSinglePageMarker = hasSinglePageTemplateMarker(config)
   const isSinglePageContract = isSinglePageTemplateConfig(config)
   if (job.job_type === 'final' && !hasSinglePageMarker) {
@@ -1900,7 +1924,7 @@ async function processJob(job: JobRow): Promise<void> {
   const attemptSegment = `attempt_${String(attemptNumber).padStart(3, '0')}`
   const outputRoot = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/output`
   const isFinalPageRerun = job.job_type === 'final' && hasFinalPageOverride(input)
-  if (singlePageContract) {
+  if (singlePageContract && job.job_type === 'final') {
     const finalContractPages = buildSinglePageFinalContractOutputPages({
       manifest: singlePageContract.final,
       existingPages: job.output_assets?.pages,
@@ -1909,7 +1933,7 @@ async function processJob(job: JobRow): Promise<void> {
       ...(job.output_assets ?? {}),
       schema_version: singlePageContract.schema_version,
       asset_layout: singlePageContract.asset_layout,
-      ...(job.job_type === 'final' ? { pages: finalContractPages } : {}),
+      pages: finalContractPages,
     }
     await updateOwnedJob(job.job_id, {
       output_assets: contractMarkedOutputAssets,
@@ -1977,17 +2001,40 @@ async function processJob(job: JobRow): Promise<void> {
     checkpoints: finalReviewPageCheckpoints,
     isExplicitPageRerun: isFinalPageRerun,
   })
+  const previewContractFingerprint =
+    job.job_type === 'preview' && singlePageContract
+      ? createPreviewContractFingerprint({
+          jobId: job.job_id,
+          templateId: job.template_id,
+          inputSnapshot: input,
+          manifest: singlePageContract.preview,
+        })
+      : null
+  const previewRecoveryPlan =
+    job.job_type === 'preview' && singlePageContract && previewContractFingerprint
+      ? buildPreviewRecoveryPlan({
+          jobId: job.job_id,
+          manifest: singlePageContract.preview,
+          outputAssets: job.output_assets,
+          expectedFingerprint: previewContractFingerprint,
+        })
+      : {
+          completed: new Map(),
+          remainingPageIndices: pageIndexList,
+          checkpointMode: 'none' as const,
+        }
   const pageIndicesToProcess = finalReviewJob
     ? finalPageRecoveryPlan.remainingPageIndices
-    : pageIndexList
+    : job.job_type === 'preview'
+      ? previewRecoveryPlan.remainingPageIndices
+      : pageIndexList
 
   if (selectedSinglePageManifest) {
     try {
       validateSinglePageJobAssets({
-        manifest:
-          finalReviewJob && !isFinalPageRerun
-            ? selectedSinglePageManifest.filter((entry) => pageIndicesToProcess.includes(entry.page_index))
-            : selectedSinglePageManifest,
+        manifest: selectedSinglePageManifest.filter((entry) =>
+          pageIndicesToProcess.includes(entry.page_index)
+        ),
         availableStorageFiles: templateFileSet,
       })
     } catch (error) {
@@ -2148,11 +2195,21 @@ async function processJob(job: JobRow): Promise<void> {
   const setProviderRunState = async (pageIndex: number, state: ProviderRunState) => {
     const pageKey = String(pageIndex)
     providerRuns[pageKey] ??= {}
-    providerRuns[pageKey][state.stage] = {
-      ...(providerRuns[pageKey][state.stage] ?? {}),
-      ...state,
-      error: state.error ?? null,
-    }
+    providerRuns[pageKey][state.stage] = mergeProviderRunState(
+      providerRuns[pageKey][state.stage],
+      state
+    )
+    await persistProviderRuns()
+  }
+
+  const getOpenAIStageState = (pageIndex: number, stage: WorkflowStageKey): OpenAIStageRunState => {
+    return normalizeOpenAIStageRunState(providerRuns[String(pageIndex)]?.[stage], stage)
+  }
+
+  const setOpenAIStageState = async (pageIndex: number, state: OpenAIStageRunState) => {
+    const pageKey = String(pageIndex)
+    providerRuns[pageKey] ??= {}
+    providerRuns[pageKey][state.stage] = JSON.parse(JSON.stringify(state))
     await persistProviderRuns()
   }
 
@@ -2186,19 +2243,23 @@ async function processJob(job: JobRow): Promise<void> {
     await updateOwnedFinalJob(job.job_id, { status: 'processing' })
   }
 
+  const previewOrderMap = new Map(pageIndexList.map((pageIndex, order) => [pageIndex, order]))
   const outputPages: OutputPage[] = []
   const subtitlePages: SubtitleOutputPage[] = []
   const outputBuffers: { page_index: number; buffer: Buffer }[] = []
-  let completedPages = finalPageRecoveryPlan.completed.size
+  let completedPages = finalPageRecoveryPlan.completed.size + previewRecoveryPlan.completed.size
   const existingOutputAssets = (job.output_assets || {}) as {
     pages?: OutputPage[]
     runtime_manifest_path?: string | null
     subtitle_pages?: SubtitleOutputPage[]
     [key: string]: unknown
   }
+  const allExistingPages = Array.isArray(existingOutputAssets.pages) ? existingOutputAssets.pages : []
   const existingPagesByIndex = new Map<number, OutputPage>()
-  for (const page of Array.isArray(existingOutputAssets.pages) ? existingOutputAssets.pages : []) {
-    existingPagesByIndex.set(page.page_index, page)
+  if (job.job_type !== 'preview') {
+    for (const page of allExistingPages) {
+      existingPagesByIndex.set(page.page_index, page)
+    }
   }
   for (const [pageIndex, checkpoint] of finalPageRecoveryPlan.completed.entries()) {
     const presentation = singlePageManifestByIndex.get(pageIndex)
@@ -2213,6 +2274,24 @@ async function processJob(job: JobRow): Promise<void> {
   if (finalPageRecoveryPlan.completed.size > 0) {
     console.log(
       `[job:${job.job_id}] resumed ${finalPageRecoveryPlan.completed.size}/${pageIndexList.length} durable Final page checkpoint(s)`
+    )
+  }
+  for (const [pageIndex, checkpoint] of previewRecoveryPlan.completed.entries()) {
+    const presentation = singlePageManifestByIndex.get(pageIndex)
+    outputPages.push({
+      page_index: pageIndex,
+      ...(presentation ? toBookPageOutputMetadata(presentation) : {}),
+      preview_order: previewOrderMap.get(pageIndex) ?? 0,
+      storage_path: String(checkpoint.storage_path),
+      storage_path_full: String(checkpoint.storage_path_full),
+      ...(checkpoint.preview_display && typeof checkpoint.preview_display === 'object'
+        ? { preview_display: checkpoint.preview_display as PreviewDisplayStats }
+        : {}),
+    })
+  }
+  if (previewRecoveryPlan.completed.size > 0) {
+    console.log(
+      `[job:${job.job_id}] resumed ${previewRecoveryPlan.completed.size}/${pageIndexList.length} durable Preview page checkpoint(s) mode=${previewRecoveryPlan.checkpointMode}`
     )
   }
   const buildOutputAssets = (): Record<string, unknown> => {
@@ -2243,6 +2322,12 @@ async function processJob(job: JobRow): Promise<void> {
             asset_layout: singlePageContract.asset_layout,
           }
         : {}),
+      ...(job.job_type === 'preview' && previewContractFingerprint
+        ? {
+            preview_checkpoint_version: PREVIEW_CHECKPOINT_VERSION,
+            preview_contract_fingerprint: previewContractFingerprint,
+          }
+        : {}),
       bucket: RAW_BUCKET,
       pages: mergedPages,
       runtime_manifest_path: runtimeManifestPath || existingOutputAssets.runtime_manifest_path || null,
@@ -2250,8 +2335,8 @@ async function processJob(job: JobRow): Promise<void> {
         mergedSubtitlePages.length > 0 ? mergedSubtitlePages : existingOutputAssets.subtitle_pages || [],
     }
   }
-  const persistPreviewPartialOutput = async () => {
-    if (job.job_type !== 'preview' || outputPages.length === 0) return
+  const persistPreviewPartialOutput = async (force = false) => {
+    if (job.job_type !== 'preview' || (!force && outputPages.length === 0)) return
     await updateOwnedJob(job.job_id, {
       output_assets: buildOutputAssets(),
       provider_runs: providerRuns,
@@ -2259,10 +2344,15 @@ async function processJob(job: JobRow): Promise<void> {
       updated_at: new Date().toISOString(),
     })
   }
+  if (job.job_type === 'preview' && allExistingPages.length > 0) {
+    // Replace the durable page set with only checkpoints that passed current
+    // job path, input fingerprint and presentation-contract validation.
+    await persistPreviewPartialOutput(true)
+  }
   const preparedPages = await preparePageInputs({
     job,
     config,
-    pageIndexList,
+    pageIndexList: pageIndicesToProcess,
     pageMap,
     basePath,
     templateFileSet,
@@ -2271,7 +2361,6 @@ async function processJob(job: JobRow): Promise<void> {
     isSinglePageContract,
   })
   const preparedPageMap = new Map(preparedPages.map((item) => [item.pageIndex, item]))
-  const previewOrderMap = new Map(pageIndexList.map((pageIndex, order) => [pageIndex, order]))
   runtimeManifestPath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/manifest.json`
   runtimeManifest = {
     generated_at: new Date().toISOString(),
@@ -2365,6 +2454,13 @@ async function processJob(job: JobRow): Promise<void> {
       throw new Error(`Missing prepared page input for index ${pageIndex}`)
     }
     const { page } = prepared
+    const existingProviderCheckpoint = providerRuns[String(page.index)]?.[prepared.stageKey]
+    const existingProviderName = existingProviderCheckpoint && typeof existingProviderCheckpoint === 'object'
+      ? String(existingProviderCheckpoint.provider || '').trim()
+      : ''
+    if (existingProviderName && existingProviderName !== prepared.provider) {
+      throw new Error(`Provider checkpoint mismatch on page ${page.index}`)
+    }
     const pageStartedAt = Date.now()
     console.log(`[job:${job.job_id}] page ${pageIndex} started`)
     console.log(
@@ -2381,7 +2477,7 @@ async function processJob(job: JobRow): Promise<void> {
     let renderedTemplateBuffer: Buffer | null = null
     const pageTimings: SubtitleRenderTimings = {}
 
-    if (prepared.subtitleEnabled) {
+    if (prepared.subtitleEnabled && prepared.provider !== 'openai') {
       const renderStartedAt = new Date().toISOString()
       await setRenderRunState(page.index, {
         page_index: page.index,
@@ -2508,6 +2604,239 @@ async function processJob(job: JobRow): Promise<void> {
     if (bypassFaceProvider) {
       buffer = renderedTemplateBuffer ?? (await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath))
       console.log(`[job:${job.job_id}] page=${page.index} face provider bypassed by config`)
+    } else if (prepared.provider === 'openai' && IS_MOCK_MODE) {
+      buffer = await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath)
+      console.log(`[job:${job.job_id}] page=${page.index} OpenAI transport bypassed in explicit Mock mode`)
+    } else if (prepared.provider === 'openai' && !IS_MOCK_MODE) {
+      try {
+        const configured = validateOpenAIImageEditConfig(prepared.stage.openai_image_edit)
+        const effectiveConfig = validateOpenAIImageEditConfig({
+          ...configured,
+          prompt: prepared.pageWorkflowOverride?.prompt ?? configured.prompt,
+        })
+        if (
+          prepared.pageWorkflowOverride?.seed !== undefined ||
+          (prepared.pageWorkflowOverride?.static_inputs &&
+            Object.keys(prepared.pageWorkflowOverride.static_inputs).length > 0)
+        ) {
+          throw new OpenAIExecutionError(
+            'openai_preflight_failed',
+            'not_sent',
+            'OpenAI P1 supports only a page-level prompt override'
+          )
+        }
+        const apiKey = String(process.env.OPENAI_API_KEY || '').trim()
+        if (!apiKey) {
+          throw new OpenAIExecutionError(
+            'openai_preflight_failed',
+            'not_sent',
+            'OpenAI API key is missing'
+          )
+        }
+
+        const templateBuffer = await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath)
+        const identityBuffer = await downloadBuffer(RAW_BUCKET, facePath)
+        const sourceIdentity = await validateOpenAIInputImage(templateBuffer)
+        const faceIdentity = await validateOpenAIInputImage(identityBuffer)
+        const effectiveProviderConfig = {
+          provider: 'openai' as const,
+          ...effectiveConfig,
+          ordered_input_roles: ['source_illustration', 'identity_reference'] as const,
+        }
+        const configDigest = createOpenAIConfigDigest(effectiveProviderConfig)
+        const frozenBase = {
+          job_id: job.job_id,
+          creation_id: job.creation_id ?? null,
+          job_type: job.job_type,
+          page_index: page.index,
+          page_role: page.presentation?.role ?? null,
+          source_illustration_identity: `${APP_TEMPLATES_BUCKET}/${prepared.templateStoragePath}`,
+          identity_reference_identity: `${RAW_BUCKET}/${facePath}`,
+          input_fingerprint: sha256Hex(canonicalJson({
+            source: {
+              storage_identity: `${APP_TEMPLATES_BUCKET}/${prepared.templateStoragePath}`,
+              ...sourceIdentity,
+            },
+            identity: {
+              storage_identity: `${RAW_BUCKET}/${facePath}`,
+              ...faceIdentity,
+            },
+            page_index: page.index,
+            stage: prepared.stageKey,
+          })),
+          provider: 'openai' as const,
+          model: effectiveConfig.model,
+          prompt_version: effectiveConfig.prompt_version,
+          prompt_sha256: sha256Hex(effectiveConfig.prompt),
+          ordered_input_roles: ['source_illustration', 'identity_reference'] as const,
+          size: effectiveConfig.size,
+          quality: effectiveConfig.quality,
+          output_format: effectiveConfig.output_format,
+          background: effectiveConfig.background,
+          request_timeout_ms: effectiveConfig.request_timeout_ms,
+          config_digest: configDigest,
+        } satisfies OpenAIFrozenRequest
+
+        const loadStoredIntermediate = (attempt: OpenAIAttemptRecord) => readOpenAIIntermediate({
+          download: () => downloadBuffer(RAW_BUCKET, attempt.intermediate_path),
+          validate: (stored) => validateOpenAIOutput(stored, attempt.frozen.size),
+        })
+
+        const throwStoredIntermediateReadFailure = (
+          kind: 'mismatch' | 'unavailable'
+        ): never => {
+          if (kind === 'unavailable') {
+            throw new OpenAIExecutionError(
+              'openai_intermediate_unavailable',
+              'result_received',
+              'OpenAI durable intermediate is temporarily unavailable; resume without provider resubmission'
+            )
+          }
+          throw new OpenAIExecutionError(
+            'openai_intermediate_mismatch',
+            'result_received',
+            'OpenAI durable intermediate does not match its checkpoint'
+          )
+        }
+
+        const resumeState = getOpenAIStageState(page.index, prepared.stageKey)
+        const resumeAttempt = currentOpenAIAttempt(resumeState)
+        if (resumeAttempt?.request_budget_consumed) {
+          assertOpenAIFrozenRequestMatches(resumeAttempt.frozen, frozenBase)
+          if (resumeAttempt.output && ['result_received', 'intermediate_stored', 'composed'].includes(resumeAttempt.status)) {
+            const stored = await loadStoredIntermediate(resumeAttempt)
+            if (stored.kind === 'unavailable') {
+              throwStoredIntermediateReadFailure('unavailable')
+            }
+            if (stored.kind === 'found' && imageMetadataMatches(stored.metadata, resumeAttempt.output)) {
+              buffer = stored.buffer
+              if (resumeAttempt.status === 'result_received') {
+                const adoptedState = updateOpenAIAttempt(resumeState, resumeAttempt.attempt_id, {
+                  status: 'intermediate_stored',
+                  dispatch_disposition: 'result_received',
+                })
+                await setOpenAIStageState(page.index, adoptedState)
+              }
+            } else {
+              const parkedState = updateOpenAIAttempt(resumeState, resumeAttempt.attempt_id, {
+                status: 'outcome_unknown',
+                error_code: 'openai_intermediate_mismatch',
+              })
+              await setOpenAIStageState(page.index, parkedState)
+              throw new OpenAIExecutionError(
+                'openai_intermediate_mismatch',
+                'outcome_unknown',
+                'OpenAI durable intermediate is absent or does not match its checkpoint'
+              )
+            }
+          } else {
+            if (resumeAttempt.status === 'dispatch_intent') {
+              await setOpenAIStageState(page.index, updateOpenAIAttempt(resumeState, resumeAttempt.attempt_id, {
+                status: 'outcome_unknown',
+                error_code: 'openai_outcome_unknown',
+              }))
+            }
+            throw new OpenAIExecutionError(
+              'openai_request_budget_consumed',
+              resumeAttempt.dispatch_disposition,
+              'OpenAI request budget was already consumed for this Job page'
+            )
+          }
+        } else {
+          buffer = await executeOpenAIWithinPageAttemptLoop({
+            pageMaxAttempts,
+            loadState: () => getOpenAIStageState(page.index, prepared.stageKey),
+            createAndPersistIntent: async (state) => {
+              const attemptId = randomUUID()
+              const intermediatePath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/providers/openai/${attemptId}/page_${padPageIndex(page.index)}.png`
+              const appended = appendOpenAIDispatchIntent({
+                state,
+                frozen: frozenBase,
+                intermediatePath,
+                attemptId,
+              })
+              await setOpenAIStageState(page.index, appended.state)
+              return appended.attempt
+            },
+            dispatch: async (attempt) => {
+              let result: Awaited<ReturnType<typeof executeOpenAIImageEdit>>
+              try {
+                await throwIfCancelled()
+                result = await executeOpenAIImageEdit({
+                  attempt,
+                  config: effectiveConfig,
+                  sourceIllustration: templateBuffer,
+                  identityReference: identityBuffer,
+                  apiKey,
+                })
+              } catch (error) {
+                if (isOpenAIExecutionError(error)) {
+                  const latest = getOpenAIStageState(page.index, prepared.stageKey)
+                  const status = error.disposition === 'conclusively_rejected'
+                    ? 'rejected'
+                    : error.disposition === 'outcome_unknown'
+                      ? 'outcome_unknown'
+                      : 'result_received'
+                  await setOpenAIStageState(page.index, updateOpenAIAttempt(latest, attempt.attempt_id, {
+                    status,
+                    dispatch_disposition: error.disposition,
+                    finished_at: new Date().toISOString(),
+                    provider_request_id: error.details.providerRequestId ?? null,
+                    provider_error_code: error.details.providerErrorCode ?? null,
+                    retry_after: error.details.retryAfter ?? null,
+                    http_status: error.details.httpStatus ?? null,
+                    error_code: error.code,
+                  }))
+                }
+                throw error
+              }
+
+              let latest = getOpenAIStageState(page.index, prepared.stageKey)
+              latest = updateOpenAIAttempt(latest, attempt.attempt_id, {
+                status: 'result_received',
+                dispatch_disposition: 'result_received',
+                provider_request_id: result.providerRequestId,
+                usage: result.usage,
+                calculated_charge_usd: result.calculatedChargeUsd,
+                provider_timing_ms: result.providerTimingMs,
+                output: result.metadata,
+                error_code: null,
+              })
+              await setOpenAIStageState(page.index, latest)
+
+              await storeOpenAIIntermediate({
+                buffer: result.buffer,
+                expected: result.metadata,
+                assertLease: () => assertJobLease(job.job_id),
+                createOnly: async () => {
+                  const { error } = await supabase.storage.from(RAW_BUCKET).upload(
+                    attempt.intermediate_path,
+                    result.buffer,
+                    { contentType: 'image/png', upsert: false }
+                  )
+                  if (error) throw error
+                },
+                readExisting: async () => {
+                  const stored = await loadStoredIntermediate(attempt)
+                  if (stored.kind === 'found') return stored
+                  if (stored.kind === 'absent') return null
+                  return throwStoredIntermediateReadFailure(stored.kind)
+                },
+              })
+
+              latest = getOpenAIStageState(page.index, prepared.stageKey)
+              await setOpenAIStageState(page.index, updateOpenAIAttempt(latest, attempt.attempt_id, {
+                status: 'intermediate_stored',
+                dispatch_disposition: 'result_received',
+              }))
+              return result.buffer
+            },
+          })
+        }
+      } catch (error) {
+        if (error instanceof JobCancelledError || error instanceof JobLeaseLostError) throw error
+        lastPageError = error
+      }
     } else {
       if (!renderedTemplateUrl) {
         throw new Error(`Missing rendered template URL for page ${page.index}`)
@@ -2515,54 +2844,60 @@ async function processJob(job: JobRow): Promise<void> {
 
       for (let attempt = 1; attempt <= pageMaxAttempts; attempt += 1) {
         try {
-        const faceUrl = IS_MOCK_MODE ? `mock://face/${job.job_id}/${page.index}` : await getFaceSignedUrl(false)
-        const providerAdapter = resolveProviderAdapter(prepared.provider)
-        const payload = IS_MOCK_MODE
-          ? {}
-          : providerAdapter.buildPayload({
-              faceUrl,
-              renderedTemplateUrl,
+          const faceUrl = IS_MOCK_MODE
+            ? `mock://face/${job.job_id}/${page.index}`
+            : await getFaceSignedUrl(false)
+          const providerAdapter = resolveProviderAdapter(prepared.provider)
+          const payload = IS_MOCK_MODE
+            ? {}
+            : providerAdapter.buildPayload({
+                faceUrl,
+                renderedTemplateUrl,
+                stageKey: prepared.stageKey,
+                stage: prepared.stage,
+                workflowJson: prepared.workflowJson,
+                pageWorkflowOverride: prepared.pageWorkflowOverride,
+              }).payload
+          const deploymentId = resolveProviderDeploymentId({
+            provider: prepared.provider,
+            stageKey: prepared.stageKey,
+            stage: prepared.stage,
+            isMockMode: IS_MOCK_MODE,
+          })
+          console.log(`[job:${job.job_id}] page=${page.index} deployment=${deploymentId}`)
+
+          if (WORKER_DEBUG_PROMPTS) {
+            console.log(
+              `[job:${job.job_id}] page=${page.index} enable_face_swap=${page.enable_face_swap !== false}`
+            )
+            console.log(
+              `[job:${job.job_id}] page=${page.index} payload.overrides=${truncateForLog(
+                (payload as any)?.overrides
+              )}`
+            )
+          }
+
+          const providerStartedAt = Date.now()
+          const workflowResult = await providerAdapter
+            .execute({
               stageKey: prepared.stageKey,
               stage: prepared.stage,
-              workflowJson: prepared.workflowJson,
+              payload,
+              faceUrl,
+              renderedTemplateUrl,
               pageWorkflowOverride: prepared.pageWorkflowOverride,
-            }).payload
-        const deploymentId = resolveProviderDeploymentId({
-          provider: prepared.provider,
-          stageKey: prepared.stageKey,
-          stage: prepared.stage,
-          isMockMode: IS_MOCK_MODE,
-        })
-        console.log(`[job:${job.job_id}] page=${page.index} deployment=${deploymentId}`)
-
-        if (WORKER_DEBUG_PROMPTS) {
-          console.log(`[job:${job.job_id}] page=${page.index} enable_face_swap=${page.enable_face_swap !== false}`)
-          console.log(
-            `[job:${job.job_id}] page=${page.index} payload.overrides=${truncateForLog(
-              (payload as any)?.overrides
-            )}`
-          )
-        }
-
-        const providerStartedAt = Date.now()
-        const workflowResult = await providerAdapter.execute({
-          stageKey: prepared.stageKey,
-          stage: prepared.stage,
-          payload,
-          faceUrl,
-          renderedTemplateUrl,
-          pageWorkflowOverride: prepared.pageWorkflowOverride,
-          mockResultBuffer: renderedTemplateBuffer,
-          throwIfCancelled,
-          pollTimeoutMs: pagePollTimeoutMs,
-          pollIntervalMs: pagePollIntervalMs,
-          resumeProviderRun: providerRuns[String(page.index)]?.[prepared.stageKey] ?? null,
-          onProviderEvent: async (state) => setProviderRunState(page.index, state),
-        }).finally(() => {
-          pageTimings.provider_handoff_ms = Date.now() - providerStartedAt
-        })
-        buffer = workflowResult.buffer
-        break
+              mockResultBuffer: renderedTemplateBuffer,
+              throwIfCancelled,
+              pollTimeoutMs: pagePollTimeoutMs,
+              pollIntervalMs: pagePollIntervalMs,
+              resumeProviderRun: providerRuns[String(page.index)]?.[prepared.stageKey] ?? null,
+              onProviderEvent: async (state) => setProviderRunState(page.index, state),
+            })
+            .finally(() => {
+              pageTimings.provider_handoff_ms = Date.now() - providerStartedAt
+            })
+          buffer = workflowResult.buffer
+          break
         } catch (error) {
           if (error instanceof JobCancelledError || error instanceof JobLeaseLostError) {
             throw error
@@ -2582,11 +2917,84 @@ async function processJob(job: JobRow): Promise<void> {
       }
     }
 
+    if (buffer && prepared.subtitleEnabled && prepared.provider === 'openai') {
+      const renderStartedAt = new Date().toISOString()
+      await setRenderRunState(page.index, {
+        page_index: page.index,
+        status: 'RENDERING',
+        started_at: renderStartedAt,
+        template_image: prepared.templateImageName,
+        subtitle_template_path: subtitleContext?.storagePath || null,
+        rendered_storage_path: null,
+        error: null,
+      })
+      try {
+        if (!subtitleContext) throw new Error('subtitle_render.enabled=true but subtitle context is missing')
+        const subtitlePage = subtitleContext.pageMap.get(prepared.templateImageName)
+        if (!subtitlePage) throw new Error(`Missing subtitle template entry for image ${prepared.templateImageName}`)
+        const subtitleRenderStartedAt = Date.now()
+        const renderedSubtitleBuffer = await renderSubtitlePage({
+          baseImage: buffer,
+          subtitlePage,
+          childName,
+          fontAssets: subtitleContext.fontAssets,
+          preserveBaseDimensions: true,
+        })
+        pageTimings.render_ms = Date.now() - subtitleRenderStartedAt
+        const subtitleStoragePath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/subtitles/page_${padPageIndex(page.index)}.png`
+        const subtitleUploadStartedAt = Date.now()
+        await uploadBuffer(RAW_BUCKET, subtitleStoragePath, renderedSubtitleBuffer, 'image/png')
+        pageTimings.subtitle_upload_ms = Date.now() - subtitleUploadStartedAt
+        subtitlePages.push({
+          page_index: page.index,
+          template_image: prepared.templateImageName,
+          storage_path: subtitleStoragePath,
+        })
+        updateRuntimeManifestPage(page.index, { subtitle_output_path: subtitleStoragePath })
+        await setRenderRunState(page.index, {
+          page_index: page.index,
+          status: 'COMPLETED',
+          started_at: renderStartedAt,
+          finished_at: new Date().toISOString(),
+          template_image: prepared.templateImageName,
+          subtitle_template_path: subtitleContext.storagePath,
+          rendered_storage_path: subtitleStoragePath,
+          error: null,
+          timings: { ...pageTimings },
+        })
+        const openAIState = getOpenAIStageState(page.index, prepared.stageKey)
+        const openAIAttempt = currentOpenAIAttempt(openAIState)
+        if (openAIAttempt) {
+          await setOpenAIStageState(page.index, updateOpenAIAttempt(openAIState, openAIAttempt.attempt_id, {
+            status: 'composed',
+            finished_at: new Date().toISOString(),
+          }))
+        }
+        buffer = renderedSubtitleBuffer
+      } catch (error) {
+        if (error instanceof JobCancelledError) throw error
+        await setRenderRunState(page.index, {
+          page_index: page.index,
+          status: 'FAILED',
+          started_at: renderStartedAt,
+          finished_at: new Date().toISOString(),
+          template_image: prepared.templateImageName,
+          subtitle_template_path: subtitleContext?.storagePath || null,
+          rendered_storage_path: null,
+          error: (error as any)?.message || 'Unknown subtitle render error',
+          timings: { ...pageTimings },
+        })
+        lastPageError = error
+        buffer = null
+      }
+    }
+
     if (!buffer) {
       const detail = (lastPageError as any)?.message ? `: ${(lastPageError as any).message}` : ''
-        const persistedProviderRun = providerRuns[String(page.index)]?.[prepared.stageKey]
-        if (lastPageError && !persistedProviderRun?.request_id) {
-          await setProviderRunState(page.index, {
+      const persistedProviderRun = providerRuns[String(page.index)]?.[prepared.stageKey]
+      if (prepared.provider === 'runpod' && lastPageError && !persistedProviderRun?.request_id) {
+        const typedProviderError = isRunPodExecutionError(lastPageError) ? lastPageError : null
+        await setProviderRunState(page.index, {
           provider: prepared.provider,
           stage: prepared.stageKey,
           deployment_id: resolveProviderDeploymentId({
@@ -2600,7 +3008,9 @@ async function processJob(job: JobRow): Promise<void> {
           result_url: null,
           status: 'FAILED',
           finished_at: new Date().toISOString(),
-          error: (lastPageError as any)?.message || `Unknown ${prepared.provider} error`,
+          error: typedProviderError?.code || (lastPageError as any)?.message || `Unknown ${prepared.provider} error`,
+          failure_code: typedProviderError?.code ?? null,
+          retryable: typedProviderError?.retryable ?? null,
         })
       }
       if (prepared.subtitleEnabled) {

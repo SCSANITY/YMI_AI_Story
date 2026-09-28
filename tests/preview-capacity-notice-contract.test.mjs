@@ -11,7 +11,8 @@ test('owned Job read model exposes only a minimal capacity state', () => {
   const route = read('app/api/jobs/[jobId]/route.ts')
 
   assert.match(route, /output_assets, provider_runs, created_at/)
-  assert.match(route, /provider_runs: providerRuns, \.\.\.publicJob/)
+  assert.match(route, /const providerRuns = job\.provider_runs/)
+  assert.doesNotMatch(route, /\.\.\.publicJob|\.\.\.job/)
   assert.match(route, /capacity_state: resolvePreviewCapacityState/)
   assert.doesNotMatch(route, /NextResponse\.json\(job/)
 })

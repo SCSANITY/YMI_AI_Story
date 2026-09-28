@@ -59,10 +59,20 @@ export async function GET(
     )
   }
 
-  const { provider_runs: providerRuns, ...publicJob } = job
+  const providerRuns = job.provider_runs
   return NextResponse.json(
     {
-      ...publicJob,
+      job_id: job.job_id,
+      job_type: job.job_type,
+      story_language: job.story_language,
+      selected_book_type: job.selected_book_type,
+      status: job.status,
+      progress: job.progress,
+      error_message: job.error_message,
+      input_snapshot: job.input_snapshot,
+      output_assets: job.output_assets,
+      created_at: job.created_at,
+      updated_at: job.updated_at,
       capacity_state: resolvePreviewCapacityState({
         jobType: job.job_type,
         status: job.status,
