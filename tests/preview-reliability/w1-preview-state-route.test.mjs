@@ -147,10 +147,24 @@ test('failed old-Worker output returns the saved cover in one redacted owned rea
     'retryable',
     'status',
   ])
+  assert.deepEqual(Object.keys(body.assets).sort(), ['asset_layout', 'pages', 'schema_version'])
+  assert.deepEqual(Object.keys(body.assets.pages[0]).sort(), [
+    'asset_size',
+    'output_order',
+    'page_index',
+    'page_number',
+    'role',
+    'side',
+    'spread_index',
+    'url',
+  ])
   assert.equal(calls.filter((call) => call.kind === 'from').length, 1)
   assert.equal(calls.filter((call) => call.kind === 'maybeSingle').length, 1)
   assert.equal(calls.filter((call) => call.kind === 'sign').length, 1)
-  assert.doesNotMatch(serialized, /provider_runs|storage_path|error_message|input_snapshot/)
+  assert.doesNotMatch(
+    serialized,
+    /provider_runs|storage_path|error_message|input_snapshot|intermediatePath|objectKey/
+  )
 })
 
 test('failed Preview without a page signs nothing and remains recoverable by identity', async () => {
