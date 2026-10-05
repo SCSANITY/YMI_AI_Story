@@ -118,6 +118,26 @@ import {
   type OpenAIStageRunState,
 } from './openaiRuntime'
 import { logEvent, redactLogText, toSafeError } from './safeLogging'
+import { toPersistedJobFailure } from './jobFailure'
+import {
+  ImageEditContractError,
+  type ResolvedImageEditPage,
+} from './imageEditContract'
+import {
+  PrivateConfigError,
+  assertPrivateImageEditProviderAuthority,
+  decideConfigReadRecovery,
+  hasDurableProviderAttemptHistory,
+  isPrivateConfigLocatorCandidate,
+  loadPrivateImageEditConfig,
+  type PrivateImageEditConfigSnapshot,
+} from './privateConfig'
+import { createPrivateConfigTransport } from './privateConfigTransport'
+import {
+  PreviewImageInputError,
+  preflightPreviewImageEditJob,
+  type PreviewWholeJobPreflight,
+} from './previewImageInput'
 
 dotenv.config()
 
@@ -127,6 +147,8 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUP
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   throw new Error('Missing required environment variables for worker')
 }
+const VERIFIED_SUPABASE_URL = SUPABASE_URL
+const VERIFIED_SUPABASE_SERVICE_KEY = SUPABASE_SERVICE_KEY
 
 const APP_TEMPLATES_BUCKET = 'app-templates'
 const RAW_BUCKET = 'raw-private'
@@ -234,6 +256,10 @@ const PREVIEW_PAGE_MAX_ATTEMPTS = Number.parseInt(process.env.PREVIEW_PAGE_MAX_A
 const FINAL_PAGE_MAX_ATTEMPTS = Number.parseInt(process.env.FINAL_PAGE_MAX_ATTEMPTS || String(PAGE_WORKFLOW_MAX_ATTEMPTS), 10)
 const WORKER_DEBUG_PROMPTS = process.env.WORKER_DEBUG_PROMPTS === 'true'
 const PREVIEW_DISPLAY_COVER_NAME = (process.env.PREVIEW_DISPLAY_COVER_NAME || 'Display.png').trim() || 'Display.png'
+const PRIVATE_CONFIG_HISTORICAL_ORIGINS = String(process.env.PRIVATE_CONFIG_HISTORICAL_ORIGINS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: {
@@ -335,6 +361,7 @@ type PreparedPageInput = {
   stage: ProviderStageConfig
   pageWorkflowOverride?: PageWorkflowOverride | null
   workflowOverrideSummary?: WorkflowOverrideSummary | null
+  privateImageEditResolution?: ResolvedImageEditPage | null
 }
 
 type WorkflowOverrideSummary = {
@@ -1557,6 +1584,77 @@ async function requeueJob(jobId: string, reason: string) {
   })
 }
 
+type PrivateConfigJobControl = Readonly<{
+  status: JobStatus
+  claimed_by: string | null
+  claim_attempts: number | null
+  provider_runs: Record<string, unknown> | null
+}>
+
+async function readPrivateConfigJobControl(jobId: string): Promise<PrivateConfigJobControl> {
+  assertJobLease(jobId)
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('status, claimed_by, claim_attempts, provider_runs')
+    .eq('job_id', jobId)
+    .maybeSingle()
+  if (error || !data) throw new JobLeaseLostError(jobId)
+  return data as PrivateConfigJobControl
+}
+
+async function requeuePrivateConfigRead(jobId: string): Promise<void> {
+  assertJobLease(jobId)
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({
+      status: 'queued',
+      claimed_by: null,
+      claimed_at: null,
+      lease_expires_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('job_id', jobId)
+    .eq('claimed_by', WORKER_INSTANCE_ID)
+    .eq('status', 'running')
+    .select('job_id')
+    .maybeSingle()
+  if (error || !data?.job_id) {
+    markLeaseLost(jobId)
+    throw new JobLeaseLostError(jobId)
+  }
+  lastSupabaseOkAt = nowIso()
+  console.log(`[job:${jobId}] requeued after config_read_unavailable without resetting progress or checkpoints`)
+}
+
+async function handlePrivateConfigReadFailure(job: JobRow, error: unknown): Promise<'handled'> {
+  const control = await readPrivateConfigJobControl(job.job_id)
+  const cancelRequested = control.status === 'cancel_requested' || control.status === 'cancelled'
+  const leaseOwned = control.claimed_by === WORKER_INSTANCE_ID && !lostJobLeases.has(job.job_id)
+  const decision = decideConfigReadRecovery({
+    error,
+    jobType: job.job_type,
+    claimAttempts: control.claim_attempts,
+    hasDurableProviderAttempt: hasDurableProviderAttemptHistory(control.provider_runs),
+    leaseOwned,
+    cancelRequested,
+  })
+  if (decision.action === 'stop') {
+    if (cancelRequested && leaseOwned) {
+      await updateOwnedJob(job.job_id, {
+        status: 'cancelled',
+        error_message: 'Preview cancelled by user',
+        lease_expires_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      return 'handled'
+    }
+    throw new JobLeaseLostError(job.job_id)
+  }
+  if (decision.action !== 'requeue') throw error
+  await requeuePrivateConfigRead(job.job_id)
+  return 'handled'
+}
+
 function getPageByIndex(pages: TemplatePage[]): Map<number, TemplatePage> {
   const map = new Map<number, TemplatePage>()
   for (const page of pages) {
@@ -1689,6 +1787,7 @@ async function preparePageInputs(args: {
   jobDatePath: string
   subtitleEnabled: boolean
   isSinglePageContract: boolean
+  privateImageEditSnapshot?: PrivateImageEditConfigSnapshot | null
 }): Promise<PreparedPageInput[]> {
   const {
     job,
@@ -1700,6 +1799,7 @@ async function preparePageInputs(args: {
     jobDatePath,
     subtitleEnabled,
     isSinglePageContract,
+    privateImageEditSnapshot,
   } = args
   const prepared: PreparedPageInput[] = []
   const workflowJsonCache = new Map<string, Record<string, unknown>>()
@@ -1742,10 +1842,49 @@ async function preparePageInputs(args: {
       throw new Error(`Template image asset missing: ${templateFileKey || assets.templateImageName || `page ${page.index}`}`)
     }
 
-    const stageConfig = resolveStageForPage({
-      jobType: job.job_type,
-      page,
-      config,
+    const privatePageContract = privateImageEditSnapshot?.validated.pages.find(
+      (candidate) => candidate.index === page.index
+    )
+    if (privateImageEditSnapshot && !privatePageContract) {
+      throw new ImageEditContractError('image_edit_page_missing', 'image_edit_page_missing')
+    }
+    const privateImageEditResolution: ResolvedImageEditPage | null = privatePageContract
+      ? privatePageContract.enable_face_swap
+        ? {
+            kind: 'provider',
+            page_index: page.index,
+            provider: 'openai',
+            profile: 'preview',
+            identity_input: 'primary',
+            ordered_input_roles: ['source_illustration', 'identity_reference'],
+            config: {
+              ...privateImageEditSnapshot!.validated.image_edit.profiles.preview,
+              prompt: privatePageContract.image_edit!.prompt,
+              prompt_version: privatePageContract.image_edit!.prompt_version,
+            },
+          }
+        : { kind: 'bypass', page_index: page.index }
+      : null
+    const stageConfig = privateImageEditResolution
+      ? {
+          provider: 'openai' as const,
+          stageKey: 'preview_face' as const,
+          stage: privateImageEditResolution.kind === 'provider'
+            ? {
+                provider: 'openai',
+                enabled: true,
+                openai_image_edit: privateImageEditResolution.config,
+              }
+            : { provider: 'openai', enabled: true },
+        }
+      : resolveStageForPage({
+          jobType: job.job_type,
+          page,
+          config,
+        })
+    assertPrivateImageEditProviderAuthority({
+      provider: stageConfig.provider,
+      hasPrivateSnapshot: privateImageEditSnapshot !== null && privateImageEditSnapshot !== undefined,
     })
     let templateUrl: string | undefined
     if (!pageSubtitleEnabled && stageConfig.provider === 'runpod') {
@@ -1768,7 +1907,9 @@ async function preparePageInputs(args: {
             signTtlSec: inputSignTtlSec,
           })
     }
-    const pageWorkflowOverride = resolvePageWorkflowOverride(page, stageConfig.stageKey)
+    const pageWorkflowOverride = privateImageEditSnapshot
+      ? null
+      : resolvePageWorkflowOverride(page, stageConfig.stageKey)
     const workflowOverrideSummary = summarizeWorkflowOverride(pageWorkflowOverride)
     let workflowJson: Record<string, unknown> | null = null
     let workflowJsonPath: string | null = null
@@ -1802,6 +1943,7 @@ async function preparePageInputs(args: {
       stage: stageConfig.stage,
       pageWorkflowOverride,
       workflowOverrideSummary,
+      privateImageEditResolution,
     })
   }
 
@@ -1866,10 +2008,40 @@ async function processJob(job: JobRow): Promise<void> {
     return
   }
 
-  // One uncached immutable read binds this process invocation to a single config.
-  const config = await loadJobTemplateConfigSnapshot(String(input.config_url))
+  const configUrl = String(input.config_url)
+  const privateConfigCandidate = isPrivateConfigLocatorCandidate(configUrl)
+  if (privateConfigCandidate && job.job_type !== 'preview') {
+    throw new ImageEditContractError(
+      'image_edit_profile_blocked',
+      'OpenAI Final remains blocked before private configuration is read'
+    )
+  }
+  let privateImageEditSnapshot: PrivateImageEditConfigSnapshot | null = null
+  let config: Readonly<TemplateConfig>
+  if (privateConfigCandidate) {
+    try {
+      privateImageEditSnapshot = await loadPrivateImageEditConfig({
+        locator: configUrl,
+        currentOrigin: VERIFIED_SUPABASE_URL,
+        historicalOrigins: PRIVATE_CONFIG_HISTORICAL_ORIGINS,
+        templateId: job.template_id,
+        authorization: `Bearer ${VERIFIED_SUPABASE_SERVICE_KEY}`,
+        transport: createPrivateConfigTransport({ trustedOrigin: new URL(VERIFIED_SUPABASE_URL).origin }),
+      })
+      config = createJobScopedConfigSnapshot(privateImageEditSnapshot.config as TemplateConfig)
+    } catch (error) {
+      if (error instanceof PrivateConfigError) {
+        await handlePrivateConfigReadFailure(job, error)
+        return
+      }
+      throw error
+    }
+  } else {
+    // One uncached immutable read preserves the existing legacy public-config path.
+    config = await loadJobTemplateConfigSnapshot(configUrl)
+  }
   const basePath = normalizeBasePath(config.base_path, job.template_id)
-  normalizeWorkflowProvider(config.workflow?.provider)
+  if (!privateImageEditSnapshot) normalizeWorkflowProvider(config.workflow?.provider)
   const hasSinglePageMarker = hasSinglePageTemplateMarker(config)
   const isSinglePageContract = isSinglePageTemplateConfig(config)
   if (job.job_type === 'final' && !hasSinglePageMarker) {
@@ -2352,15 +2524,40 @@ async function processJob(job: JobRow): Promise<void> {
   const preparedPages = await preparePageInputs({
     job,
     config,
-    pageIndexList: pageIndicesToProcess,
+    pageIndexList: privateImageEditSnapshot ? pageIndexList : pageIndicesToProcess,
     pageMap,
     basePath,
     templateFileSet,
     jobDatePath,
     subtitleEnabled: subtitleEnabledForJob,
     isSinglePageContract,
+    privateImageEditSnapshot,
   })
   const preparedPageMap = new Map(preparedPages.map((item) => [item.pageIndex, item]))
+  let privateWholeJobPreflight: PreviewWholeJobPreflight | null = null
+  if (privateImageEditSnapshot) {
+    await throwIfCancelled()
+    if (!subtitleContext) {
+      throw new PreviewImageInputError('preview_image_geometry_invalid')
+    }
+    const identityReference = await downloadBuffer(RAW_BUCKET, facePath)
+    const preflightPages = await Promise.all(preparedPages.map(async (prepared) => {
+      const subtitlePage = subtitleContext.pageMap.get(prepared.templateImageName)
+      if (!subtitlePage) throw new PreviewImageInputError('preview_image_geometry_invalid')
+      return {
+        pageIndex: prepared.pageIndex,
+        enableFaceSwap: prepared.page.enable_face_swap === true,
+        sourceIllustration: await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath),
+        subtitlePage,
+      }
+    }))
+    privateWholeJobPreflight = await preflightPreviewImageEditJob({
+      profileSize: privateImageEditSnapshot.validated.image_edit.profiles.preview.size,
+      pages: preflightPages,
+      identityReference,
+      resolvePage: privateImageEditSnapshot.resolvePage,
+    })
+  }
   runtimeManifestPath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/manifest.json`
   runtimeManifest = {
     generated_at: new Date().toISOString(),
@@ -2602,14 +2799,23 @@ async function processJob(job: JobRow): Promise<void> {
 
     const bypassFaceProvider = shouldBypassFaceProvider({ page, isMockMode: IS_MOCK_MODE })
     if (bypassFaceProvider) {
-      buffer = renderedTemplateBuffer ?? (await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath))
+      const privateBypass = privateWholeJobPreflight?.pages.get(page.index)?.bypass_output ?? null
+      buffer = privateBypass ?? renderedTemplateBuffer ?? (await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath))
       console.log(`[job:${job.job_id}] page=${page.index} face provider bypassed by config`)
     } else if (prepared.provider === 'openai' && IS_MOCK_MODE) {
       buffer = await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath)
       console.log(`[job:${job.job_id}] page=${page.index} OpenAI transport bypassed in explicit Mock mode`)
     } else if (prepared.provider === 'openai' && !IS_MOCK_MODE) {
       try {
-        const configured = validateOpenAIImageEditConfig(prepared.stage.openai_image_edit)
+        const privatePreflightPage = privateWholeJobPreflight?.pages.get(page.index) ?? null
+        if (privateImageEditSnapshot && privatePreflightPage?.resolution.kind !== 'provider') {
+          throw new PreviewImageInputError('preview_image_preparation_failed')
+        }
+        const configured = validateOpenAIImageEditConfig(
+          privatePreflightPage?.resolution.kind === 'provider'
+            ? privatePreflightPage.resolution.config
+            : prepared.stage.openai_image_edit
+        )
         const effectiveConfig = validateOpenAIImageEditConfig({
           ...configured,
           prompt: prepared.pageWorkflowOverride?.prompt ?? configured.prompt,
@@ -2634,8 +2840,10 @@ async function processJob(job: JobRow): Promise<void> {
           )
         }
 
-        const templateBuffer = await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath)
-        const identityBuffer = await downloadBuffer(RAW_BUCKET, facePath)
+        const templateBuffer = privatePreflightPage?.provider_source
+          ?? await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath)
+        const identityBuffer = privateWholeJobPreflight?.identity?.prepared
+          ?? await downloadBuffer(RAW_BUCKET, facePath)
         const sourceIdentity = await validateOpenAIInputImage(templateBuffer)
         const faceIdentity = await validateOpenAIInputImage(identityBuffer)
         const effectiveProviderConfig = {
@@ -2643,7 +2851,38 @@ async function processJob(job: JobRow): Promise<void> {
           ...effectiveConfig,
           ordered_input_roles: ['source_illustration', 'identity_reference'] as const,
         }
-        const configDigest = createOpenAIConfigDigest(effectiveProviderConfig)
+        const configDigest = createOpenAIConfigDigest(privateImageEditSnapshot
+          ? {
+              private_config_raw_sha256: privateImageEditSnapshot.raw_sha256,
+              resolved_provider_config: effectiveProviderConfig,
+            }
+          : effectiveProviderConfig)
+        const privateSourceEvidence = privatePreflightPage?.source
+          ? {
+              original_media_type: privatePreflightPage.source.original_media_type,
+              prepared_media_type: privatePreflightPage.source.prepared_media_type,
+              original_sha256: privatePreflightPage.source.original_sha256,
+              prepared_sha256: privatePreflightPage.source.prepared_sha256,
+              original_width: privatePreflightPage.source.original_width,
+              original_height: privatePreflightPage.source.original_height,
+              prepared_width: privatePreflightPage.source.prepared_width,
+              prepared_height: privatePreflightPage.source.prepared_height,
+              transformation_version: privatePreflightPage.source.transformation_version,
+            }
+          : sourceIdentity
+        const privateIdentityEvidence = privateWholeJobPreflight?.identity
+          ? {
+              original_media_type: privateWholeJobPreflight.identity.original_media_type,
+              prepared_media_type: privateWholeJobPreflight.identity.prepared_media_type,
+              original_sha256: privateWholeJobPreflight.identity.original_sha256,
+              prepared_sha256: privateWholeJobPreflight.identity.prepared_sha256,
+              original_width: privateWholeJobPreflight.identity.original_width,
+              original_height: privateWholeJobPreflight.identity.original_height,
+              prepared_width: privateWholeJobPreflight.identity.prepared_width,
+              prepared_height: privateWholeJobPreflight.identity.prepared_height,
+              transformation_version: privateWholeJobPreflight.identity.transformation_version,
+            }
+          : faceIdentity
         const frozenBase = {
           job_id: job.job_id,
           creation_id: job.creation_id ?? null,
@@ -2655,11 +2894,11 @@ async function processJob(job: JobRow): Promise<void> {
           input_fingerprint: sha256Hex(canonicalJson({
             source: {
               storage_identity: `${APP_TEMPLATES_BUCKET}/${prepared.templateStoragePath}`,
-              ...sourceIdentity,
+              ...privateSourceEvidence,
             },
             identity: {
               storage_identity: `${RAW_BUCKET}/${facePath}`,
-              ...faceIdentity,
+              ...privateIdentityEvidence,
             },
             page_index: page.index,
             stage: prepared.stageKey,
@@ -2984,12 +3223,15 @@ async function processJob(job: JobRow): Promise<void> {
           error: (error as any)?.message || 'Unknown subtitle render error',
           timings: { ...pageTimings },
         })
-        lastPageError = error
+        lastPageError = privateImageEditSnapshot ? new Error('subtitle_render_failed') : error
         buffer = null
       }
     }
 
     if (!buffer) {
+      if (privateImageEditSnapshot && lastPageError) {
+        throw toPersistedJobFailure(lastPageError)
+      }
       const detail = (lastPageError as any)?.message ? `: ${(lastPageError as any).message}` : ''
       const persistedProviderRun = providerRuns[String(page.index)]?.[prepared.stageKey]
       if (prepared.provider === 'runpod' && lastPageError && !persistedProviderRun?.request_id) {
@@ -3343,12 +3585,17 @@ function launchClaimedJob(job: JobRow) {
         return
       }
 
-      rememberError(error)
-      logEvent('error', 'job_failed', { jobId: job.job_id, jobType: job.job_type, error: toSafeError(error) })
+      const persistedFailure = toPersistedJobFailure(error)
+      rememberError(persistedFailure)
+      logEvent('error', 'job_failed', {
+        jobId: job.job_id,
+        jobType: job.job_type,
+        error: toSafeError(persistedFailure),
+      })
       try {
         await updateOwnedJob(job.job_id, {
           status: 'failed',
-          error_message: error?.message ?? 'Unknown worker error',
+          error_message: persistedFailure.message,
           lease_expires_at: null,
           updated_at: new Date().toISOString(),
         })

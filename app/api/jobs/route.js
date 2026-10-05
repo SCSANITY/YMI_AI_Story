@@ -25,6 +25,10 @@ import {
   normalizeStoryLanguage,
 } from '@/lib/story-language'
 import { saveOwnedTextProfile } from '@/lib/user-profile-history-server'
+import {
+  prepareStoryConfigForPreview,
+  StoryConfigError,
+} from '@/lib/story-config-server'
 
 const CONTENT_GENERATION_CONSENT_VERSIONS = new Set(['content-generation-consent-v1'])
 
@@ -188,22 +192,30 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Template config path missing' }, { status: 400 })
   }
 
-  const rawConfigPath = String(template.default_config_path).trim()
-  const expectedConfigPath = `${templateId}/config.json`
-  if (rawConfigPath !== expectedConfigPath) {
+  let configUrl
+  try {
+    const preparedConfig = await prepareStoryConfigForPreview({
+      templateId,
+      rawConfigPath: template.default_config_path,
+      resolveLegacyPublicUrl: (configPath) => supabaseAdmin.storage
+        .from('app-templates')
+        .getPublicUrl(configPath)
+        .data?.publicUrl,
+    })
+    configUrl = preparedConfig.configUrl
+  } catch (error) {
+    const code = error instanceof StoryConfigError
+      ? error.code
+      : 'story_config_read_failed'
+    const status = code === 'story_config_path_invalid'
+      ? 400
+      : code === 'story_config_server_misconfigured' || code === 'story_config_read_failed'
+        ? 500
+        : 503
     return NextResponse.json(
-      { error: `Template config path must be ${expectedConfigPath}` },
-      { status: 400 }
+      { error: 'Template configuration is unavailable', code },
+      { status }
     )
-  }
-
-  const configUrl = supabaseAdmin.storage
-    .from('app-templates')
-    .getPublicUrl(rawConfigPath)
-    .data?.publicUrl
-
-  if (!configUrl) {
-    return NextResponse.json({ error: 'Failed to resolve config URL' }, { status: 500 })
   }
 
   const rawFacePath = `raw-private/${asset.storage_path}`
@@ -255,10 +267,7 @@ export async function POST(request) {
     if (admissionError) {
       return NextResponse.json(admissionError, { status: 429 })
     }
-    return NextResponse.json(
-      { error: 'Failed to create preview job', details: error?.message ?? null },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create preview job' }, { status: 500 })
   }
   if (!previewJob.job_id || !previewJob.creation_id) {
     return NextResponse.json({ error: 'Missing job_id after insert' }, { status: 500 })

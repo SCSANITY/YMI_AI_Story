@@ -14,6 +14,7 @@ import {
   forceEnglishTextOverrides,
   normalizeStoryLanguage,
 } from '@/lib/story-language'
+import { loadStoryConfigForFinal } from '@/lib/story-config-server'
 
 export type CheckoutItemInput = {
   id: string
@@ -130,10 +131,6 @@ type CustomizeSnapshot = {
   params?: Record<string, unknown> | null
 }
 
-type TemplateConfigPageRow = {
-  index?: number | string | null
-}
-
 type TemplateRow = {
   template_id: string
   default_config_path: string | null
@@ -141,22 +138,6 @@ type TemplateRow = {
 
 function isUniqueViolation(error: { code?: string | null } | null | undefined) {
   return error?.code === '23505'
-}
-
-function resolveTemplateConfigUrl(templateId: string, rawConfigPath: string | null) {
-  const configPath = String(rawConfigPath || '').trim()
-  if (!configPath) {
-    throw new Error(`Template config path missing for ${templateId}`)
-  }
-  if (/^https?:\/\//i.test(configPath) || configPath.startsWith('/') || configPath.startsWith('app-templates/')) {
-    throw new Error(`Template ${templateId} must use a relative default_config_path`)
-  }
-
-  const configUrl = supabaseAdmin.storage.from('app-templates').getPublicUrl(configPath).data?.publicUrl
-  if (!configUrl) {
-    throw new Error(`Failed to resolve config URL for ${templateId}`)
-  }
-  return configUrl
 }
 
 async function loadExistingPaymentId(orderId: string, provider?: string, providerRef?: string | null) {
@@ -269,31 +250,6 @@ async function loadReusableFinalJobIdsByCreation(creationIds: string[]) {
   }
 
   return result
-}
-
-async function loadFinalPageIndices(configUrl: string): Promise<number[]> {
-  const response = await fetch(configUrl, { cache: 'no-store' })
-  if (!response.ok) {
-    throw new Error(`Failed to load template config for final pages: ${response.status}`)
-  }
-  const config = await response.json()
-  const explicit = Array.isArray(config?.final?.page_indices)
-    ? config.final.page_indices
-    : []
-  const pageIndices = explicit.length
-    ? explicit
-    : Array.isArray(config?.pages)
-      ? (config.pages as TemplateConfigPageRow[]).map((page) => page?.index)
-      : []
-  const normalized = pageIndices
-    .map((value: unknown) => Number(value))
-    .filter((value: number) => Number.isInteger(value) && value >= 0)
-    .sort((a: number, b: number) => a - b)
-
-  if (!normalized.length) {
-    throw new Error('Template config has no final page indices')
-  }
-  return Array.from(new Set(normalized))
 }
 
 async function computeOrderTotal(orderId: string, cartItemIds?: string[]): Promise<number> {
@@ -724,7 +680,10 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     const configMap = new Map(
       (templates as TemplateRow[]).map((tpl) => [tpl.template_id, tpl.default_config_path])
     )
-    const configUrlByTemplateId = new Map<string, string>()
+    const configByTemplateId = new Map<string, Readonly<{
+      configUrl: string
+      finalPageIndices: readonly number[]
+    }>>()
     const finalPageIndicesByCartItem = new Map<string, number[]>()
 
     for (const item of cartItems) {
@@ -732,12 +691,19 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       if (!templateId) {
         throw new Error('Missing creation template')
       }
-      let configUrl = configUrlByTemplateId.get(templateId)
-      if (!configUrl) {
-        configUrl = resolveTemplateConfigUrl(templateId, configMap.get(templateId) ?? null)
-        configUrlByTemplateId.set(templateId, configUrl)
+      let resolvedConfig = configByTemplateId.get(templateId)
+      if (!resolvedConfig) {
+        resolvedConfig = await loadStoryConfigForFinal({
+          templateId,
+          rawConfigPath: configMap.get(templateId) ?? null,
+          resolveLegacyPublicUrl: (configPath) => supabaseAdmin.storage
+            .from('app-templates')
+            .getPublicUrl(configPath)
+            .data?.publicUrl,
+        })
+        configByTemplateId.set(templateId, resolvedConfig)
       }
-      finalPageIndicesByCartItem.set(item.cart_item_id, await loadFinalPageIndices(configUrl))
+      finalPageIndicesByCartItem.set(item.cart_item_id, [...resolvedConfig.finalPageIndices])
     }
 
     if (missingJobItems.length > 0) {
@@ -750,8 +716,8 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         }
 
         const storagePath = creation?.customize_snapshot?.storagePath ?? null
-        const configUrl = configUrlByTemplateId.get(creation.template_id)
-        if (!configUrl) throw new Error('Failed to resolve config URL')
+        const resolvedConfig = configByTemplateId.get(creation.template_id)
+        if (!resolvedConfig) throw new Error('story_config_read_failed')
         const rawTextOverrides =
           creation?.customize_snapshot?.textOverrides ??
           creation?.customize_snapshot?.text_overrides ??
@@ -774,7 +740,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
           status: 'queued',
           input_snapshot: {
             face_source_path: storagePath ? `raw-private/${storagePath}` : null,
-            config_url: configUrl,
+            config_url: resolvedConfig.configUrl,
             text_overrides: finalTextOverrides,
             params: creation?.customize_snapshot?.params ?? null,
           },

@@ -27,6 +27,11 @@ not a second Worker source.
   that production SQL was executed; it pins the typed claim, locked owned
   lease/checkpoint, and atomic queue admission contracts that the Web and cloud
   Worker are being prepared to use.
+- IMG-PROVIDER-PROD-001 P1-C3 refreshed `worker/index.ts` byte-for-byte from
+  private Worker commit `fefae2b7b464501e79d3469ed2875e13b3c07e50` on
+  2026-10-05. It pins the reviewed private-config Preview wiring, fixed failure
+  boundary and pre-intent input validation used by the Web confidentiality
+  contract; it is source evidence, not proof of production deployment.
 - LG-001 added `20260916_173000_lg_001_shipping_details.sql` from the private
   Database logistics branch on 2026-09-16. It pins the service-only atomic
   logistics save, lease and guarded sync contracts. This source-reviewed
