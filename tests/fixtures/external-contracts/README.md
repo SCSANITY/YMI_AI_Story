@@ -32,6 +32,12 @@ not a second Worker source.
   2026-10-05. It pins the reviewed private-config Preview wiring, fixed failure
   boundary and pre-intent input validation used by the Web confidentiality
   contract; it is source evidence, not proof of production deployment.
+- IMG-PROVIDER-PROD-001 P1-E1 added
+  `worker/image-edit-acceptance-corpus-v1.json` byte-for-byte from Worker
+  candidate `19bc5fe5ca696e3cb55c31277f5bdaa04d18e9dd` on 2026-10-06. The
+  synthetic corpus is the shared Web/Worker acceptance authority for the
+  private `image_edit` contract. It includes a deliberate do-not-publish Prompt
+  marker and is test evidence only, never a story publication candidate.
 - LG-001 added `20260916_173000_lg_001_shipping_details.sql` from the private
   Database logistics branch on 2026-09-16. It pins the service-only atomic
   logistics save, lease and guarded sync contracts. This source-reviewed

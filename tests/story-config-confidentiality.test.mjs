@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import test from 'node:test'
@@ -134,6 +135,54 @@ async function loadBundled(entry, options = {}) {
   return { module: loaded.exports, calls, context }
 }
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function applyCorpusMutations(target, mutations = []) {
+  for (const mutation of mutations) {
+    assert.ok(Array.isArray(mutation.path) && mutation.path.length > 0)
+    let parent = target
+    for (const segment of mutation.path.slice(0, -1)) {
+      parent = parent[segment]
+      assert.ok(parent && typeof parent === 'object')
+    }
+    const key = mutation.path.at(-1)
+    if (mutation.op === 'delete') delete parent[key]
+    else if (mutation.op === 'repeat_string') {
+      assert.equal(typeof mutation.value, 'string')
+      assert.equal(Number.isInteger(mutation.count), true)
+      parent[key] = mutation.value.repeat(mutation.count)
+    } else parent[key] = clone(mutation.value)
+  }
+}
+
+function materializeCorpusCase(corpus, corpusCase) {
+  const config = clone(corpus.base_config)
+  applyCorpusMutations(config, corpusCase.config_mutations)
+  let bytes = Buffer.from(JSON.stringify(config), 'utf8')
+  if (corpusCase.raw_mode === 'duplicate-root-key') {
+    bytes = Buffer.from(bytes.toString('utf8').replace(
+      '{"schema_version":3',
+      '{"schema_version":2,"schema_version":3'
+    ))
+  } else if (corpusCase.raw_mode === 'invalid-utf8') {
+    bytes = Buffer.concat([bytes.subarray(0, 1), Buffer.from([0xff]), bytes.subarray(1)])
+  }
+  return { config, bytes }
+}
+
+async function listSourceFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true })
+  const files = []
+  for (const entry of entries) {
+    const absolute = path.join(directory, entry.name)
+    if (entry.isDirectory()) files.push(...await listSourceFiles(absolute))
+    else if (/\.(?:js|jsx|ts|tsx)$/.test(entry.name)) files.push(absolute)
+  }
+  return files
+}
+
 const legacyPublicUrl = (path) => `${currentOrigin}/storage/v1/object/public/app-templates/${path}`
 
 test('address resolver accepts only the exact legacy path or digest-addressed private path', async () => {
@@ -183,6 +232,77 @@ test('address resolver accepts only the exact legacy path or digest-addressed pr
       (error) => error?.code === 'story_config_path_invalid'
     )
   }
+})
+
+test('shared P1-E corpus produces the declared Web outcomes without exposing Prompt text', async () => {
+  const corpusBytes = await readFile(new URL(
+    './fixtures/external-contracts/worker/image-edit-acceptance-corpus-v1.json',
+    import.meta.url
+  ))
+  const corpus = JSON.parse(corpusBytes.toString('utf8'))
+  const { module } = await loadBundled('src/lib/story-config-server.ts')
+
+  assert.equal(corpus.schema_version, 1)
+  assert.equal(corpus.cases.length, 13)
+  for (const corpusCase of corpus.cases) {
+    const { config, bytes } = materializeCorpusCase(corpus, corpusCase)
+    let actual
+    try {
+      if (corpusCase.raw_mode) {
+        module.parsePrivateStoryConfig({
+          body: bytes,
+          templateId: corpus.template_id,
+          address: {
+            kind: 'private',
+            configUrl: privateUrl(bytes, corpus.template_id),
+            configPath: privatePath(bytes, corpus.template_id),
+            contentSha256: sha256(bytes),
+          },
+        })
+      } else {
+        module.validatePrivateStoryConfig(config, corpus.template_id)
+      }
+      actual = { accepted: true }
+    } catch (error) {
+      assert.equal(module.STORY_CONFIG_ERROR_CODES.includes(error?.code), true)
+      assert.equal(String(error).includes(corpus.prompt_marker), false)
+      actual = { accepted: false, code: error.code }
+    }
+    assert.deepEqual(actual, corpusCase.expected.web, corpusCase.id)
+    assert.equal(JSON.stringify(actual).includes(corpus.prompt_marker), false)
+  }
+})
+
+test('Prompt-bearing private configs are absent from catalog projections and every signing helper', async () => {
+  const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
+  const [catalogSource, ownedRoute, sourceFiles] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'src/lib/book-catalog.ts'), 'utf8'),
+    readFile(path.join(repositoryRoot, 'app/api/jobs/[jobId]/route.ts'), 'utf8'),
+    Promise.all([
+      listSourceFiles(path.join(repositoryRoot, 'app')),
+      listSourceFiles(path.join(repositoryRoot, 'src')),
+    ]).then((groups) => groups.flat()),
+  ])
+  const projectionStart = catalogSource.indexOf('export function templateRowToBook')
+  const projectionEnd = catalogSource.indexOf('\nexport ', projectionStart + 1)
+  const projection = catalogSource.slice(
+    projectionStart,
+    projectionEnd === -1 ? catalogSource.length : projectionEnd
+  )
+  assert.ok(projectionStart >= 0)
+  assert.doesNotMatch(projection, /default_config_path|story-config-private|image_edit|prompt/i)
+  assert.match(ownedRoute, /input_snapshot: job\.input_snapshot/)
+  assert.doesNotMatch(ownedRoute, /config body|image_edit|prompt/i)
+
+  const signingFiles = []
+  for (const filename of sourceFiles) {
+    const source = await readFile(filename, 'utf8')
+    if (/createSigned(?:StorageUrlMap|Url|Urls|UploadUrl)\s*\(/.test(source)) {
+      signingFiles.push(path.relative(repositoryRoot, filename).replace(/\\/g, '/'))
+      assert.doesNotMatch(source, /story-config-private|PRIVATE_STORY_CONFIG_BUCKET/)
+    }
+  }
+  assert.ok(signingFiles.length > 0)
 })
 
 test('private Preview preflight reads once with trusted credentials and returns only the inert locator', async () => {

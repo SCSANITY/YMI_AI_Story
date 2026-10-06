@@ -314,7 +314,7 @@ function validateSelection(
   return Object.freeze(indices)
 }
 
-function validatePrivateStoryConfig(
+export function validatePrivateStoryConfig(
   value: unknown,
   templateId: string
 ): ValidatedPrivateStoryConfig {
@@ -374,7 +374,7 @@ function validatePrivateStoryConfig(
   return Object.freeze({ finalPageIndices })
 }
 
-function parsePrivateStoryConfig(args: {
+export function parsePrivateStoryConfig(args: {
   body: Buffer
   address: PrivateStoryConfigAddress
   templateId: string
