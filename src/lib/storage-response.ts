@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { assertSignableStorageBucket } from '@/lib/storage-signing-policy'
 
 export function normalizeBucketStoragePath(bucket: string, storagePath: string) {
   if (bucket !== 'app-templates') return storagePath.replace(/^\/+/, '')
@@ -9,8 +10,9 @@ export async function downloadStorageAsset(
   bucket: string,
   storagePath: string
 ): Promise<Response> {
-  const normalizedPath = normalizeBucketStoragePath(bucket, storagePath)
-  const { data, error } = await supabaseAdmin.storage.from(bucket).download(normalizedPath)
+  const signableBucket = assertSignableStorageBucket(bucket)
+  const normalizedPath = normalizeBucketStoragePath(signableBucket, storagePath)
+  const { data, error } = await supabaseAdmin.storage.from(signableBucket).download(normalizedPath)
 
   if (error || !data) {
     throw new Error(`Failed to download storage asset: ${error?.message || 'unknown error'}`)

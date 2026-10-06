@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import { assertSignableStorageBucket } from '@/lib/storage-signing-policy'
 
 type StoredPageAsset = {
   page_index: number
@@ -59,7 +60,7 @@ export async function resolveCoverAssetFromPreviewJob(previewJobId: string) {
       }
     | null
 
-  const bucket = outputAssets?.bucket || 'raw-private'
+  const bucket = assertSignableStorageBucket(outputAssets?.bucket || 'raw-private')
   const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages : []
   const coverPage = pages.find((page) => page.page_index === 0) ?? pages[0]
 

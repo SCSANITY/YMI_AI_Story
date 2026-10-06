@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendOrderDeliveryEmail } from '@/lib/email'
 import { matchesSecret } from '@/lib/secret-compare'
+import {
+  assertSignableStorageBucket,
+  STORAGE_BUCKET_NOT_SIGNABLE_CODE,
+} from '@/lib/storage-signing-policy'
 
 // Legacy/non-review final delivery path.
 // Current production delivery goes through Admin final review release in src/lib/finalReview.ts.
@@ -43,7 +47,15 @@ export async function POST(request: Request) {
     pdf_path?: string
     pages?: { page_index: number; storage_path: string }[]
   }
-  const bucket = outputAssets.bucket || 'raw-private'
+  let bucket: string
+  try {
+    bucket = assertSignableStorageBucket(outputAssets.bucket || 'raw-private')
+  } catch {
+    return NextResponse.json(
+      { error: 'Final asset bucket is not signable', code: STORAGE_BUCKET_NOT_SIGNABLE_CODE },
+      { status: 500 }
+    )
+  }
   const pdfPath = outputAssets.pdf_path
 
   if (!pdfPath) {

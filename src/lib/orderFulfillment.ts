@@ -15,6 +15,7 @@ import {
   normalizeStoryLanguage,
 } from '@/lib/story-language'
 import { loadStoryConfigForFinal } from '@/lib/story-config-server'
+import { assertSignableStorageBucket } from '@/lib/storage-signing-policy'
 
 export type CheckoutItemInput = {
   id: string
@@ -335,7 +336,7 @@ export async function loadOrderCoverUrl(orderId: string): Promise<string | undef
   const outputAssets = job?.output_assets as
     | { bucket?: string; pages?: { page_index: number; storage_path: string }[] }
     | null
-  const bucket = outputAssets?.bucket || 'raw-private'
+  const bucket = assertSignableStorageBucket(outputAssets?.bucket || 'raw-private')
   const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
   const coverPage = pages.find((page) => page.page_index === 0) ?? pages[0]
   if (!coverPage?.storage_path) return undefined
@@ -390,7 +391,7 @@ export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderIt
       const assets = job.output_assets as
         | { bucket?: string; pages?: { page_index: number; storage_path: string }[] }
         | null
-      const bucket = assets?.bucket || 'raw-private'
+      const bucket = assertSignableStorageBucket(assets?.bucket || 'raw-private')
       const pages = Array.isArray(assets?.pages) ? assets?.pages ?? [] : []
       const coverPage = pages.find((p) => p.page_index === 0) ?? pages[0]
       if (!coverPage?.storage_path) continue

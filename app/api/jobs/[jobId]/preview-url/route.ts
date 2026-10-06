@@ -6,6 +6,10 @@ import {
 } from '@/lib/preview-page-contract'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
+  assertSignableStorageBucket,
+  STORAGE_BUCKET_NOT_SIGNABLE_CODE,
+} from '@/lib/storage-signing-policy'
+import {
   checkoutOwnerErrorResponse,
   resolveCheckoutOwner,
   scopeCheckoutOwnerQuery,
@@ -59,7 +63,15 @@ export async function GET(
         pages?: StoredPreviewPage[]
       }
     | null
-  const bucket = outputAssets?.bucket || 'raw-private'
+  let bucket: string
+  try {
+    bucket = assertSignableStorageBucket(outputAssets?.bucket || 'raw-private')
+  } catch {
+    return jsonNoStore(
+      { error: 'Preview asset bucket is not signable', code: STORAGE_BUCKET_NOT_SIGNABLE_CODE },
+      500
+    )
+  }
 
   const pages = Array.isArray(outputAssets?.pages) ? outputAssets?.pages ?? [] : []
 

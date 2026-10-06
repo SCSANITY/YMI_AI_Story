@@ -17,6 +17,10 @@ import {
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
+  assertSignableStorageBucket,
+  STORAGE_BUCKET_NOT_SIGNABLE_CODE,
+} from '@/lib/storage-signing-policy'
+import {
   checkoutOwnerErrorResponse,
   resolveCheckoutOwner,
   scopeCheckoutOwnerQuery,
@@ -82,7 +86,15 @@ export async function GET(
       limitParam: null,
       sizeParam: 'small',
     })
-    const bucket = outputAssets.bucket || 'raw-private'
+    let bucket: string
+    try {
+      bucket = assertSignableStorageBucket(outputAssets.bucket || 'raw-private')
+    } catch {
+      return jsonNoStore(
+        { error: 'Preview asset bucket is not signable', code: STORAGE_BUCKET_NOT_SIGNABLE_CODE },
+        500
+      )
+    }
     const signedUrls = await Promise.all(
       targets.map(async (target) => {
         const { data, error: signedError } = await supabaseAdmin.storage

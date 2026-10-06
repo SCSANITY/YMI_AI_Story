@@ -242,8 +242,12 @@ test('shared P1-E corpus produces the declared Web outcomes without exposing Pro
   const corpus = JSON.parse(corpusBytes.toString('utf8'))
   const { module } = await loadBundled('src/lib/story-config-server.ts')
 
+  assert.equal(
+    sha256(corpusBytes).toUpperCase(),
+    'D289272EC87DEB88823116D6093B810B14364C49EF6111E4162CC304B14D52EE'
+  )
   assert.equal(corpus.schema_version, 1)
-  assert.equal(corpus.cases.length, 13)
+  assert.equal(corpus.cases.length, 45)
   for (const corpusCase of corpus.cases) {
     const { config, bytes } = materializeCorpusCase(corpus, corpusCase)
     let actual
@@ -273,15 +277,60 @@ test('shared P1-E corpus produces the declared Web outcomes without exposing Pro
   }
 })
 
-test('Prompt-bearing private configs are absent from catalog projections and every signing helper', async () => {
+test('storage signing accepts only the explicit media bucket and rejects private configs before Storage access', async () => {
+  const calls = []
+  const supabaseAdmin = {
+    storage: {
+      from(bucket) {
+        calls.push({ kind: 'from', bucket })
+        return {
+          async createSignedUrl(storagePath) {
+            calls.push({ kind: 'sign', bucket, storagePath })
+            return { data: { signedUrl: `https://signed.example/${storagePath}` }, error: null }
+          },
+        }
+      },
+    },
+  }
+  const { module } = await loadBundled('src/lib/storage-signing.ts', {
+    external: ['@/lib/supabaseAdmin'],
+    dependencies: { '@/lib/supabaseAdmin': { supabaseAdmin } },
+  })
+
+  await assert.rejects(
+    module.createSignedStorageUrlMap([{
+      key: 'private-config',
+      bucket: 'story-config-private',
+      path: 'story/config.json',
+      expiresIn: 60,
+    }]),
+    (error) => error?.code === 'storage_bucket_not_signable'
+  )
+  assert.equal(calls.length, 0)
+
+  const signed = await module.createSignedStorageUrlMap([{
+    key: 'preview',
+    bucket: 'raw-private',
+    path: 'jobs/preview.png',
+    expiresIn: 60,
+  }])
+  assert.equal(signed.get('preview'), 'https://signed.example/jobs/preview.png')
+  assert.deepEqual(calls, [
+    { kind: 'from', bucket: 'raw-private' },
+    { kind: 'sign', bucket: 'raw-private', storagePath: 'jobs/preview.png' },
+  ])
+})
+
+test('Prompt-bearing private configs are absent from catalog projections and guarded by the signing allowlist', async () => {
   const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
-  const [catalogSource, ownedRoute, sourceFiles] = await Promise.all([
+  const [catalogSource, ownedRoute, sourceFiles, policy] = await Promise.all([
     readFile(path.join(repositoryRoot, 'src/lib/book-catalog.ts'), 'utf8'),
     readFile(path.join(repositoryRoot, 'app/api/jobs/[jobId]/route.ts'), 'utf8'),
     Promise.all([
       listSourceFiles(path.join(repositoryRoot, 'app')),
       listSourceFiles(path.join(repositoryRoot, 'src')),
     ]).then((groups) => groups.flat()),
+    loadBundled('src/lib/storage-signing-policy.ts'),
   ])
   const projectionStart = catalogSource.indexOf('export function templateRowToBook')
   const projectionEnd = catalogSource.indexOf('\nexport ', projectionStart + 1)
@@ -293,6 +342,11 @@ test('Prompt-bearing private configs are absent from catalog projections and eve
   assert.doesNotMatch(projection, /default_config_path|story-config-private|image_edit|prompt/i)
   assert.match(ownedRoute, /input_snapshot: job\.input_snapshot/)
   assert.doesNotMatch(ownedRoute, /config body|image_edit|prompt/i)
+  assert.deepEqual(structuredClone(policy.module.SIGNABLE_STORAGE_BUCKETS), ['raw-private'])
+  assert.throws(
+    () => policy.module.assertSignableStorageBucket('story-config-private'),
+    (error) => error?.code === 'storage_bucket_not_signable'
+  )
 
   const signingFiles = []
   for (const filename of sourceFiles) {
@@ -303,6 +357,18 @@ test('Prompt-bearing private configs are absent from catalog projections and eve
     }
   }
   assert.ok(signingFiles.length > 0)
+
+  for (const relativePath of [
+    'app/api/internal/worker-callback/route.ts',
+    'app/api/jobs/[jobId]/preview-state/route.ts',
+    'app/api/jobs/[jobId]/preview-url/route.ts',
+    'src/lib/orderFulfillment.ts',
+    'src/lib/share-preview.ts',
+    'src/lib/storage-response.ts',
+  ]) {
+    const source = await readFile(path.join(repositoryRoot, relativePath), 'utf8')
+    assert.match(source, /assertSignableStorageBucket\(/, relativePath)
+  }
 })
 
 test('private Preview preflight reads once with trusted credentials and returns only the inert locator', async () => {

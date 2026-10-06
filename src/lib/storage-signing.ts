@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { assertSignableStorageBucket } from '@/lib/storage-signing-policy'
 
 type SignedStorageUrlRequest<Key extends string = string> = {
   key: Key
@@ -11,8 +12,12 @@ type SignedStorageUrlRequest<Key extends string = string> = {
 export async function createSignedStorageUrlMap<Key extends string = string>(
   requests: SignedStorageUrlRequest<Key>[]
 ): Promise<Map<Key, string>> {
+  const validatedRequests = requests.map((request) => ({
+    ...request,
+    bucket: assertSignableStorageBucket(request.bucket),
+  }))
   const entries = await Promise.all(
-    requests.map(async (request) => {
+    validatedRequests.map(async (request) => {
       try {
         const { data } = await supabaseAdmin.storage
           .from(request.bucket)

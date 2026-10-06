@@ -12,6 +12,16 @@ function transpile(path) {
 }
 
 const routeJs = transpile('../../app/api/jobs/[jobId]/preview-state/route.ts')
+const storageSigningPolicyJs = transpile('../../src/lib/storage-signing-policy.ts')
+
+function loadStorageSigningPolicy() {
+  const loaded = { exports: {} }
+  vm.runInNewContext(storageSigningPolicyJs, {
+    module: loaded,
+    exports: loaded.exports,
+  }, { filename: 'src/lib/storage-signing-policy.ts' })
+  return loaded.exports
+}
 
 function loadRoute({ owner = { ownerType: 'customer' }, job }) {
   const calls = []
@@ -82,6 +92,7 @@ function loadRoute({ owner = { ownerType: 'customer' }, job }) {
       }),
     },
     '@/lib/supabaseAdmin': { supabaseAdmin },
+    '@/lib/storage-signing-policy': loadStorageSigningPolicy(),
     '@/lib/checkout-owner': {
       resolveCheckoutOwner: async () => owner,
       checkoutOwnerErrorResponse: () => null,
@@ -121,7 +132,7 @@ test('failed old-Worker output returns the saved cover in one redacted owned rea
       status: 'failed',
       progress: 30,
       provider_runs: { retryable: true },
-      output_assets: { bucket: 'private', schema_version: 3, asset_layout: 'single-page', pages: [cover] },
+      output_assets: { bucket: 'raw-private', schema_version: 3, asset_layout: 'single-page', pages: [cover] },
     },
   })
   const response = await GET(
@@ -181,6 +192,36 @@ test('failed Preview without a page signs nothing and remains recoverable by ide
   const body = await response.json()
   assert.equal(body.phase, 'failed')
   assert.equal(body.assets, null)
+  assert.equal(calls.filter((call) => call.kind === 'sign').length, 0)
+})
+
+test('Preview state refuses the private story-config bucket before direct signing', async () => {
+  const { GET, calls } = loadRoute({
+    job: {
+      job_id: 'job-private-config',
+      job_type: 'preview',
+      status: 'done',
+      progress: 100,
+      provider_runs: {},
+      output_assets: {
+        bucket: 'story-config-private',
+        schema_version: 3,
+        asset_layout: 'single-page',
+        pages: [cover],
+      },
+    },
+  })
+  const response = await GET(
+    new Request('http://localhost/api/jobs/job-private-config/preview-state'),
+    { params: Promise.resolve({ jobId: 'job-private-config' }) }
+  )
+  const body = await response.json()
+
+  assert.equal(response.status, 500)
+  assert.deepEqual(body, {
+    error: 'Preview asset bucket is not signable',
+    code: 'storage_bucket_not_signable',
+  })
   assert.equal(calls.filter((call) => call.kind === 'sign').length, 0)
 })
 
