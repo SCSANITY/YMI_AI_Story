@@ -23,6 +23,9 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceCredential
     fetch: createSupabaseServiceFetch(supabaseServiceCredential),
   },
   ...(supabaseServiceAccessToken
-    ? { accessToken: supabaseServiceAccessToken }
+    ? {
+        accessToken: supabaseServiceAccessToken,
+        realtime: { accessToken: supabaseServiceAccessToken },
+      }
     : {}),
 })

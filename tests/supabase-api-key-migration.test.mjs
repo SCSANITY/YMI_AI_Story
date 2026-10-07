@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
@@ -190,6 +190,7 @@ test('maintenance scripts use the same apikey-only secret contract', async () =>
   assert.deepEqual(secret, { value: 'sb_secret_SCRIPT_TEST', kind: 'secret' })
   const options = helper.supabaseServiceClientOptions(secret)
   assert.equal(await options.accessToken(), null)
+  assert.equal(await options.realtime.accessToken(), null)
 
   const seen = []
   const wrapped = helper.createSupabaseServiceFetch(secret, async (_input, init) => {
@@ -208,5 +209,23 @@ test('maintenance scripts use the same apikey-only secret contract', async () =>
     const source = await readFile(new URL(relativePath, import.meta.url), 'utf8')
     assert.match(source, /resolveSupabaseServiceKey\(\)/)
     assert.match(source, /supabaseServiceClientOptions\(SERVICE_CREDENTIAL\)/)
+  }
+})
+
+test('server admin suppresses the Realtime secret fallback and has no auth consumer', async () => {
+  const adminSource = await readFile(new URL('../src/lib/supabaseAdmin.ts', import.meta.url), 'utf8')
+  assert.match(
+    adminSource,
+    /realtime:\s*\{\s*accessToken:\s*supabaseServiceAccessToken\s*\}/
+  )
+
+  for (const directory of ['app', 'src', 'scripts']) {
+    const root = new URL(`../${directory}/`, import.meta.url)
+    const paths = await readdir(root, { recursive: true })
+    for (const path of paths) {
+      if (!/\.(?:[cm]?[jt]sx?)$/.test(path)) continue
+      const source = await readFile(new URL(path.replaceAll('\\', '/'), root), 'utf8')
+      assert.doesNotMatch(source, /supabaseAdmin\s*\.\s*auth\b/, `${directory}/${path}`)
+    }
   }
 })

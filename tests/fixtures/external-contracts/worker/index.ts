@@ -282,6 +282,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_CREDENTIAL.value, {
     : {}),
   realtime: {
     reconnectAfterMs: resolveQueueWakeRetryDelayMs,
+    ...(SUPABASE_SERVICE_ACCESS_TOKEN
+      ? { accessToken: SUPABASE_SERVICE_ACCESS_TOKEN }
+      : {}),
   },
 })
 const templateFileCache = new Map<string, { files: Set<string>; ts: number }>()

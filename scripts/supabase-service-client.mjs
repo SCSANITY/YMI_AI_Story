@@ -37,9 +37,10 @@ export function createSupabaseServiceFetch(credential, fetchImpl = fetch) {
 }
 
 export function supabaseServiceClientOptions(credential) {
+  const accessToken = credential.kind === 'secret' ? async () => null : undefined
   return {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { fetch: createSupabaseServiceFetch(credential) },
-    ...(credential.kind === 'secret' ? { accessToken: async () => null } : {}),
+    ...(accessToken ? { accessToken, realtime: { accessToken } } : {}),
   }
 }

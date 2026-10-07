@@ -43,7 +43,7 @@ not a second Worker source.
   `worker/index.ts` and `worker/workerOrchestration.ts`, and added
   `worker/privateConfig.ts` plus `worker/supabaseCredentials.ts`, byte-for-byte
   from local-only Worker candidate
-  `b0f4f44836229b3d33a6aab479e0e9207277b159` on 2026-10-07. These fixtures
+  `941992419ee88f9938cbf668f3e953226cc2c145` on 2026-10-07. These fixtures
   pin the legacy service-role and new `sb_secret_` compatibility boundary,
   including apikey-only private reads and Realtime access-token suppression;
   they are review evidence, not proof of deployment or key creation.
