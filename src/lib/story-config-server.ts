@@ -3,6 +3,11 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import https from 'node:https'
 import type { IncomingMessage } from 'node:http'
+import {
+  resolveSupabaseServiceCredential,
+  supabaseServiceRequestHeaders,
+  type SupabaseServiceCredential,
+} from '@/lib/supabase-service-credential'
 
 export const PRIVATE_STORY_CONFIG_BUCKET = 'story-config-private' as const
 export const PRIVATE_STORY_CONFIG_PREFIX = 'story-configs/image-edit/v1' as const
@@ -66,7 +71,7 @@ type PrivateStoryConfigResponse = Readonly<{
 
 export type PrivateStoryConfigTransport = (args: Readonly<{
   url: string
-  serviceKey: string
+  serviceCredential: SupabaseServiceCredential
   signal: AbortSignal
   timeoutMs: typeof PRIVATE_STORY_CONFIG_TIMEOUT_MS
   maxBytes: typeof PRIVATE_STORY_CONFIG_MAX_BYTES
@@ -125,14 +130,12 @@ function configuredSupabaseOrigin(): string {
   )
 }
 
-function configuredServiceKey(): string {
-  const key = String(
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || ''
-  )
-  if (!key || key !== key.trim() || /[\r\n]/.test(key)) {
+function configuredServiceCredential(): SupabaseServiceCredential {
+  try {
+    return resolveSupabaseServiceCredential()
+  } catch {
     throw new StoryConfigError('story_config_server_misconfigured')
   }
-  return key
 }
 
 function escapeRegExp(value: string): string {
@@ -433,8 +436,7 @@ export const nativePrivateStoryConfigTransport: PrivateStoryConfigTransport = as
     const request = https.request(args.url, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${args.serviceKey}`,
-        apikey: args.serviceKey,
+        ...supabaseServiceRequestHeaders(args.serviceCredential),
         'Cache-Control': 'no-cache',
         Pragma: 'no-cache',
       },
@@ -486,7 +488,7 @@ export const nativePrivateStoryConfigTransport: PrivateStoryConfigTransport = as
 async function readPrivateStoryConfig(args: {
   address: PrivateStoryConfigAddress
   templateId: string
-  serviceKey: string
+  serviceCredential: SupabaseServiceCredential
   transport: PrivateStoryConfigTransport
 }): Promise<ValidatedPrivateStoryConfig> {
   const controller = new AbortController()
@@ -496,7 +498,7 @@ async function readPrivateStoryConfig(args: {
   try {
     response = await args.transport({
       url: args.address.configUrl,
-      serviceKey: args.serviceKey,
+      serviceCredential: args.serviceCredential,
       signal: controller.signal,
       timeoutMs: PRIVATE_STORY_CONFIG_TIMEOUT_MS,
       maxBytes: PRIVATE_STORY_CONFIG_MAX_BYTES,
@@ -539,7 +541,7 @@ export async function prepareStoryConfigForPreview(args: {
     await readPrivateStoryConfig({
       address,
       templateId: args.templateId,
-      serviceKey: configuredServiceKey(),
+      serviceCredential: configuredServiceCredential(),
       transport: nativePrivateStoryConfigTransport,
     })
   }
@@ -594,7 +596,7 @@ export async function loadStoryConfigForFinal(args: {
     ? (await readPrivateStoryConfig({
         address,
         templateId: args.templateId,
-        serviceKey: configuredServiceKey(),
+        serviceCredential: configuredServiceCredential(),
         transport: nativePrivateStoryConfigTransport,
       })).finalPageIndices
     : await readLegacyFinalPageIndices(address.configUrl)

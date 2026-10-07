@@ -112,7 +112,7 @@ async function loadBundled(entry, options = {}) {
     Response,
     console,
     process: {
-      env: {
+      env: options.env ?? {
         SUPABASE_URL: currentOrigin,
         SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
       },
@@ -387,6 +387,26 @@ test('private Preview preflight reads once with trusted credentials and returns 
   assert.equal(env.calls.lastHttps.options.headers.Authorization, 'Bearer test-service-key')
   assert.equal(env.calls.lastHttps.options.headers.apikey, 'test-service-key')
   assert.equal(JSON.stringify(result).includes(secretMarker), false)
+})
+
+test('private Preview preflight sends a new secret only as apikey and never as Bearer', async () => {
+  const bytes = Buffer.from(JSON.stringify(validConfig()))
+  const env = await loadBundled('src/lib/story-config-server.ts', {
+    env: {
+      SUPABASE_URL: currentOrigin,
+      SUPABASE_SECRET_KEY: 'sb_secret_WEB_PRIVATE_READER_TEST',
+      SUPABASE_SERVICE_ROLE_KEY: 'legacy-service-test',
+    },
+    httpsPlan: { status: 200, body: bytes },
+  })
+  await env.module.prepareStoryConfigForPreview({
+    templateId,
+    rawConfigPath: privatePath(bytes),
+    resolveLegacyPublicUrl: legacyPublicUrl,
+  })
+  assert.equal(env.calls.https, 1)
+  assert.equal(env.calls.lastHttps.options.headers.apikey, 'sb_secret_WEB_PRIVATE_READER_TEST')
+  assert.equal('Authorization' in env.calls.lastHttps.options.headers, false)
 })
 
 test('private Final read returns exact indices without exposing the prompt-bearing config', async () => {

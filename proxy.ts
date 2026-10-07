@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { CURRENCY_GEO_COOKIE } from '@/lib/currency-geo'
+import { configuredSupabasePublicKey } from '@/lib/supabase-public-key'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const BYPASS_COOKIE = 'ymi_maintenance_bypass'
 const VERCEL_COUNTRY_HEADER = 'x-vercel-ip-country'
 
@@ -62,6 +62,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  const supabasePublicKey = configuredSupabasePublicKey()
   const response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -80,7 +81,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient(supabaseUrl, supabasePublicKey.value, {
     cookies: {
       getAll() {
         return request.cookies.getAll()

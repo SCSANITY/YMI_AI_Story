@@ -21,10 +21,10 @@ for (const envFile of ['.env.local', '.env.localhost']) {
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
+const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
-  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or Supabase service credential')
 }
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {

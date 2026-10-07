@@ -34,7 +34,7 @@ const ids = process.argv
   .filter(Boolean)
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
+const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
 
 const COVER_SIZE = Number(process.env.IMAGE_OPTIMIZE_COVER_SIZE || 1200)
 const COVER_CONTENT_RATIO = Number(process.env.IMAGE_OPTIMIZE_COVER_CONTENT_RATIO || 0.92)
@@ -308,7 +308,7 @@ async function optimizeCatalogAssets() {
 
   const supabase = createSupabaseClient()
   if (!supabase) {
-    logAction('skip catalog assets because NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing')
+    logAction('skip catalog assets because NEXT_PUBLIC_SUPABASE_URL or a Supabase service credential is missing')
     return
   }
 
