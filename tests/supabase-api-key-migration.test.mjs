@@ -138,6 +138,17 @@ test('service fetch removes only a new secret used as Bearer and retains an actu
     { apikey: 'sb_secret_WEB_TEST' },
     { apikey: 'sb_secret_WEB_TEST', authorization: 'Bearer user-jwt-test' },
   ])
+  const accessToken = credentials.createSupabaseServiceAccessToken(secret)
+  assert.equal(typeof accessToken, 'function')
+  assert.equal(await accessToken(), null)
+  assert.equal(
+    credentials.createSupabaseServiceAccessToken(
+      credentials.resolveSupabaseServiceCredential({
+        SUPABASE_SERVICE_ROLE_KEY: 'legacy-service-test',
+      })
+    ),
+    undefined
+  )
 })
 
 test('all public Supabase clients use the static publishable-key resolver', async () => {
@@ -155,13 +166,11 @@ test('all public Supabase clients use the static publishable-key resolver', asyn
   assert.match(resolver, /process\.env\.NEXT_PUBLIC_SUPABASE_ANON_KEY/)
 })
 
-test('server fallbacks and maintenance scripts accept the new secret variable first', async () => {
+test('server fallbacks accept the new secret variable first', async () => {
   const paths = [
     '../app/api/guest/request-otp/route.ts',
     '../app/api/newsletter-subscribers/route.ts',
     '../app/api/upload-url/route.ts',
-    '../scripts/normalize-template-covers.mjs',
-    '../scripts/optimize-images.mjs',
   ]
   for (const relativePath of paths) {
     const source = await readFile(new URL(relativePath, import.meta.url), 'utf8')
@@ -169,5 +178,35 @@ test('server fallbacks and maintenance scripts accept the new secret variable fi
     const roleIndex = source.indexOf('process.env.SUPABASE_SERVICE_ROLE_KEY')
     assert.ok(secretIndex >= 0, relativePath)
     assert.ok(roleIndex > secretIndex, relativePath)
+  }
+})
+
+test('maintenance scripts use the same apikey-only secret contract', async () => {
+  const helper = await import('../scripts/supabase-service-client.mjs')
+  const secret = helper.resolveSupabaseServiceKey({
+    SUPABASE_SECRET_KEY: 'sb_secret_SCRIPT_TEST',
+    SUPABASE_SERVICE_ROLE_KEY: 'legacy-service-test',
+  })
+  assert.deepEqual(secret, { value: 'sb_secret_SCRIPT_TEST', kind: 'secret' })
+  const options = helper.supabaseServiceClientOptions(secret)
+  assert.equal(await options.accessToken(), null)
+
+  const seen = []
+  const wrapped = helper.createSupabaseServiceFetch(secret, async (_input, init) => {
+    seen.push(Object.fromEntries(new Headers(init.headers).entries()))
+    return new Response('{}', { status: 200 })
+  })
+  await wrapped('https://example.invalid/rest/v1/test', {
+    headers: { Authorization: 'Bearer sb_secret_SCRIPT_TEST' },
+  })
+  assert.deepEqual(seen, [{ apikey: 'sb_secret_SCRIPT_TEST' }])
+
+  for (const relativePath of [
+    '../scripts/normalize-template-covers.mjs',
+    '../scripts/optimize-images.mjs',
+  ]) {
+    const source = await readFile(new URL(relativePath, import.meta.url), 'utf8')
+    assert.match(source, /resolveSupabaseServiceKey\(\)/)
+    assert.match(source, /supabaseServiceClientOptions\(SERVICE_CREDENTIAL\)/)
   }
 })

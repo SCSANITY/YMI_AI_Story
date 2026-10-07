@@ -3,6 +3,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { createClient } from '@supabase/supabase-js'
+import {
+  resolveSupabaseServiceKey,
+  supabaseServiceClientOptions,
+} from './supabase-service-client.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '..')
@@ -21,15 +25,17 @@ for (const envFile of ['.env.local', '.env.localhost']) {
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
+const SERVICE_CREDENTIAL = resolveSupabaseServiceKey()
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
+if (!SUPABASE_URL) {
   throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or Supabase service credential')
 }
 
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-})
+const supabase = createClient(
+  SUPABASE_URL,
+  SERVICE_CREDENTIAL.value,
+  supabaseServiceClientOptions(SERVICE_CREDENTIAL)
+)
 
 const OUTPUT_SIZE = Number(process.env.COVER_NORMALIZE_SIZE || 1400)
 const TARGET_CONTENT_RATIO = Number(process.env.COVER_NORMALIZE_CONTENT_RATIO || 0.92)

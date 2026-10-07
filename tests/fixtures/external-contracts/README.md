@@ -39,6 +39,14 @@ not a second Worker source.
   `image_edit` contract and pin both strict failures and the two currently
   tolerated unknown-key outcomes. It includes a deliberate do-not-publish
   Prompt marker and is test evidence only, never a story publication candidate.
+- IMG-PROVIDER-PROD-001 P1-E3 NEW-API-KEY-MIGRATION refreshed
+  `worker/index.ts` and `worker/workerOrchestration.ts`, and added
+  `worker/privateConfig.ts` plus `worker/supabaseCredentials.ts`, byte-for-byte
+  from local-only Worker candidate
+  `b0f4f44836229b3d33a6aab479e0e9207277b159` on 2026-10-07. These fixtures
+  pin the legacy service-role and new `sb_secret_` compatibility boundary,
+  including apikey-only private reads and Realtime access-token suppression;
+  they are review evidence, not proof of deployment or key creation.
 - LG-001 added `20260916_173000_lg_001_shipping_details.sql` from the private
   Database logistics branch on 2026-09-16. It pins the service-only atomic
   logistics save, lease and guarded sync contracts. This source-reviewed

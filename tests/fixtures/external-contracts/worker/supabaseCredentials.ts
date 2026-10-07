@@ -1,18 +1,15 @@
-import 'server-only'
-
 export type SupabaseServiceCredential = Readonly<{
   value: string
   kind: 'secret' | 'legacy-service-role'
-  source: 'SUPABASE_SECRET_KEY' | 'SUPABASE_SERVICE_ROLE_KEY' | 'SUPABASE_SERVICE_KEY'
+  source: 'SUPABASE_SECRET_KEY' | 'SUPABASE_SERVICE_KEY' | 'SUPABASE_SERVICE_ROLE_KEY'
 }>
 
-type SupabaseServiceEnvironment = Readonly<Record<string, string | undefined> & {
-  SUPABASE_SECRET_KEY?: string
-  SUPABASE_SERVICE_ROLE_KEY?: string
-  SUPABASE_SERVICE_KEY?: string
-}>
+type RuntimeEnv = Readonly<Record<string, string | undefined>>
 
-function classifyServiceKey(value: string, source: SupabaseServiceCredential['source']): SupabaseServiceCredential {
+function classifyServiceKey(
+  value: string,
+  source: SupabaseServiceCredential['source']
+): SupabaseServiceCredential {
   if (!value || value !== value.trim() || /[\r\n]/.test(value)) {
     throw new Error('Supabase service API key is missing or invalid')
   }
@@ -29,31 +26,28 @@ function classifyServiceKey(value: string, source: SupabaseServiceCredential['so
 }
 
 export function resolveSupabaseServiceCredential(
-  env: SupabaseServiceEnvironment = process.env
+  env: RuntimeEnv = process.env
 ): SupabaseServiceCredential {
   if (env.SUPABASE_SECRET_KEY !== undefined) {
     return classifyServiceKey(env.SUPABASE_SECRET_KEY, 'SUPABASE_SECRET_KEY')
   }
-  if (env.SUPABASE_SERVICE_ROLE_KEY !== undefined) {
-    return classifyServiceKey(env.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
-  }
   if (env.SUPABASE_SERVICE_KEY !== undefined) {
     return classifyServiceKey(env.SUPABASE_SERVICE_KEY, 'SUPABASE_SERVICE_KEY')
+  }
+  if (env.SUPABASE_SERVICE_ROLE_KEY !== undefined) {
+    return classifyServiceKey(env.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
   }
   throw new Error('Supabase service API key is missing or invalid')
 }
 
-export function supabaseServiceRequestHeaders(
+export function privateConfigCredentialHeaders(
   credential: SupabaseServiceCredential
-): Readonly<Record<string, string>> {
+): Readonly<{ Authorization?: string; apikey?: string }> {
   const validated = classifyServiceKey(credential.value, credential.source)
   if (validated.kind === 'secret') {
     return Object.freeze({ apikey: validated.value })
   }
-  return Object.freeze({
-    Authorization: `Bearer ${validated.value}`,
-    apikey: validated.value,
-  })
+  return Object.freeze({ Authorization: `Bearer ${validated.value}` })
 }
 
 export function createSupabaseServiceFetch(
@@ -80,4 +74,14 @@ export function createSupabaseServiceAccessToken(
   const validated = classifyServiceKey(credential.value, credential.source)
   if (validated.kind === 'legacy-service-role') return undefined
   return async () => null
+}
+
+export async function configureRealtimeServiceCredential(
+  realtime: Readonly<{ setAuth(token: string): Promise<unknown> }>,
+  credential: SupabaseServiceCredential
+): Promise<'apikey-only' | 'legacy-jwt'> {
+  const validated = classifyServiceKey(credential.value, credential.source)
+  if (validated.kind === 'secret') return 'apikey-only'
+  await realtime.setAuth(validated.value)
+  return 'legacy-jwt'
 }

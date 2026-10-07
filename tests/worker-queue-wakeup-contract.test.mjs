@@ -17,14 +17,21 @@ describe('Worker queue wake-up external contract', () => {
   })
 
   it('uses Broadcast only to interrupt the one bounded claim scheduler', async () => {
-    const worker = await readFixture('index.ts')
+    const [worker, credentials] = await Promise.all([
+      readFixture('index.ts'),
+      readFixture('supabaseCredentials.ts'),
+    ])
     const handlerStart = worker.indexOf(".on('broadcast'")
     const handlerEnd = worker.indexOf('channel.subscribe', handlerStart)
 
     assert.ok(handlerStart >= 0 && handlerEnd > handlerStart)
     const broadcastHandler = worker.slice(handlerStart, handlerEnd)
 
-    assert.match(worker, /supabase\.realtime\.setAuth\(SUPABASE_SERVICE_KEY\)/)
+    assert.match(worker, /configureRealtimeServiceCredential\([\s\S]*supabase\.realtime,[\s\S]*SUPABASE_SERVICE_CREDENTIAL/)
+    assert.match(worker, /createSupabaseServiceAccessToken\([\s\S]*SUPABASE_SERVICE_CREDENTIAL/)
+    assert.match(credentials, /if \(validated\.kind === 'secret'\) return 'apikey-only'/)
+    assert.match(credentials, /if \(validated\.kind === 'legacy-service-role'\) return undefined/)
+    assert.doesNotMatch(credentials, /setAuth\(validated\.value\)[\s\S]*apikey-only/)
     assert.match(worker, /config: \{ private: true \}/)
     assert.match(broadcastHandler, /claimWakeSignal\.wake\(\)/)
     assert.doesNotMatch(broadcastHandler, /claim_next_job/)

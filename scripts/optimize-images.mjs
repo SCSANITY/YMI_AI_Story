@@ -3,6 +3,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { createClient } from '@supabase/supabase-js'
+import {
+  resolveSupabaseServiceKey,
+  supabaseServiceClientOptions,
+} from './supabase-service-client.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '..')
@@ -34,7 +38,14 @@ const ids = process.argv
   .filter(Boolean)
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
+const HAS_SERVICE_CREDENTIAL = [
+  process.env.SUPABASE_SECRET_KEY,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.SUPABASE_SERVICE_KEY,
+].some((value) => value !== undefined)
+const SERVICE_CREDENTIAL = HAS_SERVICE_CREDENTIAL
+  ? resolveSupabaseServiceKey()
+  : null
 
 const COVER_SIZE = Number(process.env.IMAGE_OPTIMIZE_COVER_SIZE || 1200)
 const COVER_CONTENT_RATIO = Number(process.env.IMAGE_OPTIMIZE_COVER_CONTENT_RATIO || 0.92)
@@ -66,10 +77,12 @@ const PHOTO_SAMPLES = [
 ]
 
 function createSupabaseClient() {
-  if (!SUPABASE_URL || !SERVICE_KEY) return null
-  return createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
+  if (!SUPABASE_URL || !SERVICE_CREDENTIAL) return null
+  return createClient(
+    SUPABASE_URL,
+    SERVICE_CREDENTIAL.value,
+    supabaseServiceClientOptions(SERVICE_CREDENTIAL)
+  )
 }
 
 function logAction(message) {

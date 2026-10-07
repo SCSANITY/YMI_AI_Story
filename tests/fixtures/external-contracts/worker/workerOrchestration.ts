@@ -94,8 +94,12 @@ export function validateWorkerStartupEnvironment(args: {
 }) {
   const missing: string[] = []
   if (!args.env.SUPABASE_URL?.trim()) missing.push('SUPABASE_URL')
-  if (!(args.env.SUPABASE_SERVICE_KEY || args.env.SUPABASE_SERVICE_ROLE_KEY)?.trim()) {
-    missing.push('SUPABASE_SERVICE_KEY')
+  if (!(
+    args.env.SUPABASE_SECRET_KEY ||
+    args.env.SUPABASE_SERVICE_KEY ||
+    args.env.SUPABASE_SERVICE_ROLE_KEY
+  )?.trim()) {
+    missing.push('SUPABASE_SECRET_KEY/SUPABASE_SERVICE_KEY')
   }
 
   if (args.executionMode === 'provider') {

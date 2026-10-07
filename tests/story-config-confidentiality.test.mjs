@@ -628,16 +628,16 @@ test('Change Photo preserves the inherited immutable locator and owned Job respo
   assert.doesNotMatch(fulfillment, /fetch\(configUrl|response\.json\(\)/)
 })
 
-test('external Worker fixture pins the exact reviewed P1-C2 source and checksum identity', async () => {
+test('external Worker fixture pins the exact reviewed private-config and key-migration source identity', async () => {
   const [fixture, manifest, fixtureReadme] = await Promise.all([
     readFile(new URL('./fixtures/external-contracts/worker/index.ts', import.meta.url)),
     readFile(new URL('./fixtures/external-contracts/SHA256SUMS', import.meta.url), 'utf8'),
     readFile(new URL('./fixtures/external-contracts/README.md', import.meta.url), 'utf8'),
   ])
-  const expected = 'F7296864254A854340FA41A8E9AF3A8B64CD1494B343FF107B489D4C96FAE995'
+  const expected = '54FB4803F5A00F49941F946195FEE5FA297394BB895C45FA9171383DF655CB21'
   assert.equal(sha256(fixture).toUpperCase(), expected)
   assert.match(manifest, new RegExp(`^${expected}  worker/index\\.ts$`, 'm'))
-  assert.match(fixtureReadme, /fefae2b7b464501e79d3469ed2875e13b3c07e50/)
+  assert.match(fixtureReadme, /b0f4f44836229b3d33a6aab479e0e9207277b159/)
   assert.match(fixture.toString('utf8'), /privateImageEditSnapshot = await loadPrivateImageEditConfig\(/)
   assert.match(fixture.toString('utf8'), /assertPrivateImageEditProviderAuthority\(/)
 })

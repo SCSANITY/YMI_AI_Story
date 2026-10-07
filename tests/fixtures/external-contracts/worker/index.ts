@@ -138,17 +138,22 @@ import {
   preflightPreviewImageEditJob,
   type PreviewWholeJobPreflight,
 } from './previewImageInput'
+import {
+  configureRealtimeServiceCredential,
+  createSupabaseServiceAccessToken,
+  createSupabaseServiceFetch,
+  resolveSupabaseServiceCredential,
+} from './supabaseCredentials'
 
 dotenv.config()
 
 const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+const SUPABASE_SERVICE_CREDENTIAL = resolveSupabaseServiceCredential()
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+if (!SUPABASE_URL) {
   throw new Error('Missing required environment variables for worker')
 }
 const VERIFIED_SUPABASE_URL = SUPABASE_URL
-const VERIFIED_SUPABASE_SERVICE_KEY = SUPABASE_SERVICE_KEY
 
 const APP_TEMPLATES_BUCKET = 'app-templates'
 const RAW_BUCKET = 'raw-private'
@@ -260,12 +265,21 @@ const PRIVATE_CONFIG_HISTORICAL_ORIGINS = String(process.env.PRIVATE_CONFIG_HIST
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean)
+const SUPABASE_SERVICE_ACCESS_TOKEN = createSupabaseServiceAccessToken(
+  SUPABASE_SERVICE_CREDENTIAL
+)
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_CREDENTIAL.value, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
   },
+  global: {
+    fetch: createSupabaseServiceFetch(SUPABASE_SERVICE_CREDENTIAL),
+  },
+  ...(SUPABASE_SERVICE_ACCESS_TOKEN
+    ? { accessToken: SUPABASE_SERVICE_ACCESS_TOKEN }
+    : {}),
   realtime: {
     reconnectAfterMs: resolveQueueWakeRetryDelayMs,
   },
@@ -775,7 +789,10 @@ async function startQueueWakeSubscription(): Promise<QueueWakeSubscription | nul
     connecting = true
     setQueueWakeStatus('connecting')
     try {
-      await supabase.realtime.setAuth(SUPABASE_SERVICE_KEY)
+      await configureRealtimeServiceCredential(
+        supabase.realtime,
+        SUPABASE_SERVICE_CREDENTIAL
+      )
       if (stopped) return
 
       const channel = supabase
@@ -2025,7 +2042,7 @@ async function processJob(job: JobRow): Promise<void> {
         currentOrigin: VERIFIED_SUPABASE_URL,
         historicalOrigins: PRIVATE_CONFIG_HISTORICAL_ORIGINS,
         templateId: job.template_id,
-        authorization: `Bearer ${VERIFIED_SUPABASE_SERVICE_KEY}`,
+        serviceCredential: SUPABASE_SERVICE_CREDENTIAL,
         transport: createPrivateConfigTransport({ trustedOrigin: new URL(VERIFIED_SUPABASE_URL).origin }),
       })
       config = createJobScopedConfigSnapshot(privateImageEditSnapshot.config as TemplateConfig)
