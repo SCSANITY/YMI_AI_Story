@@ -42,6 +42,7 @@ type Props = {
   uploadErrorByPage: UploadErrorState
   approvePage: (page: FinalJobPageRow) => Promise<void>
   markNeedsFix: (page: FinalJobPageRow) => Promise<void>
+  rerunPage: (page: FinalJobPageRow) => Promise<void>
   approveAllPages: () => Promise<void>
   exportApprovedSources: (pageIndices: number[], mode: 'single' | 'zip') => Promise<void>
   openReplacementPicker: (page: FinalJobPageRow) => void
@@ -49,6 +50,7 @@ type Props = {
 }
 
 export function PdfVersionReview(props: Props) {
+  const rerunDisabled = props.selectedJob?.production_mode === 'manual'
   const {
     pages,
     pageContract,
@@ -62,6 +64,7 @@ export function PdfVersionReview(props: Props) {
     uploadErrorByPage,
     approvePage,
     markNeedsFix,
+    rerunPage,
     approveAllPages,
     exportApprovedSources,
     openReplacementPicker,
@@ -199,6 +202,8 @@ export function PdfVersionReview(props: Props) {
           uploadErrorByPage={uploadErrorByPage}
           approvePage={approvePage}
           markNeedsFix={markNeedsFix}
+          rerunPage={rerunPage}
+          rerunDisabled={rerunDisabled}
           openReplacementPicker={openReplacementPicker}
           emptySlotUploadAllowed={emptySlotUploadAllowed}
           onImageLoadError={onImageLoadError}
@@ -225,8 +230,10 @@ function StructuredPdfWorkspace({
   uploadErrorByPage,
   approvePage,
   markNeedsFix,
+  rerunPage,
   openReplacementPicker,
   emptySlotUploadAllowed,
+  rerunDisabled,
   onImageLoadError,
 }: {
   items: FinalReviewPageItem[]
@@ -241,8 +248,10 @@ function StructuredPdfWorkspace({
   uploadErrorByPage: UploadErrorState
   approvePage: (page: FinalJobPageRow) => Promise<void>
   markNeedsFix: (page: FinalJobPageRow) => Promise<void>
+  rerunPage: (page: FinalJobPageRow) => Promise<void>
   openReplacementPicker: (page: FinalJobPageRow) => void
   emptySlotUploadAllowed: boolean
+  rerunDisabled: boolean
   onImageLoadError: () => void
 }) {
   const selectedItem =
@@ -264,7 +273,7 @@ function StructuredPdfWorkspace({
             <p className="text-xs text-[var(--admin-muted)]">{selectedItem.secondaryLabel}</p>
           </div>
           <span className={`w-fit rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusClass(page.status)}`}>
-            {page.status}
+            {page.status === 'manual_pending' ? 'Awaiting upload' : page.status}
           </span>
         </div>
 
@@ -322,10 +331,11 @@ function StructuredPdfWorkspace({
               />
               <ReviewActionButton
                 label="Rerun"
-                title="Rerun with random seed is coming later. Current fixed-seed rerun is disabled."
+                title={rerunDisabled ? 'Manual production uses uploaded pages' : 'Rerun this automatic page'}
                 icon={<RotateCcw className="h-3.5 w-3.5" />}
                 tone="rerun"
-                disabled
+                disabled={rerunDisabled || emptySlot || Boolean(uploadPending) || busyAction !== null}
+                onClick={() => void rerunPage(page)}
               />
               <ReviewActionButton
                 label={emptySlot ? 'Upload page' : 'Replace'}
@@ -364,6 +374,8 @@ function StructuredPdfWorkspace({
                   uploadError={uploadErrorByPage[item.page.final_job_page_id]}
                   approvePage={approvePage}
                   markNeedsFix={markNeedsFix}
+                  rerunPage={rerunPage}
+                  rerunDisabled={rerunDisabled}
                   openReplacementPicker={openReplacementPicker}
                   emptySlotUploadAllowed={emptySlotUploadAllowed}
                   onImageLoadError={onImageLoadError}
@@ -390,8 +402,10 @@ function StructuredPageNavigatorButton({
   uploadError,
   approvePage,
   markNeedsFix,
+  rerunPage,
   openReplacementPicker,
   emptySlotUploadAllowed,
+  rerunDisabled,
   onImageLoadError,
 }: {
   item: FinalReviewPageItem
@@ -406,8 +420,10 @@ function StructuredPageNavigatorButton({
   uploadError: string | undefined
   approvePage: (page: FinalJobPageRow) => Promise<void>
   markNeedsFix: (page: FinalJobPageRow) => Promise<void>
+  rerunPage: (page: FinalJobPageRow) => Promise<void>
   openReplacementPicker: (page: FinalJobPageRow) => void
   emptySlotUploadAllowed: boolean
+  rerunDisabled: boolean
   onImageLoadError: () => void
 }) {
   const previewUrl = pagePreviewUrl(item.page)
@@ -457,7 +473,7 @@ function StructuredPageNavigatorButton({
                 : item.page.status === 'failed'
                   ? 'bg-rose-300'
                   : 'bg-sky-300'
-          }`} aria-label={item.page.status} />
+          }`} aria-label={item.page.status === 'manual_pending' ? 'Awaiting manual page upload' : item.page.status} />
         </div>
       </button>
       <div className="mt-2 space-y-2 border-t border-[var(--admin-card-line)] pt-2">
@@ -479,10 +495,11 @@ function StructuredPageNavigatorButton({
           />
           <ReviewActionButton
             label="Rerun"
-            title="Rerun with random seed is coming later. Current fixed-seed rerun is disabled."
+            title={rerunDisabled ? 'Manual production uses uploaded pages' : 'Rerun this automatic page'}
             icon={<RotateCcw className="h-3.5 w-3.5" />}
             tone="rerun"
-            disabled
+            disabled={rerunDisabled || emptySlot || Boolean(uploadPending) || busyAction !== null}
+            onClick={() => selectAndRun(() => void rerunPage(item.page))}
           />
           <ReviewActionButton
             label={emptySlot ? 'Upload page' : 'Replace'}

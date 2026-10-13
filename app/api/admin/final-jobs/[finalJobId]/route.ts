@@ -12,6 +12,7 @@ import {
   type ManualPrintArtifactRow,
 } from '@/lib/manual-print-artifact-server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getFrozenFinalProductionMode } from '@/lib/final-production'
 
 const SIGN_TTL_SECONDS = 60 * 20
 
@@ -79,7 +80,7 @@ export async function GET(
 
   const { data: linkedJob, error: linkedJobError } = await supabaseAdmin
     .from('jobs')
-    .select('output_assets')
+    .select('output_assets,input_snapshot')
     .eq('job_id', finalJob.job_id)
     .maybeSingle()
 
@@ -149,6 +150,7 @@ export async function GET(
   const { creations, ...summary } = finalJob
   const finalJobSummary = {
     ...summary,
+    production_mode: getFrozenFinalProductionMode(linkedJob.input_snapshot),
     display_title: resolveFinalJobDisplayTitle({ ...summary, creations }),
   }
 

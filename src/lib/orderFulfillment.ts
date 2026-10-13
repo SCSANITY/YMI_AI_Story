@@ -1,3 +1,5 @@
+import { getFrozenFinalProductionMode, initialFinalProductionStatus, resolveNewFinalProductionMode } from '@/lib/final-production'
+import { parseFinalPageMetadataContract, FINAL_PAGE_SOURCE_COUNT } from '@/lib/final-page-metadata'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { sendOrderConfirmationEmail } from '@/lib/email'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
@@ -649,6 +651,9 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   const missingJobItems = cartItems.filter(
     (item) => !jobIdByCartItem.has(item.cart_item_id)
   )
+  // The only environment mode decision: after payment, at new Final creation.
+  const newFinalProductionMode = missingJobItems.length > 0
+    ? resolveNewFinalProductionMode(process.env.FINAL_PRODUCTION_MODE) : null
 
   if (jobIdByCartItem.size > 0) {
     for (const [cartItemId, jobId] of jobIdByCartItem.entries()) {
@@ -684,6 +689,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     const configByTemplateId = new Map<string, Readonly<{
       configUrl: string
       finalPageIndices: readonly number[]
+      finalOutputAssets?: Record<string, unknown>
     }>>()
     const finalPageIndicesByCartItem = new Map<string, number[]>()
 
@@ -697,6 +703,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         resolvedConfig = await loadStoryConfigForFinal({
           templateId,
           rawConfigPath: configMap.get(templateId) ?? null,
+          includeFinalOutputMetadata: newFinalProductionMode === 'manual',
           resolveLegacyPublicUrl: (configPath) => supabaseAdmin.storage
             .from('app-templates')
             .getPublicUrl(configPath)
@@ -738,8 +745,10 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
               creation?.customize_snapshot?.text_overrides?.book_type ??
               creation?.customize_snapshot?.bookType
           ),
-          status: 'queued',
+          status: initialFinalProductionStatus(newFinalProductionMode!),
+          ...(newFinalProductionMode === 'manual' ? { output_assets: resolvedConfig.finalOutputAssets } : {}),
           input_snapshot: {
+            final_production_mode: newFinalProductionMode,
             face_source_path: storagePath ? `raw-private/${storagePath}` : null,
             config_url: resolvedConfig.configUrl,
             text_overrides: finalTextOverrides,
@@ -782,6 +791,12 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     }
 
     const allJobIds = Array.from(jobIdByCartItem.values()).filter(Boolean)
+    const { data: frozenJobs, error: frozenJobsError } = await supabaseAdmin
+      .from('jobs')
+      .select('job_id, input_snapshot, output_assets')
+      .in('job_id', allJobIds)
+    if (frozenJobsError) throw new Error('Failed to read frozen Final production')
+    const frozenJobById = new Map((frozenJobs ?? []).map((row) => [row.job_id, row]))
     const existingFinalJobsByJobId = new Map<string, { final_job_id: string }>()
     if (allJobIds.length > 0) {
       const { data: existingFinalJobs } = await supabaseAdmin
@@ -799,7 +814,12 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     for (const item of cartItems) {
       const jobId = jobIdByCartItem.get(item.cart_item_id)
       const creation = item.creations
-      const pageIndices = finalPageIndicesByCartItem.get(item.cart_item_id) ?? []
+      const frozenJob = jobId ? frozenJobById.get(jobId) : null
+      if (jobId && !frozenJob) throw new Error('Frozen Final job not found')
+      const productionMode = getFrozenFinalProductionMode(frozenJob?.input_snapshot)
+      const pageIndices = productionMode === 'manual'
+        ? parseFinalPageMetadataContract({ outputAssets: frozenJob?.output_assets, totalPages: FINAL_PAGE_SOURCE_COUNT }).pages.map((page) => page.page_index)
+        : finalPageIndicesByCartItem.get(item.cart_item_id) ?? []
       if (!jobId || !creation?.template_id || !pageIndices.length) continue
 
       let finalJobId = existingFinalJobsByJobId.get(jobId)?.final_job_id ?? null
@@ -812,7 +832,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
             cart_item_id: item.cart_item_id,
             creation_id: item.creation_id,
             template_id: creation.template_id,
-            status: 'queued',
+            status: initialFinalProductionStatus(productionMode),
             review_status: 'pending',
             total_pages: pageIndices.length,
             approved_pages: 0,
@@ -860,7 +880,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
         .map((pageIndex) => ({
           final_job_id: resolvedFinalJobId,
           page_index: pageIndex,
-          status: 'queued',
+          status: initialFinalProductionStatus(productionMode),
           updated_at: new Date().toISOString(),
         }))
 

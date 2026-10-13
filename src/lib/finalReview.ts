@@ -19,6 +19,7 @@ import {
 import { isFinalJobReleased } from '@/lib/purchase-state'
 import type { ManualPrintArtifactClient } from '@/lib/manual-print-artifact'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import type { FinalProductionMode } from '@/lib/final-production'
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_TTL_SECONDS = 60 * 60 * 24
@@ -26,6 +27,7 @@ const FINAL_PDF_TTL_SECONDS = 60 * 60 * 24
 export type FinalReleaseMode = 'manual' | 'job_auto' | 'story_auto' | 'global_auto'
 
 export type FinalJobSummary = {
+  production_mode?: FinalProductionMode
   final_job_id: string
   job_id: string
   order_id: string

@@ -1,5 +1,7 @@
 'use client'
 
+import { PHOTO_PREPARATION_FAILURE_MESSAGE } from '@/lib/preview-preparation-failure'
+
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
 import {
   getPreviewJobState,
@@ -372,7 +374,8 @@ export function usePreviewController({
           }
           if (job.phase === 'failed' || job.status === 'failed') {
             const terminalFailure = new PreviewWatchTerminalError(
-              job.retryable ? TERMINAL_RETRY_MESSAGE : TERMINAL_FAILURE_MESSAGE,
+              job.photoPreparationFailed ? PHOTO_PREPARATION_FAILURE_MESSAGE
+                : job.retryable ? TERMINAL_RETRY_MESSAGE : TERMINAL_FAILURE_MESSAGE,
               job.retryable
             )
             settleRemaining((subscriber) => subscriber.reject(terminalFailure))

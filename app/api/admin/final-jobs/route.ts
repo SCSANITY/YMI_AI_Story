@@ -3,6 +3,7 @@ import { requireAdminCustomer } from '@/lib/adminAuth'
 import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
+import { getFrozenFinalProductionMode } from '@/lib/final-production'
 
 const FINAL_JOB_SELECT = `
   final_job_id,
@@ -65,10 +66,16 @@ export async function GET(request: Request) {
     if (focusedJob) rows.unshift(focusedJob)
   }
 
+  if (!rows.length) return jsonNoStore({ finalJobs: [] })
+  const { data: linkedJobs, error: linkedJobsError } = await supabaseAdmin
+    .from('jobs').select('job_id,input_snapshot').in('job_id', rows.map((row) => row.job_id))
+  if (linkedJobsError) return jsonNoStore({ error: 'Failed to load Final production mode' }, { status: 500 })
+  const modeByJobId = new Map((linkedJobs ?? []).map((job) => [job.job_id, getFrozenFinalProductionMode(job.input_snapshot)]))
   const finalJobs = rows.map((row) => {
     const { creations, ...summary } = row
     return {
       ...summary,
+      production_mode: modeByJobId.get(row.job_id) ?? 'auto',
       display_title: resolveFinalJobDisplayTitle({ ...summary, creations }),
     }
   })

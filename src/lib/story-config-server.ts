@@ -3,6 +3,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import https from 'node:https'
 import type { IncomingMessage } from 'node:http'
+import { buildManualFinalOutputAssets } from '@/lib/final-production'
 import {
   resolveSupabaseServiceCredential,
   supabaseServiceRequestHeaders,
@@ -79,6 +80,7 @@ export type PrivateStoryConfigTransport = (args: Readonly<{
 
 type ValidatedPrivateStoryConfig = Readonly<{
   finalPageIndices: readonly number[]
+  config: Readonly<UnknownRecord>
 }>
 
 function asRecord(value: unknown): UnknownRecord {
@@ -358,14 +360,20 @@ export function validatePrivateStoryConfig(
       throw new StoryConfigError('story_config_contract_invalid')
     }
     pageIndices.add(index)
-    if (page.enable_face_swap) validatePageImageEdit(page.image_edit)
-    else if (page.image_edit !== undefined) {
+    if (!page.enable_face_swap && page.image_edit !== undefined) {
       throw new StoryConfigError('story_config_contract_invalid')
     }
   }
 
   const previewPageIndices = validateSelection(root.preview, pageIndices)
   const finalPageIndices = validateSelection(root.final, pageIndices)
+  const previewSet = new Set(previewPageIndices)
+  for (const rawPage of root.pages) {
+    const page = asRecord(rawPage)
+    if (page.enable_face_swap && (previewSet.has(page.index as number) || page.image_edit !== undefined)) {
+      validatePageImageEdit(page.image_edit)
+    }
+  }
   const selected = new Set([...previewPageIndices, ...finalPageIndices])
   if (
     selected.size !== previewPageIndices.length + finalPageIndices.length ||
@@ -374,7 +382,7 @@ export function validatePrivateStoryConfig(
     throw new StoryConfigError('story_config_contract_invalid')
   }
 
-  return Object.freeze({ finalPageIndices })
+  return Object.freeze({ finalPageIndices, config: Object.freeze(root) })
 }
 
 export function parsePrivateStoryConfig(args: {
@@ -548,7 +556,7 @@ export async function prepareStoryConfigForPreview(args: {
   return Object.freeze({ configUrl: address.configUrl })
 }
 
-async function readLegacyFinalPageIndices(configUrl: string): Promise<readonly number[]> {
+async function readLegacyFinalConfig(configUrl: string): Promise<ValidatedPrivateStoryConfig> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), PRIVATE_STORY_CONFIG_TIMEOUT_MS)
   timeout.unref?.()
@@ -577,7 +585,7 @@ async function readLegacyFinalPageIndices(configUrl: string): Promise<readonly n
       .filter((value) => Number.isInteger(value) && value >= 0)
       .sort((a, b) => a - b)
     if (!normalized.length) throw new StoryConfigError('story_config_contract_invalid')
-    return Object.freeze(Array.from(new Set(normalized)))
+    return Object.freeze({ finalPageIndices: Object.freeze(Array.from(new Set(normalized))), config: Object.freeze(config) })
   } catch (error) {
     if (error instanceof StoryConfigError) throw error
     throw new StoryConfigError('story_config_read_unavailable')
@@ -590,15 +598,17 @@ export async function loadStoryConfigForFinal(args: {
   templateId: string
   rawConfigPath: string | null | undefined
   resolveLegacyPublicUrl: (configPath: string) => string | null | undefined
-}): Promise<Readonly<{ configUrl: string; finalPageIndices: readonly number[] }>> {
+  includeFinalOutputMetadata?: boolean
+}): Promise<Readonly<{ configUrl: string; finalPageIndices: readonly number[]; finalOutputAssets?: Record<string, unknown> }>> {
   const address = resolveAddress(args)
-  const finalPageIndices = address.kind === 'private'
-    ? (await readPrivateStoryConfig({
+  const snapshot = address.kind === 'private'
+    ? await readPrivateStoryConfig({
         address,
         templateId: args.templateId,
         serviceCredential: configuredServiceCredential(),
         transport: nativePrivateStoryConfigTransport,
-      })).finalPageIndices
-    : await readLegacyFinalPageIndices(address.configUrl)
-  return Object.freeze({ configUrl: address.configUrl, finalPageIndices })
+      })
+    : await readLegacyFinalConfig(address.configUrl)
+  return Object.freeze({ configUrl: address.configUrl, finalPageIndices: snapshot.finalPageIndices,
+    ...(args.includeFinalOutputMetadata ? { finalOutputAssets: buildManualFinalOutputAssets(snapshot.config) } : {}) })
 }

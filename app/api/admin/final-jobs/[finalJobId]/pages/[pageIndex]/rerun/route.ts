@@ -7,6 +7,7 @@ import {
 } from '@/lib/final-review-mutation-contract'
 import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getFrozenFinalProductionMode } from '@/lib/final-production'
 
 export async function POST(
   request: Request,
@@ -40,6 +41,16 @@ export async function POST(
   }
   if (isFinalJobReleased(finalJob)) {
     return NextResponse.json({ error: 'Released Final jobs cannot be modified' }, { status: 409 })
+  }
+
+  const { data: currentJob, error: currentJobError } = await supabaseAdmin
+    .from('jobs').select('input_snapshot, output_assets, status, progress')
+    .eq('job_id', finalJob.job_id).maybeSingle()
+  if (currentJobError || !currentJob) {
+    return NextResponse.json({ error: 'Linked Final job not found' }, { status: 404 })
+  }
+  if (getFrozenFinalProductionMode(currentJob.input_snapshot) === 'manual') {
+    return NextResponse.json({ error: 'Manual Final jobs cannot be automatically rerun', code: 'manual_final_rerun_disabled' }, { status: 409 })
   }
 
   const { data: page } = await supabaseAdmin
@@ -93,12 +104,6 @@ export async function POST(
   if (!updatedPage?.final_job_page_id) {
     return NextResponse.json({ ok: true, superseded: true })
   }
-
-  const { data: currentJob } = await supabaseAdmin
-    .from('jobs')
-    .select('input_snapshot, output_assets, status, progress')
-    .eq('job_id', finalJob.job_id)
-    .maybeSingle()
 
   const inputSnapshot = (currentJob?.input_snapshot || {}) as Record<string, unknown>
   const existingPageIndices = Array.isArray(inputSnapshot.final_page_indices)

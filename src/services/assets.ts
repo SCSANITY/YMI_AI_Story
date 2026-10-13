@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import type { Detection, FaceDetector } from '@mediapipe/tasks-vision'
 import type { SignatureVoiceCaptureAuthorization } from '@/lib/signature-voice'
+import { prepareUndecodableHeicUpload } from '@/lib/heic-upload'
 
 export type AssetType = 'face_image' | 'text_profile' | 'voice_sample' | 'profile_avatar'
 
@@ -153,6 +154,12 @@ async function decodeImageFile(file: File): Promise<HTMLImageElement> {
   } finally {
     URL.revokeObjectURL(objectUrl)
   }
+}
+
+export function prepareRawHeicFallback(file: File): Promise<File | null> {
+  return prepareUndecodableHeicUpload({ file, canDecode: async (candidate) => {
+    try { await decodeImageFile(candidate); return true } catch { return false }
+  } })
 }
 
 async function getFaceDetector(): Promise<FaceDetector> {

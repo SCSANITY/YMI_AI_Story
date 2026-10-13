@@ -1,4 +1,5 @@
 import type { BookPagePresentation } from './bookPageContract'
+import type { ImageEditContract, PageImageEditContract } from './imageEditContract'
 
 export type InputSnapshot = {
   face_source_path?: string
@@ -25,6 +26,7 @@ export type TemplatePage = {
   presentation?: BookPagePresentation
   params_override?: Record<string, unknown>
   workflow_overrides?: Partial<Record<WorkflowStageKey, PageWorkflowOverride>>
+  image_edit?: PageImageEditContract
 }
 
 export type WorkflowStageKey = 'preview_face' | 'final_face'
@@ -34,7 +36,19 @@ export type InputBinding = {
   input_key?: string
 }
 
+export type OpenAIImageEditConfig = {
+  model: string
+  prompt: string
+  prompt_version: string
+  size: string
+  quality: 'low' | 'medium' | 'high'
+  output_format: 'png'
+  background: 'opaque'
+  request_timeout_ms: number
+}
+
 export type ProviderStageConfig = {
+  provider?: string
   enabled?: boolean
   result_node_id?: string
   workflow_json_path?: string
@@ -51,6 +65,7 @@ export type ProviderStageConfig = {
     user_face_image?: InputBinding
   }
   static_inputs?: Record<string, Record<string, unknown>>
+  openai_image_edit?: OpenAIImageEditConfig
 }
 
 export type PageWorkflowOverride = {
@@ -98,6 +113,7 @@ export type TemplateConfig = {
   }
   workflow: ProviderWorkflowConfig
   subtitle_render?: SubtitleRenderConfig
+  image_edit?: ImageEditContract
 }
 
 export type ProviderWorkflowCall = {
@@ -111,6 +127,9 @@ export type ProviderWorkflowCall = {
   throwIfCancelled?: () => Promise<void> | void
   pollTimeoutMs?: number
   pollIntervalMs?: number
+  statusTransportMaxAttempts?: number
+  statusTransportBackoffMs?: number
+  notReadyRetryDelayMs?: number
   resumeProviderRun?: ProviderRunState | null
   onProviderEvent?: (state: ProviderRunState) => Promise<void> | void
 }
@@ -118,6 +137,17 @@ export type ProviderWorkflowCall = {
 export type ProviderPayloadBuildResult = {
   payload: Record<string, unknown>
 }
+
+export type ProviderFailureCode =
+  | 'provider_not_ready'
+  | 'provider_status_unavailable'
+  | 'provider_submit_unknown'
+  | 'provider_terminal_failed'
+  | 'provider_cancelled'
+  | 'provider_poll_timeout'
+  | 'provider_request_rejected'
+  | 'provider_invalid_response'
+  | 'provider_result_expired'
 
 export type ProviderRunState = {
   provider: 'runpod'
@@ -130,6 +160,8 @@ export type ProviderRunState = {
   started_at?: string
   finished_at?: string
   error?: string | null
+  failure_code?: ProviderFailureCode | null
+  retryable?: boolean | null
 }
 
 export type WorkflowProviderAdapter = {

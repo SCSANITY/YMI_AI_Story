@@ -135,7 +135,7 @@ test('empty Final slots are structural and become uploadable only after automati
   assert.match(pdfReview, /canUploadIntoEmptyFinalPage\(selectedJob\.status\)/)
   assert.match(pdfReview, /Upload page/)
   assert.match(pdfReview, /Upload missing pages before PDF Release/)
-  assert.match(mutationContract, /new Set\(\[['"]failed['"], ['"]needs_fix['"], ['"]review_pending['"]\]\)/)
+  assert.match(mutationContract, /new Set\(\[['"]manual_pending['"], ['"]failed['"], ['"]needs_fix['"], ['"]review_pending['"]\]\)/)
   assert.doesNotMatch(mutationContract, /INACTIVE_FINAL_JOB_STATUSES[^\n]*queued|INACTIVE_FINAL_JOB_STATUSES[^\n]*processing|INACTIVE_FINAL_JOB_STATUSES[^\n]*releasing/)
 })
 

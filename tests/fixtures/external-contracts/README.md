@@ -78,3 +78,11 @@ The fixtures let this repository's contract suite run from an isolated clone.
 When an upstream SQL or Worker contract changes, update the affected fixture and
 its checksum in the same coordinated change. Never edit a fixture as though it
 were the production migration or active Worker implementation.
+
+- Preview-first Web candidate refresh (2026-10-13): existing Worker mirrors and
+  previewExecution.ts pin accepted private Worker ab54b4bd8dcb7efb6182f08a5b21e8467f16b5d4;
+  they are future cutover contracts, not current deployed runtime proof.
+
+- Preview-first manual Final state proposal pins private Database
+  1cb15ca52fc2c71feb4c90f7e086ca1f095e3a5f, 20261013_200000_preview_first_manual_final.sql.
+  Source-only/not applied; no claim/ACL/RLS/data change.

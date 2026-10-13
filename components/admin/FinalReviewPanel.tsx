@@ -640,15 +640,15 @@ export function FinalReviewPanel({
     }
   }
 
-  const markNeedsFix = async (page: FinalJobPageRow) => {
-    if (!selectedJobId) return
+  const requestPageCorrection = async (page: FinalJobPageRow, action: 'needs_fix' | 'rerun') => {
+    if (!selectedJobId || (action === 'rerun' && selectedJob?.production_mode === 'manual')) return
     const finalJobId = selectedJobId
     const previous = { ...page }
     const reviewIntentId = createReviewIntentId()
-    setPageReviewPending(page.final_job_page_id, 'needs_fix', reviewIntentId)
+    setPageReviewPending(page.final_job_page_id, action, reviewIntentId)
     setError('')
     patchPage(finalJobId, page.final_job_page_id, {
-      status: 'needs_fix',
+      status: action === 'rerun' ? 'rerunning' : 'needs_fix',
       review_note: reviewNote.trim() || null,
       reviewed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -657,25 +657,28 @@ export function FinalReviewPanel({
       review_intent_at: new Date().toISOString(),
     })
     try {
-      const response = await fetch(`/api/admin/final-jobs/${finalJobId}/pages/${page.page_index}/needs-fix`, {
+      const response = await fetch(`/api/admin/final-jobs/${finalJobId}/pages/${page.page_index}/${action === 'rerun' ? 'rerun' : 'needs-fix'}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviewNote: reviewNote.trim(), reviewIntentId }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<{ superseded?: boolean }>
-      if (!response.ok) throw new Error(payload.error || 'Failed to mark page as needs fix')
+      if (!response.ok) throw new Error(payload.error || (action === 'rerun' ? 'Failed to rerun page' : 'Failed to mark page as needs fix'))
       if (reviewIntentRef.current[page.final_job_page_id] !== reviewIntentId || payload.superseded) return
     } catch (actionError) {
       if (reviewIntentRef.current[page.final_job_page_id] === reviewIntentId) {
         patchPage(finalJobId, page.final_job_page_id, previous)
         reconcileOffscreenFailure(finalJobId)
-        setError(actionError instanceof Error ? actionError.message : 'Failed to mark page as needs fix')
+        setError(actionError instanceof Error ? actionError.message : (action === 'rerun' ? 'Failed to rerun page' : 'Failed to mark page as needs fix'))
       }
     } finally {
       clearPageReviewPending(page.final_job_page_id, reviewIntentId)
     }
   }
+
+  const markNeedsFix = (page: FinalJobPageRow) => requestPageCorrection(page, 'needs_fix')
+  const rerunPage = (page: FinalJobPageRow) => requestPageCorrection(page, 'rerun')
 
   const approveAllPages = async () => {
     if (
@@ -1524,6 +1527,7 @@ export function FinalReviewPanel({
                 uploadErrorByPage={currentUploadErrorByPage}
                 approvePage={approvePage}
                 markNeedsFix={markNeedsFix}
+                rerunPage={rerunPage}
                 approveAllPages={approveAllPages}
                 exportApprovedSources={exportApprovedSources}
                 openReplacementPicker={(page) => {

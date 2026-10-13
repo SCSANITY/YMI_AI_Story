@@ -37,6 +37,26 @@ export function resolveResumableRunPodRun(args: {
   return { runId, startedAt: previous.started_at }
 }
 
+export function mergeProviderRunState(
+  previous: ProviderRunState | null | undefined,
+  next: ProviderRunState
+): ProviderRunState {
+  const merged = {
+    ...(previous ?? {}),
+    ...next,
+    error: next.error ?? null,
+    failure_code: next.failure_code ?? null,
+    retryable: next.retryable ?? null,
+  } as ProviderRunState
+
+  const status = String(next.status || '').trim().toUpperCase()
+  if (!next.finished_at && !['COMPLETED', 'FAILED', 'CANCELLED', 'ERROR', 'EXPIRED'].includes(status)) {
+    delete merged.finished_at
+  }
+
+  return merged
+}
+
 export function shouldCancelRunPodForControlError(error: unknown): boolean {
   return Boolean(
     error &&

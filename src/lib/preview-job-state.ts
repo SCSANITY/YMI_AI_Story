@@ -22,6 +22,7 @@ export type PreviewJobPhase =
   | 'cancelled'
 
 export type PreviewJobState = {
+  photoPreparationFailed?: boolean
   jobId: string
   status: PreviewJobStatus
   phase: PreviewJobPhase
@@ -93,6 +94,7 @@ export function parsePreviewJobState(value: unknown): PreviewJobState {
     progress,
     capacityState,
     failureCode,
+    photoPreparationFailed: value.photo_preparation_failed === true,
     retryable,
     assets,
   }

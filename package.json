@@ -36,7 +36,8 @@
     "products:optimize": "node scripts/optimize-template-products.mjs",
     "v3:author": "node scripts/v3-story-authoring.mjs",
     "v3:authoring:tests": "node --test scripts/v3-authoring/lib.test.mjs",
-    "emails:preview": "tsx scripts/render-email-previews.tsx"
+    "emails:preview": "tsx scripts/render-email-previews.tsx",
+    "preview-first:tests": "tsx --test src/lib/final-production.test.ts src/lib/heic-upload.test.ts src/lib/preview-preparation-failure.test.ts src/lib/final-review-mutation-contract.test.ts src/lib/preview-job-state.test.ts tests/preview-first-manual-final-runtime.test.mjs tests/story-config-confidentiality.test.mjs tests/admin-final-review-mutations-contract.test.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",

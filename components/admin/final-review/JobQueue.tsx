@@ -65,6 +65,9 @@ export function JobQueue({
                     <p className="mt-1 line-clamp-2 break-words text-[15px] font-bold leading-5 text-[var(--admin-page-ink)]">
                       {job.display_title}
                     </p>
+                    <span className="mt-1 inline-flex rounded-full border border-[var(--admin-card-line)] px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-page-muted)]">
+                      Production: {job.production_mode === 'manual' ? 'Manual' : 'Automatic'}
+                    </span>
                   </div>
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
                     isActive

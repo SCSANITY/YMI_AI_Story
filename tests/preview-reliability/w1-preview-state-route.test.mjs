@@ -12,6 +12,9 @@ function transpile(path) {
 }
 
 const routeJs = transpile('../../app/api/jobs/[jobId]/preview-state/route.ts')
+const preparationJs = transpile('../../src/lib/preview-preparation-failure.ts')
+const preparation = { exports: {} }
+vm.runInNewContext(preparationJs, { module: preparation, exports: preparation.exports })
 const storageSigningPolicyJs = transpile('../../src/lib/storage-signing-policy.ts')
 
 function loadStorageSigningPolicy() {
@@ -38,6 +41,7 @@ function loadRoute({ owner = { ownerType: 'customer' }, job }) {
     } } } },
   }
   const dependencies = {
+    '@/lib/preview-preparation-failure': preparation.exports,
     '@/lib/preview-page-contract': {
       selectPreviewSignTargets: ({ pages }) => pages.map((page) => ({
         page,
@@ -154,6 +158,7 @@ test('failed old-Worker output returns the saved cover in one redacted owned rea
     'failure_code',
     'job_id',
     'phase',
+    'photo_preparation_failed',
     'progress',
     'retryable',
     'status',
@@ -233,4 +238,17 @@ test('Preview state remains owner-gated before database or Storage access', asyn
   )
   assert.equal(response.status, 401)
   assert.equal(calls.length, 0)
+})
+
+test('Preview preparation diagnostics return one fixed boolean and never the stored error text', async () => {
+  for (const [errorMessage, expected] of [['preview_image_decode_failed', true], ['PRIVATE_PATH_AND_PROMPT_MARKER', false]]) {
+    const { GET } = loadRoute({ job: { job_id: 'job-4', job_type: 'preview', status: 'failed', progress: 0,
+      output_assets: null, provider_runs: {}, error_message: errorMessage } })
+    const response = await GET(new Request('http://localhost/api/jobs/job-4/preview-state'),
+      { params: Promise.resolve({ jobId: 'job-4' }) })
+    const body = await response.json()
+    assert.equal(body.photo_preparation_failed, expected)
+    assert.equal(JSON.stringify(body).includes(errorMessage), false)
+    assert.equal(Object.hasOwn(body, 'error_message'), false)
+  }
 })

@@ -30,7 +30,7 @@ const STANDARD_REPLACEMENT_PAGE_STATUSES = [
   'needs_fix',
 ] as const
 
-const INACTIVE_FINAL_JOB_STATUSES = new Set(['failed', 'needs_fix', 'review_pending'])
+const INACTIVE_FINAL_JOB_STATUSES = new Set(['manual_pending', 'failed', 'needs_fix', 'review_pending'])
 
 export function canUploadIntoEmptyFinalPage(finalJobStatus: string): boolean {
   return INACTIVE_FINAL_JOB_STATUSES.has(finalJobStatus)
@@ -38,7 +38,7 @@ export function canUploadIntoEmptyFinalPage(finalJobStatus: string): boolean {
 
 export function getFinalReplacementClaimablePageStatuses(finalJobStatus: string): string[] {
   return canUploadIntoEmptyFinalPage(finalJobStatus)
-    ? [...STANDARD_REPLACEMENT_PAGE_STATUSES, 'queued', 'failed']
+    ? [...STANDARD_REPLACEMENT_PAGE_STATUSES, 'manual_pending', 'queued', 'failed']
     : [...STANDARD_REPLACEMENT_PAGE_STATUSES]
 }
 

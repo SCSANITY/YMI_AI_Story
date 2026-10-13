@@ -3,7 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
-import { autoCropFaceImage, faceQualityCheck, prepareFaceImage, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
+import { autoCropFaceImage, faceQualityCheck, prepareFaceImage, prepareRawHeicFallback, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
 import {
   cancelPreviewJob,
   createPreviewJob,
@@ -2322,6 +2322,15 @@ export default function PersonalizePage({
     ): Promise<FacePreparationOutcome> => {
       const isCurrent = () => facePrepareRunIdRef.current === runId;
       onPhase('checking');
+
+      try {
+        const rawHeic = await prepareRawHeicFallback(file);
+        if (!isCurrent()) return { status: 'cancelled' };
+        if (rawHeic) return { status: 'ready', file: rawHeic, autoCropped: false };
+      } catch {
+        if (!isCurrent()) return { status: 'cancelled' };
+        return { status: 'failed', error: null };
+      }
 
       const validation = await validateFaceImage(file);
       if (!isCurrent()) return { status: 'cancelled' };

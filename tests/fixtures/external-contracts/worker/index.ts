@@ -1,7 +1,7 @@
+import { executePreparedOpenAIPreviewPage, composeOpenAIPreviewPage, selectSubtitleTemplatePath } from './previewExecution'
 import { createClient, type RealtimeChannel } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 import http from 'http'
-import { randomUUID } from 'node:crypto'
 import { PDFDocument } from 'pdf-lib'
 import axios from 'axios'
 import { resolveWorkerExecutionMode } from './executionMode'
@@ -93,28 +93,11 @@ import { mergeProviderRunState } from './runpodRuntime'
 import { isRunPodExecutionError } from './providers/runpodRecovery'
 import { isRetriablePageError } from './pageRetry'
 import {
-  executeOpenAIImageEdit,
-  validateOpenAIInputImage,
-  validateOpenAIImageEditConfig,
-  validateOpenAIOutput,
-} from './providers/openaiAdapter'
-import {
   OpenAIExecutionError,
-  appendOpenAIDispatchIntent,
-  assertOpenAIFrozenRequestMatches,
-  canonicalJson,
-  createOpenAIConfigDigest,
   currentOpenAIAttempt,
-  executeOpenAIWithinPageAttemptLoop,
-  imageMetadataMatches,
-  isOpenAIExecutionError,
   normalizeOpenAIStageRunState,
-  readOpenAIIntermediate,
   sha256Hex,
-  storeOpenAIIntermediate,
   updateOpenAIAttempt,
-  type OpenAIAttemptRecord,
-  type OpenAIFrozenRequest,
   type OpenAIStageRunState,
 } from './openaiRuntime'
 import { logEvent, redactLogText, toSafeError } from './safeLogging'
@@ -136,6 +119,7 @@ import { createPrivateConfigTransport } from './privateConfigTransport'
 import {
   PreviewImageInputError,
   preflightPreviewImageEditJob,
+  withImagePreparationCancellation,
   type PreviewWholeJobPreflight,
 } from './previewImageInput'
 import {
@@ -1098,40 +1082,6 @@ async function loadSubtitleContext(args: {
     templateRaw: rawTemplate,
     fontAssets,
   })
-}
-
-function getChildAge(inputSnapshot: InputSnapshot | null | undefined): number | null {
-  const textOverrides = inputSnapshot?.text_overrides ?? {}
-  const raw = textOverrides.child_age ?? textOverrides.childAge ?? textOverrides.age
-  if (raw === undefined || raw === null || raw === '') return null
-  const age = Number.parseInt(String(raw), 10)
-  return Number.isFinite(age) ? age : null
-}
-
-function selectSubtitleTemplatePath(
-  subtitleConfig: NonNullable<ReturnType<typeof getSubtitleRenderConfig>>,
-  inputSnapshot: InputSnapshot
-): { templatePath: string; variantId: string | null } {
-  const fallbackTemplatePath = subtitleConfig.template_path?.trim() || ''
-  const childAge = getChildAge(inputSnapshot)
-  if (childAge === null || !Array.isArray(subtitleConfig.template_variants)) {
-    return { templatePath: fallbackTemplatePath, variantId: null }
-  }
-
-  for (const variant of subtitleConfig.template_variants) {
-    const templatePath = variant?.template_path?.trim()
-    if (!templatePath) continue
-    const minAge = Number(variant.when?.child_age_min ?? Number.NEGATIVE_INFINITY)
-    const maxAge = Number(variant.when?.child_age_max ?? Number.POSITIVE_INFINITY)
-    if (childAge >= minAge && childAge <= maxAge) {
-      return {
-        templatePath,
-        variantId: variant.id ? String(variant.id) : null,
-      }
-    }
-  }
-
-  return { templatePath: fallbackTemplatePath, variantId: null }
 }
 
 function stripJsonComments(input: string): string {
@@ -2571,11 +2521,15 @@ async function processJob(job: JobRow): Promise<void> {
         subtitlePage,
       }
     }))
-    privateWholeJobPreflight = await preflightPreviewImageEditJob({
-      profileSize: privateImageEditSnapshot.validated.image_edit.profiles.preview.size,
-      pages: preflightPages,
-      identityReference,
-      resolvePage: privateImageEditSnapshot.resolvePage,
+    privateWholeJobPreflight = await withImagePreparationCancellation({
+      checkActive: throwIfCancelled,
+      prepare: (signal) => preflightPreviewImageEditJob({
+        profileSize: privateImageEditSnapshot.validated.image_edit.profiles.preview.size,
+        pages: preflightPages,
+        identityReference,
+        resolvePage: privateImageEditSnapshot.resolvePage,
+        signal,
+      }),
     })
   }
   runtimeManifestPath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/manifest.json`
@@ -2827,271 +2781,23 @@ async function processJob(job: JobRow): Promise<void> {
       console.log(`[job:${job.job_id}] page=${page.index} OpenAI transport bypassed in explicit Mock mode`)
     } else if (prepared.provider === 'openai' && !IS_MOCK_MODE) {
       try {
-        const privatePreflightPage = privateWholeJobPreflight?.pages.get(page.index) ?? null
-        if (privateImageEditSnapshot && privatePreflightPage?.resolution.kind !== 'provider') {
-          throw new PreviewImageInputError('preview_image_preparation_failed')
-        }
-        const configured = validateOpenAIImageEditConfig(
-          privatePreflightPage?.resolution.kind === 'provider'
-            ? privatePreflightPage.resolution.config
-            : prepared.stage.openai_image_edit
-        )
-        const effectiveConfig = validateOpenAIImageEditConfig({
-          ...configured,
-          prompt: prepared.pageWorkflowOverride?.prompt ?? configured.prompt,
-        })
-        if (
-          prepared.pageWorkflowOverride?.seed !== undefined ||
-          (prepared.pageWorkflowOverride?.static_inputs &&
-            Object.keys(prepared.pageWorkflowOverride.static_inputs).length > 0)
-        ) {
-          throw new OpenAIExecutionError(
-            'openai_preflight_failed',
-            'not_sent',
-            'OpenAI P1 supports only a page-level prompt override'
-          )
-        }
-        const apiKey = String(process.env.OPENAI_API_KEY || '').trim()
-        if (!apiKey) {
-          throw new OpenAIExecutionError(
-            'openai_preflight_failed',
-            'not_sent',
-            'OpenAI API key is missing'
-          )
-        }
-
-        const templateBuffer = privatePreflightPage?.provider_source
-          ?? await downloadBuffer(APP_TEMPLATES_BUCKET, prepared.templateStoragePath)
-        const identityBuffer = privateWholeJobPreflight?.identity?.prepared
-          ?? await downloadBuffer(RAW_BUCKET, facePath)
-        const sourceIdentity = await validateOpenAIInputImage(templateBuffer)
-        const faceIdentity = await validateOpenAIInputImage(identityBuffer)
-        const effectiveProviderConfig = {
-          provider: 'openai' as const,
-          ...effectiveConfig,
-          ordered_input_roles: ['source_illustration', 'identity_reference'] as const,
-        }
-        const configDigest = createOpenAIConfigDigest(privateImageEditSnapshot
-          ? {
-              private_config_raw_sha256: privateImageEditSnapshot.raw_sha256,
-              resolved_provider_config: effectiveProviderConfig,
-            }
-          : effectiveProviderConfig)
-        const privateSourceEvidence = privatePreflightPage?.source
-          ? {
-              original_media_type: privatePreflightPage.source.original_media_type,
-              prepared_media_type: privatePreflightPage.source.prepared_media_type,
-              original_sha256: privatePreflightPage.source.original_sha256,
-              prepared_sha256: privatePreflightPage.source.prepared_sha256,
-              original_width: privatePreflightPage.source.original_width,
-              original_height: privatePreflightPage.source.original_height,
-              prepared_width: privatePreflightPage.source.prepared_width,
-              prepared_height: privatePreflightPage.source.prepared_height,
-              transformation_version: privatePreflightPage.source.transformation_version,
-            }
-          : sourceIdentity
-        const privateIdentityEvidence = privateWholeJobPreflight?.identity
-          ? {
-              original_media_type: privateWholeJobPreflight.identity.original_media_type,
-              prepared_media_type: privateWholeJobPreflight.identity.prepared_media_type,
-              original_sha256: privateWholeJobPreflight.identity.original_sha256,
-              prepared_sha256: privateWholeJobPreflight.identity.prepared_sha256,
-              original_width: privateWholeJobPreflight.identity.original_width,
-              original_height: privateWholeJobPreflight.identity.original_height,
-              prepared_width: privateWholeJobPreflight.identity.prepared_width,
-              prepared_height: privateWholeJobPreflight.identity.prepared_height,
-              transformation_version: privateWholeJobPreflight.identity.transformation_version,
-            }
-          : faceIdentity
-        const frozenBase = {
-          job_id: job.job_id,
-          creation_id: job.creation_id ?? null,
-          job_type: job.job_type,
-          page_index: page.index,
-          page_role: page.presentation?.role ?? null,
-          source_illustration_identity: `${APP_TEMPLATES_BUCKET}/${prepared.templateStoragePath}`,
-          identity_reference_identity: `${RAW_BUCKET}/${facePath}`,
-          input_fingerprint: sha256Hex(canonicalJson({
-            source: {
-              storage_identity: `${APP_TEMPLATES_BUCKET}/${prepared.templateStoragePath}`,
-              ...privateSourceEvidence,
-            },
-            identity: {
-              storage_identity: `${RAW_BUCKET}/${facePath}`,
-              ...privateIdentityEvidence,
-            },
-            page_index: page.index,
-            stage: prepared.stageKey,
-          })),
-          provider: 'openai' as const,
-          model: effectiveConfig.model,
-          prompt_version: effectiveConfig.prompt_version,
-          prompt_sha256: sha256Hex(effectiveConfig.prompt),
-          ordered_input_roles: ['source_illustration', 'identity_reference'] as const,
-          size: effectiveConfig.size,
-          quality: effectiveConfig.quality,
-          output_format: effectiveConfig.output_format,
-          background: effectiveConfig.background,
-          request_timeout_ms: effectiveConfig.request_timeout_ms,
-          config_digest: configDigest,
-        } satisfies OpenAIFrozenRequest
-
-        const loadStoredIntermediate = (attempt: OpenAIAttemptRecord) => readOpenAIIntermediate({
-          download: () => downloadBuffer(RAW_BUCKET, attempt.intermediate_path),
-          validate: (stored) => validateOpenAIOutput(stored, attempt.frozen.size),
-        })
-
-        const throwStoredIntermediateReadFailure = (
-          kind: 'mismatch' | 'unavailable'
-        ): never => {
-          if (kind === 'unavailable') {
-            throw new OpenAIExecutionError(
-              'openai_intermediate_unavailable',
-              'result_received',
-              'OpenAI durable intermediate is temporarily unavailable; resume without provider resubmission'
+        buffer = await executePreparedOpenAIPreviewPage({
+          job, prepared, privateImageEditSnapshot, privateWholeJobPreflight, facePath,
+          sourceBucket: APP_TEMPLATES_BUCKET, identityBucket: RAW_BUCKET,
+          apiKey: String(process.env.OPENAI_API_KEY || '').trim(), pageMaxAttempts,
+          intermediateDirectory: `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/providers/openai`,
+          loadState: () => getOpenAIStageState(page.index, prepared.stageKey),
+          persistState: (state) => setOpenAIStageState(page.index, state),
+          readImage: downloadBuffer,
+          assertActive: throwIfCancelled,
+          assertLease: () => assertJobLease(job.job_id),
+          createIntermediate: async (path, bytes) => {
+            const { error } = await supabase.storage.from(RAW_BUCKET).upload(
+              path, bytes, { contentType: 'image/png', upsert: false }
             )
-          }
-          throw new OpenAIExecutionError(
-            'openai_intermediate_mismatch',
-            'result_received',
-            'OpenAI durable intermediate does not match its checkpoint'
-          )
-        }
-
-        const resumeState = getOpenAIStageState(page.index, prepared.stageKey)
-        const resumeAttempt = currentOpenAIAttempt(resumeState)
-        if (resumeAttempt?.request_budget_consumed) {
-          assertOpenAIFrozenRequestMatches(resumeAttempt.frozen, frozenBase)
-          if (resumeAttempt.output && ['result_received', 'intermediate_stored', 'composed'].includes(resumeAttempt.status)) {
-            const stored = await loadStoredIntermediate(resumeAttempt)
-            if (stored.kind === 'unavailable') {
-              throwStoredIntermediateReadFailure('unavailable')
-            }
-            if (stored.kind === 'found' && imageMetadataMatches(stored.metadata, resumeAttempt.output)) {
-              buffer = stored.buffer
-              if (resumeAttempt.status === 'result_received') {
-                const adoptedState = updateOpenAIAttempt(resumeState, resumeAttempt.attempt_id, {
-                  status: 'intermediate_stored',
-                  dispatch_disposition: 'result_received',
-                })
-                await setOpenAIStageState(page.index, adoptedState)
-              }
-            } else {
-              const parkedState = updateOpenAIAttempt(resumeState, resumeAttempt.attempt_id, {
-                status: 'outcome_unknown',
-                error_code: 'openai_intermediate_mismatch',
-              })
-              await setOpenAIStageState(page.index, parkedState)
-              throw new OpenAIExecutionError(
-                'openai_intermediate_mismatch',
-                'outcome_unknown',
-                'OpenAI durable intermediate is absent or does not match its checkpoint'
-              )
-            }
-          } else {
-            if (resumeAttempt.status === 'dispatch_intent') {
-              await setOpenAIStageState(page.index, updateOpenAIAttempt(resumeState, resumeAttempt.attempt_id, {
-                status: 'outcome_unknown',
-                error_code: 'openai_outcome_unknown',
-              }))
-            }
-            throw new OpenAIExecutionError(
-              'openai_request_budget_consumed',
-              resumeAttempt.dispatch_disposition,
-              'OpenAI request budget was already consumed for this Job page'
-            )
-          }
-        } else {
-          buffer = await executeOpenAIWithinPageAttemptLoop({
-            pageMaxAttempts,
-            loadState: () => getOpenAIStageState(page.index, prepared.stageKey),
-            createAndPersistIntent: async (state) => {
-              const attemptId = randomUUID()
-              const intermediatePath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/providers/openai/${attemptId}/page_${padPageIndex(page.index)}.png`
-              const appended = appendOpenAIDispatchIntent({
-                state,
-                frozen: frozenBase,
-                intermediatePath,
-                attemptId,
-              })
-              await setOpenAIStageState(page.index, appended.state)
-              return appended.attempt
-            },
-            dispatch: async (attempt) => {
-              let result: Awaited<ReturnType<typeof executeOpenAIImageEdit>>
-              try {
-                await throwIfCancelled()
-                result = await executeOpenAIImageEdit({
-                  attempt,
-                  config: effectiveConfig,
-                  sourceIllustration: templateBuffer,
-                  identityReference: identityBuffer,
-                  apiKey,
-                })
-              } catch (error) {
-                if (isOpenAIExecutionError(error)) {
-                  const latest = getOpenAIStageState(page.index, prepared.stageKey)
-                  const status = error.disposition === 'conclusively_rejected'
-                    ? 'rejected'
-                    : error.disposition === 'outcome_unknown'
-                      ? 'outcome_unknown'
-                      : 'result_received'
-                  await setOpenAIStageState(page.index, updateOpenAIAttempt(latest, attempt.attempt_id, {
-                    status,
-                    dispatch_disposition: error.disposition,
-                    finished_at: new Date().toISOString(),
-                    provider_request_id: error.details.providerRequestId ?? null,
-                    provider_error_code: error.details.providerErrorCode ?? null,
-                    retry_after: error.details.retryAfter ?? null,
-                    http_status: error.details.httpStatus ?? null,
-                    error_code: error.code,
-                  }))
-                }
-                throw error
-              }
-
-              let latest = getOpenAIStageState(page.index, prepared.stageKey)
-              latest = updateOpenAIAttempt(latest, attempt.attempt_id, {
-                status: 'result_received',
-                dispatch_disposition: 'result_received',
-                provider_request_id: result.providerRequestId,
-                usage: result.usage,
-                calculated_charge_usd: result.calculatedChargeUsd,
-                provider_timing_ms: result.providerTimingMs,
-                output: result.metadata,
-                error_code: null,
-              })
-              await setOpenAIStageState(page.index, latest)
-
-              await storeOpenAIIntermediate({
-                buffer: result.buffer,
-                expected: result.metadata,
-                assertLease: () => assertJobLease(job.job_id),
-                createOnly: async () => {
-                  const { error } = await supabase.storage.from(RAW_BUCKET).upload(
-                    attempt.intermediate_path,
-                    result.buffer,
-                    { contentType: 'image/png', upsert: false }
-                  )
-                  if (error) throw error
-                },
-                readExisting: async () => {
-                  const stored = await loadStoredIntermediate(attempt)
-                  if (stored.kind === 'found') return stored
-                  if (stored.kind === 'absent') return null
-                  return throwStoredIntermediateReadFailure(stored.kind)
-                },
-              })
-
-              latest = getOpenAIStageState(page.index, prepared.stageKey)
-              await setOpenAIStageState(page.index, updateOpenAIAttempt(latest, attempt.attempt_id, {
-                status: 'intermediate_stored',
-                dispatch_disposition: 'result_received',
-              }))
-              return result.buffer
-            },
-          })
-        }
+            if (error) throw error
+          },
+        })
       } catch (error) {
         if (error instanceof JobCancelledError || error instanceof JobLeaseLostError) throw error
         lastPageError = error
@@ -3192,12 +2898,11 @@ async function processJob(job: JobRow): Promise<void> {
         const subtitlePage = subtitleContext.pageMap.get(prepared.templateImageName)
         if (!subtitlePage) throw new Error(`Missing subtitle template entry for image ${prepared.templateImageName}`)
         const subtitleRenderStartedAt = Date.now()
-        const renderedSubtitleBuffer = await renderSubtitlePage({
+        const renderedSubtitleBuffer = await composeOpenAIPreviewPage({
           baseImage: buffer,
           subtitlePage,
           childName,
           fontAssets: subtitleContext.fontAssets,
-          preserveBaseDimensions: true,
         })
         pageTimings.render_ms = Date.now() - subtitleRenderStartedAt
         const subtitleStoragePath = `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/subtitles/page_${padPageIndex(page.index)}.png`

@@ -1,3 +1,4 @@
+import { isPreviewPreparationFailure } from '@/lib/preview-preparation-failure'
 import {
   buildSignedPreviewResponse,
   parseSignedPreviewAssets,
@@ -52,7 +53,7 @@ export async function GET(
   const { data: job, error } = await scopeCheckoutOwnerQuery(
     supabaseAdmin
       .from('jobs')
-      .select('job_id, job_type, status, progress, output_assets, provider_runs')
+      .select('job_id, job_type, status, progress, output_assets, provider_runs, error_message')
       .eq('job_id', jobId),
     owner
   ).maybeSingle()
@@ -127,6 +128,7 @@ export async function GET(
       providerRuns: job.provider_runs,
     }),
     failure_code: retryDecision.failureCode,
+    photo_preparation_failed: status === 'failed' && isPreviewPreparationFailure(job.error_message),
     retryable: retryDecision.retryable,
     assets,
   })

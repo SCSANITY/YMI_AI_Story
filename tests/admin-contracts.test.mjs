@@ -132,7 +132,7 @@ test('Final Review detail uses the protected no-store V3 page read model', async
 
   assert.match(route, /await\s+requireAdminCustomer\s*\(\s*\)/)
   assert.match(route, /noStoreJson as (?:jsonNoStore|privateJson)/)
-  assert.match(route, /\.from\(['"]jobs['"]\)[\s\S]*\.select\(['"]output_assets['"]\)/)
+  assert.match(route, /\.from\(['"]jobs['"]\)[\s\S]*\.select\(['"]output_assets,input_snapshot['"]\)/)
   assert.match(route, /buildAdminFinalPageReadModel/)
   assert.match(route, /page_contract:\s*readModel\.page_contract/)
   assert.match(readModel, /parseFinalPageMetadataContract/)

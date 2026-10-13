@@ -139,6 +139,23 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+test('manual Final reads31 frozen metadata pages with Final-only prompts absent and exposes no Prompt text', async () => {
+  const corpus = JSON.parse(await readFile(new URL('./fixtures/external-contracts/worker/image-edit-acceptance-corpus-v1.json', import.meta.url), 'utf8'))
+  const config = clone(corpus.base_config)
+  const preview = new Set(config.preview.page_indices)
+  for (const page of config.pages) if (!preview.has(page.index)) delete page.image_edit
+  const bytes = Buffer.from(JSON.stringify(config))
+  const { module } = await loadBundled('src/lib/story-config-server.ts', { httpsPlan: { status: 200, body: bytes } })
+  const result = await module.loadStoryConfigForFinal({ templateId: config.template_id,
+    rawConfigPath: privatePath(bytes, config.template_id), includeFinalOutputMetadata: true,
+    resolveLegacyPublicUrl: () => assert.fail('private config became public') })
+  assert.equal(result.finalPageIndices.length, 31)
+  assert.equal(result.finalOutputAssets.pages.length, 31)
+  assert.equal(result.finalOutputAssets.pages[0].role, 'final_front_cover')
+  assert.equal(result.finalOutputAssets.pages[30].output_order, 30)
+  assert.equal(JSON.stringify(result).includes(corpus.prompt_marker), false)
+})
+
 function applyCorpusMutations(target, mutations = []) {
   for (const mutation of mutations) {
     assert.ok(Array.isArray(mutation.path) && mutation.path.length > 0)
@@ -634,10 +651,10 @@ test('external Worker fixture pins the exact reviewed private-config and key-mig
     readFile(new URL('./fixtures/external-contracts/SHA256SUMS', import.meta.url), 'utf8'),
     readFile(new URL('./fixtures/external-contracts/README.md', import.meta.url), 'utf8'),
   ])
-  const expected = '4B0EAAA680235EB59FCBB899E284E5D97B5DBEAE43C3564398A237D8259035DF'
+  const expected = '690B350BD006300DAA01A7B1A31DDDE9FA21F73D83970EB8B95AEAEB5FDC7E89'
   assert.equal(sha256(fixture).toUpperCase(), expected)
   assert.match(manifest, new RegExp(`^${expected}  worker/index\\.ts$`, 'm'))
-  assert.match(fixtureReadme, /941992419ee88f9938cbf668f3e953226cc2c145/)
+  assert.match(fixtureReadme, /ab54b4bd8dcb7efb6182f08a5b21e8467f16b5d4/)
   assert.match(fixture.toString('utf8'), /privateImageEditSnapshot = await loadPrivateImageEditConfig\(/)
   assert.match(fixture.toString('utf8'), /assertPrivateImageEditProviderAuthority\(/)
 })
