@@ -149,7 +149,7 @@ export const Footer: React.FC = () => {
           },
           {
             question: 'How long does production take?',
-            answer: 'Production typically takes 5-10 business days, depending on workload and order complexity.',
+            answer: 'Production typically takes 3-7 business days, depending on workload and order complexity.',
           },
         ],
       },
@@ -163,7 +163,7 @@ export const Footer: React.FC = () => {
           },
           {
             question: 'How long does delivery take?',
-            answer: 'Total delivery time consists of processing time plus shipping time. Processing usually takes 5-10 business days, and shipping varies by location.',
+            answer: 'Total delivery time consists of processing time plus shipping time. Processing usually takes 3-7 business days, and shipping varies by location.',
             bullets: ['Hong Kong / Mainland China: 3-5 business days.', 'USA / Canada: 5-10 business days.', 'Europe: 5-12 business days.', 'Other Asia: 5-12 business days.'],
           },
           {
