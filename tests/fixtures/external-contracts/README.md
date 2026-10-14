@@ -80,14 +80,14 @@ its checksum in the same coordinated change. Never edit a fixture as though it
 were the production migration or active Worker implementation.
 
 - Preview-first Web candidate refresh (2026-10-13): existing Worker mirrors and
-  previewExecution.ts pin accepted private Worker 12cc963d867f6b511f95566ee52c3f2fb411b164;
+  previewExecution.ts pin accepted private Worker cfe057e318b54ddd7711e78b780ccca4e29fcd8e;
   they are future cutover contracts, not current deployed runtime proof.
 
 - Preview-first manual Final state proposal pins private Database
   1cb15ca52fc2c71feb4c90f7e086ca1f095e3a5f, 20261013_200000_preview_first_manual_final.sql.
   Source-only/not applied; no claim/ACL/RLS/data change.
 
-Step1 central-runtime mirrors pin Worker12cc963d867f6b511f95566ee52c3f2fb411b164.
+Step1 central-runtime mirrors pin Workercfe057e318b54ddd7711e78b780ccca4e29fcd8e.
 imageEditRuntime.ts and config/image-edit-runtime.json are test-only exact evidence,
 never imported by Web production code or a second selected-profile authority.
 Story content contract is version2; corpus metadata is version2 with45 vectors.

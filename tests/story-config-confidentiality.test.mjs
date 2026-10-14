@@ -659,7 +659,7 @@ test('external Worker fixture pins the exact reviewed private-config and key-mig
   const expected = '083FCB536C466F5E2D9C745AB984C36CBD4B6DE8E63EC533715705DDC392355A'
   assert.equal(sha256(fixture).toUpperCase(), expected)
   assert.match(manifest, new RegExp(`^${expected}  worker/index\\.ts$`, 'm'))
-  assert.match(fixtureReadme, /12cc963d867f6b511f95566ee52c3f2fb411b164/)
+  assert.match(fixtureReadme, /cfe057e318b54ddd7711e78b780ccca4e29fcd8e/)
   assert.match(fixture.toString('utf8'), /privateImageEditSnapshot = await loadPrivateImageEditConfig\(/)
   assert.match(fixture.toString('utf8'), /assertPrivateImageEditProviderAuthority\(/)
 })
