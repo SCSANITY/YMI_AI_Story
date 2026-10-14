@@ -15,7 +15,18 @@ import {
   resolveRunPodEndpointId,
   shouldCancelRunPodForControlError,
 } from '../runpodRuntime'
-import { redactLogText } from '../safeLogging'
+import {
+  logRunPodHttpFailure,
+  logRunPodTransportFailure,
+  readRunPodJsonResponse,
+} from './runpodDiagnostics'
+import {
+  RunPodExecutionError,
+  classifyRunPodTerminalFailure,
+  classifyRunPodTransportCause,
+  isRunPodExecutionError,
+  isTransientRunPodStatusHttpError,
+} from './runpodRecovery'
 
 const DEFAULT_TEMPLATE_IMAGE_NAME = 'template_image.png'
 const DEFAULT_FACE_IMAGE_NAME = 'face_image.png'
@@ -33,6 +44,34 @@ const DEFAULT_POLL_TIMEOUT_MS = Number.parseInt(process.env.RUNPOD_POLL_TIMEOUT_
 const DEFAULT_SUBMIT_TIMEOUT_MS = Number.parseInt(process.env.RUNPOD_SUBMIT_TIMEOUT_MS || '300000', 10)
 const DEFAULT_IMAGE_MAX_BYTES = Number.parseInt(process.env.RUNPOD_IMAGE_MAX_BYTES || '2000000', 10)
 const DEFAULT_REQUEST_MAX_BYTES = Number.parseInt(process.env.RUNPOD_REQUEST_MAX_BYTES || '9500000', 10)
+
+function readBoundedInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : Number.parseInt(typeof value === 'string' ? value : '', 10)
+  const safeValue = Number.isFinite(parsed) ? Math.floor(parsed) : fallback
+  return Math.max(min, Math.min(max, safeValue))
+}
+
+const DEFAULT_STATUS_TRANSPORT_MAX_ATTEMPTS = readBoundedInteger(
+  process.env.RUNPOD_STATUS_TRANSPORT_MAX_ATTEMPTS,
+  3,
+  1,
+  10
+)
+const DEFAULT_STATUS_TRANSPORT_BACKOFF_MS = readBoundedInteger(
+  process.env.RUNPOD_STATUS_TRANSPORT_BACKOFF_MS,
+  1000,
+  0,
+  30_000
+)
+const DEFAULT_NOT_READY_RETRY_DELAY_MS = readBoundedInteger(
+  process.env.RUNPOD_NOT_READY_RETRY_DELAY_MS,
+  2000,
+  0,
+  30_000
+)
 
 type RunPodPayload = {
   workflow: Record<string, unknown>
@@ -191,33 +230,8 @@ function readRunId(data: any): string | null {
 }
 
 function normalizeStatus(status: unknown): string {
-  return typeof status === 'string' ? status.trim().toUpperCase() : ''
-}
-
-function readErrorText(data: any): string {
-  if (!data) return ''
-  if (typeof data === 'string') return data
-  if (typeof data.error === 'string') return data.error
-  if (typeof data.message === 'string') return data.message
-  if (typeof data.status_message === 'string') return data.status_message
-  return ''
-}
-
-async function readJsonResponse(response: Response, operation: string): Promise<any> {
-  const responseText = await response.text()
-  let data: any = null
-  if (responseText) {
-    try {
-      data = JSON.parse(responseText)
-    } catch {
-      throw new Error(`RunPod ${operation} returned invalid JSON (HTTP ${response.status})`)
-    }
-  }
-  if (!response.ok) {
-    const detail = readErrorText(data)
-    throw new Error(`RunPod ${operation} failed with HTTP ${response.status}${detail ? `: ${detail}` : ''}`)
-  }
-  return data
+  const normalized = typeof status === 'string' ? status.trim().toUpperCase() : ''
+  return /^[A-Z][A-Z0-9_]{0,39}$/.test(normalized) ? normalized : ''
 }
 
 function stripDataUriPrefix(value: string): string {
@@ -344,7 +358,12 @@ async function emitProviderEvent(
   await callback(state)
 }
 
-async function cancelRunPodJob(args: { apiKey: string; endpointBase: string; runId: string }) {
+async function cancelRunPodJob(args: {
+  apiKey: string
+  endpointBase: string
+  runId: string
+  stageKey: WorkflowStageKey
+}) {
   try {
     await axios.post(
       `${args.endpointBase}/cancel/${encodeURIComponent(args.runId)}`,
@@ -355,7 +374,23 @@ async function cancelRunPodJob(args: { apiKey: string; endpointBase: string; run
       }
     )
   } catch (error: any) {
-    console.warn(`[runpod] cancel failed for job ${args.runId}: ${redactLogText(error?.message || error)}`)
+    if (axios.isAxiosError(error) && error.response) {
+      logRunPodHttpFailure({
+        operation: '/cancel',
+        stage: args.stageKey,
+        apiKey: args.apiKey,
+        status: error.response.status,
+        body: error.response.data,
+        headers: error.response.headers,
+        responseFormat: typeof error.response.data === 'object' && error.response.data !== null ? 'json' : 'invalid_json',
+      })
+    } else {
+      try {
+        console.warn('[runpod] cancel failed: transport error')
+      } catch {
+        // Preserve the original customer cancellation even if the log sink fails.
+      }
+    }
   }
 }
 
@@ -368,6 +403,8 @@ async function pollRunPodStatus(args: {
   throwIfCancelled?: ProviderWorkflowCall['throwIfCancelled']
   pollTimeoutMs?: number
   pollIntervalMs?: number
+  statusTransportMaxAttempts?: number
+  statusTransportBackoffMs?: number
   onProviderEvent?: ProviderWorkflowCall['onProviderEvent']
   startedAt?: string
 }): Promise<any> {
@@ -379,18 +416,34 @@ async function pollRunPodStatus(args: {
     typeof args.pollIntervalMs === 'number' && Number.isFinite(args.pollIntervalMs) && args.pollIntervalMs > 0
       ? args.pollIntervalMs
       : DEFAULT_POLL_INTERVAL_MS
+  const statusTransportMaxAttempts = readBoundedInteger(
+    args.statusTransportMaxAttempts,
+    DEFAULT_STATUS_TRANSPORT_MAX_ATTEMPTS,
+    1,
+    10
+  )
+  const statusTransportBackoffMs = readBoundedInteger(
+    args.statusTransportBackoffMs,
+    DEFAULT_STATUS_TRANSPORT_BACKOFF_MS,
+    0,
+    30_000
+  )
 
   const statusUrl = `${args.endpointBase}/status/${encodeURIComponent(args.runId)}`
   const startedAt = Date.now()
   const providerStartedAt = args.startedAt || new Date(startedAt).toISOString()
   let lastStatus = 'UNKNOWN'
+  let consecutiveStatusFailures = 0
 
   const throwIfCancelledAndCancelRunPod = async () => {
     try {
       await args.throwIfCancelled?.()
     } catch (error) {
       if (shouldCancelRunPodForControlError(error)) {
-        await cancelRunPodJob({ apiKey: args.apiKey, endpointBase: args.endpointBase, runId: args.runId })
+        await cancelRunPodJob({
+          apiKey: args.apiKey, endpointBase: args.endpointBase,
+          runId: args.runId, stageKey: args.stageKey,
+        })
       }
       throw error
     }
@@ -398,15 +451,57 @@ async function pollRunPodStatus(args: {
 
   while (Date.now() - startedAt < timeoutMs) {
     await throwIfCancelledAndCancelRunPod()
+    let data: any
+    try {
+      const response = await fetch(statusUrl, {
+        headers: { Authorization: `Bearer ${args.apiKey}` },
+        signal: AbortSignal.timeout(60000),
+      })
+      data = await readRunPodJsonResponse(response, '/status', args.stageKey, args.apiKey)
+    } catch (error) {
+      const isTransientHttp = isTransientRunPodStatusHttpError(error)
+      if (!isTransientHttp && isRunPodExecutionError(error)) throw error
+      if (!isTransientHttp) {
+        logRunPodTransportFailure({
+          operation: '/status',
+          stage: args.stageKey,
+          category: classifyRunPodTransportCause(error),
+          acceptedRun: true,
+        })
+      }
 
-    const response = await fetch(statusUrl, {
-      headers: { Authorization: `Bearer ${args.apiKey}` },
-      signal: AbortSignal.timeout(60000),
-    })
-    const data = await readJsonResponse(response, '/status')
+      consecutiveStatusFailures += 1
+      const persistedStatus = lastStatus === 'UNKNOWN' ? 'STATUS_UNAVAILABLE' : lastStatus
+      await emitProviderEvent(args.onProviderEvent, {
+        provider: 'runpod',
+        stage: args.stageKey,
+        deployment_id: args.endpointId,
+        request_id: args.runId,
+        status_url: statusUrl,
+        result_url: null,
+        status: persistedStatus,
+        started_at: providerStartedAt,
+        error: 'provider_status_unavailable',
+        failure_code: 'provider_status_unavailable',
+        retryable: true,
+      })
+      if (consecutiveStatusFailures >= statusTransportMaxAttempts) {
+        throw new RunPodExecutionError({
+          code: 'provider_status_unavailable',
+          retryable: true,
+          retryDisposition: 'same_id_status',
+        })
+      }
+      const waitMs = Math.min(30_000, statusTransportBackoffMs * consecutiveStatusFailures)
+      if (waitMs > 0) await sleep(waitMs)
+      continue
+    }
+
     const status = normalizeStatus(data?.status)
+    const recoveredStatusTransport = consecutiveStatusFailures > 0
+    consecutiveStatusFailures = 0
 
-    if (status && status !== lastStatus) {
+    if (status && (status !== lastStatus || recoveredStatusTransport)) {
       lastStatus = status
       console.log(`[runpod] status=${status} job_id=${args.runId} elapsed_ms=${Date.now() - startedAt}`)
       await emitProviderEvent(args.onProviderEvent, {
@@ -418,6 +513,9 @@ async function pollRunPodStatus(args: {
         result_url: null,
         status,
         started_at: providerStartedAt,
+        error: null,
+        failure_code: null,
+        retryable: null,
       })
     }
 
@@ -426,7 +524,7 @@ async function pollRunPodStatus(args: {
     }
 
     if (status === 'FAILED' || status === 'CANCELLED' || status === 'ERROR') {
-      const errorMessage = readErrorText(data) || `RunPod job failed with status ${status || 'UNKNOWN'}`
+      const terminalError = classifyRunPodTerminalFailure({ status, response: data })
       await emitProviderEvent(args.onProviderEvent, {
         provider: 'runpod',
         stage: args.stageKey,
@@ -437,15 +535,35 @@ async function pollRunPodStatus(args: {
         status: status || 'FAILED',
         started_at: providerStartedAt,
         finished_at: new Date().toISOString(),
-        error: errorMessage,
+        error: terminalError.code,
+        failure_code: terminalError.code,
+        retryable: terminalError.retryable,
       })
-      throw new Error(errorMessage)
+      throw terminalError
     }
 
     await sleep(intervalMs)
   }
 
-  throw new Error(`RunPod poll timeout after ${timeoutMs}ms (last_status=${lastStatus})`)
+  await emitProviderEvent(args.onProviderEvent, {
+    provider: 'runpod',
+    stage: args.stageKey,
+    deployment_id: args.endpointId,
+    request_id: args.runId,
+    status_url: statusUrl,
+    result_url: null,
+    status: lastStatus === 'UNKNOWN' ? 'STATUS_UNAVAILABLE' : lastStatus,
+    started_at: providerStartedAt,
+    error: 'provider_poll_timeout',
+    failure_code: 'provider_poll_timeout',
+    retryable: true,
+  })
+  throw new RunPodExecutionError({
+    code: 'provider_poll_timeout',
+    retryable: true,
+    retryDisposition: 'same_id_status',
+    providerStatus: lastStatus,
+  })
 }
 
 export const runPodAdapter: WorkflowProviderAdapter = {
@@ -508,6 +626,9 @@ export const runPodAdapter: WorkflowProviderAdapter = {
           status: 'MOCK_COMPLETED',
           started_at: startedAt,
           finished_at: new Date().toISOString(),
+          error: null,
+          failure_code: null,
+          retryable: null,
         },
       }
     }
@@ -536,11 +657,21 @@ export const runPodAdapter: WorkflowProviderAdapter = {
         status: 'COMPLETED',
         started_at: args.startedAt,
         finished_at: new Date().toISOString(),
+        error: null,
+        failure_code: null,
+        retryable: null,
       }
       await emitProviderEvent(input.onProviderEvent, providerRun)
       return { buffer, providerRun }
     }
 
+    let notReadyRetryUsed = false
+    const notReadyRetryDelayMs = readBoundedInteger(
+      input.notReadyRetryDelayMs,
+      DEFAULT_NOT_READY_RETRY_DELAY_MS,
+      0,
+      30_000
+    )
     const resumable = resolveResumableRunPodRun({
       previousRun: input.resumeProviderRun,
       stageKey: input.stageKey,
@@ -558,6 +689,8 @@ export const runPodAdapter: WorkflowProviderAdapter = {
           throwIfCancelled: input.throwIfCancelled,
           pollTimeoutMs: input.pollTimeoutMs,
           pollIntervalMs: input.pollIntervalMs,
+          statusTransportMaxAttempts: input.statusTransportMaxAttempts,
+          statusTransportBackoffMs: input.statusTransportBackoffMs,
           onProviderEvent: input.onProviderEvent,
           startedAt: resumable.startedAt,
         })
@@ -567,20 +700,33 @@ export const runPodAdapter: WorkflowProviderAdapter = {
           startedAt: resumable.startedAt || new Date().toISOString(),
         })
       } catch (error) {
-        if (!String((error as Error)?.message || error).includes('HTTP 404')) throw error
-        await emitProviderEvent(input.onProviderEvent, {
-          ...input.resumeProviderRun!,
-          provider: 'runpod',
-          stage: input.stageKey,
-          deployment_id: endpointId,
-          request_id: resumable.runId,
-          status_url: `${endpointBase}/status/${encodeURIComponent(resumable.runId)}`,
-          result_url: null,
-          status: 'EXPIRED',
-          finished_at: new Date().toISOString(),
-          error: 'RunPod result expired before Worker recovery',
-        })
-        console.warn(`[runpod] prior result expired endpoint=${endpointId}; submitting replacement`)
+        if (isRunPodExecutionError(error) && error.status === 404) {
+          await emitProviderEvent(input.onProviderEvent, {
+            ...input.resumeProviderRun!,
+            provider: 'runpod',
+            stage: input.stageKey,
+            deployment_id: endpointId,
+            request_id: resumable.runId,
+            status_url: `${endpointBase}/status/${encodeURIComponent(resumable.runId)}`,
+            result_url: null,
+            status: 'EXPIRED',
+            finished_at: new Date().toISOString(),
+            error: 'provider_result_expired',
+            failure_code: 'provider_result_expired',
+            retryable: true,
+          })
+          console.warn(`[runpod] prior result expired endpoint=${endpointId}; submitting replacement`)
+        } else if (
+          isRunPodExecutionError(error) &&
+          error.code === 'provider_not_ready' &&
+          error.retryDisposition === 'resubmit_once'
+        ) {
+          notReadyRetryUsed = true
+          console.warn('[runpod] provider not ready; retrying the same page once')
+          if (notReadyRetryDelayMs > 0) await sleep(notReadyRetryDelayMs)
+        } else {
+          throw error
+        }
       }
     }
 
@@ -618,50 +764,96 @@ export const runPodAdapter: WorkflowProviderAdapter = {
     }
 
     const submitUrl = `${endpointBase}/run`
-    const submitStartedAt = new Date().toISOString()
+    const submitAndPoll = async () => {
+      const startedAtForRun = new Date().toISOString()
+      await input.throwIfCancelled?.()
+      let response: Response
+      try {
+        response = await fetch(submitUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: bodyJson,
+          signal: AbortSignal.timeout(DEFAULT_SUBMIT_TIMEOUT_MS),
+        })
+      } catch (error) {
+        logRunPodTransportFailure({
+          operation: '/run',
+          stage: input.stageKey,
+          category: classifyRunPodTransportCause(error),
+          acceptedRun: false,
+        })
+        throw new RunPodExecutionError({
+          code: 'provider_submit_unknown',
+          retryable: false,
+          retryDisposition: 'none',
+        })
+      }
+      const responseData = await readRunPodJsonResponse(response, '/run', input.stageKey, apiKey)
 
-    await input.throwIfCancelled?.()
-    const response = await fetch(submitUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: bodyJson,
-      signal: AbortSignal.timeout(DEFAULT_SUBMIT_TIMEOUT_MS),
-    })
-    const responseData = await readJsonResponse(response, '/run')
+      const runId = readRunId(responseData)
+      if (!runId) {
+        throw new RunPodExecutionError({
+          code: 'provider_invalid_response',
+          retryable: false,
+          retryDisposition: 'none',
+          message: 'RunPod /run response missing job id',
+        })
+      }
 
-    const runId = readRunId(responseData)
-    if (!runId) {
-      throw new Error('RunPod /run response missing job id')
+      const statusUrl = `${endpointBase}/status/${encodeURIComponent(runId)}`
+      await emitProviderEvent(input.onProviderEvent, {
+        provider: 'runpod',
+        stage: input.stageKey,
+        deployment_id: endpointId,
+        request_id: runId,
+        status_url: statusUrl,
+        result_url: null,
+        status: normalizeStatus(responseData?.status) || 'SUBMITTED',
+        started_at: startedAtForRun,
+        error: null,
+        failure_code: null,
+        retryable: null,
+      })
+      console.log(`[runpod] submitted endpoint=${endpointId} job_id=${runId} request_bytes=${requestBytes}`)
+
+      const completed = await pollRunPodStatus({
+        apiKey,
+        endpointId,
+        endpointBase,
+        runId,
+        stageKey: input.stageKey,
+        throwIfCancelled: input.throwIfCancelled,
+        pollTimeoutMs: input.pollTimeoutMs,
+        pollIntervalMs: input.pollIntervalMs,
+        statusTransportMaxAttempts: input.statusTransportMaxAttempts,
+        statusTransportBackoffMs: input.statusTransportBackoffMs,
+        onProviderEvent: input.onProviderEvent,
+        startedAt: startedAtForRun,
+      })
+
+      return completeRun({ completed, runId, startedAt: startedAtForRun })
     }
 
-    const statusUrl = `${endpointBase}/status/${encodeURIComponent(runId)}`
-    await emitProviderEvent(input.onProviderEvent, {
-      provider: 'runpod',
-      stage: input.stageKey,
-      deployment_id: endpointId,
-      request_id: runId,
-      status_url: statusUrl,
-      result_url: null,
-      status: normalizeStatus(responseData?.status) || 'SUBMITTED',
-      started_at: submitStartedAt,
-    })
-    console.log(`[runpod] submitted endpoint=${endpointId} job_id=${runId} request_bytes=${requestBytes}`)
-
-    const completed = await pollRunPodStatus({
-      apiKey,
-      endpointId,
-      endpointBase,
-      runId,
-      stageKey: input.stageKey,
-      throwIfCancelled: input.throwIfCancelled,
-      pollTimeoutMs: input.pollTimeoutMs,
-      pollIntervalMs: input.pollIntervalMs,
-      onProviderEvent: input.onProviderEvent,
-    })
-
-    return completeRun({ completed, runId, startedAt: submitStartedAt })
+    while (true) {
+      try {
+        return await submitAndPoll()
+      } catch (error) {
+        if (
+          !notReadyRetryUsed &&
+          isRunPodExecutionError(error) &&
+          error.code === 'provider_not_ready' &&
+          error.retryDisposition === 'resubmit_once'
+        ) {
+          notReadyRetryUsed = true
+          console.warn('[runpod] provider not ready; retrying the same page once')
+          if (notReadyRetryDelayMs > 0) await sleep(notReadyRetryDelayMs)
+          continue
+        }
+        throw error
+      }
+    }
   },
 }
