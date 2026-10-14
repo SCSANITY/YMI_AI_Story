@@ -4,6 +4,7 @@ import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
 import { autoCropFaceImage, faceQualityCheck, prepareFaceImage, prepareRawHeicFallback, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
+import { HeicUploadTooLargeError } from '@/lib/heic-upload';
 import {
   cancelPreviewJob,
   createPreviewJob,
@@ -2327,9 +2328,9 @@ export default function PersonalizePage({
         const rawHeic = await prepareRawHeicFallback(file);
         if (!isCurrent()) return { status: 'cancelled' };
         if (rawHeic) return { status: 'ready', file: rawHeic, autoCropped: false };
-      } catch {
+      } catch (error) {
         if (!isCurrent()) return { status: 'cancelled' };
-        return { status: 'failed', error: null };
+        return { status: 'failed', error: error instanceof HeicUploadTooLargeError ? { ok: false, message: error.message } : null };
       }
 
       const validation = await validateFaceImage(file);

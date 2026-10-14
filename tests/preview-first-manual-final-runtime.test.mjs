@@ -91,14 +91,16 @@ test('actual photo-preparation callback bypasses browser face functions only for
   const js = ts.transpileModule(`export ${source.slice(start, end)}`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText
-  const run = async (rawFallback) => {
+  class HeicUploadTooLargeError extends Error {}
+  const run = async (rawFallback, failure = null, currentRunId = 7) => {
     const loaded = { exports: {} }
     const calls = []
     const file = { name: 'synthetic-photo' }
     vm.runInNewContext(js, {
       module: loaded, exports: loaded.exports,
-      useCallback: (callback) => callback, facePrepareRunIdRef: { current: 7 },
-      prepareRawHeicFallback: async () => rawFallback ? file : null,
+      useCallback: (callback) => callback, facePrepareRunIdRef: { current: currentRunId },
+      HeicUploadTooLargeError,
+      prepareRawHeicFallback: async () => { if (failure) throw failure; return rawFallback ? file : null },
       validateFaceImage: async () => { calls.push('validate'); return { ok: true } },
       faceQualityCheck: async () => { calls.push('quality'); return { ok: true } },
       prepareFaceImage: async () => { calls.push('prepare'); return file },
@@ -112,4 +114,13 @@ test('actual photo-preparation callback bypasses browser face functions only for
   const ordinary = await run(false)
   assert.equal(ordinary.result.status, 'ready')
   assert.deepEqual(ordinary.calls, ['validate', 'quality', 'prepare'])
+  const sizeMessage = 'This file is too large. Please upload an image smaller than 5 MB.'
+  const oversized = await run(false, new HeicUploadTooLargeError(sizeMessage))
+  assert.equal(oversized.result.status, 'failed')
+  assert.equal(oversized.result.error.message, sizeMessage)
+  assert.deepEqual(oversized.calls, [])
+  const unexpected = await run(false, new Error('internal decoder details'))
+  assert.equal(unexpected.result.error, null)
+  const cancelled = await run(false, new HeicUploadTooLargeError(sizeMessage), 8)
+  assert.equal(cancelled.result.status, 'cancelled')
 })

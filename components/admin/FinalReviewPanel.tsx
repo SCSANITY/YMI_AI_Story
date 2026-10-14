@@ -1457,6 +1457,11 @@ export function FinalReviewPanel({
                   {selectedJob?.orders?.display_id || selectedJob?.order_id || 'Select a final job'}
                   </h3>
                 {selectedJob ? (
+                  <span className="mt-1 inline-flex rounded-full border border-[var(--admin-line)] px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-muted)]">
+                    {selectedJob.production_mode === 'manual' ? 'Handmade' : 'Auto'}
+                  </span>
+                ) : null}
+                {selectedJob ? (
                   <p className="mt-0.5 truncate text-xs text-[var(--admin-muted)]">
                     {selectedJob.display_title} · PDF {approvedPageCount}/{totalPageCount} approved
                   </p>

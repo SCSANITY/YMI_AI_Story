@@ -27,8 +27,11 @@ test('actual Admin queue renders production mode separately from review progress
       review_status: 'pending', print_status: 'locked', total_pages: 31, approved_pages: 0 }],
     totalJobs: 1, selectedJobId: 'review', loadingJobs: false, emptyLabel: 'None', onSelectJob: () => {},
   }))
-  assert.match(html, /Production: Manual/)
+  assert.match(html, /Handmade/)
+  assert.doesNotMatch(html, /Production: Manual/)
   assert.match(html, /PDF pending/)
+  const modal = await readFile(new URL('../components/admin/FinalReviewPanel.tsx', import.meta.url), 'utf8')
+  assert.match(modal, /selectedJob\.production_mode === 'manual' \? 'Handmade' : 'Auto'/)
 })
 
 test('actual PDF workspace keeps Rerun visible but disabled only for manual production', async () => {

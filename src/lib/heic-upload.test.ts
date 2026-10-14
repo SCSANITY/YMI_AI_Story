@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { prepareUndecodableHeicUpload } from './heic-upload'
+import { HeicUploadTooLargeError, prepareUndecodableHeicUpload } from './heic-upload'
 
 function heic(size = 32, brand = 'heic'): File {
   const bytes = Buffer.alloc(size)
@@ -24,7 +24,10 @@ test('browser-undecodable HEIC preserves bytes, sets usable MIME, and uses the e
   assert.equal(prepared.name, 'phone-photo.heic')
   assert.equal(prepared.lastModified, file.lastModified)
   assert.deepEqual(new Uint8Array(await prepared.arrayBuffer()), new Uint8Array(await file.arrayBuffer()))
-  await assert.rejects(prepareUndecodableHeicUpload({ file: heic(5 * 1024 * 1024 + 1), canDecode: async () => false }), /5 MB/)
+  assert.ok(await prepareUndecodableHeicUpload({ file: heic(5 * 1024 * 1024), canDecode: async () => false }))
+  await assert.rejects(prepareUndecodableHeicUpload({ file: heic(5 * 1024 * 1024 + 1), canDecode: async () => false }),
+    (error: unknown) => error instanceof HeicUploadTooLargeError
+      && error.message === 'This file is too large. Please upload an image smaller than 5 MB.')
 })
 
 test('decodable HEIC still uses normal face validation/quality/crop; generic compatible HEVC gets fallback', async () => {
