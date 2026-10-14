@@ -1,3 +1,4 @@
+import { resolveJobRuntimeSnapshot, type ImageEditRuntimeSnapshot } from './imageEditRuntime'
 import { randomUUID } from 'node:crypto'
 import type { TemplatePage, ProviderStageConfig, PageWorkflowOverride, WorkflowStageKey, InputSnapshot, SubtitleRenderConfig } from './processor'
 import type { PrivateImageEditConfigSnapshot } from './privateConfig'
@@ -15,6 +16,7 @@ import { renderSubtitlePage, type SubtitleTemplatePage, type SubtitleFontAsset }
 // Queue ownership, credentials and durable adapters belong to the caller.
 export type PreviewExecutionPorts = {
   apiKey: string
+  runtimeSnapshot?: ImageEditRuntimeSnapshot
   transport?: OpenAITransport
   loadState: () => OpenAIStageRunState
   persistState: (state: OpenAIStageRunState) => Promise<void>
@@ -54,6 +56,14 @@ export async function executePreparedOpenAIPreviewPage(args: PreviewExecutionPor
     ...configured,
     prompt: prepared.pageWorkflowOverride?.prompt ?? configured.prompt,
   })
+  if (privateImageEditSnapshot) {
+    if (!args.runtimeSnapshot) throw new OpenAIExecutionError('openai_preflight_failed', 'not_sent', 'Job runtime snapshot is missing')
+    const snapshot = resolveJobRuntimeSnapshot({ jobType: job.job_type, stored: args.runtimeSnapshot })
+    const { prompt: _prompt, prompt_version: _version, ...parameters } = effectiveConfig
+    if (canonicalJson(snapshot.parameters) !== canonicalJson(parameters)) {
+      throw new OpenAIExecutionError('openai_preflight_failed', 'not_sent', 'Request differs from Job runtime snapshot')
+    }
+  }
   if (
     prepared.pageWorkflowOverride?.seed !== undefined ||
     (prepared.pageWorkflowOverride?.static_inputs &&
@@ -88,6 +98,7 @@ export async function executePreparedOpenAIPreviewPage(args: PreviewExecutionPor
   const configDigest = createOpenAIConfigDigest(privateImageEditSnapshot
     ? {
         private_config_raw_sha256: privateImageEditSnapshot.raw_sha256,
+        ...(args.runtimeSnapshot ? { runtime_snapshot_digest: args.runtimeSnapshot.snapshot_digest } : {}),
         resolved_provider_config: effectiveProviderConfig,
       }
     : effectiveProviderConfig)
@@ -242,6 +253,7 @@ export async function executePreparedOpenAIPreviewPage(args: PreviewExecutionPor
             identityReference: identityBuffer,
             apiKey,
             privateConfigRawSha256: privateImageEditSnapshot?.raw_sha256,
+            runtimeSnapshotDigest: args.runtimeSnapshot?.snapshot_digest,
             transport: args.transport,
           })
         } catch (error) {
@@ -272,6 +284,7 @@ export async function executePreparedOpenAIPreviewPage(args: PreviewExecutionPor
           dispatch_disposition: 'result_received',
           provider_request_id: result.providerRequestId,
           usage: result.usage,
+          returned_settings: result.returnedSettings,
           calculated_charge_usd: result.calculatedChargeUsd,
           provider_timing_ms: result.providerTimingMs,
           output: result.metadata,

@@ -1,3 +1,4 @@
+import { acquireJobRuntimeSnapshot, type ImageEditRuntimeSnapshot } from './imageEditRuntime'
 import { executePreparedOpenAIPreviewPage, composeOpenAIPreviewPage, selectSubtitleTemplatePath } from './previewExecution'
 import { createClient, type RealtimeChannel } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
@@ -1757,6 +1758,7 @@ async function preparePageInputs(args: {
   jobDatePath: string
   subtitleEnabled: boolean
   isSinglePageContract: boolean
+  runtimeSnapshot?: ImageEditRuntimeSnapshot
   privateImageEditSnapshot?: PrivateImageEditConfigSnapshot | null
 }): Promise<PreparedPageInput[]> {
   const {
@@ -1828,7 +1830,7 @@ async function preparePageInputs(args: {
             identity_input: 'primary',
             ordered_input_roles: ['source_illustration', 'identity_reference'],
             config: {
-              ...privateImageEditSnapshot!.validated.image_edit.profiles.preview,
+              ...args.runtimeSnapshot!.parameters,
               prompt: privatePageContract.image_edit!.prompt,
               prompt_version: privatePageContract.image_edit!.prompt_version,
             },
@@ -1986,11 +1988,24 @@ async function processJob(job: JobRow): Promise<void> {
       'OpenAI Final remains blocked before private configuration is read'
     )
   }
+  let runtimeSnapshot: ImageEditRuntimeSnapshot | undefined
+  if (privateConfigCandidate) {
+    runtimeSnapshot = await acquireJobRuntimeSnapshot({
+      jobType: job.job_type, stored: job.input_snapshot?.image_edit_runtime,
+      persist: async (snapshot) => {
+        const persistedInput = { ...(job.input_snapshot ?? {}), image_edit_runtime: snapshot }
+        await updateOwnedJob(job.job_id, { input_snapshot: persistedInput, updated_at: new Date().toISOString() })
+        job.input_snapshot = persistedInput
+        input.image_edit_runtime = snapshot
+      },
+    })
+  }
   let privateImageEditSnapshot: PrivateImageEditConfigSnapshot | null = null
   let config: Readonly<TemplateConfig>
   if (privateConfigCandidate) {
     try {
       privateImageEditSnapshot = await loadPrivateImageEditConfig({
+        runtimeProfile: runtimeSnapshot!.parameters,
         locator: configUrl,
         currentOrigin: VERIFIED_SUPABASE_URL,
         historicalOrigins: PRIVATE_CONFIG_HISTORICAL_ORIGINS,
@@ -2502,6 +2517,7 @@ async function processJob(job: JobRow): Promise<void> {
     subtitleEnabled: subtitleEnabledForJob,
     isSinglePageContract,
     privateImageEditSnapshot,
+    runtimeSnapshot,
   })
   const preparedPageMap = new Map(preparedPages.map((item) => [item.pageIndex, item]))
   let privateWholeJobPreflight: PreviewWholeJobPreflight | null = null
@@ -2524,7 +2540,7 @@ async function processJob(job: JobRow): Promise<void> {
     privateWholeJobPreflight = await withImagePreparationCancellation({
       checkActive: throwIfCancelled,
       prepare: (signal) => preflightPreviewImageEditJob({
-        profileSize: privateImageEditSnapshot.validated.image_edit.profiles.preview.size,
+        profileSize: runtimeSnapshot!.parameters.size,
         pages: preflightPages,
         identityReference,
         resolvePage: privateImageEditSnapshot.resolvePage,
@@ -2782,7 +2798,7 @@ async function processJob(job: JobRow): Promise<void> {
     } else if (prepared.provider === 'openai' && !IS_MOCK_MODE) {
       try {
         buffer = await executePreparedOpenAIPreviewPage({
-          job, prepared, privateImageEditSnapshot, privateWholeJobPreflight, facePath,
+          job, prepared, privateImageEditSnapshot, privateWholeJobPreflight, facePath, runtimeSnapshot,
           sourceBucket: APP_TEMPLATES_BUCKET, identityBucket: RAW_BUCKET,
           apiKey: String(process.env.OPENAI_API_KEY || '').trim(), pageMaxAttempts,
           intermediateDirectory: `jobs/${jobDatePath}/${job.job_id}/${attemptSegment}/runtime/providers/openai`,

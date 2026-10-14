@@ -1,7 +1,9 @@
+import type { ImageEditRuntimeSnapshot, ImageEditQuality } from './imageEditRuntime'
 import type { BookPagePresentation } from './bookPageContract'
 import type { ImageEditContract, PageImageEditContract } from './imageEditContract'
 
 export type InputSnapshot = {
+  image_edit_runtime?: ImageEditRuntimeSnapshot
   face_source_path?: string
   config_url?: string
   text_overrides?: Record<string, unknown>
@@ -41,7 +43,7 @@ export type OpenAIImageEditConfig = {
   prompt: string
   prompt_version: string
   size: string
-  quality: 'low' | 'medium' | 'high'
+  quality: ImageEditQuality
   output_format: 'png'
   background: 'opaque'
   request_timeout_ms: number

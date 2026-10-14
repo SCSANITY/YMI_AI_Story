@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "corpus_id": "IMG-PROVIDER-PROD-001/P1-E1/SHARED-CORPUS-V1",
+  "schema_version": 2,
+  "corpus_id": "IMG-PROVIDER-PROD-001/STEP1/CONTENT-CORPUS-V2",
   "template_id": "p1-e1-synthetic-story",
   "prompt_marker": "P1_E1_SYNTHETIC_PROMPT_DO_NOT_PUBLISH_7F31",
   "base_config": {
@@ -8,29 +8,7 @@
     "asset_layout": "single-page",
     "template_id": "p1-e1-synthetic-story",
     "base_path": "p1-e1-synthetic-story/openai-v1",
-    "image_edit": {
-      "contract_version": 1,
-      "active_provider": "openai",
-      "profiles": {
-        "preview": {
-          "model": "gpt-image-2.5-flare-2026-09-08",
-          "size": "1024x1024",
-          "quality": "medium",
-          "output_format": "png",
-          "background": "opaque",
-          "request_timeout_ms": 180000
-        },
-        "final": {
-          "activation": "blocked_pending_print_contract",
-          "model": "gpt-image-2.5-flare-2026-09-08",
-          "size": "2048x2048",
-          "quality": "medium",
-          "output_format": "png",
-          "background": "opaque",
-          "request_timeout_ms": 180000
-        }
-      }
-    },
+    "image_edit": { "contract_version": 2 },
     "pages": [
       { "index": 0, "template_image": "preview0_A.png", "enable_face_swap": true, "image_edit": { "prompt": "P1_E1_SYNTHETIC_PROMPT_DO_NOT_PUBLISH_7F31 cover", "prompt_version": "P1-E1-COVER-V1", "identity_input": "primary" }, "presentation": { "role": "preview_cover", "spread_index": 0 } },
       { "index": 1, "template_image": "preview1_L_A.png", "enable_face_swap": true, "image_edit": { "prompt": "P1_E1_SYNTHETIC_PROMPT_DO_NOT_PUBLISH_7F31 interior", "prompt_version": "P1-E1-INTERIOR-V1", "identity_input": "primary" }, "presentation": { "role": "preview_interior", "spread_index": 1, "side": "left", "page_number": 1 } },
@@ -117,7 +95,7 @@
     { "id": "valid-composed-preview", "expected": { "worker": { "accepted": true }, "web": { "accepted": true } } },
     { "id": "template-id-mismatch", "config_mutations": [{ "op": "set", "path": ["template_id"], "value": "other-story" }], "expected": { "worker": { "accepted": true }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
     { "id": "extra-image-edit-key", "config_mutations": [{ "op": "set", "path": ["image_edit", "unexpected"], "value": true }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "unapproved-model", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "preview", "model"], "value": "gpt-image-2.5" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
+    {"id": "unapproved-model", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"model": "gpt-image-2.5"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
     { "id": "blank-prompt", "config_mutations": [{ "op": "set", "path": ["pages", 0, "image_edit", "prompt"], "value": "   " }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
     { "id": "over-limit-prompt", "config_mutations": [{ "op": "repeat_string", "path": ["pages", 0, "image_edit", "prompt"], "value": "X", "count": 32001 }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
     { "id": "string-page-index", "config_mutations": [{ "op": "set", "path": ["pages", 0, "index"], "value": "0" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
@@ -126,15 +104,15 @@
     { "id": "preview-final-overlap", "config_mutations": [{ "op": "set", "path": ["final", "page_indices", 0], "value": 0 }], "expected": { "worker": { "accepted": false, "code": "book_page_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
     { "id": "subtitle-orphan", "subtitle_mutations": [{ "op": "set", "path": ["pages", 0, "image"], "value": "orphan.png" }], "expected": { "worker": { "accepted": false, "code": "book_page_contract_invalid" }, "web": { "accepted": true } } },
     { "id": "provider-mismatch", "config_mutations": [{ "op": "set", "path": ["image_edit", "active_provider"], "value": "runpod" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "size-mismatch", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "preview", "size"], "value": "2048x2048" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "quality-mismatch", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "preview", "quality"], "value": "high" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "output-format-mismatch", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "preview", "output_format"], "value": "jpeg" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "background-mismatch", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "preview", "background"], "value": "transparent" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "timeout-type-mismatch", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "preview", "request_timeout_ms"], "value": "180000" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "final-activation-mismatch", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "final", "activation"], "value": "enabled" }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "missing-preview-profile", "config_mutations": [{ "op": "delete", "path": ["image_edit", "profiles", "preview"] }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "missing-final-profile", "config_mutations": [{ "op": "delete", "path": ["image_edit", "profiles", "final"] }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
-    { "id": "extra-profile-key", "config_mutations": [{ "op": "set", "path": ["image_edit", "profiles", "preview", "unexpected"], "value": true }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
+    {"id": "size-mismatch", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"model": "legacy-runtime-profile-not-story-content"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "quality-mismatch", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"quality": "high"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "output-format-mismatch", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"output_format": "jpeg"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "background-mismatch", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"background": "transparent"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "timeout-type-mismatch", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"request_timeout_ms": "180000"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "final-activation-mismatch", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"final": {"activation": "enabled"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "missing-preview-profile", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"model": "legacy-runtime-profile-not-story-content"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "missing-final-profile", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"model": "legacy-runtime-profile-not-story-content"}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
+    {"id": "extra-profile-key", "config_mutations": [{"op": "set", "path": ["image_edit", "profiles"], "value": {"preview": {"unexpected": true}}}], "expected": {"worker": {"accepted": false, "code": "config_contract_invalid"}, "web": {"accepted": false, "code": "story_config_contract_invalid"}}},
     { "id": "missing-root-image-edit", "config_mutations": [{ "op": "delete", "path": ["image_edit"] }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
     { "id": "missing-page-image-edit", "config_mutations": [{ "op": "delete", "path": ["pages", 0, "image_edit"] }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },
     { "id": "missing-prompt", "config_mutations": [{ "op": "delete", "path": ["pages", 0, "image_edit", "prompt"] }], "expected": { "worker": { "accepted": false, "code": "config_contract_invalid" }, "web": { "accepted": false, "code": "story_config_contract_invalid" } } },

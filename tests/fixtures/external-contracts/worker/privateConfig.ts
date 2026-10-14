@@ -1,3 +1,4 @@
+import { validateRuntimeProfile, type ImageEditRuntimeProfile } from './imageEditRuntime'
 import { createHash } from 'node:crypto'
 import {
   privateConfigCredentialHeaders,
@@ -243,7 +244,7 @@ function sha256(value: Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function assertNoDuplicateJsonKeys(text: string): void {
+export function assertNoDuplicateJsonKeys(text: string): void {
   let cursor = 0
   const whitespace = () => {
     while (cursor < text.length && /\s/.test(text[cursor])) cursor += 1
@@ -335,6 +336,7 @@ export async function loadPrivateImageEditConfig(args: {
   templateId: string
   serviceCredential: SupabaseServiceCredential
   transport: PrivateConfigTransport
+  runtimeProfile?: ImageEditRuntimeProfile
   validateContract?: typeof validateImageEditContract
   scheduleTimeout?: PrivateConfigTimeoutScheduler
 }): Promise<PrivateImageEditConfigSnapshot> {
@@ -407,6 +409,7 @@ export async function loadPrivateImageEditConfig(args: {
     throw new PrivateConfigError('config_contract_invalid')
   }
 
+  const runtimeProfile = args.runtimeProfile ? validateRuntimeProfile(args.runtimeProfile) : undefined
   deepFreeze(config)
   const snapshot: PrivateImageEditConfigSnapshot = {
     locator,
@@ -416,6 +419,7 @@ export async function loadPrivateImageEditConfig(args: {
     resolvePage: (pageArgs) => resolveValidatedImageEditPage({
       validated,
       ...pageArgs,
+      runtimeProfile,
     }),
   }
   return deepFreeze(snapshot)

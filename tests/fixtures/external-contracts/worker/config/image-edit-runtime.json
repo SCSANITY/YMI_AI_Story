@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "provider": "openai",
+  "sources": [
+    "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare",
+    "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst",
+    "https://developers.openai.com/api/reference/resources/images/methods/edit"
+  ],
+  "verified_on": "2026-10-14",
+  "allowlist": {
+    "gpt-image-2.5-flare": { "family": "flare", "version": "alias" },
+    "gpt-image-2.5-flare-2026-09-08": { "family": "flare", "version": "2026-09-08" },
+    "gpt-image-2.5-sunburst": { "family": "sunburst", "version": "alias" },
+    "gpt-image-2.5-sunburst-2026-09-08": { "family": "sunburst", "version": "2026-09-08" }
+  },
+  "capabilities": {
+    "quality": ["low", "medium", "high", "xhigh", "max", "auto"],
+    "output_format": ["png", "jpeg", "webp"],
+    "background": ["opaque", "transparent", "auto"],
+    "size": {
+      "auto": true,
+      "edge_multiple": 16,
+      "max_edge": 3840,
+      "max_aspect": 3,
+      "min_pixels": 655360,
+      "max_pixels": 8294400,
+      "experimental_above_pixels": 3686400
+    },
+    "transparent_formats": ["png", "webp"],
+    "compression_formats": ["jpeg", "webp"]
+  },
+  "runtime_supported": {
+    "preview": {
+      "size": ["1024x1024"],
+      "output_format": ["png"],
+      "background": ["opaque"],
+      "request_timeout_ms": { "min": 1000, "max": 300000 }
+    },
+    "final": null
+  },
+  "selected": { "preview": null, "final": null }
+}

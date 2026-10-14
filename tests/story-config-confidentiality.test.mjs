@@ -31,21 +31,7 @@ function validConfig() {
     schema_version: 3,
     asset_layout: 'single-page',
     template_id: templateId,
-    image_edit: {
-      contract_version: 1,
-      active_provider: 'openai',
-      profiles: {
-        preview: {
-          model: 'gpt-image-2.5-flare-2026-09-08', size: '1024x1024', quality: 'medium',
-          output_format: 'png', background: 'opaque', request_timeout_ms: 180000,
-        },
-        final: {
-          activation: 'blocked_pending_print_contract',
-          model: 'gpt-image-2.5-flare-2026-09-08', size: '2048x2048', quality: 'medium',
-          output_format: 'png', background: 'opaque', request_timeout_ms: 180000,
-        },
-      },
-    },
+    image_edit: { contract_version: 2 },
     pages: [
       {
         index: 0, template_image: 'cover.png', enable_face_swap: true,
@@ -70,6 +56,25 @@ function responseEmitter(plan) {
   })
   return response
 }
+
+test('content-only stories reject embedded runtime and legacy controls; Web owns no runtime selection', async () => {
+  const { module } = await loadBundled('src/lib/story-config-server.ts')
+  const original = validConfig()
+  assert.doesNotThrow(() => module.validatePrivateStoryConfig(original, templateId))
+  for (const field of ['profiles', 'model', 'quality', 'size', 'active_provider']) {
+    const config = structuredClone(original)
+    config.image_edit[field] = secretMarker
+    assert.throws(() => module.validatePrivateStoryConfig(config, templateId), /story_config_contract_invalid/)
+  }
+  const root = structuredClone(original); root.workflow = { provider: 'runpod' }
+  assert.throws(() => module.validatePrivateStoryConfig(root, templateId), /story_config_contract_invalid/)
+  const page = structuredClone(original); page.pages[0].workflow_overrides = {}
+  assert.throws(() => module.validatePrivateStoryConfig(page, templateId), /story_config_contract_invalid/)
+  const old = structuredClone(original); old.image_edit.contract_version = 1
+  assert.throws(() => module.validatePrivateStoryConfig(old, templateId), /story_config_contract_invalid/)
+  const source = await readFile(new URL('../src/lib/story-config-server.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /gpt-image-|selected\.preview|image-edit-runtime\.json|validateImageEditProfile/)
+})
 
 async function loadBundled(entry, options = {}) {
   const result = await build({
@@ -261,9 +266,9 @@ test('shared P1-E corpus produces the declared Web outcomes without exposing Pro
 
   assert.equal(
     sha256(corpusBytes).toUpperCase(),
-    'D289272EC87DEB88823116D6093B810B14364C49EF6111E4162CC304B14D52EE'
+    '22BE71CDCF16DD38272A45F5DC5E28EF5310CBA4561FFE421709EC5F034DE30B'
   )
-  assert.equal(corpus.schema_version, 1)
+  assert.equal(corpus.schema_version, 2)
   assert.equal(corpus.cases.length, 45)
   for (const corpusCase of corpus.cases) {
     const { config, bytes } = materializeCorpusCase(corpus, corpusCase)
@@ -651,10 +656,10 @@ test('external Worker fixture pins the exact reviewed private-config and key-mig
     readFile(new URL('./fixtures/external-contracts/SHA256SUMS', import.meta.url), 'utf8'),
     readFile(new URL('./fixtures/external-contracts/README.md', import.meta.url), 'utf8'),
   ])
-  const expected = '690B350BD006300DAA01A7B1A31DDDE9FA21F73D83970EB8B95AEAEB5FDC7E89'
+  const expected = '083FCB536C466F5E2D9C745AB984C36CBD4B6DE8E63EC533715705DDC392355A'
   assert.equal(sha256(fixture).toUpperCase(), expected)
   assert.match(manifest, new RegExp(`^${expected}  worker/index\\.ts$`, 'm'))
-  assert.match(fixtureReadme, /ab54b4bd8dcb7efb6182f08a5b21e8467f16b5d4/)
+  assert.match(fixtureReadme, /12cc963d867f6b511f95566ee52c3f2fb411b164/)
   assert.match(fixture.toString('utf8'), /privateImageEditSnapshot = await loadPrivateImageEditConfig\(/)
   assert.match(fixture.toString('utf8'), /assertPrivateImageEditProviderAuthority\(/)
 })

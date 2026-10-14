@@ -15,16 +15,7 @@ export const PRIVATE_STORY_CONFIG_PREFIX = 'story-configs/image-edit/v1' as cons
 export const PRIVATE_STORY_CONFIG_MAX_BYTES = 8 * 1024 * 1024
 export const PRIVATE_STORY_CONFIG_TIMEOUT_MS = 15_000
 
-const IMAGE_EDIT_MODEL = 'gpt-image-2.5-flare-2026-09-08'
 const IMAGE_EDIT_MAX_PROMPT_CHARACTERS = 32_000
-const IMAGE_EDIT_PROFILE_KEYS = [
-  'background',
-  'model',
-  'output_format',
-  'quality',
-  'request_timeout_ms',
-  'size',
-] as const
 
 export const STORY_CONFIG_ERROR_CODES = [
   'story_config_path_invalid',
@@ -256,28 +247,6 @@ function assertNoDuplicateJsonKeys(text: string): void {
   if (cursor !== text.length) throw new Error('invalid_json')
 }
 
-function validateImageEditProfile(value: unknown, profile: 'preview' | 'final'): void {
-  const record = asRecord(value)
-  assertExactKeys(
-    record,
-    profile === 'final' ? ['activation', ...IMAGE_EDIT_PROFILE_KEYS] : IMAGE_EDIT_PROFILE_KEYS
-  )
-  if (
-    record.model !== IMAGE_EDIT_MODEL ||
-    record.size !== (profile === 'preview' ? '1024x1024' : '2048x2048') ||
-    record.quality !== 'medium' ||
-    record.output_format !== 'png' ||
-    record.background !== 'opaque' ||
-    typeof record.request_timeout_ms !== 'number' ||
-    !Number.isInteger(record.request_timeout_ms) ||
-    record.request_timeout_ms < 1_000 ||
-    record.request_timeout_ms > 300_000 ||
-    (profile === 'final' && record.activation !== 'blocked_pending_print_contract')
-  ) {
-    throw new StoryConfigError('story_config_contract_invalid')
-  }
-}
-
 function validatePageImageEdit(value: unknown): void {
   const record = asRecord(value)
   assertExactKeys(record, ['identity_input', 'prompt', 'prompt_version'])
@@ -335,18 +304,14 @@ export function validatePrivateStoryConfig(
   }
 
   const imageEdit = asRecord(root.image_edit)
-  assertExactKeys(imageEdit, ['active_provider', 'contract_version', 'profiles'])
-  if (imageEdit.contract_version !== 1 || imageEdit.active_provider !== 'openai') {
+  assertExactKeys(imageEdit, ['contract_version'])
+  if (imageEdit.contract_version !== 2 || root.workflow !== undefined) {
     throw new StoryConfigError('story_config_contract_invalid')
   }
-  const profiles = asRecord(imageEdit.profiles)
-  assertExactKeys(profiles, ['final', 'preview'])
-  validateImageEditProfile(profiles.preview, 'preview')
-  validateImageEditProfile(profiles.final, 'final')
-
   const pageIndices = new Set<number>()
   for (const rawPage of root.pages) {
     const page = asRecord(rawPage)
+    if (page.workflow_overrides !== undefined || page.params_override !== undefined) throw new StoryConfigError('story_config_contract_invalid')
     const index = page.index
     if (
       typeof index !== 'number' ||
