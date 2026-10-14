@@ -91,3 +91,11 @@ Step1 central-runtime mirrors pin Workercfe057e318b54ddd7711e78b780ccca4e29fcd8e
 imageEditRuntime.ts and config/image-edit-runtime.json are test-only exact evidence,
 never imported by Web production code or a second selected-profile authority.
 Story content contract is version2; corpus metadata is version2 with45 vectors.
+
+Step4 current integration mirrors (2026-10-14) pin exact Worker 698b606dd62b6ff5a80dfee1813395c3223af39f.
+The selected runtime is owner-approved Sunburst dated / medium / 1024x1024
+PNG/opaque180000ms; selected.final remains null. imageEditRuntime.ts and central
+JSON are checksum-bound TEST evidence only, never a Web production authority.
+Database migration stays exact1cb15ca/proposed/not applied; no application code
+or dependency was changed by this mirror refresh. Historical pins above remain
+review provenance, not the current upstream fixture identity.

@@ -38,7 +38,7 @@ function freeze<T>(value: T): T {
   for (const nested of Object.values(value as object)) freeze(nested)
   return Object.freeze(value)
 }
-export const IMAGE_EDIT_RUNTIME_CONFIGURATION = freeze(centralFile)
+export const IMAGE_EDIT_RUNTIME_CONFIGURATION: ImageEditRuntimeConfiguration = freeze(centralFile) as ImageEditRuntimeConfiguration
 
 export function validateRuntimeProfile(value: unknown,
   configuration: ImageEditRuntimeConfiguration = IMAGE_EDIT_RUNTIME_CONFIGURATION): ImageEditRuntimeProfile {

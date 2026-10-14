@@ -38,5 +38,15 @@
     },
     "final": null
   },
-  "selected": { "preview": null, "final": null }
+  "selected": {
+    "preview": {
+      "model": "gpt-image-2.5-sunburst-2026-09-08",
+      "quality": "medium",
+      "size": "1024x1024",
+      "output_format": "png",
+      "background": "opaque",
+      "request_timeout_ms": 180000
+    },
+    "final": null
+  }
 }
