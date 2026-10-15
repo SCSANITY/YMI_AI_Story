@@ -10,7 +10,7 @@ async function run(request: Request) {
     return noStoreJson({ error: 'Unauthorized' }, 401)
   }
   try {
-    const result = await processUserAssetCleanup()
+    const result = await processUserAssetCleanup({ limit: 20 })
     return noStoreJson(result)
   } catch (error) {
     console.error('[user-assets] scheduled cleanup failed', error)
