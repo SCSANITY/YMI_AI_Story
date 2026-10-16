@@ -741,7 +741,7 @@ const en: MessageDictionary = {
   'personalize.generatingCoverOverrun': 'Still creating your cover — thanks for waiting',
   'personalize.generatingCoverStage1': 'A little magic is on its way',
   'personalize.generatingCoverStage2': 'Your story is taking shape',
-  'personalize.generatingCoverStage3': 'Bringing your cover to life',
+  'personalize.generatingCoverStage3': 'A little more magic…',
   'personalize.generatingCoverStage4': 'Almost there…',
   'personalize.generatingCoverRetry': 'Review details and retry',
   'personalize.returnToCustomize': 'Return to Customize',

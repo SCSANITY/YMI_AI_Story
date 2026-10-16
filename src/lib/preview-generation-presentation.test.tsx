@@ -9,15 +9,16 @@ import { PersonalizeProductIntro } from '@/components/personalize/PersonalizePro
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar'
 import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction'
 
-test('35-second estimate follows elapsed wall time, clamps safely, and has no completion signal', () => {
-  assert.deepEqual(getPreviewGenerationEstimate(0), { countdownSeconds: 35, fraction: 0, stageIndex: 0 })
-  assert.deepEqual(getPreviewGenerationEstimate(17_500), { countdownSeconds: 18, fraction: 0.5, stageIndex: 1 })
-  assert.deepEqual(getPreviewGenerationEstimate(34_999), { countdownSeconds: 1, fraction: 34_999 / 35_000, stageIndex: 3 })
-  for (const elapsed of [35_000, 180_000, 600_000]) {
+test('40-second estimate follows elapsed wall time, clamps safely, and has no completion signal', () => {
+  assert.deepEqual(getPreviewGenerationEstimate(0), { countdownSeconds: 40, fraction: 0, stageIndex: 0 })
+  assert.deepEqual(getPreviewGenerationEstimate(20_000), { countdownSeconds: 20, fraction: 0.5, stageIndex: 2 })
+  assert.deepEqual(getPreviewGenerationEstimate(35_000), { countdownSeconds: 5, fraction: 35_000 / 40_000, stageIndex: 3 })
+  assert.deepEqual(getPreviewGenerationEstimate(39_999), { countdownSeconds: 1, fraction: 39_999 / 40_000, stageIndex: 3 })
+  for (const elapsed of [40_000, 180_000, 600_000]) {
     assert.deepEqual(getPreviewGenerationEstimate(elapsed), { countdownSeconds: 0, fraction: 1, stageIndex: 3 })
   }
   for (const elapsed of [-10, Number.NaN, Number.POSITIVE_INFINITY]) {
-    assert.equal(getPreviewGenerationEstimate(elapsed).countdownSeconds, 35)
+    assert.equal(getPreviewGenerationEstimate(elapsed).countdownSeconds, 40)
     assert.equal(getPreviewGenerationEstimate(elapsed).stageIndex, 0)
   }
 })
@@ -51,7 +52,7 @@ test('Creation hydration cannot revert a local selection, even when its read sta
 const pendingProps = {
   startedAt: null, title: 'Creating your cover', body: 'Your cover will appear when ready.',
   estimateLabel: 'Estimated time remaining', stillWorking: 'Still creating — no need to refresh',
-  stageMessages: ['A little magic is on its way', 'Your story is taking shape', 'Bringing your cover to life', 'Almost there…'] as const,
+  stageMessages: ['A little magic is on its way', 'Your story is taking shape', 'A little more magic…', 'Almost there…'] as const,
   capacityWaiting: false, capacityTitle: 'Your place is saved', capacityBody: 'Please wait.',
   error: null, actionLabel: 'Return to Customize', onReturnToDetails: () => {},
 }
@@ -60,7 +61,7 @@ test('pending cover is inline, has a non-announcing estimate timer, and shows an
   const html = renderToStaticMarkup(<PreviewGeneratingCover {...pendingProps} />)
   assert.match(html, /data-preview-generating-cover="true"/)
   assert.match(html, /role="timer" aria-live="off"/)
-  assert.match(html, /35s/)
+  assert.match(html, /40s/)
   assert.match(html, /A little magic is on its way/)
   assert.match(html, /Estimated time remaining/)
   assert.doesNotMatch(html, /fixed|role="progressbar"|100%|RunPod/)

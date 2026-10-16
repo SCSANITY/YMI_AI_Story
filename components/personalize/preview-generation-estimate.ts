@@ -1,4 +1,4 @@
-export const PREVIEW_ESTIMATE_SECONDS = 35
+export const PREVIEW_ESTIMATE_SECONDS = 40
 
 // This is a waiting estimate, never a provider completion or purchase signal.
 export function getPreviewGenerationEstimate(elapsedMs: number) {

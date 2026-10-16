@@ -6,12 +6,12 @@ import test from 'node:test'
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
 
-test('pending Preview uses one 35-second estimate while durable identity unlocks purchase configuration', () => {
+test('pending Preview uses one 40-second estimate while durable identity unlocks purchase configuration', () => {
   const page = read('components/PersonalizePage.tsx')
   const helper = read('components/personalize/preview-generation-estimate.ts')
   const cover = read('components/personalize/PreviewGeneratingCover.tsx')
   const stage = read('components/personalize/usePersonalizeStage.ts')
-  assert.match(helper, /PREVIEW_ESTIMATE_SECONDS = 35/)
+  assert.match(helper, /PREVIEW_ESTIMATE_SECONDS = 40/)
   assert.match(cover, /getPreviewGenerationEstimate\(elapsedMs\)/)
   assert.match(cover, /Date\.now\(\) - origin/)
   assert.match(cover, /window\.clearInterval\(timer\)/)
