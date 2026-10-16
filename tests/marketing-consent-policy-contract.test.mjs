@@ -30,25 +30,21 @@ async function listSourceFiles(relativeDirectory) {
 test('the approved privacy policy discloses optional analytics and marketing boundaries', async () => {
   const policy = await read('src/lib/footer-legal-content.ts')
 
-  assert.match(policy, /5\. Cookies, Analytics, and Advertising Technologies/)
-  assert.match(policy, /With Analytics consent, YMI Story may use Google Analytics/)
-  assert.match(policy, /With Marketing consent, YMI Story may use Google Ads measurement and Meta Pixel/)
-  assert.match(policy, /retention to two months/)
-  assert.match(policy, /Withdrawing consent stops future optional collection/)
-  assert.match(policy, /It cannot recall information already sent to a provider/)
-  assert.match(policy, /Google or Meta may process limited technical and event data in countries outside/)
-  assert.match(policy, /href: 'https:\/\/policies\.google\.com\/privacy'/)
-  assert.match(policy, /href: 'https:\/\/www\.facebook\.com\/privacy\/policy\/'/)
+  assert.match(policy, /11\. Cookies, Analytics & Marketing/)
+  assert.match(policy, /analytics and advertising tools such as Google Analytics and Meta Pixel/)
+  assert.match(policy, /consent before analytics or advertising cookies are placed or accessed/)
+  assert.match(policy, /provide an appropriate consent mechanism and respect your choices/)
+  assert.match(policy, /manage or withdraw certain cookie and advertising preferences through our cookie settings/)
+  assert.match(policy, /stored, accessed, or processed in Singapore and other countries/)
+  assert.match(policy, /YMI does not control the independent internal retention practices of third-party providers/)
 })
 
-test('the policy explicitly excludes child, customer, and private route data from vendors', async () => {
+test('the policy excludes child materials from advertising and unrelated profiling', async () => {
   const policy = await read('src/lib/footer-legal-content.ts')
 
-  assert.match(policy, /Analytics and Advertising Exclusion:/)
-  assert.match(policy, /name, age, uploaded photo or audio, generated likeness/)
-  assert.match(policy, /does not send raw personalized routes, query strings, child information/)
-  assert.match(policy, /customer contact details, or internal order and creation identifiers/)
-  assert.match(policy, /uploaded materials for advertising profiles/)
+  assert.match(policy, /We do not use your child's uploaded photos, voice recordings, or personalised book content for behavioural advertising or unrelated advertising profiles/)
+  assert.match(policy, /We do not use children's photos, recordings, or personalised information for behavioural advertising or unrelated profiling/)
+  assert.match(policy, /not used by YMI to create products for other customers or for unrelated purposes/)
 })
 
 test('the current disclosure version keeps the approved vendor boundaries and legal policy', async () => {
@@ -64,9 +60,9 @@ test('the current disclosure version keeps the approved vendor boundaries and le
   assert.match(messages, /Help us see which pages and stories people spend time on/)
   assert.match(messages, /Let us measure whether our ads reach families who actually want a book/)
   assert.doesNotMatch(messages, /They stay off unless you allow them/)
-  assert.match(legalDocuments, /effectiveDate: 'August 28, 2026'/)
-  assert.match(legalDocuments, /version: '2026-08-28-v3'/)
-  assert.match(publishedLoader, /privacy: 'August 28, 2026'/)
+  assert.match(legalDocuments, /effectiveDate: 'October 16, 2026'/)
+  assert.match(legalDocuments, /version: '2026-10-16-v4'/)
+  assert.match(publishedLoader, /privacy: 'October 16, 2026'/)
   assert.match(footer, /publishedLegalContent\?\.footerEffectiveDates/)
 })
 

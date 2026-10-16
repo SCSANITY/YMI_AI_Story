@@ -24,143 +24,148 @@ export type FooterLegalContent = {
 const privacyEn: LegalSection[] = [
   {
     paragraphs: [
-      {
-        text: 'At YMI, we treat your family data, uploaded media, and generated content with care. This policy explains how we collect, use, store, and protect the information required to personalize and deliver your books.',
-      },
+      { text: "YMI (“YMI”, “we”, “us”, or “our”) respects your privacy and is committed to handling personal information responsibly." },
+      { text: "This Privacy Policy explains what information we collect, how we use it, how we protect it, and the choices available to you when you use our website and personalised products." },
+      { text: "YMI is operated by a company incorporated in Hong Kong. Depending on the services used to provide your order, certain information may be stored or processed in Singapore and other countries where YMI or our service providers operate." },
     ],
   },
   {
-    title: '1. Data We Collect',
+    title: "1. Information We Collect",
     paragraphs: [
-      {
-        text: 'To create and deliver personalized books, we may collect the following categories of information:',
-      },
+      { text: "Depending on how you use YMI, we may collect the following information:" },
+    ],
+  },
+  {
+    title: "Information You Provide",
+    bullets: [
+      { text: "Your name and contact details" },
+      { text: "Billing and shipping information" },
+      { text: "Child's name, age, and other personalisation details" },
+      { text: "Photos or other images you upload" },
+      { text: "Voice recordings for Voice Edition products" },
+      { text: "Personal messages, blessings, or other content you choose to include in your book" },
+      { text: "Information you provide when contacting customer support" },
+    ],
+  },
+  {
+    title: "Information Collected Automatically",
+    paragraphs: [
+      { text: "When you use our website, we may automatically collect limited technical and usage information, such as your IP address, browser type, device information, pages visited, interactions with our website, and information collected through cookies or similar technologies." },
+    ],
+  },
+  {
+    title: "2. How We Use Your Information",
+    paragraphs: [
+      { text: "We use personal information only for purposes reasonably necessary to operate YMI and provide the products and services you request." },
+      { text: "This may include:" },
     ],
     bullets: [
-      { label: 'Voice Data:', text: 'Short child or adult audio samples provided for Signature Voice, the synthetic voice representations created from them, and the generated narration used in the personalized physical book.' },
-      { label: 'Visual Data:', text: 'Uploaded child photos and profile images used for personalization and account display.' },
-      { label: 'Account Information:', text: 'Name, email address, shipping details, and profile settings.' },
-      {
-        label: 'Technical and Usage Data:',
-        text: 'Basic device, browser, approximate location derived from IP address, referral or campaign information, consent choices, and coarse interactions with YMI Story that are needed to operate, secure, measure, and improve the service. We do not send uploaded child photos or audio, personalized book titles, customer contact details, order identifiers, or session tokens to analytics or advertising providers.',
-      },
+      { text: "Creating and personalising your book" },
+      { text: "Generating and displaying personalised previews" },
+      { text: "Creating personalised illustrations and visual content" },
+      { text: "Creating personalised voice narration for Voice Edition products" },
+      { text: "Processing orders, payments, shipping, and delivery" },
+      { text: "Providing customer support and responding to enquiries" },
+      { text: "Maintaining, improving, and securing our website and services" },
+      { text: "Preventing fraud, misuse, or unauthorised activity" },
+      { text: "Complying with applicable legal obligations" },
+      { text: "Protecting our rights, property, services, and users" },
     ],
   },
   {
-    title: '2. AI, Biometric Data, and Use Restrictions',
     paragraphs: [
-      {
-        text: 'YMI uses AI workflows to personalize images, preview pages, and voice-related assets. Where applicable, uploaded photos and audio may be processed as sensitive or biometric-like information under local law.',
-      },
-      {
-        label: 'Strict Purpose Limitation:',
-        text: 'We only process uploaded photos and audio to create, fulfil, support, replace, or re-fulfil the specific personalized product you request. Signature Voice processing may create a synthetic version of the authorized child or adult voice for that book\'s narration.',
-      },
-      {
-        label: 'No Model Training:',
-        text: 'We do not use your or your child\'s uploaded materials to train AI models or to create products for other users.',
-      },
+      { text: "Depending on where you live and the circumstances, we may process your information because it is necessary to provide the product or service you request, to comply with legal obligations, to protect our legitimate business interests, or where you have given us permission to do so." },
+      { text: "We do not sell your child's photos or voice recordings for advertising purposes, and we do not use them to create behavioural advertising profiles." },
     ],
   },
   {
-    title: '3. Storage and Security',
+    title: "3. Photos, Voice & Personalised Content",
     paragraphs: [
-      {
-        text: 'We apply reasonable technical and organizational safeguards to protect customer data and uploaded assets.',
-      },
+      { text: "Photos, voice recordings, names, messages, and other content you provide may be used to create the personalised product you request." },
+      { text: "For example:" },
     ],
     bullets: [
-      { label: 'Encryption:', text: 'Uploads are protected during transfer, and stored assets are kept in secured infrastructure.' },
-      { label: 'Retention:', text: 'We keep uploaded assets and generated content only as long as needed for personalization, fulfillment, support, and reasonable operational needs.' },
-      { label: 'Access Control:', text: 'Access is restricted to authorized staff, systems, and service providers that require the data to produce, fulfil, support, replace, or re-fulfil the requested product.' },
+      { text: "Photos may be processed to create personalised illustrations and previews." },
+      { text: "Voice recordings may be processed to create personalised narration for Voice Edition products." },
+      { text: "Names, ages, and other personalisation details may be used to generate the content of your book." },
+      { text: "Personal messages may be included on personalised pages of your book." },
     ],
   },
   {
-    title: '4. Children\'s Data',
     paragraphs: [
-      {
-        text: 'YMI products are intended to be ordered and managed by parents or guardians. By uploading a child\'s image or related materials, you confirm that you are authorized to provide that data for personalization and fulfillment.',
-      },
-      {
-        label: 'Child Voice Authorization:',
-        text: 'A child\'s voice may be used for a Signature Voice recording only when the person submitting it confirms that they hold all necessary rights and authorization for that use, including any parental or guardian permission required. No recording is uploaded until that confirmation is given, and it authorizes creation of the synthetic narration for that book only.',
-      },
-      {
-        label: 'No Child Marketing:',
-        text: 'We do not use children\'s uploaded materials for profiling, advertising, or unrelated marketing purposes.',
-      },
-      {
-        label: 'Analytics and Advertising Exclusion:',
-        text: 'We do not intentionally send a child\'s name, age, uploaded photo or audio, generated likeness, personalized book title, or other child profile information to Google Analytics, Google Ads, Meta Pixel, or another advertising provider.',
-      },
+      { text: "We use this content only as reasonably necessary to create, fulfil, support, update, replace, or re-fulfil the personalised product or service you request." },
+      { text: "We do not use children's photos or voice recordings for facial recognition, voice identification, behavioural advertising, or unrelated profiling." },
     ],
   },
   {
-    title: '5. Cookies, Analytics, and Advertising Technologies',
+    title: "4. Personalisation Technology",
     paragraphs: [
-      {
-        text: 'YMI Story uses cookies and similar browser technologies for different purposes. Necessary storage supports functions such as authentication, cart, checkout, security, regional preferences, and remembering your privacy choices. Necessary storage cannot be disabled through Cookie Settings because the service may not function correctly without it.',
-      },
-      {
-        text: 'Optional technologies are disabled unless and until you grant the matching choice in Cookie Settings.',
-      },
+      { text: "YMI uses modern personalisation technology, including artificial intelligence and other automated tools, to help bring your personalised book to life." },
+      { text: "These technologies may be used to personalise images, create illustrations and previews, and produce personalised voice narration for Voice Edition products." },
+      { text: "We use these technologies only as part of the production and delivery of the personalised product you request." },
+      { text: "Your photos, voice recordings, and other personalised materials are not used by YMI to create products for other customers or for unrelated purposes." },
+      { text: "We work with selected technology providers to perform certain processing functions on our behalf. These providers receive only the information reasonably necessary for the relevant service and are expected to maintain appropriate privacy and security protections." },
+    ],
+  },
+  {
+    title: "5. How We Protect Your Personalised Content",
+    paragraphs: [
+      { text: "We treat uploaded photos, voice recordings, and personalised book materials as private customer content." },
+      { text: "We do not use your personalised materials to build advertising profiles or to create personalised products for unrelated customers." },
+      { text: "Access to personalised content is limited to YMI personnel and service providers who reasonably need access to perform authorised business functions." },
+      { text: "If you provide a photo, voice recording, message, or other content relating to another person, you should have the permission or authority required by applicable law to provide and use that content for the requested product." },
+    ],
+  },
+  {
+    title: "6. Children's Information",
+    paragraphs: [
+      { text: "YMI creates personalised products that may feature children." },
+      { text: "Information about a child may be provided by a person using our service to create or purchase a product. We do not encourage children to provide personal information for advertising, profiling, or unrelated purposes." },
+      { text: "Where applicable law requires parental or guardian consent for the collection, use, or disclosure of a child's personal information, YMI will take appropriate steps to comply with those requirements." },
+      { text: "We do not use children's photos, recordings, or personalised information for behavioural advertising or unrelated profiling." },
+      { text: "If you believe that a child has provided personal information to YMI in circumstances where this was not authorised or where applicable consent was required, please contact us so that we can review the situation and take appropriate action." },
+    ],
+  },
+  {
+    title: "7. Service Providers",
+    paragraphs: [
+      { text: "We may use selected third-party service providers to help us operate YMI and provide the products and services you request." },
+      { text: "These providers may support functions such as:" },
     ],
     bullets: [
-      {
-        label: 'Analytics:',
-        text: 'With Analytics consent, YMI Story may use Google Analytics to understand coarse website usage, page performance, and shopping-flow completion. Google Analytics may process browser and device information, approximate location, referral or campaign information, consented first-party identifiers, and redacted page categories. YMI Story does not send raw personalized routes, query strings, child information, uploaded media, customer contact details, or internal order and creation identifiers.',
-      },
-      {
-        label: 'Marketing:',
-        text: 'With Marketing consent, YMI Story may use Google Ads measurement and Meta Pixel to understand whether an advertisement led to a permitted website action and, where YMI separately enables it, to support advertising audiences or remarketing. These providers may use cookies, pixels, web beacons, and similar technologies for measurement and advertising services. YMI Story limits these events to approved coarse funnel facts and does not use children\'s uploaded materials for advertising profiles.',
-      },
+      { text: "Image and visual content processing" },
+      { text: "Voice generation and audio processing" },
+      { text: "Website hosting and data storage" },
+      { text: "Payment processing" },
+      { text: "Order fulfilment and delivery" },
+      { text: "Customer support" },
+      { text: "Security and fraud prevention" },
+      { text: "Website analytics and technical services" },
     ],
   },
   {
     paragraphs: [
-      {
-        text: 'Google Analytics may set first-party cookies such as _ga and property-specific _ga cookies to distinguish consented users and sessions. Google documents a default cookie duration of up to two years, subject to browser limits and YMI\'s configuration. YMI will configure user-level and event-level Google Analytics retention to two months. Google and Meta may retain data under their own terms, settings, and legal obligations. YMI periodically reviews its configuration and keeps provider access only while it is needed for the purposes described above.',
-      },
-      {
-        text: 'You can accept, reject, or change optional choices at any time through Cookie Settings in the website footer. Withdrawing consent stops future optional collection from YMI Story after the updated choice takes effect and removes reachable YMI-domain analytics or advertising cookies where technically possible. It cannot recall information already sent to a provider. You can also clear cookies through your browser and use the privacy and advertising controls offered by Google and Meta.',
-      },
-      {
-        text: 'You can review provider privacy information at the following official pages:',
-      },
-    ],
-    bullets: [
-      {
-        label: 'Google:',
-        text: 'Google Privacy Policy',
-        href: 'https://policies.google.com/privacy',
-      },
-      {
-        label: 'Meta:',
-        text: 'Meta Privacy Policy',
-        href: 'https://www.facebook.com/privacy/policy/',
-      },
+      { text: "We provide service providers with only the information reasonably necessary for their services and require appropriate privacy and security protections through our agreements or other applicable arrangements." },
+      { text: "Some service providers may process information in accordance with their own legal, technical, and operational requirements, including applicable retention periods. YMI does not control the independent internal retention practices of third-party providers." },
     ],
   },
   {
-    title: '6. Third-Party Processors',
+    title: "8. International Data Processing",
     paragraphs: [
-      {
-        text: 'We may share limited data with trusted service providers only when necessary to operate the service, such as hosting, payments, production, shipping, and technical infrastructure.',
-      },
-    ],
-    bullets: [
-      { label: 'Cloud Infrastructure:', text: 'Secure hosting and storage providers used to operate uploads, generated assets, and application services.' },
-      { label: 'Payment Processors:', text: 'Providers such as Stripe or PayPal used to securely process payments.' },
-      { label: 'Production and Logistics:', text: 'Manufacturing and shipping partners involved in producing and delivering your physical order.' },
-      {
-        label: 'Analytics and Advertising Providers:',
-        text: 'With the relevant optional consent, providers such as Google and Meta may process limited technical and coarse event data for analytics, campaign measurement, and any separately enabled advertising features described in this policy.',
-      },
+      { text: "YMI is operated by a Hong Kong-based company." },
+      { text: "To provide our products and services, personal information may be stored, accessed, or processed in Singapore and other countries where YMI or our service providers operate." },
+      { text: "Privacy and data protection laws may differ between countries. Where required by applicable law, we take appropriate steps to protect personal information when it is transferred internationally." },
     ],
   },
   {
-    title: '7. Voice Data Retention',
+    title: '9. How Long We Keep Information',
     paragraphs: [
+      {
+        text: 'We retain personal information only for as long as reasonably necessary for the purposes described in this Privacy Policy.',
+      },
+      {
+        text: 'We keep uploaded assets and generated content only as long as needed for personalization, fulfillment, support, and reasonable operational needs.',
+      },
       {
         text: 'Signature Voice uses a short authorized child or adult voice sample to create a synthetic voice and generated narration only for the personalized physical book covered by your consent. The same retention schedule applies whether the narrator is the child in the book or an adult. Processing may be performed manually and with authorized service providers, with access limited to authorized personnel. The following operational retention periods apply unless a legal hold, active dispute, fraud review, or other binding obligation requires a limited extension.',
       },
@@ -180,48 +185,85 @@ const privacyEn: LegalSection[] = [
     ],
   },
   {
-    title: '8. Your Rights',
+    title: "10. Data Security",
     paragraphs: [
-      { text: 'Depending on your jurisdiction, you may have the right to access, correct, or request deletion of your personal data.' },
+      { text: "We use reasonable technical, organisational, and administrative measures designed to protect personal information against unauthorised access, loss, misuse, alteration, or disclosure." },
+      { text: "Access to personal information is limited to people and service providers who reasonably need it for authorised purposes." },
+      { text: "However, no method of transmission or storage over the internet can be guaranteed to be completely secure. While we take reasonable precautions, we cannot guarantee absolute security." },
+    ],
+  },
+  {
+    title: "11. Cookies, Analytics & Marketing",
+    paragraphs: [
+      { text: "We use cookies and similar technologies to help operate, understand, and improve our website and marketing." },
+      { text: "These technologies may be provided by YMI or selected third-party service providers and may include analytics and advertising tools such as Google Analytics and Meta Pixel." },
+      { text: "They may collect information such as:" },
     ],
     bullets: [
-      { label: 'Access:', text: 'You may ask what account or order data we hold about you.' },
-      { label: 'Correction:', text: 'You may request updates to inaccurate profile or order information.' },
-      { label: 'Erasure:', text: 'You may request deletion of eligible account data, subject to legal, operational, and fulfillment requirements.' },
-      {
-        label: 'Withdraw Optional Consent:',
-        text: 'You may change Analytics and Marketing choices at any time through Cookie Settings. Withdrawal applies to future collection after the updated choice takes effect and does not make earlier lawful processing reversible.',
-      },
+      { text: "Browser and device information" },
+      { text: "IP address or similar technical information" },
+      { text: "Pages viewed and interactions with our website" },
+      { text: "Referral or campaign information" },
+      { text: "Purchase or conversion events" },
+      { text: "Cookie or advertising identifiers, where permitted" },
     ],
   },
   {
-    title: '9. International Transfers',
     paragraphs: [
-      {
-        text: 'Because YMI operates online and serves multiple regions, your data may be processed in jurisdictions outside your place of residence. We use reasonable safeguards for such transfers.',
-      },
-      {
-        text: 'Where you consent to optional analytics or advertising, Google or Meta may process limited technical and event data in countries outside your place of residence. Their processing is also governed by their privacy terms and applicable transfer safeguards.',
-      },
+      { text: "We may use this information to:" },
+    ],
+    bullets: [
+      { text: "Understand how visitors use our website" },
+      { text: "Improve website performance and user experience" },
+      { text: "Measure the effectiveness of our advertising" },
+      { text: "Understand which marketing campaigns bring visitors to YMI" },
+      { text: "Build or measure advertising audiences and remarketing campaigns, where permitted by applicable law" },
     ],
   },
   {
-    title: '10. Policy Updates',
     paragraphs: [
-      {
-        text: 'We may revise this Privacy Policy from time to time. Material updates will be reflected on this page and may also be communicated through the site or your registered email address.',
-      },
+      { text: "We do not use your child's uploaded photos, voice recordings, or personalised book content for behavioural advertising or unrelated advertising profiles." },
+      { text: "Where applicable law requires consent before analytics or advertising cookies are placed or accessed, we will provide an appropriate consent mechanism and respect your choices." },
+      { text: "You may be able to manage or withdraw certain cookie and advertising preferences through our cookie settings, your browser settings, or the relevant advertising platform's privacy controls." },
     ],
   },
   {
-    title: '11. Contact',
+    title: "12. Your Privacy Rights",
     paragraphs: [
-      {
-        text: 'If you have privacy-related questions or requests, please contact us at admin@ymistory.com.',
-      },
-      {
-        text: 'Address: Room 1604, Nathan Center, 580 Nathan Road, Mongkok',
-      },
+      { text: "Depending on where you live and subject to applicable law, you may have rights to:" },
+    ],
+    bullets: [
+      { text: "Request access to personal information we hold about you" },
+      { text: "Request correction of inaccurate information" },
+      { text: "Request deletion of personal information" },
+      { text: "Request restriction of certain processing" },
+      { text: "Object to certain uses of your information" },
+      { text: "Request a copy of certain information in a portable format" },
+      { text: "Withdraw consent where processing is based on consent" },
+      { text: "Ask questions about how your information is handled" },
+    ],
+  },
+  {
+    paragraphs: [
+      { text: "We may need to verify your identity before completing certain requests in order to protect your information from unauthorised access." },
+      { text: "Some information may need to be retained where required or permitted by law." },
+    ],
+  },
+  {
+    title: "13. Changes to This Privacy Policy",
+    paragraphs: [
+      { text: "We may update this Privacy Policy from time to time to reflect changes to our services, technology, legal requirements, or privacy practices." },
+      { text: "When we make material changes, we will take reasonable steps to notify users where required by applicable law." },
+    ],
+  },
+  {
+    title: "14. Contact Us",
+    paragraphs: [
+      { text: "If you have questions about this Privacy Policy, our privacy practices, or would like to exercise a privacy right, please contact us:" },
+      { text: "YMI" },
+      { text: "Legal Company Name: Talent Connect" },
+      { text: "Business Address: Room 1604, Nathan Center, 580 Nathan Road, Mongkok" },
+      { text: "Privacy Contact Email: admin@ymistory.com" },
     ],
   },
 ]
