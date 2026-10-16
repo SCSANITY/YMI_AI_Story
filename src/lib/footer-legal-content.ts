@@ -656,56 +656,33 @@ const impactProgramEn: LegalSection[] = [
 
 const ourStoryEn: LegalSection[] = [
   {
-    title: 'YMI Story',
+    title: 'Where Love Is Heard, Growth Begins.',
     paragraphs: [
-      { text: 'Where Love Is Heard, Growth Begins' },
       {
-        text: "As children grow, they quietly begin asking one of life's most important questions:",
+        text: 'Some voices stay with us long after the moment has passed. A story told with love. Words that bring comfort. A familiar voice that reminds us we are never alone.',
       },
-      { text: '"Why am I?"' },
       {
-        text: 'At YMI Story, this question became the inspiration behind our name — and the heart of everything we create.',
+        text: "At YMI Story, we believe these moments can become a child's most treasured memories — shaping not only the stories they remember, but also the person they become.",
+      },
+      {
+        text: "We create personalised children's books that bring together beautifully crafted physical storybooks, custom storybook illustrations featuring your child as the hero, and interactive audio features. More than an ordinary book or audiobook, each YMI Story is a keepsake of connection — made to be held, heard, and cherished as childhood unfolds.",
+      },
+      { text: 'But our purpose reaches beyond the pages.' },
+      {
+        text: "Through stories inspired by truth, goodness, and beauty, we hope to nurture a child's heart and spirit, planting the seeds of faith, hope, and love. We believe meaningful storytelling can encourage kindness, courage, wisdom, and compassion — values that children carry with them as they grow.",
+      },
+      {
+        text: 'Because a better world begins with hearts that learn to care, hands that choose kindness, and a generation that understands the value of love and peace.',
+      },
+      {
+        text: 'And through our charitable initiatives, we aspire to extend this spirit beyond every book, bringing care and hope to more lives.',
       },
     ],
   },
   {
+    title: 'Your Voice. My Love. Inner Growth.',
     paragraphs: [
-      { text: 'We believe stories can shape a child far beyond imagination alone.' },
-      {
-        text: 'They can nurture truth, beauty, and inner growth — helping children grow with kindness, confidence, wonder, and a strong sense of self.',
-      },
-    ],
-  },
-  {
-    title: 'What We Create',
-    paragraphs: [
-      {
-        text: 'In a world filled with screens and fast-moving digital experiences, we wanted to create something more personal and lasting.',
-      },
-      { text: 'Not just another online audio story.' },
-      {
-        text: "But a physical storybook children can hold close, revisit, and grow up with — paired with the warmth of a loved one's voice.",
-      },
-      { text: 'Because some memories deserve to be felt, not simply played.' },
-    ],
-  },
-  {
-    paragraphs: [
-      {
-        text: 'Every YMI Story is designed to preserve connection, comfort, and meaningful moments through storytelling that feels timeless and deeply personal.',
-      },
-    ],
-    bullets: [
-      { text: 'A bedtime voice.' },
-      { text: 'A familiar story.' },
-      { text: 'A reminder that says: "You are loved. You are heard. You matter."' },
-    ],
-  },
-  {
-    paragraphs: [
-      {
-        text: 'And perhaps, through stories, children will slowly begin to discover the answer to that quiet question within themselves…',
-      },
+      { text: 'A story to treasure. Values to carry. Love to share with the world.' },
     ],
   },
 ]
