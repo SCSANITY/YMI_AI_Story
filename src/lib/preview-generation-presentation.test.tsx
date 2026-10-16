@@ -9,15 +9,22 @@ import { PersonalizeProductIntro } from '@/components/personalize/PersonalizePro
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar'
 import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction'
 
-test('70-second estimate follows elapsed wall time, clamps safely, and has no completion signal', () => {
-  assert.deepEqual(getPreviewGenerationEstimate(0), { countdownSeconds: 70, fraction: 0 })
-  assert.deepEqual(getPreviewGenerationEstimate(35_000), { countdownSeconds: 35, fraction: 0.5 })
-  assert.deepEqual(getPreviewGenerationEstimate(69_999), { countdownSeconds: 1, fraction: 69_999 / 70_000 })
-  for (const elapsed of [70_000, 180_000, 600_000]) {
-    assert.deepEqual(getPreviewGenerationEstimate(elapsed), { countdownSeconds: 0, fraction: 1 })
+test('35-second estimate follows elapsed wall time, clamps safely, and has no completion signal', () => {
+  assert.deepEqual(getPreviewGenerationEstimate(0), { countdownSeconds: 35, fraction: 0, stageIndex: 0 })
+  assert.deepEqual(getPreviewGenerationEstimate(17_500), { countdownSeconds: 18, fraction: 0.5, stageIndex: 1 })
+  assert.deepEqual(getPreviewGenerationEstimate(34_999), { countdownSeconds: 1, fraction: 34_999 / 35_000, stageIndex: 3 })
+  for (const elapsed of [35_000, 180_000, 600_000]) {
+    assert.deepEqual(getPreviewGenerationEstimate(elapsed), { countdownSeconds: 0, fraction: 1, stageIndex: 3 })
   }
   for (const elapsed of [-10, Number.NaN, Number.POSITIVE_INFINITY]) {
-    assert.equal(getPreviewGenerationEstimate(elapsed).countdownSeconds, 70)
+    assert.equal(getPreviewGenerationEstimate(elapsed).countdownSeconds, 35)
+    assert.equal(getPreviewGenerationEstimate(elapsed).stageIndex, 0)
+  }
+})
+
+test('encouragement changes at ten-second boundaries without affecting readiness', () => {
+  for (const [elapsed, stage] of [[0, 0], [9_999, 0], [10_000, 1], [19_999, 1], [20_000, 2], [29_999, 2], [30_000, 3]]) {
+    assert.equal(getPreviewGenerationEstimate(elapsed).stageIndex, stage)
   }
 })
 
@@ -44,6 +51,7 @@ test('Creation hydration cannot revert a local selection, even when its read sta
 const pendingProps = {
   startedAt: null, title: 'Creating your cover', body: 'Your cover will appear when ready.',
   estimateLabel: 'Estimated time remaining', stillWorking: 'Still creating — no need to refresh',
+  stageMessages: ['A little magic is on its way', 'Your story is taking shape', 'Bringing your cover to life', 'Almost there…'] as const,
   capacityWaiting: false, capacityTitle: 'Your place is saved', capacityBody: 'Please wait.',
   error: null, actionLabel: 'Return to Customize', onReturnToDetails: () => {},
 }
@@ -52,7 +60,8 @@ test('pending cover is inline, has a non-announcing estimate timer, and shows an
   const html = renderToStaticMarkup(<PreviewGeneratingCover {...pendingProps} />)
   assert.match(html, /data-preview-generating-cover="true"/)
   assert.match(html, /role="timer" aria-live="off"/)
-  assert.match(html, /70s/)
+  assert.match(html, /35s/)
+  assert.match(html, /A little magic is on its way/)
   assert.match(html, /Estimated time remaining/)
   assert.doesNotMatch(html, /fixed|role="progressbar"|100%|RunPod/)
   const failed = renderToStaticMarkup(<PreviewGeneratingCover {...pendingProps} error="Unable to generate" />)
@@ -63,7 +72,8 @@ test('pending cover is inline, has a non-announcing estimate timer, and shows an
   assert.doesNotMatch(failed, /role="timer"/)
   const queued = renderToStaticMarkup(<PreviewGeneratingCover {...pendingProps} capacityWaiting />)
   assert.match(queued, /Your place is saved/)
-  assert.match(queued, /70s/)
+  assert.match(queued, /Please wait\./)
+  assert.doesNotMatch(queued, /role="timer"|A little magic is on its way/)
 })
 
 test('edition cards use real full-card radio targets and are selectable while saving, not while generating', () => {

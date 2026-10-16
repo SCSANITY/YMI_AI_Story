@@ -29,6 +29,7 @@ import { ProgressSteps } from '@/components/personalize/ProgressSteps';
 import { PersonalizeHeader } from '@/components/personalize/PersonalizeHeader';
 import { PersonalizeOverlays } from '@/components/personalize/PersonalizeOverlays';
 import { PreviewGeneratingCover } from '@/components/personalize/PreviewGeneratingCover';
+import { getPreviewCoverState } from '@/components/personalize/preview-cover-state';
 import { PreviewAccessCover } from '@/components/personalize/PreviewAccessCover';
 import { decodePreviewImage as waitForImageDecode, useDecodedPreviewCover } from '@/components/personalize/useDecodedPreviewCover';
 import { canHydrateEdition } from '@/lib/edition-hydration';
@@ -239,6 +240,7 @@ export default function PersonalizePage({
   const pageToastTimerRef = useRef<number | null>(null);
   const previewCancelRequestedRef = useRef(false);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [generationJobId, setGenerationJobId] = useState<string | null>(null);
   const [facePrepareStatus, setFacePrepareStatus] = useState<FacePrepareStatus>('idle');
   const [preparedFaceFile, setPreparedFaceFile] = useState<File | null>(null);
   const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
@@ -632,8 +634,17 @@ export default function PersonalizePage({
   const decodedPreviewCover = useDecodedPreviewCover(displayedPreviewJobId, previewUrl, setPreviewError);
   const hasReadyPreviewCover = decodedPreviewCover.isReady;
   const isPreviewCoverPending = viewState.showPreview && !hasReadyPreviewCover;
-  const isPreviewUnavailable = stage === 'PREVIEW' && isPreviewCoverPending && previewAccessState === 'unavailable';
-  const isPreviewRestoring = stage === 'PREVIEW' && isPreviewCoverPending && !isPreviewUnavailable;
+  const previewCoverState = getPreviewCoverState({
+    ready: hasReadyPreviewCover,
+    access: previewAccessState,
+    phase: previewPhase,
+    locallyStarted: stage === 'GENERATING' || Boolean(
+      generationStartedAt !== null && generationJobId && generationJobId === displayedPreviewJobId
+    ),
+    hasError: Boolean(previewError),
+  });
+  const isPreviewUnavailable = stage === 'PREVIEW' && isPreviewCoverPending && previewCoverState === 'unavailable';
+  const isPreviewRestoring = isPreviewCoverPending && previewCoverState === 'restoring';
   const visiblePreviewPresentation = useMemo(() => {
     if (!previewBookPresentation?.cover || !decodedPreviewCover.url) return previewBookPresentation;
     return { ...previewBookPresentation, cover: { ...previewBookPresentation.cover, url: decodedPreviewCover.url } };
@@ -1149,6 +1160,7 @@ export default function PersonalizePage({
     let isActive = true;
     setPreviewError(null);
     setGenerationStartedAt(Date.now());
+    setGenerationJobId(null);
     editionSelectionRevisionRef.current = 0;
 
     const run = async () => {
@@ -1265,6 +1277,7 @@ export default function PersonalizePage({
         if (!isActive) return
         selectedPreviewCreationIdRef.current = null
         setPreviewJobId(created.jobId)
+        setGenerationJobId(created.jobId)
         selectPreviewJobId(created.jobId)
         setCreationId(created.creationId)
         replacePreviewUrl(created.creationId, created.jobId);
@@ -1615,6 +1628,7 @@ export default function PersonalizePage({
       setPreviewPages([]);
       setPreviewBookPresentation(null);
       setGenerationStartedAt(null);
+      setGenerationJobId(null);
       replacePersonalizeUrl(null);
       setFormStep('REVIEW');
       startForm();
@@ -2514,6 +2528,7 @@ export default function PersonalizePage({
         setShareError(null);
         setPreviewError(null);
         setGenerationStartedAt(Date.now());
+        setGenerationJobId(created.jobId);
         replacePreviewUrl(created.creationId, created.jobId);
         try {
           window.sessionStorage.removeItem(`ymi_creation_${created.creationId}`);
@@ -3138,11 +3153,17 @@ export default function PersonalizePage({
                           />
                         ) : (
                           <PreviewGeneratingCover
-                            startedAt={generationStartedAt}
+                            startedAt={generationJobId === displayedPreviewJobId || stage === 'GENERATING' ? generationStartedAt : null}
                             title={t('personalize.generatingCoverTitle')}
                             body={t('personalize.generatingCoverBody')}
                             estimateLabel={t('personalize.generatingCoverEstimate')}
                             stillWorking={t('personalize.generatingCoverOverrun')}
+                            stageMessages={[
+                              t('personalize.generatingCoverStage1'),
+                              t('personalize.generatingCoverStage2'),
+                              t('personalize.generatingCoverStage3'),
+                              t('personalize.generatingCoverStage4'),
+                            ]}
                             error={previewError}
                             actionLabel={canRetryPreview
                               ? t('personalize.previewRetryRemaining')

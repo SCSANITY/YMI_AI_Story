@@ -11,6 +11,7 @@ type Props = {
   body: string
   estimateLabel: string
   stillWorking: string
+  stageMessages?: readonly [string, string, string, string]
   capacityWaiting: boolean
   capacityTitle: string
   capacityBody: string
@@ -31,7 +32,7 @@ function PreviewGeneratingCoverComponent(props: Props) {
     const timer = window.setInterval(tick, 1000)
     return () => window.clearInterval(timer)
   }, [props.startedAt])
-  const { countdownSeconds, fraction } = getPreviewGenerationEstimate(elapsedMs)
+  const { countdownSeconds, fraction, stageIndex } = getPreviewGenerationEstimate(elapsedMs)
 
   return (
     <div data-preview-generating-cover="true" className="relative flex h-full w-full flex-col items-center justify-center overflow-y-auto rounded-r-lg border border-amber-200/80 bg-gradient-to-br from-[#fff9e8] via-[#fff2d7] to-[#ffe4c8] px-5 text-center shadow-[inset_7px_0_12px_-10px_rgba(120,53,15,0.45)] md:px-7">
@@ -53,6 +54,8 @@ function PreviewGeneratingCoverComponent(props: Props) {
         >
           {props.actionPending ? props.actionPendingLabel ?? props.actionLabel : props.actionLabel}
         </button>
+      ) : props.capacityWaiting ? (
+        <p role="status" className="mt-3 max-w-[290px] text-xs leading-5 text-slate-600 md:hidden">{props.capacityBody}</p>
       ) : (
         <div className="mt-3 flex flex-col items-center gap-2 md:mt-5">
           <span className="relative flex h-16 w-16 items-center justify-center">
@@ -62,7 +65,10 @@ function PreviewGeneratingCoverComponent(props: Props) {
             </svg>
             <span role="timer" aria-live="off" className="text-lg font-bold tabular-nums text-amber-900">{countdownSeconds > 0 ? `${countdownSeconds}s` : <Sparkles className="h-5 w-5" aria-hidden="true" />}</span>
           </span>
-          <span className="text-xs font-semibold text-amber-800">{countdownSeconds > 0 ? props.estimateLabel : props.stillWorking}</span>
+          <p role="status" aria-live="polite" aria-atomic="true" className="max-w-[260px] text-sm font-semibold leading-5 text-amber-900">
+            {countdownSeconds > 0 ? props.stageMessages?.[stageIndex] ?? props.estimateLabel : props.stillWorking}
+          </p>
+          {countdownSeconds > 0 && <span className="text-xs text-amber-800">{props.estimateLabel}</span>}
         </div>
       )}
     </div>
