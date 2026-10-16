@@ -261,7 +261,7 @@ const privacyEn: LegalSection[] = [
     paragraphs: [
       { text: "If you have questions about this Privacy Policy, our privacy practices, or would like to exercise a privacy right, please contact us:" },
       { text: "YMI" },
-      { text: "Legal Company Name: Talent Connect" },
+      { text: "Legal Company Name: YMI Story Team" },
       { text: "Business Address: Room 1604, Nathan Center, 580 Nathan Road, Mongkok" },
       { text: "Privacy Contact Email: admin@ymistory.com" },
     ],
