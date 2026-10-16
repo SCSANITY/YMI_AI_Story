@@ -225,7 +225,9 @@
 }
 
 .popover {
-  max-height: min(23rem, 58vh);
+  /* Stay in the form flow; show roughly five rows and scroll the rest. */
+  max-height: min(15rem, 45vh);
+  max-height: min(15rem, 45dvh);
   overflow-y: auto;
   border: 1px solid rgba(180, 116, 54, 0.22);
   background:

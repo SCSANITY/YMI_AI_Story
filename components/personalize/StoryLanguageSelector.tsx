@@ -73,16 +73,16 @@ function StoryLanguageSelectorComponent({ value, labels, onChange }: StoryLangua
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           onClick={() => setIsOpen((prev) => !prev)}
-          className={`${styles.control} flex h-11 w-full min-w-0 max-w-full items-center justify-between rounded-xl px-4 text-left text-sm font-semibold text-slate-950`}
+          className={`${styles.control} relative flex h-11 w-full min-w-0 max-w-full items-center justify-between rounded-xl px-4 pr-10 text-left text-sm font-semibold text-slate-950`}
         >
           <span className="min-w-0 truncate">{currentLabel}</span>
+          <ChevronDown className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
-        <ChevronDown className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         {isOpen && (
           <div
             role="listbox"
             aria-label={labels.field}
-            className={`${styles.popover} absolute z-30 mt-2 w-full rounded-2xl p-2`}
+            className={`${styles.popover} mt-2 w-full rounded-2xl p-2`}
             onMouseDown={(event) => {
               event.preventDefault()
               event.stopPropagation()
