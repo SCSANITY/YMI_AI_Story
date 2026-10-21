@@ -52,7 +52,7 @@ test('Preview offers equal-weight cart and purchase actions with distinct icons'
   assert.equal((actions.match(/glass-action-btn--brand min-h-14/g) ?? []).length, 2)
   assert.match(actions, /onClick=\{handleAddToCart\}[\s\S]*disabled=\{!isCheckoutAcknowledged \|\| pending\}/)
   assert.match(actions, /onClick=\{handleCheckout\}[\s\S]*disabled=\{!isCheckoutAcknowledged \|\| pending\}/)
-  assert.match(page, /addToCartLabel=\{requiresVoiceSample[\s\S]*t\('personalize\.addToCart'\)/)
+  assert.match(page, /addToCartLabel=\{t\('personalize\.addToCart'\)\}/)
   assert.match(page, /purchaseLabel=\{t\('personalize\.purchaseNow'\)\}/)
   assert.match(actions, /const pending = isCheckoutPending \|\| isConfigurationPending \|\| !previewReady/)
   assert.match(page, /previewReady=\{Boolean\(canAddToCart && canCheckout\)\}/)

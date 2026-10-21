@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, PenLine, X } from 'lucide-react'
 import {
@@ -10,15 +10,16 @@ import {
 import { getDedicationPreset } from '@/lib/dedication-presets'
 
 export type DedicationAcknowledgement = { decision: 'skipped' | 'confirmed'; revision: number }
-export type PreviewDedicationHandle = { ensureDecision: () => Promise<DedicationAcknowledgement | null> }
 
-export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
+type PreviewDedicationProps = {
   creationId: string | null
   bookID: string
   childName: string
   openOnArrival: boolean
   onArrivalChoice?: (acknowledgement: DedicationAcknowledgement) => void
-}>(function PreviewDedication({ creationId, bookID, childName, openOnArrival, onArrivalChoice }, ref) {
+}
+
+export function PreviewDedication({ creationId, bookID, childName, openOnArrival, onArrivalChoice }:PreviewDedicationProps) {
   const [choice, setChoice] = useState<DedicationChoice | null>(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -29,8 +30,6 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
-  const resolverRef = useRef<((value: DedicationAcknowledgement | null) => void) | null>(null)
-  const lastAcknowledgedRef = useRef<DedicationAcknowledgement | null>(null)
   const arrivalOpenedRef = useRef<string | null>(null)
   const arrivalPendingRef = useRef(false)
   const reducedMotion = useReducedMotion()
@@ -51,7 +50,6 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
   useEffect(() => {
     const controller = new AbortController()
     if (!creationId) { setChoice(null); return }
-    lastAcknowledgedRef.current = null
     setChoice(null)
     setLoading(true)
     void loadChoice(controller.signal).catch(() => { if (!controller.signal.aborted) setError('Unable to load the dedication choice. Try again.') })
@@ -86,8 +84,6 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
     if (saving) return
     setOpen(false)
     arrivalPendingRef.current = false
-    resolverRef.current?.(null)
-    resolverRef.current = null
     window.setTimeout(() => triggerRef.current?.focus(), reducedMotion ? 0 : 160)
   }, [reducedMotion, saving])
 
@@ -109,31 +105,8 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', onKeyDown) }
   }, [close, open])
 
-  useImperativeHandle(ref, () => ({
-    ensureDecision: async () => {
-      try {
-        if (!creationId) { setError('This preview is still being saved. Please try again.'); return null }
-        const current = await loadChoice()
-        if (!current) return null
-        const acknowledged = lastAcknowledgedRef.current
-        if (acknowledged?.decision === current.decision && acknowledged.revision === current.revision) return acknowledged
-        if (current.decision !== 'undecided' && !current.previouslyPurchased) {
-          return { decision: current.decision, revision: current.revision! }
-        }
-        show(current)
-        return await new Promise<DedicationAcknowledgement | null>(resolve => { resolverRef.current = resolve })
-      } catch {
-        setError('Unable to verify the dedication. Please retry.')
-        return null
-      }
-    },
-  }), [creationId, loadChoice, show])
-
   const finish = useCallback((acknowledgement: DedicationAcknowledgement) => {
-    lastAcknowledgedRef.current = acknowledgement
     setOpen(false)
-    resolverRef.current?.(acknowledgement)
-    resolverRef.current = null
     if (arrivalPendingRef.current) onArrivalChoice?.(acknowledgement)
     arrivalPendingRef.current = false
     window.setTimeout(() => triggerRef.current?.focus(), reducedMotion ? 0 : 160)
@@ -176,15 +149,16 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
           <h2 className="font-serif text-base font-semibold text-slate-900">{choice?.decision === 'undecided' ? 'One last personal touch' : 'Your book dedication'}</h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             {loading ? 'Loading dedication…' : choice?.decision === 'confirmed' ? <span className="line-clamp-2 whitespace-pre-line">{choice.body}</span> :
-              choice?.decision === 'skipped' ? 'No message selected' : 'Add a message, or choose No Thanks before checkout.'}
+              choice?.decision === 'skipped' ? 'No message selected' : 'Optional ? add a message now or within 48 hours after purchase.'}
           </p>
           {error && !open ? <p role="alert" className="mt-2 text-xs text-rose-700">{error}</p> : null}
         </div>
       </div>
       <button ref={triggerRef} type="button" disabled={!creationId || loading} onClick={() => choice ? show(choice) : void loadChoice().then(current => current && show(current)).catch(() => setError('Unable to load the dedication. Try again.'))}
         className="mt-3 min-h-10 rounded-full border border-amber-300 bg-white px-4 text-xs font-bold text-amber-800 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50">
-        {choice?.decision === 'confirmed' ? 'Edit message' : choice?.decision === 'skipped' ? 'Change choice' : 'Add a message'}
+        {choice?.decision === 'confirmed' ? 'Edit message' : 'Do it now'}
       </button>
+      <p className="mt-2 text-xs text-slate-500">Or later after purchase. No message is fine, too.</p>
     </section>
     <AnimatePresence>
       {open ? <motion.div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-5" role="presentation"
@@ -223,4 +197,4 @@ export const PreviewDedication = forwardRef<PreviewDedicationHandle, {
       </motion.div> : null}
     </AnimatePresence>
   </>
-})
+}

@@ -106,3 +106,8 @@ review provenance, not the current upstream fixture identity.
   TTL while retaining48h dedication edits and existing OTP expiry.
   Offline/unapplied foundation only;07-C reader/purchase/mail/print integration
   and independent review/T2 authorization are required before any live action.
+
+- WEB-UIUX-001/07-C adds `sql/20261021_140000_web_uiux_007_print_materials.sql`
+  from private Database5ff4cebe0afb797b1e9d3edfcb5fb3f441a60d61. Offline/not applied;
+  wraps retained print authorities with order-lock/revision/deadline fences and
+  a service-only historical effective-line read.07-B fixture remains unchanged.

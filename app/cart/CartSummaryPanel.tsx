@@ -10,7 +10,6 @@ type CartSummaryPanelProps = {
   subtotal: number;
   selectedTotal: number;
   selectedItemsCount: number;
-  pendingDedicationCount: number;
   displayCurrency: DisplayCurrency;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   onCheckout: () => Promise<boolean>;
@@ -20,7 +19,6 @@ export function CartSummaryPanel({
   subtotal,
   selectedTotal,
   selectedItemsCount,
-  pendingDedicationCount,
   displayCurrency,
   t,
   onCheckout,
@@ -55,9 +53,7 @@ export function CartSummaryPanel({
           <span className="font-bold text-gray-900">{formatDisplayCurrency(hasSelection ? selectedTotal : subtotal, displayCurrency)}</span>
         </div>
       </div>
-      {pendingDedicationCount > 0 ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-        {pendingDedicationCount} {pendingDedicationCount === 1 ? 'book needs' : 'books need'} a dedication choice or review before payment.
-      </p> : null}
+      <p className="mt-4 text-xs text-slate-600">Dedication is optional. Add it now or within 48 hours after purchase.</p>
       <Button
         size="lg"
         className="mt-6 w-full rounded-full"

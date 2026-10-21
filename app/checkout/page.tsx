@@ -32,7 +32,6 @@ import {
   resolveCartItemPreviewCoverStatus,
 } from '@/lib/cart-cover';
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
-import { clearDedicationAcknowledgement, readDedicationAcknowledgement } from '@/lib/dedication';
 
 const CheckoutIdentityModal = dynamic(
   () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
@@ -1064,10 +1063,6 @@ function CheckoutPageContent() {
         setIsPlacingOrder(false);
         return;
       }
-      items.forEach(item => {
-        const creationId = item.creationId || item.personalization?.creationId;
-        if (creationId) clearDedicationAcknowledgement(creationId);
-      });
       window.location.assign(data.url);
     } catch {
       setFormError(t('checkout.stripeStartError'));
@@ -1137,7 +1132,6 @@ function CheckoutPageContent() {
           cartItemId: item.id,
           creationId: item.creationId ?? item.personalization?.creationId ?? null,
           quantity: item.quantity ?? 1,
-          dedicationAcknowledgement: readDedicationAcknowledgement(item.creationId ?? item.personalization?.creationId ?? ''),
         })),
       };
 

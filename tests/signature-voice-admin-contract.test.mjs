@@ -112,7 +112,7 @@ test('S3 Admin UI is order-scoped and exposes dedicated audio controls without m
   assert.match(workspace, /uploadToSignedUrl/)
   assert.match(workspace, /item\.source\.playbackUrl/)
   assert.match(server, /\.eq\('order_id', orderId\)[\s\S]*\.eq\('status', 'ordered'\)[\s\S]*\.eq\('package_type', 'supreme'\)/)
-  assert.match(server, /normalizedItems\.length !== signatureItems\.length[\s\S]*missing its authoritative source binding/)
+  assert.match(server, /pendingItems=signatureItems\.filter/);assert.match(workspace,/daysWaiting/)
 
   for (const source of [workspace, server]) {
     assert.doesNotMatch(source, /subject.*match|sender.*match|from_email|fromEmail/i)

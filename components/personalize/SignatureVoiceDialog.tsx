@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/Button'
+import { validateUserAssetUpload } from '@/lib/userAssetsStorage'
 import { PrivacyReassurance } from '@/components/personalize/PrivacyReassurance'
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel'
 
@@ -15,6 +16,7 @@ const VoiceRecorderPanel = dynamic(
 
 type SignatureVoiceDialogProps = {
   open: boolean
+  allowFileUpload?:boolean
   existingAssetId: string | null
   existingSignedUrl: string | null
   existingDurationSeconds: number | null
@@ -40,6 +42,7 @@ type SignatureVoiceDialogProps = {
 
 export function SignatureVoiceDialog({
   open,
+  allowFileUpload=false,
   existingAssetId,
   existingSignedUrl,
   existingDurationSeconds,
@@ -59,6 +62,7 @@ export function SignatureVoiceDialog({
   const isSavingRef = useRef(isSaving)
   const onCloseRef = useRef(onClose)
   const [authorized, setAuthorized] = useState(false)
+  const [fileError,setFileError]=useState('')
 
   useEffect(() => {
     isSavingRef.current = isSaving
@@ -201,6 +205,24 @@ export function SignatureVoiceDialog({
             onClearValidation={onClearValidation}
           />
 
+          {allowFileUpload?<div className="mt-4 rounded-2xl border border-stone-200 p-4">
+            <label htmlFor="material-voice-file" className="text-sm font-semibold">Or choose an existing recording</label>
+            <input id="material-voice-file" type="file" accept="audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg,.m4a,.mp3,.wav,.webm,.ogg,.mp4"
+              disabled={isSaving} className="mt-3 block w-full text-sm" onChange={event=>{
+                const file=event.target.files?.[0];if(!file)return
+                setFileError('');onClearValidation()
+                try {
+                  const extension=file.name.split('.').pop()?.toLowerCase()
+                  const types:Record<string,string>={m4a:'audio/mp4',mp4:'audio/mp4',mp3:'audio/mpeg',wav:'audio/wav',webm:'audio/webm',ogg:'audio/ogg'}
+                  const selected=file.type?file:new File([file],file.name,{type:types[extension ?? ''] ?? 'application/octet-stream'})
+                  validateUserAssetUpload({assetType:'voice_sample',contentType:selected.type,sizeBytes:selected.size})
+                  // The existing server confirmation inspects real audio duration.
+                  onRecordingSelected({file:selected,durationSeconds:0})
+                }catch(error){onRecordingSelected(null);setFileError(error instanceof Error?error.message:'Please choose a supported audio file.')}
+              }}/>
+            <p className="mt-2 text-xs text-slate-600">Your file stays on this device until you consent and choose Upload recording.</p>
+            {fileError?<p role="alert" className="mt-2 text-xs text-rose-700">{fileError}</p>:null}
+          </div>:null}
           <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/55 p-3.5 text-sm leading-5 text-slate-700 sm:mt-5 sm:p-4 sm:leading-6">
             <input type="checkbox" checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} aria-required="true" className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-amber-600 focus:ring-amber-500 sm:h-4 sm:w-4" />
             <span>

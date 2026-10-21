@@ -71,14 +71,14 @@ test('ordinary asset deletion records the private path before touching Storage',
   assert.match(deleteHandler, /rpc\('finish_user_asset_cleanup'/)
 })
 
-test('Cart and Order Start fail closed on an incomplete Signature Voice Creation', async () => {
+test('Cart and Order Start allow missing voice but fail closed on a supplied corrupt binding', async () => {
   const [store, cartRoute, orderStart] = await Promise.all([
     read('src/lib/package-pricing-store.ts'),
     read('app/api/cart/route.ts'),
     read('app/api/orders/start/route.ts'),
   ])
 
-  assert.match(store, /if \(packageType === 'supreme'\)/)
+  assert.match(store, /if \(packageType === 'supreme' && creation\.voice_asset_id\)/)
   assert.match(store, /requireSignatureVoiceAssetId\(creation\)/)
   assert.match(store, /\.from\('user_assets'\)[\s\S]*\.eq\('asset_id', voiceAssetId\)/)
   assert.match(store, /assertSignatureVoicePurchaseBinding\(creation, voiceAsset\)/)

@@ -96,7 +96,7 @@ export async function POST(
     return jsonNoStore({ error: message }, { status: 409 })
   }
 
-  const { error: commitError } = await supabaseAdmin.rpc('commit_final_print_artifact', {
+  const { error: commitError } = await supabaseAdmin.rpc('materials_commit_print_artifact', {
     p_final_job_id: finalJobId,
     p_artifact_id: artifactId,
     p_verified_size_bytes: verified.sizeBytes,

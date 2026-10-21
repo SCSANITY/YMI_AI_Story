@@ -37,7 +37,7 @@ export function PrintVersionReview({
   pdfReleased: boolean
   printReleased: boolean
   artifact: ManualPrintArtifactClient | null
-  dedicationSnapshot: { decision: 'skipped' | 'confirmed'; body: string | null } | null
+  dedicationSnapshot: { decision: 'skipped' | 'confirmed'; body: string | null;revision:number } | null
   uploading: boolean
   uploadProgress: PrintUploadProgressValue | null
   uploadError: string | null
@@ -56,8 +56,10 @@ export function PrintVersionReview({
     <div className="mt-4 space-y-4">
       <section className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-5" aria-label="Purchased book dedication">
         <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">Insert-page dedication</p>
+        <p className="mt-2 text-xs">Print release opens 48 hours after payment. Prepare the PDF using the current message below.</p>
+        {artifact && artifact.dedication_revision!==dedicationSnapshot?.revision?<p role="alert" className="mt-2 text-sm text-rose-700">The dedication changed. Prepare and upload a new print PDF before release.</p>:null}
         {dedicationSnapshot?.decision === 'confirmed' && dedicationSnapshot.body ? <>
-          <p className="mt-2 text-xs text-[var(--admin-muted)]">Purchased wording for this order line. Copy it into the separately prepared insert page.</p>
+          <p className="mt-2 text-xs text-[var(--admin-muted)]">Current message for this order line (revision {dedicationSnapshot.revision}). Copy it into the separately prepared insert page.</p>
           <pre className="mt-4 whitespace-pre-wrap break-words rounded-lg border border-[var(--admin-card-line)] bg-white p-4 font-sans text-sm leading-7 text-slate-900 select-text">{dedicationSnapshot.body}</pre>
           <button type="button" onClick={() => {
             void (async () => {
@@ -72,7 +74,7 @@ export function PrintVersionReview({
         </> : dedicationSnapshot?.decision === 'skipped' ? (
           <p className="mt-2 text-sm text-[var(--admin-muted)]">No message selected for this order line.</p>
         ) : (
-          <p role="alert" className="mt-2 text-sm text-rose-700">Dedication snapshot missing. Verify this order line before preparing its print insert.</p>
+          <p role="alert" className="mt-2 text-sm text-rose-700">Dedication material missing. Verify this order line before preparing its print insert.</p>
         )}
       </section>
       <section className="overflow-hidden rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)]">

@@ -22,6 +22,11 @@ export type CheckoutOwner =
       anonSessionId: string
     }
 
+// Asset custody can be delegated without manufacturing a login identity.
+export type CheckoutAssetOwner =
+  | {ownerType:'customer';customerId:string;anonSessionId:null}
+  | {ownerType:'anon';customerId:null;anonSessionId:string}
+
 export class CheckoutOwnerError extends Error {
   status: number
 
@@ -132,7 +137,7 @@ export async function resolveCheckoutOwner(
   throw new CheckoutOwnerError('Checkout session not found', 401)
 }
 
-export function ownerFilter(owner: CheckoutOwner) {
+export function ownerFilter(owner: CheckoutAssetOwner) {
   return owner.ownerType === 'customer'
     ? { owner_type: 'customer', column: 'customer_id', value: owner.customerId } as const
     : { owner_type: 'anon', column: 'anon_session_id', value: owner.anonSessionId } as const

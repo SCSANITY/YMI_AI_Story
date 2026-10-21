@@ -95,7 +95,8 @@ export type FinalJobDetail = {
   page_contract: FinalPageContractSummary
   pages: FinalJobPageRow[]
   print_artifact: ManualPrintArtifactClient | null
-  dedication_snapshot: { decision: 'skipped' | 'confirmed'; body: string | null } | null
+  dedication_snapshot: { decision: 'skipped' | 'confirmed'; body: string | null;revision:number } | null
+  dedication_deadline?:string
 }
 
 export function getFinalPagePath(orderId: string, pageNumber: number) {

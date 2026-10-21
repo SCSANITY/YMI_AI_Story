@@ -20,7 +20,6 @@ type CartItemsListProps = {
   pendingAction: PendingCartAction;
   pendingCustomizeHref: string | null;
   dedicationChoices: Record<string, DedicationChoice>;
-  acknowledgedCreations: Record<string, boolean>;
   displayCurrency: DisplayCurrency;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   onToggleSelectAll: () => void;
@@ -45,7 +44,6 @@ type CartItemCardProps = {
   pendingAction: PendingCartAction;
   pendingCustomizeHref: string | null;
   dedicationChoices: Record<string, DedicationChoice>;
-  acknowledgedCreations: Record<string, boolean>;
   displayCurrency: DisplayCurrency;
   t: CartItemsListProps['t'];
   onToggleSelection: (itemId: string) => void;
@@ -64,7 +62,6 @@ const CartItemCard = memo(function CartItemCard({
   pendingAction,
   pendingCustomizeHref,
   dedicationChoices,
-  acknowledgedCreations,
   displayCurrency,
   t,
   onToggleSelection,
@@ -84,7 +81,6 @@ const CartItemCard = memo(function CartItemCard({
   const dedicationId = item.creationId || item.personalization?.creationId || '';
   const dedicationChoice = dedicationChoices[dedicationId];
   const dedicationUndecided = dedicationChoice?.decision === 'undecided';
-  const repeatDedicationReview = Boolean(dedicationChoice?.previouslyPurchased && !acknowledgedCreations[dedicationId]);
 
   return (
     <div className="glass-panel rounded-2xl p-4 md:p-6 flex gap-3 sm:gap-4">
@@ -177,11 +173,11 @@ const CartItemCard = memo(function CartItemCard({
           <div><span className="font-semibold">{t('cart.ageLabel')}:</span> {item.personalization?.childAge || t('common.unknown')}</div>
           <div><span className="font-semibold">{t('cart.languageLabel')}:</span> {item.personalization?.language || t('language.en')}</div>
         </div>
-        {dedicationUndecided || repeatDedicationReview ? (
+        {dedicationUndecided ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="font-semibold">{dedicationUndecided ? 'Dedication choice pending' : 'Review dedication for this purchase'}</span>
-            <button type="button" onClick={() => onFinishDedication(item.id, item.bookID)} className="font-bold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-500">{dedicationUndecided ? 'Finish in Preview' : 'Review in Preview'}</button>
+            <span className="font-semibold">Optional dedication: now or after purchase</span>
+            <button type="button" onClick={() => onFinishDedication(item.id, item.bookID)} className="font-bold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-500">Do it now</button>
           </div>
         ) : null}
 
@@ -219,7 +215,6 @@ export function CartItemsList({
   pendingAction,
   pendingCustomizeHref,
   dedicationChoices,
-  acknowledgedCreations,
   displayCurrency,
   t,
   onToggleSelectAll,
@@ -250,7 +245,6 @@ export function CartItemsList({
           pendingAction={pendingAction}
           pendingCustomizeHref={pendingCustomizeHref}
           dedicationChoices={dedicationChoices}
-          acknowledgedCreations={acknowledgedCreations}
           displayCurrency={displayCurrency}
           t={t}
           onToggleSelection={onToggleSelection}

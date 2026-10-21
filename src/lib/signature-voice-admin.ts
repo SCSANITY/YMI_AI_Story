@@ -78,6 +78,7 @@ export type AdminSignatureVoiceItem = {
 }
 
 export type AdminSignatureVoiceWorkspace = {
+  pendingItems?:Array<{cartItemId:string;creationId:string;title:string;daysWaiting:number}>
   order: {
     orderId: string
     displayId: string | null

@@ -68,7 +68,7 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
     throw new PackagePricingStoreError('Creation uses an unsupported book package', 409)
   }
 
-  if (packageType === 'supreme') {
+  if (packageType === 'supreme' && creation.voice_asset_id) {
     let voiceAssetId: string
     try {
       voiceAssetId = requireSignatureVoiceAssetId(creation)

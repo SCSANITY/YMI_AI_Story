@@ -1,3 +1,4 @@
+import { loadTrustedOrderLineDedications } from '@/lib/order-materials-server'
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import {
   buildAdminFinalPageReadModel,
@@ -182,18 +183,8 @@ export async function GET(
     }
   }
 
-  // Admin print handoff reads the immutable purchased line, never the mutable
-  // current creation choice. A missing purchased snapshot is an integrity gap.
-  let dedicationSnapshot: { decision: 'skipped' | 'confirmed'; body: string | null } | null = null
-  if (finalJob.cart_item_id) {
-    const { data: dedication, error: dedicationError } = await supabaseAdmin
-      .from('cart_item_dedications').select('decision,body')
-      .eq('cart_item_id', finalJob.cart_item_id).eq('order_id', finalJob.order_id).maybeSingle()
-    if (dedicationError) return jsonNoStore({ error: 'Failed to load purchased dedication' }, { status: 500 })
-    if (dedication?.decision === 'confirmed' || dedication?.decision === 'skipped') {
-      dedicationSnapshot = { decision: dedication.decision, body: dedication.body ?? null }
-    }
-  }
+  const materials=await loadTrustedOrderLineDedications(finalJob.order_id)
+  const dedicationSnapshot=materials.find(item=>item.cartItemId===finalJob.cart_item_id) ?? null
 
   return jsonNoStore({
     finalJob: finalJobSummary,
@@ -201,5 +192,6 @@ export async function GET(
     pages: signedPages,
     print_artifact: printArtifact,
     dedication_snapshot: dedicationSnapshot,
+    dedication_deadline:dedicationSnapshot?.deadline,
   })
 }

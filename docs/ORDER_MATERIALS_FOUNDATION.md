@@ -1,9 +1,9 @@
 # Order material foundation (WEB-UIUX-001/07-B)
 
-Offline foundation only. No customer UI,Preview purchase handler,price reader,
-payment fingerprint,confirmation-mail rendering or print release is switched
-yet. Do not deploy/apply without the combined07-C chain and owner-authorized
-release. Automatic Final and the Worker are outside this change.
+Offline combined07-C candidate on the accepted07-B foundation. Customer forms,
+purchase entries,confirmation mail,Admin and print readers are connected here.
+Independent review and a separately authorized combined release remain required.
+Automatic Final and the Worker are outside this change.
 
 ## Authority and API
 
@@ -29,7 +29,7 @@ release. Automatic Final and the Worker are outside this change.
 - POST same path accepts `dedication`(itemId,expectedRevision,body),
   `voice`(itemId,assetId,authorizationId) or explicit `complete`.
   Voice requires an already confirmed,consented capture through the existing
-  private upload chain;browser capture/upload signing integration is07-C.
+  private upload chain;the07-C page connects the existing capture/sign/confirm steps.
   Completion revokes active links;it does not end the48h dedication window.
 - POST `.../materials/recovery`:request(email) reuses guest OTP normalizer,rate
   RPC,delivery and single-use verification. Request returns a non-enumerating
@@ -42,14 +42,57 @@ release. Automatic Final and the Worker are outside this change.
 - All responses are private/no-store;writes enforce JSON,origin and streamed4KiB
   limit. Unexpected backend errors become fixed codes,no raw SQL/private details.
 
-## Remaining integration (07-C)
+## 07-C journey and custody
 
-Reuse existing capture reservation/confirmation and upload validation under the
-authorized Creation's owner,including guest-paid/customer-order ownership split.
-Do not override upload ownership with a client-supplied ID. Connect forms,customer
-success/order entry,confirmation mail,Admin waiting state and print fencing to
-this facade. Remove old prepayment material gates only in that combined candidate.
-Do not mutate historical migrations,run reset scripts or add legacy compatibility.
+Preview and Cart retain voluntary dedication/Voice controls with now/later
+copy. Purchase does not open either material dialog. Cart,order-start,Checkout
+Session and the payment fingerprint require no dedication or missing recording.
+A supplied Voice binding still passes the existing integrity checks. Prices,
+active Stripe Session,financial locks,manual Final mode and31-page seeding stay.
+No prepayment dedication snapshots are written;payment initializes the effective
+rows through the accepted DB triggers. Existing optional Creation drafts stay.
+
+The scoped page is `/orders/[orderID]/materials`. It shares the accepted APIs,
+keeps its bearer only in memory,removes the fragment from history,and opens OTP
+recovery directly on missing/revoked access. GET never issues/consumes access.
+Authenticated customers use existing sessions;guests use the scoped email link
+or order-email OTP. A Stripe Session ID remains read-only proof,not a write grant.
+Dedicated forms save with expected revisions. Completion is explicit;it revokes
+links without shortening the48h dedication window. No scheduled reminders exist.
+
+Recording reuses SignatureVoiceDialog,explicit synthetic-narration consent,
+private signing,reservation and byte/duration confirmation. Existing-file choice
+is enabled on this postpayment page only;selection stays local until consented
+Upload. Browser-unreadable audio duration remains subject to server inspection.
+The scoped context derives the original Creation's custody on the server. It
+can upload only Voice for an eligible unbound line,never faces/avatars or another
+line. AssetOwner is a custody-only type,not an authenticated CheckoutOwner.
+Scoped upload paths put the random asset UUID in the owner segment;the real owner
+remains in the existing DB rows and is never returned to the bearer. Confirmation
+returns only asset ID,authorization ID and verified duration. Thus an anon
+Creation/customer-paid order works without disclosing the anon login identifier.
+Unbound failures retain existing cleanup/capture rules;bound replacements stay Admin-only.
+
+Confirmation sending resolves current state and issues a scoped link lazily,
+AFTER managed-mail idempotency allows a real send. Raw bearers enter delivered
+content only,never event context/logs. Mail includes the48h dedication deadline
+and urges missing Voice submission to avoid delay. Mail previews use synthetic
+same-shaped data. Success/order UI uses the same material DTO;guest entry can
+recover through order-email OTP. No mail attachment intake is added.
+
+Admin derives bindings through the shared Creation reader and lists expected
+missing recordings with days waiting. Bound-source triage,narration and shipping
+protections remain. Trusted print reads use materials_read_trusted_lines over
+the same effective rows,including historical orders;customer access eligibility
+is not widened. The prepayment JS binding implementation remains unchanged.
+
+Manual print preparation submits the dedication revision displayed in Admin.
+The new service wrappers lock the same order as dedication save,before legacy
+job/artifact locks. They call unchanged existing print authorities;direct legacy
+RPC execution is revoked. Artifacts retain an immutable dedication_revision.
+Verification/release reject stale revisions;release requires paid_at+48h. The
+artifact trigger fences internal writers too. Original Admin/PDF/Voice checks
+remain. A changed dedication requires a newly prepared/uploaded PDF.
 
 ## Verification
 
@@ -62,3 +105,12 @@ The actual finalizeOrderPayment is executed with a query probe to pin order-firs
 selected-line updates and replay;isolated SQL tests replay that writer sequence.
 Database PGlite tests exercise actual SQL/guards separately. This is not production
 catalog evidence,a UI/device test or a full real-catalog Next production build.
+
+Additional offline commands:
+- `node --test tests/order-materials-mail.test.mjs` mocks mail delivery completely.
+- `node tests/materials-preview-fixture.mjs` serves actual customer components with
+  synthetic state and disabled external requests/uploads. Optional output path
+  is argv2;the default is ignored `.next/materials-preview`. `?invalid=1` shows
+  link recovery. This is not a live upload,mailbox,real-catalog build or device test.
+- Database runbooks retain51 foundation and17 print-fence synthetic checks.
+No reset/cleanup/production SQL,Storage,mail or deployment is part of these tests.

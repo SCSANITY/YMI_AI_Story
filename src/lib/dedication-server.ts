@@ -31,12 +31,3 @@ export async function loadOwnedDedicationChoices(owner: CheckoutOwner, creationI
     }
   })
 }
-
-export async function prepareOrderDedications(orderId: string, owner: CheckoutOwner) {
-  const ownerId = owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId
-  const { data, error } = await supabaseAdmin.rpc('dedication_prepare_order', {
-    p_order_id: orderId, p_owner_type: owner.ownerType, p_owner_id: ownerId,
-  })
-  if (error || !data) throw new Error(error?.message || 'Dedication choice is required before payment')
-  return data
-}

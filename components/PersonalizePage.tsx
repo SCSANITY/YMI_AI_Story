@@ -48,8 +48,7 @@ import { PersonalizeProductIntro } from '@/components/personalize/PersonalizePro
 import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
 import { ProductSectionBoundary } from '@/components/personalize/product/ProductSectionBoundary';
 import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePanel';
-import { PreviewDedication, type DedicationAcknowledgement, type PreviewDedicationHandle } from '@/components/personalize/PreviewDedication';
-import { rememberDedicationAcknowledgement } from '@/lib/dedication';
+import { PreviewDedication } from '@/components/personalize/PreviewDedication';
 import { SignatureVoiceDialog } from '@/components/personalize/SignatureVoiceDialog';
 import { PRIVACY_REASSURANCE_COPY } from '@/components/personalize/PrivacyReassurance';
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
@@ -163,7 +162,6 @@ export default function PersonalizePage({
   const previewSource = searchParams?.get('source') || null;
   const dedicationOnArrival = searchParams?.get('dedication') === '1';
   const dedicationReturnTo = searchParams?.get('returnTo') || null;
-  const dedicationPurchaseOnArrival = searchParams?.get('purchase') === '1';
   const productIntroEntryRef = useRef(viewMode !== 'preview' && searchParams?.get('entry') === 'intro');
 
   const {
@@ -233,9 +231,6 @@ export default function PersonalizePage({
   const [showFlyAnimation, setShowFlyAnimation] = useState(false);
   const [flyAnimationId, setFlyAnimationId] = useState(0);
   const addToCartBtnRef = useRef<HTMLButtonElement>(null);
-  const dedicationRef = useRef<PreviewDedicationHandle>(null);
-  const dedicationAcknowledgementRef = useRef<DedicationAcknowledgement | null>(null);
-  const dedicationRequestInFlightRef = useRef(false);
   const cartIconRef = useRef<HTMLButtonElement>(null); 
   const [flyOrigin, setFlyOrigin] = useState({ x: 0, y: 0 });
   const [flyTarget, setFlyTarget] = useState({ x: 0, y: 0 });
@@ -1732,21 +1727,6 @@ export default function PersonalizePage({
     logout();
   }, [logout, requestPreviewCancellation, stage]);
 
-  const ensurePremiumVoiceSample = useCallback(() => {
-    if (!requiresVoiceSample) {
-      setVoiceValidationError(null);
-      return true;
-    }
-    if (voiceAssetId) {
-      setVoiceValidationError(null);
-      return true;
-    }
-
-    setVoiceValidationError(t('personalize.voiceSampleRequired'));
-    setIsVoiceDialogOpen(true);
-    return false;
-  }, [requiresVoiceSample, voiceAssetId, t]);
-
   const handleVoiceRecordingSelected = useCallback(
     (recording: PendingVoiceRecording | null) => {
       pendingVoiceRecordingRef.current = recording;
@@ -2022,11 +2002,6 @@ export default function PersonalizePage({
         voiceAssetId: selectedPackageType === 'supreme' ? voiceAssetIdRef.current : null,
       });
       confirmedPurchaseBookTypeRef.current = result.packageType;
-      if (selectedPackageType === 'supreme' && !result.voiceReady) {
-        setVoiceValidationError(t('personalize.voiceSampleRequired'));
-        setIsVoiceDialogOpen(true);
-        return null;
-      }
       return result;
     } catch (error) {
       setEditionError(resolveEditionError(error));
@@ -2034,12 +2009,11 @@ export default function PersonalizePage({
     } finally {
       setIsSavingEdition(false);
     }
-  }, [resolveEditionError, saveEditionConfiguration, t]);
+  }, [resolveEditionError, saveEditionConfiguration]);
 
   const performAddToCart = useCallback(async () => {
     if (!canAddToCart) return null
     if (!resolvedBook) return null
-    if (!ensurePremiumVoiceSample()) return null
     const purchaseConfiguration = await ensureCurrentPurchaseConfiguration()
     if (!purchaseConfiguration) return null
     const currentName = nameRef.current
@@ -2087,7 +2061,7 @@ export default function PersonalizePage({
     }
 
     return item ?? null;
-    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewPages, previewUrl, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration]);
+    }, [canAddToCart, resolvedBook, addToCart, selectedLang, bookType, savedStep, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, previewPages, previewUrl, ensureCurrentPurchaseConfiguration]);
 
   const startAddToCart = useCallback(() => {
     const promise = performAddToCart()
@@ -2118,7 +2092,6 @@ export default function PersonalizePage({
   const performCheckout = useCallback(async () => {
         if (!canCheckout) return false
         if (checkoutInFlightRef.current) return false
-        if (!ensurePremiumVoiceSample()) return false
         const purchaseConfiguration = await ensureCurrentPurchaseConfiguration()
         if (!purchaseConfiguration) return false
         checkoutInFlightRef.current = true
@@ -2176,7 +2149,6 @@ export default function PersonalizePage({
                   cartItemId: existingItem?.id ?? null,
                   creationId: ensuredCreationId ?? null,
                   quantity,
-                  dedicationAcknowledgement: dedicationAcknowledgementRef.current,
                 },
               ],
             }
@@ -2236,12 +2208,11 @@ export default function PersonalizePage({
         } finally {
           checkoutInFlightRef.current = false
         }
-    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, savedStep, prepareCheckout, router, cart, user?.customerId, ensurePremiumVoiceSample, ensureCurrentPurchaseConfiguration, previewPages, previewUrl]);
+    }, [canCheckout, resolvedBook, selectedLang, bookType, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, voiceAssetId, voiceStoragePath, savedStep, prepareCheckout, router, cart, user?.customerId, ensureCurrentPurchaseConfiguration, previewPages, previewUrl]);
 
   const handleAddToCartClick = () => {
     if (!canAddToCart || isExiting) return;
     if (previewActionInFlightRef.current === 'CHECKOUT') return;
-    if (!ensurePremiumVoiceSample()) return;
     triggerFlyToCart();
     if (!addToCartPromiseRef.current) {
       void startAddToCart();
@@ -2251,32 +2222,18 @@ export default function PersonalizePage({
   const startPreviewCheckout = () => {
     if (isExiting) return;
     if (previewActionInFlightRef.current) return;
-    if (!ensurePremiumVoiceSample()) return;
     previewActionInFlightRef.current = 'CHECKOUT';
     setPreviewActionPending('CHECKOUT');
     setCheckoutTransitionPhase('preparing');
     requestCheckout();
   };
 
-  const handleCheckoutClick = async () => {
-    if (isExiting || previewActionInFlightRef.current || dedicationRequestInFlightRef.current) return;
-    dedicationRequestInFlightRef.current = true;
-    try {
-      const acknowledgement = await dedicationRef.current?.ensureDecision();
-      if (!acknowledgement) return;
-      dedicationAcknowledgementRef.current = acknowledgement;
-      if (creationId) rememberDedicationAcknowledgement(creationId, acknowledgement);
-      startPreviewCheckout();
-    } finally { dedicationRequestInFlightRef.current = false; }
-  };
+  const handleCheckoutClick = () => startPreviewCheckout();
 
-  const handleArrivalDedicationChoice = (acknowledgement: DedicationAcknowledgement) => {
-    dedicationAcknowledgementRef.current = acknowledgement;
-    if (creationId) rememberDedicationAcknowledgement(creationId, acknowledgement);
+  const handleArrivalDedicationChoice = () => {
     if (dedicationReturnTo === 'cart' && creationId) {
       router.push('/cart');
     }
-    else if (dedicationPurchaseOnArrival) startPreviewCheckout();
   };
 
   useEffect(() => {
@@ -3227,7 +3184,6 @@ export default function PersonalizePage({
                       onChange={handleEditionChange}
                       onOpenVoice={() => setIsVoiceDialogOpen(true)}
                       dedication={canConfigurePurchase ? <PreviewDedication
-                        ref={dedicationRef}
                         creationId={creationId}
                         bookID={bookID}
                         childName={name}
@@ -3239,9 +3195,7 @@ export default function PersonalizePage({
                           acknowledgementLabel={t('personalize.checkoutAcknowledgement')}
                           acknowledgementRequiredLabel={t('personalize.checkoutAcknowledgementRequired')}
                           shareLabel={isPreparingShare ? t('common.loading') : t('share.previewButton')}
-                          addToCartLabel={requiresVoiceSample && !voiceAssetId
-                            ? t('personalize.addVoiceToContinue')
-                            : t('personalize.addToCart')}
+                          addToCartLabel={t('personalize.addToCart')}
                           purchaseLabel={t('personalize.purchaseNow')}
                           loadingLabel={t('common.loading')}
                           shareError={shareError}

@@ -12,6 +12,7 @@ export { isUuid }
 export class ManualPrintArtifactError extends Error {}
 
 export type ManualPrintArtifactClient = {
+  dedication_revision?:number|null
   artifact_id: string
   original_filename: string
   size_bytes: number

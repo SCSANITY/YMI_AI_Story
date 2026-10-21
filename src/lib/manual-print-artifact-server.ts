@@ -8,6 +8,7 @@ const DOWNLOAD_TTL_SECONDS = 60 * 20
 
 export type ManualPrintArtifactRow = {
   artifact_id: string
+  dedication_revision?:number|null
   final_job_id: string
   storage_bucket: string
   storage_path: string
@@ -22,7 +23,7 @@ export type ManualPrintArtifactRow = {
 }
 
 export const MANUAL_PRINT_ARTIFACT_SELECT =
-  'artifact_id, final_job_id, storage_bucket, storage_path, original_filename, declared_size_bytes, verified_size_bytes, content_type, status, created_at, verified_at, released_at'
+  'artifact_id, final_job_id, storage_bucket, storage_path, dedication_revision, original_filename, declared_size_bytes, verified_size_bytes, content_type, status, created_at, verified_at, released_at'
 
 export async function buildManualPrintArtifactClient(
   row: ManualPrintArtifactRow
@@ -48,6 +49,7 @@ export async function buildManualPrintArtifactClient(
 
   return {
     artifact_id: row.artifact_id,
+    dedication_revision:row.dedication_revision ?? null,
     original_filename: row.original_filename,
     size_bytes: Number(row.verified_size_bytes),
     content_type: 'application/pdf',

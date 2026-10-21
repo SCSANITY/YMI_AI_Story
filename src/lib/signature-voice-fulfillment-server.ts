@@ -1,3 +1,4 @@
+import { loadCreationVoiceBindings } from '@/lib/order-materials-server'
 import { createHash } from 'node:crypto'
 import { parseBuffer } from 'music-metadata'
 import {
@@ -60,12 +61,12 @@ async function loadPaidSignatureVoiceItems(orderId: string) {
     .eq('package_type', 'supreme')
 
   if (error) throw new SignatureVoiceFulfillmentError(error.message)
+  const bindingById=new Map((await loadCreationVoiceBindings((data ?? []).map(row=>String(firstRelation(row.creations).creation_id)))).map(binding=>[binding.creation_id,binding]))
   return (data ?? []).map((row) => {
     const order = firstRelation(row.orders)
-    const creation = firstRelation(row.creations)
     const cartItemId = String(row.cart_item_id ?? '')
     const creationId = String(row.creation_id ?? '')
-    const sourceAssetId = String(creation.voice_asset_id ?? '')
+    const sourceAssetId = String(bindingById.get(creationId)?.voice_asset_id ?? '')
     if (!order.payment_id || !cartItemId || !creationId || !sourceAssetId) {
       throw new SignatureVoiceFulfillmentError(
         'A paid Signature Voice item is missing its authoritative source recording'

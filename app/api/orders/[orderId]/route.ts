@@ -1,3 +1,4 @@
+import { loadTrustedOrderMaterials } from '@/lib/order-materials-server'
 import { NextResponse } from 'next/server'
 import { noStoreJson } from '@/lib/http-response'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -71,7 +72,9 @@ export async function GET(
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
-    return noStoreJson({ order })
+    const materials=['paid','production'].includes(String(order.order_status))
+      ? await loadTrustedOrderMaterials(order.order_id) : null
+    return noStoreJson({ order:{...order,materials} })
   } catch (error) {
     if (error instanceof CustomerOrderReadError) {
       return NextResponse.json({ error: error.message }, { status: error.status })

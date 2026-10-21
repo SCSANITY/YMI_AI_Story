@@ -182,6 +182,7 @@ function PreviewPurchasePanelComponent({
       ) : null}
 
       </div>
+      {selectedValue === 'supreme' ? <p className="mt-2 text-xs text-slate-500">Do it now or later after purchase. We need your recording to complete your Voice book.</p> : null}
       {dedication}
       <div className="rounded-[1.35rem] bg-white p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.6)] sm:p-6 xl:p-5">{actions}</div>
     </aside>

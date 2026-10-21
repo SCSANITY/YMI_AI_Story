@@ -1,3 +1,4 @@
+import { loadCreationVoiceBindings } from '@/lib/order-materials-server'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import {
   SIGNATURE_VOICE_NARRATION_SLOTS,
@@ -54,7 +55,7 @@ export async function loadAdminSignatureVoiceWorkspace(
 ): Promise<AdminSignatureVoiceWorkspace | null> {
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
-    .select('order_id, display_id, order_status, payment_id, customer_id, email')
+    .select('order_id, display_id, order_status, payment_id, paid_at, customer_id, email')
     .eq('order_id', orderId)
     .maybeSingle()
   if (orderError) throw new Error(orderError.message)
@@ -87,12 +88,16 @@ export async function loadAdminSignatureVoiceWorkspace(
   if (cartItemsError) throw new Error(cartItemsError.message)
 
   const signatureItems = cartItems ?? []
+  const bindings=new Map((await loadCreationVoiceBindings(signatureItems.map(item=>String(firstRelation(item.creations).creation_id)))).map(row=>[row.creation_id,row]))
+  const pendingItems=signatureItems.filter(item=>!bindings.get(String(firstRelation(item.creations).creation_id))?.voice_asset_id).map(item=>{
+    const creation=firstRelation(item.creations)
+    return {cartItemId:String(item.cart_item_id),creationId:String(creation.creation_id),
+      title:resolvePersonalizedBookTitle({templateId:creation.template_id,templateName:firstRelation(creation.templates).name,customizeSnapshot:creation.customize_snapshot}),
+      daysWaiting:Math.max(0,Math.floor((Date.now()-Date.parse(String(order.paid_at)))/86400000))}
+  })
   const normalizedItems = signatureItems
-    .map((item) => ({ item, creation: firstRelation(item.creations) }))
+    .map((item) => ({ item, creation: {...firstRelation(item.creations),...bindings.get(String(firstRelation(item.creations).creation_id))} as UnknownRecord }))
     .filter(({ creation }) => nullableString(creation.creation_id) && nullableString(creation.voice_asset_id))
-  if (normalizedItems.length !== signatureItems.length) {
-    throw new Error('A paid Signature Voice item is missing its authoritative source binding')
-  }
   const creationIds = normalizedItems.map(({ creation }) => String(creation.creation_id))
   const assetIds = normalizedItems.map(({ creation }) => String(creation.voice_asset_id))
 
@@ -286,6 +291,7 @@ export async function loadAdminSignatureVoiceWorkspace(
       email: nullableString(order.email) || nullableString(customer?.email),
     },
     items,
+    pendingItems,
   }
 }
 

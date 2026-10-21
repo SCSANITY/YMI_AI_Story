@@ -12,10 +12,11 @@ const dto=()=>({order_id:order,dedication_deadline:'2026-10-23T12:00:00Z',items:
   cart_item_id:item,creation_id:creation,template_id:'Synthetic_story',package_type:'supreme',
   dedication:{decision:'skipped',body:null,revision:1},can_edit_dedication:true,voice_ready:false,can_submit_voice:true,
 }]})
-function harness({owner=null,rpcResult,queryResult}={}) {
+function harness({owner=null,rpcResult,queryResult,storage}={}) {
   const calls=[],sent=[],cache=new Map()
   const supabaseAdmin={
-    async rpc(name,args) {calls.push({name,args});return rpcResult?.(name,args) ?? {data:name==='materials_read'?dto():null,error:null}},
+    storage,
+    rpc(name,args) {calls.push({name,args});const result=Promise.resolve(rpcResult?.(name,args) ?? {data:name==='materials_read'?dto():null,error:null});result.single=()=>result;return result},
     from(table) {
       const log={table,steps:[]};calls.push(log)
       const query={then(resolve,reject) {return Promise.resolve(queryResult?.(table,log.steps) ?? {data:null,error:null}).then(resolve,reject)}}
@@ -27,8 +28,9 @@ function harness({owner=null,rpcResult,queryResult}={}) {
   }
   const injections={
     'server-only':{},'node:crypto':crypto,
+    'next/server':{NextResponse:{json:Response.json}},
     '@/lib/supabaseAdmin':{supabaseAdmin},
-    '@/lib/checkout-owner':{resolveCheckoutOwner:async (_request,options)=>{calls.push({auth:options});return owner}},
+    '@/lib/checkout-owner':{ownerFilter:value=>value.ownerType==='anon'?{owner_type:'anon',column:'anon_session_id',value:value.anonSessionId}:{owner_type:'customer',column:'customer_id',value:value.customerId},resolveCheckoutOwner:async (_request,options)=>{calls.push({auth:options});return owner}},
     '@/lib/session':{getOrCreateAnonSession:async()=>{calls.push({session:true});return 'synthetic-session'}},
     '@/lib/email':{sendOtpEmail:async (...args)=>{sent.push(args)}},
     '@/lib/http-response':{noStoreJson:(value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'private, no-store, max-age=0'}})},
@@ -220,4 +222,67 @@ test('rate denial sends nothing and cannot bypass to OTP creation',async()=>{
   const h=harness({rpcResult:()=>({data:{allowed:false,retry_after_seconds:60},error:null})})
   await assert.rejects(h.load('src/lib/order-materials-recovery.ts').requestMaterialRecovery(new Request('https://example.test'),order,'synthetic@example.test'),/rate_limited/)
   assert.equal(h.sent.length,0);assert.ok(!h.calls.some(x=>x.table==='verification_codes'))
+})
+
+const captureBody=()=>({asset_type:'voice_sample',role:'voice',orderMaterial:{orderId:order,itemId:item}})
+const captureRequest=(origin='https://example.test')=>new Request('https://example.test/api/upload-url',{
+  headers:{authorization:'Bearer '+'a'.repeat(43),origin},method:'POST',body:'{}',
+})
+test('postpayment upload derives the original anon Creation owner rather than caller-supplied identity',async()=>{
+  const h=harness({queryResult:()=>({data:{owner_type:'anon',anon_session_id:creation},error:null})})
+  const result=await h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest(),{...captureBody(),customerId:customer})
+  assert.equal(result.ownerType,'anon');assert.equal(result.anonSessionId,creation)
+  assert.equal(h.calls.find(call=>call.name==='materials_read').args.p_customer,null)
+})
+test('material capture cannot upload a face,avatar or another line',async()=>{
+  for (const change of [body=>body.asset_type='face_image',body=>body.role='avatar',body=>body.orderMaterial.itemId=creation]) {
+    const h=harness(),body=captureBody();change(body)
+    await assert.rejects(h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest(),body))
+    assert.ok(!h.calls.some(call=>call.table==='creations'))
+  }
+})
+test('cross-origin material capture fails before any material read',async()=>{
+  const h=harness()
+  await assert.rejects(h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest('https://foreign.test'),captureBody()),/origin_denied/)
+  assert.equal(h.calls.length,0)
+})
+test('a completed Voice binding does not grant another upload or source replacement',async()=>{
+  const state=dto();state.items[0].voice_ready=true;state.items[0].can_submit_voice=false
+  const h=harness({rpcResult:()=>({data:state,error:null})})
+  await assert.rejects(h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest(),captureBody()),/access_denied/)
+  assert.ok(!h.calls.some(call=>call.table==='creations'))
+})
+test('ordinary prepayment capture keeps its original owner-resolution path',async()=>{
+  const h=harness()
+  assert.equal(await h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest(),{}),null)
+  assert.equal(h.calls.length,0)
+})
+
+test('Voice checkout prices a missing recording but still rejects a supplied corrupt source',async()=>{
+  const make=(voice)=>harness({queryResult:table=>({error:null,data:table==='creations'?{
+    creation_id:creation,template_id:'Synthetic_story',owner_type:'customer',customer_id:customer,
+    customize_snapshot:{bookType:'supreme'},voice_asset_id:voice,
+  }:table==='template_package_prices'?{package_type:'supreme',list_price_usd:149,sale_price_usd:89,row_version:1}:null})})
+  const missing=make(null),owner={ownerType:'customer',customerId:customer}
+  const price=await missing.load('src/lib/package-pricing-store.ts').loadAuthoritativeCreationPackagePrice({creationId:creation,owner})
+  assert.equal(price.packageType,'supreme');assert.equal(price.priceAtPurchase,89)
+  assert.ok(!missing.calls.some(call=>call.table==='user_assets'))
+  await assert.rejects(make(item).load('src/lib/package-pricing-store.ts').loadAuthoritativeCreationPackagePrice({creationId:creation,owner}))
+})
+
+test('scoped upload signs an opaque path while reserving capture under the original Creation owner',async()=>{
+  const h=harness({queryResult:()=>({data:{owner_type:'anon',anon_session_id:creation},error:null}),
+    rpcResult:(name)=>({data:name==='materials_read'?dto():name==='consume_user_asset_upload_rate_limit'?{allowed:true}:name==='reserve_signature_voice_capture_authorization'?{out_authorization_id:item}:null,error:null}),
+    storage:{from:()=>({createSignedUploadUrl:async path=>({data:{signedUrl:'https://example.test/upload/'+path,token:'synthetic-upload-token'},error:null})})},
+  })
+  const response=await h.load('app/api/upload-url/route.ts').POST(new Request('https://example.test/api/upload-url',{
+    method:'POST',headers:{authorization:'Bearer '+'a'.repeat(43),origin:'https://example.test','content-type':'application/json'},
+    body:JSON.stringify({...captureBody(),file_name:'synthetic.wav',content_type:'audio/wav',size_bytes:100,
+      voice_authorization:{accepted:true,version:'signature-voice-consent-v3',speaker_kind:'authorized_speaker'}}),
+  }))
+  assert.equal(response.status,200)
+  const result=await response.json()
+  assert.ok(!JSON.stringify(result).includes(creation))
+  assert.equal(result.storage_path.split('/')[2],result.asset_id)
+  assert.equal(h.calls.find(call=>call.name==='reserve_signature_voice_capture_authorization').args.p_anon_session_id,creation)
 })

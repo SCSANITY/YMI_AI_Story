@@ -44,7 +44,7 @@ test('manual Print Release records the print artifact without changing customer 
     'app/api/admin/final-jobs/[finalJobId]/release-print/route.ts'
   )
 
-  assert.match(printRelease, /rpc\(['"]release_final_print_artifact['"]/)
+  assert.match(printRelease, /rpc\(['"]materials_release_print_artifact['"]/)
   assert.match(printRelease, /expectedArtifactId/)
   assert.doesNotMatch(printRelease, /from\(['"]orders['"]\)/)
   assert.doesNotMatch(printRelease, /order_status|advanceOrdersToProduction|send.*Email/)

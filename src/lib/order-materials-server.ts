@@ -75,3 +75,18 @@ export async function recoverOrderMaterialLink(orderId: string,challengeId: stri
   if (verified!==true) throw new MaterialError('invalid_verification',400)
   return materialAccessPath(orderId,credential.token)
 }
+
+// Internal fulfillment/Admin callers only: caller must have already authorized
+// this order through its existing reader. Never accept an arbitrary client ID.
+export async function loadTrustedOrderMaterials(orderId:string) {
+  const {data,error}=await supabaseAdmin.from('orders').select('customer_id').eq('order_id',materialUuid(orderId)).maybeSingle()
+  if (error || !data?.customer_id) throw new MaterialError('materials_unavailable',503)
+  return loadOrderMaterials(orderId,{customerId:materialUuid(data.customer_id),tokenHash:null})
+}
+
+export async function loadTrustedOrderLineDedications(orderId:string) {
+  const rows=await rpc('materials_read_trusted_lines',{p_order:materialUuid(orderId)})
+  if (!Array.isArray(rows) || !rows.length) throw new MaterialError('materials_unavailable',503)
+  return rows.map(row=>({cartItemId:materialUuid(row.cart_item_id),creationId:materialUuid(row.creation_id),
+    ...parseMaterialDedication(row),deadline:String(row.dedication_deadline)}))
+}

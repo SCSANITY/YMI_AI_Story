@@ -16,6 +16,7 @@ export interface UserAssetRecord {
   playback_url?: string
   metadata?: Record<string, unknown> | null
   created_at?: string
+  voice_authorization_id?: string
 }
 
 export type PendingUserAssetUpload = {
@@ -632,6 +633,7 @@ type UploadUserAssetOptions = {
   onTiming?: (label: string, details?: Record<string, unknown>) => void
   metadata?: Record<string, unknown>
   voiceAuthorization?: SignatureVoiceCaptureAuthorization
+  orderMaterial?: {orderId:string;itemId:string;token?:string}
 }
 
 async function resolveUploadError(response: Response, fallback: string) {
@@ -677,9 +679,10 @@ export async function uploadUserAsset(
 
   const response = await fetch('/api/upload-url', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(options?.orderMaterial?.token ? {Authorization:`Bearer ${options.orderMaterial.token}`} : {}) },
     body: JSON.stringify({
       asset_type: type,
+      ...(options?.orderMaterial ? {orderMaterial:{orderId:options.orderMaterial.orderId,itemId:options.orderMaterial.itemId}} : {}),
       role,
       customerId: customerId ?? null,
       file_name: uploadFile.name,
@@ -740,6 +743,7 @@ export async function uploadUserAsset(
       storage_path: storagePath,
       bucket,
       asset_type: type,
+      ...(options?.orderMaterial ? {orderMaterial:{orderId:options.orderMaterial.orderId,itemId:options.orderMaterial.itemId}} : {}),
       role,
       original_name: options?.originalName ?? file.name,
       content_type: uploadFile.type || 'application/octet-stream',
@@ -749,12 +753,13 @@ export async function uploadUserAsset(
 
   const confirmResponse = await fetch('/api/user-assets/confirm', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(options?.orderMaterial?.token ? {Authorization:`Bearer ${options.orderMaterial.token}`} : {}) },
     credentials: 'include',
     body: JSON.stringify({
       asset_id: assetId,
       storage_path: storagePath,
       asset_type: type,
+      ...(options?.orderMaterial ? {orderMaterial:{orderId:options.orderMaterial.orderId,itemId:options.orderMaterial.itemId}} : {}),
       role,
       customerId: customerId ?? null,
       original_name: options?.originalName ?? file.name,

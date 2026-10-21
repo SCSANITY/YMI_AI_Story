@@ -1,3 +1,5 @@
+import { resolveMaterialCaptureOwner } from '@/lib/order-material-capture'
+import { MaterialError } from '@/lib/order-materials'
 import { NextResponse } from 'next/server'
 import { parseBuffer } from 'music-metadata'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -60,11 +62,12 @@ export async function POST(request: Request) {
   }
   let owner
   try {
-    owner = await resolveCheckoutOwner(request, {
+    owner = await resolveMaterialCaptureOwner(request,body) ?? await resolveCheckoutOwner(request, {
       expectedCustomerId,
       createAnonIfMissing: true,
     })
   } catch (error) {
+    if (error instanceof MaterialError) return NextResponse.json({error:error.code},{status:error.status})
     return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
   }
   if (!owner) return NextResponse.json({ error: 'Unable to resolve owner' }, { status: 401 })
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
   const filter = ownerFilter(owner)
   if (!isValidUserAssetStoragePath(storagePath, assetId, {
     ownerType: filter.owner_type,
-    ownerId: filter.value,
+    ownerId: body.orderMaterial ? assetId : filter.value,
     assetType,
   })) {
     return NextResponse.json({ error: 'storage_path does not match the current owner or asset' }, { status: 400 })
@@ -194,6 +197,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to record asset' }, { status: 500 })
   }
 
+  if (assetType === 'voice_sample' && body.orderMaterial) {
+    return NextResponse.json({asset_id:assetId,voice_authorization_id:voiceAuthorizationId,metadata:{duration_seconds:verifiedVoiceDuration}})
+  }
   if (assetType === 'voice_sample') {
     return NextResponse.json({
       ...asset,

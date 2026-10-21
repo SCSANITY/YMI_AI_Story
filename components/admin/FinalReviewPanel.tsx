@@ -468,6 +468,8 @@ export function FinalReviewPanel({
         return {
           ...current,
           print_artifact: data.print_artifact,
+          dedication_snapshot:data.dedication_snapshot,
+          dedication_deadline:data.dedication_deadline,
           pages: current.pages.map((page) => {
             const signedPage = signedPages.get(page.final_job_page_id)
             if (!signedPage) return page
@@ -947,6 +949,7 @@ export function FinalReviewPanel({
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            expectedDedicationRevision: detail?.dedication_snapshot?.revision,
             fileName: validated.fileName,
             sizeBytes: validated.sizeBytes,
             contentType: validated.contentType,

@@ -10,13 +10,13 @@ const js = ts.transpileModule(routeSource, { compilerOptions: {
 } }).outputText
 const creationId = '20000000-0000-4000-8000-000000000001'
 
-function handler(choice, { allowWrites = false } = {}) {
+function handler(choice, { allowWrites = true } = {}) {
   let writes = 0
   const written = []
   const dependencies = {
     'next/server': { NextResponse: { json: Response.json }, after: () => undefined },
     '@/lib/supabaseAdmin': { supabaseAdmin: { from(table) {
-      if (!allowWrites) { writes++; throw new Error('Order write before dedication gate') }
+      if (!allowWrites) { writes++; throw new Error('Unexpected order write') }
       if (!['orders', 'cart_items'].includes(table)) throw new Error(`Unexpected table ${table}`)
       return { insert(value) {
         writes++
@@ -51,21 +51,19 @@ const request = (acknowledgement, items = [{ creationId, quantity: 1, dedication
   body: JSON.stringify({ items }),
 })
 
-test('undecided creation cannot start even an unpaid order', async () => {
+test('missing dedication does not block an unpaid order', async () => {
   const { POST, writes } = handler({ creationId, decision: 'undecided', revision: null, previouslyPurchased: false })
   const response = await POST(request(null))
-  assert.equal(response.status, 409)
-  assert.equal((await response.json()).code, 'dedication_required')
-  assert.equal(writes(), 0)
+  assert.equal(response.status, 200)
+  assert.equal(writes(), 2)
 })
 
-test('repeat purchase rejects missing and stale acknowledgements before writes', async () => {
+test('repeat purchase does not require dedication acknowledgements', async () => {
   for (const ack of [null, { decision: 'confirmed', revision: 2 }, { decision: 'skipped', revision: 3 }]) {
     const { POST, writes } = handler({ creationId, decision: 'confirmed', revision: 3, previouslyPurchased: true })
     const response = await POST(request(ack))
-    assert.equal(response.status, 409)
-    assert.equal((await response.json()).code, 'dedication_reconfirmation_required')
-    assert.equal(writes(), 0)
+    assert.equal(response.status, 200)
+    assert.equal(writes(), 2)
   }
 })
 
@@ -93,7 +91,7 @@ test('repeat purchase with an exact acknowledgement can start an unpaid order', 
   assert.equal(writes(), 2)
 })
 
-test('one undecided creation blocks the whole multi-book order before writes', async () => {
+test('optional missing dedications do not block a multi-book order', async () => {
   const secondId = '20000000-0000-4000-8000-000000000002'
   const { POST, writes } = handler([
     { creationId, decision: 'confirmed', revision: 1, previouslyPurchased: false },
@@ -102,7 +100,6 @@ test('one undecided creation blocks the whole multi-book order before writes', a
   const response = await POST(request(null, [
     { creationId, quantity: 1 }, { creationId: secondId, quantity: 1 },
   ]))
-  assert.equal(response.status, 409)
-  assert.equal((await response.json()).creationId, secondId)
-  assert.equal(writes(), 0)
+  assert.equal(response.status, 200)
+  assert.equal(writes(), 3)
 })

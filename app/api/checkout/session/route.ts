@@ -28,7 +28,6 @@ import {
 import { getSiteUrl } from '@/lib/site-url'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { normalizeShippingAddress, recipientAddressIssue } from '@/lib/shipping-address'
-import { prepareOrderDedications } from '@/lib/dedication-server'
 
 function checkoutSessionMatchesSiteOrigin(
   session: { success_url?: string | null; cancel_url?: string | null },
@@ -299,13 +298,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Zero-total checkout is not supported yet' }, { status: 400 })
     }
 
-    // The RPC locks the payable order and all selected lines, then snapshots
-    // each current choice atomically immediately before Stripe can issue a URL.
-    try {
-      await prepareOrderDedications(orderId, owner)
-    } catch {
-      return NextResponse.json({ error: 'Review every book’s dedication in Preview before payment', code: 'dedication_required' }, { status: 409 })
-    }
     const checkoutFingerprint = await createOrderCheckoutFingerprint(orderId)
 
     const session = await stripe.checkout.sessions.create({

@@ -1,3 +1,4 @@
+import { loadTrustedOrderMaterials,issueOrderMaterialLink } from '@/lib/order-materials-server'
 import React from 'react'
 import { Resend } from 'resend'
 import { buildOtpEmailText, OtpEmail } from '@/components/emails/OtpEmail'
@@ -64,6 +65,7 @@ type SendEmailParams = {
 }
 
 type ManagedEmailParams = SendEmailParams & {
+  prepareReact?:()=>Promise<React.ReactElement>
   emailKey: string
   idempotencyKey: string
   fromEnvName?: string
@@ -266,7 +268,8 @@ async function sendManagedEmail(params: ManagedEmailParams) {
   }
 
   try {
-    const response = await sendEmail({ ...params, from: resolvedFrom })
+    const react=params.prepareReact ? await params.prepareReact() : params.react
+    const response = await sendEmail({ ...params,react, from: resolvedFrom })
     const responseAny = response as
       | { data?: { id?: string | null } | null; id?: string | null }
       | null
@@ -333,7 +336,14 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
       itemCount: params.items.length,
       hasCoverImage: Boolean(params.coverImageUrl),
     },
-    react: (
+    prepareReact:async()=>{
+      const materialState=await loadTrustedOrderMaterials(params.orderId)
+      const materialPath=await issueOrderMaterialLink(params.orderId,materialState.items.map(item=>item.cart_item_id))
+      // Resolve only after send idempotency succeeds. No raw token in event context.
+      const materialNotice={deadline:materialState.dedication_deadline,
+        pendingVoice:materialState.items.filter(item=>item.can_submit_voice).length,
+        url:buildAbsoluteUrl(materialPath) ?? materialPath}
+      return (
       <OrderReceiptEmail
         orderId={params.orderId}
         displayId={params.displayId}
@@ -343,8 +353,10 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
         address={params.address}
         coverImageUrl={params.coverImageUrl}
         trackUrl={buildAbsoluteUrl(`/orders/${params.orderId}`)}
+        materialNotice={materialNotice}
       />
-    ),
+      )
+    },
   })
 }
 

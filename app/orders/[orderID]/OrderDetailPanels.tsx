@@ -1,5 +1,6 @@
 'use client'
 
+import { OrderMaterialsSummary } from '@/components/orders/OrderMaterialsSummary'
 import { MapPin } from 'lucide-react'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import { formatMajorCurrencyValue } from '@/lib/locale-pricing'
@@ -54,6 +55,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
             </div>
           ))}
         </div>
+        <OrderMaterialsSummary materials={order.materials}/>
         {hasSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" compact /> : null}
       </div>
 

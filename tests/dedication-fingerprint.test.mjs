@@ -39,20 +39,19 @@ function fingerprintFor(options = {}) {
   return fingerprintModule(options).api.createOrderCheckoutFingerprint('order-1')
 }
 
-test('the purchase fingerprint includes the private line message without exposing it', async () => {
+test('the purchase fingerprint excludes optional private dedication materials', async () => {
   const first = await fingerprintFor({ body: 'For you' })
   const second = await fingerprintFor({ body: 'With love' })
   assert.match(first, /^[0-9a-f]{64}$/)
-  assert.notEqual(first, second)
+  assert.equal(first, second)
   assert.doesNotMatch(first, /For you/)
 })
 
-test('missing snapshot or concurrent creation edit blocks a new unpaid checkout', async () => {
-  await assert.rejects(fingerprintFor({ snapshot: false }), /authoritative checkout snapshot/)
-  await assert.rejects(fingerprintFor({ body: 'For you', currentBody: 'Changed after capture' }), /Dedication changed/)
+test('missing dedication and a draft edit do not block checkout', async () => {
+  assert.equal(await fingerprintFor({ snapshot: false }),await fingerprintFor({currentBody:'Changed after capture'}))
 })
 
-test('payment completion requires the current dedication snapshot and fingerprint', async () => {
+test('payment completion retains commercial fingerprint and active Session fencing', async () => {
   const missingSnapshot = fingerprintModule({ snapshot: false })
   const oldSnapshot = {
     order: { currency: 'USD', productDiscount: 0, shipping: 0, shippingDiscount: 0,
@@ -61,14 +60,17 @@ test('payment completion requires the current dedication snapshot and fingerprin
       packageType: 'basic', packagePriceVersion: 1, quantity: 1, unitPrice: 30 }],
   }
   const oldHash = createHash('sha256').update(JSON.stringify(oldSnapshot)).digest('hex')
-  await assert.rejects(
-    missingSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash),
-    /authoritative checkout snapshot/
-  )
+  await missingSnapshot.api.requireMatchingCheckoutSession('order-1','cs-test',oldHash)
 
   const withSnapshot = fingerprintModule()
   const newHash = await withSnapshot.api.createOrderCheckoutFingerprint('order-1')
   await withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', newHash)
-  await assert.rejects(withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', oldHash), /Order changed/)
+  await assert.rejects(withSnapshot.api.requireMatchingCheckoutSession('order-1', 'cs-test', 'different-commercial-fingerprint'), /Order changed/)
   await assert.rejects(withSnapshot.api.requireMatchingCheckoutSession('order-1', 'wrong-session', newHash), /not active/)
+})
+
+test('commercial quantity changes still change the checkout fingerprint',async()=>{
+  const h=fingerprintModule(),before=await h.api.createOrderCheckoutFingerprint('order-1')
+  h.rows.cart_items.data=[{...item,quantity:2}]
+  assert.notEqual(await h.api.createOrderCheckoutFingerprint('order-1'),before)
 })

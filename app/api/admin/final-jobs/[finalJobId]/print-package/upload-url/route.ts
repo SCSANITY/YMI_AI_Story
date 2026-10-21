@@ -71,7 +71,7 @@ export async function POST(
     return jsonNoStore({ error: signedError?.message || 'Failed to prepare print PDF upload' }, { status: 500 })
   }
 
-  const { error: createError } = await supabaseAdmin.rpc('create_final_print_artifact', {
+  const { error: createError } = await supabaseAdmin.rpc('materials_create_print_artifact', {
     p_final_job_id: finalJobId,
     p_artifact_id: artifactId,
     p_storage_path: storagePath,
@@ -79,9 +79,10 @@ export async function POST(
     p_declared_size_bytes: upload.sizeBytes,
     p_content_type: upload.contentType,
     p_admin_customer_id: admin.customer_id,
+    p_expected_dedication_revision:body.expectedDedicationRevision,
   })
   if (createError) {
-    const conflict = /released|must be released|no longer/i.test(createError.message)
+    const conflict = /released|must be released|no longer|materials_print_/i.test(createError.message)
     return jsonNoStore(
       { error: createError.message || 'Failed to register print PDF revision' },
       { status: conflict ? 409 : 500 }

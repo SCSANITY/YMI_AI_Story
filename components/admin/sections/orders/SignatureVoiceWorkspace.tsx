@@ -870,10 +870,11 @@ export function SignatureVoiceWorkspace({
             <RefreshCw className="h-4 w-4" />
           </AdminIconButton>
         </AdminNotice>
-      ) : !workspace || workspace.items.length === 0 ? (
+      ) : !workspace || workspace.items.length === 0 && !workspace.pendingItems?.length ? (
         <AdminEmptyState>No bound Signature Voice source was found.</AdminEmptyState>
       ) : (
         <div className="grid gap-4">
+          {(workspace.pendingItems ?? []).map(item=><AdminNotice key={item.cartItemId} tone="warning"><strong>{item.title}</strong> ? Waiting for recording ({item.daysWaiting} days). Image preparation may continue; Voice delivery is pending.</AdminNotice>)}
           {workspace.items.map((item) => (
             <VoiceItem
               key={item.creationId}

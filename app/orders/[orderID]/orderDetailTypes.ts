@@ -1,3 +1,4 @@
+import type { OrderMaterials } from '@/lib/order-materials'
 import type { CheckoutCurrency } from '@/lib/locale-pricing'
 import type { ShippingDetails } from '@/lib/order-shipping'
 
@@ -17,6 +18,7 @@ export type OrderItem = {
 }
 
 export type OrderDetail = {
+  materials?:OrderMaterials|null
   order_id: string
   display_id?: string | null
   order_status?: string | null

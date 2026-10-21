@@ -108,22 +108,21 @@ const request = () => new Request('http://localhost/api/checkout/session', {
   body: JSON.stringify({ orderId: 'order-1', email: 'buyer@example.test', shippingAddress: { country: 'HK' } }),
 })
 
-test('missing dedication snapshot stops before Stripe Session creation', async () => {
+test('missing dedication does not block Stripe Session creation', async () => {
   const { POST, calls } = checkoutRoute({ prepareFails: true })
   const response = await POST(request())
-  assert.equal(response.status, 409)
-  assert.equal((await response.json()).code, 'dedication_required')
-  assert.ok(calls.some(call => call.kind === 'prepare'))
-  assert.ok(!calls.some(call => call.kind === 'create'))
+  assert.equal(response.status, 200)
+  assert.ok(!calls.some(call => call.kind === 'prepare'))
+  assert.ok(calls.some(call => call.kind === 'create'))
 })
 
-test('successful route prepares a snapshot and fingerprint before issuing a Session', async () => {
+test('successful route freezes only a commercial fingerprint before issuing a Session', async () => {
   const { POST, calls } = checkoutRoute()
   const response = await POST(request())
   assert.equal(response.status, 200)
   assert.equal((await response.json()).sessionId, 'cs_new')
   const sequence = calls.map(call => call.kind)
-  assert.ok(sequence.indexOf('prepare') < sequence.indexOf('fingerprint'))
+  assert.ok(!sequence.includes('prepare'))
   assert.ok(sequence.indexOf('fingerprint') < sequence.indexOf('create'))
   assert.ok(sequence.indexOf('create') < sequence.indexOf('lock'))
   const created = calls.find(call => call.kind === 'create').input

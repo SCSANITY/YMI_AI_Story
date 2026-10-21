@@ -4,6 +4,7 @@ import type { OrderDetail } from './orderDetailTypes'
 export function createOrderDetailReadModel(order: OrderDetail): OrderDetail {
   return {
     order_id: order.order_id,
+    materials:order.materials,
     display_id: order.display_id,
     order_status: order.order_status,
     created_at: order.created_at,

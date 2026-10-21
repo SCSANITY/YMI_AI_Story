@@ -49,7 +49,7 @@ test('Admin upload is direct-to-Storage with progress and server confirmation ve
 
   assert.match(uploadUrl, /await\s+requireAdminCustomer\s*\(\s*\)/)
   assert.match(uploadUrl, /createSignedUploadUrl\(storagePath, \{ upsert: false \}\)/)
-  assert.match(uploadUrl, /create_final_print_artifact/)
+  assert.match(uploadUrl, /materials_create_print_artifact/)
   assert.match(uploadUrl, /signedUrl:\s*signed\.signedUrl/)
   assert.doesNotMatch(uploadUrl, /arrayBuffer|\.upload\(/)
   assert.match(panel, /uploadFileToSignedStorageUrl\(\{/)
@@ -64,7 +64,7 @@ test('Admin upload is direct-to-Storage with progress and server confirmation ve
 
   assert.match(confirm, /\.info\(row\.storage_path\)/)
   assert.match(confirm, /verifyRemotePdfHeader/)
-  assert.match(confirm, /commit_final_print_artifact/)
+  assert.match(confirm, /materials_commit_print_artifact/)
   assert.match(policy, /MANUAL_PRINT_PDF_MAX_BYTES = 600 \* 1024 \* 1024/)
   assert.match(policy, /PDF_HEADER = ['"]%PDF-['"]/)
   assert.match(policy, /Range:\s*['"]bytes=0-4['"]/)
@@ -89,7 +89,7 @@ test('Print Release locks only the verified manual artifact', async () => {
     read('components/admin/final-review/PrintVersionReview.tsx'),
   ])
 
-  assert.match(releaseRoute, /release_final_print_artifact/)
+  assert.match(releaseRoute, /materials_release_print_artifact/)
   assert.match(releaseRoute, /p_expected_artifact_id:\s*body\.expectedArtifactId/)
   assert.match(panel, /body:\s*JSON\.stringify\(\{ expectedArtifactId \}\)/)
   assert.doesNotMatch(releaseRoute, /\.from\(['"]orders['"]\)|sendOrder|sendEmail|jobs|Worker/)

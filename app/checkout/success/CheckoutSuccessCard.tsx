@@ -1,6 +1,8 @@
 'use client';
+import type { OrderMaterials } from '@/lib/order-materials';
 
 import { useState } from 'react';
+import { OrderMaterialsSummary } from '@/components/orders/OrderMaterialsSummary';
 import { BookMarked, CheckCircle2, Loader2, MailCheck } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
@@ -10,6 +12,7 @@ import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionN
 import { isSignatureVoicePackage } from '@/lib/signature-voice';
 
 export type CheckoutSuccessOrder = {
+  materials?:OrderMaterials|null;
   order_id: string;
   display_id?: string | null;
   order_status?: string | null;
@@ -107,6 +110,7 @@ export function CheckoutSuccessCard({
           </div>
         ) : null}
 
+        <OrderMaterialsSummary materials={order?.materials}/>
         {hasSignatureVoice ? (
           <SignatureVoiceEditionNotice variant="postPurchase" className="mx-auto mt-5 max-w-xl" />
         ) : null}
