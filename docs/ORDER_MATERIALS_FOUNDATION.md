@@ -14,8 +14,14 @@ release. Automatic Final and the Worker are outside this change.
 - `loadCreationVoiceBindings` is for already-authorized server/Admin readers;
   Creation.voice_asset_id remains sole source. No per-line voice source is added.
 - Database owns paid_at,revision/deadline checks and atomic null->bound capture.
-  No second JavaScript deadline policy or expiry job. Scope grant TTL is7days,
-  not a voice submission deadline. OTP recovery restores still-eligible access.
+  No second JavaScript deadline policy or expiry job. Per owner2026-10-21, scoped
+  links have no time expiry in the early phase. Completion/refund/eligible-state
+  exit ends access;OTP recovery restores still-eligible access. The48h dedication
+  window and existing OTP code expiry are unchanged.
+- Paid-line initialization works with the actual payment writer's order-first,
+  then ordered-line statements, including partial cartItemIds and webhook replay.
+  The paid transition also handles already-ordered lines. One locked DB helper
+  seeds only missing effective rows; existing revisions are never reinitialized.
 - GET `/api/orders/:orderId/materials` returns the scoped DTO only and never
   issues/consumes/rotates a link,sends OTP or creates an anonymous session.
   Access is either an authenticated customer or a43-character opaque bearer
@@ -52,5 +58,7 @@ helpers/routes with mocked server dependencies;no network,mail,Storage or Provid
 call. It verifies read-only GET,DTO projection,bearer hashing,customer access,
 origin/body bounds,revision RPC arguments,fixed errors and purpose-bound recovery.
 The full contracts suite also verifies the exact data-free Database SQL mirror.
+The actual finalizeOrderPayment is executed with a query probe to pin order-first,
+selected-line updates and replay;isolated SQL tests replay that writer sequence.
 Database PGlite tests exercise actual SQL/guards separately. This is not production
 catalog evidence,a UI/device test or a full real-catalog Next production build.

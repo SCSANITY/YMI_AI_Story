@@ -101,6 +101,8 @@ or dependency was changed by this mirror refresh. Historical pins above remain
 review provenance, not the current upstream fixture identity.
 
 - WEB-UIUX-001/07-B adds `sql/20261021_120000_web_uiux_007_materials.sql`
-  byte-identical to private Databased9aabb7311352d61cf034a5a7ebd33e2a66699da.
+  byte-identical to private Database53f0fed643fd4aad4d70f22f795a637f0985a7fd.
+  The returned07-B payment-order defect is repaired;owner2026-10-21 removes grant
+  TTL while retaining48h dedication edits and existing OTP expiry.
   Offline/unapplied foundation only;07-C reader/purchase/mail/print integration
   and independent review/T2 authorization are required before any live action.

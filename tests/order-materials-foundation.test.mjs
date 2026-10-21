@@ -55,6 +55,47 @@ const request=(body,token='a'.repeat(43),origin='https://example.test')=>new Req
   method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+token,origin},body:JSON.stringify(body),
 })
 
+test('real finalizeOrderPayment writes order before selected lines and repeats that sequence on webhook replay',async()=>{
+  const writes=[],queries=[],state={order_id:order,display_id:null,payment_id:null,order_status:'unpaid'}
+  const supabaseAdmin={from(table) {
+    const steps=[];queries.push({table,steps})
+    const query={then(resolve,reject) {
+      const update=steps.find(x=>x[0]==='update')
+      if (update) {writes.push(table);if (table==='orders') Object.assign(state,update[1])}
+      const data=table==='orders'?{...state}:table==='payments'?{payment_id:'00000000-0000-4000-8000-000000000090'}:
+        table==='cart_items'?[{cart_item_id:item,creation_id:creation}]:null
+      return Promise.resolve({data,error:null}).then(resolve,reject)
+    }}
+    for (const name of ['select','eq','in','order','limit','maybeSingle','update']) {
+      query[name]=(...args)=>{steps.push([name,...args]);return query}
+    }
+    return query
+  }}
+  const fixtureModule={exports:{}}
+  vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/lib/orderFulfillment.ts',import.meta.url),'utf8'),{
+    compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+  }).outputText,{
+    module:fixtureModule,exports:fixtureModule.exports,
+    require(name) {
+      if (name==='@/lib/supabaseAdmin') return {supabaseAdmin}
+      if (name==='@/lib/locale-pricing') return {normalizeCheckoutCurrency:value=>value}
+      if (name==='@/lib/order-status') return {normalizeOrderStatus:value=>value}
+      if (name.startsWith('@/lib/')) return {} // Unused postpayment work stays unreachable.
+      throw new Error('Unexpected payment-writer dependency: '+name)
+    },
+  })
+  for (let attempt=0;attempt<2;attempt++) {
+    const result=await fixtureModule.exports.finalizeOrderPayment({orderId:order,customerId:customer,email:'synthetic@example.test',
+      provider:'stripe',amount:1,cartItemIds:[item],deferPostPaymentWork:true})
+    assert.deepEqual(writes.slice(attempt*3),['orders','order_reminder_schedules','cart_items'])
+    assert.deepEqual(Array.from(result.cartItemIds),[item])
+  }
+  for (const update of queries.filter(x=>x.table==='cart_items'&&x.steps.some(s=>s[0]==='update'))) {
+    assert.deepEqual(Array.from(update.steps.find(s=>s[0]==='in'&&s[1]==='cart_item_id')[2]),[item])
+    assert.equal(update.steps.find(s=>s[0]==='update')[1].status,'ordered')
+  }
+})
+
 test('scoped projection drops receipt/credential fields at both levels',()=>{
   const h=harness(),m=h.load('src/lib/order-materials.ts'),data=dto()
   data.email='private@example.test';data.token_hash='secret';data.items[0].storage_path='private/path'

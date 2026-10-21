@@ -51,9 +51,7 @@ CREATE TABLE public.order_material_grants (
   order_id uuid NOT NULL REFERENCES public.orders(order_id) ON DELETE RESTRICT,
   item_ids uuid[] NOT NULL CHECK (cardinality(item_ids) BETWEEN 1 AND 100),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  expires_at timestamptz NOT NULL,
-  completed_at timestamptz,
-  CHECK (expires_at>created_at AND expires_at<=created_at+interval '7 days')
+  completed_at timestamptz
 );
 CREATE INDEX order_material_grants_order_idx ON public.order_material_grants(order_id);
 CREATE TABLE public.order_material_recovery_challenges (
@@ -137,24 +135,42 @@ END $$;
 CREATE TRIGGER dedication_material_revision AFTER INSERT OR UPDATE ON public.cart_item_dedications
   FOR EACH ROW EXECUTE FUNCTION public.materials_append_dedication_revision();
 
+-- Both payment writer orders converge here under the same order lock. Existing
+-- revisions are never inserted again, including on webhook replay after 48h.
+CREATE FUNCTION public.materials_initialize_order_lines(p_order uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE o public.orders%rowtype;
+BEGIN
+  SELECT * INTO o FROM public.orders WHERE order_id=p_order FOR UPDATE;
+  IF NOT FOUND OR o.paid_at IS NULL OR o.payment_id IS NULL
+    OR o.order_status::text NOT IN ('paid','production') THEN RETURN; END IF;
+  INSERT INTO public.cart_item_dedications
+    (cart_item_id,order_id,creation_id,decision,body,source_revision,revision)
+  SELECT i.cart_item_id,i.order_id,i.creation_id,coalesce(d.decision,'skipped'),d.body,
+    coalesce(d.revision,1),1
+  FROM public.cart_items i LEFT JOIN public.creation_dedications d ON d.creation_id=i.creation_id
+  WHERE i.order_id=p_order AND i.status::text='ordered'
+    AND NOT EXISTS (SELECT 1 FROM public.cart_item_dedications saved WHERE saved.cart_item_id=i.cart_item_id);
+END $$;
 CREATE FUNCTION public.materials_initialize_paid_lines() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
   IF OLD.paid_at IS NULL AND NEW.paid_at IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM public.cart_items WHERE order_id=NEW.order_id AND status::text='ordered') THEN
-      RAISE EXCEPTION 'materials_order_lines_missing';
-    END IF;
-    INSERT INTO public.cart_item_dedications
-      (cart_item_id,order_id,creation_id,decision,body,source_revision,revision)
-    SELECT i.cart_item_id,i.order_id,i.creation_id,coalesce(d.decision,'skipped'),d.body,
-      coalesce(d.revision,1),1
-    FROM public.cart_items i LEFT JOIN public.creation_dedications d ON d.creation_id=i.creation_id
-    WHERE i.order_id=NEW.order_id AND i.status::text='ordered';
+    PERFORM public.materials_initialize_order_lines(NEW.order_id);
   END IF;
   RETURN NEW;
 END $$;
 CREATE TRIGGER orders_materials_initialize AFTER UPDATE ON public.orders
   FOR EACH ROW EXECUTE FUNCTION public.materials_initialize_paid_lines();
+CREATE FUNCTION public.materials_initialize_ordered_line() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  PERFORM public.materials_initialize_order_lines(NEW.order_id);
+  RETURN NEW;
+END $$;
+CREATE TRIGGER cart_items_materials_initialize AFTER INSERT OR UPDATE OF status,order_id,creation_id
+  ON public.cart_items FOR EACH ROW WHEN (NEW.status::text='ordered')
+  EXECUTE FUNCTION public.materials_initialize_ordered_line();
 
 -- A customer ID is supplied only by verified server authentication; a grant only
 -- by the material credential adapter. Neither is accepted as a client identity.
@@ -173,7 +189,7 @@ BEGIN
     END IF;
   ELSIF p_customer IS NULL AND p_hash IS NOT NULL THEN
     SELECT * INTO g FROM public.order_material_grants WHERE token_hash=p_hash AND order_id=p_order;
-    IF NOT FOUND OR g.completed_at IS NOT NULL OR g.expires_at<=clock_timestamp()
+    IF NOT FOUND OR g.completed_at IS NOT NULL
       OR (p_item IS NOT NULL AND NOT p_item=ANY(g.item_ids)) THEN
       RAISE EXCEPTION 'materials_access_denied' USING ERRCODE='42501';
     END IF;
@@ -224,8 +240,8 @@ BEGIN
       WHERE i.cart_item_id=x AND i.order_id=p_order AND i.status::text='ordered')) THEN
     RAISE EXCEPTION 'materials_grant_ineligible';
   END IF;
-  INSERT INTO public.order_material_grants(token_hash,order_id,item_ids,created_at,expires_at)
-    VALUES(p_hash,p_order,p_items,statement_timestamp(),statement_timestamp()+interval '7 days');
+  INSERT INTO public.order_material_grants(token_hash,order_id,item_ids)
+    VALUES(p_hash,p_order,p_items);
 END $$;
 
 CREATE FUNCTION public.materials_complete_grant(p_order uuid,p_hash text)
