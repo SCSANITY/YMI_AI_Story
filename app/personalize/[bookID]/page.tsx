@@ -6,6 +6,7 @@ import { CustomizeAccessGate } from '@/components/CustomizeAccessGate'
 import { BOOKS } from '@/data/books'
 import { publicPageMetadata } from '@/lib/seo'
 import { loadActiveTemplateDetail } from '@/lib/template-catalog-server'
+import { getPublishedHomepageBanners } from '@/lib/homepage-banners'
 
 function clampDescription(value: string) {
   const normalized = value.replace(/\s+/g, ' ').trim()
@@ -50,11 +51,15 @@ export default async function Page({
   const { bookID } = await params;
   const initialBook = await loadActiveTemplateDetail(bookID)
   if (!initialBook) notFound()
+  // Existing public cache; resolve only inside the below-fold banner Suspense.
+  const closingBannerPromise = getPublishedHomepageBanners()
+    .then((banners) => banners.after_in_discount)
+    .catch(() => undefined)
 
   return (
     <CustomizeAccessGate>
       <Suspense fallback={<main className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50" />}>
-        <PersonalizePage bookID={bookID} initialBook={initialBook} />
+        <PersonalizePage bookID={bookID} initialBook={initialBook} closingBannerPromise={closingBannerPromise} />
       </Suspense>
     </CustomizeAccessGate>
   );

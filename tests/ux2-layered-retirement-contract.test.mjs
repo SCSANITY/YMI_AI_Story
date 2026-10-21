@@ -4,22 +4,24 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('mobile Product Intro scroll guide has no start/navigation action and respects reduced motion', async () => {
+test('Product Intro has one shared floating CTA wired to the existing start entry (WEB-UIUX-001/06)', async () => {
   const intro = await read('components/personalize/PersonalizeProductIntro.tsx')
-  const handler = intro.match(/const scrollToPersonalize = \(\) => \{[\s\S]*?\n  \}/)?.[0] ?? ''
-  assert.match(handler, /setGuideUsed\(true\)/)
-  assert.match(handler, /scrollIntoView/)
-  assert.match(handler, /prefers-reduced-motion: reduce/)
-  assert.doesNotMatch(handler, /onStart|router|location|fetch|primaryAction/)
+  assert.equal(intro.match(/createPortal\(/g)?.length, 1)
+  assert.doesNotMatch(intro, /guideUsed|scrollToPersonalize|router|location|fetch|primaryAction/)
+  assert.match(intro, /setNeedsScrollGuide\(!entry.isIntersecting\)/)
+  assert.match(intro, /motion-reduce:transition-none/)
   assert.match(intro, /IntersectionObserver/)
   assert.match(intro, /observer\.disconnect\(\)/)
-  assert.match(intro, /needsScrollGuide && !guideUsed[\s\S]*createPortal/)
+  assert.match(intro, /needsScrollGuide \? createPortal/)
   assert.match(intro, /safe-area-inset-bottom/)
-  assert.match(intro, /md:hidden/)
+  assert.match(intro, /data-customize-floating-cta/)
   assert.match(intro, /document\.body/)
   assert.match(intro, /onClick=\{onStart\}/)
   assert.match(intro, /ref=\{personalizeButtonRef\}/)
   assert.match(await read('components/PersonalizePage.tsx'), /<PersonalizeProductIntro\s+key=\{bookID\}/)
+  const page = await read('components/PersonalizePage.tsx')
+  assert.match(page, /const handleStartFromProductIntro[\s\S]*?window\.scrollTo[\s\S]*?handleStartPersonalization\(\)/)
+  assert.match(page, /onStart=\{handleStartFromProductIntro\}/)
 })
 
 test('all live edition UI and copy exclude the retired product and artwork', async () => {

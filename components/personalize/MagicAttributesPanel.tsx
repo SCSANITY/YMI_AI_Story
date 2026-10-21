@@ -3,11 +3,13 @@
 import { memo } from 'react'
 import { Check, Heart, Shield, Sparkles, Star, type LucideIcon } from 'lucide-react'
 import type { MagicAttribute } from '@/types'
+import styles from './MagicAttributesPanel.module.css'
 
 type MagicAttributesPanelProps = {
   attributes: MagicAttribute[]
   heading: string
   translateAttribute: (key: string) => string
+  compactOnPhone?: boolean
 }
 
 const ATTRIBUTE_KEYS: Record<string, { key: string; Icon: LucideIcon; iconClassName: string; barClassName: string }> = {
@@ -29,11 +31,12 @@ function MagicAttributesPanelComponent({
   attributes,
   heading,
   translateAttribute,
+  compactOnPhone = false,
 }: MagicAttributesPanelProps) {
   if (!attributes.length) return null
 
   return (
-    <section aria-labelledby="magic-attributes-heading" className="border-t border-slate-200 pt-4">
+    <section aria-labelledby="magic-attributes-heading" className={`border-t border-slate-200 pt-4 ${compactOnPhone ? styles.compact : ''}`}>
       <h2
         id="magic-attributes-heading"
         className="text-xs font-extrabold uppercase tracking-[0.12em] text-amber-700"

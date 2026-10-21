@@ -1,4 +1,5 @@
 'use client'
+import dynamic from 'next/dynamic';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -45,6 +46,7 @@ import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/personalize/PersonalizeFormFlow';
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
 import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
+import { useIntroSurface } from '@/components/personalize/product/useIntroSurface';
 import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePanel';
 import { PreviewDedication, type DedicationAcknowledgement, type PreviewDedicationHandle } from '@/components/personalize/PreviewDedication';
 import { rememberDedicationAcknowledgement } from '@/lib/dedication';
@@ -53,6 +55,7 @@ import { PRIVACY_REASSURANCE_COPY } from '@/components/personalize/PrivacyReassu
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
 import { templateStorageUrl, type CatalogBook } from '@/lib/book-catalog';
 import type { CartItem } from '@/types';
+import type { PublishedHomepageBanner } from '@/lib/homepage-banners-core';
 import { buildTemplateLockedPreviewPresentation } from '@/lib/template-locked-preview';
 import {
   getPreviewMaxSpreadIndex,
@@ -81,6 +84,8 @@ import {
 } from '@/services/purchaseConfiguration';
 
 type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
+
+const ProductSections = dynamic(() => import('@/components/personalize/product/ProductSections'));
 
 type FacePreparationOutcome =
   | { status: 'ready'; file: File; autoCropped: boolean }
@@ -137,9 +142,11 @@ const parseChildAge = (value: string) => {
 export default function PersonalizePage({
   bookID,
   initialBook,
+  closingBannerPromise,
 }: {
   bookID: string
   initialBook: CatalogBook
+  closingBannerPromise?: Promise<PublishedHomepageBanner | undefined>
 }) {
 
   const fsm = usePersonalizeStage()
@@ -263,6 +270,11 @@ export default function PersonalizePage({
     emitYmiTrackingEvent('start_personalization');
   }, []);
 
+  const handleStartFromProductIntro = useCallback(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    handleStartPersonalization();
+  }, [handleStartPersonalization]);
+
   const handleFormStepChange = useCallback((nextStep: PersonalizeFormStep) => {
     setFormStep(nextStep);
   }, []);
@@ -317,6 +329,8 @@ export default function PersonalizePage({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
   const [formStep, setFormStep] = useState<PersonalizeFormStep>('INTRO');
+  const introSurfaceRef = useRef<HTMLDivElement>(null);
+  useIntroSurface(introSurfaceRef, viewState.showForm && formStep === 'INTRO');
   const lastMobileTopSurfaceRef = useRef<'INTRO' | 'PREVIEW' | null>(null);
   const mobileTopSurface = viewState.showPreview
     ? 'PREVIEW'
@@ -2859,7 +2873,8 @@ export default function PersonalizePage({
       transformStyle: 'preserve-3d'
   };
   return (
-    <div className="page-surface min-h-screen flex flex-col font-sans relative z-20">
+    <div className={viewState.showForm && formStep === 'INTRO' ? 'overflow-x-clip' : undefined}>
+    <div ref={introSurfaceRef} className="page-surface min-h-screen flex flex-col font-sans relative z-20">
       <PersonalizeOverlays
         showFlyAnimation={showFlyAnimation}
         flyAnimationId={flyAnimationId}
@@ -2959,6 +2974,7 @@ export default function PersonalizePage({
                     }
                     storyInfo={
                       <MagicAttributesPanel
+                        compactOnPhone={formStep === 'INTRO'}
                         attributes={magicAttributes}
                         heading={t('personalize.magicAttributes')}
                         translateAttribute={t}
@@ -2985,9 +3001,10 @@ export default function PersonalizePage({
                         fromLabel={t('personalize.fromPrice')}
                         priceLabel={formatDisplayCurrency(fromPrice, displayCurrency)}
                         ctaLabel={t('personalize.personalizeThisBook')}
+                        floatingCtaLabel={t('product.personalize')}
                         faqHeading={t('personalize.aboutThisStory')}
                         faqItems={bookFaqItems}
-                        onStart={handleStartPersonalization}
+                        onStart={handleStartFromProductIntro}
                       />
                     ) : (
                       <PersonalizeFormFlow
@@ -3286,6 +3303,11 @@ export default function PersonalizePage({
         />
 
       </main>
+    </div>
+    {viewState.showForm && formStep === 'INTRO' ? <ProductSections
+      pricing={{ basic: getBookPackagePrice(book, 'basic'), supreme: getBookPackagePrice(book, 'supreme') }}
+      currency={displayCurrency} bannerPromise={closingBannerPromise} onStart={handleStartFromProductIntro}
+    /> : null}
     </div>
   );
 };

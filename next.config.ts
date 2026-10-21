@@ -30,6 +30,10 @@ const nextConfig: NextConfig = {
     }))
 
     return [
+      {
+        source: '/customize-product/v1/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
       ...[
         '/hero-video-mobile-v1.mp4',
         '/hero-video-desktop-v1.mp4',

@@ -6,12 +6,14 @@ type HomePosterBannerProps = {
   banner?: PublishedHomepageBanner;
   priority?: boolean;
   className?: string;
+  onActivate?: () => void;
 };
 
 export function HomePosterBanner({
   banner,
   priority = false,
   className = '',
+  onActivate,
 }: HomePosterBannerProps) {
   if (!banner) return null;
 
@@ -61,11 +63,11 @@ export function HomePosterBanner({
             className="block h-auto w-full"
           />
         </picture>
-        <Link
+        {onActivate ? <button type="button" onClick={onActivate} aria-label={banner.displayName} className={overlayClassName} /> : <Link
           href={banner.href}
           aria-label={banner.displayName}
           className={overlayClassName}
-        />
+        />}
       </div>
     </section>
   );

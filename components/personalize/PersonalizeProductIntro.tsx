@@ -2,8 +2,9 @@
 
 import { memo, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, BookOpen, ChevronDown, Eye, Sparkles, Star, UserRound } from 'lucide-react'
+import { BookOpen, ChevronDown, Eye, Sparkles, Star, UserRound } from 'lucide-react'
 import { Button } from '@/components/Button'
+import { isNightAtFloatingCta } from './product/presentation'
 
 type ProductFact = {
   label: string
@@ -20,6 +21,7 @@ type PersonalizeProductIntroProps = {
   fromLabel: string
   priceLabel: string
   ctaLabel: string
+  floatingCtaLabel?: string
   faqHeading: string
   faqItems: Array<{ question: string; answer: string }>
   onStart: () => void
@@ -44,13 +46,15 @@ function PersonalizeProductIntroComponent({
   fromLabel,
   priceLabel,
   ctaLabel,
+  floatingCtaLabel = ctaLabel,
   faqHeading,
   faqItems,
   onStart,
 }: PersonalizeProductIntroProps) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [needsScrollGuide, setNeedsScrollGuide] = useState(false)
-  const [guideUsed, setGuideUsed] = useState(false)
+  const [night, setNight] = useState(false)
+  const floatingRef = useRef<HTMLDivElement>(null)
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const [descriptionOverflows, setDescriptionOverflows] = useState(false)
   const descriptionRef = useRef<HTMLParagraphElement>(null)
@@ -78,19 +82,26 @@ function PersonalizeProductIntroComponent({
     const target = personalizeButtonRef.current
     if (!target) return
     const observer = new IntersectionObserver(([entry]) => {
-      setNeedsScrollGuide(!entry.isIntersecting && entry.boundingClientRect.top >= window.innerHeight)
+      setNeedsScrollGuide(!entry.isIntersecting)
     })
     observer.observe(target)
     return () => observer.disconnect()
   }, [])
 
-  const scrollToPersonalize = () => {
-    setGuideUsed(true)
-    personalizeButtonRef.current?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-      block: 'center',
-    })
-  }
+  useEffect(() => {
+    if (!needsScrollGuide) return
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const target = document.getElementById('customize-signature-voice')
+      setNight(Boolean(target && isNightAtFloatingCta(target.getBoundingClientRect(), window.innerHeight, floatingRef.current?.offsetHeight ?? 84)))
+    }
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
+    update()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule, { passive: true })
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule) }
+  }, [needsScrollGuide])
 
   return (
     <section className="flex flex-col py-1 lg:pl-2">
@@ -137,18 +148,19 @@ function PersonalizeProductIntroComponent({
           {ctaLabel}
         </Button>
       </div>
-      {needsScrollGuide && !guideUsed ? createPortal(
-        <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#fff9f2]/95 via-[#fff9f2]/80 to-transparent px-4 pt-6 pb-[calc(1rem+env(safe-area-inset-bottom))] md:hidden">
+      {needsScrollGuide ? createPortal(
+        <div ref={floatingRef} data-customize-floating-cta data-theme={night ? 'night' : 'day'}
+          className={`fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-5 rounded-2xl border px-4 py-2.5 shadow-lg backdrop-blur-xl transition-colors motion-reduce:transition-none md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:rounded-full md:px-5 ${night ? 'border-white/20 bg-[rgba(26,22,48,.86)] text-[#fff4e0]' : 'border-white/80 bg-white/85 text-stone-800'}`}>
+          <span className="whitespace-nowrap text-[13px] md:text-sm">{fromLabel} <strong>{priceLabel}</strong></span>
           <Button
             type="button"
             size="lg"
             aria-controls={personalizeButtonId}
-            aria-label={`Scroll to ${ctaLabel}`}
-            onClick={scrollToPersonalize}
-            className={PERSONALIZE_BUTTON_CLASS}
+            aria-label={ctaLabel}
+            onClick={onStart}
+            className="glass-action-btn glass-action-btn--brand min-h-11 rounded-full px-6 text-sm font-bold"
           >
-            {ctaLabel}
-            <ArrowDown className="ms-2 h-4 w-4 shrink-0" aria-hidden="true" />
+            {floatingCtaLabel}
           </Button>
         </div>,
         document.body,
