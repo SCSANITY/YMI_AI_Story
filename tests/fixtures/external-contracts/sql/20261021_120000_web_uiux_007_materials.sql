@@ -15,8 +15,18 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_trigger
     WHERE tgrelid='public.cart_item_dedications'::regclass
-      AND tgname='dedication_snapshot_change_guard' AND tgenabled='O') THEN
+      AND tgname='dedication_snapshot_change_guard' AND tgenabled='O'
+      AND tgfoid='public.dedication_guard_snapshot_change()'::regprocedure) THEN
     RAISE EXCEPTION 'materials_dedication_guard_drift';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='public.creations'::regclass
+    AND tgenabled='O' AND NOT tgisinternal AND tgfoid IN
+    ('public.enforce_creation_voice_binding()'::regprocedure,
+     'public.enforce_creation_voice_authorization_v2()'::regprocedure))<>2
+    OR (SELECT count(*) FROM pg_constraint WHERE conrelid='public.creations'::regclass
+      AND contype='f' AND confdeltype='r' AND convalidated AND confrelid IN
+      ('public.user_assets'::regclass,'public.signature_voice_capture_authorizations'::regclass))<>2 THEN
+    RAISE EXCEPTION 'materials_voice_guard_or_restrict_drift';
   END IF;
 END $preflight$;
 
@@ -286,7 +296,7 @@ BEGIN
     voice_subject_relationship='authorized_submitter',voice_capture_authorization_id=p_authorization,
     voice_speaker_kind=v_authorization.speaker_kind,updated_at=clock_timestamp()
     WHERE creation_id=c.creation_id AND voice_asset_id IS NULL;
-  -- Existing Creation voice-binding/v_authorization/RESTRICT guards stay enabled.
+  -- Existing Creation voice-binding/authorization/RESTRICT guards stay enabled.
 END $$;
 
 CREATE FUNCTION public.materials_begin_recovery(p_order uuid,p_verification uuid)

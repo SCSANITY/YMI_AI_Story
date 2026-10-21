@@ -101,6 +101,6 @@ or dependency was changed by this mirror refresh. Historical pins above remain
 review provenance, not the current upstream fixture identity.
 
 - WEB-UIUX-001/07-B adds `sql/20261021_120000_web_uiux_007_materials.sql`
-  byte-identical to private Database9ee5b9d682136b366f0e607987b68f0cfbfa4362.
+  byte-identical to private Databased9aabb7311352d61cf034a5a7ebd33e2a66699da.
   Offline/unapplied foundation only;07-C reader/purchase/mail/print integration
   and independent review/T2 authorization are required before any live action.
