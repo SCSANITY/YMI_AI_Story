@@ -46,7 +46,6 @@ import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/personalize/PersonalizeFormFlow';
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
 import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
-import { useIntroSurface } from '@/components/personalize/product/useIntroSurface';
 import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePanel';
 import { PreviewDedication, type DedicationAcknowledgement, type PreviewDedicationHandle } from '@/components/personalize/PreviewDedication';
 import { rememberDedicationAcknowledgement } from '@/lib/dedication';
@@ -329,8 +328,6 @@ export default function PersonalizePage({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
   const [formStep, setFormStep] = useState<PersonalizeFormStep>('INTRO');
-  const introSurfaceRef = useRef<HTMLDivElement>(null);
-  useIntroSurface(introSurfaceRef, viewState.showForm && formStep === 'INTRO');
   const lastMobileTopSurfaceRef = useRef<'INTRO' | 'PREVIEW' | null>(null);
   const mobileTopSurface = viewState.showPreview
     ? 'PREVIEW'
@@ -2873,8 +2870,8 @@ export default function PersonalizePage({
       transformStyle: 'preserve-3d'
   };
   return (
-    <div className={viewState.showForm && formStep === 'INTRO' ? 'overflow-x-clip' : undefined}>
-    <div ref={introSurfaceRef} className="page-surface min-h-screen flex flex-col font-sans relative z-20">
+    <>
+    <div className="page-surface min-h-screen flex flex-col font-sans relative z-20">
       <PersonalizeOverlays
         showFlyAnimation={showFlyAnimation}
         flyAnimationId={flyAnimationId}
@@ -3308,6 +3305,6 @@ export default function PersonalizePage({
       pricing={{ basic: getBookPackagePrice(book, 'basic'), supreme: getBookPackagePrice(book, 'supreme') }}
       currency={displayCurrency} bannerPromise={closingBannerPromise} onStart={handleStartFromProductIntro}
     /> : null}
-    </div>
+    </>
   );
 };

@@ -40,7 +40,7 @@ function Price({
       {sale ? (
         <>
           <span>
-            {price.computedDiscountPercent}% {t("product.off")}
+            {price.discountPercent}% {t("product.off")}
           </span>
           <s
             aria-label={t("product.originalPrice", {

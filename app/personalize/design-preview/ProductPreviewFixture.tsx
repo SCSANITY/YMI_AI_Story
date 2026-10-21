@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useIntroSurface } from '@/components/personalize/product/useIntroSurface';
+import { useEffect, useState } from "react";
 import { CustomizeFormLayout } from "@/components/personalize/CustomizeFormLayout";
 import { StoryShowcaseCard } from "@/components/personalize/StoryShowcaseCard";
 import { ProductShowcaseCarousel } from "@/components/personalize/ProductShowcaseCarousel";
@@ -55,8 +54,6 @@ export function ProductPreviewFixture({ baseline }: { baseline: boolean }) {
   const [mobile, setMobile] = useState(false);
   const [currency, setCurrency] = useState<DisplayCurrency>("USD");
   const [starts, setStarts] = useState(0);
-  const surfaceRef = useRef<HTMLDivElement>(null);
-  useIntroSurface(surfaceRef, !baseline && !starts);
   useEffect(() => {
     const media = matchMedia("(max-width: 767px)");
     const update = () => setMobile(media.matches);
@@ -69,11 +66,10 @@ export function ProductPreviewFixture({ baseline }: { baseline: boolean }) {
     setStarts((value) => value + 1);
   };
   return (
-    <div className={!baseline && !starts ? 'overflow-x-clip' : undefined}>
+    <>
       <div
         className="page-surface min-h-screen flex flex-col font-sans relative z-20"
         data-fixture-first-screen
-        ref={surfaceRef}
       >
         <header className="flex h-16 items-center justify-between border-b border-stone-100 px-6">
           <span>‹ Back</span>
@@ -188,6 +184,6 @@ export function ProductPreviewFixture({ baseline }: { baseline: boolean }) {
           onStart={onStart}
         />
       ) : null}
-    </div>
+    </>
   );
 }

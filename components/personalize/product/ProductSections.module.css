@@ -897,19 +897,21 @@
   }
   .demoPage {
     min-height: 245px;
-    padding: 22px 20px 86px;
+    padding: 22px 20px;
   }
   .demoPage p {
     font-size: 18px;
     line-height: 1.7;
+    padding-right: 56px;
   }
   .playCorner {
-    right: 20px;
-    bottom: 17px;
+    top: -30px;
+    right: 16px;
+    bottom: auto;
     gap: 9px;
   }
   .playCorner > span {
-    font-size: 11px;
+    display: none;
   }
   .playCorner button,
   .playCorner img {
