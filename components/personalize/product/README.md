@@ -16,6 +16,9 @@ there is no separate price configuration or purchase path here.
   audio and word timings together when approved recordings arrive; no generation
   or microphone access is part of this module.
 - `EditionCards`: independent gallery selection per edition, shared price authority.
+  Visible galleries loop their five images every four seconds. Offscreen cards,
+  background tabs and reduced-motion preferences pause autoplay; desktop hover
+  and keyboard focus pause that card. Manual selection restarts the interval.
 - `ProductEnding`: cached Home `after_in_discount` banner and existing Footer.
 - All start buttons call the parent's existing INTRO-to-PHOTO handler.
 

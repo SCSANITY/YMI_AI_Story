@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen, Layers, Gift, Volume2, Mic, Plug } from "lucide-react";
 import type {
   BookPackagePrice,
@@ -26,6 +26,9 @@ const EDITIONS = [
     icons: [Volume2, Mic, Plug],
   },
 ] as const;
+type EditionType = (typeof EDITIONS)[number]["type"];
+const IMAGE_COUNT = 5;
+const AUTOPLAY_MS = 4000;
 
 function Price({
   price,
@@ -67,6 +70,53 @@ export default function EditionCards({
 }) {
   const [edition, setEdition] = useState("supreme");
   const [selected, setSelected] = useState({ basic: 0, supreme: 0 });
+  const [manualSelection, setManualSelection] = useState(0);
+  const cards = useRef<Partial<Record<EditionType, HTMLElement>>>({});
+
+  useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const hover = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const visible = new Set<EditionType>();
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const refresh = () => {
+      if (timer) clearInterval(timer);
+      timer = undefined;
+      if (document.hidden || reduced.matches || !visible.size) return;
+      timer = setInterval(() => {
+        const focused = document.activeElement;
+        const advancing = [...visible].filter((type) => {
+          const card = cards.current[type];
+          return card?.getClientRects().length &&
+            !(hover.matches && card.matches(":hover")) &&
+            !(focused?.matches(":focus-visible") && card.contains(focused));
+        });
+        if (!advancing.length) return;
+        setSelected((previous) => {
+          const next = { ...previous };
+          for (const type of advancing) next[type] = (previous[type] + 1) % IMAGE_COUNT;
+          return next;
+        });
+      }, AUTOPLAY_MS);
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const type = entry.target.getAttribute("data-edition") as EditionType;
+        if (entry.isIntersecting) visible.add(type);
+        else visible.delete(type);
+      }
+      refresh();
+    });
+    for (const card of Object.values(cards.current)) observer.observe(card);
+    document.addEventListener("visibilitychange", refresh);
+    reduced.addEventListener("change", refresh);
+    return () => {
+      observer.disconnect();
+      if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      reduced.removeEventListener("change", refresh);
+    };
+  }, [edition, manualSelection]);
+
   return (
     <section
       className={styles.editions}
@@ -94,6 +144,10 @@ export default function EditionCards({
       <div className={styles.editionGrid}>
         {EDITIONS.map((item) => (
           <article
+            ref={(node) => {
+              if (node) cards.current[item.type] = node;
+              else delete cards.current[item.type];
+            }}
             className={styles.editionCard}
             data-edition={item.type}
             data-selected={item.type === edition}
@@ -101,7 +155,7 @@ export default function EditionCards({
           >
             <div className={styles.gallery}>
               <div className={styles.thumbnails}>
-                {Array.from({ length: 5 }, (_, index) => (
+                {Array.from({ length: IMAGE_COUNT }, (_, index) => (
                   <button
                     type="button"
                     key={index}
@@ -110,12 +164,13 @@ export default function EditionCards({
                       edition: t(`product.${item.label}`),
                       number: index + 1,
                     })}
-                    onClick={() =>
+                    onClick={() => {
                       setSelected((previous) => ({
                         ...previous,
                         [item.type]: index,
-                      }))
-                    }
+                      }));
+                      setManualSelection((value) => value + 1);
+                    }}
                   >
                     <Image
                       src={`/customize-product/v1/${item.prefix}-0${index + 1}.jpg`}
