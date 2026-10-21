@@ -6,6 +6,9 @@ Pricing uses the current story's existing `BookPackagePricing` and display curre
 there is no separate price configuration or purchase path here.
 
 - `ProductSections`: independent lower-page surface, near-viewport chunk mounting.
+- `ProductSectionBoundary`: contains pending imports locally, both around the
+  extension root and inside each reserved section slot. A late chunk must not
+  replace the entire Customize page with its route-level loading fallback.
 - `HowItWorks`: one five-step dataset; wide cycling pauses offscreen/hidden and
   under reduced motion; portrait activation follows the visible step.
 - `SignatureVoiceDemo`: approved static template with simulated word timings.

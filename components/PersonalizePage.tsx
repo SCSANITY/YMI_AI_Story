@@ -46,6 +46,7 @@ import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/personalize/PersonalizeFormFlow';
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
 import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
+import { ProductSectionBoundary } from '@/components/personalize/product/ProductSectionBoundary';
 import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePanel';
 import { PreviewDedication, type DedicationAcknowledgement, type PreviewDedicationHandle } from '@/components/personalize/PreviewDedication';
 import { rememberDedicationAcknowledgement } from '@/lib/dedication';
@@ -3301,10 +3302,14 @@ export default function PersonalizePage({
 
       </main>
     </div>
-    {viewState.showForm && formStep === 'INTRO' ? <ProductSections
-      pricing={{ basic: getBookPackagePrice(book, 'basic'), supreme: getBookPackagePrice(book, 'supreme') }}
-      currency={displayCurrency} bannerPromise={closingBannerPromise} onStart={handleStartFromProductIntro}
-    /> : null}
+    {viewState.showForm && formStep === 'INTRO' ? (
+      <ProductSectionBoundary>
+        <ProductSections
+          pricing={{ basic: getBookPackagePrice(book, 'basic'), supreme: getBookPackagePrice(book, 'supreme') }}
+          currency={displayCurrency} bannerPromise={closingBannerPromise} onStart={handleStartFromProductIntro}
+        />
+      </ProductSectionBoundary>
+    ) : null}
     </>
   );
 };

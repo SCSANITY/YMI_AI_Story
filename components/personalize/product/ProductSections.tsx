@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Playfair_Display } from "next/font/google";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import styles from "./ProductSections.module.css";
+import { ProductSectionBoundary } from "./ProductSectionBoundary";
 import type { BookPackagePricing, DisplayCurrency } from "@/types";
 import type { PublishedHomepageBanner } from "@/lib/homepage-banners-core";
 
@@ -44,7 +45,7 @@ function NearViewport({
   }, []);
   return (
     <div ref={ref} className={className}>
-      {mounted ? children : null}
+      <ProductSectionBoundary>{mounted ? children : null}</ProductSectionBoundary>
     </div>
   );
 }

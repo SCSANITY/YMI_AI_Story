@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { CustomizeFormLayout } from "@/components/personalize/CustomizeFormLayout";
 import { StoryShowcaseCard } from "@/components/personalize/StoryShowcaseCard";
 import { ProductShowcaseCarousel } from "@/components/personalize/ProductShowcaseCarousel";
 import { MagicAttributesPanel } from "@/components/personalize/MagicAttributesPanel";
 import { PersonalizeProductIntro } from "@/components/personalize/PersonalizeProductIntro";
 import { ProgressSteps } from "@/components/personalize/ProgressSteps";
-import ProductSections from "@/components/personalize/product/ProductSections";
+import { ProductSectionBoundary } from "@/components/personalize/product/ProductSectionBoundary";
 import { packagePriceRowsToPricing } from "@/lib/package-pricing";
 import { formatDisplayCurrency } from "@/lib/locale-pricing";
 import type { DisplayCurrency } from "@/types";
@@ -28,6 +29,7 @@ const PRICING = packagePriceRowsToPricing([
     row_version: 1,
   },
 ]);
+const ProductSections = dynamic(() => import("@/components/personalize/product/ProductSections"));
 const BANNER: PublishedHomepageBanner = {
   slotKey: "after_in_discount",
   displayName: "Personalize this book",
@@ -177,12 +179,14 @@ export function ProductPreviewFixture({ baseline }: { baseline: boolean }) {
         </main>
       </div>
       {!baseline && !starts ? (
-        <ProductSections
-          pricing={PRICING}
-          currency={currency}
-          bannerPromise={BANNER_PROMISE}
-          onStart={onStart}
-        />
+        <ProductSectionBoundary>
+          <ProductSections
+            pricing={PRICING}
+            currency={currency}
+            bannerPromise={BANNER_PROMISE}
+            onStart={onStart}
+          />
+        </ProductSectionBoundary>
       ) : null}
     </>
   );
