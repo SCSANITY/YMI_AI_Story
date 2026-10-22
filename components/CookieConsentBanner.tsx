@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Cookie, SlidersHorizontal, X } from 'lucide-react'
-import Link from 'next/link'
+import { PolicyReference } from '@/components/legal/PolicyReference'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import {
   COOKIE_CONSENT_OPEN_EVENT,
@@ -206,12 +206,11 @@ export function CookieConsentBanner() {
                     {t('cookies.manageChoices')}
                   </button>
                   <span aria-hidden="true" className="text-amber-500">·</span>
-                  <Link
-                    href="/privacy"
+                  <PolicyReference
                     className="flex min-h-11 items-center rounded-lg px-1 underline decoration-amber-400/70 underline-offset-4 transition hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2"
                   >
                     {t('cookies.privacyPolicy')}
-                  </Link>
+                  </PolicyReference>
                 </div>
               </div>
               <div className="order-2 grid grid-cols-2 gap-2 lg:order-none lg:min-w-[318px]">

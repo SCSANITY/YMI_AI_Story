@@ -76,7 +76,7 @@ test('the first cookie layer is compact, symmetric, and does not preselect optio
   assert.match(banner, /onClick=\{acceptAll\}[\s\S]*cookies\.acceptAll/)
   assert.match(banner, /onClick=\{openPreferences\}[\s\S]*cookies\.manageChoices/)
   assert.match(banner, /role="dialog"[\s\S]*aria-label=\{t\('cookies\.bannerTitle'\)\}/)
-  assert.match(banner, /href="\/privacy"[\s\S]*cookies\.privacyPolicy/)
+  assert.match(banner, /<PolicyReference[\s\S]*cookies\.privacyPolicy/)
   assert.match(messages, /We use cookies to see which stories families love most and to keep our ads relevant/)
   assert.match(messages, /No child photos or names are ever included/)
   assert.match(messages, /'cookies\.rejectOptional': 'Reject all'/)
@@ -125,7 +125,7 @@ test('vendor runtime stays confined to the single S3 tracking boundary', async (
 
 test('all legal policy renderers support controlled external provider links', async () => {
   const footer = await read('components/Footer.tsx')
-  const checkout = await read('app/checkout/CheckoutPolicyModal.tsx')
+  const checkout = await read('components/legal/PolicyDialog.tsx')
   const canonicalPage = await read('components/legal/LegalDocumentPage.tsx')
 
   for (const renderer of [footer, checkout, canonicalPage]) {

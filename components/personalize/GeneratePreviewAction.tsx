@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useMemo, useState } from 'react'
-import Link from 'next/link'
+import { PolicyReference } from '@/components/legal/PolicyReference'
 import { Sparkles } from 'lucide-react'
 
 export type GeneratePreviewConsent = {
@@ -75,9 +75,9 @@ function GeneratePreviewActionComponent({
             {labels.required}
           </span>
           <span className="font-semibold text-slate-900">{labels.acknowledgement}</span>{' '}
-          <Link href="/privacy" className="font-semibold text-amber-800 underline underline-offset-2">
+          <PolicyReference className="font-semibold text-amber-800 underline underline-offset-2">
             {labels.privacyPolicy}
-          </Link>
+          </PolicyReference>
         </span>
       </label>
 

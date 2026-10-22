@@ -10,6 +10,9 @@ import { fetchPublishedLegalContentSnapshot } from '@/lib/published-legal-conten
 import type { PublishedLegalContentSnapshot } from '@/lib/published-legal-content-core'
 import { useI18n } from '@/lib/useI18n'
 import { NewsletterSignup } from '@/components/footer/NewsletterSignup'
+import dynamic from 'next/dynamic'
+
+const PolicyDialog = dynamic(() => import('@/components/legal/PolicyDialog').then(component => component.PolicyDialog), { ssr: false })
 
 type LegalModalType = 'privacy' | 'terms' | 'shipping' | 'refund' | 'safety' | 'impact' | 'faq' | 'ourStory' | null
 
@@ -331,15 +334,6 @@ export const Footer: React.FC = () => {
     return () => {
       active = false
       controller.abort()
-    }
-  }, [openLegalModal])
-
-  useEffect(() => {
-    if (!openLegalModal) return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previous
     }
   }, [openLegalModal])
 
@@ -677,155 +671,92 @@ export const Footer: React.FC = () => {
       ) : null}
 
       {openLegalModal ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-black/35 backdrop-blur-[3px]"
-            onClick={() => handleLegalModalChange(null)}
-          />
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={modalTitle}
-            className="relative z-10 max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-2xl sm:rounded-[32px] border border-white/40 bg-white/40 shadow-[0_40px_100px_rgba(0,0,0,0.18),0_12px_32px_rgba(0,0,0,0.10),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[200%]"
-          >
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent opacity-90"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 rounded-[32px] bg-gradient-to-b from-white/40 via-transparent to-white/10"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -top-12 left-1/3 h-36 w-64 rounded-full bg-amber-200/40 blur-3xl"
-            />
-
-            <button
-              type="button"
-              onClick={() => handleLegalModalChange(null)}
-              className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-black/8 text-gray-500 transition-all duration-150 hover:bg-black/12 hover:text-gray-800"
-              aria-label={t('common.close')}
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <div className="relative z-10 border-b border-black/8 px-6 py-5 sm:px-8">
-              <h2 className="text-2xl font-bold text-gray-900">{modalTitle}</h2>
-              {isOurStory || !modalEffectiveDate ? null : (
-                <p className="mt-0.5 text-sm text-gray-500">
-                  {t('footer.effectiveDate', { date: modalEffectiveDate })}
-                </p>
-              )}
-            </div>
-
-            <div className="relative z-10">
-              <div className="max-h-[62vh] space-y-6 overflow-y-auto px-6 py-6 text-sm leading-relaxed text-gray-700 [scrollbar-color:rgba(0,0,0,0.15)_transparent] [scrollbar-width:thin] sm:px-8">
-                {isFaq ? (
-                  <section className="space-y-5">
-                    <div className="rounded-2xl border border-amber-100/80 bg-amber-50/70 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                      <h3 className="text-sm font-bold uppercase tracking-[0.08em] text-amber-700">Quick Answers</h3>
-                      <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
-                        {quickAnswers.map((answer) => (
-                          <li key={answer} className="flex gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                            <span>{answer}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {faqSections.map((section, sectionIndex) => (
-                      <div key={section.title} className="space-y-3">
-                        <h3 className="flex items-center gap-2 text-base font-bold text-gray-900">
-                          <span className={`h-2.5 w-2.5 rounded-full ${section.accentClassName}`} />
-                          {section.title}
-                        </h3>
-                        <div className="space-y-3">
-                          {section.items.map((item, itemIndex) => {
-                            const itemKey = `${sectionIndex}-${itemIndex}`
-                            const isOpen = openFaqIndex === itemKey
-                            return (
-                              <div
-                                key={item.question}
-                                className="overflow-hidden rounded-2xl border border-black/8 bg-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-md"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenFaqIndex(isOpen ? null : itemKey)}
-                                  className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
-                                  aria-expanded={isOpen}
-                                >
-                                  <span className="text-sm font-semibold text-gray-900">{item.question}</span>
-                                  <ChevronDown
-                                    className={`h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 ${
-                                      isOpen ? 'rotate-180' : ''
-                                    }`}
-                                  />
-                                </button>
-                                {isOpen ? (
-                                  <div className="space-y-3 border-t border-black/6 px-4 py-4 text-sm leading-relaxed text-gray-700">
-                                    <p>{item.answer}</p>
-                                    {item.bullets ? (
-                                      <ul className="list-disc space-y-1 pl-5">
-                                        {item.bullets.map((bullet) => (
-                                          <li key={bullet}>{bullet}</li>
-                                        ))}
-                                      </ul>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </section>
-                ) : !legalContent && legalContentError ? (
-                  <div className="rounded-2xl border border-rose-100/80 bg-white/45 px-4 py-5 text-sm text-gray-600">
-                    Policy content could not be loaded. Close this window and try again.
-                  </div>
-                ) : !legalContent ? (
-                  <div className="rounded-2xl border border-amber-100/80 bg-white/45 px-4 py-5 text-sm text-gray-500">
-                    Loading policy...
-                  </div>
-                ) : isPrivacy ? (
-                  renderLegalSections(legalContent.privacy)
-                ) : isOurStory ? (
-                  renderLegalSections(legalContent.ourStory)
-                ) : isShipping ? (
-                  renderLegalSections(legalContent.shipping)
-                ) : isRefund ? (
-                  renderLegalSections(legalContent.refund)
-                ) : isSafety ? (
-                  renderLegalSections(legalContent.safety)
-                ) : isImpact ? (
-                  renderLegalSections(legalContent.impact)
-                ) : (
-                  renderLegalSections(legalContent.terms)
-                )}
+        <PolicyDialog title={modalTitle} effectiveDate={isOurStory ? '' : modalEffectiveDate ?? ''} t={t} onClose={() => handleLegalModalChange(null)}>
+          {isFaq ? (
+            <section className="space-y-5">
+              <div className="rounded-2xl border border-amber-100/80 bg-amber-50/70 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <h3 className="text-sm font-bold uppercase tracking-[0.08em] text-amber-700">Quick Answers</h3>
+                <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+                  {quickAnswers.map((answer) => (
+                    <li key={answer} className="flex gap-2">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                      <span>{answer}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute bottom-0 inset-x-0 h-10 bg-gradient-to-t from-white/60 to-transparent"
-              />
+              {faqSections.map((section, sectionIndex) => (
+                <div key={section.title} className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-base font-bold text-gray-900">
+                    <span className={`h-2.5 w-2.5 rounded-full ${section.accentClassName}`} />
+                    {section.title}
+                  </h3>
+                  <div className="space-y-3">
+                    {section.items.map((item, itemIndex) => {
+                      const itemKey = `${sectionIndex}-${itemIndex}`
+                      const isOpen = openFaqIndex === itemKey
+                      return (
+                        <div
+                          key={item.question}
+                          className="overflow-hidden rounded-2xl border border-black/8 bg-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-md"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setOpenFaqIndex(isOpen ? null : itemKey)}
+                            className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+                            aria-expanded={isOpen}
+                          >
+                            <span className="text-sm font-semibold text-gray-900">{item.question}</span>
+                            <ChevronDown
+                              className={`h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 ${
+                                isOpen ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+                          {isOpen ? (
+                            <div className="space-y-3 border-t border-black/6 px-4 py-4 text-sm leading-relaxed text-gray-700">
+                              <p>{item.answer}</p>
+                              {item.bullets ? (
+                                <ul className="list-disc space-y-1 pl-5">
+                                  {item.bullets.map((bullet) => (
+                                    <li key={bullet}>{bullet}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </section>
+          ) : !legalContent && legalContentError ? (
+            <div className="rounded-2xl border border-rose-100/80 bg-white/45 px-4 py-5 text-sm text-gray-600">
+              Policy content could not be loaded. Close this window and try again.
             </div>
-
-            <div className="relative z-10 flex justify-end border-t border-black/8 px-6 py-4 sm:px-8">
-              <button
-                type="button"
-                onClick={() => handleLegalModalChange(null)}
-                className="h-9 rounded-full border border-black/10 bg-black/6 px-5 text-sm font-semibold text-gray-700 transition-all duration-150 hover:bg-black/10 hover:text-gray-900"
-              >
-                {t('common.close')}
-              </button>
+          ) : !legalContent ? (
+            <div className="rounded-2xl border border-amber-100/80 bg-white/45 px-4 py-5 text-sm text-gray-500">
+              Loading policy...
             </div>
-          </div>
-        </div>
+          ) : isPrivacy ? (
+            renderLegalSections(legalContent.privacy)
+          ) : isOurStory ? (
+            renderLegalSections(legalContent.ourStory)
+          ) : isShipping ? (
+            renderLegalSections(legalContent.shipping)
+          ) : isRefund ? (
+            renderLegalSections(legalContent.refund)
+          ) : isSafety ? (
+            renderLegalSections(legalContent.safety)
+          ) : isImpact ? (
+            renderLegalSections(legalContent.impact)
+          ) : (
+            renderLegalSections(legalContent.terms)
+          )}
+        </PolicyDialog>
       ) : null}
     </>
   )

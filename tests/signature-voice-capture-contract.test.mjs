@@ -28,7 +28,7 @@ test('Signature Voice v3 is captured after Preview and bound through the owner-s
   assert.match(action, /isDataGenerationConsentChecked[\s\S]*useState\(false\)/)
   assert.match(action, /signatureVoiceAuthorization:\s*false/)
   assert.doesNotMatch(action, /isSignatureVoiceAuthorizationChecked|voiceAuthorizationRequired/)
-  assert.match(action, /href="\/privacy"/)
+  assert.match(action, /<PolicyReference[\s\S]*labels\.privacyPolicy/)
   assert.match(recorder, /export type PendingVoiceRecording =/)
   assert.match(recorder, /new File\(\[blob\]/)
   assert.match(recorder, /recorder\.onstop[\s\S]*onRecordingSelected\(\{ file, durationSeconds \}\)/)
