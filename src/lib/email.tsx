@@ -319,6 +319,8 @@ type SendOrderConfirmationEmailParams = {
   customerId?: string | null
   /** Face-swapped cover (long-lived signed URL); falls back to placeholder if absent */
   coverImageUrl?: string
+  /** Personalized title belonging to this cover, not the first receipt line. */
+  coverTitle?: string
 }
 
 export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEmailParams) {
@@ -352,6 +354,7 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
         items={params.items}
         address={params.address}
         coverImageUrl={params.coverImageUrl}
+        coverTitle={params.coverTitle}
         trackUrl={buildAbsoluteUrl(`/orders/${params.orderId}`)}
         materialNotice={materialNotice}
       />

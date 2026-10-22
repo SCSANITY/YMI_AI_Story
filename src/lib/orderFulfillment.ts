@@ -107,7 +107,7 @@ type CartItemForFinal = {
 }
 
 type OrderCoverLookupRow = {
-  creations: { preview_job_id: string | null } | null
+  creations: (NonNullable<CartItemForFinal['creations']> & { preview_job_id: string | null }) | null
 }
 
 type OrderItemCoverLookupRow = {
@@ -313,20 +313,23 @@ async function loadOrderItemsForFinal(orderId: string, cartItemIds?: string[]): 
 const EMAIL_COVER_URL_TTL_SECONDS = 60 * 60 * 24 * 365 // 1 year
 
 /**
- * Derive the face-swapped cover image URL for an order's first item, reusing the
+ * Derive the face-swapped cover and its title from the same order item, reusing the
  * order-detail cover logic: creation → preview_job → output page 0 → signed URL.
  * Returns undefined if no cover is available (email falls back to placeholder).
  * Shared by order-confirmation and logistics emails.
  */
-export async function loadOrderCoverUrl(orderId: string): Promise<string | undefined> {
+export async function loadOrderCover(orderId: string): Promise<{
+  coverImageUrl: string
+  coverTitle: string
+} | undefined> {
   const { data: items } = await supabaseAdmin
     .from('cart_items')
-    .select('creations:creations ( preview_job_id )')
+    .select('creations:creations ( preview_job_id, template_id, customize_snapshot, templates:templates ( name ) )')
     .eq('order_id', orderId)
 
-  const previewJobId = ((items ?? []) as unknown as OrderCoverLookupRow[])
-    .map((row) => row.creations?.preview_job_id)
-    .find((value): value is string => Boolean(value))
+  const creation = ((items ?? []) as unknown as OrderCoverLookupRow[])
+    .find((row) => Boolean(row.creations?.preview_job_id))?.creations
+  const previewJobId = creation?.preview_job_id
   if (!previewJobId) return undefined
 
   const { data: job } = await supabaseAdmin
@@ -346,7 +349,19 @@ export async function loadOrderCoverUrl(orderId: string): Promise<string | undef
   const { data: signed } = await supabaseAdmin.storage
     .from(bucket)
     .createSignedUrl(coverPage.storage_path, EMAIL_COVER_URL_TTL_SECONDS)
-  return signed?.signedUrl ?? undefined
+  if (!signed?.signedUrl) return undefined
+  return {
+    coverImageUrl: signed.signedUrl,
+    coverTitle: resolvePersonalizedBookTitle({
+      templateId: creation.template_id,
+      templateName: creation.templates?.name,
+      customizeSnapshot: creation.customize_snapshot,
+    }),
+  }
+}
+
+export async function loadOrderCoverUrl(orderId: string): Promise<string | undefined> {
+  return (await loadOrderCover(orderId))?.coverImageUrl
 }
 
 export type OrderItemWithCover = {
@@ -598,7 +613,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
             unitPrice: convertUsdToCurrency(Number(item.price_at_purchase ?? 0), normalizedCurrency),
           }))
 
-    const coverImageUrl = await loadOrderCoverUrl(orderId).catch(() => undefined)
+    const cover = await loadOrderCover(orderId).catch(() => undefined)
 
     await sendOrderConfirmationEmail({
       to: email,
@@ -608,7 +623,8 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       currency: normalizedCurrency,
       items: emailItems,
       customerId,
-      coverImageUrl,
+      coverImageUrl: cover?.coverImageUrl,
+      coverTitle: cover?.coverTitle,
       address: {
         firstName: String(shippingAddress?.firstName ?? ''),
         lastName: String(shippingAddress?.lastName ?? ''),

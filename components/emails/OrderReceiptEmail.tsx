@@ -30,6 +30,7 @@ type OrderReceiptEmailProps = {
   trackUrl?: string
   /** Real personalized cover image; falls back to the decorative placeholder */
   coverImageUrl?: string
+  coverTitle?: string
 }
 
 // Copy is kept at similar lengths on purpose — the four cards sit in a 2×2
@@ -85,6 +86,7 @@ export function OrderReceiptEmail({
   address,
   trackUrl,
   coverImageUrl,
+  coverTitle,
 }: OrderReceiptEmailProps) {
   const label = displayId || orderId
   return (
@@ -105,7 +107,7 @@ export function OrderReceiptEmail({
               <Img src={emailAsset('sparkles.png')} alt="" width="92" style={styles.coverFlank} />
             </td>
             <td>
-              <BookCoverCard coverImageUrl={coverImageUrl} />
+              <BookCoverCard coverImageUrl={coverImageUrl} title={coverTitle ?? ''} />
             </td>
             <td className="ym-hide-sm" style={styles.coverFlankCell}>
               <Img src={emailAsset('sparkles.png')} alt="" width="92" style={styles.coverFlank} />

@@ -267,6 +267,7 @@ export async function renderEmailTemplatePreview(
           trackUrl={orderUrl}
           materialNotice={{deadline:'2026-10-23T12:00:00Z',pendingVoice:1,url:orderUrl+'/materials'}}
           coverImageUrl={coverImageUrl}
+          coverTitle="The Secret Journey Through Eight Plants"
         />
       )
       break

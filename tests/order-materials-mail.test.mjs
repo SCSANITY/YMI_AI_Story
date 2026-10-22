@@ -41,6 +41,15 @@ test('a skipped confirmation replay does not read materials,issue a grant or sen
   const h=mailHarness(true);await h.api.sendOrderConfirmationEmail(input)
   assert.equal(h.reads.length,0);assert.equal(h.sent.length,0);assert.equal(h.events.length,1)
 })
+
+test('confirmation sender forwards the paired cover title without changing receipt items',async()=>{
+  const h=mailHarness()
+  const items=[{name:"Alston's Story",quantity:1,unitPrice:39},{name:"Sonia's Story",quantity:1,unitPrice:39}]
+  await h.api.sendOrderConfirmationEmail({...input,items,coverImageUrl:'https://example.test/sonia.webp',coverTitle:"Sonia's Story"})
+  assert.equal(h.sent[0].react.props.coverTitle,"Sonia's Story")
+  assert.equal(h.sent[0].react.props.coverImageUrl,'https://example.test/sonia.webp')
+  assert.equal(h.sent[0].react.props.items,items)
+})
 test('an actual confirmation resolves fresh materials only after idempotency;raw bearer is delivered but never persisted',async()=>{
   const h=mailHarness();await h.api.sendOrderConfirmationEmail(input)
   assert.deepEqual(h.reads.map(row=>row[0]),['read','issue'])
