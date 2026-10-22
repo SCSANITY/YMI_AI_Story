@@ -78,12 +78,14 @@ export default function CartPage() {
   } = useGlobalContext();
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation();
 
-  const [selectedIdsDraft, setSelectedIdsDraft] = useState<string[]>([]);
+  // Until the user changes selection, include every item as the cart hydrates.
+  const [selectedIdsDraft, setSelectedIdsDraft] = useState<string[] | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingCartAction>(null);
   const [cartActionError, setCartActionError] = useState<string | null>(null);
   const dedicationIds = useMemo(() => cart.map(item => item.creationId || item.personalization?.creationId || '').filter(Boolean), [cart]);
   const { choices: dedicationChoices } = useDedicationChoices(dedicationIds);
   const selectedIds = useMemo(() => {
+    if (selectedIdsDraft === null) return cart.map((item) => item.id);
     const cartIds = new Set(cart.map((item) => item.id));
     return selectedIdsDraft.filter((id) => cartIds.has(id));
   }, [cart, selectedIdsDraft]);
@@ -106,7 +108,10 @@ export default function CartPage() {
   };
 
   const toggleSelection = (id: string) => {
-    setSelectedIdsDraft(prev => prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]);
+    setSelectedIdsDraft(prev => {
+      const current = prev ?? cart.map(item => item.id);
+      return current.includes(id) ? current.filter(itemId => itemId !== id) : [...current, id];
+    });
   };
 
   const handleCheckout = async () => {
