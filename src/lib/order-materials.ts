@@ -10,6 +10,7 @@ export type MaterialItem = {
   can_edit_dedication: boolean
   voice_ready: boolean
   can_submit_voice: boolean
+  book?: { title: string; cover_url: string | null; cover_status: 'ready' | 'pending' | 'unavailable' }
 }
 export type OrderMaterials = { order_id: string; dedication_deadline: string; items: MaterialItem[] }
 export class MaterialError extends Error {
@@ -49,10 +50,21 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
       || (item.can_submit_voice && (item.package_type!=='supreme' || item.voice_ready))) {
       throw new MaterialError('materials_unavailable',503)
     }
+    let book: MaterialItem['book']
+    if (item.book!==undefined) {
+      const display=materialRecord(item.book)
+      if (typeof display.title!=='string' || !display.title.trim()
+        || (display.cover_url!==null && typeof display.cover_url!=='string')
+        || !['ready','pending','unavailable'].includes(String(display.cover_status))) {
+        throw new MaterialError('materials_unavailable',503)
+      }
+      book={title:display.title,cover_url:display.cover_url as string|null,
+        cover_status:display.cover_status as 'ready'|'pending'|'unavailable'}
+    }
     return { cart_item_id:materialUuid(item.cart_item_id),creation_id:materialUuid(item.creation_id),
       template_id:item.template_id,package_type:item.package_type,
       dedication:parseMaterialDedication(item.dedication),can_edit_dedication:item.can_edit_dedication,
-      voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice } satisfies MaterialItem
+      voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice,...(book?{book}:{}) } satisfies MaterialItem
   })
   if (new Set(items.map(item=>item.cart_item_id)).size!==items.length) throw new MaterialError('materials_unavailable',503)
   return { order_id:materialUuid(row.order_id),dedication_deadline:new Date(deadline).toISOString(),items }

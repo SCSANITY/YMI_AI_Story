@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { hasCompleteSignatureVoiceBinding } from '@/lib/purchase-configuration'
 import { type MaterialAccess, newMaterialCredential, materialAccessPath } from '@/lib/order-materials-access'
 import { MaterialError, materialUuid, parseOrderMaterials, parseMaterialDedication, parseDedicationWrite } from '@/lib/order-materials'
+import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
 
 function accessArgs(orderId: string,access: MaterialAccess) {
   return { p_order:materialUuid(orderId),p_customer:access.customerId,p_hash:access.tokenHash }
@@ -25,6 +27,25 @@ export async function loadOrderMaterials(orderId: string,access: MaterialAccess)
   const result=parseOrderMaterials(await rpc('materials_read',accessArgs(orderId,access)))
   if (result.order_id!==orderId) throw new MaterialError('materials_unavailable',503)
   return result
+}
+// Enrich only the already-authorized material lines, not a whole order/customer.
+// Mail and other material readers do not need thumbnail signing.
+export async function loadOrderMaterialsPage(orderId:string,access:MaterialAccess) {
+  const result=await loadOrderMaterials(orderId,access)
+  const ids=[...new Set(result.items.map(item=>item.creation_id))]
+  const {data,error}=await supabaseAdmin.from('creations')
+    .select('creation_id,template_id,customize_snapshot,preview_job_id,templates:templates(name)')
+    .in('creation_id',ids)
+  if (error || data?.length!==ids.length) throw new MaterialError('materials_unavailable',503)
+  const creations=new Map(data.map(row=>[row.creation_id,row]))
+  const covers=await createGeneratedPreviewCoverMap(data.map(row=>row.preview_job_id).filter((id):id is string=>typeof id==='string'))
+  return {...result,items:result.items.map(item=>{
+    const creation=creations.get(item.creation_id)!
+    const template=Array.isArray(creation.templates)?creation.templates[0]:creation.templates
+    const cover=getGeneratedPreviewCover(covers,creation.preview_job_id)
+    return {...item,book:{title:resolvePersonalizedBookTitle({templateId:creation.template_id,
+      templateName:template?.name,customizeSnapshot:creation.customize_snapshot}),cover_url:cover.url,cover_status:cover.status}}
+  })}
 }
 export async function loadOrderLineDedications(orderId: string,access: MaterialAccess) {
   return (await loadOrderMaterials(orderId,access)).items.map(item=>({

@@ -30,6 +30,10 @@ function harness({owner=null,rpcResult,queryResult,storage}={}) {
     'server-only':{},'node:crypto':crypto,
     'next/server':{NextResponse:{json:Response.json}},
     '@/lib/supabaseAdmin':{supabaseAdmin},
+    '@/lib/order-covers':{
+      createGeneratedPreviewCoverMap:async ids=>{calls.push({covers:ids});return new Map(ids.map(id=>[id,{url:'https://example.test/synthetic-cover.webp',status:'ready'}]))},
+      getGeneratedPreviewCover:(map,id)=>map.get(id)??{url:null,status:'unavailable'},
+    },
     '@/lib/checkout-owner':{ownerFilter:value=>value.ownerType==='anon'?{owner_type:'anon',column:'anon_session_id',value:value.anonSessionId}:{owner_type:'customer',column:'customer_id',value:value.customerId},resolveCheckoutOwner:async (_request,options)=>{calls.push({auth:options});return owner}},
     '@/lib/session':{getOrCreateAnonSession:async()=>{calls.push({session:true});return 'synthetic-session'}},
     '@/lib/email':{sendOtpEmail:async (...args)=>{sent.push(args)}},
@@ -142,12 +146,38 @@ test('write parsing rejects cross-origin,non-JSON,invalid JSON and streamed over
   await assert.rejects(m.readMaterialWrite(request({body:'x'.repeat(5000)})))
 })
 test('GET/prefetch only calls material read; private/no-store and narrowed DTO',async()=>{
-  const h=harness(),route=h.load('app/api/orders/[orderId]/materials/route.ts')
+  const h=harness({queryResult:()=>({data:[{creation_id:creation,template_id:'Birthdayboy_story',
+    customize_snapshot:{childName:'Alston'},preview_job_id:item,templates:{name:'Birthday Adventure'}}],error:null})})
+  const route=h.load('app/api/orders/[orderId]/materials/route.ts')
   const req=new Request(`https://example.test/api/orders/${order}/materials`,{headers:{authorization:'Bearer '+'a'.repeat(43)}})
   const result=await route.GET(req,context)
   assert.equal(result.status,200);assert.match(result.headers.get('cache-control'),/private, no-store/)
-  assert.equal((await result.json()).items.length,1)
-  assert.deepEqual(h.calls.map(x=>x.name),['materials_read'])
+  const data=await result.json()
+  assert.equal(data.items.length,1)
+  assert.equal(data.items[0].book.title,"Alston's Birthday Adventure")
+  assert.equal(data.items[0].book.cover_status,'ready')
+  assert.deepEqual(h.calls.filter(x=>x.name).map(x=>x.name),['materials_read'])
+  assert.equal(h.calls[0].name,'materials_read')
+  assert.deepEqual(Array.from(h.calls.find(x=>x.table==='creations').steps.find(x=>x[0]==='in')[2]),[creation])
+  assert.deepEqual(Array.from(h.calls.find(x=>x.covers).covers),[item])
+  assert.doesNotMatch(JSON.stringify(data),/childName|customize_snapshot|preview_job_id/)
+})
+
+test('denied scoped reads do not query book metadata or sign covers',async()=>{
+  const h=harness({rpcResult:()=>({data:null,error:{code:'42501',message:'materials_access_denied'}})})
+  const route=h.load('app/api/orders/[orderId]/materials/route.ts')
+  const result=await route.GET(new Request('https://example.test',{headers:{authorization:'Bearer '+'a'.repeat(43)}}),context)
+  assert.equal(result.status,403);assert.equal(h.calls.length,1)
+  assert.equal(h.calls[0].name,'materials_read')
+})
+
+test('book presentation survives explicit projection without leaking raw metadata',()=>{
+  const m=harness().load('src/lib/order-materials.ts'),data=dto()
+  data.items[0].book={title:"Sonia's Adventure",cover_url:null,cover_status:'unavailable',customize_snapshot:{private:true}}
+  const result=m.parseOrderMaterials(data)
+  assert.equal(result.items[0].book.title,"Sonia's Adventure")
+  assert.equal(result.items[0].book.cover_url,null)
+  assert.doesNotMatch(JSON.stringify(result),/customize_snapshot|private/)
 })
 test('dedication POST sends authorized hash/order/revision to atomic RPC',async()=>{
   const h=harness({rpcResult:()=>({data:{decision:'confirmed',body:'For you',revision:2},error:null})})

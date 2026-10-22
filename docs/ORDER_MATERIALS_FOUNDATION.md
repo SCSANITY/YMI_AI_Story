@@ -60,6 +60,16 @@ or order-email OTP. A Stripe Session ID remains read-only proof,not a write gran
 Dedicated forms save with expected revisions. Completion is explicit;it revokes
 links without shortening the48h dedication window. No scheduled reminders exist.
 
+Owner-approved07-C refinement:the page inherits the existing Navbar/logo/back
+control from AppShell and adds an explicit orders entry;no duplicate header or
+new design system. GET enriches only authorized material lines through the
+existing personalized-title and generated-Preview-cover authorities. The DTO
+projects only title/short-lived signed cover URL/status,not raw customization.
+Other readers do not sign thumbnails. Page,success/order notice and confirmation
+email use toUTCString(),which explicitly labels GMT (UTC);no browser-local
+unlabelled deadline. Covers reuse OrderCoverImage without an unrelated order-cover
+auth request;reloading the material read refreshes its signed URL.
+
 Recording reuses SignatureVoiceDialog,explicit synthetic-narration consent,
 private signing,reservation and byte/duration confirmation. Existing-file choice
 is enabled on this postpayment page only;selection stays local until consented

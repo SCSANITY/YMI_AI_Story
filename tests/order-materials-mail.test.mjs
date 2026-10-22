@@ -68,3 +68,16 @@ test('postpayment recording uses the existing explicit synthetic-narration conse
   assert.doesNotMatch(selection,/fetch\(|uploadUserAsset\(/)
   assert.match(selection,/onRecordingSelected/)
 })
+
+test('materials page reuses the global header,orders entry,cover and explicit email timezone',()=>{
+  const client=readFileSync(new URL('../components/orders/OrderMaterialsClient.tsx',import.meta.url),'utf8')
+  const shell=readFileSync(new URL('../components/AppShell.tsx',import.meta.url),'utf8')
+  const mail=readFileSync(new URL('../components/emails/OrderReceiptEmail.tsx',import.meta.url),'utf8')
+  assert.match(shell,/showGlobalNav \? <Navbar \/>/)
+  assert.doesNotMatch(shell.slice(shell.indexOf('const showGlobalNav'),shell.indexOf('const isHomePage')),/materials|orders/)
+  assert.match(client,/href="\/orders"/)
+  assert.match(client,/OrderCoverImage src=\{item.book\?\.cover_url\}/)
+  assert.doesNotMatch(client,/template_id\.replace|toLocaleString/)
+  assert.match(client,/dedication_deadline\)\.toUTCString\(\)/)
+  assert.match(mail,/materialNotice.deadline\)\.toUTCString\(\)/)
+})

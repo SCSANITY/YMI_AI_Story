@@ -1,7 +1,7 @@
 import { noStoreJson } from '@/lib/http-response'
 import { MaterialError, materialRecord, materialUuid } from '@/lib/order-materials'
 import { resolveMaterialAccess,readMaterialWrite } from '@/lib/order-materials-access'
-import { loadOrderMaterials,saveOrderDedication,bindOrderVoice,completeMaterialGrant } from '@/lib/order-materials-server'
+import { loadOrderMaterialsPage,saveOrderDedication,bindOrderVoice,completeMaterialGrant } from '@/lib/order-materials-server'
 
 export const runtime='nodejs'
 type Context={params:Promise<{orderId:string}>}
@@ -15,7 +15,7 @@ export async function GET(request: Request,context: Context) {
   try {
     const orderId=materialUuid((await context.params).orderId)
     const access=await resolveMaterialAccess(request)
-    return noStoreJson(await loadOrderMaterials(orderId,access))
+    return noStoreJson(await loadOrderMaterialsPage(orderId,access))
   } catch (error) {return errorResponse(error)}
 }
 export async function POST(request: Request,context: Context) {

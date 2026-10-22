@@ -7,6 +7,8 @@ import { parseOrderMaterials } from '@/lib/order-materials'
 import { uploadUserAsset } from '@/services/assets'
 import { useI18n } from '@/lib/useI18n'
 import { SIGNATURE_VOICE_CONSENT_VERSION } from '@/lib/signature-voice'
+import OrderCoverImage from '@/components/OrderCoverImage'
+import Link from 'next/link'
 
 const button='rounded-full bg-amber-800 px-5 py-3 text-sm font-bold text-white disabled:opacity-50'
 function DedicationEditor({item,save,busy}:{item:MaterialItem;save:(item:MaterialItem,body:string)=>Promise<void>;busy:boolean}) {
@@ -77,6 +79,8 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
     }catch(e){setError(e instanceof Error?e.message:'Unable to recover access.')}finally{setBusy(false)}
   }
   return <main className="mx-auto max-w-3xl space-y-6 px-5 py-12 text-slate-900">
+    {/* AppShell supplies the existing site Navbar/logo/back control on this route. */}
+    <Link href="/orders" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 underline">← Back to orders</Link>
     <h1 className="font-serif text-3xl font-bold">Your book&apos;s personal touches</h1>
     {error?<p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{error}</p>:null}
     {message?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-900">{message}</p>:null}
@@ -87,9 +91,13 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
         <button disabled={busy} className={button}>{challenge?'Verify and open materials':'Send verification code'}</button>
         {challenge?<button type="button" className="ml-3 text-sm underline" onClick={()=>setChallenge('')}>Use another email</button>:null}
       </form></section> : materials ? <>
-      <p className="text-sm leading-6">Dedication is optional and can be edited until {new Date(materials.dedication_deadline).toLocaleString('en-GB')}.{materials.items.some(item=>item.package_type==='supreme')?' Your recording can still be provided afterwards.':''}</p>
+      <p className="text-sm leading-6">Dedication is optional and can be edited until {new Date(materials.dedication_deadline).toUTCString()}.{materials.items.some(item=>item.package_type==='supreme')?' Your recording can still be provided afterwards.':''}</p>
       {materials.items.map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
-        <h2 className="font-serif text-xl">{item.template_id.replace(/_story$/,'').replaceAll('_',' ')}</h2>
+        <div className="flex items-center gap-4">
+          <OrderCoverImage src={item.book?.cover_url} status={item.book?.cover_status} alt={item.book?.title || 'Your personalized book'}
+            sizes="80px" className="h-20 w-20 shrink-0 rounded-xl" imageClassName="object-contain" placeholderLabel="Book cover"/>
+          <h2 className="min-w-0 break-words font-serif text-xl">{item.book?.title || 'Your personalized book'}</h2>
+        </div>
         <DedicationEditor key={`${item.cart_item_id}:${item.dedication.revision}`} item={item} save={save} busy={busy}/>
         {item.package_type==='supreme'?<div className="mt-5 border-t pt-4"><h3 className="font-semibold">Your Signature Voice recording</h3>
           {item.voice_ready?<p className="mt-2 text-sm">Recording received. For a replacement, please contact our team.</p>:<><p className="my-3 text-sm">Please provide your recording as soon as possible. Without it, completion of your Hardcover + Voice book will be delayed.</p><button className={button} disabled={busy} onClick={()=>{setVoiceItem(item);setRecording(null);setError('')}}>Record or upload now</button></>}
