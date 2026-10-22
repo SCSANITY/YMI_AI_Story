@@ -77,29 +77,31 @@ function MiniCartComponent({
     if (!open) return
     let frame = 0
     const updatePosition = () => {
+      const anchor = anchorRef.current
+      if (!anchor) return
+      const rect = anchor.getBoundingClientRect()
+      const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)
+      const left = window.innerWidth < 640
+        ? VIEWPORT_MARGIN
+        : Math.min(
+            Math.max(VIEWPORT_MARGIN, rect.right - width),
+            window.innerWidth - width - VIEWPORT_MARGIN
+          )
+      setPosition({ left, top: rect.bottom + 8, width })
+    }
+    const schedulePosition = () => {
       window.cancelAnimationFrame(frame)
-      frame = window.requestAnimationFrame(() => {
-        const anchor = anchorRef.current
-        if (!anchor) return
-        const rect = anchor.getBoundingClientRect()
-        const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)
-        const left = window.innerWidth < 640
-          ? VIEWPORT_MARGIN
-          : Math.min(
-              Math.max(VIEWPORT_MARGIN, rect.right - width),
-              window.innerWidth - width - VIEWPORT_MARGIN
-            )
-        setPosition({ left, top: rect.bottom + 8, width })
-      })
+      frame = window.requestAnimationFrame(updatePosition)
     }
 
+    // Position the portal before its first paint; only later events wait a frame.
     updatePosition()
-    window.addEventListener('resize', updatePosition)
-    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', schedulePosition)
+    window.addEventListener('scroll', schedulePosition, true)
     return () => {
       window.cancelAnimationFrame(frame)
-      window.removeEventListener('resize', updatePosition)
-      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', schedulePosition)
+      window.removeEventListener('scroll', schedulePosition, true)
     }
   }, [anchorRef, open])
 
