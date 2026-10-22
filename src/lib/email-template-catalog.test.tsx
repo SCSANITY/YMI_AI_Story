@@ -42,6 +42,15 @@ test('provider-owned and freeform families do not render misleading local previe
   }
 })
 
+test('order confirmation preview demonstrates the personalized title below the cover', async () => {
+  const html = await renderEmailTemplatePreview('order-confirmation', 'default', {
+    coverImageUrl: 'https://example.test/sophie-cover.webp',
+  })
+  const cover = html!.slice(html!.indexOf('https://example.test/sophie-cover.webp'), html!.indexOf('Your Order'))
+  assert.match(cover, /Sophie(?:'|&#x27;)s Secret Journey Through Eight Plants/)
+  assert.doesNotMatch(cover, /Personalized Book Cover/)
+})
+
 test('unpaid reminder preview uses the personalized child-name copy', async () => {
   const template = EMAIL_TEMPLATE_CATALOG.find((entry) => entry.id === 'unpaid-reminder')
   const html = await renderEmailTemplatePreview('unpaid-reminder')

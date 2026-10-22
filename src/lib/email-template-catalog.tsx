@@ -253,7 +253,7 @@ export async function renderEmailTemplatePreview(
           orderId="sample-order"
           displayId="YMI-2026-0903"
           items={[
-            { name: 'The Secret Journey Through Eight Plants', quantity: 1, unitPrice: 36 },
+            { name: "Sophie's Secret Journey Through Eight Plants", quantity: 1, unitPrice: 36 },
           ]}
           total={36}
           currency="USD"
@@ -267,7 +267,7 @@ export async function renderEmailTemplatePreview(
           trackUrl={orderUrl}
           materialNotice={{deadline:'2026-10-23T12:00:00Z',pendingVoice:1,url:orderUrl+'/materials'}}
           coverImageUrl={coverImageUrl}
-          coverTitle="The Secret Journey Through Eight Plants"
+          coverTitle="Sophie's Secret Journey Through Eight Plants"
         />
       )
       break
