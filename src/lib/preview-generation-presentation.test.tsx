@@ -8,6 +8,7 @@ import { PreviewPurchasePanel } from '@/components/personalize/PreviewPurchasePa
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro'
 import { PreviewActionBar } from '@/components/personalize/PreviewActionBar'
 import { GeneratePreviewAction } from '@/components/personalize/GeneratePreviewAction'
+import { packagePriceRowToModel } from './package-pricing'
 
 test('40-second estimate follows elapsed wall time, clamps safely, and has no completion signal', () => {
   assert.deepEqual(getPreviewGenerationEstimate(0), { countdownSeconds: 40, fraction: 0, stageIndex: 0 })
@@ -80,8 +81,9 @@ test('pending cover is inline, has a non-announcing estimate timer, and shows an
 test('edition cards use real full-card radio targets and are selectable while saving, not while generating', () => {
   const props = {
     value: 'basic' as const,
-    options: [{ value: 'basic' as const, title: 'Hardcover', subtitle: 'Printed book', image: '/personalize-editions/classic-portrait.svg', imageAlt: 'Hardcover', price: '$35.90' },
-      { value: 'supreme' as const, title: 'Hardcover + Voice', subtitle: 'Printed book and audio', image: '/personalize-editions/signature-voice.svg', imageAlt: 'Hardcover and voice', price: '$65.90', badge: 'Most Popular' }],
+    currency: 'USD' as const,
+    options: [{ value: 'basic' as const, title: 'Hardcover', subtitle: 'Printed book', image: '/personalize-editions/classic-portrait.svg', imageAlt: 'Hardcover', price: packagePriceRowToModel({ package_type: 'basic', list_price_usd: 35.90, row_version: 1 }) },
+      { value: 'supreme' as const, title: 'Hardcover + Voice', subtitle: 'Printed book and audio', image: '/personalize-editions/signature-voice.svg', imageAlt: 'Hardcover and voice', price: packagePriceRowToModel({ package_type: 'supreme', list_price_usd: 65.90, row_version: 1 }), badge: 'Most Popular' }],
     title: 'Choose your edition', voiceTitle: 'Voice', voiceBody: 'Record a sample', voiceReadyLabel: 'Voice ready', addVoiceLabel: 'Add voice', changeVoiceLabel: 'Change', privacyCopy: 'Private and secure. No third-party reuse.',
     isSavingEdition: true, editionError: null, voiceReady: false, voiceDurationSeconds: null,
     actions: null, onChange: async () => {}, onOpenVoice: () => {},

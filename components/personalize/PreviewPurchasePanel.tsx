@@ -4,6 +4,9 @@ import { memo, startTransition, useCallback, useState, type ReactNode } from 're
 import Image from 'next/image'
 import { Check, Mic2, ShieldCheck } from 'lucide-react'
 import type { PurchasePackageType } from '@/lib/purchase-configuration'
+import type { BookPackagePrice, DisplayCurrency } from '@/types'
+import { formatDisplayCurrency } from '@/lib/locale-pricing'
+import { getUiMessage as t } from '@/lib/i18n-messages'
 
 type EditionOption = {
   value: PurchasePackageType
@@ -11,13 +14,14 @@ type EditionOption = {
   subtitle: string
   image: string
   imageAlt: string
-  price: string
+  price: BookPackagePrice
   badge?: string
 }
 
 type PreviewPurchasePanelProps = {
   value: PurchasePackageType
   options: EditionOption[]
+  currency: DisplayCurrency
   title: string
   voiceTitle: string
   voiceBody: string
@@ -39,6 +43,7 @@ type PreviewPurchasePanelProps = {
 function PreviewPurchasePanelComponent({
   value,
   options,
+  currency,
   title,
   voiceTitle,
   voiceBody,
@@ -86,6 +91,10 @@ function PreviewPurchasePanelComponent({
           {options.map((option) => {
             const selected = option.value === selectedValue
             const imageFailed = failedImages.has(option.value)
+            const priceLabel = formatDisplayCurrency(option.price.effectivePriceUsd, currency)
+            const compareAtPriceLabel = option.price.salePriceUsd !== null
+              ? formatDisplayCurrency(option.price.listPriceUsd, currency)
+              : null
             return (
               <label
                 key={option.value}
@@ -99,7 +108,7 @@ function PreviewPurchasePanelComponent({
                   className="peer absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                   type="radio"
                   name="book-edition"
-                  aria-label={`${option.title}, ${option.subtitle}, ${option.price}`}
+                  aria-label={`${option.title}, ${option.subtitle}, ${priceLabel}${compareAtPriceLabel ? `, ${t('product.originalPrice', { price: compareAtPriceLabel })}` : ''}`}
                   value={option.value}
                   checked={selected}
                   onChange={() => handleEditionChange(option.value)}
@@ -128,7 +137,17 @@ function PreviewPurchasePanelComponent({
                     ) : null}
                   </span>
                   <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">{option.subtitle}</span>
-                  <span className="mt-0.5 block text-[13px] font-extrabold text-slate-950">{option.price}</span>
+                  <span className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="whitespace-nowrap text-sm font-extrabold text-amber-600">{priceLabel}</span>
+                    {compareAtPriceLabel ? (
+                      <s className="whitespace-nowrap text-[11px] font-semibold text-gray-400">{compareAtPriceLabel}</s>
+                    ) : null}
+                    {compareAtPriceLabel && option.price.discountPercent != null && option.price.discountPercent > 0 ? (
+                      <span className="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-extrabold text-white shadow-sm shadow-orange-300/30">
+                        -{option.price.discountPercent}%
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
                 <span className={`flex h-[22px] w-[22px] items-center justify-center rounded-full border ${selected ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300 text-transparent'}`} aria-hidden="true">
                   <Check className="h-3.5 w-3.5" />

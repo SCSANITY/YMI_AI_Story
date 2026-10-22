@@ -2749,7 +2749,7 @@ export default function PersonalizePage({
       subtitle: t('personalize.bookTypeBasicSubtitle'),
       image: '/personalize-editions/classic-portrait.svg',
       imageAlt: t('personalize.editionBasicImageAlt'),
-      price: formatDisplayCurrency(getBookPackagePrice(book, 'basic').effectivePriceUsd, displayCurrency),
+      price: getBookPackagePrice(book, 'basic'),
     },
     {
       value: 'supreme' as const,
@@ -2757,7 +2757,7 @@ export default function PersonalizePage({
       subtitle: t('personalize.bookTypeSupremeSubtitle'),
       image: '/personalize-editions/signature-voice.svg',
       imageAlt: t('personalize.editionSupremeImageAlt'),
-      price: formatDisplayCurrency(getBookPackagePrice(book, 'supreme').effectivePriceUsd, displayCurrency),
+      price: getBookPackagePrice(book, 'supreme'),
       badge: t('personalize.mostPopular'),
     },
   ] : [];
@@ -3171,6 +3171,7 @@ export default function PersonalizePage({
                     <PreviewPurchasePanel
                       value={purchaseBookType}
                       options={editionOptions}
+                      currency={displayCurrency}
                       title={t('personalize.bookType')}
                       voiceTitle={t('personalize.signatureVoiceTitle')}
                       voiceBody={t('personalize.signatureVoiceBody')}
