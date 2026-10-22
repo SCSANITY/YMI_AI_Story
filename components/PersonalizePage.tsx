@@ -2738,12 +2738,10 @@ export default function PersonalizePage({
     || (photo && preparedFaceFile && facePrepareStatus === 'ready')
   );
   const isFormReady = areChildDetailsReady && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
-  const fromPrice = book
-    ? Math.min(
-        getBookPackagePrice(book, 'basic').effectivePriceUsd,
-        getBookPackagePrice(book, 'supreme').effectivePriceUsd,
-      )
-    : 0;
+  const fromPackagePrice = book
+    ? [getBookPackagePrice(book, 'basic'), getBookPackagePrice(book, 'supreme')]
+        .reduce((lowest, price) => price.effectivePriceUsd < lowest.effectivePriceUsd ? price : lowest)
+    : null;
   const editionOptions = book ? [
     {
       value: 'basic' as const,
@@ -2954,7 +2952,11 @@ export default function PersonalizePage({
                           { icon: 'formats', label: t('personalize.productFactFormats') },
                         ]}
                         fromLabel={t('personalize.fromPrice')}
-                        priceLabel={formatDisplayCurrency(fromPrice, displayCurrency)}
+                        priceLabel={formatDisplayCurrency(fromPackagePrice?.effectivePriceUsd ?? 0, displayCurrency)}
+                        compareAtPriceLabel={fromPackagePrice?.salePriceUsd != null
+                          ? formatDisplayCurrency(fromPackagePrice.listPriceUsd, displayCurrency)
+                          : undefined}
+                        discountPercent={fromPackagePrice?.discountPercent}
                         ctaLabel={t('personalize.personalizeThisBook')}
                         floatingCtaLabel={t('product.personalize')}
                         faqHeading={t('personalize.aboutThisStory')}

@@ -20,6 +20,8 @@ type PersonalizeProductIntroProps = {
   facts: ProductFact[]
   fromLabel: string
   priceLabel: string
+  compareAtPriceLabel?: string
+  discountPercent?: number | null
   ctaLabel: string
   floatingCtaLabel?: string
   faqHeading: string
@@ -45,6 +47,8 @@ function PersonalizeProductIntroComponent({
   facts,
   fromLabel,
   priceLabel,
+  compareAtPriceLabel,
+  discountPercent,
   ctaLabel,
   floatingCtaLabel = ctaLabel,
   faqHeading,
@@ -135,8 +139,20 @@ function PersonalizeProductIntroComponent({
       </ul>
 
       <div className="mt-5 border-t border-slate-200 pt-4">
-        <p className="text-sm font-semibold text-slate-500">{fromLabel}</p>
-        <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{priceLabel}</p>
+        <div className="rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50/90 to-orange-50/80 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-800">{fromLabel}</p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
+            <p className="whitespace-nowrap text-2xl font-extrabold tracking-tight text-amber-600">{priceLabel}</p>
+            {compareAtPriceLabel ? (
+              <s className="whitespace-nowrap text-sm font-semibold text-gray-400">{compareAtPriceLabel}</s>
+            ) : null}
+            {compareAtPriceLabel && discountPercent != null && discountPercent > 0 ? (
+              <span className="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1 text-xs font-extrabold tracking-wide text-white shadow-sm shadow-orange-300/30">
+                -{discountPercent}%
+              </span>
+            ) : null}
+          </div>
+        </div>
         <Button
           ref={personalizeButtonRef}
           id={personalizeButtonId}

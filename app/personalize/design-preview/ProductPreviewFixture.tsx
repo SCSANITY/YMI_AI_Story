@@ -152,7 +152,9 @@ export function ProductPreviewFixture({ baseline }: { baseline: boolean }) {
                     },
                   ]}
                   fromLabel="From"
-                  priceLabel={formatDisplayCurrency(39, currency)}
+                  priceLabel={formatDisplayCurrency(PRICING.basic.effectivePriceUsd, currency)}
+                  compareAtPriceLabel={formatDisplayCurrency(PRICING.basic.listPriceUsd, currency)}
+                  discountPercent={PRICING.basic.discountPercent}
                   ctaLabel="Personalize this book"
                   floatingCtaLabel="Personalize"
                   faqHeading="About this story"
