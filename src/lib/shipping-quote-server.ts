@@ -1,5 +1,6 @@
 import { DEFAULT_EXCHANGE_RATES } from '@/lib/i18n-config'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { applyShippingPricingRule } from '@/lib/shipping-pricing'
 
 type ShippingMethodRow = {
   method_code: string
@@ -130,23 +131,6 @@ function resolveRegionKey(countryCode: string, address: Record<string, unknown>)
   return SOUTH_CHINA_KEYWORDS.some((keyword) => haystack.includes(keyword.toUpperCase()))
     ? 'CN-South'
     : 'CN-Other'
-}
-
-function applyPricingRule(baseCostHkd: number, rule: PricingRuleRow | null) {
-  if (!rule) return baseCostHkd
-  const fuel = numeric(rule.fuel_surcharge_percent) / 100
-  const margin = numeric(rule.margin_percent) / 100
-  const discount = numeric(rule.discount_percent) / 100
-  const fxAdjustment = numeric(rule.fx_adjustment_percent) / 100
-  const handling = numeric(rule.handling_fee_hkd)
-  const minCharge = numeric(rule.min_charge_hkd)
-
-  let amount = baseCostHkd * (1 + fuel)
-  amount += handling
-  amount *= 1 + margin
-  amount *= Math.max(0, 1 - discount)
-  amount *= 1 + fxAdjustment
-  return Math.max(minCharge, amount)
 }
 
 function choosePricingRule(rules: PricingRuleRow[], methodCode: string, zoneCode: string) {
@@ -280,7 +264,8 @@ export async function calculateShippingQuote(
         if (!rate) return null
         const baseCostHkd = numeric(rate.base_cost_hkd)
         const rule = choosePricingRule(rules, method.method_code, zone.zone_code)
-        const finalCostHkd = applyPricingRule(baseCostHkd, rule)
+        const finalCostHkd = applyShippingPricingRule(baseCostHkd, rule)
+        const originalCostHkd = applyShippingPricingRule(baseCostHkd, rule ? { ...rule, discount_percent: 0 } : null)
         const amountUsd = Math.max(0, finalCostHkd / HKD_TO_USD_RATE)
         const estimatedDelivery =
           method.method_code === 'speedy' ? 'Fast express delivery' : 'Standard postal delivery'
@@ -307,6 +292,8 @@ export async function calculateShippingQuote(
             city,
             postalCode,
             baseCostHkd,
+            originalCostHkd,
+            originalShippingAmountUsd: Math.max(0, originalCostHkd / HKD_TO_USD_RATE),
             finalCostHkd,
             sourceCurrency: 'HKD',
             systemCurrency: 'USD',

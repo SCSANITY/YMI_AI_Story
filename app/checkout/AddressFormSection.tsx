@@ -4,9 +4,10 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/Button';
-import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
+import { CheckoutCurrency } from '@/lib/locale-pricing';
 import { RECIPIENT_ADDRESS_LIMITS, recipientAddressIssue } from '@/lib/shipping-address';
 import { CheckoutEmailOwnershipHint } from './CheckoutEmailOwnershipHint';
+import { ShippingPrice } from './ShippingPrice';
 
 type ShippingMethodCode = 'standard' | 'speedy';
 
@@ -301,11 +302,6 @@ function AddressFormSectionComponent({
     );
   }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
 
-  const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
-  const formattedShipping = useMemo(
-    () => formatCurrencyAmount(shippingAmountUsd, selectedCurrency),
-    [selectedCurrency, shippingAmountUsd]
-  );
   const canUseShippingQuote = shippingQuote.status === 'available' && Boolean(selectedShippingOption);
 
   useEffect(() => {
@@ -1003,7 +999,7 @@ function AddressFormSectionComponent({
             {shippingQuote.status === 'loading'
               ? t('checkout.shippingCalculating')
               : shippingQuote.status === 'available'
-              ? formattedShipping
+              ? <ShippingPrice amountUsd={selectedShippingOption?.amountUsd ?? 0} snapshot={selectedShippingOption?.snapshot} currency={selectedCurrency} />
               : shippingQuote.status === 'missing'
               ? t('checkout.shippingPending')
               : t('checkout.shippingUnavailable')}
@@ -1037,8 +1033,8 @@ function AddressFormSectionComponent({
                           : t('checkout.standardShippingDescription')}
                       </div>
                     </div>
-                    <div className="whitespace-nowrap text-sm font-bold text-amber-700">
-                      {formatCurrencyAmount(option.amountUsd, selectedCurrency)}
+                    <div className="max-w-[55%] text-sm font-bold text-amber-700">
+                      <ShippingPrice amountUsd={option.amountUsd} snapshot={option.snapshot} currency={selectedCurrency} />
                     </div>
                   </div>
                   {option.estimatedDelivery ? (

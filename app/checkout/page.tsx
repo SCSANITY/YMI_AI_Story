@@ -1473,6 +1473,9 @@ function CheckoutPageContent() {
           estimatedDelivery={selectedShippingOption?.estimatedDelivery}
           discountTotalUsd={discountTotalUsd}
           shippingDiscountTotalUsd={shippingDiscountTotalUsd}
+          shippingAmountUsd={shippingAmountUsd}
+          shippingRateSnapshot={selectedShippingOption?.snapshot}
+          currency={selectedCurrency}
           formattedSubtotal={formattedSubtotal}
           formattedShipping={formattedShipping}
           formattedNetShipping={formattedNetShipping}

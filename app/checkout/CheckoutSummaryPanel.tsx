@@ -1,4 +1,6 @@
 'use client';
+import type { CheckoutCurrency } from '@/lib/locale-pricing';
+import { ShippingPrice } from './ShippingPrice';
 
 type ShippingQuoteStatus = 'idle' | 'missing' | 'loading' | 'available' | 'unavailable' | 'error';
 
@@ -10,6 +12,9 @@ type CheckoutSummaryPanelProps = {
   estimatedDelivery?: string | null;
   discountTotalUsd: number;
   shippingDiscountTotalUsd: number;
+  shippingAmountUsd: number;
+  shippingRateSnapshot?: Record<string, unknown> | null;
+  currency: CheckoutCurrency;
   formattedSubtotal: string;
   formattedShipping: string;
   formattedNetShipping: string;
@@ -27,6 +32,9 @@ export function CheckoutSummaryPanel({
   estimatedDelivery,
   discountTotalUsd,
   shippingDiscountTotalUsd,
+  shippingAmountUsd,
+  shippingRateSnapshot,
+  currency,
   formattedSubtotal,
   formattedShipping,
   formattedNetShipping,
@@ -60,14 +68,16 @@ export function CheckoutSummaryPanel({
           </span>
         </div>
         {showShipping ? (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span>{t('checkout.shipping')}</span>
             <span className={`text-right font-semibold ${
               shippingStatus === 'unavailable' || shippingStatus === 'error'
                 ? 'text-red-500'
                 : 'text-gray-900'
             }`}>
-              {shippingLabel}
+              {shippingStatus === 'available' ? (
+                <ShippingPrice amountUsd={shippingAmountUsd} snapshot={shippingRateSnapshot} currency={currency} formattedAmount={shippingLabel} />
+              ) : shippingLabel}
             </span>
           </div>
         ) : null}
