@@ -12,7 +12,7 @@ function accessArgs(orderId: string,access: MaterialAccess) {
 function failure(error: {code?: string;message?: string}): never {
   const message=error.message ?? ''
   if (error.code==='42501' || message.includes('materials_access_denied')) throw new MaterialError('material_access_denied',403)
-  if (error.code==='40001') throw new MaterialError('dedication_revision_conflict',409)
+  if (error.code==='40001' || error.code==='PT409') throw new MaterialError('dedication_revision_conflict',409)
   if (message.includes('materials_dedication_closed')) throw new MaterialError('dedication_closed',409)
   if (message.includes('materials_voice_not_unbound')) throw new MaterialError('voice_already_bound',409)
   if (message.includes('materials_voice_') || error.code==='23514') throw new MaterialError('invalid_material',400)

@@ -66,7 +66,7 @@ function parseCodeMutation(body: Record<string, unknown>, includeCode: boolean) 
 }
 
 function rpcErrorResponse(error: { code?: string; message?: string }) {
-  if (error.code === '23505' || error.code === '40001') {
+  if (error.code === '23505' || error.code === '40001' || error.code === 'PT409') {
     return jsonNoStore({ error: error.message || 'The KOL Code changed or is already reserved' }, 409)
   }
   if (error.code === 'P0002') {

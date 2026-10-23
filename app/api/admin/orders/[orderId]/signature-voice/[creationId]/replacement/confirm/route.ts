@@ -203,7 +203,7 @@ export async function POST(
       )
     }
     await discardReplacementUpload(input.newAssetId, input.storagePath, message)
-    const conflict = error?.code === '40001' || /changed|expired/i.test(message)
+    const conflict = error?.code === '40001' || error?.code === 'PT409' || /changed|expired/i.test(message)
     return jsonNoStore({ error: message }, { status: conflict ? 409 : 400 })
   }
 

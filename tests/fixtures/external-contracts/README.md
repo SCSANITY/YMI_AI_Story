@@ -111,3 +111,6 @@ review provenance, not the current upstream fixture identity.
   from private Database5ff4cebe0afb797b1e9d3edfcb5fb3f441a60d61. Offline/not applied;
   wraps retained print authorities with order-lock/revision/deadline fences and
   a service-only historical effective-line read.07-B fixture remains unchanged.
+
+- SUPABASE-CPU-001 adds the pending 23-function non-retryable business-conflict repair;
+  the byte-exact SQL mirror is not evidence of production execution.

@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       p_expected_revision: expectedRevision, p_decision: decision, p_body: body,
     })
     if (error || !data) {
-      const conflict = error?.code === '40001' || error?.code === '55000'
+      const conflict = error?.code === '40001' || error?.code === 'PT409' || error?.code === '55000'
       return NextResponse.json({ error: conflict ? 'Dedication changed. Reload and try again.' : 'Unable to save dedication' }, { status: conflict ? 409 : 500 })
     }
     return NextResponse.json({ choice: { creationId, decision: data.decision, body: data.body, revision: Number(data.revision) } }, {

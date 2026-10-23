@@ -22,7 +22,7 @@ export async function saveOrderLogistics(order: LogisticsOrder, adminId: string,
   const { data, error } = await supabaseAdmin.rpc('lg_001_save_order_logistics', {
     p_order_id: order.order_id, p_admin_id: adminId, p_expected_updated_at: expectedUpdatedAt, p_patch: patch,
   })
-  if (error) throw new Error(error.code === '40001' ? 'Order changed; reload before saving' : 'Logistics update rejected; no order changes were saved')
+  if (error) throw new Error((error.code === '40001' || error.code === 'PT409') ? 'Order changed; reload before saving' : 'Logistics update rejected; no order changes were saved')
   const result = data as { order: LogisticsOrder; statusEventId: string; previousStatus: string; statusChanged: boolean; trackingDetailsChanged: boolean }
   // Use the committed snapshot, not a second read that could observe another writer.
   const committedOrder = Object.fromEntries(LOGISTICS_ORDER_SELECT.split(',').map((key) => [key, result.order[key as keyof LogisticsOrder]])) as LogisticsOrder
