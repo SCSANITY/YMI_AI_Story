@@ -1,3 +1,12 @@
+export function parseGeneralMailDraftVersion(value: unknown): string | null {
+  if (typeof value !== 'string' || !value || !Number.isFinite(new Date(value).getTime())) {
+    return null
+  }
+  // PostgreSQL versions can carry microseconds. Date.toISOString() truncates
+  // them to milliseconds and makes an unchanged draft fail its exact CAS.
+  return value
+}
+
 export function classifyGeneralMailError(error: unknown, fallback: string) {
   const detail = error instanceof Error ? error.message : fallback
   if (detail.includes('not_found') || detail.includes('not found')) {

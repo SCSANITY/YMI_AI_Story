@@ -1,6 +1,6 @@
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
-import { classifyGeneralMailError } from '@/lib/general-mail-api'
+import { classifyGeneralMailError, parseGeneralMailDraftVersion } from '@/lib/general-mail-api'
 import {
   buildGeneralMailAttachmentPath,
   normalizeGeneralMailAttachmentInput,
@@ -22,10 +22,10 @@ export async function POST(
     ? String((body as Record<string, unknown>).attachmentId ?? '')
     : ''
   const expectedUpdatedAt = body && typeof body === 'object'
-    ? String((body as Record<string, unknown>).expectedUpdatedAt ?? '')
-    : ''
+    ? parseGeneralMailDraftVersion((body as Record<string, unknown>).expectedUpdatedAt)
+    : null
   if (!isUuid(attachmentId)) return jsonNoStore({ error: 'Invalid attachment id' }, 400)
-  if (!Number.isFinite(new Date(expectedUpdatedAt).getTime())) {
+  if (!expectedUpdatedAt) {
     return jsonNoStore({ error: 'Expected draft version is required' }, 400)
   }
 
@@ -39,7 +39,7 @@ export async function POST(
     const upload = await registerGeneralMailAttachmentUpload({
       attachmentId,
       messageId,
-      expectedUpdatedAt: new Date(expectedUpdatedAt).toISOString(),
+      expectedUpdatedAt,
       adminCustomerId: admin.customer_id,
       input,
       storagePath,

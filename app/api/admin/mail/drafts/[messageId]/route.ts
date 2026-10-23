@@ -1,6 +1,6 @@
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
-import { classifyGeneralMailError } from '@/lib/general-mail-api'
+import { classifyGeneralMailError, parseGeneralMailDraftVersion } from '@/lib/general-mail-api'
 import { normalizeGeneralMailDraftInput } from '@/lib/general-mail'
 import {
   deleteGeneralMailDraft,
@@ -9,12 +9,6 @@ import {
 } from '@/lib/general-mail-server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/support-ticket'
-
-function parseExpectedUpdatedAt(value: unknown) {
-  if (typeof value !== 'string') return null
-  const parsed = new Date(value)
-  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null
-}
 
 export async function GET(
   _request: Request,
@@ -73,7 +67,7 @@ export async function PATCH(
   if (!isUuid(messageId)) return jsonNoStore({ error: 'Invalid message id' }, 400)
   const body = await request.json().catch(() => null)
   const expectedUpdatedAt = body && typeof body === 'object'
-    ? parseExpectedUpdatedAt((body as Record<string, unknown>).expectedUpdatedAt)
+    ? parseGeneralMailDraftVersion((body as Record<string, unknown>).expectedUpdatedAt)
     : null
   if (!expectedUpdatedAt) return jsonNoStore({ error: 'Expected draft version is required' }, 400)
 
@@ -103,7 +97,7 @@ export async function DELETE(
   if (!isUuid(messageId)) return jsonNoStore({ error: 'Invalid message id' }, 400)
   const body = await request.json().catch(() => null)
   const expectedUpdatedAt = body && typeof body === 'object'
-    ? parseExpectedUpdatedAt((body as Record<string, unknown>).expectedUpdatedAt)
+    ? parseGeneralMailDraftVersion((body as Record<string, unknown>).expectedUpdatedAt)
     : null
   if (!expectedUpdatedAt) return jsonNoStore({ error: 'Expected draft version is required' }, 400)
 
