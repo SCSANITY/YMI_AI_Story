@@ -4,6 +4,9 @@ import { createRoot } from 'react-dom/client'
 import { AddressFormSection } from '../../app/checkout/AddressFormSection'
 import { CheckoutSummaryPanel } from '../../app/checkout/CheckoutSummaryPanel'
 import { ShippingDiscountControl } from '../../components/admin/sections/discounts/ShippingDiscountControl'
+import { DiscountManagementSection } from '../../components/admin/sections/DiscountManagementSection'
+import { DiscountSectionTabs } from '../../components/admin/sections/discounts/DiscountSectionTabs'
+import { AdminPage, AdminPageHeader } from '../../components/admin/AdminUi'
 import { formatCurrencyAmount } from '../../src/lib/locale-pricing'
 import { getUiMessage as t } from '../../src/lib/i18n-messages'
 
@@ -36,8 +39,16 @@ function Preview() {
           formattedSubtotal={formatCurrencyAmount(39, currency)} formattedShipping={formatCurrencyAmount(shipping, currency)} formattedNetShipping={formatCurrencyAmount(free ? 0 : shipping, currency)}
           formattedDiscount={formatCurrencyAmount(0, currency)} formattedShippingDiscount={formatCurrencyAmount(free ? shipping : 0, currency)} formattedTotal={formatCurrencyAmount(39 + (free ? 0 : shipping), currency)} t={t} />
       </div>
-      <section className="ymi-admin-theme mt-8 rounded-3xl p-3" aria-label="Admin shipping settings"><ShippingDiscountControl /></section>
+      <p className="mt-8"><a href="/admin/discounts" className="font-semibold text-amber-800 underline">Open Admin Discounts preview</a></p>
     </main>
   )
 }
-createRoot(document.getElementById('root')).render(<Preview />)
+function AdminPreview() {
+  const activeSection = new URLSearchParams(location.search).get('view') === 'shipping' ? 'shipping' : 'instruments'
+  return <main className="ymi-admin-theme min-h-dvh p-4 sm:p-8"><AdminPage className="mx-auto max-w-6xl space-y-5">
+    <AdminPageHeader eyebrow="Commercial tools" title="Discounts" />
+    <DiscountSectionTabs activeSection={activeSection} />
+    {activeSection === 'shipping' ? <ShippingDiscountControl /> : <DiscountManagementSection />}
+  </AdminPage></main>
+}
+createRoot(document.getElementById('root')).render(location.pathname === '/admin/discounts' ? <AdminPreview /> : <Preview />)

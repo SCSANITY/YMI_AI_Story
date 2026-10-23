@@ -11,8 +11,11 @@ import { shippingHarness } from './helpers/shipping-discount-harness.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const out = path.join(root, '.next/shipping-discount-preview')
 fs.mkdirSync(out, { recursive: true })
+const linkStub = path.join(out, 'link-stub.jsx')
+fs.writeFileSync(linkStub, 'import React from "react";export default function Link(props){return <a {...props}/>;}')
 await esbuild.build({ entryPoints: [path.join(root, 'tests/fixtures/shipping-discount-preview.jsx')], bundle: true, format: 'iife',
   outfile: path.join(out, 'fixture.js'), jsx: 'automatic', tsconfig: path.join(root, 'tsconfig.json'),
+  alias: { 'next/link': linkStub },
   nodePaths: [path.join(root, 'node_modules')], define: { 'process.env.NODE_ENV': '"development"' }, logLevel: 'error' })
 const css = await postcss([tailwind({ base: root })]).process(fs.readFileSync(path.join(root, 'app/globals.css'), 'utf8'), { from: path.join(root, 'app/globals.css') })
 fs.writeFileSync(path.join(out, 'fixture.css'), css.css)
@@ -26,6 +29,8 @@ http.createServer(async (req, res) => {
         let body = ''; for await (const chunk of req) body += chunk
         response = await h.load('app/api/admin/shipping-discount/route.ts').PATCH(new Request('http://localhost' + pathname, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body }))
       } else response = await h.load('app/api/admin/shipping-discount/route.ts').GET()
+    } else if (pathname === '/api/admin/discounts' && req.method === 'GET') {
+      response = Response.json({ instruments: [] })
     } else if (pathname === '/api/checkout/shipping-quote') {
       let body = ''; for await (const chunk of req) body += chunk
       response = await h.load('app/api/checkout/shipping-quote/route.ts').POST(new Request('http://localhost' + pathname, { method: 'POST', headers: { 'content-type': 'application/json' }, body }))
@@ -39,7 +44,7 @@ http.createServer(async (req, res) => {
       res.setHeader('Content-Type', pathname.endsWith('.css') ? 'text/css' : 'text/javascript')
       res.end(fs.readFileSync(path.join(out, pathname.slice(1)))); return
     }
-    if (pathname !== '/') { res.writeHead(404).end(); return }
+    if (pathname !== '/' && pathname !== '/admin/discounts') { res.writeHead(404).end(); return }
     res.setHeader('Content-Type', 'text/html')
     res.end('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shipping discount · local fixture</title><link rel="stylesheet" href="/fixture.css"></head><body style="background:#fffaf2"><div id="root"></div><script src="/fixture.js"></script></body></html>')
   } catch (error) { console.error(error); res.writeHead(500).end('Local fixture failed') }

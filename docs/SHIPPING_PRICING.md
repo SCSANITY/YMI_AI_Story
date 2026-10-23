@@ -4,7 +4,11 @@
 percent **off**: 60 means the customer pays 40%, and 0 removes the promotion.
 There is no hardcoded customer discount, separate settings row or schema migration.
 
-Admin **Discounts → Shipping discount** reads all existing rules and writes only
+Admin **Discounts** has separate **Promo codes & vouchers** (the default) and
+**Shipping discount** sections. The former keeps its existing creation/management
+workspace;`/admin/discounts?view=shipping` opens only shipping controls. The
+selected section is reflected in the URL,so refresh/back keep normal navigation.
+Unselected controls are not mounted or fetched. The shipping section reads all existing rules and writes only
 their `discount_percent`, in one statement, including disabled rules. The rate is
 an integer from 0 to 100. Mixed existing rates are shown as mixed until an Admin
 chooses a uniform value. Loading never writes or activates a promotion. New rules

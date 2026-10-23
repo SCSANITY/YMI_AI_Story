@@ -9,7 +9,6 @@ import {
   AdminPanel,
 } from '@/components/admin/AdminUi'
 import { DiscountCreator } from '@/components/admin/sections/discounts/DiscountCreator'
-import { ShippingDiscountControl } from '@/components/admin/sections/discounts/ShippingDiscountControl'
 import { DiscountInstrumentCard } from '@/components/admin/sections/discounts/DiscountInstrumentCard'
 import {
   isDiscountInstrumentRow,
@@ -88,7 +87,6 @@ export function DiscountManagementSection() {
 
   return (
     <div className="space-y-4">
-      <ShippingDiscountControl />
       <DiscountCreator onCreated={handleCreated} />
 
       <AdminPanel className="p-5">
