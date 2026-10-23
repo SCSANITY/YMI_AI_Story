@@ -36,6 +36,7 @@ const en: MessageDictionary = {
   'product.voiceEditionGallery3': 'Hardcover + Voice: meet the Voice Edition',
   'product.voiceEditionGallery4': 'Hardcover + Voice: recharge and customize audio',
   'product.voiceEditionGallery5': 'Hardcover + Voice: record and replay your voice',
+  'product.editionComparisonAlt': 'Hardcover and Hardcover + Voice feature comparison',
   'product.basicFeature1': 'Rigid hardcover boards',
   'product.basicFeature2': 'Thick pages, strong spine',
   'product.basicFeature3': 'Gift-ready presentation',

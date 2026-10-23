@@ -16,6 +16,9 @@ there is no separate price configuration or purchase path here.
   audio and word timings together when approved recordings arrive; no generation
   or microphone access is part of this module.
 - `EditionCards`: independent gallery selection per edition, shared price authority.
+  `edition-definitions.ts` is the shared gallery/copy/icon authority;
+  `EditionPrice` preserves Catalog prices and the Admin display-percent override.
+  Preview details may append `EDITION_COMPARISON_IMAGE`; C stays five frames.
   Visible galleries loop their five images every four seconds. Offscreen cards,
   background tabs and reduced-motion preferences pause autoplay; desktop hover
   and keyboard focus pause that card. Manual selection restarts the interval.
@@ -25,6 +28,8 @@ there is no separate price configuration or purchase path here.
 Assets under `/customize-product/v1/` are public, versioned demo assets, served
 with a one-year immutable cache header. Publish replacement bytes at a new URL
 (for example `/customize-product/v2/`), never overwrite a cached v1 URL.
+WEB-UIUX-001/17 uses v2 only for the replaced Voice image05 and the new
+Preview-only comparison image. The other nine gallery images retain v1 URLs.
 Images use responsive lazy loading; no video, customer media or additional
 backend service is introduced. The banner promise reuses the existing cache and
 does not delay the first screen. Actual conversion/checkout logic is unchanged.
