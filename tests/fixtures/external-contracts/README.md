@@ -111,3 +111,8 @@ review provenance, not the current upstream fixture identity.
   from private Database5ff4cebe0afb797b1e9d3edfcb5fb3f441a60d61. Offline/not applied;
   wraps retained print authorities with order-lock/revision/deadline fences and
   a service-only historical effective-line read.07-B fixture remains unchanged.
+
+- PREVIEW-UIUX-001/P0 adds `20261023_150000_preview_version_durable_group.sql`
+  from Database `ab55209ebbe2dddd93d7ed0a6f9092b607a508e0`, byte-identical to
+  that Git blob. It freezes the proposed service-only group reader/root quota;
+  it is NOT evidence of production application.

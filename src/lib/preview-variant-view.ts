@@ -2,6 +2,7 @@ import type { BookPresentation } from '@/lib/book-presentation'
 import type { PreviewDisplayAssets } from '@/lib/preview-book-presentation'
 
 export type PreviewVariantView = {
+  creationId: string
   jobId: string
   status: 'generating' | 'ready' | 'failed'
   pages: string[]

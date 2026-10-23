@@ -63,6 +63,8 @@ import {
 } from '@/lib/preview-book-presentation';
 import { previewImageIdentity } from '@/lib/preview-image-continuity';
 import type { PreviewVariantView } from '@/lib/preview-variant-view';
+import { usePreviewVersionGroup } from '@/components/personalize/usePreviewVersionGroup';
+import { mergeRestoredPreviewVersions } from '@/lib/preview-version-group';
 import { emitYmiTrackingEvent, resolveTrackingFormat } from '@/lib/tracking-policy';
 import { normalizeStoryLanguage } from '@/lib/story-language';
 import { usePreviewController } from '@/components/personalize/usePreviewController';
@@ -399,6 +401,8 @@ export default function PersonalizePage({
   const previewVariantGenerationRef = useRef(false);
   const previewVariantPhotoUrlsRef = useRef<Set<string>>(new Set());
   const [creationId, setCreationId] = useState<string | null>(null);
+  const restoredPreviewGroup = usePreviewVersionGroup(creationId, previewJobId,
+    user?.customerId ?? 'anon', stage === 'PREVIEW');
   const creationIdRef = useRef<string | null>(null);
   const previewJobIdRef = useRef<string | null>(null);
   const [previewImageErrors, setPreviewImageErrors] = useState<Set<string>>(() => new Set());
@@ -441,6 +445,7 @@ export default function PersonalizePage({
       selectPreviewJobId(previewJobId);
       setPreviewVariants([
         {
+          creationId,
           jobId: previewJobId,
           status: previewUrl || previewPages[0] ? 'ready' : 'generating',
           pages: previewPages,
@@ -454,10 +459,15 @@ export default function PersonalizePage({
           countsTowardLimit: false,
         },
       ]);
-      setPreviewVariantSessionCount(0);
       setPreviewVariantError(null);
     }
   }, [creationId, previewJobId, previewPages, previewBookPresentation, previewUrl, photoPreview, photoAssetId, photoStoragePath, faceImageUrl, selectPreviewJobId, setPreviewVariants]);
+
+  useEffect(() => {
+    if (!restoredPreviewGroup.ready || !restoredPreviewGroup.group) return;
+    setPreviewVariantSessionCount(restoredPreviewGroup.group.changeCount);
+    setPreviewVariants(current => mergeRestoredPreviewVersions(current, restoredPreviewGroup.group!.versions));
+  }, [restoredPreviewGroup.ready, restoredPreviewGroup.group, setPreviewVariants]);
 
   useEffect(() => {
     const photoUrls = previewVariantPhotoUrlsRef.current;
@@ -481,7 +491,7 @@ export default function PersonalizePage({
     previewVariantPrepareStatus === 'preparing' ||
     previewVariants.some((variant) => variant.status === 'generating');
   const isPreviewVariantLimitReached =
-    previewVariantSessionCount >= PREVIEW_VARIANT_SESSION_CAP;
+    Math.max(previewVariantSessionCount, restoredPreviewGroup.group?.changeCount ?? 0) >= PREVIEW_VARIANT_SESSION_CAP;
   const isGeneratingPreviewCapacityWaiting = Boolean(
     viewState.showPreview && previewJobId && capacityWaitingByJobId[previewJobId]
   );
@@ -2413,8 +2423,9 @@ export default function PersonalizePage({
     ) => {
       const sourceCreationId = creationIdRef.current ?? creationId;
       const sourcePreviewJobId = previewJobIdRef.current ?? previewJobId;
-      if (!sourceCreationId || !sourcePreviewJobId || previewVariantGenerationRef.current) return;
-      if (previewVariantSessionCount >= PREVIEW_VARIANT_SESSION_CAP) {
+      if (!sourceCreationId || !sourcePreviewJobId || previewVariantGenerationRef.current
+        || !restoredPreviewGroup.ready) return;
+      if (isPreviewVariantLimitReached) {
         setPreviewVariantError(t('personalize.previewVariantLimit'));
         return;
       }
@@ -2454,6 +2465,7 @@ export default function PersonalizePage({
         setPreviewVariantPrepareStatus('idle');
 
         const candidate: PreviewVariantView = {
+          creationId: created.creationId,
           jobId: created.jobId,
           status: 'generating',
           pages: [],
@@ -2537,7 +2549,8 @@ export default function PersonalizePage({
       watchPreviewJob,
       ensurePreviewVariantSession,
       previewJobId,
-      previewVariantSessionCount,
+      isPreviewVariantLimitReached,
+      restoredPreviewGroup.ready,
       replacePreviewUrl,
       resolvePreviewVariantError,
       selectPreviewJobId,
@@ -2566,7 +2579,7 @@ export default function PersonalizePage({
       facePrepareRunIdRef.current = nextRunId;
 
       if (viewState.showPreview) {
-        if (isPreviewVariantBusy || isPreviewVariantLimitReached) return;
+        if (isPreviewVariantBusy || isPreviewVariantLimitReached || !restoredPreviewGroup.ready) return;
         setPreviewVariantError(null);
         setPreviewVariantPrepareStatus('checking');
         void (async () => {
@@ -3098,9 +3111,10 @@ export default function PersonalizePage({
                       changePhotoLabel={t('personalize.changePhoto')}
                       busyLabel={t('personalize.previewVariantPreparing')}
                       showChangePhoto={!isPreviewCoverPending}
-                      changePhotoDisabled={isPreviewVariantBusy || isPreviewVariantLimitReached}
+                      changePhotoDisabled={isPreviewVariantBusy || isPreviewVariantLimitReached || !restoredPreviewGroup.ready}
                       changePhotoBusy={isPreviewVariantBusy}
-                      changePhotoError={previewVariantError}
+                      changePhotoError={previewVariantError ?? restoredPreviewGroup.error
+                        ?? (isPreviewVariantLimitReached ? t('personalize.previewVariantLimit') : null)}
                       capacityWaiting={isPreviewVariantCapacityWaiting}
                       capacityTitle={t('personalize.capacityPhotoTitle')}
                       capacityBody={t('personalize.capacityPhotoBody')}

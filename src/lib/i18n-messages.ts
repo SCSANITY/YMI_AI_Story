@@ -847,7 +847,7 @@ const en: MessageDictionary = {
   'personalize.previewVariantGenerating': 'Generating...',
   'personalize.previewVariantFailedShort': 'Failed',
   'personalize.previewVariantRemove': 'Remove this version',
-  'personalize.previewVariantLimit': 'Remove a version to try another photo.',
+  'personalize.previewVariantLimit': "You've used all 3 photo changes.",
   'personalize.previewVariantInFlight': 'Another photo version is already generating.',
   'personalize.previewVariantFailed': 'This photo version could not be generated. Please try again.',
   'personalize.previewVariantStillProcessing': 'This version is still processing. You can keep the current version or remove it and try again.',
