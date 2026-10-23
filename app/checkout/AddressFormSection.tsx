@@ -995,15 +995,15 @@ function AddressFormSectionComponent({
             <div className="font-semibold">{t('checkout.shippingOptionsTitle')}</div>
             <div className="mt-0.5 text-xs opacity-80">{t('checkout.shippingOptionsHint')}</div>
           </div>
-          <span className="text-right font-bold">
-            {shippingQuote.status === 'loading'
-              ? t('checkout.shippingCalculating')
-              : shippingQuote.status === 'available'
-              ? <ShippingPrice amountUsd={selectedShippingOption?.amountUsd ?? 0} snapshot={selectedShippingOption?.snapshot} currency={selectedCurrency} />
-              : shippingQuote.status === 'missing'
-              ? t('checkout.shippingPending')
-              : t('checkout.shippingUnavailable')}
-          </span>
+          {shippingQuote.status !== 'available' ? (
+            <span className="text-right font-bold">
+              {shippingQuote.status === 'loading'
+                ? t('checkout.shippingCalculating')
+                : shippingQuote.status === 'missing'
+                ? t('checkout.shippingPending')
+                : t('checkout.shippingUnavailable')}
+            </span>
+          ) : null}
         </div>
         {shippingQuote.status === 'available' ? (
           <div className="mt-3 grid gap-2 md:grid-cols-2">
