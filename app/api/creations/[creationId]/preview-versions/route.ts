@@ -47,7 +47,7 @@ function rpcConflictCode(error: { code?: string | null; message?: string | null 
   if (sqlState === '54000' && /preview_version_limit/i.test(message)) {
     return 'preview_variant_limit'
   }
-  if ((sqlState === '40001' || sqlState === 'PT409') && /preview_version_source_conflict/i.test(message)) {
+  if ((sqlState === 'PT409') && /preview_version_source_conflict/i.test(message)) {
     return 'preview_version_source_conflict'
   }
   if (sqlState !== '55000') return null

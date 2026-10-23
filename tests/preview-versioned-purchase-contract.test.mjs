@@ -17,7 +17,7 @@ test('Change Photo forks a server-owned durable version without cart or purchase
   assert.match(route, /confirmPendingFaceAsset|loadOwnedFaceAsset/)
   assert.match(route, /\.rpc\('fork_preview_creation_version'/)
   assert.match(route, /sqlState === '54000'[\s\S]*preview_version_limit/)
-  assert.match(route, /sqlState === '40001'[\s\S]*preview_version_source_conflict/)
+  assert.match(route, /sqlState === 'PT409'[\s\S]*preview_version_source_conflict/)
   assert.match(route, /sqlState !== '55000'[\s\S]*preview_version_source_terminal/)
   assert.match(route, /preview_version_source_job_missing[\s\S]*preview_config_missing/)
   assert.match(route, /rpcConflictCode\(error\)/)

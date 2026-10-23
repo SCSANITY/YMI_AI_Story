@@ -60,7 +60,7 @@ export async function PATCH(
     p_adult_declaration_reason: input.adultDeclarationReason,
   })
   if (error || !firstRpcRow(data)) {
-    const conflict = error?.code === '40001' || error?.code === 'PT409' || /changed/i.test(error?.message || '')
+    const conflict = error?.code === 'PT409' || /changed/i.test(error?.message || '')
     return jsonNoStore(
       { error: error?.message || 'Signature Voice triage was not saved' },
       { status: conflict ? 409 : 400 }
