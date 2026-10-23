@@ -85,6 +85,18 @@ test('rejects retired general aliases without loading message content', () => {
   }
 })
 
+test('staff addresses route to the existing general inbox without stealing support replies', () => {
+  for (const key of ['amy', 'justin']) {
+    const route = classifyInboundRecipients([`${key.toUpperCase()}@YMISTORY.COM`], DOMAIN)
+    assert.equal(route.kind, 'general')
+    assert.equal(route.address, `${key}@ymistory.com`)
+    assert.equal(route.shouldLoadContent, true)
+    const replyAddress = buildSupportReplyAddress({ replyAlias: ALIAS_A, inboundDomain: DOMAIN })
+    assert.equal(classifyInboundRecipients([`${key}@ymistory.com`, replyAddress], DOMAIN).kind, 'ticket_reply')
+    assert.equal(classifyInboundRecipients([`${key}@example.com`], DOMAIN).kind, 'rejected_unknown')
+  }
+})
+
 test('unknown or wrong-domain recipients are minimally rejected', () => {
   for (const addresses of [
     ['random-address@ymistory.com'],

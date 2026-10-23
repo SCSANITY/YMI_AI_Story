@@ -56,6 +56,20 @@ uses the canonical rich General Mail workspace.
 - No database table, Storage object, Worker behavior, sender configuration, or
   production provider template is mutated by this feature.
 
+## Shared staff addresses
+
+General Inbox includes Amy and Justin alongside the existing five identities.
+These are shared Admin mailboxes, not separate accounts or private employee
+inboxes. The existing Admin authorization, compose/reply/attachments and
+delivery flow apply unchanged. Addresses are normalized to lowercase.
+
+The required sender variables are `EMAIL_FROM_AMY` and `EMAIL_FROM_JUSTIN`
+(for example `Amy <amy@your-verified-domain>`). Missing variables fail closed;
+there is no fallback to another mailbox. Reply-To uses the existing inbound
+domain authority. Deployment requires the matching database mailbox expansion
+first; changing the Web list alone does not enable inbound projection or drafts.
+No per-address Resend account or new domain/MX setup is part of this change.
+
 ## Local verification
 
 - `npm run email-center:tests` validates registry uniqueness, summary counts,

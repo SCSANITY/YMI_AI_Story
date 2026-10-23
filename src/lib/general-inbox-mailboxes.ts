@@ -34,6 +34,20 @@ export const GENERAL_MAILBOX_DEFINITIONS = [
     senderEnvName: 'EMAIL_FROM_DELIVERY',
     inboundAliases: [],
   },
+  {
+    key: 'amy',
+    displayName: 'Amy',
+    localPart: 'amy',
+    senderEnvName: 'EMAIL_FROM_AMY',
+    inboundAliases: [],
+  },
+  {
+    key: 'justin',
+    displayName: 'Justin',
+    localPart: 'justin',
+    senderEnvName: 'EMAIL_FROM_JUSTIN',
+    inboundAliases: [],
+  },
 ] as const
 
 export type GeneralMailboxKey = (typeof GENERAL_MAILBOX_DEFINITIONS)[number]['key']
@@ -46,6 +60,8 @@ export const GENERAL_INBOUND_LOCAL_PARTS = [
   'security',
   'postmaster',
   'abuse',
+  'amy',
+  'justin',
 ] as const
 
 const mailboxByLocalPart = new Map<string, GeneralMailboxDefinition>(

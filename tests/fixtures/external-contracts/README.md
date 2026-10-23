@@ -111,3 +111,7 @@ review provenance, not the current upstream fixture identity.
   from private Database5ff4cebe0afb797b1e9d3edfcb5fb3f441a60d61. Offline/not applied;
   wraps retained print authorities with order-lock/revision/deadline fences and
   a service-only historical effective-line read.07-B fixture remains unchanged.
+
+- WEB-UIUX-001/16 adds `20261023_180000_staff_mailboxes.sql` byte-identical
+  to Database offline candidate `978bf27`. It pins the additive Amy/Justin shared
+  mailbox expansion, not production application or deployment authorization.

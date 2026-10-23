@@ -22,6 +22,13 @@ test('General Inbox reply identity is server-derived from recognized aliases', (
       replyTo: 'hello@ymistory.com',
       senderKey: 'hello',
     })
+    for (const key of ['amy', 'justin']) {
+      assert.deepEqual(resolveGeneralInboxReplyIdentity(`${key.toUpperCase()}@ymistory.com`), {
+        replyTo: `${key}@ymistory.com`,
+        senderKey: key,
+      })
+      assert.equal(resolveGeneralInboxReplyIdentity(`${key}@attacker.example`), null)
+    }
     assert.equal(resolveGeneralInboxReplyIdentity('dmarc@ymistory.com'), null)
     assert.equal(resolveGeneralInboxReplyIdentity('noreply@ymistory.com'), null)
     assert.equal(resolveGeneralInboxReplyIdentity('no-reply@ymistory.com'), null)
