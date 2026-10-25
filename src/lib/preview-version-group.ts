@@ -9,7 +9,7 @@ export type PreviewVersionGroup = {
   changeCount: number
   changeCap: number
   remainingCount: number
-  versions: { creationId: string; jobId: string; original: boolean }[]
+  versions: { creationId: string; jobId: string; original: boolean; photoUrl?: string | null; faceAssetId?: string | null }[]
 }
 
 export function buildPreviewVersionGroup(rows: {
@@ -36,6 +36,8 @@ export function mergeRestoredPreviewVersions(current: PreviewVariantView[], rest
   return restored.map(version => {
     const previous = current.find(item => item.jobId === version.jobId)
     return previous?.coverUrl ? { ...version, ...previous, original: version.original,
+      photoPreviewUrl: previous.photoPreviewUrl ?? version.photoPreviewUrl,
+      faceAssetId: previous.faceAssetId ?? version.faceAssetId,
       creationId: version.creationId, countsTowardLimit: !version.original } : version
   })
 }

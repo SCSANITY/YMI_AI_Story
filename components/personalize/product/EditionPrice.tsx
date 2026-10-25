@@ -7,14 +7,16 @@ export function EditionPrice({
   price,
   currency,
   className,
+  as: Tag = 'div',
 }: {
   price: BookPackagePrice;
   currency: DisplayCurrency;
   className?: string;
+  as?: 'div' | 'span';
 }) {
   const sale = price.salePriceUsd !== null;
   return (
-    <div className={[styles.price, className].filter(Boolean).join(" ")}>
+    <Tag className={[styles.price, className].filter(Boolean).join(" ")}>
       {sale ? (
         <>
           <span>{price.discountPercent}% {t("product.off")}</span>
@@ -26,6 +28,6 @@ export function EditionPrice({
         </>
       ) : null}
       <strong>{formatDisplayCurrency(price.effectivePriceUsd, currency)}</strong>
-    </div>
+    </Tag>
   );
 }

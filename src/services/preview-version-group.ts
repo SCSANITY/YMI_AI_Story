@@ -7,7 +7,7 @@ export async function restorePreviewVersionGroup(creationId: string, signal: Abo
   const response = await fetch(`/api/creations/${encodeURIComponent(creationId)}/preview-versions`, {
     method: 'GET', credentials: 'include', cache: 'no-store', signal,
   })
-  if (!response.ok) throw new Error('Could not restore photo versions. Please refresh this page.')
+  if (!response.ok) throw new Error('Your photo versions could not be loaded. Please return to My Books and reopen this Preview.')
   const group: PreviewVersionGroup = await response.json()
   // Asset access uses the existing owned signing endpoint, never stored private paths.
   const versions: PreviewVariantView[] = await Promise.all(group.versions.map(async version => {
@@ -17,7 +17,7 @@ export async function restorePreviewVersionGroup(creationId: string, signal: Abo
       ...version,
       status: assets?.coverUrl ? 'ready' : job?.status === 'queued' || job?.status === 'running' ? 'generating' : 'failed',
       pages: assets?.urls ?? [], presentation: assets?.presentation ?? null,
-      coverUrl: assets?.coverUrl ?? null, photoPreviewUrl: null, faceAssetId: null,
+      coverUrl: assets?.coverUrl ?? null, photoPreviewUrl: version.photoUrl ?? null, faceAssetId: version.faceAssetId ?? null,
       faceStoragePath: null, faceImageUrl: null, countsTowardLimit: !version.original,
     }
   }))

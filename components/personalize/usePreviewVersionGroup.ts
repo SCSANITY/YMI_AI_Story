@@ -14,7 +14,7 @@ export function usePreviewVersionGroup(creationId: string | null, jobId: string 
     void restorePreviewVersionGroup(creationId, controller.signal).then(group => {
       if (!controller.signal.aborted) setResult({ key, signal: controller.signal, group })
     }).catch(() => {
-      if (!controller.signal.aborted) setResult({ key, signal: controller.signal, error: 'Could not restore photo versions. Please refresh this page.' })
+      if (!controller.signal.aborted) setResult({ key, signal: controller.signal, error: 'Your photo versions could not be loaded. Please return to My Books and reopen this Preview.' })
     })
     return () => controller.abort()
   }, [key, creationId])
