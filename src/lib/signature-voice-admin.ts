@@ -55,9 +55,11 @@ export type AdminSignatureVoiceItem = {
     consentVersion: string
     consentAcceptedAt: string
     boundAt: string
+    replaceUntil: string
   }
   triage: {
     sourceRevision: number
+    narrationOutdated: boolean
     technicalStatus: SignatureVoiceTriageStatus
     technicalReason: string | null
     technicalReviewedAt: string | null

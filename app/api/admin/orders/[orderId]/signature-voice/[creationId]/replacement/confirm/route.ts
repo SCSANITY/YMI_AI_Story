@@ -20,16 +20,18 @@ import { isUuid } from '@/lib/validators'
 export const runtime = 'nodejs'
 
 async function discardReplacementUpload(assetId: string, storagePath: string, errorMessage: string) {
+  const { data: lineBinding,error: lineError } = await supabaseAdmin.from('order_line_voice')
+    .select('cart_item_id').eq('voice_asset_id',assetId).limit(1).maybeSingle()
   const { data: binding, error: bindingError } = await supabaseAdmin
     .from('creations')
     .select('creation_id')
     .eq('voice_asset_id', assetId)
     .limit(1)
     .maybeSingle()
-  if (bindingError || binding) {
+  if (bindingError || binding || lineError || lineBinding) {
     console.error('[signature-voice] replacement discard blocked', {
       assetId,
-      reason: bindingError ? 'binding_check_failed' : 'asset_is_bound',
+      reason: bindingError || lineError ? 'binding_check_failed' : 'asset_is_bound',
       error: bindingError?.message,
     })
     return
@@ -58,11 +60,12 @@ async function discardReplacementUpload(assetId: string, storagePath: string, er
 async function reconcileReplacementResult(input: {
   orderId: string
   creationId: string
+  cartItemId: string
   newAssetId: string
 }) {
   try {
     const workspace = await loadAdminSignatureVoiceWorkspace(input.orderId)
-    const item = workspace?.items.find((candidate) => candidate.creationId === input.creationId)
+    const item = workspace?.items.find((candidate) => candidate.cartItemId === input.cartItemId && candidate.creationId === input.creationId)
     if (!workspace || !item) return { status: 'unknown' as const }
     if (item.source.assetId === input.newAssetId) {
       return { status: 'committed' as const, workspace }
@@ -191,6 +194,7 @@ export async function POST(
     const reconciliation = await reconcileReplacementResult({
       orderId,
       creationId,
+      cartItemId: input.cartItemId,
       newAssetId: input.newAssetId,
     })
     if (reconciliation.status === 'committed') {

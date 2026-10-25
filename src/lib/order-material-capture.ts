@@ -16,10 +16,8 @@ export async function resolveMaterialCaptureOwner(request: Request,body: Record<
   const materials=await loadOrderMaterials(orderId,await resolveMaterialAccess(request))
   const item=materials.items.find(item=>item.cart_item_id===itemId)
   if (!item?.can_submit_voice) throw new MaterialError('material_access_denied',403)
-  const {data,error}=await supabaseAdmin.from('creations').select('owner_type,customer_id,anon_session_id')
-    .eq('creation_id',item.creation_id).maybeSingle()
+  const {data,error}=await supabaseAdmin.from('orders').select('customer_id')
+    .eq('order_id',orderId).maybeSingle()
   if (error || !data) throw new MaterialError('materials_unavailable',503)
-  if (data.owner_type==='anon') return {ownerType:'anon',anonSessionId:materialUuid(data.anon_session_id),customerId:null}
-  if (data.owner_type==='customer') return {ownerType:'customer',customerId:materialUuid(data.customer_id),anonSessionId:null}
-  throw new MaterialError('materials_unavailable',503)
+  return {ownerType:'customer',customerId:materialUuid(data.customer_id),anonSessionId:null}
 }

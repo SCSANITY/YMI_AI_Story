@@ -1,4 +1,4 @@
-import { loadCreationVoiceBindings } from '@/lib/order-materials-server'
+import { loadOrderLineVoiceBindings } from '@/lib/order-materials-server'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import {
   SIGNATURE_VOICE_NARRATION_SLOTS,
@@ -72,13 +72,6 @@ export async function loadAdminSignatureVoiceWorkspace(
         creation_id,
         template_id,
         customize_snapshot,
-        voice_asset_id,
-        voice_sample_duration_seconds,
-        voice_consent_version,
-        voice_consent_accepted_at,
-        voice_bound_at,
-        voice_subject_name,
-        voice_subject_relationship,
         templates:templates(name)
       )
     `)
@@ -88,17 +81,17 @@ export async function loadAdminSignatureVoiceWorkspace(
   if (cartItemsError) throw new Error(cartItemsError.message)
 
   const signatureItems = cartItems ?? []
-  const bindings=new Map((await loadCreationVoiceBindings(signatureItems.map(item=>String(firstRelation(item.creations).creation_id)))).map(row=>[row.creation_id,row]))
-  const pendingItems=signatureItems.filter(item=>!bindings.get(String(firstRelation(item.creations).creation_id))?.voice_asset_id).map(item=>{
+  const bindings=new Map((await loadOrderLineVoiceBindings(orderId,signatureItems.map(item=>String(item.cart_item_id)))).map(row=>[row.cart_item_id,row]))
+  const pendingItems=signatureItems.filter(item=>!bindings.get(String(item.cart_item_id))?.voice_asset_id).map(item=>{
     const creation=firstRelation(item.creations)
     return {cartItemId:String(item.cart_item_id),creationId:String(creation.creation_id),
       title:resolvePersonalizedBookTitle({templateId:creation.template_id,templateName:firstRelation(creation.templates).name,customizeSnapshot:creation.customize_snapshot}),
       daysWaiting:Math.max(0,Math.floor((Date.now()-Date.parse(String(order.paid_at)))/86400000))}
   })
   const normalizedItems = signatureItems
-    .map((item) => ({ item, creation: {...firstRelation(item.creations),...bindings.get(String(firstRelation(item.creations).creation_id))} as UnknownRecord }))
+    .map((item) => ({ item, creation: {...firstRelation(item.creations),...bindings.get(String(item.cart_item_id))} as UnknownRecord }))
     .filter(({ creation }) => nullableString(creation.creation_id) && nullableString(creation.voice_asset_id))
-  const creationIds = normalizedItems.map(({ creation }) => String(creation.creation_id))
+  const lineIds = normalizedItems.map(({ item }) => String(item.cart_item_id))
   const assetIds = normalizedItems.map(({ creation }) => String(creation.voice_asset_id))
 
   const [assetsResult, statesResult, tracksResult, attestationsResult, customerResult] = await Promise.all([
@@ -108,23 +101,23 @@ export async function loadAdminSignatureVoiceWorkspace(
           .select('asset_id, asset_type, metadata, created_at')
           .in('asset_id', assetIds)
       : Promise.resolve({ data: [], error: null }),
-    creationIds.length > 0
+    lineIds.length > 0
       ? supabaseAdmin
           .from('signature_voice_production_states')
           .select('*')
-          .in('creation_id', creationIds)
+          .in('cart_item_id', lineIds)
       : Promise.resolve({ data: [], error: null }),
-    creationIds.length > 0
+    lineIds.length > 0
       ? supabaseAdmin
           .from('signature_voice_narration_tracks')
-          .select('creation_id, slot_key, asset_id, source_asset_id, content_type, size_bytes, duration_seconds, revision, verified_at')
-          .in('creation_id', creationIds)
+          .select('cart_item_id, creation_id, source_revision, slot_key, asset_id, source_asset_id, content_type, size_bytes, duration_seconds, revision, verified_at')
+          .in('cart_item_id', lineIds)
       : Promise.resolve({ data: [], error: null }),
-    creationIds.length > 0
+    lineIds.length > 0
       ? supabaseAdmin
           .from('signature_voice_hardware_attestations')
-          .select('creation_id, source_asset_id, narration_manifest_sha256, attested_by, attested_at, shipment_integrity_checked_at')
-          .in('creation_id', creationIds)
+          .select('cart_item_id, creation_id, source_asset_id, narration_manifest_sha256, attested_by, attested_at, shipment_integrity_checked_at')
+          .in('cart_item_id', lineIds)
       : Promise.resolve({ data: [], error: null }),
     order.customer_id
       ? supabaseAdmin
@@ -156,25 +149,25 @@ export async function loadAdminSignatureVoiceWorkspace(
   const assetsById = new Map(
     (assetsResult.data ?? []).map((asset) => [String(asset.asset_id), asset])
   )
-  const statesByCreationId = new Map(
-    (statesResult.data ?? []).map((state) => [String(state.creation_id), state])
+  const statesByLineId = new Map(
+    (statesResult.data ?? []).map((state) => [String(state.cart_item_id), state])
   )
-  const attestationsByCreationId = new Map(
+  const attestationsByLineId = new Map(
     (attestationsResult.data ?? []).map((attestation) => [
-      String(attestation.creation_id),
+      String(attestation.cart_item_id),
       attestation,
     ])
   )
   const attestingAdminsById = new Map(
     (attestingAdmins ?? []).map((admin) => [String(admin.customer_id), admin])
   )
-  const tracksByCreationId = new Map<string, Map<string, UnknownRecord>>()
+  const tracksByLineId = new Map<string, Map<string, UnknownRecord>>()
   for (const track of tracksResult.data ?? []) {
-    const creationId = String(track.creation_id)
+    const lineId = String(track.cart_item_id)
     const slotKey = String(track.slot_key)
-    const existing = tracksByCreationId.get(creationId) ?? new Map()
+    const existing = tracksByLineId.get(lineId) ?? new Map()
     existing.set(slotKey, track)
-    tracksByCreationId.set(creationId, existing)
+    tracksByLineId.set(lineId, existing)
   }
 
   const items: AdminSignatureVoiceItem[] = normalizedItems.map(({ item, creation }) => {
@@ -186,8 +179,8 @@ export async function loadAdminSignatureVoiceWorkspace(
       throw new Error(`Signature Voice source is missing for creation ${creationId}`)
     }
     const metadata = asRecord(asset.metadata)
-    const state = statesByCreationId.get(creationId)
-    const attestation = attestationsByCreationId.get(creationId)
+    const state = statesByLineId.get(cartItemId)
+    const attestation = attestationsByLineId.get(cartItemId)
     const currentAttestation = attestation && String(attestation.source_asset_id) === assetId
       ? attestation
       : null
@@ -205,7 +198,7 @@ export async function loadAdminSignatureVoiceWorkspace(
     const encodedCartItemId = encodeURIComponent(cartItemId)
     const encodedAssetId = encodeURIComponent(assetId)
     const sourceBase = `/api/admin/orders/${encodedOrderId}/signature-voice/${encodedCreationId}/source?cartItemId=${encodedCartItemId}&assetId=${encodedAssetId}`
-    const narrationTracks = tracksByCreationId.get(creationId) ?? new Map()
+    const narrationTracks = tracksByLineId.get(cartItemId) ?? new Map()
 
     return {
       cartItemId,
@@ -231,9 +224,11 @@ export async function loadAdminSignatureVoiceWorkspace(
         consentVersion: String(creation.voice_consent_version ?? ''),
         consentAcceptedAt: String(creation.voice_consent_accepted_at ?? ''),
         boundAt: String(creation.voice_bound_at ?? ''),
+        replaceUntil: new Date(Date.parse(String(order.paid_at)) + 48 * 60 * 60 * 1000).toISOString(),
       },
       triage: {
-        sourceRevision: positiveInteger(state?.source_revision),
+        sourceRevision: positiveInteger(creation.revision),
+        narrationOutdated: state?.narration_outdated === true,
         technicalStatus: triageStatus(state?.technical_status),
         technicalReason: nullableString(state?.technical_reason),
         technicalReviewedAt: nullableString(state?.technical_reviewed_at),
@@ -257,7 +252,7 @@ export async function loadAdminSignatureVoiceWorkspace(
       narration: SIGNATURE_VOICE_NARRATION_SLOTS.map((slotKey, index) => {
         const track = narrationTracks.get(slotKey)
         if (!track) return { slotKey, position: index + 1, track: null }
-        if (String(track.source_asset_id) !== assetId) {
+        if (String(track.source_asset_id) !== assetId || Number(track.source_revision)!==Number(creation.revision)) {
           throw new Error(`Narration ${slotKey} belongs to an outdated source recording`)
         }
         const trackAssetId = String(track.asset_id)
@@ -309,7 +304,7 @@ export async function requireAdminSignatureVoiceOrderItem(input: {
       package_type,
       status,
       orders!inner(order_id, payment_id),
-      creations!inner(creation_id, voice_asset_id)
+      creations!inner(creation_id)
     `)
     .eq('cart_item_id', input.cartItemId)
     .eq('order_id', input.orderId)
@@ -320,11 +315,11 @@ export async function requireAdminSignatureVoiceOrderItem(input: {
   if (error) throw new Error(error.message)
   if (!data) throw new Error('Signature Voice order item was not found')
   const order = firstRelation(data.orders)
-  const creation = firstRelation(data.creations)
-  if (!order.payment_id || String(creation.voice_asset_id ?? '') !== input.expectedAssetId) {
+  const [binding] = await loadOrderLineVoiceBindings(input.orderId,[input.cartItemId])
+  if (!order.payment_id || String(binding.voice_asset_id ?? '') !== input.expectedAssetId) {
     throw new Error('Signature Voice source has changed or the order is unpaid')
   }
-  return data
+  return { ...data, voiceBinding:binding }
 }
 
 export function firstRpcRow<T>(data: unknown): T | null {

@@ -12,7 +12,7 @@ const dto=()=>({order_id:order,dedication_deadline:'2026-10-23T12:00:00Z',items:
   cart_item_id:item,creation_id:creation,template_id:'Synthetic_story',package_type:'supreme',
   dedication:{decision:'skipped',body:null,revision:1},can_edit_dedication:true,voice_ready:false,can_submit_voice:true,
 }]})
-function harness({owner=null,rpcResult,queryResult,storage}={}) {
+function harness({owner=null,rpcResult,queryResult,storage,dependencies={}}={}) {
   const calls=[],sent=[],cache=new Map()
   const supabaseAdmin={
     storage,
@@ -20,7 +20,7 @@ function harness({owner=null,rpcResult,queryResult,storage}={}) {
     from(table) {
       const log={table,steps:[]};calls.push(log)
       const query={then(resolve,reject) {return Promise.resolve(queryResult?.(table,log.steps) ?? {data:null,error:null}).then(resolve,reject)}}
-      for (const operation of ['select','eq','in','insert','delete','neq','maybeSingle','single']) {
+      for (const operation of ['select','eq','in','insert','delete','neq','maybeSingle','single','order','limit']) {
         query[operation]=(...args)=>{log.steps.push([operation,...args]);return query}
       }
       return query
@@ -28,7 +28,7 @@ function harness({owner=null,rpcResult,queryResult,storage}={}) {
   }
   const injections={
     'server-only':{},'node:crypto':crypto,
-    'next/server':{NextResponse:{json:Response.json}},
+    'next/server':{NextResponse:Response},
     '@/lib/supabaseAdmin':{supabaseAdmin},
     '@/lib/order-covers':{
       createGeneratedPreviewCoverMap:async ids=>{calls.push({covers:ids});return new Map(ids.map(id=>[id,{url:'https://example.test/synthetic-cover.webp',status:'ready'}]))},
@@ -38,6 +38,7 @@ function harness({owner=null,rpcResult,queryResult,storage}={}) {
     '@/lib/session':{getOrCreateAnonSession:async()=>{calls.push({session:true});return 'synthetic-session'}},
     '@/lib/email':{sendOtpEmail:async (...args)=>{sent.push(args)}},
     '@/lib/http-response':{noStoreJson:(value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'private, no-store, max-age=0'}})},
+    ...dependencies,
   }
   function load(path) {
     if (cache.has(path)) return cache.get(path)
@@ -258,10 +259,10 @@ const captureBody=()=>({asset_type:'voice_sample',role:'voice',orderMaterial:{or
 const captureRequest=(origin='https://example.test')=>new Request('https://example.test/api/upload-url',{
   headers:{authorization:'Bearer '+'a'.repeat(43),origin},method:'POST',body:'{}',
 })
-test('postpayment upload derives the original anon Creation owner rather than caller-supplied identity',async()=>{
-  const h=harness({queryResult:()=>({data:{owner_type:'anon',anon_session_id:creation},error:null})})
+test('postpayment upload derives order customer custody rather than caller-supplied identity',async()=>{
+  const h=harness({queryResult:()=>({data:{customer_id:customer},error:null})})
   const result=await h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest(),{...captureBody(),customerId:customer})
-  assert.equal(result.ownerType,'anon');assert.equal(result.anonSessionId,creation)
+  assert.equal(result.ownerType,'customer');assert.equal(result.customerId,customer);assert.equal(result.anonSessionId,null)
   assert.equal(h.calls.find(call=>call.name==='materials_read').args.p_customer,null)
 })
 test('material capture cannot upload a face,avatar or another line',async()=>{
@@ -300,8 +301,8 @@ test('Voice checkout prices a missing recording but still rejects a supplied cor
   await assert.rejects(make(item).load('src/lib/package-pricing-store.ts').loadAuthoritativeCreationPackagePrice({creationId:creation,owner}))
 })
 
-test('scoped upload signs an opaque path while reserving capture under the original Creation owner',async()=>{
-  const h=harness({queryResult:()=>({data:{owner_type:'anon',anon_session_id:creation},error:null}),
+test('scoped upload signs an opaque path while reserving capture under the order customer',async()=>{
+  const h=harness({queryResult:()=>({data:{customer_id:customer},error:null}),
     rpcResult:(name)=>({data:name==='materials_read'?dto():name==='consume_user_asset_upload_rate_limit'?{allowed:true}:name==='reserve_signature_voice_capture_authorization'?{out_authorization_id:item}:null,error:null}),
     storage:{from:()=>({createSignedUploadUrl:async path=>({data:{signedUrl:'https://example.test/upload/'+path,token:'synthetic-upload-token'},error:null})})},
   })
@@ -314,5 +315,76 @@ test('scoped upload signs an opaque path while reserving capture under the origi
   const result=await response.json()
   assert.ok(!JSON.stringify(result).includes(creation))
   assert.equal(result.storage_path.split('/')[2],result.asset_id)
-  assert.equal(h.calls.find(call=>call.name==='reserve_signature_voice_capture_authorization').args.p_anon_session_id,creation)
+  assert.equal(h.calls.find(call=>call.name==='reserve_signature_voice_capture_authorization').args.p_anon_session_id,null)
+  assert.equal(h.calls.find(call=>call.name==='reserve_signature_voice_capture_authorization').args.p_customer_id,customer)
+})
+
+
+test('paid Voice bindings scope by order and line, keeping two purchases of one Creation distinct',async()=>{
+  const extra='00000000-0000-4000-8000-000000000021'
+  const h=harness({queryResult:()=>({data:[{cart_item_id:item,creation_id:creation,voice_asset_id:null},
+    {cart_item_id:extra,creation_id:creation,voice_asset_id:null}],error:null})})
+  const rows=await h.load('src/lib/order-materials-server.ts').loadOrderLineVoiceBindings(order,[item,extra])
+  assert.equal(rows.length,2);assert.notEqual(rows[0].cart_item_id,rows[1].cart_item_id)
+  const read=h.calls.find(x=>x.table==='order_line_voice')
+  assert.ok(read.steps.some(s=>s[0]==='eq' && s[1]==='order_id' && s[2]===order))
+  assert.ok(read.steps.some(s=>s[0]==='in' && s[1]==='cart_item_id' && s[2].length===2))
+  assert.ok(!h.calls.some(x=>x.table==='creations'))
+})
+test('missing paid-line binding fails closed without falling back to a Creation',async()=>{
+  const h=harness({queryResult:()=>({data:[],error:null})})
+  await assert.rejects(h.load('src/lib/order-materials-server.ts').loadOrderLineVoiceBindings(order,[item]),/materials_unavailable/)
+  assert.ok(!h.calls.some(x=>x.table==='creations'))
+})
+
+test('a cross-device grant plays the current inherited anonymous recording through order access',async()=>{
+  const h=harness({queryResult:table=>({data:table==='order_line_voice'?[
+    {cart_item_id:item,creation_id:creation,voice_asset_id:challenge}]:
+    {owner_type:'anon',anon_session_id:'old-anonymous-custody',storage_path:'synthetic/current.wav',metadata:{content_type:'audio/wav'}},error:null}),
+    storage:{from:()=>({download:async()=>({data:new Blob(['synthetic audio']),error:null})})}})
+  const route=h.load('app/api/user-assets/[assetId]/download/route.ts')
+  const response=await route.GET(new Request(`https://example.test/api/user-assets/${challenge}/download?orderId=${order}&itemId=${item}`,
+    {headers:{authorization:'Bearer '+'a'.repeat(43)}}),{params:Promise.resolve({assetId:challenge})})
+  assert.equal(response.status,200);assert.equal(await response.text(),'synthetic audio')
+  assert.match(response.headers.get('cache-control'),/private, no-store/)
+  assert.equal(h.calls.find(c=>c.name==='materials_read').args.p_customer,null)
+  assert.ok(!h.calls.some(c=>c.auth || c.table==='creations'))
+})
+test('paid playback denies revoked grants, another line and a replaced asset before reading files',async()=>{
+  for(const variant of ['revoked','line','asset']) {
+    const h=harness({rpcResult:()=>variant==='revoked'?{data:null,error:{code:'42501'}}:{data:dto(),error:null},
+      queryResult:()=>({data:[{cart_item_id:item,creation_id:creation,voice_asset_id:challenge}],error:null})})
+    const route=h.load('app/api/user-assets/[assetId]/download/route.ts')
+    const response=await route.GET(new Request(`https://example.test/api/user-assets/${creation}/download?orderId=${order}&itemId=${variant==='line'?challenge:item}`,
+      {headers:{authorization:'Bearer '+'a'.repeat(43)}}),{params:Promise.resolve({assetId:creation})})
+    assert.equal(response.status,403,variant)
+    assert.ok(!h.calls.some(c=>c.auth || c.table==='user_assets' || c.table==='creations'))
+  }
+})
+test('Admin workspace separates same-Creation lines and exposes their current source and outdated state',async()=>{
+  const second='00000000-0000-4000-8000-000000000021'
+  const binding=(cart_item_id,voice_asset_id,revision)=>({cart_item_id,creation_id:creation,voice_asset_id,revision,
+    voice_sample_duration_seconds:12,voice_subject_name:'Authorized narrator',voice_subject_relationship:'authorized_submitter'})
+  const h=harness({queryResult:table=>({error:null,data:table==='orders'?{order_id:order,payment_id:challenge,paid_at:'2026-10-26T00:00:00Z'}:
+    table==='cart_items'?[item,second].map(id=>({cart_item_id:id,creations:{creation_id:creation,template_id:'Synthetic_story'}})):
+    table==='order_line_voice'?[binding(item,customer,2),binding(second,challenge,1)]:
+    table==='user_assets'?[customer,challenge].map(id=>({asset_id:id,asset_type:'voice_sample'})):
+    table==='signature_voice_production_states'?[{cart_item_id:item,narration_outdated:true}]:[]})})
+  const workspace=await h.load('src/lib/signature-voice-admin-server.ts').loadAdminSignatureVoiceWorkspace(order)
+  assert.deepEqual(Array.from(workspace.items,x=>x.source.assetId),[customer,challenge])
+  assert.deepEqual(Array.from(workspace.items,x=>x.triage.sourceRevision),[2,1])
+  assert.deepEqual(Array.from(workspace.items,x=>x.triage.narrationOutdated),[true,false])
+  assert.equal(workspace.items[0].declaration.replaceUntil,'2026-10-28T00:00:00.000Z')
+  for(const read of h.calls.filter(c=>['signature_voice_production_states','signature_voice_narration_tracks','signature_voice_hardware_attestations'].includes(c.table))) {
+    assert.ok(read.steps.some(s=>s[0]==='in' && s[1]==='cart_item_id'))
+  }
+})
+test('fulfillment rejects a same-asset stale revision before downloading narration bytes',async()=>{
+  const h=harness({dependencies:{'music-metadata':{parseBuffer:()=>{throw new Error('must not parse')}}},
+    queryResult:table=>({error:null,data:table==='cart_items'?[{cart_item_id:item,creation_id:creation,orders:{payment_id:challenge}}]:
+      table==='order_line_voice'?[{cart_item_id:item,creation_id:creation,voice_asset_id:challenge,revision:3}]:
+      Array.from({length:15},(_,i)=>({slot_key:`narration_${String(i+1).padStart(2,'0')}`,source_asset_id:challenge,source_revision:2}))})})
+  await assert.rejects(h.load('src/lib/signature-voice-fulfillment-server.ts').verifySignatureVoiceOrderNarrationIntegrity(order),/revision changed/)
+  const read=h.calls.find(c=>c.table==='signature_voice_narration_tracks')
+  assert.ok(read.steps.some(s=>s[0]==='eq' && s[1]==='cart_item_id' && s[2]===item))
 })

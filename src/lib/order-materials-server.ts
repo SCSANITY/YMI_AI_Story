@@ -52,17 +52,23 @@ export async function loadOrderLineDedications(orderId: string,access: MaterialA
     cartItemId:item.cart_item_id,creationId:item.creation_id,...item.dedication,
   }))
 }
-// Trusted server readers (Admin/fulfillment) must already scope their Creation
-// IDs to an authorized order. This reads existing authority, never a copied source.
-export async function loadCreationVoiceBindings(creationIds: readonly string[]) {
-  const ids=[...new Set(creationIds.map(materialUuid))]
+// Paid consumers authorize the order first. Creation is provenance, not the source key.
+export async function loadOrderLineVoiceBindings(orderId: string,itemIds: readonly string[]) {
+  const ids=[...new Set(itemIds.map(materialUuid))]
   if (!ids.length) return []
   if (ids.length>100) throw new MaterialError('invalid_material',400)
-  const {data,error}=await supabaseAdmin.from('creations').select(
-    'creation_id,voice_asset_id,voice_sample_duration_seconds,voice_consent_version,voice_consent_accepted_at,voice_bound_at,voice_subject_name,voice_subject_relationship,voice_capture_authorization_id,voice_speaker_kind'
-  ).in('creation_id',ids)
+  const {data,error}=await supabaseAdmin.from('order_line_voice').select(
+    'cart_item_id,creation_id,customer_id,revision,voice_asset_id,voice_sample_duration_seconds,voice_consent_version,voice_consent_accepted_at,voice_bound_at,voice_subject_name,voice_subject_relationship,voice_capture_authorization_id,voice_speaker_kind'
+  ).eq('order_id',materialUuid(orderId)).in('cart_item_id',ids)
   if (error || data?.length!==ids.length) throw new MaterialError('materials_unavailable',503)
   return data.map(row=>({ ...row,voiceReady:hasCompleteSignatureVoiceBinding(row) }))
+}
+export async function assertOrderLineVoiceDownload(request:Request,orderId:string,itemId:string,assetId:string) {
+  const { resolveMaterialAccess }=await import('@/lib/order-materials-access')
+  const materials=await loadOrderMaterials(materialUuid(orderId),await resolveMaterialAccess(request))
+  if (!materials.items.some(item=>item.cart_item_id===materialUuid(itemId))) throw new MaterialError('material_access_denied',403)
+  const [binding]=await loadOrderLineVoiceBindings(orderId,[itemId])
+  if (binding.voice_asset_id!==materialUuid(assetId)) throw new MaterialError('material_access_denied',403)
 }
 export async function saveOrderDedication(orderId: string,access: MaterialAccess,value: unknown) {
   const input=parseDedicationWrite(value)

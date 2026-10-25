@@ -1,4 +1,4 @@
-import { loadCreationVoiceBindings } from '@/lib/order-materials-server'
+import { loadOrderLineVoiceBindings } from '@/lib/order-materials-server'
 import { createHash } from 'node:crypto'
 import { parseBuffer } from 'music-metadata'
 import {
@@ -54,29 +54,30 @@ async function loadPaidSignatureVoiceItems(orderId: string) {
       package_type,
       status,
       orders!inner(order_id, payment_id),
-      creations!inner(creation_id, voice_asset_id)
+      creations!inner(creation_id)
     `)
     .eq('order_id', orderId)
     .eq('status', 'ordered')
     .eq('package_type', 'supreme')
 
   if (error) throw new SignatureVoiceFulfillmentError(error.message)
-  const bindingById=new Map((await loadCreationVoiceBindings((data ?? []).map(row=>String(firstRelation(row.creations).creation_id)))).map(binding=>[binding.creation_id,binding]))
+  const bindingById=new Map((await loadOrderLineVoiceBindings(orderId,(data ?? []).map(row=>String(row.cart_item_id)))).map(binding=>[binding.cart_item_id,binding]))
   return (data ?? []).map((row) => {
     const order = firstRelation(row.orders)
     const cartItemId = String(row.cart_item_id ?? '')
     const creationId = String(row.creation_id ?? '')
-    const sourceAssetId = String(bindingById.get(creationId)?.voice_asset_id ?? '')
+    const sourceAssetId = String(bindingById.get(cartItemId)?.voice_asset_id ?? '')
     if (!order.payment_id || !cartItemId || !creationId || !sourceAssetId) {
       throw new SignatureVoiceFulfillmentError(
         'A paid Signature Voice item is missing its authoritative source recording'
       )
     }
-    return { orderId, cartItemId, creationId, sourceAssetId }
+    return { orderId, cartItemId, creationId, sourceAssetId, sourceRevision:Number(bindingById.get(cartItemId)?.revision) }
   })
 }
 
 async function verifyNarrationItem(input: {
+  sourceRevision: number
   orderId: string
   cartItemId: string
   creationId: string
@@ -84,8 +85,8 @@ async function verifyNarrationItem(input: {
 }): Promise<SignatureVoiceNarrationManifest> {
   const { data, error } = await supabaseAdmin
     .from('signature_voice_narration_tracks')
-    .select('slot_key, asset_id, source_asset_id, storage_path, content_type, size_bytes, duration_seconds, sha256, revision')
-    .eq('creation_id', input.creationId)
+    .select('slot_key, asset_id, source_asset_id, source_revision, storage_path, content_type, size_bytes, duration_seconds, sha256, revision')
+    .eq('cart_item_id', input.cartItemId)
     .order('slot_key', { ascending: true })
   if (error) throw new SignatureVoiceFulfillmentError(error.message)
 
@@ -104,6 +105,7 @@ async function verifyNarrationItem(input: {
     const slotKey = String(row.slot_key)
     const assetId = String(row.asset_id ?? '')
     const sourceAssetId = String(row.source_asset_id ?? '')
+    if (Number(row.source_revision)!==input.sourceRevision) throw new SignatureVoiceFulfillmentError('Narration source revision changed')
     const storagePath = String(row.storage_path ?? '')
     const contentType = normalizeUserAssetContentType(row.content_type)
     const sizeBytes = Number(row.size_bytes)

@@ -61,12 +61,13 @@ async function discardNarrationUpload(assetId: string, storagePath: string, erro
 async function reconcileNarrationResult(input: {
   orderId: string
   creationId: string
+  cartItemId: string
   slotKey: string
   newAssetId: string
 }) {
   try {
     const workspace = await loadAdminSignatureVoiceWorkspace(input.orderId)
-    const item = workspace?.items.find((candidate) => candidate.creationId === input.creationId)
+    const item = workspace?.items.find((candidate) => candidate.cartItemId === input.cartItemId && candidate.creationId === input.creationId)
     const slot = item?.narration.find((candidate) => candidate.slotKey === input.slotKey)
     if (!workspace || !item || !slot) return { status: 'unknown' as const }
     if (slot.track?.assetId === input.newAssetId) {
@@ -203,6 +204,7 @@ export async function POST(
     const reconciliation = await reconcileNarrationResult({
       orderId,
       creationId,
+      cartItemId:input.cartItemId,
       slotKey,
       newAssetId: input.newAssetId,
     })

@@ -21,17 +21,19 @@ export async function POST(
   const { orderId, creationId, slotKey: rawSlotKey } = await Promise.resolve(context.params)
 
   let input
+  let sourceRevision: number
   let slotKey
   try {
     if (!isUuid(orderId) || !isUuid(creationId)) throw new Error('Invalid Signature Voice identity')
     slotKey = parseSignatureVoiceNarrationSlot(rawSlotKey)
     input = parseSignatureVoiceNarrationUploadRequest(await request.json())
-    await requireAdminSignatureVoiceOrderItem({
+    const bound = await requireAdminSignatureVoiceOrderItem({
       orderId,
       creationId,
       cartItemId: input.cartItemId,
       expectedAssetId: input.sourceAssetId,
     })
+    sourceRevision=Number(bound.voiceBinding.revision)
   } catch (error) {
     return jsonNoStore(
       { error: error instanceof Error ? error.message : 'Invalid narration upload' },
@@ -42,7 +44,7 @@ export async function POST(
   const { data: currentTrack, error: currentTrackError } = await supabaseAdmin
     .from('signature_voice_narration_tracks')
     .select('asset_id, source_asset_id')
-    .eq('creation_id', creationId)
+    .eq('cart_item_id', input.cartItemId)
     .eq('slot_key', slotKey)
     .maybeSingle()
   if (currentTrackError) {
@@ -71,6 +73,7 @@ export async function POST(
       order_id: orderId,
       cart_item_id: input.cartItemId,
       creation_id: creationId,
+      source_revision: sourceRevision,
       slot_key: slotKey,
       source_asset_id: input.sourceAssetId,
       expected_track_asset_id: input.expectedTrackAssetId,

@@ -128,3 +128,9 @@ review provenance, not the current upstream fixture identity.
 
 - Mail16 resume2026-10-26 binds exact observed CRLF function bodies without
   normalization;the mirror is offline evidence,not production application.
+
+- WEB-UIUX-001/19 S1 adds `20261026_090000_web_uiux_019_line_voice.sql`
+  byte-for-byte from the isolated Database S1 candidate on 2026-10-26.
+  It pins paid-line Voice references, production keys and source-revision guards;
+  it is OFFLINE, not evidence of application or independent deployment authority.
+  S1-S3 must be released together after combined review and owner authorization.

@@ -23,14 +23,16 @@ export async function POST(
   }
 
   let input
+  let sourceRevision: number
   try {
     input = parseSignatureVoiceReplacementUploadRequest(await request.json())
-    await requireAdminSignatureVoiceOrderItem({
+    const bound = await requireAdminSignatureVoiceOrderItem({
       orderId,
       creationId,
       cartItemId: input.cartItemId,
       expectedAssetId: input.expectedAssetId,
     })
+    sourceRevision=Number(bound.voiceBinding.revision)
   } catch (error) {
     return jsonNoStore(
       { error: error instanceof Error ? error.message : 'Invalid replacement upload' },
@@ -52,6 +54,7 @@ export async function POST(
       order_id: orderId,
       cart_item_id: input.cartItemId,
       creation_id: creationId,
+      source_revision: sourceRevision,
       expected_asset_id: input.expectedAssetId,
       admin_customer_id: admin.customer_id,
       storage_path: storagePath,

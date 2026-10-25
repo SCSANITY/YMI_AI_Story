@@ -8,6 +8,8 @@ import {
 } from '@/lib/checkout-owner'
 import { isUuid } from '@/lib/validators'
 import { normalizeUserAssetContentType } from '@/lib/userAssetsStorage'
+import { assertOrderLineVoiceDownload } from '@/lib/order-materials-server'
+import { MaterialError } from '@/lib/order-materials'
 
 export async function GET(
   request: Request,
@@ -16,14 +18,26 @@ export async function GET(
   const { assetId } = await context.params
   if (!isUuid(assetId)) return jsonNoStore({ error: 'Invalid asset id' }, 400)
 
+  const params=new URL(request.url).searchParams
+  const orderId=params.get('orderId'),itemId=params.get('itemId')
+  let orderAuthorized=false
+  if (orderId!==null || itemId!==null) {
+    if (!isUuid(orderId) || !isUuid(itemId)) return jsonNoStore({error:'Invalid order item'},400)
+    try {
+      await assertOrderLineVoiceDownload(request,orderId!,itemId!,assetId)
+      orderAuthorized=true
+    } catch(error) {
+      return jsonNoStore({error:'Recording not found'},error instanceof MaterialError?error.status:503)
+    }
+  }
   let owner
   try {
-    owner = await resolveCheckoutOwner(request)
+    if (!orderAuthorized) owner = await resolveCheckoutOwner(request)
   } catch (error) {
     return checkoutOwnerErrorResponse(error) ?? jsonNoStore({ error: 'Failed to resolve owner' }, 500)
   }
-  if (!owner) return jsonNoStore({ error: 'Unauthorized' }, 401)
-  const filter = ownerFilter(owner)
+  if (!orderAuthorized && !owner) return jsonNoStore({ error: 'Unauthorized' }, 401)
+  const filter = owner ? ownerFilter(owner) : null
 
   const { data: asset, error: assetError } = await supabaseAdmin
     .from('user_assets')
@@ -33,9 +47,10 @@ export async function GET(
     .maybeSingle()
   if (assetError || !asset?.storage_path) return jsonNoStore({ error: 'Recording not found' }, 404)
 
-  const ownsAsset = asset.owner_type === filter.owner_type
-    && asset[filter.column] === filter.value
+  const ownsAsset = orderAuthorized || (filter!==null && asset.owner_type === filter.owner_type
+    && asset[filter.column] === filter.value)
   if (!ownsAsset) {
+    if (!filter) return jsonNoStore({error:'Recording not found'},404)
     const { data: boundCreation, error: creationError } = await supabaseAdmin
       .from('creations')
       .select('creation_id')
