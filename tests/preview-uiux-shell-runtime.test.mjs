@@ -36,6 +36,24 @@ test('an unavailable Preview never claims it is illustrating or runs an active p
  assert.match(uiText(tree),/Preview unavailable/);assert.doesNotMatch(uiText(tree),/ILLUSTRATING YOUR BOOK|sec left/)
  assert.equal(uiNodes(tree).filter(node=>node.props?.['data-active']).length,0)
 })
+test('queue, error and unavailable states reset the visual ring and never show a countdown or active/completed segments',()=>{
+ const {PreviewWaitingStatus}=loadUi('components/personalize/PreviewWaitingPages.tsx')
+ for(const mode of ['queue','error','unavailable','restoring'])for(const compact of [false,true]){
+  const tree=PreviewWaitingStatus({name:'Mia',photo:null,ready:false,mode,compact,progress:{countdownSeconds:24,fraction:.4,step:0,reduced:false,hidden:false,interact:()=>{}}}),nodes=uiNodes(tree)
+  assert.equal(nodes.find(n=>n.type==='circle'&&String(n.props.pathLength)==='1').props.strokeDashoffset,1)
+  assert.equal(nodes.filter(n=>n.props?.['data-active']||n.props?.['data-complete']).length,0)
+  assert.doesNotMatch(uiText(tree),/24|ILLUSTRATING YOUR BOOK|sec left/)
+ }
+})
+test('ready photo controls show the remaining count only in the row; generation/cap retain the reserved note',()=>{
+ const {PreviewPhotoVersions}=loadUi('components/personalize/PreviewPhotoVersions.tsx')
+ const props={versions:[],selectedJobId:null,cap:3,changeCount:1,waiting:false,disabled:false,changing:false,error:null,onUpload:()=>{},onSelect:()=>{}}
+ const tree=PreviewPhotoVersions(props),nodes=uiNodes(tree)
+ assert.equal(nodes.find(n=>n.props?.className==='changesLeft').props.children.join(''),'2 changes left')
+ assert.equal(nodes.find(n=>n.props?.className==='versionCaption').props.children.props.className,'phoneRemainingCount')
+ assert.match(uiText(PreviewPhotoVersions({...props,waiting:true})),/Change photo once your preview is ready/)
+ assert.match(uiText(PreviewPhotoVersions({...props,changeCount:3})),/You've used all 3 photo changes/)
+})
 test('touch swipes and Arrow keys share navigation while vertical scroll and form controls stay untouched',()=>{
  const turns=[],page=new Element(),stage=uiNodes(PreviewBookShell({...props,ready:true,onTurn:value=>turns.push(value)})).find(n=>n.props?.['data-preview-book-stage']).props
  stage.onPointerDown({pointerType:'touch',clientX:200,clientY:100,target:page})

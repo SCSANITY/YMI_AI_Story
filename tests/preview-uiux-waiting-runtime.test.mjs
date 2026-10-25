@@ -29,3 +29,9 @@ test('reduced motion has manual steps only, and a different generation starts at
  state=h.render('second',20000,true);assert.equal(state.step,0);assert.equal(state.countdownSeconds,40)
  assert.equal(h.advance(9).step,0);h.unmount()
 })
+test('an inactive queue/error clock cannot advance the countdown or step and removes its timer',()=>{
+ const h=clockHarness();h.render('job',0,true);const generating=h.advance(6)
+ h.render('job',0,false);assert.equal(h.timers.size,0)
+ const queued=h.advance(16);assert.equal(queued.countdownSeconds,generating.countdownSeconds);assert.equal(queued.step,generating.step)
+ h.unmount()
+})

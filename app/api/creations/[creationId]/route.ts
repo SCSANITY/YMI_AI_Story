@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { loadCreationPhotoLockState } from '@/lib/purchase-state'
 import {
   checkoutOwnerErrorResponse,
   ownerFilter,
@@ -68,5 +69,17 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
     return NextResponse.json({ error: 'Creation not found' }, { status: 404 })
   }
 
+  // Ownership above must succeed before the optional lock lookup. No order or
+  // cart identifiers are exposed, and callers must not cache a lock decision.
+  if (url.searchParams.get('includePhotoLock') === '1') {
+    try {
+      const photoLock = await loadCreationPhotoLockState(creationId)
+      return NextResponse.json({ creation, photoLock }, { headers: { 'Cache-Control': 'private, no-store' } })
+    } catch {
+      return NextResponse.json({ error: 'Unable to verify purchase state' }, {
+        status: 500, headers: { 'Cache-Control': 'private, no-store' },
+      })
+    }
+  }
   return NextResponse.json({ creation })
 }

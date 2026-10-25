@@ -26,6 +26,9 @@ is split into:
 Version selection first re-reads the target's signed result, then saves the
 current edition/voice and effective message through their existing guarded
 writers. Selection and its Creation/Job URL commit only after those saves succeed.
+Before any save, an owned Creation GET reads `loadCreationPhotoLockState`;any
+cart attachment or non-unpurchased state refuses the switch. An undecided source
+message carries nothing and preserves the target text. Explicit skipped still carries empty.
 These separate writers are not a cross-route transaction. A locked target is
 reported while keeping the current selection. The same confirmed Voice asset is
 reused; new Voice capture still uses the existing explicit-consent flow.
@@ -45,6 +48,8 @@ Optional fixture query parameters:
 
 - `state=waiting|queue|error|partial|unavailable` (default ready).
 - `edition=voice`, `voice=1`, `name=Sonia`, `cap=1`, `locked=1`.
+  `locked=1` models an unpaid in-cart original with the same edition/voice but a
+  different message;switching to it must keep the current version and issue no POST.
 - `fresh=1` without Creation/Job query ids starts the real Customize flow with
   synthetic prepared materials. Its mocked create request waits for **Release
   identity**, allowing selection before ids; this is not a real generation.

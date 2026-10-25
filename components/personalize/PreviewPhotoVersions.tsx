@@ -12,7 +12,7 @@ export function PreviewPhotoVersions({ versions, selectedJobId, cap, changeCount
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void; onSelect: (version: PreviewVariantView) => void
 }) {
   const remaining = Math.max(0, cap - changeCount)
-  const caption = error || (remaining === 0 ? `You've used all ${cap} photo changes.` : waiting ? 'Change photo once your preview is ready' : `${remaining} ${remaining === 1 ? 'change' : 'changes'} left`)
+  const caption = error || (remaining === 0 ? `You've used all ${cap} photo changes.` : waiting ? 'Change photo once your preview is ready' : '')
   return <div className={styles.versions} aria-label="Photo versions">
     <div className={styles.versionControls}>
       <label className={styles.changePhoto} aria-disabled={disabled || remaining === 0}>
@@ -30,6 +30,6 @@ export function PreviewPhotoVersions({ versions, selectedJobId, cap, changeCount
       </div>
       <span className={styles.changesLeft}>{remaining} {remaining===1?'change':'changes'} left</span>
     </div>
-    <p className={styles.versionCaption} role={error?'alert':undefined}>{caption}</p>
+    <p className={styles.versionCaption} role={error?'alert':undefined}>{caption || <span className={styles.phoneRemainingCount}>{remaining} {remaining===1?'change':'changes'} left</span>}</p>
   </div>
 }

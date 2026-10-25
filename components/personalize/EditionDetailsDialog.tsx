@@ -11,9 +11,10 @@ import type { BookPackagePrice, DisplayCurrency } from '@/types'
 import styles from './PreviewExperience.module.css'
 
 // Mounted only while open: no gallery image is requested by the initial Preview.
-export function EditionDetailsDialog({ edition, selected, price, currency, onChoose, onClose }: {
+export function EditionDetailsDialog({ edition, selected, price, currency, disabled = false, onChoose, onClose }: {
   edition: EditionType; selected: EditionType; price: BookPackagePrice; currency: DisplayCurrency
   onChoose: (edition: EditionType) => void; onClose: () => void
+  disabled?: boolean
 }) {
   const definition = getEditionDefinition(edition)
   const gallery = [...definition.gallery, EDITION_COMPARISON_IMAGE]
@@ -62,7 +63,7 @@ export function EditionDetailsDialog({ edition, selected, price, currency, onCho
         <h2 id={id}>Hardcover{voice ? <em> + Voice</em> : null}</h2>
         <EditionPrice price={price} currency={currency} />
         <ul>{definition.features.map(({ Icon, textKey }) => <li key={textKey}><Icon size={22} aria-hidden="true" /><span>{t(textKey)}</span></li>)}</ul>
-        <button type="button" className={styles.chooseEdition} data-selected={selected === edition || undefined} onClick={() => { onChoose(edition); onClose() }}>
+        <button type="button" className={styles.chooseEdition} disabled={disabled} data-selected={selected === edition || undefined} onClick={() => { if (disabled) return; onChoose(edition); onClose() }}>
           {selected === edition ? <>Selected <Check size={16} /></> : `Choose ${t(definition.nameKey)}`}
         </button>
       </div>

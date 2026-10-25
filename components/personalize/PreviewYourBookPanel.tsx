@@ -26,7 +26,7 @@ export function PreviewYourBookPanel({ value, pricing, currency, childName, disa
           <span className={styles.editionText}><strong>{t(edition.nameKey)}</strong><EditionPrice as="span" price={pricing[edition.type]} currency={currency} className={styles.compactPrice} /></span>
           <span className={styles.radioDot} aria-hidden="true" />
         </label>
-        <button type="button" className={styles.detailsLink} onClick={() => onDetails(edition.type)}>See details</button>
+        <button type="button" className={styles.detailsLink} disabled={disabled} onClick={() => onDetails(edition.type)}>See details</button>
       </div>)}
     </div>
     {value === 'supreme' ? <div className={styles.voiceRow}><Mic size={18} aria-hidden="true" /><span>Your voice · now or after purchase</span><button type="button" disabled={disabled || voiceDisabled} onClick={onVoice}>{voiceReady ? 'Change' : 'Record'}</button></div> : null}

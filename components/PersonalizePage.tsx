@@ -54,6 +54,7 @@ import { EditionDetailsDialog } from '@/components/personalize/EditionDetailsDia
 import { PreviewMessageEditor } from '@/components/personalize/PreviewMessageEditor';
 import { PreviewPhotoVersions } from '@/components/personalize/PreviewPhotoVersions';
 import { carryPreviewVersionChoices, PreviewVersionLockedError } from '@/lib/preview-version-selection';
+import { readPreviewVersionLock } from '@/services/preview-version-lock';
 import { readPreviewDedications, savePreviewDedication } from '@/services/preview-dedication';
 import { SignatureVoiceDialog } from '@/components/personalize/SignatureVoiceDialog';
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
@@ -677,7 +678,8 @@ export default function PersonalizePage({
     ? `generation:${generationStartedAt}` : displayedPreviewJobId;
   const waitingProgress = usePreviewWaitingState(waitingIdentity,
     generationJobId === displayedPreviewJobId || stage === 'GENERATING' ? generationStartedAt : null,
-    viewState.showPreview && isPreviewCoverPending && previewCoverState === 'generating');
+    viewState.showPreview && isPreviewCoverPending && previewCoverState === 'generating'
+      && !isGeneratingPreviewCapacityWaiting && !isPreviewVariantCapacityWaiting);
   const visiblePreviewPresentation = useMemo(() => {
     if (!previewBookPresentation?.cover || !decodedPreviewCover.url) return previewBookPresentation;
     return { ...previewBookPresentation, cover: { ...previewBookPresentation.cover, url: decodedPreviewCover.url } };
@@ -1928,7 +1930,7 @@ export default function PersonalizePage({
   }, [creationId, previewJobId, flushEditionConfiguration]);
 
   const handleEditionChange = useCallback((nextPackageType: PurchasePackageType) => {
-    if (previewAccessState === 'unavailable' || hasTerminalPreviewFailure) return Promise.resolve();
+    if (versionSelectionAbortRef.current || isSwitchingPreviewVersion || previewAccessState === 'unavailable' || hasTerminalPreviewFailure) return Promise.resolve();
     if (
       nextPackageType === purchaseBookTypeRef.current
       && !queuedPurchaseBookTypeRef.current
@@ -1947,7 +1949,7 @@ export default function PersonalizePage({
     // effect drains this same queue once; no provisional request is sent.
     if (!creationIdRef.current || !previewJobIdRef.current) return Promise.resolve();
     return flushEditionConfiguration();
-  }, [flushEditionConfiguration, hasTerminalPreviewFailure, previewAccessState, setBookType]);
+  }, [flushEditionConfiguration, hasTerminalPreviewFailure, isSwitchingPreviewVersion, previewAccessState, setBookType]);
 
   const handleSelectPhotoVersion = useCallback(async (version: PreviewVariantView) => {
     if (versionSelectionAbortRef.current || isPreviewVariantBusy || isSavingVoice
@@ -1976,6 +1978,7 @@ export default function PersonalizePage({
       await carryPreviewVersionChoices({ creationId: sourceCreationId, jobId: sourceJobId }, version,
         { packageType: purchaseBookTypeRef.current, voiceAssetId: voiceAssetIdRef.current }, {
           isCurrent,
+          readTargetLock: target => readPreviewVersionLock(target, abort.signal),
           readMessages: ids => readPreviewDedications(ids, abort.signal),
           saveMessage: (choice, decision, body) => savePreviewDedication(choice, decision, body, abort.signal),
           saveConfiguration: (target, choices) => savePurchaseConfiguration({ creationId: target.creationId,
@@ -2554,7 +2557,12 @@ export default function PersonalizePage({
         // authority before dispatch so it cannot clone a pending older choice.
         const confirmedSource = await ensureCurrentPurchaseConfiguration();
         if (!confirmedSource) throw new Error('Please save your book options before changing the photo.');
-        if (creationIdRef.current !== sourceCreationId || previewJobIdRef.current !== sourcePreviewJobId) return;
+        if (creationIdRef.current !== sourceCreationId || previewJobIdRef.current !== sourcePreviewJobId) {
+          previewVariantPhotoUrlsRef.current.delete(preparedPhotoUrl);
+          URL.revokeObjectURL(preparedPhotoUrl);
+          setPreviewVariantPrepareStatus('idle');
+          return;
+        }
         const created = await createPreviewVersion({
           creationId: sourceCreationId,
           expectedPreviewJobId: sourcePreviewJobId,
@@ -2878,6 +2886,7 @@ export default function PersonalizePage({
   }
 
   const waitingMode = previewError ? 'error' : isPreviewUnavailable ? 'unavailable'
+    : isGeneratingPreviewCapacityWaiting || isPreviewVariantCapacityWaiting ? 'queue'
     : previewCoverState === 'restoring' ? 'restoring' : 'generating';
   const waitingNotice = previewError || (isGeneratingPreviewCapacityWaiting
     ? t('personalize.capacityLoadingBody') : null);
@@ -3149,13 +3158,13 @@ export default function PersonalizePage({
                   status={<PreviewWaitingStatus name={name} photo={selectedPreviewPhoto} progress={waitingProgress}
                     ready={hasReadyPreviewCover} mode={waitingMode} notice={waitingNotice} compact />}
                   mobilePurchase={<PreviewMobilePurchase edition={purchaseBookType === 'supreme' ? 'Hardcover + Voice' : 'Hardcover'}
-                    waitingLabel={waitingMode === 'generating' ? waitingProgress.countdownSeconds ? `Ready in ~${waitingProgress.countdownSeconds}s` : 'Just a little longer…' : waitingMode === 'error' || waitingMode === 'unavailable' ? 'Preview unavailable' : 'Restoring preview…'}
+                    waitingLabel={waitingMode === 'generating' ? waitingProgress.countdownSeconds ? `Ready in ~${waitingProgress.countdownSeconds}s` : 'Just a little longer…' : waitingMode === 'queue' ? 'Waiting in queue' : waitingMode === 'error' || waitingMode === 'unavailable' ? 'Preview unavailable' : 'Restoring preview…'}
                     price={purchasePrice} ready={purchaseReady} busy={purchaseBusy} onPurchase={() => acknowledgeAction(handleCheckoutClick)} />}
                   book={<PreviewBookShell coverUrl={decodedPreviewCover.url} ready={hasReadyPreviewCover}
                     waitingLeft={waitingStatus}
                     waitingRight={<PreviewWaitingPages name={name} value={purchaseBookType} pricing={previewPricing!}
-                      currency={displayCurrency} progress={waitingProgress} generating={previewCoverState === 'generating'}
-                      disabled={hasTerminalPreviewFailure || previewAccessState === 'unavailable'}
+                      currency={displayCurrency} progress={waitingProgress} generating={waitingMode === 'generating'}
+                      disabled={isSwitchingPreviewVersion || hasTerminalPreviewFailure || previewAccessState === 'unavailable'}
                       onChange={handleEditionChange} onMessage={() => setIsMessageEditorOpen(true)} />}
                     currentSpread={currentSpread} transition={bookNavigation.transition} maxSpread={maxSpreadIndex}
                     renderPage={renderPageContent} onTurn={turnPage} onCover={returnToPreviewCover} onComplete={bookNavigation.complete} />}
@@ -3181,7 +3190,7 @@ export default function PersonalizePage({
                           {isRetryingPreview ? 'Retrying...' : canRetryPreview ? 'Retry remaining' : 'Customize'}</button> : null}
                       voiceReady={Boolean(voiceAssetId)}
                       onChange={handleEditionChange}
-                      onDetails={setEditionDetails}
+                      onDetails={value => { if (!versionSelectionAbortRef.current && !isSwitchingPreviewVersion) setEditionDetails(value); }}
                       onVoice={() => setIsVoiceDialogOpen(true)}
                       onMessage={() => setIsMessageEditorOpen(true)}
                       actions={
@@ -3198,6 +3207,7 @@ export default function PersonalizePage({
                 />
             )}
         {editionDetails ? <EditionDetailsDialog key={editionDetails} edition={editionDetails} selected={purchaseBookType}
+          disabled={isSwitchingPreviewVersion}
           price={getBookPackagePrice(book, editionDetails)} currency={displayCurrency}
           onChoose={value => void handleEditionChange(value)} onClose={() => setEditionDetails(null)} /> : null}
         {isMessageEditorOpen ? <PreviewMessageEditor key={bookID} creationId={creationId} bookID={bookID} childName={name}

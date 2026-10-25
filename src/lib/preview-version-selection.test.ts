@@ -11,6 +11,7 @@ function setup(sourceBody: string | null, targetBody: string | null, purchased =
   const writes: unknown[] = []; let current = true
   return { writes, cancel: () => {current=false}, ports: {
     isCurrent: () => current,
+    readTargetLock: async () => purchased,
     readMessages: async () => [message('source',sourceBody), message('target',targetBody,purchased)],
     saveConfiguration: async (...args: unknown[]) => { writes.push(['configuration',...args]) },
     saveMessage: async (...args: unknown[]) => { writes.push(['message',...args]) },
@@ -26,8 +27,29 @@ test('an empty current message clears an older target message through the existi
   assert.deepEqual(h.writes[1],['message',message('target','Old message'),'skipped',null])
 })
 test('does not create an unnecessary dedication revision for an equal effective message', async () => {
-  const h=setup('Same','Same',true);await carryPreviewVersionChoices(source,target,choices,h.ports)
+  const h=setup('Same','Same');await carryPreviewVersionChoices(source,target,choices,h.ports)
   assert.equal(h.writes.length,1)
+})
+test('an in-cart unpaid target with the same edition/voice and a different message is refused before any save', async () => {
+  const h=setup('New message','In-cart message')
+  h.ports.readTargetLock=async()=>true
+  h.ports.readMessages=async()=>{throw Error('Must stop before reading/carrying messages')}
+  await assert.rejects(carryPreviewVersionChoices(source,target,choices,h.ports),PreviewVersionLockedError)
+  assert.deepEqual(h.writes,[])
+})
+test('an undecided source keeps a confirmed target message without a dedication write', async () => {
+  const h=setup(null,'Keep this written text')
+  h.ports.readMessages=async()=>[{...message('source',null),decision:'undecided'},message('target','Keep this written text')]
+  await carryPreviewVersionChoices(source,target,choices,h.ports)
+  assert.deepEqual(h.writes,[['configuration',target,choices]])
+})
+test('a failed lock read or cancelled lock lookup never reaches a save', async () => {
+  const h=setup('New','Old');h.ports.readTargetLock=async()=>{throw Error('Lookup unavailable')}
+  await assert.rejects(carryPreviewVersionChoices(source,target,choices,h.ports),/Lookup unavailable/)
+  assert.deepEqual(h.writes,[])
+  h.ports.readTargetLock=async()=>{h.cancel();return false}
+  await assert.rejects(carryPreviewVersionChoices(source,target,choices,h.ports),/cancelled/)
+  assert.deepEqual(h.writes,[])
 })
 test('a paid target with a different message is refused before any write', async () => {
   const h=setup('New','Paid message',true)

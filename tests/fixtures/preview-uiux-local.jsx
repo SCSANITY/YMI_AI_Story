@@ -11,6 +11,10 @@ const cid=params.get('creationId')||versions[1].creationId,jid=params.get('jobId
 let ready=params.get('state')!=='waiting',cls=0,releaseIdentity
 const identityReleased=new Promise(resolve=>{releaseIdentity=resolve})
 const messages=new Map(),configs=new Map(),log=[],shifts=[]
+if(params.get('locked')==='1'){
+ messages.set(versions[0].creationId,{creationId:versions[0].creationId,decision:'confirmed',body:'In-cart message to keep',revision:1,previouslyPurchased:false})
+ messages.set(cid,{creationId:cid,decision:'confirmed',body:'Current version message',revision:1,previouslyPurchased:false})
+}
 const toolbar=document.createElement('details');toolbar.id='fixture-controls';toolbar.style.cssText='position:fixed;z-index:200;right:5px;top:5px;max-width:400px;background:white;border:1px dashed purple;font:11px monospace';toolbar.innerHTML='<summary>Local fixture controls</summary><button id="fixture-identity">Release identity</button><button id="fixture-ready">Ready</button> <button id="fixture-wait">Waiting</button><output id="fixture-metrics"></output><pre id="fixture-purchase"></pre><pre id="fixture-trace" style="max-height:160px;overflow:auto"></pre>';document.body.prepend(toolbar)
 const geometry=()=>{
  const selectors=['[aria-label="Your book"]','[aria-label="Photo versions"]','[data-preview-book-stage]']
@@ -50,6 +54,7 @@ window.fetch=async(input,init={})=>{
  } else if(url.pathname.startsWith('/api/creations/')){
   const id=url.pathname.split('/')[3],version=versions.find(v=>v.creationId===id)||versions[1]
   data={creation:{creation_id:id,preview_job_id:version.jobId,template_id:'Fixture_story',voice_asset_id:params.get('voice')==='1'?uuid(5,1):null,customize_snapshot:{storagePath:'user-assets/fixture/photo.jpg',textOverrides:{child_name:name,child_age:6,language:'English',book_type:params.get('edition')==='voice'?'supreme':'basic'}}}}
+  if(url.searchParams.get('includePhotoLock')==='1')data.photoLock={purchaseState:'unpurchased',hasCartAttachment:params.get('locked')==='1'&&id===versions[0].creationId}
  } else if(url.pathname.includes('assets'))data={assets:[{asset_id:uuid(4,2),asset_type:'face_image',storage_path:'user-assets/fixture/photo.jpg',signed_url:'/customize-product/v1/a-02-add-their-photo.jpg',preview_url:'/customize-product/v1/a-02-add-their-photo.jpg',metadata:{}}]}
  else if(method!=='GET')throw Error('Unexpected local mutation '+url.pathname)
  return Response.json(data)
