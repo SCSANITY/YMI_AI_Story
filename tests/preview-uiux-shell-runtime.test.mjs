@@ -20,6 +20,30 @@ test('one geometry drives the same shell in waiting and ready, without a resize 
   assert.equal(nodes.filter(n=>n.props?.['data-preview-book-model']).length,1)
  }
 })
+test('cover open and close use only the moving back;the flat left copy never fades underneath',()=>{
+ for(const [kind,from,target] of [['open',0,1],['close',1,0],['close',4,0]]){
+  const transition={id:1,identity:'job',kind,from,target,direction:kind==='open'?'next':'prev'}
+  const tree=PreviewBookShell({...props,ready:true,currentSpread:from,transition,renderPage:(side,spread)=>`${side}:${spread}`}),nodes=uiNodes(tree)
+  const left=nodes.find(n=>n.props?.className==='leftHalf'),back=nodes.find(n=>n.props?.className==='coverBack')
+  assert.equal(left.type,'div');assert.equal(left.props.style.visibility,'hidden');assert.equal(left.props.style.pointerEvents,'none');assert.equal(left.props['aria-hidden'],true)
+  assert.equal(back.props.style.visibility,'visible')
+  assert.equal(uiText(nodes.find(n=>n.props?.className==='coverBackPage')),`left:${kind==='close'?from:1}`)
+ }
+})
+test('cover completion hands the image to the stationary left once;closed and waiting layouts stay correct',()=>{
+ for(const [ready,currentSpread,leftVisible] of [[true,0,false],[true,1,true],[true,4,true],[false,0,false]]){
+  const nodes=uiNodes(PreviewBookShell({...props,ready,currentSpread})),left=nodes.find(n=>n.props?.className==='leftHalf'),back=nodes.find(n=>n.props?.className==='coverBack')
+  assert.equal(left.props.style.visibility,leftVisible?'visible':'hidden');assert.equal(back.props.style.visibility,'hidden')
+ }
+})
+test('desktop waiting left stays visible and reduced motion settles without a second cover-back image',()=>{
+ const {PreviewBookShell:Desktop}=loadUi('components/personalize/PreviewBookShell.tsx',{react:{...react,useState:()=>[{width:820,portrait:false},()=>{}]},'framer-motion':{motion,useReducedMotion:()=>true}},{HTMLElement:Element})
+ const waiting=uiNodes(Desktop(props));assert.equal(waiting.find(n=>n.props?.className==='leftHalf').props.style.visibility,'visible')
+ const open=uiNodes(Desktop({...props,ready:true,currentSpread:1}))
+ assert.equal(open.find(n=>n.props?.className==='leftHalf').props.style.visibility,'visible')
+ assert.equal(open.find(n=>n.props?.className==='coverBack').props.style.visibility,'hidden')
+ const cover=open.find(n=>n.props?.['data-preview-cover-leaf']);assert.equal(cover.props.animate.rotateY,-180);assert.equal(cover.props.transition.rotateY.duration,0)
+})
 test('the cap is original plus three changes, with no removal action and only upload disabled at the cap',()=>{
  const {PreviewPhotoVersions}=loadUi('components/personalize/PreviewPhotoVersions.tsx')
  const versions=Array.from({length:4},(_,i)=>({jobId:String(i),status:'ready',photoPreviewUrl:null}))

@@ -25,6 +25,12 @@ export function PreviewBookShell({ coverUrl, ready, waitingLeft, waitingRight, c
   const turn=transition
   const openTarget=ready && (turn ? turn.target>0 : currentSpread>0)
   const openCover=(!ready && !metrics.portrait)||openTarget
+  const isCoverTurn=turn?.kind==='open'||turn?.kind==='close'
+  // A moving cover owns its left artwork until it lands. Never fade a second,
+  // flat copy in behind it; hand off both layers in the completion render.
+  const showStaticLeft=openCover&&!isCoverTurn
+  const showMovingCoverBack=ready&&isCoverTurn
+  const coverBackSpread=turn?.kind==='close'?turn.from:1
   const scale=metrics.portrait?Math.min(1,metrics.width/(openTarget?776:475)):Math.min(1,metrics.width/PREVIEW_BOOK_GEOMETRY.width)
   const isPageTurn=turn?.kind==='page'
   const faces=isPageTurn?resolvePreviewBookTurningLeafFaces(turn.from,turn.direction):null
@@ -59,10 +65,10 @@ export function PreviewBookShell({ coverUrl, ready, waitingLeft, waitingRight, c
         <motion.div className={styles.leftFloor} initial={false} animate={{opacity:openCover?1:0}} transition={{duration:reduced?0:.5,delay:openCover && !reduced ? .55 : 0}} aria-hidden="true"/>
         <div className={styles.rightFloor} aria-hidden="true"/>
         <div className={styles.rightStack} aria-hidden="true"/>
-        <motion.div className={styles.leftHalf} aria-hidden={!openCover} style={{pointerEvents:openCover?'auto':'none'}} initial={false} animate={{opacity:openCover?1:0}} transition={{duration:turn && !reduced ? .3 : 0}}>
+        <div className={styles.leftHalf} aria-hidden={!showStaticLeft} style={{visibility:showStaticLeft?'visible':'hidden',pointerEvents:showStaticLeft?'auto':'none'}}>
           <div className={styles.leftBoard} style={edge} aria-hidden="true"><i/></div><div className={styles.leftStack} aria-hidden="true"/>
           <div className={styles.leftPage}>{ready?renderPage('left',staticLeft):waitingLeft}</div>
-        </motion.div>
+        </div>
         <div className={styles.rightPage}>{ready?renderPage('right',staticRight):waitingRight}</div>
         {turn&&faces?<motion.div key={turn.id} className={styles.leaf} data-preview-turning-leaf="true" data-preview-turn-direction={turn.direction}
           initial={{rotateY:turn.direction==='next'?0:-180}} animate={{rotateY:turn.direction==='next'?-180:0}}
@@ -77,7 +83,7 @@ export function PreviewBookShell({ coverUrl, ready, waitingLeft, waitingRight, c
           <div className={styles.coverFront}>{ready?renderPage('right',0):null}
             {ready&&!openTarget&&!turn?<button type="button" data-cover-open="true" aria-label="Open book" className={styles.openCover} onClick={()=>onTurn('next')}><span className={styles.coverNext}><ChevronRight size={24}/></span></button>:null}
           </div>
-          <div className={styles.coverBack} style={edge}><i className={styles.boardShade}/><div className={styles.backThinEdge}/><div className={styles.coverBackPage}>{ready?renderPage('left',1):null}</div></div>
+          <div className={styles.coverBack} aria-hidden="true" style={{...edge,visibility:showMovingCoverBack?'visible':'hidden'}}><i className={styles.boardShade}/><div className={styles.backThinEdge}/><div className={styles.coverBackPage}>{ready?renderPage('left',coverBackSpread):null}</div></div>
         </motion.div>
         {ready&&currentSpread>0&&!turn?<div className={styles.controls}>
           <button type="button" className={`${styles.control} ${styles.previous}`} aria-label="Previous page" onClick={()=>onTurn('prev')}><ChevronLeft size={22}/></button>

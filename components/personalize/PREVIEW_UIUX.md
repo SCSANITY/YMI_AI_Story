@@ -9,6 +9,9 @@ is split into:
   A turn captures its absolute target and identity; reset/unmount cancels its
   completion. Resizing is immediate; user open/close uses 1.1 seconds and inner
   turns use 0.8 seconds. Reduced motion commits immediately.
+  During cover open/close,only its moving back owns the left illustration;the
+  stationary left is hidden until landing. Closing captures the currently viewed
+  left page rather than flashing the first spread. The handoff adds no timer.
 - `PreviewWaitingPages` + `usePreviewWaitingState`: the existing 40-second estimate,
   three eight-second steps, 15-second interaction hold and hidden-tab pause.
   Demo assets come from `product/voice-demo-data`; there is no new audio service.

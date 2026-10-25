@@ -23,6 +23,23 @@ const geometry=()=>{
 const metrics=()=>{document.getElementById('fixture-metrics').textContent=JSON.stringify({cls,scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,geometry:geometry()})}
 new PerformanceObserver(list=>{for(const e of list.getEntries())if(!e.hadRecentInput){cls+=e.value;shifts.push({value:e.value,sources:e.sources.map(s=>({tag:s.node?.tagName,role:s.node?.getAttribute?.('aria-label'),class:s.node?.className,previous:s.previousRect.toJSON(),current:s.currentRect.toJSON()}))})};metrics();toolbar.dataset.shifts=JSON.stringify(shifts)}).observe({type:'layout-shift',buffered:true})
 setInterval(metrics,1000)
+// Opt-in, bounded DOM-frame evidence for cover handoffs. No provider/API calls.
+if(params.get('coverFrames')==='1'){
+ const output=document.createElement('pre');output.id='fixture-cover-frames';toolbar.append(output)
+ let capture=0
+ const record=()=>{
+  const id=++capture,start=performance.now(),frames=[]
+  const sample=()=>{
+   if(capture!==id)return
+   const cover=document.querySelector('[data-preview-cover-leaf]'),left=document.querySelector('[class$="_leftHalf"]'),back=document.querySelector('[class$="_coverBack"]')
+   if(cover&&left&&back){const transform=getComputedStyle(cover).transform,matrix=new DOMMatrixReadOnly(transform);frames.push({ms:Math.round(performance.now()-start),angle:Math.round(Math.acos(Math.max(-1,Math.min(1,matrix.m11)))*180/Math.PI*100)/100,left:getComputedStyle(left).visibility,leftOpacity:Number(getComputedStyle(left).opacity),back:getComputedStyle(back).visibility})}
+   if(performance.now()-start<1800)requestAnimationFrame(sample)
+   else output.textContent=JSON.stringify(frames)
+  };requestAnimationFrame(sample)
+ }
+ document.addEventListener('click',event=>{if(event.target.closest('[data-cover-open],button[aria-label="Back to cover"],button[aria-label="Previous page"]'))record()},true)
+ document.addEventListener('keydown',event=>{if(event.key==='ArrowRight'||event.key==='ArrowLeft')record()},true)
+}
 document.getElementById('fixture-identity').onclick=()=>releaseIdentity()
 document.getElementById('fixture-ready').onclick=()=>{cls=0;shifts.length=0;toolbar.dataset.geometryBaseline=JSON.stringify(geometry());setTimeout(()=>{ready=true;window.dispatchEvent(new Event('focus'))},1000)}
 document.getElementById('fixture-wait').onclick=()=>{ready=false;window.dispatchEvent(new Event('focus'))}
