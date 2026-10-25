@@ -5,7 +5,7 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('Preview purchase controls depend on durable identity, not image availability', async () => {
+test('edition choice is immediate; paid purchase waits for durable identity and decoded cover', async () => {
   const page = await read('components/PersonalizePage.tsx')
 
   assert.match(page, /hasPurchaseIdentity = isUuid\(creationId\) && isUuid\(displayedPreviewJobId\)/)
@@ -14,9 +14,10 @@ test('Preview purchase controls depend on durable identity, not image availabili
   assert.match(page, /canCheckout = stageCanCheckout && canConfigurePurchase/)
   assert.doesNotMatch(page, /canAddToCart = [^\n]*(hasReadyPreviewCover|previewCompletionReady|previewError)/)
   assert.doesNotMatch(page, /canCheckout = [^\n]*(hasReadyPreviewCover|previewCompletionReady|previewError)/)
-  assert.match(page, /selectionDisabled=\{!canConfigurePurchase \|\| isSavingVoice\}/)
-  assert.match(page, /dedication=\{canConfigurePurchase \? <PreviewDedication/)
-  assert.match(page, /canShare=\{Boolean\(creationId\) && !isPreviewCoverPending && !previewError\}/)
+  assert.match(page, /disabled=\{isSavingVoice \|\| isSwitchingPreviewVersion \|\| hasTerminalPreviewFailure/)
+  assert.match(page, /purchaseReady = hasReadyPreviewCover && canAddToCart && canCheckout/)
+  assert.match(page, /onMessage=\{\(\) => setIsMessageEditorOpen\(true\)\}/)
+  assert.match(page, /canShare=\{Boolean\(creationId\) && hasReadyPreviewCover && !previewError\}/)
 })
 
 test('the first Preview enters Preview after Creation and Job identity exist without waiting for an image', async () => {

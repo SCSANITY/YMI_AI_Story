@@ -15,6 +15,8 @@ import { parseJobQueueAdmissionError } from '@/lib/jobQueueAdmission'
 import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
+import { buildPreviewVersionGroup } from '@/lib/preview-version-group'
+import { readPreviewVersionPhotos } from '@/lib/preview-version-photos-server'
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -47,7 +49,7 @@ function rpcConflictCode(error: { code?: string | null; message?: string | null 
   if (sqlState === '54000' && /preview_version_limit/i.test(message)) {
     return 'preview_variant_limit'
   }
-  if (sqlState === '40001' && /preview_version_source_conflict/i.test(message)) {
+  if ((sqlState === 'PT409') && /preview_version_source_conflict/i.test(message)) {
     return 'preview_version_source_conflict'
   }
   if (sqlState !== '55000') return null
@@ -56,6 +58,38 @@ function rpcConflictCode(error: { code?: string | null; message?: string | null 
   if (/preview_version_source_job_missing/i.test(message)) return 'preview_version_source_job_missing'
   if (/preview_version_config_missing/i.test(message)) return 'preview_config_missing'
   return null
+}
+
+export async function GET(request: Request, context: { params: Promise<{ creationId: string }> }) {
+  const { creationId } = await context.params
+  if (!isUuid(creationId)) return jsonNoStore({ code: 'invalid_creation_id' }, 400)
+  let owner
+  try {
+    owner = await resolveCheckoutOwner(request, { allowAnon: true, createAnonIfMissing: false })
+  } catch (error) {
+    const response = checkoutOwnerErrorResponse(error) ?? jsonNoStore({ code: 'unauthorized' }, 401)
+    response.headers.set('Cache-Control', NO_STORE_HEADERS['Cache-Control'])
+    return response
+  }
+  if (!owner) return jsonNoStore({ code: 'unauthorized' }, 401)
+  const filter = ownerFilter(owner)
+  const { data: creation, error: lookupError } = await supabaseAdmin.from('creations')
+    .select('creation_id').eq('creation_id', creationId)
+    .eq('owner_type', filter.owner_type).eq(filter.column, filter.value).maybeSingle()
+  if (lookupError) return jsonNoStore({ code: 'creation_lookup_failed' }, 500)
+  if (!creation) return jsonNoStore({ code: 'creation_not_found' }, 404)
+  const { data, error } = await supabaseAdmin.rpc('read_preview_version_group', {
+    p_creation_id: creationId, p_owner_type: owner.ownerType,
+    p_owner_id: owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId,
+  })
+  if (error) return jsonNoStore({ code: 'preview_version_group_unavailable' }, error.code === '42501' ? 404 : 409)
+  try {
+    const group = buildPreviewVersionGroup(data ?? [], creationId)
+    const photos = await readPreviewVersionPhotos(owner, group.versions.map(version => version.creationId)).catch(() => new Map<string, { photoUrl: string; faceAssetId: string }>())
+    return jsonNoStore({ ...group, versions: group.versions.map(version => ({ ...version, photoUrl: photos.get(version.creationId)?.photoUrl ?? null, faceAssetId: photos.get(version.creationId)?.faceAssetId ?? null })) })
+  } catch {
+    return jsonNoStore({ code: 'preview_version_group_unavailable' }, 409)
+  }
 }
 
 export async function POST(

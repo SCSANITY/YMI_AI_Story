@@ -16,9 +16,9 @@ test('full description uses the existing catalog read model with accessible two-
 
 test('only the voiced physical edition carries the badge and labels explain the formats', async () => {
   const [page, messages] = await Promise.all([read('components/PersonalizePage.tsx'), read('src/lib/i18n-messages.ts')])
-  const editions = page.slice(page.indexOf('const editionOptions ='), page.indexOf('const isAgeBelowRecommendedRange'))
-  assert.doesNotMatch(editions.slice(0, editions.indexOf("value: 'supreme'")), /badge:/)
-  assert.match(editions.slice(editions.indexOf("value: 'supreme'")), /badge: t\('personalize\.mostPopular'\)/)
+  const panel = await read('components/personalize/PreviewYourBookPanel.tsx')
+  assert.match(panel, /edition.type === 'supreme' \? <span className=\{styles.popular\}/)
+  assert.match(panel, /MOST POPULAR/)
   assert.match(messages, /'personalize\.bookTypeBasicTitle': 'Hardcover'/)
   assert.match(messages, /'personalize\.bookTypeSupremeTitle': 'Hardcover \+ Voice'/)
 })

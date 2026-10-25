@@ -196,7 +196,7 @@ test('voice bind uses existing capture identity; no model/upload/email side effe
 test('RPC failures return fixed codes and never SQL/private error details',async()=>{
   for (const [error,status,code] of [
     [{code:'42501',message:'private/path raw credential'},403,'material_access_denied'],
-    [{code:'40001'},409,'dedication_revision_conflict'],
+    [{code:'PT409'},409,'dedication_revision_conflict'],
     [{message:'materials_dedication_closed'},409,'dedication_closed'],
     [{message:'private/path raw credential'},503,'materials_unavailable'],
   ]) {

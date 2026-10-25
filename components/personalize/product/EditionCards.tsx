@@ -2,64 +2,16 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Layers, Gift, Volume2, Mic, Plug } from "lucide-react";
 import type {
-  BookPackagePrice,
   BookPackagePricing,
   DisplayCurrency,
 } from "@/types";
-import { formatDisplayCurrency } from "@/lib/locale-pricing";
 import { getUiMessage as t } from "@/lib/i18n-messages";
+import { EDITION_DEFINITIONS, getEditionDefinition, type EditionType } from "./edition-definitions";
+import { EditionPrice } from "./EditionPrice";
 import styles from "./ProductSections.module.css";
 
-const EDITIONS = [
-  {
-    type: "basic",
-    prefix: "c-hardcover",
-    label: "hardcover",
-    icons: [BookOpen, Layers, Gift],
-  },
-  {
-    type: "supreme",
-    prefix: "c-voice",
-    label: "voiceEdition",
-    icons: [Volume2, Mic, Plug],
-  },
-] as const;
-type EditionType = (typeof EDITIONS)[number]["type"];
-const IMAGE_COUNT = 5;
 const AUTOPLAY_MS = 4000;
-
-function Price({
-  price,
-  currency,
-}: {
-  price: BookPackagePrice;
-  currency: DisplayCurrency;
-}) {
-  const sale = price.salePriceUsd !== null;
-  return (
-    <div className={styles.price}>
-      {sale ? (
-        <>
-          <span>
-            {price.discountPercent}% {t("product.off")}
-          </span>
-          <s
-            aria-label={t("product.originalPrice", {
-              price: formatDisplayCurrency(price.listPriceUsd, currency),
-            })}
-          >
-            {formatDisplayCurrency(price.listPriceUsd, currency)}
-          </s>
-        </>
-      ) : null}
-      <strong>
-        {formatDisplayCurrency(price.effectivePriceUsd, currency)}
-      </strong>
-    </div>
-  );
-}
 
 export default function EditionCards({
   pricing,
@@ -68,7 +20,7 @@ export default function EditionCards({
   pricing: BookPackagePricing;
   currency: DisplayCurrency;
 }) {
-  const [edition, setEdition] = useState("supreme");
+  const [edition, setEdition] = useState<EditionType>("supreme");
   const [selected, setSelected] = useState({ basic: 0, supreme: 0 });
   const [manualSelection, setManualSelection] = useState(0);
   const cards = useRef<Partial<Record<EditionType, HTMLElement>>>({});
@@ -93,7 +45,7 @@ export default function EditionCards({
         if (!advancing.length) return;
         setSelected((previous) => {
           const next = { ...previous };
-          for (const type of advancing) next[type] = (previous[type] + 1) % IMAGE_COUNT;
+          for (const type of advancing) next[type] = (previous[type] + 1) % getEditionDefinition(type).gallery.length;
           return next;
         });
       }, AUTOPLAY_MS);
@@ -130,19 +82,19 @@ export default function EditionCards({
         </h2>
       </header>
       <div className={styles.editionToggle}>
-        {EDITIONS.map((item) => (
+        {EDITION_DEFINITIONS.map((item) => (
           <button
             type="button"
             key={item.type}
             aria-pressed={edition === item.type}
             onClick={() => setEdition(item.type)}
           >
-            {t(`product.${item.label}`)}
+            {t(item.nameKey)}
           </button>
         ))}
       </div>
       <div className={styles.editionGrid}>
-        {EDITIONS.map((item) => (
+        {EDITION_DEFINITIONS.map((item) => (
           <article
             ref={(node) => {
               if (node) cards.current[item.type] = node;
@@ -155,13 +107,13 @@ export default function EditionCards({
           >
             <div className={styles.gallery}>
               <div className={styles.thumbnails}>
-                {Array.from({ length: IMAGE_COUNT }, (_, index) => (
+                {item.gallery.map((image, index) => (
                   <button
                     type="button"
                     key={index}
                     aria-pressed={selected[item.type] === index}
                     aria-label={t("product.showGalleryImage", {
-                      edition: t(`product.${item.label}`),
+                      edition: t(item.nameKey),
                       number: index + 1,
                     })}
                     onClick={() => {
@@ -173,7 +125,7 @@ export default function EditionCards({
                     }}
                   >
                     <Image
-                      src={`/customize-product/v1/${item.prefix}-0${index + 1}.jpg`}
+                      src={image.src}
                       alt=""
                       width={72}
                       height={72}
@@ -185,10 +137,8 @@ export default function EditionCards({
               <div className={styles.galleryMain}>
                 <Image
                   key={selected[item.type]}
-                  src={`/customize-product/v1/${item.prefix}-0${selected[item.type] + 1}.jpg`}
-                  alt={t(
-                    `product.${item.label}Gallery${selected[item.type] + 1}`,
-                  )}
+                  src={item.gallery[selected[item.type]].src}
+                  alt={t(item.gallery[selected[item.type]].altKey)}
                   fill
                   sizes="(max-width: 767px) calc(100vw - 72px), (max-width: 1100px) 35vw, 440px"
                 />
@@ -196,23 +146,23 @@ export default function EditionCards({
             </div>
             <div className={styles.editionTitle}>
               <h3>
-                {item.type === "supreme" ? (
+                {item.titleAccentKey ? (
                   <>
-                    {t("product.hardcover")} <em>+ {t("product.voiceWord")}</em>
+                    {t(item.titleKey)} <em>+ {t(item.titleAccentKey)}</em>
                   </>
                 ) : (
-                  t("product.hardcover")
+                  t(item.titleKey)
                 )}
               </h3>
-              <Price price={pricing[item.type]} currency={currency} />
+              <EditionPrice price={pricing[item.type]} currency={currency} />
             </div>
             <ul className={styles.features}>
-              {item.icons.map((Icon, index) => (
-                <li key={index}>
+              {item.features.map(({ Icon, textKey }) => (
+                <li key={textKey}>
                   <span>
                     <Icon size={22} aria-hidden="true" />
                   </span>
-                  {t(`product.${item.type}Feature${index + 1}`)}
+                  {t(textKey)}
                 </li>
               ))}
             </ul>

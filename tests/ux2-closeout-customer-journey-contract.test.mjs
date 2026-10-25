@@ -23,16 +23,16 @@ test('private Preview access failures stop polling and never impersonate generat
     read('src/services/jobs.ts'),
     read('components/personalize/usePreviewController.ts'),
     read('components/PersonalizePage.tsx'),
-    read('components/personalize/PreviewAccessCover.tsx'),
+    read('components/personalize/PreviewWaitingPages.tsx'),
   ])
 
   assert.match(jobs, /\[401, 403, 404\]\.includes\(error\.status\)/)
   assert.match(controller, /isTerminalJobAccessError\(watchError\)/)
   assert.match(controller, /updatePreviewAccess\(jobId, 'unavailable'\)/)
-  assert.match(page, /isPreviewUnavailable[\s\S]*PreviewAccessCover/)
-  assert.match(page, /isPreviewRestoring[\s\S]*mode="restoring"/)
-  assert.match(accessCover, /data-preview-access-state=\{mode\}/)
-  assert.doesNotMatch(accessCover, /countdown|role="timer"/)
+  assert.match(page, /waitingMode = previewError \? 'error' : isPreviewUnavailable \? 'unavailable'/)
+  assert.match(page, /previewCoverState === 'restoring' \? 'restoring' : 'generating'/)
+  assert.match(accessCover, /data-preview-status=\{ready\?'ready':mode\}/)
+  assert.match(accessCover, /mode==='generating'\?progress.countdownSeconds/)
 })
 
 test('Preview purchase gives immediate protected handoff and Checkout owns a route shell', async () => {

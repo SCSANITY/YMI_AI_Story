@@ -32,8 +32,10 @@ test('all live edition UI and copy exclude the retired product and artwork', asy
   for (const source of [page, pricing, messages]) {
     assert.doesNotMatch(source, /Cloud Explorer|cloud-explorer|bookTypeDigital|included\.digital|Digital and hardcover/)
   }
-  assert.match(page, /value: 'basic' as const/)
-  assert.match(page, /value: 'supreme' as const/)
+  const definitions = await read('components/personalize/product/edition-definitions.ts')
+  assert.match(definitions, /type: "basic"/)
+  assert.match(definitions, /type: "supreme"/)
+  assert.doesNotMatch(definitions, /cloud-explorer|Cloud Explorer/)
   await assert.rejects(access(new URL('../public/personalize-editions/cloud-explorer.svg', import.meta.url)))
 })
 

@@ -1,5 +1,5 @@
 export const PREVIEW_VARIANT_KIND = 'change_photo' as const
-export const PREVIEW_VARIANT_SESSION_CAP = 5
+export const PREVIEW_VARIANT_SESSION_CAP = 3
 
 export type PreviewVariantMarker = {
   kind: typeof PREVIEW_VARIANT_KIND

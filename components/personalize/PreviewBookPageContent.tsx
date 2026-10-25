@@ -22,6 +22,7 @@ const PREVIEW_COVER_LOGO_STYLE: CSSProperties = {
 
 type PreviewBookPageContentProps = {
   mode?: 'preview' | 'reader'
+  controls?: boolean
   side: 'left' | 'right'
   spreadIndex: number
   previewImageErrors: Set<string>
@@ -48,6 +49,7 @@ type PreviewBookPageContentProps = {
 
 function PreviewBookPageContentComponent({
   mode = 'preview',
+  controls = true,
   side,
   spreadIndex,
   previewImageErrors,
@@ -129,7 +131,7 @@ function PreviewBookPageContentComponent({
 
         <div className="pointer-events-none absolute bottom-0 left-0 top-0 z-30 w-3 bg-gradient-to-r from-black/20 via-black/10 to-transparent" />
 
-        {!isFlipping && canTurnNext && (
+        {controls && !isFlipping && canTurnNext && (
           <button
             type="button"
             aria-label={labels.nextPage}
@@ -219,7 +221,7 @@ function PreviewBookPageContentComponent({
         ) : null}
 
         <div className="pointer-events-none absolute inset-0 z-10" style={{ background: bindingShadow }} />
-        <PageControls
+        {controls ? <PageControls
           side={side}
           isFlipping={isFlipping}
           canTurnNext={canTurnNext}
@@ -230,7 +232,7 @@ function PreviewBookPageContentComponent({
           onTurnPage={onTurnPage}
           onReturnToCover={onReturnToCover}
           strongBackground
-        />
+        /> : null}
       </div>
     )
   }

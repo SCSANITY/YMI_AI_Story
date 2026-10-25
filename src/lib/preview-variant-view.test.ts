@@ -7,6 +7,7 @@ import {
 } from './preview-variant-view'
 
 const original: PreviewVariantView = {
+  creationId: 'original-creation',
   jobId: 'original-job',
   status: 'ready',
   pages: ['original-cover'],
@@ -22,6 +23,7 @@ const original: PreviewVariantView = {
 
 const alternate: PreviewVariantView = {
   ...original,
+  creationId: 'alternate-creation',
   jobId: 'alternate-job',
   status: 'generating',
   pages: [],

@@ -105,7 +105,8 @@ test('session cap counts queued, running and done variants but frees discarded s
     input_snapshot: marker,
   }))
 
-  assert.equal(PREVIEW_VARIANT_SESSION_CAP, 5)
+  // Legacy transient helpers remain covered; the durable RPC counts all forks.
+  assert.equal(PREVIEW_VARIANT_SESSION_CAP, 3)
   assert.equal(jobs.filter((job) => isCountedPreviewVariant(job, sessionId)).length, 3)
 })
 

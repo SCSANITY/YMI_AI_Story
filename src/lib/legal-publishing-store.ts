@@ -73,7 +73,7 @@ export function isCanonicalLegalDocumentKey(
 
 function mapStoreError(error: { code?: string; message?: string } | null, fallback: string): never {
   const message = String(error?.message || fallback)
-  if (error?.code === '40001' || /changed|conflict|older live revision/i.test(message)) {
+  if (error?.code === 'PT409' || /changed|conflict|older live revision/i.test(message)) {
     throw new LegalPublishingConflictError(message)
   }
   if (error?.code === '22023' || error?.code === 'P0002') {
