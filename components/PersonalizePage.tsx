@@ -265,6 +265,8 @@ export default function PersonalizePage({
   const facePrepareErrorRef = useRef<string | null>(facePrepareError);
   const dataGenerationConsentRef = useRef(false);
   const personalizationStartTrackedRef = useRef(false);
+  const uploadPanelRef = useRef<HTMLDivElement | null>(null);
+  const scrollToPhotoOnStartRef = useRef(false);
   const previewReadyTrackedJobIdsRef = useRef<Set<string>>(new Set());
 
   const handleStartPersonalization = useCallback(() => {
@@ -275,7 +277,11 @@ export default function PersonalizePage({
   }, []);
 
   const handleStartFromProductIntro = useCallback(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    // Match CustomizeFormLayout's stacked layout, including phone landscape.
+    scrollToPhotoOnStartRef.current = window.matchMedia('(max-width: 1023px)').matches;
+    if (!scrollToPhotoOnStartRef.current) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
     handleStartPersonalization();
   }, [handleStartPersonalization]);
 
@@ -344,6 +350,15 @@ export default function PersonalizePage({
     lastMobileTopSurfaceRef.current = mobileTopSurface;
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [mobileTopSurface]);
+
+  useLayoutEffect(() => {
+    if (!scrollToPhotoOnStartRef.current || !viewState.showForm || formStep !== 'PHOTO') return;
+    scrollToPhotoOnStartRef.current = false;
+    uploadPanelRef.current?.scrollIntoView({
+      block: 'start',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }, [formStep, viewState.showForm]);
 
   const pendingGenerateConsentRef = useRef<GeneratePreviewConsent | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
@@ -542,7 +557,6 @@ export default function PersonalizePage({
       setIsPreparingShare(false);
     }
   }, [creationId, t, user?.customerId]);
-  const uploadPanelRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef(name);
   const ageRef = useRef(age);
   const [areChildDetailsReady, setAreChildDetailsReady] = useState(false);
@@ -3022,7 +3036,7 @@ export default function PersonalizePage({
                   />
                 }
                 form={
-                  <div ref={uploadPanelRef} className="scroll-mt-5">
+                  <div ref={uploadPanelRef} className="scroll-mt-24 lg:scroll-mt-5">
                     {formStep === 'INTRO' ? (
                       <PersonalizeProductIntro
                         key={bookID}
