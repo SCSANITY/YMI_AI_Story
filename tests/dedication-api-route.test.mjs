@@ -156,7 +156,7 @@ test('ownership and revision conflicts fail closed without a successful save', a
   assert.equal((await lostOwnership.POST(post({ creationId, decision: 'skipped', expectedRevision: null }))).status, 500)
   assert.deepEqual(lostOwnership.calls.map(call => call.kind), ['load'])
 
-  const staleRevision = route({ rpcError: { code: '40001' } })
+  const staleRevision = route({ rpcError: { code: 'PT409' } })
   const response = await staleRevision.POST(post({ creationId, decision: 'skipped', expectedRevision: 1 }))
   assert.equal(response.status, 409)
   assert.match((await response.json()).error, /Reload/)

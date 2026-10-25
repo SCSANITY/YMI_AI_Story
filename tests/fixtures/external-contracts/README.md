@@ -116,3 +116,5 @@ review provenance, not the current upstream fixture identity.
   from Database `ab55209ebbe2dddd93d7ed0a6f9092b607a508e0`, byte-identical to
   that Git blob. It freezes the proposed service-only group reader/root quota;
   it is NOT evidence of production application.
+- SUPABASE-CPU-001 adds the pending 23-function non-retryable business-conflict repair;
+  the byte-exact SQL mirror is not evidence of production execution.
