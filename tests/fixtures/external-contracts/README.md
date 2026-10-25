@@ -113,7 +113,7 @@ review provenance, not the current upstream fixture identity.
   a service-only historical effective-line read.07-B fixture remains unchanged.
 
 - WEB-UIUX-001/16 adds `20261023_180000_staff_mailboxes.sql` byte-identical
-  to Database offline candidate `978bf27`. It pins the additive Amy/Justin shared
+  to Database offline candidate `271729e`. It pins the additive Amy/Justin shared
   mailbox expansion, not production application or deployment authorization.
 - PREVIEW-UIUX-001/P0 adds `20261023_150000_preview_version_durable_group.sql`
   from Database `4abe6080943fa8233442299987744a7c29a62530`, byte-identical to
@@ -125,3 +125,6 @@ review provenance, not the current upstream fixture identity.
 - P0 reconciliation2026-10-25 supersedes the oldab55209 mirror: exact applied
   CPU baseline fingerprint (CRLF retained) and PT409 source conflicts. No retryable
   business conflict is restored;the P0 migration remains NOT APPLIED.
+
+- Mail16 resume2026-10-26 binds exact observed CRLF function bodies without
+  normalization;the mirror is offline evidence,not production application.

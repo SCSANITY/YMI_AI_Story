@@ -23,16 +23,16 @@ BEGIN
   END IF;
   SELECT count(*) INTO v_count FROM public.general_mail_threads;
   FOR v_item IN SELECT * FROM (VALUES
-      ('public.project_general_mail_inbound(uuid,text[])', '6352245efaafed31dd4f4df9cd98b854', '91974c04b180dc548adabbc3fc035739'),
-      ('public.create_general_mail_draft(uuid,uuid,text,uuid,text,text[],text[],text[],text[],text,text,text,text)', '9d04744ee3c2042e9754e7854d9a3178', '1370486f1d9ad66ad024963d009093af'),
-      ('public.get_general_mail_mailbox_counts()', '99e4066ba71b32a3655f903ba1a5e8fc', '8a6157d0ef63fcebbcec17f24c5b1ba3'),
-      ('public.list_general_mail_thread_summaries(text,text,text,integer,integer)', 'c3e6387735b4ad64fc5d5935c4d30401', '3978d0e08eb36ecb3a69edc87c44d458'),
-      ('public.create_general_mail_rich_draft(uuid,uuid,text,uuid,text,text[],text[],text[],text[],text,text,text,jsonb,text,text)', '55eff0774bb6e75f54bd0d41b12edfd4', '67f4a1ab86b9fd56af884abf1df2a1a9')
+      ('public.project_general_mail_inbound(uuid,text[])', '503469c4b31ab432e3760e986992cae5', '549fc2ebc6a7e930fb9b7acd9d6adeb6'),
+      ('public.create_general_mail_draft(uuid,uuid,text,uuid,text,text[],text[],text[],text[],text,text,text,text)', '523e50613ba6f5b716d44d136644cc1d', '45089ef804e4e08c46ce2c992f298b9a'),
+      ('public.get_general_mail_mailbox_counts()', 'd03617b5c9daf14e05259e4f1f349ff4', '0a64618d5254b92fe57ec215a9925a5e'),
+      ('public.list_general_mail_thread_summaries(text,text,text,integer,integer)', '26c0a2e99a6afc10837882ae0edce35c', '3f40351fcc5ad6330f0cf9de98934893'),
+      ('public.create_general_mail_rich_draft(uuid,uuid,text,uuid,text,text[],text[],text[],text[],text,text,text,jsonb,text,text)', 'f263f8d336a271f2b9f06331f49b21fc', '83e16e96dfbdc6fe32501070473d5928')
     ) AS expected(signature, before_hash, after_hash)
   LOOP
     v_oid := to_regprocedure(v_item.signature);
     IF v_oid IS NULL THEN RAISE EXCEPTION 'staff_mailboxes_function_missing: %',v_item.signature; END IF;
-    SELECT replace(prosrc,E'\r\n',E'\n'), pg_get_functiondef(oid),
+    SELECT prosrc, pg_get_functiondef(oid),
       jsonb_build_object('acl',proacl,'owner',proowner,'security',prosecdef,'config',proconfig)
       INTO v_source,v_definition,v_acl FROM pg_proc WHERE oid=v_oid;
     IF md5(v_source) <> v_item.before_hash THEN
@@ -46,9 +46,9 @@ BEGIN
     v_changed := v_definition;
     IF v_item.signature LIKE 'public.project_general_mail_inbound(%' THEN
       v_changed := replace(v_changed, $old$when 'delivery' then 'delivery'$old$,
-        $new$when 'delivery' then 'delivery'
-    when 'amy' then 'amy'
-    when 'justin' then 'justin'$new$);
+        $new$when 'delivery' then 'delivery'$new$ || chr(13) || chr(10) ||
+        $new$    when 'amy' then 'amy'$new$ || chr(13) || chr(10) ||
+        $new$    when 'justin' then 'justin'$new$);
     ELSIF v_item.signature='public.get_general_mail_mailbox_counts()' THEN
       v_changed := replace(v_changed,$old$('delivery')$old$,$new$('delivery'), ('amy'), ('justin')$new$);
       v_changed := replace(v_changed,$old$'orders', 'delivery']$old$,$new$'orders', 'delivery', 'amy', 'justin']$new$);
@@ -60,7 +60,7 @@ BEGIN
     SELECT jsonb_build_object('acl',proacl,'owner',proowner,'security',prosecdef,'config',proconfig)
       INTO v_after_acl FROM pg_proc WHERE oid=v_oid;
     IF v_after_acl IS DISTINCT FROM v_acl OR NOT EXISTS (
-      SELECT 1 FROM pg_proc WHERE oid=v_oid AND md5(replace(prosrc,E'\r\n',E'\n'))=v_item.after_hash
+      SELECT 1 FROM pg_proc WHERE oid=v_oid AND md5(prosrc)=v_item.after_hash
     ) THEN RAISE EXCEPTION 'staff_mailboxes_function_postcheck: %',v_item.signature; END IF;
   END LOOP;
   ALTER TABLE public.general_mail_threads DROP CONSTRAINT general_mail_threads_mailbox_key_check;
