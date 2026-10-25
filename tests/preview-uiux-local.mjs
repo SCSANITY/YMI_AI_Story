@@ -28,9 +28,13 @@ http.createServer((req,res)=>{
  const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname)
  let file
  if(['/fixture.js','/fixture.css','/global.css'].includes(pathname))file=path.join(out,pathname.slice(1))
- else if(pathname.startsWith('/customize-product/')||pathname.startsWith('/images/')||pathname.startsWith('/fonts/'))file=path.join(root,'public',pathname)
- if(file&&file.startsWith(root)&&fs.existsSync(file)){res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':file.endsWith('.jpg')?'image/jpeg':'application/octet-stream');res.end(fs.readFileSync(file));return}
+ else if(['/customize-product/','/images/','/fonts/','/flags/'].some(prefix=>pathname.startsWith(prefix))||pathname==='/logo.webp'){
+  const candidate=path.resolve(root,'public','.'+pathname)
+  if(candidate.startsWith(path.join(root,'public')+path.sep))file=candidate
+ }
+ if(file&&file.startsWith(root+path.sep)&&fs.existsSync(file)&&fs.statSync(file).isFile()){res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':file.endsWith('.jpg')?'image/jpeg':file.endsWith('.webp')?'image/webp':'application/octet-stream');res.end(fs.readFileSync(file));return}
  if(pathname==='/cover.svg'){const color=new URL(req.url,'http://localhost').searchParams.get('v')==='1'?'#dbab64':'#adc3b2';res.setHeader('Content-Type','image/svg+xml');res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="1024" height="1024" fill="${color}"/><rect x="150" y="70" width="730" height="880" rx="35" fill="#fff2c9"/><circle cx="510" cy="530" r="200" fill="#dca76e"/><circle cx="450" cy="500" r="20"/><circle cx="570" cy="500" r="20"/><path d="M450 590 Q510 650 570 590" stroke="#604b40" stroke-width="10" fill="none"/><text x="512" y="200" text-anchor="middle" font-family="Georgia" font-size="58">An illustrated story</text><text x="512" y="860" text-anchor="middle" font-family="Georgia" font-size="32">Local fixture · not a generation</text></svg>`);return}
  if(pathname!=='/personalize/Fixture_story'){res.writeHead(404).end();return}
+ res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self' data:")
  res.setHeader('Content-Type','text/html');res.end('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preview UIUX · local fixture</title><link rel="stylesheet" href="/global.css"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>')
 }).listen(0,'127.0.0.1',function(){console.log('PREVIEW_UIUX_FIXTURE http://127.0.0.1:'+this.address().port+'/personalize/Fixture_story?view=preview&creationId=10000000-0000-4000-8000-000000000002&jobId=20000000-0000-4000-8000-000000000002')})
