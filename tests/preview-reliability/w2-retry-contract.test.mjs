@@ -60,5 +60,6 @@ test('W2 provides one accessible double-activation-resistant action while termin
   assert.match(page, /retryPreview\(creationId\)/)
   assert.match(page, /const hasTerminalPreviewFailure = previewPhase === 'failed'[\s\S]*previewPhase === 'partial_failed'[\s\S]*previewPhase === 'cancelled'/)
   assert.match(page, /const canAddToCart = stageCanAddToCart && canConfigurePurchase/)
-  assert.match(page, /selectionDisabled=\{!canConfigurePurchase \|\| isSavingVoice\}/)
+  assert.match(page, /voiceDisabled=\{!canConfigurePurchase\}/)
+  assert.match(page, /disabled=\{isRetryingPreview\} aria-busy=\{isRetryingPreview\}/)
 })

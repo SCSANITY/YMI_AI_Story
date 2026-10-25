@@ -22,7 +22,8 @@ test('Change Photo switches to a new durable Creation and Job before image waiti
   assert.ok(jobIndex > createIndex && jobIndex < watchIndex)
   assert.match(personalize, /replacePreviewUrl\(created\.creationId, created\.jobId\)/)
   assert.doesNotMatch(personalize, /handleSelectPreviewVariant|commitSelectedPreviewForExit/)
-  assert.match(personalize, /key=\{displayedPreviewJobId \?\? 'preview-book'\}/)
+  assert.match(personalize, /usePreviewBookNavigation\(displayedPreviewJobId, maxSpreadIndex, hasReadyPreviewCover\)/)
+  assert.match(personalize, /resetBookNavigation\(\)/)
 })
 
 test('late image responses cannot overwrite a different selected photo version', () => {

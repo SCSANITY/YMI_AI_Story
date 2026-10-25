@@ -66,6 +66,7 @@ function routeHarness(kind = 'customer', foreign = false) {
       from(table) { assert.equal(table, 'creations'); return query },
       rpc: async (name, args) => { calls.push([name, args]); return { data: rows, error: null } },
     } },
+    '@/lib/preview-version-photos-server': { readPreviewVersionPhotos: async () => new Map([[child, { photoUrl: 'https://signed.test/photo', faceAssetId: uuid(40) }]]) },
   })
   return { route, calls, filters }
 }
@@ -75,7 +76,11 @@ for (const kind of ['customer', 'anon']) test(`GET restores ${kind} group and de
   const response = await h.route.GET(new Request('https://local.test/preview-versions'), { params: Promise.resolve({ creationId: child }) })
   assert.equal(response.status, 200)
   assert.match(response.headers.get('cache-control'), /no-store/)
-  assert.equal((await response.json()).selectedJobId, childJob)
+  const dto = await response.json()
+  assert.equal(dto.selectedJobId, childJob)
+  assert.equal(dto.versions[1].photoUrl, 'https://signed.test/photo')
+  assert.equal(dto.versions[1].faceAssetId, uuid(40))
+  assert.doesNotMatch(JSON.stringify(dto), /storage_path|customize_snapshot|storagePath/)
   assert.equal(h.calls[1][0], 'read_preview_version_group')
   assert.deepEqual(plain(h.calls[0][1]), { allowAnon: true, createAnonIfMissing: false })
   assert.ok(h.filters.some(([column]) => column === (kind === 'customer' ? 'customer_id' : 'anon_session_id')))
@@ -134,6 +139,6 @@ test('restoration hook closes the loading window and ignores stale completion af
   assert.equal(render(child, childJob).ready, false)
   assert.equal(render(root, rootJob).ready, false)
   const page = read('components/PersonalizePage.tsx')
-  assert.match(page, /changePhotoDisabled=\{[^}]*!restoredPreviewGroup.ready/)
+  assert.match(page, /disabled=\{[^}]*!restoredPreviewGroup.ready/)
   assert.match(page, /previewVariantGenerationRef.current\s*\|\| !restoredPreviewGroup.ready/)
 })

@@ -10,7 +10,7 @@ test('PX-001 separates product introduction, preview inputs, and post-Preview pu
     read('components/PersonalizePage.tsx'),
     read('components/personalize/PersonalizeFormFlow.tsx'),
     read('components/personalize/PersonalizeProductIntro.tsx'),
-    read('components/personalize/PreviewPurchasePanel.tsx'),
+    read('components/personalize/PreviewYourBookPanel.tsx'),
     read('components/personalize/PreviewStepLayout.tsx'),
   ])
 
@@ -20,11 +20,11 @@ test('PX-001 separates product introduction, preview inputs, and post-Preview pu
   assert.match(productIntro, /onStart/)
   assert.doesNotMatch(formFlow, /BookPackageSelector|VoiceRecorderPanel|Signature Voice/)
   assert.match(page, /book_type: 'basic'/)
-  assert.match(page, /<PreviewPurchasePanel/)
+  assert.match(page, /<PreviewYourBookPanel/)
   assert.match(purchasePanel, /type="radio"/)
-  assert.match(purchasePanel, /selectedValue === 'supreme'/)
-  assert.match(layout, /xl:grid-cols-\[minmax\(0,7fr\)_minmax\(310px,3fr\)\]/)
-  assert.match(layout, /max-w-\[380px\][^>]*>\{intro\}/)
+  assert.match(purchasePanel, /value === 'supreme'/)
+  assert.match(layout, /styles\.previewGrid/)
+  assert.match(layout, /styles\.intro[^>]*>\{intro\}/)
   assert.match(layout, /\{progress\}[\s\S]*?\{intro\}[\s\S]*?\{book\}/)
 })
 

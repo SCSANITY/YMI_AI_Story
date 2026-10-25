@@ -4,24 +4,21 @@ import test from 'node:test'
 
 const read = (file) => readFile(new URL(`../${file}`, import.meta.url), 'utf8')
 
-test('one physical turning leaf keeps its real front and back page images', async () => {
-  const stage = await read('components/personalize/PreviewBookStage.tsx')
-
-  assert.match(stage, /return isClosed \|\| isClosingToCover \? -pageWidth \/ 2 : 0/)
-  assert.match(stage, /animate=\{\{ x: modelTargetX \}\}/)
-  assert.match(stage, /resolvePreviewBookTurningLeafFaces\(currentSpread, flipDirection\)/)
-  assert.match(stage, /data-preview-turning-leaf="true"/)
-  assert.match(stage, /data-preview-leaf-face="front"[\s\S]*?renderPageContent\(turningLeafFaces\.front\.side, turningLeafFaces\.front\.spreadIndex\)/)
-  assert.match(stage, /data-preview-leaf-face="back"[\s\S]*?renderPageContent\(turningLeafFaces\.back\.side, turningLeafFaces\.back\.spreadIndex\)/)
-  assert.match(stage, /willChange: 'transform'/)
-  assert.match(stage, /transform: 'translateZ\(0\.1px\)'/)
-  assert.match(stage, /transform: 'rotateY\(180deg\) translateZ\(0\.1px\)'/)
-  assert.doesNotMatch(stage, /data-preview-cover-guard/)
-  assert.doesNotMatch(stage, /data-preview-page-role="cover-backing"/)
-  assert.doesNotMatch(stage, /AnimatePresence/)
-  assert.doesNotMatch(stage, /previewBookShadow|filter:\s*previewBookShadow/)
-  assert.equal((stage.match(/<motion\.div/g) ?? []).length, 2)
-  assert.doesNotMatch(stage, /animate=\{\{ x: \(currentSpread === 0 && !isFlipping\)/)
+test('the v2 cover and one moving inner leaf retain the real page faces and neutral landing shade', async () => {
+  const stage=await read('components/personalize/PreviewBookShell.tsx')
+  const css=await read('components/personalize/PreviewBookShell.module.css')
+  assert.match(stage,/resolvePreviewBookTurningLeafFaces\(turn.from,turn.direction\)/)
+  assert.equal((stage.match(/data-preview-cover-leaf="true"/g)||[]).length,1)
+  assert.equal((stage.match(/data-preview-turning-leaf="true"/g)||[]).length,1)
+  assert.match(stage,/data-preview-leaf-face="front"[\s\S]*renderPage\(faces.front.side,faces.front.spreadIndex\)/)
+  assert.match(stage,/data-preview-leaf-face="back"[\s\S]*renderPage\(faces.back.side,faces.back.spreadIndex\)/)
+  assert.match(stage,/const duration=reduced\?0:1.1/)
+  assert.match(stage,/duration:reduced\?0:.8/)
+  assert.match(css,/@keyframes leafShade\{0%,100%\{opacity:0\}/)
+  assert.match(css,/backface-visibility:hidden;-webkit-backface-visibility:hidden/)
+  assert.doesNotMatch(css,/(?:^|[;{])filter:/)
+  assert.match(stage,/onAnimationComplete=\{\(\)=>onComplete\(turn.id\)\}/)
+  assert.doesNotMatch(stage,/AnimatePresence|setTimeout|setCurrentSpread/)
 })
 
 test('book artwork cannot escape the physical page through native image interaction', async () => {

@@ -24,14 +24,14 @@ test('S6 uses one factual Signature Voice notice without offering digital playba
 test('S6 Preview and Checkout identify Signature Voice from their local authoritative state', async () => {
   const [personalize, purchasePanel, checkout, context] = await Promise.all([
     read('components/PersonalizePage.tsx'),
-    read('components/personalize/PreviewPurchasePanel.tsx'),
+    read('components/personalize/PreviewYourBookPanel.tsx'),
     read('app/checkout/CheckoutItemsSection.tsx'),
     read('contexts/GlobalContext.tsx'),
   ])
 
   assert.match(personalize, /const requiresVoiceSample = purchaseBookType === 'supreme'/)
-  assert.match(personalize, /<PreviewPurchasePanel/)
-  assert.match(purchasePanel, /selectedValue === 'supreme'/)
+  assert.match(personalize, /<PreviewYourBookPanel/)
+  assert.match(purchasePanel, /value === 'supreme'/)
   assert.match(purchasePanel, /voiceReady/)
   assert.match(checkout, /items\.some\([^\n]*isSignatureVoicePackage\(item\.personalization\?\.bookType\)\)/)
   assert.match(checkout, /SignatureVoiceBadge/)
