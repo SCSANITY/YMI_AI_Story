@@ -3,7 +3,8 @@ import test from 'node:test'
 import {loadUi,uiNodes,uiText} from './helpers/preview-uiux-harness.mjs'
 const react={useLayoutEffect:()=>{},useRef:()=>({current:null}),useState:()=>[{width:361,portrait:true},()=>{}]}
 const motion=new Proxy({},{get:(_,key)=>props=>({type:'motion-'+key,props})})
-const {PreviewBookShell}=loadUi('components/personalize/PreviewBookShell.tsx',{react,'framer-motion':{motion,useReducedMotion:()=>false}})
+class Element {constructor(kind='page'){this.kind=kind}closest(selector){return selector.includes(this.kind)?this:null}hasAttribute(){return false}}
+const {PreviewBookShell}=loadUi('components/personalize/PreviewBookShell.tsx',{react,'framer-motion':{motion,useReducedMotion:()=>false}},{HTMLElement:Element})
 const props={coverUrl:null,ready:false,waitingLeft:'counter',waitingRight:'steps',currentSpread:0,transition:null,maxSpread:15,renderPage:()=>null,onTurn:()=>{},onCover:()=>{},onComplete:()=>{}}
 test('the invisible cover cannot intercept phone waiting-step controls',()=>{
  const waiting=uiNodes(PreviewBookShell(props)),cover=waiting.find(n=>n.props?.['data-preview-cover-leaf'])
@@ -34,4 +35,18 @@ test('an unavailable Preview never claims it is illustrating or runs an active p
  const tree=PreviewWaitingStatus({name:'Mia',photo:null,ready:false,mode:'unavailable',progress:{countdownSeconds:24,fraction:.4,step:0,reduced:false,hidden:false,interact:()=>{}}})
  assert.match(uiText(tree),/Preview unavailable/);assert.doesNotMatch(uiText(tree),/ILLUSTRATING YOUR BOOK|sec left/)
  assert.equal(uiNodes(tree).filter(node=>node.props?.['data-active']).length,0)
+})
+test('touch swipes and Arrow keys share navigation while vertical scroll and form controls stay untouched',()=>{
+ const turns=[],page=new Element(),stage=uiNodes(PreviewBookShell({...props,ready:true,onTurn:value=>turns.push(value)})).find(n=>n.props?.['data-preview-book-stage']).props
+ stage.onPointerDown({pointerType:'touch',clientX:200,clientY:100,target:page})
+ stage.onPointerUp({clientX:100,clientY:105})
+ let suppressed=0;stage.onClickCapture({preventDefault:()=>suppressed++,stopPropagation:()=>{}})
+ assert.equal(suppressed,1)
+ stage.onPointerDown({pointerType:'touch',clientX:100,clientY:100,target:page})
+ stage.onPointerUp({clientX:200,clientY:105})
+ stage.onPointerDown({pointerType:'touch',clientX:100,clientY:100,target:page})
+ stage.onPointerUp({clientX:120,clientY:200})
+ stage.onKeyDown({key:'ArrowRight',target:new Element('input'),preventDefault:()=>{throw Error('Input key intercepted')}})
+ stage.onKeyDown({key:'ArrowLeft',target:page,preventDefault:()=>{}})
+ assert.deepEqual(turns,['next','prev','prev'])
 })
