@@ -3,3 +3,5 @@
 @media(prefers-reduced-motion:reduce){.segments [data-active] i,.waveBars i,.caret{animation:none!important}.photoRing>svg circle:last-child{transition:none}}
 .waitingRight[data-hidden] *{animation-play-state:paused!important}
 .waitingLeft[data-hidden] *,.statusCard[data-hidden] *{animation-play-state:paused!important}
+/* The complete failure message remains in the reserved panel feedback. */
+.statusCard .progressText>strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
