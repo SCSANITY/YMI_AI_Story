@@ -113,8 +113,12 @@ review provenance, not the current upstream fixture identity.
   a service-only historical effective-line read.07-B fixture remains unchanged.
 
 - PREVIEW-UIUX-001/P0 adds `20261023_150000_preview_version_durable_group.sql`
-  from Database `ab55209ebbe2dddd93d7ed0a6f9092b607a508e0`, byte-identical to
+  from Database `4abe6080943fa8233442299987744a7c29a62530`, byte-identical to
   that Git blob. It freezes the proposed service-only group reader/root quota;
   it is NOT evidence of production application.
 - SUPABASE-CPU-001 adds the pending 23-function non-retryable business-conflict repair;
   the byte-exact SQL mirror is not evidence of production execution.
+
+- P0 reconciliation2026-10-25 supersedes the oldab55209 mirror: exact applied
+  CPU baseline fingerprint (CRLF retained) and PT409 source conflicts. No retryable
+  business conflict is restored;the P0 migration remains NOT APPLIED.

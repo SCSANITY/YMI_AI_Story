@@ -5,7 +5,7 @@ BEGIN
   PERFORM pg_catalog.set_config('lock_timeout','5s',true);
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_proc p
     WHERE p.oid=pg_catalog.to_regprocedure('public.fork_preview_creation_version(uuid,uuid,text,uuid,uuid,uuid,uuid)')
-      AND pg_catalog.md5(p.prosrc)='4da39ca54015bc76a796b341a22b32e3'
+      AND pg_catalog.md5(p.prosrc)='cf4d2ffd68e18ad71e3095804df31b17'
       AND p.prosecdef AND 'search_path=""'=ANY(p.proconfig))
     OR pg_catalog.to_regprocedure('public.read_preview_version_group(uuid,text,uuid)') IS NOT NULL THEN
     RAISE EXCEPTION 'preview_durable_group_baseline_drift';
@@ -167,7 +167,7 @@ BEGIN
   END IF;
 
   IF v_source_creation.preview_job_id IS DISTINCT FROM p_expected_source_preview_job_id THEN
-    RAISE EXCEPTION 'preview_version_source_conflict' USING ERRCODE = '40001';
+    RAISE EXCEPTION 'preview_version_source_conflict' USING ERRCODE = 'PT409';
   END IF;
 
   SELECT job.*
@@ -215,7 +215,7 @@ BEGIN
   IF v_existing_job.job_id IS NOT NULL THEN
     IF v_existing_job.input_snapshot->'creation_version_fork'->>'face_asset_id'
       IS DISTINCT FROM p_face_asset_id::text THEN
-      RAISE EXCEPTION 'preview_version_source_conflict' USING ERRCODE = '40001';
+      RAISE EXCEPTION 'preview_version_source_conflict' USING ERRCODE = 'PT409';
     END IF;
     RETURN QUERY SELECT
       v_existing_job.creation_id,
