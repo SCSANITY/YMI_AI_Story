@@ -14,7 +14,7 @@ test('edition choice is immediate; paid purchase waits for durable identity and 
   assert.match(page, /canCheckout = stageCanCheckout && canConfigurePurchase/)
   assert.doesNotMatch(page, /canAddToCart = [^\n]*(hasReadyPreviewCover|previewCompletionReady|previewError)/)
   assert.doesNotMatch(page, /canCheckout = [^\n]*(hasReadyPreviewCover|previewCompletionReady|previewError)/)
-  assert.match(page, /disabled=\{isSavingVoice \|\| isSwitchingPreviewVersion\}/)
+  assert.match(page, /disabled=\{isSavingVoice \|\| isSwitchingPreviewVersion \|\| hasTerminalPreviewFailure/)
   assert.match(page, /purchaseReady = hasReadyPreviewCover && canAddToCart && canCheckout/)
   assert.match(page, /onMessage=\{\(\) => setIsMessageEditorOpen\(true\)\}/)
   assert.match(page, /canShare=\{Boolean\(creationId\) && hasReadyPreviewCover && !previewError\}/)

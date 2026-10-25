@@ -677,7 +677,7 @@ export default function PersonalizePage({
     ? `generation:${generationStartedAt}` : displayedPreviewJobId;
   const waitingProgress = usePreviewWaitingState(waitingIdentity,
     generationJobId === displayedPreviewJobId || stage === 'GENERATING' ? generationStartedAt : null,
-    viewState.showPreview && isPreviewCoverPending);
+    viewState.showPreview && isPreviewCoverPending && previewCoverState === 'generating');
   const visiblePreviewPresentation = useMemo(() => {
     if (!previewBookPresentation?.cover || !decodedPreviewCover.url) return previewBookPresentation;
     return { ...previewBookPresentation, cover: { ...previewBookPresentation.cover, url: decodedPreviewCover.url } };
@@ -1928,6 +1928,7 @@ export default function PersonalizePage({
   }, [creationId, previewJobId, flushEditionConfiguration]);
 
   const handleEditionChange = useCallback((nextPackageType: PurchasePackageType) => {
+    if (previewAccessState === 'unavailable' || hasTerminalPreviewFailure) return Promise.resolve();
     if (
       nextPackageType === purchaseBookTypeRef.current
       && !queuedPurchaseBookTypeRef.current
@@ -1946,7 +1947,7 @@ export default function PersonalizePage({
     // effect drains this same queue once; no provisional request is sent.
     if (!creationIdRef.current || !previewJobIdRef.current) return Promise.resolve();
     return flushEditionConfiguration();
-  }, [flushEditionConfiguration, setBookType]);
+  }, [flushEditionConfiguration, hasTerminalPreviewFailure, previewAccessState, setBookType]);
 
   const handleSelectPhotoVersion = useCallback(async (version: PreviewVariantView) => {
     if (versionSelectionAbortRef.current || isPreviewVariantBusy || isSavingVoice
@@ -3144,7 +3145,7 @@ export default function PersonalizePage({
                       }}
                     />
                   }
-                  intro={<h1><span aria-hidden={hasReadyPreviewCover}>{name}’s book is being <em>illustrated</em></span><span aria-hidden={!hasReadyPreviewCover}>Meet {name}’s <em>book</em></span></h1>}
+                  intro={<h1><span aria-hidden={hasReadyPreviewCover || Boolean(previewError) || isPreviewUnavailable}>{name}’s book is being <em>illustrated</em></span><span aria-hidden={!hasReadyPreviewCover}>Meet {name}’s <em>book</em></span><span aria-hidden={hasReadyPreviewCover || !previewError && !isPreviewUnavailable}>{t('personalize.previewUnavailableTitle')}</span></h1>}
                   status={<PreviewWaitingStatus name={name} photo={selectedPreviewPhoto} progress={waitingProgress}
                     ready={hasReadyPreviewCover} mode={waitingMode} notice={waitingNotice} compact />}
                   mobilePurchase={<PreviewMobilePurchase edition={purchaseBookType === 'supreme' ? 'Hardcover + Voice' : 'Hardcover'}
@@ -3153,7 +3154,9 @@ export default function PersonalizePage({
                   book={<PreviewBookShell coverUrl={decodedPreviewCover.url} ready={hasReadyPreviewCover}
                     waitingLeft={waitingStatus}
                     waitingRight={<PreviewWaitingPages name={name} value={purchaseBookType} pricing={previewPricing!}
-                      currency={displayCurrency} progress={waitingProgress} onChange={handleEditionChange} onMessage={() => setIsMessageEditorOpen(true)} />}
+                      currency={displayCurrency} progress={waitingProgress} generating={previewCoverState === 'generating'}
+                      disabled={hasTerminalPreviewFailure || previewAccessState === 'unavailable'}
+                      onChange={handleEditionChange} onMessage={() => setIsMessageEditorOpen(true)} />}
                     currentSpread={currentSpread} transition={bookNavigation.transition} maxSpread={maxSpreadIndex}
                     renderPage={renderPageContent} onTurn={turnPage} onCover={returnToPreviewCover} onComplete={bookNavigation.complete} />}
                   versions={<PreviewPhotoVersions versions={restoredPreviewGroup.ready ? previewVariants : []} selectedJobId={displayedPreviewJobId}
@@ -3169,7 +3172,7 @@ export default function PersonalizePage({
                       pricing={previewPricing!}
                       currency={displayCurrency}
                       childName={name}
-                      disabled={isSavingVoice || isSwitchingPreviewVersion}
+                      disabled={isSavingVoice || isSwitchingPreviewVersion || hasTerminalPreviewFailure || previewAccessState === 'unavailable'}
                       voiceDisabled={!canConfigurePurchase}
                       notice={panelNotice}
                       recovery={isPreviewUnavailable ? <button type="button" onClick={leaveUnavailablePreview}>Customize</button>

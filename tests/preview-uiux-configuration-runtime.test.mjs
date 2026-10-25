@@ -9,7 +9,7 @@ function visit(node){if(ts.isVariableDeclaration(node)&&node.initializer&&ts.isC
 function callback(context,name){context.module={exports:{}};vm.runInContext(ts.transpileModule('module.exports = '+callbacks.get(name),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,context);return context[name]=context.module.exports}
 function harness(){
  const requests=[],changes=[],errors=[],pending=[],noop=()=>{}
- const context=vm.createContext({Promise,purchaseBookTypeRef:{current:'basic'},confirmedPurchaseBookTypeRef:{current:'basic'},queuedPurchaseBookTypeRef:{current:null},editionSelectionRevisionRef:{current:0},purchaseConfigurationDrainPromiseRef:{current:null},creationIdRef:{current:null},previewJobIdRef:{current:null},voiceAssetIdRef:{current:null},pendingVoiceRecordingRef:{current:null},setBookType:value=>changes.push(value),setEditionError:value=>errors.push(value),setVoiceValidationError:noop,setIsSavingEdition:noop,setVoiceAssetId:noop,setVoiceStoragePath:noop,setVoicePlaybackUrl:noop,setVoiceDurationSeconds:noop,setPendingVoiceRecording:noop,setIsVoiceDialogOpen:noop,resolveEditionError:error=>error.message,saveEditionConfiguration:(type,options)=>{requests.push({type,options});return new Promise((resolve,reject)=>pending.push({resolve:()=>resolve({packageType:type,voiceReady:false}),reject}))}})
+ const context=vm.createContext({Promise,previewAccessState:'available',hasTerminalPreviewFailure:false,purchaseBookTypeRef:{current:'basic'},confirmedPurchaseBookTypeRef:{current:'basic'},queuedPurchaseBookTypeRef:{current:null},editionSelectionRevisionRef:{current:0},purchaseConfigurationDrainPromiseRef:{current:null},creationIdRef:{current:null},previewJobIdRef:{current:null},voiceAssetIdRef:{current:null},pendingVoiceRecordingRef:{current:null},setBookType:value=>changes.push(value),setEditionError:value=>errors.push(value),setVoiceValidationError:noop,setIsSavingEdition:noop,setVoiceAssetId:noop,setVoiceStoragePath:noop,setVoicePlaybackUrl:noop,setVoiceDurationSeconds:noop,setPendingVoiceRecording:noop,setIsVoiceDialogOpen:noop,resolveEditionError:error=>error.message,saveEditionConfiguration:(type,options)=>{requests.push({type,options});return new Promise((resolve,reject)=>pending.push({resolve:()=>resolve({packageType:type,voiceReady:false}),reject}))}})
  callback(context,'drainEditionConfigurationQueue');callback(context,'flushEditionConfiguration');callback(context,'handleEditionChange')
  return{context,requests,changes,errors,pending}
 }
@@ -30,6 +30,13 @@ test('an in-flight old edition cannot replace the newer local selection',async()
  assert.deepEqual(h.requests.map(r=>r.type),['supreme','basic'])
  assert.equal(h.changes.at(-1),'basic')
  h.pending.shift().resolve();await save;assert.equal(c.purchaseBookTypeRef.current,'basic')
+})
+test('unavailable or terminal failed previews retain the existing configuration stop',async()=>{
+ for(const failed of [false,true]){
+  const h=harness();h.context.previewAccessState=failed?'available':'unavailable';h.context.hasTerminalPreviewFailure=failed
+  await h.context.handleEditionChange('supreme')
+  assert.equal(h.requests.length,0);assert.equal(h.changes.length,0);assert.equal(h.context.queuedPurchaseBookTypeRef.current,null)
+ }
 })
 test('a failed source configuration prevents the photo fork dispatch and releases its busy latch',async()=>{
  let dispatches=0;const states=[],ref={current:false},noop=()=>{}

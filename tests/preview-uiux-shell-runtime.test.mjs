@@ -29,3 +29,9 @@ test('the cap is original plus three changes, with no removal action and only up
  assert.match(uiText(tree),/You've used all 3 photo changes\./)
  assert.doesNotMatch(uiText(tree),/remove|delete/i)
 })
+test('an unavailable Preview never claims it is illustrating or runs an active progress segment',()=>{
+ const {PreviewWaitingStatus}=loadUi('components/personalize/PreviewWaitingPages.tsx')
+ const tree=PreviewWaitingStatus({name:'Mia',photo:null,ready:false,mode:'unavailable',progress:{countdownSeconds:24,fraction:.4,step:0,reduced:false,hidden:false,interact:()=>{}}})
+ assert.match(uiText(tree),/Preview unavailable/);assert.doesNotMatch(uiText(tree),/ILLUSTRATING YOUR BOOK|sec left/)
+ assert.equal(uiNodes(tree).filter(node=>node.props?.['data-active']).length,0)
+})
