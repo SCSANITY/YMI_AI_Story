@@ -50,10 +50,12 @@ export type AdminSignatureVoiceItem = {
     downloadUrl: string
   }
   declaration: {
+    kind: 'customer_capture' | 'admin_declared'
+    adminDeclaration: { actorCustomerId:string;evidenceReference:string;declaredAt:string } | null
     subjectName: string
     subjectRelationship: SignatureVoiceSubjectRelationship
     consentVersion: string
-    consentAcceptedAt: string
+    consentAcceptedAt: string | null
     boundAt: string
     replaceUntil: string
   }
@@ -80,7 +82,7 @@ export type AdminSignatureVoiceItem = {
 }
 
 export type AdminSignatureVoiceWorkspace = {
-  pendingItems?:Array<{cartItemId:string;creationId:string;title:string;daysWaiting:number}>
+  pendingItems?:Array<{cartItemId:string;creationId:string;title:string;daysWaiting:number;snapshotRejectedReason?:string|null}>
   order: {
     orderId: string
     displayId: string | null

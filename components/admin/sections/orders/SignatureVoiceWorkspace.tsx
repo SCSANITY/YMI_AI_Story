@@ -744,6 +744,12 @@ function VoiceItem({
           <p className="mt-1 text-xs text-[var(--admin-page-muted)]">
             {item.declaration.subjectName} / {RELATIONSHIP_LABELS[item.declaration.subjectRelationship]} / Revision {item.triage.sourceRevision}
           </p>
+          {item.declaration.kind === 'admin_declared' && item.declaration.adminDeclaration && (
+            <p className="mt-1 break-words text-xs text-[var(--admin-page-muted)]">
+              Admin-declared replacement · {item.declaration.adminDeclaration.declaredAt} · Admin {item.declaration.adminDeclaration.actorCustomerId}
+              <br />Evidence: {item.declaration.adminDeclaration.evidenceReference}
+            </p>
+          )}
         </div>
         <span className="text-xs font-semibold text-[var(--admin-page-muted)]">Qty {item.quantity}</span>
       </div>
@@ -874,7 +880,9 @@ export function SignatureVoiceWorkspace({
         <AdminEmptyState>No bound Signature Voice source was found.</AdminEmptyState>
       ) : (
         <div className="grid gap-4">
-          {(workspace.pendingItems ?? []).map(item=><AdminNotice key={item.cartItemId} tone="warning"><strong>{item.title}</strong> ? Waiting for recording ({item.daysWaiting} days). Image preparation may continue; Voice delivery is pending.</AdminNotice>)}
+          {(workspace.pendingItems ?? []).map(item=><AdminNotice key={item.cartItemId} tone="warning"><strong>{item.title}</strong> ? Waiting for recording ({item.daysWaiting} days). Image preparation may continue; Voice delivery is pending.
+            {item.snapshotRejectedReason && <span className="mt-1 block">Preview recording was not inherited ({item.snapshotRejectedReason}). A new recording is needed.</span>}
+          </AdminNotice>)}
           {workspace.items.map((item) => (
             <VoiceItem
               key={item.creationId}

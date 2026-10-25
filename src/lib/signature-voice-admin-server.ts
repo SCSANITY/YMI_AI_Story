@@ -86,13 +86,23 @@ export async function loadAdminSignatureVoiceWorkspace(
     const creation=firstRelation(item.creations)
     return {cartItemId:String(item.cart_item_id),creationId:String(creation.creation_id),
       title:resolvePersonalizedBookTitle({templateId:creation.template_id,templateName:firstRelation(creation.templates).name,customizeSnapshot:creation.customize_snapshot}),
-      daysWaiting:Math.max(0,Math.floor((Date.now()-Date.parse(String(order.paid_at)))/86400000))}
+      daysWaiting:Math.max(0,Math.floor((Date.now()-Date.parse(String(order.paid_at)))/86400000)),
+      snapshotRejectedReason:nullableString(bindings.get(String(item.cart_item_id))?.snapshot_rejected_reason)}
   })
   const normalizedItems = signatureItems
     .map((item) => ({ item, creation: {...firstRelation(item.creations),...bindings.get(String(item.cart_item_id))} as UnknownRecord }))
     .filter(({ creation }) => nullableString(creation.creation_id) && nullableString(creation.voice_asset_id))
   const lineIds = normalizedItems.map(({ item }) => String(item.cart_item_id))
   const assetIds = normalizedItems.map(({ creation }) => String(creation.voice_asset_id))
+  const declarationIds=normalizedItems.map(({creation})=>nullableString(creation.voice_admin_authorization_id))
+    .filter((id):id is string=>id!==null)
+  const {data:declarations,error:declarationsError}=declarationIds.length
+    ? await supabaseAdmin.from('order_line_voice_admin_authorizations')
+      .select('authorization_id,order_id,cart_item_id,asset_id,admin_customer_id,evidence_reference,declared_at,subject_name,subject_relationship')
+      .eq('order_id',orderId).in('authorization_id',declarationIds)
+    : {data:[],error:null}
+  if(declarationsError) throw new Error(declarationsError.message)
+  const declarationsById=new Map((declarations ?? []).map(row=>[row.authorization_id,row]))
 
   const [assetsResult, statesResult, tracksResult, attestationsResult, customerResult] = await Promise.all([
     assetIds.length > 0
@@ -174,6 +184,11 @@ export async function loadAdminSignatureVoiceWorkspace(
     const creationId = String(creation.creation_id)
     const cartItemId = String(item.cart_item_id)
     const assetId = String(creation.voice_asset_id)
+    const isAdminDeclaration=creation.voice_consent_version==='signature-voice-admin-declaration-v1'
+    const adminDeclaration=isAdminDeclaration?declarationsById.get(String(creation.voice_admin_authorization_id)):null
+    if(isAdminDeclaration && (!adminDeclaration || adminDeclaration.cart_item_id!==cartItemId || adminDeclaration.asset_id!==assetId)) {
+      throw new Error('Admin recording declaration is missing or changed')
+    }
     const asset = assetsById.get(assetId)
     if (!asset || String(asset.asset_type) !== 'voice_sample') {
       throw new Error(`Signature Voice source is missing for creation ${creationId}`)
@@ -219,10 +234,13 @@ export async function loadAdminSignatureVoiceWorkspace(
         downloadUrl: `${sourceBase}&mode=download`,
       },
       declaration: {
+        kind:isAdminDeclaration?'admin_declared':'customer_capture',
+        adminDeclaration:adminDeclaration?{actorCustomerId:adminDeclaration.admin_customer_id,
+          evidenceReference:adminDeclaration.evidence_reference,declaredAt:adminDeclaration.declared_at}:null,
         subjectName: String(creation.voice_subject_name ?? ''),
         subjectRelationship: subjectRelationship(creation.voice_subject_relationship),
         consentVersion: String(creation.voice_consent_version ?? ''),
-        consentAcceptedAt: String(creation.voice_consent_accepted_at ?? ''),
+        consentAcceptedAt: isAdminDeclaration?null:String(creation.voice_consent_accepted_at ?? ''),
         boundAt: String(creation.voice_bound_at ?? ''),
         replaceUntil: new Date(Date.parse(String(order.paid_at)) + 48 * 60 * 60 * 1000).toISOString(),
       },

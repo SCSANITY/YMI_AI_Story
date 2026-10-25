@@ -388,3 +388,34 @@ test('fulfillment rejects a same-asset stale revision before downloading narrati
   const read=h.calls.find(c=>c.table==='signature_voice_narration_tracks')
   assert.ok(read.steps.some(s=>s[0]==='eq' && s[1]==='cart_item_id' && s[2]===item))
 })
+
+test('Admin-declared source retains evidence and subject without claiming customer acceptance',async()=>{
+  const source={cart_item_id:item,creation_id:creation,voice_asset_id:challenge,revision:2,
+    binding_origin:'admin_replacement',voice_admin_authorization_id:customer,
+    voice_consent_version:'signature-voice-admin-declaration-v1',voice_consent_accepted_at:null,
+    voice_capture_authorization_id:null,voice_speaker_kind:'admin_declared',voice_bound_at:'2026-10-26T01:00:00Z',
+    voice_subject_name:'Declared speaker',voice_subject_relationship:'family_member',voice_sample_duration_seconds:12}
+  const h=harness({queryResult:table=>({error:null,data:table==='orders'?{order_id:order,payment_id:challenge,paid_at:'2026-10-26T00:00:00Z'}:
+    table==='cart_items'?[{cart_item_id:item,creations:{creation_id:creation,template_id:'Synthetic_story'}}]:
+    table==='order_line_voice'?[source]:table==='order_line_voice_admin_authorizations'?[{
+      authorization_id:customer,order_id:order,cart_item_id:item,asset_id:challenge,
+      admin_customer_id:customer,evidence_reference:'Support reference',declared_at:'2026-10-26T01:00:00Z'}]:
+    table==='user_assets'?[{asset_id:challenge,asset_type:'voice_sample'}]:[]})})
+  assert.equal((await h.load('src/lib/order-materials-server.ts').loadOrderLineVoiceBindings(order,[item]))[0].voiceReady,true)
+  const result=await h.load('src/lib/signature-voice-admin-server.ts').loadAdminSignatureVoiceWorkspace(order)
+  assert.equal(result.items[0].declaration.kind,'admin_declared')
+  assert.equal(result.items[0].declaration.consentAcceptedAt,null)
+  assert.equal(result.items[0].declaration.subjectName,'Declared speaker')
+  assert.equal(result.items[0].declaration.adminDeclaration.actorCustomerId,customer)
+  assert.equal(result.items[0].declaration.adminDeclaration.evidenceReference,'Support reference')
+  const component=readFileSync(new URL('../components/admin/sections/orders/SignatureVoiceWorkspace.tsx',import.meta.url),'utf8')
+  assert.match(component,/item\.declaration\.kind === 'admin_declared'[\s\S]*Admin-declared replacement/)
+})
+test('Admin pending list exposes a rejected payment snapshot reason without restoring the invalid source',async()=>{
+  const h=harness({queryResult:table=>({error:null,data:table==='orders'?{order_id:order,payment_id:challenge,paid_at:'2026-10-26T00:00:00Z'}:
+    table==='cart_items'?[{cart_item_id:item,creations:{creation_id:creation,template_id:'Synthetic_story',voice_asset_id:challenge}}]:
+    table==='order_line_voice'?[{cart_item_id:item,creation_id:creation,voice_asset_id:null,snapshot_rejected_reason:'source_validation_failed'}]:[]})})
+  const result=await h.load('src/lib/signature-voice-admin-server.ts').loadAdminSignatureVoiceWorkspace(order)
+  assert.equal(result.items.length,0)
+  assert.equal(result.pendingItems[0].snapshotRejectedReason,'source_validation_failed')
+})

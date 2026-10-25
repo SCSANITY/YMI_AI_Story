@@ -134,3 +134,7 @@ review provenance, not the current upstream fixture identity.
   It pins paid-line Voice references, production keys and source-revision guards;
   it is OFFLINE, not evidence of application or independent deployment authority.
   S1-S3 must be released together after combined review and owner authorization.
+
+- S1 return corrects Admin replacement to distinct actor/evidence declarations
+  (not customer v3 consent), and invalid payment snapshots to empty lines with
+  Admin-visible reasons. The unexecuted SQL mirror is refreshed for delta review.

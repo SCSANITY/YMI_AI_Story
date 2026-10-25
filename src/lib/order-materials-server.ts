@@ -58,10 +58,15 @@ export async function loadOrderLineVoiceBindings(orderId: string,itemIds: readon
   if (!ids.length) return []
   if (ids.length>100) throw new MaterialError('invalid_material',400)
   const {data,error}=await supabaseAdmin.from('order_line_voice').select(
-    'cart_item_id,creation_id,customer_id,revision,voice_asset_id,voice_sample_duration_seconds,voice_consent_version,voice_consent_accepted_at,voice_bound_at,voice_subject_name,voice_subject_relationship,voice_capture_authorization_id,voice_speaker_kind'
+    'cart_item_id,creation_id,customer_id,revision,voice_asset_id,voice_sample_duration_seconds,voice_consent_version,voice_consent_accepted_at,voice_bound_at,voice_subject_name,voice_subject_relationship,voice_capture_authorization_id,voice_speaker_kind,voice_admin_authorization_id,binding_origin,snapshot_rejected_reason'
   ).eq('order_id',materialUuid(orderId)).in('cart_item_id',ids)
   if (error || data?.length!==ids.length) throw new MaterialError('materials_unavailable',503)
-  return data.map(row=>({ ...row,voiceReady:hasCompleteSignatureVoiceBinding(row) }))
+  return data.map(row=>({ ...row,voiceReady:row.voice_consent_version==='signature-voice-admin-declaration-v1'
+    ? Boolean(row.binding_origin==='admin_replacement' && row.voice_admin_authorization_id && row.voice_asset_id
+      && Number(row.voice_sample_duration_seconds)>0 && row.voice_bound_at && row.voice_subject_name
+      && row.voice_subject_relationship && row.voice_speaker_kind==='admin_declared'
+      && row.voice_capture_authorization_id===null && row.voice_consent_accepted_at===null)
+    : hasCompleteSignatureVoiceBinding(row) }))
 }
 export async function assertOrderLineVoiceDownload(request:Request,orderId:string,itemId:string,assetId:string) {
   const { resolveMaterialAccess }=await import('@/lib/order-materials-access')

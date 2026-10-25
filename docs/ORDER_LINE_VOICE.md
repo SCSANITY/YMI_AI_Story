@@ -44,8 +44,20 @@ other source. Asset and authorization RESTRICT references remain live.
 Admin DTO exposes current upload timestamp, declaration.replaceUntil (paid_at +
 48h), sourceRevision and persisted narrationOutdated. Presentation changes are S3.
 The existing Admin authorization reference/declaration remains mandatory; new
-Admin replacement captures are separately authorized and customer-owned, with
-actor/reference evidence in immutable audit. No old authorization is reassigned.
+Admin replacement assets are customer-owned, but authorization is an explicit
+Admin declaration, never customer-clicked v3 consent. The distinct immutable
+Admin authorization stores actor/evidence/time and declared subject/relationship;
+only the Admin replacement RPC can write it. The line stores the Admin kind and
+no customer acceptance timestamp; Admin labels it "Admin-declared replacement".
+No old authorization is reassigned. Customer capture remains confirmed v3.
+
+A rejected payment source creates an empty line with snapshot_rejected_reason,
+shown in Admin pending items. Legacy v1, child-name drift or missing customer
+identity cannot abort payment through source validation. A null-customer empty
+line acquires only access identity when the order customer is later filled;
+its source is not resnapshotted. Structural/resource errors remain failures.
+Ordered-later Voice lines initialize for any already-paid order status, while
+dedication retains the eligible-state guard.
 
 ## Database object coverage
 
