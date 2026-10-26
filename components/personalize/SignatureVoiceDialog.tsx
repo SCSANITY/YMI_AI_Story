@@ -210,7 +210,7 @@ export function SignatureVoiceDialog({
             <input id="material-voice-file" type="file" accept="audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg,.m4a,.mp3,.wav,.webm,.ogg,.mp4"
               disabled={isSaving} className="mt-3 block w-full text-sm" onChange={event=>{
                 const file=event.target.files?.[0];if(!file)return
-                setFileError('');onClearValidation()
+                setAuthorized(false);setFileError('');onClearValidation()
                 try {
                   const extension=file.name.split('.').pop()?.toLowerCase()
                   const types:Record<string,string>={m4a:'audio/mp4',mp4:'audio/mp4',mp3:'audio/mpeg',wav:'audio/wav',webm:'audio/webm',ogg:'audio/ogg'}

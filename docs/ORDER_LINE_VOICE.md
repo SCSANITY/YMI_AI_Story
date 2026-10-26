@@ -109,13 +109,52 @@ Shared references remain locked/rechecked;orphan/delete cannot bypass retention.
 No delivered lifecycle executor or Stripe/legal hold model is claimed:BL-073
 remains separate. See Database WEB_UIUX_019_S2.md for exact source/policy fences.
 
-S3 must freeze expected asset/revision at edit intent,send them on bind,keep the
-same grant after acknowledgement and consume current eligibility/update copy.
-It also owns cartItemId React keys and guest fetch-to-blob/Bearer playback.
-The existing OrderMaterialsClient is deliberately not the S2 delivery surface;
-no mixed S1/S2/S3 rollout or standalone deployment is permitted.
+## S3 customer and Admin surface (offline)
 
-React checklist for the bounded TSX delta:pending counts derive at render from
+OrderMaterialsClient captures a copy of the line DTO when the customer opens
+Record/Update. The bind payload uses that intent's expected asset AND revision;
+a later status refresh cannot silently rebase it. A synchronous ref suppresses
+repeated Save clicks before React rerenders. Selection stays local until the
+existing dialog's explicit consent+Upload;choosing a different file resets consent.
+Upload failure leaves the current recording intact. A definitive bind failure
+or unknown outcome closes the stale intent and GET-refreshes current state;
+there is no automatic upload/bind retry or deletion of possibly-bound bytes.
+
+Update recording is shown only from server can_replace_voice;missing/late-first
+uses can_submit_voice. A local-clock label never grants write eligibility. The
+page displays local-time deadlines with an explicit IANA zone and upload time.
+Submitted/closed/late-first states explain next steps without a history picker.
+Update message stays optional and revision-guarded. Done for now acknowledges
+without clearing the bearer/materials or hiding eligible controls. Refund and
+ineligible access still land on OTP recovery. Mail/order/success entry copy
+explains the same48h/shipment/late-first boundary;mail timestamps remain UTC.
+
+Current recording playback is lazy:on Listen,fetch the existing scoped download
+with orderId/itemId and Bearer only in a header,no token in media/URL. Cookies
+support account access. The response becomes a local Blob URL;pending fetch is
+aborted and the URL revoked on unmount/source change. No direct private path,
+Storage signing or all-line preload is added.
+
+Admin VoiceItem now keys cartItemId,not Creation. Upload/binding time,customer
+replace-until,source revision,narration-outdated notice,Admin-declared evidence
+and retained-source count all use the accepted line reader. No new Admin action,
+source authority,production timing gate or lifecycle executor is introduced.
+S1/S2 SQL bytes stay frozen;S1-S3 must still deploy together under a separate GO.
+
+S3 runtime tests execute actual client handlers with deterministic hooks/synthetic
+HTTP for double Save,repeat updates,frozen intent after refresh,multi-line target,
+unknown/definitive failure,grant acknowledgement and upload failure;pure helpers
+check local-zone display and header-only blob fetch. Local browser fixture adds
+submitted/missing/late/closed/recovery states and synthetic12s WAV playback.
+Neither fixture/harness proves real Supabase,physical iPhone recording,mail receipt
+or multi-backend concurrency. Those require the combined owner-authorized window.
+
+S2 React checklist for the bounded TSX delta:pending counts derive at render from
 server readiness;no new effect/state,client fetch or dependency;retained-source
 text uses existing markup and escapes evidence normally. Independent Admin
 provenance/declaration reads are parallel;counts are grouped once per line.
+
+S3 React checklist:one lazy cancellable playback effect with object-URL cleanup;
+server booleans derive controls;no polling/dependency additions. Per-line/source
+keys isolate state;client token remains in memory/headers. Existing dialog retains
+focus trap,close and scroll restoration. JSX escapes Admin declarations normally.

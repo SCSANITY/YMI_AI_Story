@@ -57,7 +57,7 @@ function formatBytes(value: number | null) {
 function formatTimestamp(value: string | null) {
   if (!value) return '-'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'long'}).format(date)
 }
 
 function triageTone(status: SignatureVoiceTriageStatus): AdminStatusTone {
@@ -741,13 +741,16 @@ function VoiceItem({
             </AdminStatusBadge>
           </div>
           <h3 className="mt-2 text-base font-bold text-[var(--admin-page-ink)]">{item.title}</h3>
+          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Recording uploaded: {formatTimestamp(item.source.createdAt)} / Bound to this book: {formatTimestamp(item.declaration.boundAt)}</p>
+          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Customer replacement deadline: {formatTimestamp(item.declaration.replaceUntil)} (payment + 48h; closes at shipment)</p>
+          {item.triage.narrationOutdated?<AdminNotice tone="warning" className="mt-2">Narration outdated: the recording changed. Regenerate and verify narration, then confirm hardware loading for this book again.</AdminNotice>:null}
           {item.retainedSourceCount>0 && <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Previous recording retained after shipment ({item.retainedSourceCount}). It has not been scheduled for 30-day removal.</p>}
           <p className="mt-1 text-xs text-[var(--admin-page-muted)]">
             {item.declaration.subjectName} / {RELATIONSHIP_LABELS[item.declaration.subjectRelationship]} / Revision {item.triage.sourceRevision}
           </p>
           {item.declaration.kind === 'admin_declared' && item.declaration.adminDeclaration && (
             <p className="mt-1 break-words text-xs text-[var(--admin-page-muted)]">
-              Admin-declared replacement · {item.declaration.adminDeclaration.declaredAt} · Admin {item.declaration.adminDeclaration.actorCustomerId}
+              Admin-declared replacement · {formatTimestamp(item.declaration.adminDeclaration.declaredAt)} · Admin {item.declaration.adminDeclaration.actorCustomerId}
               <br />Evidence: {item.declaration.adminDeclaration.evidenceReference}
             </p>
           )}
@@ -886,7 +889,7 @@ export function SignatureVoiceWorkspace({
           </AdminNotice>)}
           {workspace.items.map((item) => (
             <VoiceItem
-              key={item.creationId}
+              key={item.cartItemId}
               orderId={orderId}
               item={item}
               onWorkspace={setWorkspace}

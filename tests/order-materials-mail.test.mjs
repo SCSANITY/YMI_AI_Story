@@ -86,8 +86,8 @@ test('materials page reuses the global header,orders entry,cover and explicit em
   assert.doesNotMatch(shell.slice(shell.indexOf('const showGlobalNav'),shell.indexOf('const isHomePage')),/materials|orders/)
   assert.match(client,/href="\/orders"/)
   assert.match(client,/OrderCoverImage src=\{item.book\?\.cover_url\}/)
-  assert.doesNotMatch(client,/template_id\.replace|toLocaleString/)
-  assert.match(client,/dedication_deadline\)\.toUTCString\(\)/)
+  assert.doesNotMatch(client,/template_id\.replace/)
+  assert.match(client,/formatMaterialTime\(materials.dedication_deadline\)/)
   assert.match(mail,/materialNotice.deadline\)\.toUTCString\(\)/)
 })
 

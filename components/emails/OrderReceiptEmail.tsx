@@ -119,7 +119,8 @@ export function OrderReceiptEmail({
       {materialNotice?<Section style={styles.summaryWrap}>
         <Text style={styles.paragraph}>Your dedication is optional. Add or edit it by {new Date(materialNotice.deadline).toUTCString()} (48 hours after payment).</Text>
         {materialNotice.pendingVoice?<Text style={styles.paragraph}><strong>Please provide your recording as soon as possible.</strong> A recording is required for each Hardcover + Voice book. Missing recordings delay completion of your book.</Text>:null}
-        <Link href={materialNotice.url} style={styles.summaryOrderLink}>Add or review your book materials</Link>
+        <Text style={styles.paragraph}>For Hardcover + Voice, a submitted recording can be updated until 48 hours after payment, before shipment. If a recording is still missing, you may submit the first one afterwards while online submission is available. Keep this link to review or update eligible materials.</Text>
+        <Link href={materialNotice.url} style={styles.summaryOrderLink}>Review or update your book materials</Link>
       </Section>:null}
       {/* Order summary */}
       <Section style={styles.summaryWrap}>
