@@ -212,4 +212,7 @@ between orders and cart_items. Customer order reads explicitly select the direct
 orders_checkout_id_fkey relationship, retaining the cart_items alias and owner
 filter for list/detail/checkout-success consumers. My Orders distinguishes a
 failed read from a successful empty list and offers a user-triggered retry.
+Admin Voice item validation and fulfillment use the same explicit direct FK in
+the reverse direction, retaining their inner join, line filters and paid/source
+checks. The provenance relationship is never a source of purchased order lines.
 This read repair changes no binding,grant,cleanup or database lifecycle rule.

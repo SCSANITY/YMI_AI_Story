@@ -68,6 +68,55 @@ test('customer order reader preserves a failed database read as an error instead
  await assert.rejects(r.loadCustomerOrders({customerId:'owner-a'}),e=>e instanceof r.CustomerOrderReadError&&e.status===500)
 })
 
+function voiceReader({missing=false,unpaid=false,fail=false}={}) {
+ const queries=[],bindings=[]
+ const supabaseAdmin={from(table){
+  const q={table,filters:[]};queries.push(q)
+  const chain={select(select){q.select=select;return chain},eq(k,v){q.filters.push([k,v]);return chain},order(){return chain},maybeSingle(){q.single=true;return chain},
+   then(resolve){
+    if(table==='cart_items'){
+     if(fail||!q.select.includes('orders!orders_checkout_id_fkey!inner('))return Promise.resolve({data:null,error:{message:'PGRST201'}}).then(resolve)
+     const row={cart_item_id:'line-a',creation_id:'creation-a',package_type:'supreme',status:'ordered',orders:{order_id:'order-a',payment_id:unpaid?null:'paid-a'},creations:{creation_id:'creation-a'}}
+     return Promise.resolve({data:q.single?(missing?null:row):(missing?[]:[row]),error:null}).then(resolve)
+    }
+    assert.equal(table,'signature_voice_narration_tracks')
+    return Promise.resolve({data:[],error:null}).then(resolve)
+   }}
+  return chain
+ }}
+ const injections={
+  '@/lib/supabaseAdmin':{supabaseAdmin},
+  '@/lib/order-materials-server':{loadOrderLineVoiceBindings:async(orderId,lineIds)=>{bindings.push({orderId,lineIds});return[{cart_item_id:'line-a',voice_asset_id:'source-a',revision:3}]}},
+  '@/lib/personalized-book-title':{resolvePersonalizedBookTitle:()=> 'Synthetic'},
+  '@/lib/signature-voice-admin':{SIGNATURE_VOICE_NARRATION_SLOTS:['narration_01']},
+  '@/lib/signature-voice':{SIGNATURE_VOICE_SUBJECT_RELATIONSHIPS:[]},
+  '@/lib/userAssetsStorage':{normalizeUserAssetContentType:x=>x},
+  'node:crypto':{},'music-metadata':{},
+ }
+ return {queries,bindings,admin:load('src/lib/signature-voice-admin-server.ts',injections),fulfillment:load('src/lib/signature-voice-fulfillment-server.ts',injections)}
+}
+
+test('Admin Voice direct order join retains line/order/Creation/edition/paid and current-source checks',async()=>{
+ const input={orderId:'order-a',cartItemId:'line-a',creationId:'creation-a',expectedAssetId:'source-a'}
+ const r=voiceReader();const result=await r.admin.requireAdminSignatureVoiceOrderItem(input)
+ assert.equal(result.voiceBinding.revision,3)
+ assert.deepEqual(r.queries[0].filters,[['cart_item_id','line-a'],['order_id','order-a'],['creation_id','creation-a'],['package_type','supreme'],['status','ordered']])
+ assert.match(r.queries[0].select,/orders!orders_checkout_id_fkey!inner\(/)
+ for(const options of [{missing:true},{unpaid:true},{fail:true}])await assert.rejects(voiceReader(options).admin.requireAdminSignatureVoiceOrderItem(input))
+ await assert.rejects(voiceReader().admin.requireAdminSignatureVoiceOrderItem({...input,expectedAssetId:'old-source'}))
+})
+
+test('fulfillment direct order join reaches line-scoped narration validation without bypassing its fence',async()=>{
+ const r=voiceReader()
+ await assert.rejects(r.fulfillment.verifySignatureVoiceOrderNarrationIntegrity('order-a'),/narration is incomplete/)
+ assert.deepEqual(r.queries[0].filters,[['order_id','order-a'],['status','ordered'],['package_type','supreme']])
+ assert.match(r.queries[0].select,/orders!orders_checkout_id_fkey!inner\(/)
+ assert.deepEqual(r.queries[1].filters,[['cart_item_id','line-a']])
+ assert.equal(r.bindings[0].orderId,'order-a');assert.deepEqual(Array.from(r.bindings[0].lineIds),['line-a'])
+ await assert.rejects(voiceReader({unpaid:true}).fulfillment.verifySignatureVoiceOrderNarrationIntegrity('order-a'),/paid Signature Voice item/)
+ await assert.rejects(voiceReader({fail:true}).fulfillment.verifySignatureVoiceOrderNarrationIntegrity('order-a'),/PGRST201/)
+})
+
 function pageHarness(responses) {
  let cursor=0,dirty=true,tree,user={customerId:'owner-a'}
  const slots=[],effects=[],calls=[]

@@ -330,7 +330,7 @@ export async function requireAdminSignatureVoiceOrderItem(input: {
       creation_id,
       package_type,
       status,
-      orders!inner(order_id, payment_id),
+      orders!orders_checkout_id_fkey!inner(order_id, payment_id),
       creations!inner(creation_id)
     `)
     .eq('cart_item_id', input.cartItemId)
