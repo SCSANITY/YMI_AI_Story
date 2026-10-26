@@ -141,12 +141,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   }, [])
 
   useEffect(() => {
-    if (!reader?.eligible || reader.finalReady) return
-    const intervalId = window.setInterval(() => void loadReader({ silent: true }), 8000)
-    return () => window.clearInterval(intervalId)
-  }, [loadReader, reader?.eligible, reader?.finalReady])
-
-  useEffect(() => {
     const refreshVisibleReader = () => {
       if (document.visibilityState === 'visible') void loadReader({ silent: true })
     }

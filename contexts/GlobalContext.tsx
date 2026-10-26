@@ -297,18 +297,6 @@ export const GlobalProvider: React.FC<{
       .filter((book: Book | null): book is Book => Boolean(book));
   }, []);
 
-  const refreshFavoritesFromDb = useCallback(async () => {
-    if (favoriteTogglePendingRef.current) return;
-    const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-    const response = await fetch(`/api/favourites${params}`, { credentials: 'include', cache: 'no-store' });
-    if (!response.ok || favoriteTogglePendingRef.current) return;
-    const data = await response.json();
-    const items = Array.isArray(data?.items) ? data.items : [];
-    if (!favoriteTogglePendingRef.current) {
-      setFavorites(mapFavouriteItems(items));
-    }
-  }, [mapFavouriteItems, user?.customerId]);
-
   useEffect(() => {
     let isActive = true;
 
@@ -336,7 +324,6 @@ export const GlobalProvider: React.FC<{
     if (!isHydrated) return;
 
     let isActive = true;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
     setIsFavoritesLoading(true);
 
     const loadFavoritesFromDb = async () => {
@@ -349,7 +336,7 @@ export const GlobalProvider: React.FC<{
         const items = Array.isArray(data?.items) ? data.items : [];
         setFavorites(mapFavouriteItems(items));
       } catch {
-        // Keep the current in-memory favorites; the next focus/interval refresh can recover.
+        // Keep current favorites until the next app-start or auth-change load.
       } finally {
         if (isActive) setIsFavoritesLoading(false);
       }
@@ -357,28 +344,10 @@ export const GlobalProvider: React.FC<{
 
     loadFavoritesFromDb();
 
-    if (typeof window !== 'undefined') {
-      intervalId = setInterval(() => {
-        void refreshFavoritesFromDb();
-      }, 30000);
-
-      const onFocus = () => {
-        void refreshFavoritesFromDb();
-      };
-      window.addEventListener('focus', onFocus);
-
-      return () => {
-        isActive = false;
-        if (intervalId) clearInterval(intervalId);
-        window.removeEventListener('focus', onFocus);
-      };
-    }
-
     return () => {
       isActive = false;
-      if (intervalId) clearInterval(intervalId);
     };
-  }, [isHydrated, mapFavouriteItems, refreshFavoritesFromDb, user?.customerId]);
+  }, [isHydrated, mapFavouriteItems, user?.customerId]);
 
   useEffect(() => {
     if (user) localStorage.setItem('ymi_user', JSON.stringify(user));
