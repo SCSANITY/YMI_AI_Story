@@ -5,6 +5,7 @@ import { CheckSquare, Loader2, Pencil, Square, Trash2 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import OrderCoverImage from '@/components/OrderCoverImage';
 import { formatDisplayCurrency } from '@/lib/locale-pricing';
+import { cartItemUnitPrice } from '@/lib/cart-price';
 import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title';
 import {
   resolveCartItemPreviewCover,
@@ -74,7 +75,7 @@ const CartItemCard = memo(function CartItemCard({
   onRemove,
 }: CartItemCardProps) {
   const quantity = item.quantity ?? 1;
-  const lineTotal = (item.priceAtPurchase ?? item.book.price) * quantity;
+  const lineTotal = cartItemUnitPrice(item) * quantity;
   const displayTitle = resolveCartItemDisplayTitle(item);
   const activeAction = pendingAction?.itemId === item.id ? pendingAction.action : null;
   const hasPendingAction = Boolean(activeAction);

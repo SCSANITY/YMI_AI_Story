@@ -160,7 +160,7 @@ export default function PersonalizePage({
   const fsm = usePersonalizeStage()
   const { t } = useI18n()
 
-  const { user, openLoginModal, logout, addToCart, removeFromCart, updateCartQuantity, prepareCheckout, resumeData, resumePersonalization, displayCurrency, cart, isHydrated } = useGlobalContext();
+  const { user, openLoginModal, logout, addToCart, removeFromCart, updateCartQuantity, prepareCheckout, resumeData, resumePersonalization, displayCurrency, cart, cartLoadError, isHydrated } = useGlobalContext();
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
   const book = initialBook;
   const router = useRouter();
@@ -2969,6 +2969,7 @@ export default function PersonalizePage({
         user={user}
         cartCount={cartCount}
         cartItems={cart}
+        cartLoadError={cartLoadError}
         displayCurrency={displayCurrency}
         isCartHydrated={isHydrated}
         cartButtonRef={cartIconRef}

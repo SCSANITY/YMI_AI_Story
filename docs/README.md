@@ -14,6 +14,8 @@ repository:
 
 ## Application References
 
+- [`CATALOG_PRICING.md`](CATALOG_PRICING.md): shared public Catalog invalidation,
+  DB-backed Personalize ISR/metadata and selected-edition active-cart prices.
 - `../AGENTS.md`: component-specific agent instructions.
 - `../package.json`: authoritative development, test, and build commands.
 - [`SHIPPING_DETAILS.md`](SHIPPING_DETAILS.md): supplementary order shipping

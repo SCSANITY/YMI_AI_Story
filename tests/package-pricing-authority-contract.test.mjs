@@ -117,7 +117,7 @@ test('Admin public-card package bulk apply reconciles every story and invalidate
 
   assert.match(cache, /revalidatePath\('\/'\)/)
   assert.match(cache, /revalidatePath\('\/books'\)/)
-  assert.match(cache, /revalidatePath\('\/api\/templates'\)/)
+  assert.match(cache, /revalidatePath\('\/api\/templates', 'layout'\)/)
   assert.match(settingsRoute, /invalidatePublicCatalogCache\(\)/)
   assert.match(pricingRoute, /invalidatePublicCatalogCache\(\)/)
   assert.match(placementsRoute, /invalidatePublicCatalogCache\(\)/)

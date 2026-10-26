@@ -6,6 +6,7 @@ import { Loader2, Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/Button'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
+import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price'
 import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title'
 import {
   resolveCartItemPreviewCover,
@@ -18,6 +19,7 @@ type MiniCartProps = {
   open: boolean
   anchorRef: React.RefObject<HTMLButtonElement | null>
   items: CartItem[]
+  loadError?: string | null
   displayCurrency: DisplayCurrency
   isHydrated: boolean
   onDismiss: (restoreFocus: boolean) => void
@@ -44,6 +46,7 @@ function MiniCartComponent({
   open,
   anchorRef,
   items,
+  loadError,
   displayCurrency,
   isHydrated,
   onDismiss,
@@ -61,16 +64,17 @@ function MiniCartComponent({
   })
   const [pendingAction, setPendingAction] = useState<PendingCartAction>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const priceError = loadError || (items.some(item => !hasCartItemPrice(item)) ? CART_PRICE_LOAD_ERROR : null)
   const itemCount = useMemo(
     () => items.reduce((sum, item) => sum + (item.quantity ?? 1), 0),
     [items]
   )
   const subtotal = useMemo(
-    () => items.reduce(
-      (sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1),
+    () => priceError ? 0 : items.reduce(
+      (sum, item) => sum + cartItemUnitPrice(item) * (item.quantity ?? 1),
       0
     ),
-    [items]
+    [items, priceError]
   )
 
   useLayoutEffect(() => {
@@ -198,6 +202,8 @@ function MiniCartComponent({
             </div>
           ))}
         </div>
+      ) : priceError ? (
+        <p role="alert" className="bg-rose-50 px-4 py-6 text-sm text-rose-700">{priceError}</p>
       ) : items.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-600">
@@ -209,7 +215,7 @@ function MiniCartComponent({
         <div className="min-h-0 max-h-[40dvh] overflow-y-auto overscroll-contain px-4">
           {items.map((item) => {
             const quantity = item.quantity ?? 1
-            const lineTotal = (item.priceAtPurchase ?? item.book.price) * quantity
+            const lineTotal = cartItemUnitPrice(item) * quantity
             const displayTitle = resolveCartItemDisplayTitle(item)
             const isPending = pendingAction?.itemId === item.id
             const controlsDisabled = Boolean(pendingAction)
@@ -289,7 +295,7 @@ function MiniCartComponent({
       ) : null}
 
       <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-4">
-        <div className="mb-3 flex items-center justify-between text-sm">
+        {!priceError ? <div className="mb-3 flex items-center justify-between text-sm">
           <span className="text-slate-600">{t('cart.miniSubtotal')}</span>
           {isHydrated ? (
             <span className="font-bold text-slate-900">
@@ -298,7 +304,7 @@ function MiniCartComponent({
           ) : (
             <span className="h-4 w-20 animate-pulse rounded-full bg-slate-200" aria-hidden="true" />
           )}
-        </div>
+        </div> : null}
         <Button
           ref={viewCartButtonRef}
           type="button"

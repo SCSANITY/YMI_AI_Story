@@ -7,6 +7,7 @@ import {
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
 import { filterActiveCartItems } from '@/lib/cart-lifecycle'
+import { activeCartUnitPrice, requireCartUnitPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price'
 import { parseCartItemQuantity } from '@/lib/cart-quantity'
 import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
 import {
@@ -152,6 +153,16 @@ export async function GET(request: Request) {
     }
 
     cartItems = filterActiveCartItems(cartItems, linkedOrders)
+  }
+  // Read-only projection: active carts follow Catalog; checkout/history keep
+  // their persisted amount. Neither path writes price_at_purchase during GET.
+  try {
+    cartItems = cartItems.map(row => ({
+      ...row,
+      unit_price_usd: isActiveCartRequest ? activeCartUnitPrice(row) : requireCartUnitPrice(row.price_at_purchase),
+    }))
+  } catch {
+    return cartJson({ error: CART_PRICE_LOAD_ERROR }, { status: 503 })
   }
   const jobIds = cartItems
     .map((row) => row.creations?.preview_job_id)

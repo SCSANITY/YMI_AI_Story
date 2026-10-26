@@ -119,7 +119,7 @@ async function loadPreviewFirstSpreadPages(templateId: string) {
     : parseTemplatePreviewFirstSpreadPages(templateId, data, templateStorageUrl)
 }
 
-export async function loadActiveTemplateCatalog(): Promise<CatalogBook[]> {
+export async function loadActiveTemplateCatalog(options: { strict?: boolean } = {}): Promise<CatalogBook[]> {
   const { data, error } = await supabaseAdmin
     .from('templates')
     .select(TEMPLATE_LIST_COLUMNS)
@@ -127,12 +127,18 @@ export async function loadActiveTemplateCatalog(): Promise<CatalogBook[]> {
 
   if (error) throw new TemplateCatalogLoadError(error.message)
 
-  return templateRowsToBooks((data ?? []) as TemplateCatalogRow[], (row, pricingError) => {
+  if (!Array.isArray(data)) throw new TemplateCatalogLoadError('Catalog response is invalid', 503)
+  const books = templateRowsToBooks(data as TemplateCatalogRow[], (row, pricingError) => {
+    if (options.strict) throw new TemplateCatalogLoadError('Catalog pricing is not configured', 503)
     console.error('[template-catalog] skipped template with invalid package pricing', {
       templateId: row.template_id,
       error: pricingError,
     })
   })
+  if (options.strict && books.length !== data.length) {
+    throw new TemplateCatalogLoadError('Catalog contains an invalid template', 503)
+  }
+  return books
 }
 
 export const loadActiveTemplateDetail = cache(

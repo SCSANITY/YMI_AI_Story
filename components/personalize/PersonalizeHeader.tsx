@@ -21,6 +21,7 @@ type PersonalizeHeaderProps = {
   user: User | null
   cartCount: number
   cartItems: CartItem[]
+  cartLoadError?: string | null
   displayCurrency: DisplayCurrency
   isCartHydrated: boolean
   labels: {
@@ -41,6 +42,7 @@ function PersonalizeHeaderComponent({
   user,
   cartCount,
   cartItems,
+  cartLoadError,
   displayCurrency,
   isCartHydrated,
   labels,
@@ -142,6 +144,7 @@ function PersonalizeHeaderComponent({
               open={isCartOpen}
               anchorRef={cartButtonRef}
               items={cartItems}
+              loadError={cartLoadError}
               displayCurrency={displayCurrency}
               isHydrated={isCartHydrated}
               onDismiss={dismissCart}

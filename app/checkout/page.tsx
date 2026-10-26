@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, ChevronLeft } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
+import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price';
 import { AddressFormSection } from './AddressFormSection';
 import { CheckoutItemsSection } from './CheckoutItemsSection';
 import { CheckoutSummaryPanel } from './CheckoutSummaryPanel';
@@ -115,6 +116,7 @@ function CheckoutPageContent() {
     user,
     cart,
     checkoutItems,
+    checkoutLoadError,
     prepareCheckout,
     addToCheckout,
     hydrateCheckoutItems,
@@ -132,11 +134,12 @@ function CheckoutPageContent() {
   const items = checkoutItems;
   const remainingCartItems = cart.filter(item => !items.some(current => current.id === item.id));
   const isMultiOrderCheckout = items.length > 1;
+  const priceLoadError = checkoutLoadError || (items.some(item => !hasCartItemPrice(item)) ? CART_PRICE_LOAD_ERROR : null);
   const total = useMemo(
-    () => items.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0),
-    [items]
+    () => priceLoadError ? 0 : items.reduce((sum, item) => sum + cartItemUnitPrice(item) * (item.quantity ?? 1), 0),
+    [items, priceLoadError]
   );
-  const isCheckoutPriceReady = items.length > 0;
+  const isCheckoutPriceReady = items.length > 0 && !priceLoadError;
 
   const [step, setStep] = useState<CheckoutStep>('address');
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -452,13 +455,17 @@ function CheckoutPageContent() {
       : `/api/cart?orderId=${encodeURIComponent(queryOrderId)}&status=ordered`;
 
     fetch(url, { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((res) => {
+        if (!res.ok) throw new Error(CART_PRICE_LOAD_ERROR);
+        return res.json();
+      })
       .then((data) => {
-        const rows = Array.isArray(data?.items) ? data.items : [];
+        if (!Array.isArray(data?.items)) throw new Error(CART_PRICE_LOAD_ERROR);
+        const rows = data.items;
         if (!rows.length) return;
         hydrateCheckoutItems(rows);
       })
-      .catch(() => {});
+      .catch(() => hydrateCheckoutItems(null));
   }, [queryOrderId, checkoutItems.length, user?.customerId, hydrateCheckoutItems]);
 
   useEffect(() => {
@@ -580,13 +587,17 @@ function CheckoutPageContent() {
       : `/api/cart?ids=${encodeURIComponent(selectedIdsFromQuery.join(','))}`;
 
     fetch(url, { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((res) => {
+        if (!res.ok) throw new Error(CART_PRICE_LOAD_ERROR);
+        return res.json();
+      })
       .then((data) => {
-        const items = Array.isArray(data?.items) ? data.items : [];
+        if (!Array.isArray(data?.items)) throw new Error(CART_PRICE_LOAD_ERROR);
+        const items = data.items;
         if (!items.length) return;
         hydrateCheckoutItems(items);
       })
-      .catch(() => {});
+      .catch(() => hydrateCheckoutItems(null));
   }, [checkoutItems.length, cart, prepareCheckout, selectedIdsFromQuery, user?.customerId, hydrateCheckoutItems]);
 
   const resetIdentityVerification = useCallback(() => {
@@ -1317,6 +1328,8 @@ function CheckoutPageContent() {
       {t('checkout.policyAgreementSuffix')}
     </div>
   );
+
+  if (priceLoadError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{priceLoadError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => router.push('/cart')}>Back to cart</button></div>;
 
   return (
     <div className={`mx-auto max-w-7xl px-3 pt-6 ${shouldShowMobilePaymentBar ? 'pb-28' : 'pb-6'} sm:px-4 md:px-8 md:py-10`}>

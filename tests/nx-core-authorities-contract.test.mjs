@@ -21,7 +21,7 @@ async function collectSources(relativeDirectory) {
   return nested.flat()
 }
 
-test('runtime Catalog reads use the database authority while static books stay build-only', async () => {
+test('all runtime and prerender Catalog reads use the database authority', async () => {
   const sourceFiles = (
     await Promise.all(
       ['app', 'components', 'contexts', 'src'].map((directory) => collectSources(directory))
@@ -34,7 +34,7 @@ test('runtime Catalog reads use the database authority while static books stay b
     if (/from ['"]@\/data\/books['"]/.test(source)) staticBookImports.push(file.replaceAll('\\', '/'))
   }
 
-  assert.deepEqual(staticBookImports, ['app/personalize/[bookID]/page.tsx'])
+  assert.deepEqual(staticBookImports, [])
 
   const [personalizeRoute, personalizeClient, catalogServer] = await Promise.all([
     read('app/personalize/[bookID]/page.tsx'),

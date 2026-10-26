@@ -120,7 +120,7 @@ export interface CartItem {
   book: Book;
   coverStatus?: 'ready' | 'pending' | 'unavailable';
   personalization?: PersonalizationData;
-  priceAtPurchase?: number; // Store the price (base + type modifier)
+  priceAtPurchase?: number; // Server-resolved selected-edition unit price; validated at the read boundary.
   savedStep?: number; // To resume progress
 }
 
@@ -199,6 +199,8 @@ export interface GlobalContextType {
   displayCurrency: DisplayCurrency;
   displayRegion: string;
   cart: CartItem[];
+  cartLoadError: string | null;
+  checkoutLoadError: string | null;
   favorites: Book[];
   isFavoritesLoading: boolean;
   isLoginModalOpen: boolean;
@@ -226,7 +228,7 @@ export interface GlobalContextType {
   updateCheckoutQuantity: (itemId: string, quantity: number) => void;
   prepareCheckout: (items: CartItem[]) => void;
   addToCheckout: (items: CartItem[]) => void;
-  hydrateCheckoutItems: (items: any[]) => void;
+  hydrateCheckoutItems: (items: unknown) => void;
   reconcileCartItemPrices: (items: Array<{ cartItemId: string; priceAtPurchase: number }>) => void;
   restoreCheckout: (items: CartItem[]) => void;
   removeFromCheckout: (itemId: string) => void;

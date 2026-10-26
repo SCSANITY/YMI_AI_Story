@@ -3,6 +3,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import {loadUi} from './helpers/preview-uiux-harness.mjs'
 
 // Run CartPage itself, preserving hook state across hydration and cart updates.
 function harness() {
@@ -19,6 +20,7 @@ function harness() {
   }).outputText, {
     module: fixtureModule, exports: fixtureModule.exports,
     require(name) {
+      if (name === '@/lib/cart-price') return loadUi('src/lib/cart-price.ts')
       if (name === 'react') return {
         useMemo: fn => fn(),
         useState(initial) {
@@ -46,12 +48,12 @@ function harness() {
     render() {
       stateIndex = 0
       const tree = fixtureModule.exports.default()
-      return { list: find(tree, 'CartItemsList'), summary: find(tree, 'CartSummaryPanel') }
+      return { tree, list: find(tree, 'CartItemsList'), summary: find(tree, 'CartSummaryPanel') }
     },
   }
 }
 
-const item = (id, price = 39, quantity = 1) => ({ id, book: { price }, quantity })
+const item = (id, price = 39, quantity = 1) => ({ id, book: { price: 1 }, priceAtPurchase: price, quantity })
 const ids = view => Array.from(view.list.selectedIds)
 
 test('all items default selected after asynchronous hydration, including later arrivals before manual choice', () => {
@@ -118,4 +120,13 @@ test('removed items never contribute to selection, total or checkout', async () 
   assert.deepEqual(ids(view), [])
   assert.equal(view.summary.selectedTotal, 0)
   assert.equal(await view.summary.onCheckout(), false)
+})
+
+test('a missing selected-edition price shows a load error and no book display-package fallback or checkout',()=>{
+ const h=harness();h.context.isHydrated=true
+ h.context.cart=[{id:'invalid',book:{price:39},quantity:1}]
+ const view=h.render()
+ assert.equal(view.list,undefined);assert.equal(view.summary,undefined)
+ assert.match(JSON.stringify(view.tree),/current book prices/)
+ assert.equal(h.prepared.length,0)
 })

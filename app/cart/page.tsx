@@ -11,6 +11,7 @@ import { CartItemsList } from './CartItemsList';
 import { CartSummaryPanel } from './CartSummaryPanel';
 import type { CartItem } from '@/types';
 import { useDedicationChoices } from '@/lib/use-dedication-choices';
+import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price';
 
 type PendingCartAction = {
   itemId: string;
@@ -69,6 +70,8 @@ export default function CartPage() {
   const router = useRouter();
   const {
     cart,
+    cartLoadError,
+    refreshCart,
     displayCurrency,
     isHydrated,
     removeFromCart,
@@ -94,12 +97,13 @@ export default function CartPage() {
     () => cart.filter(item => selectedIds.includes(item.id)),
     [cart, selectedIds],
   );
+  const priceLoadError = cartLoadError || (cart.some(item => !hasCartItemPrice(item)) ? CART_PRICE_LOAD_ERROR : null);
   const selectedTotal = useMemo(
-    () => selectedItems.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0),
-    [selectedItems]
+    () => priceLoadError ? 0 : selectedItems.reduce((sum, item) => sum + cartItemUnitPrice(item) * (item.quantity ?? 1), 0),
+    [selectedItems, priceLoadError]
   );
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), 0);
+  const subtotal = priceLoadError ? 0 : cart.reduce((sum, item) => sum + cartItemUnitPrice(item) * (item.quantity ?? 1), 0);
   const allSelected = cart.length > 0 && selectedIds.length === cart.length;
 
   const toggleSelectAll = () => {
@@ -233,6 +237,11 @@ export default function CartPage() {
 
       {!isHydrated ? (
         <CartLoadingContent />
+      ) : priceLoadError ? (
+        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700">
+          <p>{priceLoadError}</p>
+          <Button className="mt-4" onClick={() => void refreshCart()}>Try again</Button>
+        </div>
       ) : cart.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-8 text-center">
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">

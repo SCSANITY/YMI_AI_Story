@@ -4,6 +4,7 @@ import type { Provider, User as SupabaseUser } from '@supabase/supabase-js';
 import { User, Book, CartItem, GlobalContextType, ToggleFavoriteResult, PersonalizationData, type DisplayCurrency } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { templateRowToBook } from '@/lib/book-catalog';
+import { CART_PRICE_LOAD_ERROR, requireCartUnitPrice, hasCartItemPrice } from '@/lib/cart-price';
 import { normalizeStoryLanguage } from '@/lib/story-language';
 import {
   resolveChildNameFromCustomization,
@@ -104,6 +105,8 @@ export const GlobalProvider: React.FC<{
   const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
   const [displayRegion, setDisplayRegionState] = useState('US');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartLoadError, setCartLoadError] = useState<string | null>(null);
+  const [checkoutLoadError, setCheckoutLoadError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Book[]>([]);
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const [checkoutEmail, setCheckoutEmail] = useState('');
@@ -253,23 +256,34 @@ export const GlobalProvider: React.FC<{
             undefined,
           creationId: row.creation_id ?? creation.creation_id ?? undefined,
         },
-        priceAtPurchase: row.price_at_purchase ?? undefined,
+        priceAtPurchase: requireCartUnitPrice(row.unit_price_usd),
         savedStep: creation.preview_job_id ? 3 : undefined,
       } as CartItem;
     });
   }, []);
 
-  const refreshCartFromDb = useCallback(async () => {
+  const readCartFromDb = useCallback(async () => {
     const params = user?.customerId ? `?customerId=${user.customerId}` : '';
     const response = await fetch(`/api/cart${params}`, {
       credentials: 'include',
       cache: 'no-store',
     });
-    if (!response.ok) return;
+    if (!response.ok) throw new Error(CART_PRICE_LOAD_ERROR);
     const data = await response.json();
-    const items = Array.isArray(data?.items) ? data.items : [];
-    setCart(mapCartItems(items));
+    if (!Array.isArray(data?.items)) throw new Error(CART_PRICE_LOAD_ERROR);
+    return mapCartItems(data.items);
   }, [mapCartItems, user?.customerId]);
+
+  const refreshCartFromDb = useCallback(async () => {
+    try {
+      const items = await readCartFromDb();
+      setCart(items);
+      setCartLoadError(null);
+    } catch {
+      setCart([]);
+      setCartLoadError(CART_PRICE_LOAD_ERROR);
+    }
+  }, [readCartFromDb]);
 
   const mapFavouriteItems = useCallback((items: any[]) => {
     return items
@@ -299,16 +313,16 @@ export const GlobalProvider: React.FC<{
     let isActive = true;
 
     const loadCartFromDb = async () => {
-      const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-      const response = await fetch(`/api/cart${params}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (!isActive) return;
-      const items = Array.isArray(data?.items) ? data.items : [];
-      setCart(mapCartItems(items));
+      try {
+        const items = await readCartFromDb();
+        if (!isActive) return;
+        setCart(items);
+        setCartLoadError(null);
+      } catch {
+        if (!isActive) return;
+        setCart([]);
+        setCartLoadError(CART_PRICE_LOAD_ERROR);
+      }
     };
 
     loadCartFromDb();
@@ -316,7 +330,7 @@ export const GlobalProvider: React.FC<{
     return () => {
       isActive = false;
     };
-  }, [user?.customerId, mapCartItems]);
+  }, [readCartFromDb]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -974,6 +988,12 @@ export const GlobalProvider: React.FC<{
   }, [refreshCartFromDb, user?.customerId]);
 
   const prepareCheckout = useCallback((items: CartItem[]) => {
+    if (items.some(item => !hasCartItemPrice(item))) {
+      setCheckoutLoadError(CART_PRICE_LOAD_ERROR);
+      setCheckoutItems([]);
+      return;
+    }
+    setCheckoutLoadError(null);
     setCheckoutItems(items);
     setCart(prev => {
       const existingIds = new Set(prev.map(item => item.id));
@@ -984,6 +1004,11 @@ export const GlobalProvider: React.FC<{
 
   const addToCheckout = useCallback((items: CartItem[]) => {
     if (!items.length) return;
+    if (items.some(item => !hasCartItemPrice(item))) {
+      setCheckoutLoadError(CART_PRICE_LOAD_ERROR);
+      return;
+    }
+    setCheckoutLoadError(null);
     setCheckoutItems(prev => {
       const existingIds = new Set(prev.map(item => item.id));
       const additions = items.filter(item => !existingIds.has(item.id));
@@ -996,8 +1021,15 @@ export const GlobalProvider: React.FC<{
     });
   }, []);
 
-  const hydrateCheckoutItems = useCallback((rawItems: any[]) => {
-    setCheckoutItems(mapCartItems(rawItems));
+  const hydrateCheckoutItems = useCallback((rawItems: unknown) => {
+    try {
+      if (!Array.isArray(rawItems)) throw new Error(CART_PRICE_LOAD_ERROR);
+      setCheckoutItems(mapCartItems(rawItems));
+      setCheckoutLoadError(null);
+    } catch {
+      setCheckoutItems([]);
+      setCheckoutLoadError(CART_PRICE_LOAD_ERROR);
+    }
   }, [mapCartItems]);
 
   const reconcileCartItemPrices = useCallback((pricedItems: Array<{ cartItemId: string; priceAtPurchase: number }>) => {
@@ -1027,14 +1059,17 @@ export const GlobalProvider: React.FC<{
       return [...restored, ...prev];
     });
     setCheckoutItems([]);
+    setCheckoutLoadError(null);
   }, []);
 
   const clearCheckout = useCallback(() => {
     setCheckoutItems([]);
+    setCheckoutLoadError(null);
   }, []);
 
   const clearCart = useCallback(() => {
     setCart([]);
+    setCartLoadError(null);
   }, []);
 
   const removeOrderedItems = useCallback((itemIds: string[]) => {
@@ -1118,6 +1153,8 @@ export const GlobalProvider: React.FC<{
     displayCurrency,
     displayRegion,
     cart,
+    cartLoadError,
+    checkoutLoadError,
     favorites,
     isFavoritesLoading,
     checkoutEmail,
@@ -1162,6 +1199,8 @@ export const GlobalProvider: React.FC<{
     displayCurrency,
     displayRegion,
     cart,
+    cartLoadError,
+    checkoutLoadError,
     favorites,
     isFavoritesLoading,
     checkoutEmail,

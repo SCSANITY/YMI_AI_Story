@@ -3,9 +3,8 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import PersonalizePage from '@/components/PersonalizePage';
 import { CustomizeAccessGate } from '@/components/CustomizeAccessGate'
-import { BOOKS } from '@/data/books'
 import { publicPageMetadata } from '@/lib/seo'
-import { loadActiveTemplateDetail } from '@/lib/template-catalog-server'
+import { loadActiveTemplateCatalog, loadActiveTemplateDetail } from '@/lib/template-catalog-server'
 import { getPublishedHomepageBanners } from '@/lib/homepage-banners'
 
 function clampDescription(value: string) {
@@ -14,8 +13,13 @@ function clampDescription(value: string) {
   return `${normalized.slice(0, 152).trim()}...`
 }
 
-export function generateStaticParams() {
-  return BOOKS.map((book) => ({ bookID: book.bookID }))
+export const dynamic = 'force-static'
+export const dynamicParams = true
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  const books = await loadActiveTemplateCatalog({ strict: true })
+  return books.map((book) => ({ bookID: book.bookID }))
 }
 
 export async function generateMetadata({
@@ -25,7 +29,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { bookID } = await params
   const templateId = String(bookID || '').trim()
-  const book = BOOKS.find((item) => item.bookID === templateId)
+  const book = await loadActiveTemplateDetail(templateId)
+  if (!book) notFound()
 
   const title = String(book?.title || templateId || 'Personalized Storybook').trim()
   const baseDescription =

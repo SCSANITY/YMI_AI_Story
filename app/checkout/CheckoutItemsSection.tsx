@@ -11,6 +11,7 @@ import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
 import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title';
 import { SignatureVoiceBadge, SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
 import { isSignatureVoicePackage } from '@/lib/signature-voice';
+import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price';
 
 type CoverStatus = 'ready' | 'pending' | 'unavailable';
 
@@ -108,6 +109,10 @@ export function CheckoutItemsSection({
     }
   };
 
+  if ([...items, ...remainingCartItems].some(item => !hasCartItemPrice(item))) {
+    return <p role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">{CART_PRICE_LOAD_ERROR}</p>;
+  }
+
   const addFromCartDialog = isAddFromCartOpen && typeof document !== 'undefined'
     ? createPortal(
         <div
@@ -201,13 +206,13 @@ export function CheckoutItemsSection({
                           <div className="mt-1 text-xs font-medium text-slate-500 sm:hidden">
                             {t('cart.miniQuantity', { quantity })} -{' '}
                             <span className="font-semibold text-slate-800">
-                              {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * quantity, selectedCurrency)}
+                              {formatCurrencyAmount(cartItemUnitPrice(item) * quantity, selectedCurrency)}
                             </span>
                           </div>
                         </div>
                         <div className="hidden shrink-0 text-right sm:block">
                           <div className="text-sm font-semibold text-gray-950">
-                            {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * quantity, selectedCurrency)}
+                            {formatCurrencyAmount(cartItemUnitPrice(item) * quantity, selectedCurrency)}
                           </div>
                           <div className="mt-1 text-xs text-slate-500">{t('cart.miniQuantity', { quantity })}</div>
                         </div>
@@ -282,7 +287,7 @@ export function CheckoutItemsSection({
                         <SignatureVoiceBadge className="mt-2" />
                       ) : null}
                       <div className="mt-2 text-sm font-semibold text-gray-900 sm:hidden">
-                        {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}
+                        {formatCurrencyAmount(cartItemUnitPrice(item) * (item.quantity ?? 1), selectedCurrency)}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-900">
@@ -290,7 +295,7 @@ export function CheckoutItemsSection({
                         <LoaderCircle className="h-4 w-4 animate-spin text-amber-500" aria-label={t('common.loading')} />
                       ) : null}
                       <span className="hidden sm:inline">
-                        {formatCurrencyAmount((item.priceAtPurchase ?? item.book.price) * (item.quantity ?? 1), selectedCurrency)}
+                        {formatCurrencyAmount(cartItemUnitPrice(item) * (item.quantity ?? 1), selectedCurrency)}
                       </span>
                     </div>
                   </div>

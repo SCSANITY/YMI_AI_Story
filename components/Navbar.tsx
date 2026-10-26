@@ -40,6 +40,7 @@ export const Navbar: React.FC = () => {
   const {
     user,
     cart,
+    cartLoadError,
     displayCurrency,
     isHydrated,
     openLoginModal,
@@ -476,6 +477,7 @@ export const Navbar: React.FC = () => {
               open={isCartOpen}
               anchorRef={cartButtonRef}
               items={cart}
+              loadError={cartLoadError}
               displayCurrency={displayCurrency}
               isHydrated={isHydrated}
               onDismiss={dismissCart}
