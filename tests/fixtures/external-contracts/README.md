@@ -144,3 +144,7 @@ review provenance, not the current upstream fixture identity.
   nonrevoking links and the existing queue's provenance/support/shipment boundary.
   It is OFFLINE,not APPLIED or an independent release. S1 bytes stay frozen;
   S3 client/copy and combined T2 review/owner GO remain necessary.
+
+- S2 B1 return refreshes only the SQL mirror:referenced/retained rows cannot
+  starve queue batches;unbound expiry preserves provenance deadlines. App bytes
+  stay unchanged from cf27d78. This remains OFFLINE pending delta review/S3.
