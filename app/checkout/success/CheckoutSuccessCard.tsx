@@ -16,6 +16,7 @@ export type CheckoutSuccessOrder = {
   order_id: string;
   display_id?: string | null;
   order_status?: string | null;
+  shipped_at?:string|null;
   display_total?: number | null;
   display_currency?: CheckoutCurrency;
   email?: string | null;
@@ -110,7 +111,7 @@ export function CheckoutSuccessCard({
           </div>
         ) : null}
 
-        <OrderMaterialsSummary materials={order?.materials} shipped={['shipped','delivered'].includes(String(order?.order_status))}/>
+        <OrderMaterialsSummary materials={order?.materials} shipment={order??undefined}/>
         {hasSignatureVoice ? (
           <SignatureVoiceEditionNotice variant="postPurchase" className="mx-auto mt-5 max-w-xl" />
         ) : null}

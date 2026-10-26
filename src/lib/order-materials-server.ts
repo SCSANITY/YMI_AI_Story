@@ -1,4 +1,5 @@
 import 'server-only'
+import {isMaterialOrderShipped} from '@/lib/order-materials-client'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { hasCompleteSignatureVoiceBinding } from '@/lib/purchase-configuration'
 import { type MaterialAccess, newMaterialCredential, materialAccessPath } from '@/lib/order-materials-access'
@@ -37,7 +38,7 @@ async function shippedMaterialDisposition(orderId:string,access:MaterialAccess,a
     .eq('order_id',orderId).maybeSingle()
   if(error)throw new MaterialError('materials_unavailable',503)
   if(!o||!['paid','production','shipped','delivered'].includes(String(o.order_status))
-    ||(!o.shipped_at&&!['shipped','delivered'].includes(String(o.order_status))))return false
+    ||!isMaterialOrderShipped(o))return false
   return alreadyAuthorized||o.customer_id===access.customerId
 }
 async function namedMaterialCreations(result:Awaited<ReturnType<typeof loadOrderMaterials>>) {
@@ -57,11 +58,16 @@ export async function loadOrderMaterialsPage(orderId:string,access:MaterialAcces
       return {order_id:orderId,disposition:'shipped' as const}
     throw error
   }
-  if(await shippedMaterialDisposition(orderId,access,true)){
+  const [shipment,names]=await Promise.allSettled([
+    shippedMaterialDisposition(orderId,access,true),namedMaterialCreations(result),
+  ])
+  if(shipment.status==='rejected')throw shipment.reason
+  if(shipment.value){
     if(!access.customerId)throw new MaterialError('material_access_denied',403)
     return {order_id:orderId,disposition:'shipped' as const}
   }
-  const named=await namedMaterialCreations(result)
+  if(names.status==='rejected')throw names.reason
+  const named=names.value
   const covers=await createGeneratedPreviewCoverMap(named.data.map(row=>row.preview_job_id).filter((id):id is string=>typeof id==='string'))
   return {...named.result,items:named.result.items.map(item=>{
     const creation=named.creations.get(item.creation_id)!

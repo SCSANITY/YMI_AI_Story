@@ -47,6 +47,8 @@ function harness({response,upload,initial=dto(),component='page'}={}) {
   react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
   '@/components/personalize/SignatureVoiceDialog':{SignatureVoiceDialog:'voice-dialog'},
   '@/components/orders/MaterialTime':{MaterialTime:'local-time'},
+  '@/components/orders/MaterialMessageEditor':{MaterialMessageEditor:'message-editor'},
+  '@/components/orders/MaterialShippedNotice':{MaterialShippedNotice:'shipped-notice'},
   '@/components/orders/MaterialDeadlineNotice':{MaterialDeadlineNotice:'deadline-notice'},
   '@/lib/order-materials':{parseOrderMaterialsPage:x=>x},'@/lib/order-materials-client':helpers({fetch:fetchMock}),
   '@/services/assets':{uploadUserAsset:async(...args)=>{uploads.push(args);return upload?upload(...args):{asset_id:newAsset,voice_authorization_id:'synthetic-authorization'}}},
@@ -208,7 +210,7 @@ test('404 unavailable maps to support,not expired access or obsolete source',asy
 
 test('explicitly authorized shipped disposition displays only a notice,no book or upload fields',async()=>{
  const h=harness({response:()=>Response.json({order_id:order,disposition:'shipped'})});await h.settle()
- assert.match(h.text(),/Your book has shipped/);assert.ok(!h.nodes().some(n=>n.type==='textarea'||n.type==='voice-dialog'))
+ assert.ok(h.nodes().some(n=>n.type==='shipped-notice'));assert.ok(!h.nodes().some(n=>n.type==='textarea'||n.type==='voice-dialog'))
  assert.ok(!h.text().includes('Synthetic book'));h.cleanup()
 })
 
@@ -229,5 +231,5 @@ test('a shipped refresh closes an open capture intent instead of leaving an uplo
  const h=harness({response:()=>shipped?Response.json({order_id:order,disposition:'shipped'}):null});await h.settle()
  h.button('Update recording').props.onClick();await h.settle();assert.ok(h.dialog())
  shipped=true;h.button('Reload current status').props.onClick();await h.settle()
- assert.equal(h.dialog(),undefined);assert.match(h.text(),/Your book has shipped/);assert.equal(h.uploads.length,0);h.cleanup()
+ assert.equal(h.dialog(),undefined);assert.ok(h.nodes().some(n=>n.type==='shipped-notice'));assert.equal(h.uploads.length,0);h.cleanup()
 })

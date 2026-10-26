@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import type {OrderMaterials} from '@/lib/order-materials'
-import {distinctMaterialNames} from '@/lib/order-materials-client'
+import {distinctMaterialNames,isMaterialOrderShipped,type MaterialShipment} from '@/lib/order-materials-client'
+import {MaterialShippedNotice} from '@/components/orders/MaterialShippedNotice'
 import {MaterialDeadlineNotice} from '@/components/orders/MaterialDeadlineNotice'
-export function OrderMaterialsSummary({materials,shipped=false}:{materials?:OrderMaterials|null;shipped?:boolean}) {
-  if(shipped)return <p role="status" className="mt-3 text-sm">Your book has shipped. Please contact us if you need help.</p>
+export function OrderMaterialsSummary({materials,shipment}:{materials?:OrderMaterials|null;shipment?:MaterialShipment}) {
+  if(isMaterialOrderShipped(shipment))return <MaterialShippedNotice/>
   if(!materials)return null
   const names=distinctMaterialNames(materials.items)
   return <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-left" aria-label="Book materials">

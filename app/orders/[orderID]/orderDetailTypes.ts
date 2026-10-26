@@ -22,6 +22,7 @@ export type OrderDetail = {
   order_id: string
   display_id?: string | null
   order_status?: string | null
+  shipped_at?:string|null
   created_at?: string | null
   email?: string | null
   cover_url?: string | null

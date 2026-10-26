@@ -500,13 +500,27 @@ test('authorized Web name enrichment uses the existing Creation name resolver pe
 })
 
 
-test('a valid guest read stops before book metadata if the shipment timestamp has already been set',async()=>{
+test('an authorized guest shipment read returns no materials or signed cover despite parallel scoped enrichment',async()=>{
  const h=harness({queryResult:table=>({error:null,data:table==='orders'?{
   order_id:order,customer_id:customer,order_status:'paid',shipped_at:'2026-10-26T00:00:00Z'}:null})})
  const response=await h.load('app/api/orders/[orderId]/materials/route.ts').GET(new Request('https://example.test',{
   headers:{authorization:'Bearer '+'a'.repeat(43)}}),context)
  assert.equal(response.status,403)
- assert.ok(!h.calls.some(c=>c.table==='order_material_grants'||c.table==='creations'||c.covers))
+ assert.ok(!h.calls.some(c=>c.table==='order_material_grants'||c.covers))
  const source=readFileSync(new URL('../src/lib/order-materials-server.ts',import.meta.url),'utf8')
  assert.doesNotMatch(source,/from\('order_material_grants'\)/)
+})
+
+
+test('successful materials read starts order and scoped Creation reads in parallel,without waiting to sign covers',async()=>{
+ let release,creationStarted=false
+ const h=harness({queryResult:table=>table==='orders'?new Promise(resolve=>{release=resolve}):
+  table==='creations'?(()=>{creationStarted=true;release({data:{order_id:order,customer_id:customer,order_status:'paid',shipped_at:null},error:null});return {data:[{creation_id:creation,template_id:'Synthetic_story',customize_snapshot:{childName:'Alston'}}],error:null}})():{data:null,error:null}})
+ let timer
+ try {
+  const result=await Promise.race([h.load('src/lib/order-materials-server.ts').loadOrderMaterialsPage(order,{customerId:customer,tokenHash:null}),
+   new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('reads were serialized')),300)})])
+  assert.ok(creationStarted);assert.equal(result.items[0].child_name,'Alston')
+  assert.equal(h.calls[0].name,'materials_read')
+ }finally{clearTimeout(timer)}
 })

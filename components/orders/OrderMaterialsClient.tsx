@@ -8,6 +8,8 @@ import { fetchMaterialRecording, RecordingPlaybackError, playbackMediaReason, ty
 import { uploadUserAsset } from '@/services/assets'
 import { useI18n } from '@/lib/useI18n'
 import { SIGNATURE_VOICE_CONSENT_VERSION } from '@/lib/signature-voice'
+import {MaterialMessageEditor as DedicationEditor} from '@/components/orders/MaterialMessageEditor'
+import {MaterialShippedNotice} from '@/components/orders/MaterialShippedNotice'
 import {MaterialTime} from '@/components/orders/MaterialTime'
 import {MaterialDeadlineNotice} from '@/components/orders/MaterialDeadlineNotice'
 import OrderCoverImage from '@/components/OrderCoverImage'
@@ -16,16 +18,6 @@ import Link from 'next/link'
 class MaterialWriteFailure extends Error {}
 
 const button='rounded-full bg-amber-800 px-5 py-3 text-sm font-bold text-white disabled:opacity-50'
-function DedicationEditor({item,save,busy}:{item:MaterialItem;save:(item:MaterialItem,body:string)=>Promise<void>;busy:boolean}) {
-  const [body,setBody]=useState(item.dedication.body ?? '')
-  return <form onSubmit={event=>{event.preventDefault();void save(item,body)}} className="mt-4 space-y-3">
-    <label className="block text-sm font-semibold" htmlFor={`dedication-${item.cart_item_id}`}>Your message for <bdi>{item.child_name||'this book'}</bdi> (optional)</label>
-    <textarea id={`dedication-${item.cart_item_id}`} rows={5} maxLength={300} value={body} onChange={event=>setBody(event.target.value)}
-      disabled={busy || !item.can_edit_dedication} className="w-full rounded-xl border border-stone-300 p-3" />
-    <p className="text-xs text-slate-600">Leave empty for no message. Maximum 300 characters and 8 line breaks.</p>
-    {item.can_edit_dedication ? <button type="submit" className={button} disabled={busy}>Update message</button> : <p className="text-sm">The message editing window has closed.</p>}
-  </form>
-}
 type PlaybackState={status:'idle';attempt:number}|{status:'loading';attempt:number}|{status:'ready';attempt:number;url:string}|{status:'failed';attempt:number;reason:PlaybackFailureReason}
 export function RecordingPlayback({orderId,itemId,assetId,token,onRecovery,onLatest}:{orderId:string;itemId:string;assetId:string;token:string|null|undefined;onRecovery:()=>void;onLatest:()=>void}) {
   const [state,setState]=useState<PlaybackState>({status:'idle',attempt:0})
@@ -139,7 +131,7 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
     <h1 className="font-serif text-3xl font-bold">Your book&apos;s personal touches</h1>
     {error?<p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{error}</p>:null}
     {message?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-900">{message}</p>:null}
-    {shipped?<p role="status">Your book has shipped. Please contact us if you need help.</p>:recovery ? <section className="rounded-2xl border border-amber-200 bg-white p-6">
+    {shipped?<MaterialShippedNotice/>:recovery ? <section className="rounded-2xl border border-amber-200 bg-white p-6">
       <h2 className="font-serif text-xl">Send me a new link</h2><p className="mt-2 text-sm">Enter the email used for this order. Access is only for its book materials.</p>
       <p className="mt-3 text-sm">If you cannot access your materials, <Link href="/support" className="underline">contact our team</Link> for help.</p>
       <form className="mt-4 space-y-4" onSubmit={event=>{event.preventDefault();void recover()}}>

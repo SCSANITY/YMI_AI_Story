@@ -120,7 +120,7 @@ export function OrderReceiptEmail({
       {materialNotice?<Section style={styles.summaryWrap}>
         <Text style={styles.paragraph}>A message for {materialNotice.names.length?materialNotice.names.map((name,index)=><React.Fragment key={name}>{index>0?(index===materialNotice.names.length-1?' and ':', '):''}<bdi>{name}</bdi></React.Fragment>):<bdi>this book</bdi>} is optional.</Text>
         <Text style={styles.paragraph}>{materialNotice.updateOpen?<>You can update your message{materialNotice.hasVoice?' and recording':''} until {formatMaterialTime(materialNotice.deadline,'UTC')}.</>
-          :<>The update deadline ({formatMaterialTime(materialNotice.deadline,'UTC')}) has passed. Your message{materialNotice.hasVoice&&!materialNotice.pendingVoice?' and recording are':' is'} final.</>}</Text>
+          :<>The update deadline has passed: {formatMaterialTime(materialNotice.deadline,'UTC')}. Your message{materialNotice.hasVoice&&!materialNotice.pendingVoice?' and recording are':' is'} final.</>}</Text>
         <Text style={styles.paragraph}>Open your materials page to see this in your local time.</Text>
         {materialNotice.pendingVoice?<Text style={styles.paragraph}><strong>{materialNotice.updateOpen?'Please provide your recording as soon as possible. Missing recordings delay completion of your Hardcover + Voice book.':'We still need your recording to make this book. Please submit it as soon as possible. Once submitted, it is final.'}</strong></Text>:null}
         <Link href={materialNotice.url} style={styles.summaryOrderLink}>Review or update your book materials</Link>

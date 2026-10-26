@@ -49,7 +49,7 @@ test('one deadline notice is before-update or after-final,never contradictory re
  const before=renderToStaticMarkup(React.createElement(Notice,{materials:state()}))
  assert.match(before,/You can update your message and recording until/)
  const final=renderToStaticMarkup(React.createElement(Notice,{materials:state(false)}))
- assert.match(final,/has passed. Your message and recording are final/)
+ assert.match(final,/has passed:/);assert.match(final,/Your message and recording are final/);assert.doesNotMatch(final,/\(\(|\)\)|\([^)]*\(/)
  assert.doesNotMatch(final,/before this deadline|can update|replacement window/)
 })
 
@@ -61,6 +61,7 @@ test('summary uses own child names and isolates bidi,with correct missing-requir
  assert.equal((html.match(/<bdi>Alston<\/bdi>/g)||[]).length,1)
  const missing=state(false,true);missing.items[0].child_name=null
  const late=renderToStaticMarkup(React.createElement(Summary,{materials:missing}))
+ assert.doesNotMatch(late,/\(\(|\)\)|\([^)]*\(/)
  assert.match(late,/<bdi>this book<\/bdi>/);assert.match(late,/We still need your recording/);assert.match(late,/Once submitted, it is final/)
  assert.doesNotMatch(late,/replacement window|before this deadline/)
 })
@@ -75,7 +76,7 @@ test('receipt shows English UTC,local-page instruction and individualized messag
  assert.match(html,/Oct.*\(UTC\)/);assert.match(html,/Open your materials page to see this in your local time/)
  assert.doesNotMatch(html,/GMT|Hong Kong|dedication/)
  assert.match(render([]),/A message for <bdi>this book<\/bdi>/)
- const final=render(['Alston'],false);assert.match(final,/has passed. Your message and recording are final/)
+ const final=render(['Alston'],false);assert.match(final,/has passed:/);assert.match(final,/Your message and recording are final/);assert.doesNotMatch(final,/\(\(|\)\)|\([^)]*\(/)
  assert.doesNotMatch(final,/before this deadline|can be updated/)
  const missing=render(['Sonia'],false,1);assert.match(missing,/We still need your recording/);assert.match(missing,/Once submitted, it is final/)
 })
@@ -83,6 +84,33 @@ test('receipt shows English UTC,local-page instruction and individualized messag
 
 test('shipped summary ignores retained materials and renders no data or update control',()=>{
  const Summary=loader()('components/orders/OrderMaterialsSummary.tsx').OrderMaterialsSummary
- const html=renderToStaticMarkup(React.createElement(Summary,{materials:state(),shipped:true}))
- assert.match(html,/Your book has shipped/);assert.doesNotMatch(html,/Alston|Update|deadline|materials/)
+ const html=renderToStaticMarkup(React.createElement(Summary,{materials:state(),shipment:{shipped_at:deadline,order_status:'paid'}}))
+ assert.match(html,/Your book has shipped/);assert.match(html,/href="\/support"/);assert.doesNotMatch(html,/Alston|Update|deadline|materials/)
+})
+
+
+test('final saved messages are plain text;empty final messages name the child with no input or typing hints',()=>{
+ const Editor=loader()('components/orders/MaterialMessageEditor.tsx').MaterialMessageEditor
+ for(const body of ['Saved message\nWith love',null]){
+  const item={...state(false).items[0],dedication:{body,revision:1}}
+  const html=renderToStaticMarkup(React.createElement(Editor,{item,save:async()=>{},busy:false}))
+  assert.doesNotMatch(html,/<textarea|Leave empty|300 characters|window has closed/)
+  if(body)assert.match(html,/Saved message/);else assert.match(html,/No message for <bdi>Alston<\/bdi>/)
+ }
+})
+
+test('one shipment predicate covers timestamp-only and status-only across all material surfaces',()=>{
+ const fn=loader()('src/lib/order-materials-client.ts').isMaterialOrderShipped
+ assert.equal(fn({shipped_at:deadline,order_status:'paid'}),true)
+ for(const order_status of ['shipped','delivered'])assert.equal(fn({order_status}),true)
+ assert.equal(fn({shipped_at:null,order_status:'production'}),false);assert.equal(fn(undefined),false)
+ for(const file of ['components/orders/OrderMaterialsSummary.tsx','src/lib/order-materials-server.ts'])
+  assert.match(readFileSync(new URL('../'+file,import.meta.url),'utf8'),/isMaterialOrderShipped/)
+ for(const file of ['app/orders/[orderID]/OrderDetailPanels.tsx','app/checkout/success/CheckoutSuccessCard.tsx']){
+  const source=readFileSync(new URL('../'+file,import.meta.url),'utf8')
+  assert.match(source,/shipment=\{order\?\?undefined\}/)
+  assert.doesNotMatch(source,/shipped=\{\['shipped','delivered'\]/)
+ }
+ const Notice=loader()('components/orders/MaterialShippedNotice.tsx').MaterialShippedNotice
+ const html=renderToStaticMarkup(React.createElement(Notice));assert.match(html,/href="\/support"/)
 })

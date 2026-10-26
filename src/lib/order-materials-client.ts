@@ -57,3 +57,8 @@ export async function fetchMaterialRecording(orderId: string, itemId: string, as
   if(!response.ok)throw new RecordingPlaybackError(playbackHttpReason(response.status))
   try {return await response.blob()}catch {throw new RecordingPlaybackError('network')}
 }
+
+export type MaterialShipment={shipped_at?:string|null;order_status?:string|null}
+export function isMaterialOrderShipped(order:MaterialShipment|null|undefined):boolean {
+  return Boolean(order?.shipped_at)||order?.order_status==='shipped'||order?.order_status==='delivered'
+}

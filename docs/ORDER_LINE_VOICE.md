@@ -197,3 +197,12 @@ order_material_grants. The07 migration explicitly revokes that access. No live
 execution occurred;mock tests did not model its ACL. Owner subsequently chose
 pureWeb/account-only shipped fallback,generic guest denial plus support. This
 supersedes the proposed grant fallback;the final candidate never reads that table.
+
+Owner-required S3 final polish: closed messages render saved text (or an explicit
+empty message), without an input or typing hint. Deadline copy has one timezone
+label with no outer parentheses. MaterialShippedNotice supplies the shared support
+link; isMaterialOrderShipped is the single timestamp-or-status predicate used by
+the server and summary, with authorized order data supplied by both callers.
+After successful materials authorization, shipment and Creation enrichment reads
+run in parallel. Denied guest access never starts those reads; shipped output is
+still only the authenticated customer's minimal disposition, never materials.
