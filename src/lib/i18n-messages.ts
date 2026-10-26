@@ -544,6 +544,9 @@ const en: MessageDictionary = {
   'account.errorUpdateFailed': 'Failed to update profile.',
 
   'orders.emptyTitle': 'No orders yet',
+  'orders.loadFailedTitle': "We couldn't load your orders",
+  'orders.loadFailedDescription': 'Please try again in a moment.',
+  'orders.tryAgain': 'Try again',
   'orders.emptyDescription': 'Start by creating a magical storybook.',
   'orders.signedOutTitle': 'Sign in to view your orders',
   'orders.signedOutDescription': 'Sign in or create an account with the email used at checkout to see linked orders and track updates on any device.',

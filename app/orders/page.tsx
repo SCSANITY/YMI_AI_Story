@@ -65,6 +65,8 @@ export default function OrdersPage() {
   } = useGlobalContext();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoadError, setHasLoadError] = useState(false);
+  const [reloadAttempt, setReloadAttempt] = useState(0);
   const [loadedCustomerId, setLoadedCustomerId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<OrderTab>('shipping');
   const [pendingAction, setPendingAction] = useState<PendingOrderAction>(null);
@@ -75,12 +77,18 @@ export default function OrdersPage() {
 
     let cancelled = false;
     setLoading(true);
+    setHasLoadError(false);
 
     fetch('/api/orders', {
       credentials: 'include',
       cache: 'no-store',
     })
-      .then((res) => (res.ok ? res.json() : { orders: [] }))
+      .then(async (res) => {
+        if (!res.ok) throw new Error('orders_load_failed');
+        const data = await res.json();
+        if (!Array.isArray(data?.orders)) throw new Error('orders_response_invalid');
+        return data;
+      })
       .then((data) => {
         if (cancelled) return;
         setOrders(Array.isArray(data?.orders) ? data.orders : []);
@@ -88,6 +96,7 @@ export default function OrdersPage() {
       .catch(() => {
         if (cancelled) return;
         setOrders([]);
+        setHasLoadError(true);
       })
       .finally(() => {
         if (cancelled) return;
@@ -98,7 +107,7 @@ export default function OrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthResolved, isHydrated, user?.customerId]);
+  }, [isAuthResolved, isHydrated, user?.customerId, reloadAttempt]);
 
   const grouped = useMemo(() => {
     const shipping = orders.filter((order) => getOrderTab(order.order_status) === 'shipping');
@@ -115,6 +124,7 @@ export default function OrdersPage() {
     loadedCustomerId,
     isLoading: loading,
     orderCount: orders.length,
+    hasLoadError,
   });
 
   const handleAccountAction = (mode: 'login' | 'signup') => {
@@ -211,6 +221,14 @@ export default function OrdersPage() {
             onClick={() => router.push('/')}
           >
             {t('common.browseBooks')}
+          </Button>
+        </div>
+      ) : pageState === 'error' ? (
+        <div role="alert" className="rounded-2xl border border-amber-200/70 bg-white/80 p-8 text-center">
+          <h2 className="text-xl font-title text-gray-900 md:text-2xl">{t('orders.loadFailedTitle')}</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">{t('orders.loadFailedDescription')}</p>
+          <Button size="lg" className="mt-6 px-8" disabled={loading} onClick={() => setReloadAttempt((attempt) => attempt + 1)}>
+            {t('orders.tryAgain')}
           </Button>
         </div>
       ) : pageState === 'empty' ? (

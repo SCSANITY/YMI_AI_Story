@@ -206,3 +206,10 @@ the server and summary, with authorized order data supplied by both callers.
 After successful materials authorization, shipment and Creation enrichment reads
 run in parallel. Denied guest access never starts those reads; shipped output is
 still only the authenticated customer's minimal disposition, never materials.
+
+The cleanup-provenance composite key also creates a PostgREST many-to-many path
+between orders and cart_items. Customer order reads explicitly select the direct
+orders_checkout_id_fkey relationship, retaining the cart_items alias and owner
+filter for list/detail/checkout-success consumers. My Orders distinguishes a
+failed read from a successful empty list and offers a user-triggered retry.
+This read repair changes no binding,grant,cleanup or database lifecycle rule.

@@ -50,7 +50,7 @@ const CUSTOMER_ORDER_SELECT = `
   email,
   shipping_address,
   billing_address,
-  cart_items:cart_items (
+  cart_items:cart_items!orders_checkout_id_fkey (
     cart_item_id,
     owner_type,
     anon_session_id,

@@ -1,4 +1,4 @@
-export type OrdersPageState = 'loading' | 'signed_out' | 'empty' | 'ready'
+export type OrdersPageState = 'loading' | 'signed_out' | 'error' | 'empty' | 'ready'
 
 type ResolveOrdersPageStateInput = {
   isHydrated: boolean
@@ -7,6 +7,7 @@ type ResolveOrdersPageStateInput = {
   loadedCustomerId?: string | null
   isLoading: boolean
   orderCount: number
+  hasLoadError?: boolean
 }
 
 export function resolveOrdersPageState({
@@ -16,9 +17,11 @@ export function resolveOrdersPageState({
   loadedCustomerId,
   isLoading,
   orderCount,
+  hasLoadError = false,
 }: ResolveOrdersPageStateInput): OrdersPageState {
   if (!isHydrated || !isAuthResolved) return 'loading'
   if (!customerId) return 'signed_out'
   if (isLoading || loadedCustomerId !== customerId) return 'loading'
+  if (hasLoadError) return 'error'
   return orderCount > 0 ? 'ready' : 'empty'
 }
