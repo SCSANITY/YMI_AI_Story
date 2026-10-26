@@ -5,14 +5,18 @@ import ts from 'typescript'
 import React from 'react'
 import { readFileSync } from 'node:fs'
 
-function mailHarness(skip=false,voiceReady=false) {
+const helperModule={exports:{}}
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/lib/order-materials-client.ts',import.meta.url),'utf8'),{
+ compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+}).outputText,{module:helperModule,exports:helperModule.exports})
+function mailHarness(skip=false,voiceReady=false,names=['Alston']) {
   const events=[],sent=[],reads=[],logs=[],fixtureModule={exports:{}}
   const model='a'.repeat(43)
   const injections={
-    react:React,
+    react:React,'@/lib/order-materials-client':helperModule.exports,
     resend:{Resend:class {emails={send:async value=>{sent.push(value);return {data:{id:'synthetic-message'}}}}}},
     '@/lib/order-materials-server':{
-      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {dedication_deadline:'2026-10-23T12:00:00Z',items:[{cart_item_id:'synthetic-line',package_type:'supreme',voice_ready:voiceReady,can_submit_voice:true}]}},
+      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {dedication_deadline:'2026-10-23T12:00:00Z',items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,package_type:'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
       issueOrderMaterialLink:async id=>{reads.push(['issue',id]);return `/orders/${id}/materials#token=${model}`},
     },
     '@/lib/locale-pricing':{normalizeCheckoutCurrency:()=> 'USD'},
@@ -55,7 +59,7 @@ test('an actual confirmation resolves fresh materials only after idempotency;raw
   assert.deepEqual(h.reads.map(row=>row[0]),['read','issue'])
   assert.equal(h.sent.length,1)
   const notice=h.sent[0].react.props.materialNotice
-  assert.equal(notice.pendingVoice,1);assert.equal(notice.deadline,'2026-10-23T12:00:00Z')
+  assert.deepEqual(Array.from(notice.names),['Alston']);assert.equal(notice.updateOpen,true);assert.equal(notice.pendingVoice,1);assert.equal(notice.deadline,'2026-10-23T12:00:00Z')
   assert.ok(notice.url.endsWith('#token='+h.model))
   assert.ok(!JSON.stringify(h.events).includes(h.model));assert.ok(!JSON.stringify(h.logs).includes(h.model))
 })
@@ -87,11 +91,17 @@ test('materials page reuses the global header,orders entry,cover and explicit em
   assert.match(client,/href="\/orders"/)
   assert.match(client,/OrderCoverImage src=\{item.book\?\.cover_url\}/)
   assert.doesNotMatch(client,/template_id\.replace/)
-  assert.match(client,/formatMaterialTime\(materials.dedication_deadline\)/)
-  assert.match(mail,/materialNotice.deadline\)\.toUTCString\(\)/)
+  assert.match(client,/MaterialDeadlineNotice materials=\{materials\}/)
+  assert.match(mail,/formatMaterialTime\(materialNotice.deadline,'UTC'\)/)
 })
 
 test('a received recording eligible for replacement is not counted as missing in confirmation mail',async()=>{
  const h=mailHarness(false,true);await h.api.sendOrderConfirmationEmail(input)
  assert.equal(h.sent[0].react.props.materialNotice.pendingVoice,0)
+})
+
+
+test('confirmation joins distinct child names without repeating a child in its message notice',async()=>{
+ const h=mailHarness(false,true,['Alston','Sonia','Alston']);await h.api.sendOrderConfirmationEmail(input)
+ assert.deepEqual(Array.from(h.sent[0].react.props.materialNotice.names),['Alston','Sonia'])
 })

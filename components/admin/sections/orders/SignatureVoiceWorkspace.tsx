@@ -24,6 +24,7 @@ import {
   adminLabelClass,
   type AdminStatusTone,
 } from '@/components/admin/AdminUi'
+import {MaterialTime} from '@/components/orders/MaterialTime'
 import { supabase } from '@/lib/supabase'
 import {
   resolveSignatureVoiceFileContentType,
@@ -52,12 +53,6 @@ function formatBytes(value: number | null) {
   if (!value || value <= 0) return '-'
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`
   return `${(value / 1024 / 1024).toFixed(1)} MB`
-}
-
-function formatTimestamp(value: string | null) {
-  if (!value) return '-'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'long'}).format(date)
 }
 
 function triageTone(status: SignatureVoiceTriageStatus): AdminStatusTone {
@@ -672,7 +667,7 @@ function HardwareAttestation({
             <h4 className="text-sm font-bold text-[var(--admin-page-ink)]">Physical audio hardware</h4>
             <p className="mt-0.5 text-xs text-[var(--admin-page-muted)]">
               {item.hardware.status === 'attested'
-                ? `${item.hardware.attestedByName || 'Admin'} / ${formatTimestamp(item.hardware.attestedAt)}`
+                ? <>{item.hardware.attestedByName || 'Admin'} / {item.hardware.attestedAt?<MaterialTime value={item.hardware.attestedAt}/>:null}</>
                 : `${item.narration.filter((slot) => slot.track).length}/15 narration tracks`}
             </p>
           </div>
@@ -741,8 +736,8 @@ function VoiceItem({
             </AdminStatusBadge>
           </div>
           <h3 className="mt-2 text-base font-bold text-[var(--admin-page-ink)]">{item.title}</h3>
-          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Recording uploaded: {formatTimestamp(item.source.createdAt)} / Bound to this book: {formatTimestamp(item.declaration.boundAt)}</p>
-          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Customer replacement deadline: {formatTimestamp(item.declaration.replaceUntil)} (payment + 48h; closes at shipment)</p>
+          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Recording uploaded: {item.source.createdAt?<MaterialTime value={item.source.createdAt}/>:null} / Bound to this book: {item.declaration.boundAt?<MaterialTime value={item.declaration.boundAt}/>:null}</p>
+          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Customer replacement deadline: {item.declaration.replaceUntil?<MaterialTime value={item.declaration.replaceUntil}/>:null} (payment + 48h; closes at shipment)</p>
           {item.triage.narrationOutdated?<AdminNotice tone="warning" className="mt-2">Narration outdated: the recording changed. Regenerate and verify narration, then confirm hardware loading for this book again.</AdminNotice>:null}
           {item.retainedSourceCount>0 && <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Previous recording retained after shipment ({item.retainedSourceCount}). It has not been scheduled for 30-day removal.</p>}
           <p className="mt-1 text-xs text-[var(--admin-page-muted)]">
@@ -750,7 +745,7 @@ function VoiceItem({
           </p>
           {item.declaration.kind === 'admin_declared' && item.declaration.adminDeclaration && (
             <p className="mt-1 break-words text-xs text-[var(--admin-page-muted)]">
-              Admin-declared replacement · {formatTimestamp(item.declaration.adminDeclaration.declaredAt)} · Admin {item.declaration.adminDeclaration.actorCustomerId}
+              Admin-declared replacement · {item.declaration.adminDeclaration.declaredAt?<MaterialTime value={item.declaration.adminDeclaration.declaredAt}/>:null} · Admin {item.declaration.adminDeclaration.actorCustomerId}
               <br />Evidence: {item.declaration.adminDeclaration.evidenceReference}
             </p>
           )}

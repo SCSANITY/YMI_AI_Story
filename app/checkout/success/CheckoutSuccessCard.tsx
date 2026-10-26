@@ -110,7 +110,7 @@ export function CheckoutSuccessCard({
           </div>
         ) : null}
 
-        <OrderMaterialsSummary materials={order?.materials}/>
+        <OrderMaterialsSummary materials={order?.materials} shipped={['shipped','delivered'].includes(String(order?.order_status))}/>
         {hasSignatureVoice ? (
           <SignatureVoiceEditionNotice variant="postPurchase" className="mx-auto mt-5 max-w-xl" />
         ) : null}

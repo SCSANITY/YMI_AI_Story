@@ -265,7 +265,7 @@ export async function renderEmailTemplatePreview(
             zip: 'N1 9GU',
           }}
           trackUrl={orderUrl}
-          materialNotice={{deadline:'2026-10-23T12:00:00Z',pendingVoice:1,url:orderUrl+'/materials'}}
+          materialNotice={{deadline:'2026-10-23T12:00:00Z',pendingVoice:1,url:orderUrl+'/materials',names:['Alston','Sonia'],updateOpen:true,hasVoice:true}}
           coverImageUrl={coverImageUrl}
           coverTitle="Sophie's Secret Journey Through Eight Plants"
         />

@@ -169,7 +169,7 @@ test('denied scoped reads do not query book metadata or sign covers',async()=>{
   const h=harness({rpcResult:()=>({data:null,error:{code:'42501',message:'materials_access_denied'}})})
   const route=h.load('app/api/orders/[orderId]/materials/route.ts')
   const result=await route.GET(new Request('https://example.test',{headers:{authorization:'Bearer '+'a'.repeat(43)}}),context)
-  assert.equal(result.status,403);assert.equal(h.calls.length,1)
+  assert.equal(result.status,403);assert.ok(!h.calls.some(c=>c.table==='creations'||c.covers))
   assert.equal(h.calls[0].name,'materials_read')
 })
 
@@ -358,7 +358,7 @@ test('paid playback denies revoked grants, another line and a replaced asset bef
     const route=h.load('app/api/user-assets/[assetId]/download/route.ts')
     const response=await route.GET(new Request(`https://example.test/api/user-assets/${creation}/download?orderId=${order}&itemId=${variant==='line'?challenge:item}`,
       {headers:{authorization:'Bearer '+'a'.repeat(43)}}),{params:Promise.resolve({assetId:creation})})
-    assert.equal(response.status,403,variant)
+    assert.equal(response.status,variant==='asset'?409:403,variant)
     assert.ok(!h.calls.some(c=>c.auth || c.table==='user_assets' || c.table==='creations'))
   }
 })
@@ -469,4 +469,32 @@ test('a bad replay of voice confirmation never deletes current or possibly bound
    ...captureBody(),asset_id:challenge,storage_path:`user-assets/customer/${challenge}/voice_sample/${challenge}.wav`,
    content_type:'audio/wav',size_bytes:100,voice_authorization_id:customer,metadata:{duration_seconds:12}})}))
  assert.equal(response.status,409);assert.equal(removed,0)
+})
+
+
+test('shipped disposition allows only the order customer or an unrevoked scoped grant;no material data escapes',async()=>{
+ for(const mode of ['customer','grant','stranger','revoked','wrong-scope','refund']){
+  const h=harness({owner:mode==='customer'||mode==='stranger'?{ownerType:'customer',customerId:mode==='customer'?customer:creation}:null,
+   rpcResult:()=>({data:null,error:{code:'42501'}}),queryResult:table=>({error:null,data:table==='orders'?{
+    order_id:order,customer_id:customer,order_status:mode==='refund'?'refunded':'shipped',shipped_at:'2026-10-26T00:00:00Z'}:
+    table==='order_material_grants'?{item_ids:[item],completed_at:mode==='revoked'?'2026-10-26T00:00:00Z':null}:
+    table==='cart_items'?(mode==='wrong-scope'?[]:[{cart_item_id:item}]):null})})
+  const headers=mode==='customer'||mode==='stranger'?{}:{authorization:'Bearer '+'a'.repeat(43)}
+  const result=await h.load('app/api/orders/[orderId]/materials/route.ts').GET(new Request('https://example.test',{headers}),context)
+  if(mode==='customer'||mode==='grant'){
+   assert.equal(result.status,200,mode);assert.deepEqual(await result.json(),{order_id:order,disposition:'shipped'})
+  }else assert.equal(result.status,403,mode)
+  assert.ok(!h.calls.some(c=>c.table==='creations'||c.table==='user_assets'||c.covers))
+ }
+})
+
+test('authorized Web name enrichment uses the existing Creation name resolver per line',async()=>{
+ const value=dto();value.items.push({...value.items[0],cart_item_id:challenge,creation_id:customer})
+ const h=harness({rpcResult:()=>({data:value,error:null}),queryResult:table=>({error:null,data:table==='orders'?{
+  order_id:order,customer_id:customer,order_status:'paid',shipped_at:null}:table==='creations'?[
+   {creation_id:creation,template_id:'Synthetic_story',customize_snapshot:{textOverrides:{child_name:'Alston'}}},
+   {creation_id:customer,template_id:'Synthetic_story',customize_snapshot:{child_name:'Sonia'}}]:null})})
+ const result=await h.load('src/lib/order-materials-server.ts').loadOrderMaterialsPage(order,{customerId:customer,tokenHash:null})
+ assert.deepEqual(Array.from(result.items,x=>x.child_name),['Alston','Sonia'])
+ assert.ok(!JSON.stringify(result).includes('customize_snapshot'))
 })

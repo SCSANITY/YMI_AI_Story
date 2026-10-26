@@ -1,3 +1,4 @@
+import {formatMaterialTime} from '@/lib/order-materials-client'
 import * as React from 'react'
 import { Hr, Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, EmailDivider, SignoffStamp, emailAsset, emailTheme, emailButtons } from './EmailLayout'
@@ -20,7 +21,7 @@ export type ReceiptAddress = {
 }
 
 type OrderReceiptEmailProps = {
-  materialNotice?:{deadline:string;pendingVoice:number;url:string}
+  materialNotice?:{deadline:string;pendingVoice:number;url:string;names:string[];updateOpen:boolean;hasVoice:boolean}
   orderId: string
   displayId?: string | null
   items: ReceiptItem[]
@@ -117,9 +118,11 @@ export function OrderReceiptEmail({
       </table>
 
       {materialNotice?<Section style={styles.summaryWrap}>
-        <Text style={styles.paragraph}>Your dedication is optional. Add or edit it by {new Date(materialNotice.deadline).toUTCString()} (48 hours after payment).</Text>
-        {materialNotice.pendingVoice?<Text style={styles.paragraph}><strong>Please provide your recording as soon as possible.</strong> A recording is required for each Hardcover + Voice book. Missing recordings delay completion of your book.</Text>:null}
-        <Text style={styles.paragraph}>For Hardcover + Voice, a submitted recording can be updated until 48 hours after payment, before shipment. If a recording is still missing, you may submit the first one afterwards while online submission is available. Keep this link to review or update eligible materials.</Text>
+        <Text style={styles.paragraph}>A message for {materialNotice.names.length?materialNotice.names.map((name,index)=><React.Fragment key={name}>{index>0?(index===materialNotice.names.length-1?' and ':', '):''}<bdi>{name}</bdi></React.Fragment>):<bdi>this book</bdi>} is optional.</Text>
+        <Text style={styles.paragraph}>{materialNotice.updateOpen?<>You can update your message{materialNotice.hasVoice?' and recording':''} until {formatMaterialTime(materialNotice.deadline,'UTC')}.</>
+          :<>The update deadline ({formatMaterialTime(materialNotice.deadline,'UTC')}) has passed. Your message{materialNotice.hasVoice&&!materialNotice.pendingVoice?' and recording are':' is'} final.</>}</Text>
+        <Text style={styles.paragraph}>Open your materials page to see this in your local time.</Text>
+        {materialNotice.pendingVoice?<Text style={styles.paragraph}><strong>{materialNotice.updateOpen?'Please provide your recording as soon as possible. Missing recordings delay completion of your Hardcover + Voice book.':'We still need your recording to make this book. Please submit it as soon as possible. Once submitted, it is final.'}</strong></Text>:null}
         <Link href={materialNotice.url} style={styles.summaryOrderLink}>Review or update your book materials</Link>
       </Section>:null}
       {/* Order summary */}

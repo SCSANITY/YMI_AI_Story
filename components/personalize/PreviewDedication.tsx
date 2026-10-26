@@ -39,7 +39,7 @@ export function PreviewDedication({ creationId, bookID, childName, openOnArrival
     const response = await fetch(`/api/dedication?creationId=${encodeURIComponent(creationId)}`, {
       credentials: 'include', cache: 'no-store', signal,
     })
-    if (!response.ok) throw new Error('Unable to load the dedication choice')
+    if (!response.ok) throw new Error('Unable to load the message choice')
     const data = await response.json()
     const next = data?.choices?.[0] as DedicationChoice | undefined
     if (!next || next.creationId !== creationId) throw new Error('Dedication choice unavailable')
@@ -52,7 +52,7 @@ export function PreviewDedication({ creationId, bookID, childName, openOnArrival
     if (!creationId) { setChoice(null); return }
     setChoice(null)
     setLoading(true)
-    void loadChoice(controller.signal).catch(() => { if (!controller.signal.aborted) setError('Unable to load the dedication choice. Try again.') })
+    void loadChoice(controller.signal).catch(() => { if (!controller.signal.aborted) setError('Unable to load the message choice. Try again.') })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [creationId, loadChoice])
@@ -129,12 +129,12 @@ export function PreviewDedication({ creationId, bookID, childName, openOnArrival
           body: decision === 'confirmed' ? normalized : null }),
       })
       const data = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(data?.error || 'Unable to save the dedication')
+      if (!response.ok) throw new Error(data?.error || 'Unable to save the message')
       const updated: DedicationChoice = { ...choice, ...data.choice }
       setChoice(updated)
       finish({ decision, revision: updated.revision! })
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Unable to save the dedication')
+      setError(failure instanceof Error ? failure.message : 'Unable to save the message')
     } finally { setSaving(false) }
   }, [choice, creationId, draft, finish, saving])
 
@@ -142,19 +142,19 @@ export function PreviewDedication({ creationId, bookID, childName, openOnArrival
   const valid = validDedicationBody(draft)
   const recipientName = childName.trim()
   return <>
-    <section className={`rounded-[1.35rem] border p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.45)] sm:p-6 xl:p-5 ${choice?.decision === 'undecided' ? 'border-amber-200 bg-[#fff8eb]' : 'border-stone-200 bg-white'}`} aria-label="Book dedication">
+    <section className={`rounded-[1.35rem] border p-5 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.45)] sm:p-6 xl:p-5 ${choice?.decision === 'undecided' ? 'border-amber-200 bg-[#fff8eb]' : 'border-stone-200 bg-white'}`} aria-label="Your message">
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-amber-700 shadow-sm"><PenLine className="h-4 w-4" aria-hidden="true" /></span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-serif text-base font-semibold text-slate-900">{choice?.decision === 'undecided' ? 'One last personal touch' : 'Your book dedication'}</h2>
+          <h2 className="font-serif text-base font-semibold text-slate-900">Your message for <bdi>{recipientName||'this book'}</bdi></h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            {loading ? 'Loading dedication…' : choice?.decision === 'confirmed' ? <span className="line-clamp-2 whitespace-pre-line">{choice.body}</span> :
+            {loading ? 'Loading message…' : choice?.decision === 'confirmed' ? <span className="line-clamp-2 whitespace-pre-line">{choice.body}</span> :
               choice?.decision === 'skipped' ? 'No message selected' : 'Optional ? add a message now or within 48 hours after purchase.'}
           </p>
           {error && !open ? <p role="alert" className="mt-2 text-xs text-rose-700">{error}</p> : null}
         </div>
       </div>
-      <button ref={triggerRef} type="button" disabled={!creationId || loading} onClick={() => choice ? show(choice) : void loadChoice().then(current => current && show(current)).catch(() => setError('Unable to load the dedication. Try again.'))}
+      <button ref={triggerRef} type="button" disabled={!creationId || loading} onClick={() => choice ? show(choice) : void loadChoice().then(current => current && show(current)).catch(() => setError('Unable to load the message. Try again.'))}
         className="mt-3 min-h-10 rounded-full border border-amber-300 bg-white px-4 text-xs font-bold text-amber-800 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50">
         {choice?.decision === 'confirmed' ? 'Edit message' : 'Do it now'}
       </button>
@@ -173,7 +173,7 @@ export function PreviewDedication({ creationId, bookID, childName, openOnArrival
             <h2 id="dedication-dialog-title" className="min-w-0 break-words font-serif text-2xl font-semibold leading-tight text-slate-950">
               {recipientName ? <>Write your own message for <bdi>{recipientName}</bdi></> : 'Write your own message for this book'}
             </h2>
-            <button type="button" onClick={close} disabled={saving} aria-label="Close dedication dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 focus-visible:ring-2 focus-visible:ring-amber-500"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={close} disabled={saving} aria-label="Close message dialog" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 focus-visible:ring-2 focus-visible:ring-amber-500"><X className="h-5 w-5" /></button>
             </div>
             <p id="dedication-dialog-description" className="mt-3 text-sm leading-6 text-slate-600">Write a few words they’ll treasure. We’ll print them on a special page between the cover and the story in the finished book.</p>
             {choice?.previouslyPurchased ? <p className="mt-3 rounded-xl bg-amber-100/70 px-3 py-2 text-xs font-semibold text-amber-900">Buying again? Review this message or choose No Thanks for the new copy.</p> : null}

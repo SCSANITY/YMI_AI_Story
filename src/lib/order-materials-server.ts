@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { hasCompleteSignatureVoiceBinding } from '@/lib/purchase-configuration'
 import { type MaterialAccess, newMaterialCredential, materialAccessPath } from '@/lib/order-materials-access'
 import { MaterialError, materialUuid, parseOrderMaterials, parseMaterialDedication, parseDedicationWrite } from '@/lib/order-materials'
-import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import { resolvePersonalizedBookTitle,resolveChildNameFromCustomization } from '@/lib/personalized-book-title'
 import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
 
 function accessArgs(orderId: string,access: MaterialAccess) {
@@ -28,19 +28,47 @@ export async function loadOrderMaterials(orderId: string,access: MaterialAccess)
   if (result.order_id!==orderId) throw new MaterialError('materials_unavailable',503)
   return result
 }
-// Enrich only the already-authorized material lines, not a whole order/customer.
-// Mail and other material readers do not need thumbnail signing.
-export async function loadOrderMaterialsPage(orderId:string,access:MaterialAccess) {
-  const result=await loadOrderMaterials(orderId,access)
+// A disposition is not material access. Only the owner or an unrevoked scoped
+// grant can learn this one fact;no book/voice/customer/address fields are returned.
+async function shippedMaterialDisposition(orderId:string,access:MaterialAccess,alreadyAuthorized=false) {
+  const {data:o,error}=await supabaseAdmin.from('orders').select('order_id,customer_id,order_status,shipped_at')
+    .eq('order_id',orderId).maybeSingle()
+  if(error)throw new MaterialError('materials_unavailable',503)
+  if(!o||!['paid','production','shipped','delivered'].includes(String(o.order_status))
+    ||(!o.shipped_at&&!['shipped','delivered'].includes(String(o.order_status))))return false
+  if(alreadyAuthorized)return true
+  if(access.customerId)return o.customer_id===access.customerId
+  const {data:g,error:grantError}=await supabaseAdmin.from('order_material_grants').select('item_ids,completed_at')
+    .eq('order_id',orderId).eq('token_hash',access.tokenHash).maybeSingle()
+  if(grantError)throw new MaterialError('materials_unavailable',503)
+  if(!g||g.completed_at!==null||!Array.isArray(g.item_ids)||!g.item_ids.length)return false
+  const {data:lines,error:lineError}=await supabaseAdmin.from('cart_items').select('cart_item_id')
+    .eq('order_id',orderId).eq('status','ordered').in('cart_item_id',g.item_ids).limit(1)
+  if(lineError)throw new MaterialError('materials_unavailable',503)
+  return Boolean(lines?.length)
+}
+async function namedMaterialCreations(result:Awaited<ReturnType<typeof loadOrderMaterials>>) {
   const ids=[...new Set(result.items.map(item=>item.creation_id))]
   const {data,error}=await supabaseAdmin.from('creations')
-    .select('creation_id,template_id,customize_snapshot,preview_job_id,templates:templates(name)')
-    .in('creation_id',ids)
-  if (error || data?.length!==ids.length) throw new MaterialError('materials_unavailable',503)
+    .select('creation_id,template_id,customize_snapshot,preview_job_id,templates:templates(name)').in('creation_id',ids)
+  if(error||data?.length!==ids.length)throw new MaterialError('materials_unavailable',503)
   const creations=new Map(data.map(row=>[row.creation_id,row]))
-  const covers=await createGeneratedPreviewCoverMap(data.map(row=>row.preview_job_id).filter((id):id is string=>typeof id==='string'))
-  return {...result,items:result.items.map(item=>{
-    const creation=creations.get(item.creation_id)!
+  return {creations,data,result:{...result,items:result.items.map(item=>({...item,
+    child_name:resolveChildNameFromCustomization({customizeSnapshot:creations.get(item.creation_id)!.customize_snapshot})||null}))}}
+}
+// Enrich only lines already returned by the existing scoped authority.
+export async function loadOrderMaterialsPage(orderId:string,access:MaterialAccess) {
+  let result:Awaited<ReturnType<typeof loadOrderMaterials>>
+  try {result=await loadOrderMaterials(orderId,access)} catch(error){
+    if(error instanceof MaterialError&&error.code==='material_access_denied'&&await shippedMaterialDisposition(orderId,access))
+      return {order_id:orderId,disposition:'shipped' as const}
+    throw error
+  }
+  if(await shippedMaterialDisposition(orderId,access,true))return {order_id:orderId,disposition:'shipped' as const}
+  const named=await namedMaterialCreations(result)
+  const covers=await createGeneratedPreviewCoverMap(named.data.map(row=>row.preview_job_id).filter((id):id is string=>typeof id==='string'))
+  return {...named.result,items:named.result.items.map(item=>{
+    const creation=named.creations.get(item.creation_id)!
     const template=Array.isArray(creation.templates)?creation.templates[0]:creation.templates
     const cover=getGeneratedPreviewCover(covers,creation.preview_job_id)
     return {...item,book:{title:resolvePersonalizedBookTitle({templateId:creation.template_id,
@@ -73,7 +101,7 @@ export async function assertOrderLineVoiceDownload(request:Request,orderId:strin
   const materials=await loadOrderMaterials(materialUuid(orderId),await resolveMaterialAccess(request))
   if (!materials.items.some(item=>item.cart_item_id===materialUuid(itemId))) throw new MaterialError('material_access_denied',403)
   const [binding]=await loadOrderLineVoiceBindings(orderId,[itemId])
-  if (binding.voice_asset_id!==materialUuid(assetId)) throw new MaterialError('material_access_denied',403)
+  if (binding.voice_asset_id!==materialUuid(assetId)) throw new MaterialError('recording_not_current',409)
 }
 export async function saveOrderDedication(orderId: string,access: MaterialAccess,value: unknown) {
   const input=parseDedicationWrite(value)
@@ -142,7 +170,7 @@ export async function recoverOrderMaterialLink(orderId: string,challengeId: stri
 export async function loadTrustedOrderMaterials(orderId:string) {
   const {data,error}=await supabaseAdmin.from('orders').select('customer_id').eq('order_id',materialUuid(orderId)).maybeSingle()
   if (error || !data?.customer_id) throw new MaterialError('materials_unavailable',503)
-  return loadOrderMaterials(orderId,{customerId:materialUuid(data.customer_id),tokenHash:null})
+  return (await namedMaterialCreations(await loadOrderMaterials(orderId,{customerId:materialUuid(data.customer_id),tokenHash:null}))).result
 }
 
 export async function loadTrustedOrderLineDedications(orderId:string) {

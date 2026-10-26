@@ -27,7 +27,7 @@ export async function GET(
       await assertOrderLineVoiceDownload(request,orderId!,itemId!,assetId)
       orderAuthorized=true
     } catch(error) {
-      return jsonNoStore({error:'Recording not found'},error instanceof MaterialError?error.status:503)
+      return jsonNoStore({error:error instanceof MaterialError&&error.code==='recording_not_current'?'recording_not_current':'Recording not found'},error instanceof MaterialError?error.status:503)
     }
   }
   let owner

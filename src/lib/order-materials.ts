@@ -5,6 +5,7 @@ export type MaterialItem = {
   cart_item_id: string
   creation_id: string
   template_id: string
+  child_name?:string|null
   package_type: 'basic' | 'supreme'
   dedication: { decision: 'skipped' | 'confirmed'; body: string | null; revision: number }
   can_edit_dedication: boolean
@@ -75,7 +76,7 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
         cover_status:display.cover_status as 'ready'|'pending'|'unavailable'}
     }
     return { cart_item_id:materialUuid(item.cart_item_id),creation_id:materialUuid(item.creation_id),
-      template_id:item.template_id,package_type:item.package_type,
+      template_id:item.template_id,child_name:typeof item.child_name==='string'?item.child_name.trim()||null:null,package_type:item.package_type,
       dedication:parseMaterialDedication(item.dedication),can_edit_dedication:item.can_edit_dedication,
       voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice,can_replace_voice:item.can_replace_voice,
       voice_asset_id:item.voice_asset_id as string|null,voice_revision:item.voice_revision as number|null,
@@ -92,4 +93,11 @@ export function parseDedicationWrite(value: unknown) {
   const body=dedicationBodyMetrics(row.body).normalized
   if (body.trim() && !validDedicationBody(body)) throw new MaterialError('invalid_dedication',400)
   return { itemId:materialUuid(row.itemId),expectedRevision:Number(row.expectedRevision),body }
+}
+
+export type OrderMaterialsPage = OrderMaterials | {order_id:string;disposition:'shipped'}
+export function parseOrderMaterialsPage(value:unknown):OrderMaterialsPage {
+  const row=materialRecord(value)
+  if(row.disposition==='shipped')return {order_id:materialUuid(row.order_id),disposition:'shipped'}
+  return parseOrderMaterials(value)
 }

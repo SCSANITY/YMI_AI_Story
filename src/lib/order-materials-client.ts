@@ -1,22 +1,22 @@
 import type { MaterialItem } from '@/lib/order-materials'
 
-export function formatMaterialTime(value: string, locale?: string, timeZone?: string): string {
-  const formatter = new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium', timeStyle: 'long', ...(timeZone ? { timeZone } : {}),
-  })
-  return `${formatter.format(new Date(value))} (${formatter.resolvedOptions().timeZone})`
+// SD-036: date language follows the English UI,never navigator.language.
+export const MATERIAL_UI_LANGUAGE = 'en'
+export function formatMaterialTime(value: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat(MATERIAL_UI_LANGUAGE, {
+    year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone,timeZoneName:'long',
+  }).formatToParts(new Date(value))
+  const label=timeZone==='UTC'?'UTC':parts.find(part=>part.type==='timeZoneName')?.value
+  return `${parts.filter(part=>part.type!=='timeZoneName').map(part=>part.value).join('').trim()} (${label})`
 }
 
+export function distinctMaterialNames(items: readonly {child_name?:string|null}[]): string[] {
+  return [...new Set(items.map(item=>item.child_name?.trim()).filter((name):name is string=>Boolean(name)))]
+}
 // Capture both fields at edit intent, never from a later refreshed DTO at commit.
 export function recordingIntent(item: MaterialItem) {
   if (!item.can_submit_voice || item.voice_revision === null) return null
   return { itemId: item.cart_item_id, expectedAssetId: item.voice_asset_id, expectedRevision: item.voice_revision }
-}
-
-export function recordingStatus(item: MaterialItem, now = Date.now()) {
-  if (item.voice_ready) return item.can_replace_voice ? 'replaceable' : 'submitted'
-  if (!item.can_submit_voice) return 'unavailable'
-  return now >= Date.parse(item.voice_replace_until) ? 'late-first' : 'missing'
 }
 
 export function materialWriteError(code: string | undefined) {
@@ -31,13 +31,29 @@ export function materialWriteError(code: string | undefined) {
   }
 }
 
+export type PlaybackFailureReason='network'|'access'|'not-current'|'format'|'unavailable'
+export class RecordingPlaybackError extends Error {
+  constructor(public readonly reason:PlaybackFailureReason){super(reason)}
+}
+export function playbackHttpReason(status:number):PlaybackFailureReason {
+  if(status===401||status===403)return 'access'
+  if(status===409)return 'not-current'
+  return status>=500?'network':'unavailable'
+}
+export function playbackMediaReason(code:number|undefined):PlaybackFailureReason {
+  if(code===1||code===2)return 'network'
+  return code===3||code===4?'format':'unavailable'
+}
 // Audio elements cannot attach the scoped grant. Keep it in a header, never a URL.
 export async function fetchMaterialRecording(orderId: string, itemId: string, assetId: string, token: string | null | undefined, signal: AbortSignal) {
   const params = new URLSearchParams({ orderId, itemId })
-  const response = await fetch(`/api/user-assets/${encodeURIComponent(assetId)}/download?${params}`, {
-    credentials: 'include', cache: 'no-store', redirect: 'error', signal,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!response.ok) throw new Error('The current recording could not be played. Check your access or reload its status.')
-  return response.blob()
+  let response:Response
+  try {
+    response=await fetch(`/api/user-assets/${encodeURIComponent(assetId)}/download?${params}`, {
+      credentials:'include',cache:'no-store',redirect:'error',signal,
+      headers:token?{Authorization:`Bearer ${token}`}:{},
+    })
+  } catch {throw new RecordingPlaybackError('network')}
+  if(!response.ok)throw new RecordingPlaybackError(playbackHttpReason(response.status))
+  try {return await response.blob()}catch {throw new RecordingPlaybackError('network')}
 }

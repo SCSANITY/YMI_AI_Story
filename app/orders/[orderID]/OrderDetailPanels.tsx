@@ -55,7 +55,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
             </div>
           ))}
         </div>
-        <OrderMaterialsSummary materials={order.materials}/>
+        <OrderMaterialsSummary materials={order.materials} shipped={['shipped','delivered'].includes(String(order.order_status))}/>
         {hasSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" compact /> : null}
       </div>
 

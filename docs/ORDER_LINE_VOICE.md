@@ -158,3 +158,36 @@ S3 React checklist:one lazy cancellable playback effect with object-URL cleanup;
 server booleans derive controls;no polling/dependency additions. Per-line/source
 keys isolate state;client token remains in memory/headers. Existing dialog retains
 focus trap,close and scroll restoration. JSX escapes Admin declarations normally.
+
+## Owner A polish / 2026-10-26 (offline)
+
+Dates use one English formatter (SD-036) and one device zone label. MaterialTime
+runs through useSyncExternalStore with a null server snapshot:SSR only shows a
+stable placeholder. It never resolves device time during server rendering.
+MaterialDeadlineNotice owns the single paid+48h notice;both SQL deadlines were
+confirmed identical once. After deadline,submitted is final;missing recording is
+a required item,not an editing window. Summary/success/order/email use matching
+wording. Receipt uses explicit UTC and directs to the local-time materials page.
+
+Web-only child_name enrichment uses resolveChildNameFromCustomization on scoped
+Creation IDs. Preview/message labels use bdi and fall back to this book. Receipt
+names are distinct;no new SQL field or checkout timezone capture is introduced.
+
+Playback is one idle/loading/ready/failed machine. Only network/5xx offers a
+user-triggered retry with a fresh AbortController and prior URL revocation.
+401/403 offers scoped recovery;409 loads latest materials;404/other client errors
+offer support. MediaError1/2 is network;3/4 decode/unsupported reassures the
+recording is received and suggests another browser/device,no retry. Bearer
+stays in headers,no-store/redirect:error/abort/revoke remain. No retry loop.
+
+Owner explicitly accepted two Web prerequisite fixes after they were reported:
+- Download distinguishes an obsolete asset as409 ONLY after order and item access;
+  denied access stays401/403. No asset bytes are read on a mismatch.
+- The existing DB denies shipped/delivered materials. Web can return ONLY
+  {order_id,disposition:shipped},after confirming the order customer or unrevoked
+  grant with an ordered item in scope. Refunded/cancelled/wrong owner/revoked or
+  empty scope still deny. No book/name/voice/address/payment data is returned.
+  POST/capture/download still use the unchanged DB eligibility;no SQL broadening.
+Existing order/success summary callers pass their already-authorized order status
+for the same notice. S1/S2 bytes,ordinary data access and all write rules stay frozen.
+Physical iPhone Safari format playback remains a combined-window checklist item.
