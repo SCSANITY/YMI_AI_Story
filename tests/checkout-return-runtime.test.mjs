@@ -19,7 +19,7 @@ const order = () => ({ order_id: 'order-1', order_status: 'unpaid', shipping_add
 const item = { id: 'line-1', bookID: 'Birthdayboy_story', priceAtPurchase: 39, quantity: 1, book: { price: 999 }, personalization: {} }
 const component = type => props => ({ type, props })
 
-function checkoutFixture({ delayed = false, status = 200, signedIn = true, search = '?orderId=order-1&step=payment' } = {}) {
+function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, search = '?orderId=order-1&step=payment' } = {}) {
   const runtime = customerRuntime(), calls = [], pending = deferred()
   let currentOrder = order(), responseStatus = status
   runtime.react.Suspense = ({ children }) => children
@@ -44,7 +44,11 @@ function checkoutFixture({ delayed = false, status = 200, signedIn = true, searc
       if (delayed) await pending.promise
       return Response.json(responseStatus === 200 ? { order: currentOrder } : { error: 'unavailable' }, { status: responseStatus })
     }
-    if (path.startsWith('/api/cart?orderId=')) return Response.json({ items: [item] })
+    if (path.startsWith('/api/cart?orderId=')) {
+      if (rejectItems) throw Error('Cart transport unavailable')
+      if (deferItems) await new Promise(() => {})
+      return Response.json({ items: itemsStatus === 200 ? [item] : [] }, { status: itemsStatus })
+    }
     if (path === '/api/checkout/vouchers') return Response.json({ active: [] })
     if (path === '/api/checkout/session') return Response.json({ url: 'https://checkout.example.test/session' })
     if (path.startsWith('/api/checkout/apply-')) return Response.json({ ok: true, code: options.body ? JSON.parse(options.body).code : undefined, ...summary })
@@ -122,6 +126,55 @@ test('failed restore stays an explicit error; only user Retry reloads and expose
   uiNodes(h.runtime.tree).find(n => n.type === 'button' && uiText(n) === 'common.retry').props.onClick()
   await h.runtime.flush(); assert.ok(h.node('payment')); assert.ok(h.calls.every(call => call.method === 'GET'))
   h.runtime.unmount()
+})
+
+test('paid and production returns show the order link without Retry,even if ordered-item transport fails', async () => {
+  for (const state of ['paid', 'production']) {
+    const h = checkoutFixture({ delayed: true, rejectItems: true })
+    h.order = { order_id: 'order-1', order_status: state } // no unpaid-only discounts or quote
+    h.pending.resolve(); await h.runtime.flush()
+    assert.match(uiText(h.runtime.tree), /This order has been paid\./)
+    assert.ok(uiNodes(h.runtime.tree).some(n => n.type === 'a' && n.props.href === '/orders/order-1'))
+    assert.ok(!uiNodes(h.runtime.tree).some(n => n.type === 'button' && uiText(n) === 'common.retry'))
+    assert.equal(h.node('address-form'), undefined); assert.equal(h.node('payment'), undefined)
+    assert.ok(h.calls.every(call => call.method === 'GET'))
+    assert.equal(h.calls.filter(call => call.path.startsWith('/api/orders/')).length, 1)
+    h.runtime.unmount()
+  }
+})
+
+test('a known paid return does not wait for an unrelated ordered-cart read to finish', async () => {
+  const h = checkoutFixture({ delayed: true, deferItems: true })
+  h.order = { order_id: 'order-1', order_status: 'paid' }
+  h.pending.resolve(); await h.runtime.flush()
+  assert.match(uiText(h.runtime.tree), /This order has been paid\./)
+  assert.ok(!uiNodes(h.runtime.tree).some(n => n.props?.['data-checkout-loading-shell']))
+  h.runtime.unmount()
+})
+
+test('cancelled,expired and other closed returns show cart link without Retry or payment actions', async () => {
+  for (const state of ['cancelled', 'expired', 'refunded']) {
+    const h = checkoutFixture({ delayed: true, itemsStatus: 503 })
+    h.order = { order_id: 'order-1', order_status: state }
+    h.pending.resolve(); await h.runtime.flush()
+    assert.match(uiText(h.runtime.tree), /This checkout is closed\./)
+    assert.ok(uiNodes(h.runtime.tree).some(n => n.type === 'a' && n.props.href === '/cart'))
+    assert.ok(!uiNodes(h.runtime.tree).some(n => n.type === 'button' && uiText(n) === 'common.retry'))
+    assert.equal(h.node('payment'), undefined); assert.equal(h.node('discount'), undefined)
+    assert.ok(h.calls.every(call => call.method === 'GET')); h.runtime.unmount()
+  }
+})
+
+test('an unpaid cart-read failure or unreadable order status remains a real read error with user Retry', async () => {
+  for (const malformedOrder of [false, true]) {
+    const h = checkoutFixture({ delayed: true, itemsStatus: malformedOrder ? 200 : 503 })
+    if (malformedOrder) h.order = { order_id: 'order-1' }
+    h.pending.resolve(); await h.runtime.flush()
+    assert.match(uiText(h.runtime.tree), /Unable to restore checkout/)
+    assert.ok(uiNodes(h.runtime.tree).some(n => n.type === 'button' && uiText(n) === 'common.retry'))
+    assert.ok(!uiNodes(h.runtime.tree).some(n => n.type === 'a'))
+    h.runtime.unmount()
+  }
 })
 
 test('bfcache return clears redirect busy state and performs one GET-only recovery; normal pageshow does nothing', async () => {

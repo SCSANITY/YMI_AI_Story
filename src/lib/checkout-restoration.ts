@@ -23,8 +23,19 @@ export const EMPTY_SHIPPING_QUOTE: ShippingQuoteState = {
 }
 
 const text = (value: unknown) => typeof value === 'string' ? value : ''
+
+export class CheckoutReturnStateError extends Error {
+  constructor(readonly outcome: 'paid' | 'closed') {
+    super(outcome === 'paid' ? 'This order has been paid.' : 'This checkout is closed.')
+    this.name = 'CheckoutReturnStateError'
+  }
+}
+
 export function restoreCheckoutOrder(order: Record<string, unknown>) {
-  if (order.order_status !== 'unpaid') throw new Error('This order is no longer awaiting payment.')
+  if (typeof order.order_status !== 'string' || !order.order_status) throw new Error('Unable to read the order state.')
+  if (order.order_status !== 'unpaid') {
+    throw new CheckoutReturnStateError(['paid', 'production'].includes(order.order_status) ? 'paid' : 'closed')
+  }
   const address = (order.shipping_address ?? {}) as Record<string, unknown>
   const form: CheckoutAddressForm = {
     firstName: text(address.firstName), lastName: text(address.lastName),

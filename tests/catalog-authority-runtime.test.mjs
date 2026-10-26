@@ -168,6 +168,6 @@ test('GlobalContext exposes cart and checkout load errors,clears them on a valid
  // New-order item hydration keeps its loud price error; returning orders now
  // hydrate the complete order/items together and expose a retryable restore error.
  assert.equal(checkout.match(/\.catch\(\(\) => hydrateCheckoutItems\(null\)\)/g)?.length,1)
- assert.match(checkout,/Promise\.all\([\s\S]*?api\/orders\/[\s\S]*?api\/cart\?orderId=/)
+ assert.match(checkout,/const itemsResponsePromise = fetch\(`\/api\/cart\?orderId=[\s\S]*?fetch\(`\/api\/orders\/[\s\S]*?await itemsResponsePromise/)
  assert.match(checkout,/if \(orderRestoreError\) return <div role="alert"/)
 })

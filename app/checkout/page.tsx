@@ -35,7 +35,7 @@ import {
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
 import type { OrderDiscountSummary } from '@/lib/discounts';
 import {
-  EMPTY_SHIPPING_QUOTE, restoreCheckoutOrder, shippingDiscountRefreshKey,
+  EMPTY_SHIPPING_QUOTE, CheckoutReturnStateError, restoreCheckoutOrder, shippingDiscountRefreshKey,
   type CheckoutAddressForm, type ShippingQuoteState,
 } from '@/lib/checkout-restoration';
 
@@ -106,7 +106,7 @@ function CheckoutPageContent() {
   );
   const isCheckoutPriceReady = items.length > 0 && !priceLoadError;
 
-  const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null } | null>(null);
+  const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null; closed?: 'paid' | 'closed' } | null>(null);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
   const [hasCompletedAddress, setHasCompletedAddress] = useState(false);
   const [appliedShippingDiscountType, setAppliedShippingDiscountType] = useState<string | null>(null);
@@ -285,7 +285,8 @@ function CheckoutPageContent() {
   const restoreKey = queryOrderId ? `${queryOrderId}:${user?.customerId ?? 'anon'}:${restoreAttempt}` : null;
   const isOrderRestoring = Boolean(restoreKey && restoredOrder?.key !== restoreKey);
   const orderRestoreError = restoredOrder?.key === restoreKey ? restoredOrder?.error : null;
-  const checkoutStateReady = !isOrderRestoring && !orderRestoreError;
+  const closedOrderState = restoredOrder?.key === restoreKey ? restoredOrder?.closed : null;
+  const checkoutStateReady = !isOrderRestoring && !orderRestoreError && !closedOrderState;
 
   const queryIdentityVerified = useMemo(() => searchParams?.get('verified') === '1', [searchParams]);
   const queryIdentityMode = useMemo(() => {
@@ -442,17 +443,22 @@ function CheckoutPageContent() {
     let cancelled = false;
     const controller = new AbortController();
     const options = { credentials: 'include' as const, cache: 'no-store' as const, signal: controller.signal };
-    Promise.all([
-      fetch(`/api/orders/${encodeURIComponent(queryOrderId)}`, options),
-      fetch(`/api/cart?orderId=${encodeURIComponent(queryOrderId)}&status=ordered`, options),
-    ])
-      .then(async ([orderResponse, itemsResponse]) => {
-        if (!orderResponse.ok || !itemsResponse.ok) throw new Error('Unable to restore checkout. Please try again.');
-        const [data, cartData] = await Promise.all([orderResponse.json(), itemsResponse.json()]);
-        if (!data?.order || data.order.order_id !== queryOrderId || !Array.isArray(cartData?.items) || !cartData.items.length) {
+    const itemsResponsePromise = fetch(`/api/cart?orderId=${encodeURIComponent(queryOrderId)}&status=ordered`, options).catch(() => null);
+    fetch(`/api/orders/${encodeURIComponent(queryOrderId)}`, options)
+      .then(async (orderResponse) => {
+        if (!orderResponse.ok) throw new Error('Unable to restore checkout. Please try again.');
+        const data = await orderResponse.json();
+        if (!data?.order || data.order.order_id !== queryOrderId) {
           throw new Error('Unable to restore checkout. Please try again.');
         }
-        return { ...restoreCheckoutOrder(data.order), rows: cartData.items };
+        // A paid/closed order does not need ordered cart rows or discount DTOs.
+        // Do not disguise its known state as a retryable cart-read failure.
+        const restored = restoreCheckoutOrder(data.order);
+        const itemsResponse = await itemsResponsePromise;
+        if (!itemsResponse?.ok) throw new Error('Unable to restore checkout. Please try again.');
+        const cartData = await itemsResponse.json();
+        if (!Array.isArray(cartData?.items) || !cartData.items.length) throw new Error('Unable to restore checkout. Please try again.');
+        return { ...restored, rows: cartData.items };
       })
       .then(({ form: address, quote, discounts, rows }) => {
         if (cancelled) return;
@@ -469,8 +475,12 @@ function CheckoutPageContent() {
         checkoutPaymentResumeAppliedRef.current = false;
         setRestoredOrder({ key: restoreKey, error: null });
       })
-      .catch(() => {
-        if (!cancelled) setRestoredOrder({ key: restoreKey, error: 'Unable to restore checkout. Please try again.' });
+      .catch((error) => {
+        if (cancelled) return;
+        controller.abort();
+        setRestoredOrder(error instanceof CheckoutReturnStateError
+          ? { key: restoreKey, error: null, closed: error.outcome }
+          : { key: restoreKey, error: 'Unable to restore checkout. Please try again.' });
       });
     return () => { cancelled = true; controller.abort(); };
   }, [queryOrderId, restoreKey, isAuthResolved, setCheckoutEmail, hydrateCheckoutItems, applyDiscountSummary]);
@@ -1251,6 +1261,14 @@ function CheckoutPageContent() {
   );
 
   if (isOrderRestoring) return <CheckoutLoadingShell />;
+  if (closedOrderState) return (
+    <div role="status" className="mx-auto my-10 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center text-slate-700">
+      <p>{closedOrderState === 'paid' ? 'This order has been paid.' : 'This checkout is closed.'}</p>
+      <a className="mt-4 inline-block font-semibold underline" href={closedOrderState === 'paid' ? `/orders/${encodeURIComponent(queryOrderId ?? '')}` : '/cart'}>
+        {closedOrderState === 'paid' ? 'View order' : t('checkout.backToCart')}
+      </a>
+    </div>
+  );
   if (orderRestoreError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{orderRestoreError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => setRestoreAttempt(attempt => attempt + 1)}>{t('common.retry')}</button></div>;
   if (priceLoadError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{priceLoadError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => router.push('/cart')}>Back to cart</button></div>;
 
