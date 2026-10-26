@@ -122,7 +122,8 @@ test('Admin public-card package bulk apply reconciles every story and invalidate
   assert.match(pricingRoute, /invalidatePublicCatalogCache\(\)/)
   assert.match(placementsRoute, /invalidatePublicCatalogCache\(\)/)
   assert.match(clientCatalog, /export function invalidateBookCatalogClientCache\(\)/)
-  assert.match(clientCatalog, /\?refresh=\$\{catalogRefreshVersion\}/)
+  assert.match(clientCatalog, /fetch\('\/api\/templates', \{ credentials: 'same-origin' \}\)/)
+  assert.doesNotMatch(clientCatalog, /catalogRefreshVersion|\?refresh=/)
 })
 
 test('customer-facing saved books and Reader do not fall back to legacy template prices', async () => {

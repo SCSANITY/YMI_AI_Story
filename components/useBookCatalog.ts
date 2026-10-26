@@ -5,19 +5,14 @@ import type { CatalogBook } from '@/lib/book-catalog'
 
 let cachedCatalog: { books: CatalogBook[]; loadedAt: number } | null = null
 let catalogRequest: Promise<CatalogBook[]> | null = null
-let catalogRefreshVersion = 0
 
 export function invalidateBookCatalogClientCache() {
   cachedCatalog = null
-  catalogRefreshVersion += 1
 }
 
 async function fetchCatalogBooks(): Promise<CatalogBook[]> {
   if (!catalogRequest) {
-    const refreshQuery = catalogRefreshVersion > 0
-      ? `?refresh=${catalogRefreshVersion}`
-      : ''
-    catalogRequest = fetch(`/api/templates${refreshQuery}`, { credentials: 'same-origin' })
+    catalogRequest = fetch('/api/templates', { credentials: 'same-origin' })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}))
 
