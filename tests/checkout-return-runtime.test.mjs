@@ -128,8 +128,8 @@ test('failed restore stays an explicit error; only user Retry reloads and expose
   h.runtime.unmount()
 })
 
-test('paid and production returns show the order link without Retry,even if ordered-item transport fails', async () => {
-  for (const state of ['paid', 'production']) {
+test('paid,production,shipped and delivered returns show the order link without Retry,even if ordered-item transport fails', async () => {
+  for (const state of ['paid', 'production', 'shipped', 'delivered']) {
     const h = checkoutFixture({ delayed: true, rejectItems: true })
     h.order = { order_id: 'order-1', order_status: state } // no unpaid-only discounts or quote
     h.pending.resolve(); await h.runtime.flush()

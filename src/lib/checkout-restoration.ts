@@ -34,7 +34,7 @@ export class CheckoutReturnStateError extends Error {
 export function restoreCheckoutOrder(order: Record<string, unknown>) {
   if (typeof order.order_status !== 'string' || !order.order_status) throw new Error('Unable to read the order state.')
   if (order.order_status !== 'unpaid') {
-    throw new CheckoutReturnStateError(['paid', 'production'].includes(order.order_status) ? 'paid' : 'closed')
+    throw new CheckoutReturnStateError(['paid', 'production', 'shipped', 'delivered'].includes(order.order_status) ? 'paid' : 'closed')
   }
   const address = (order.shipping_address ?? {}) as Record<string, unknown>
   const form: CheckoutAddressForm = {
