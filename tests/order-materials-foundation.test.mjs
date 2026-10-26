@@ -472,7 +472,7 @@ test('a bad replay of voice confirmation never deletes current or possibly bound
 })
 
 
-test('shipped disposition allows only the order customer or an unrevoked scoped grant;no material data escapes',async()=>{
+test('shipped fallback is account-only;guests keep generic denial with no private grant read',async()=>{
  for(const mode of ['customer','grant','stranger','revoked','wrong-scope','refund']){
   const h=harness({owner:mode==='customer'||mode==='stranger'?{ownerType:'customer',customerId:mode==='customer'?customer:creation}:null,
    rpcResult:()=>({data:null,error:{code:'42501'}}),queryResult:table=>({error:null,data:table==='orders'?{
@@ -481,10 +481,10 @@ test('shipped disposition allows only the order customer or an unrevoked scoped 
     table==='cart_items'?(mode==='wrong-scope'?[]:[{cart_item_id:item}]):null})})
   const headers=mode==='customer'||mode==='stranger'?{}:{authorization:'Bearer '+'a'.repeat(43)}
   const result=await h.load('app/api/orders/[orderId]/materials/route.ts').GET(new Request('https://example.test',{headers}),context)
-  if(mode==='customer'||mode==='grant'){
+  if(mode==='customer'){
    assert.equal(result.status,200,mode);assert.deepEqual(await result.json(),{order_id:order,disposition:'shipped'})
   }else assert.equal(result.status,403,mode)
-  assert.ok(!h.calls.some(c=>c.table==='creations'||c.table==='user_assets'||c.covers))
+  assert.ok(!h.calls.some(c=>c.table==='creations'||c.table==='user_assets'||c.table==='order_material_grants'||c.covers))
  }
 })
 
@@ -497,4 +497,16 @@ test('authorized Web name enrichment uses the existing Creation name resolver pe
  const result=await h.load('src/lib/order-materials-server.ts').loadOrderMaterialsPage(order,{customerId:customer,tokenHash:null})
  assert.deepEqual(Array.from(result.items,x=>x.child_name),['Alston','Sonia'])
  assert.ok(!JSON.stringify(result).includes('customize_snapshot'))
+})
+
+
+test('a valid guest read stops before book metadata if the shipment timestamp has already been set',async()=>{
+ const h=harness({queryResult:table=>({error:null,data:table==='orders'?{
+  order_id:order,customer_id:customer,order_status:'paid',shipped_at:'2026-10-26T00:00:00Z'}:null})})
+ const response=await h.load('app/api/orders/[orderId]/materials/route.ts').GET(new Request('https://example.test',{
+  headers:{authorization:'Bearer '+'a'.repeat(43)}}),context)
+ assert.equal(response.status,403)
+ assert.ok(!h.calls.some(c=>c.table==='order_material_grants'||c.table==='creations'||c.covers))
+ const source=readFileSync(new URL('../src/lib/order-materials-server.ts',import.meta.url),'utf8')
+ assert.doesNotMatch(source,/from\('order_material_grants'\)/)
 })

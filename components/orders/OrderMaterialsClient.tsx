@@ -141,6 +141,7 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
     {message?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-900">{message}</p>:null}
     {shipped?<p role="status">Your book has shipped. Please contact us if you need help.</p>:recovery ? <section className="rounded-2xl border border-amber-200 bg-white p-6">
       <h2 className="font-serif text-xl">Send me a new link</h2><p className="mt-2 text-sm">Enter the email used for this order. Access is only for its book materials.</p>
+      <p className="mt-3 text-sm">If you cannot access your materials, <Link href="/support" className="underline">contact our team</Link> for help.</p>
       <form className="mt-4 space-y-4" onSubmit={event=>{event.preventDefault();void recover()}}>
         <label className="block">{challenge?'Verification code':'Order email'}<input className="mt-1 block w-full rounded-xl border p-3" required type={challenge?'text':'email'} autoComplete={challenge?'one-time-code':'email'} inputMode={challenge?'numeric':'email'} maxLength={challenge?6:254} value={challenge?code:email} onChange={event=>challenge?setCode(event.target.value):setEmail(event.target.value)} /></label>
         <button disabled={busy} className={button}>{challenge?'Verify and open materials':'Send verification code'}</button>

@@ -28,24 +28,17 @@ export async function loadOrderMaterials(orderId: string,access: MaterialAccess)
   if (result.order_id!==orderId) throw new MaterialError('materials_unavailable',503)
   return result
 }
-// A disposition is not material access. Only the owner or an unrevoked scoped
-// grant can learn this one fact;no book/voice/customer/address fields are returned.
+// A disposition is not material access. Only the authenticated order customer
+// gets this fallback after DB denial. Guest grants stay RPC-only;no private grant
+// table SELECT or book/voice/customer/address fields are exposed.
 async function shippedMaterialDisposition(orderId:string,access:MaterialAccess,alreadyAuthorized=false) {
+  if(!alreadyAuthorized&&!access.customerId)return false
   const {data:o,error}=await supabaseAdmin.from('orders').select('order_id,customer_id,order_status,shipped_at')
     .eq('order_id',orderId).maybeSingle()
   if(error)throw new MaterialError('materials_unavailable',503)
   if(!o||!['paid','production','shipped','delivered'].includes(String(o.order_status))
     ||(!o.shipped_at&&!['shipped','delivered'].includes(String(o.order_status))))return false
-  if(alreadyAuthorized)return true
-  if(access.customerId)return o.customer_id===access.customerId
-  const {data:g,error:grantError}=await supabaseAdmin.from('order_material_grants').select('item_ids,completed_at')
-    .eq('order_id',orderId).eq('token_hash',access.tokenHash).maybeSingle()
-  if(grantError)throw new MaterialError('materials_unavailable',503)
-  if(!g||g.completed_at!==null||!Array.isArray(g.item_ids)||!g.item_ids.length)return false
-  const {data:lines,error:lineError}=await supabaseAdmin.from('cart_items').select('cart_item_id')
-    .eq('order_id',orderId).eq('status','ordered').in('cart_item_id',g.item_ids).limit(1)
-  if(lineError)throw new MaterialError('materials_unavailable',503)
-  return Boolean(lines?.length)
+  return alreadyAuthorized||o.customer_id===access.customerId
 }
 async function namedMaterialCreations(result:Awaited<ReturnType<typeof loadOrderMaterials>>) {
   const ids=[...new Set(result.items.map(item=>item.creation_id))]
@@ -64,7 +57,10 @@ export async function loadOrderMaterialsPage(orderId:string,access:MaterialAcces
       return {order_id:orderId,disposition:'shipped' as const}
     throw error
   }
-  if(await shippedMaterialDisposition(orderId,access,true))return {order_id:orderId,disposition:'shipped' as const}
+  if(await shippedMaterialDisposition(orderId,access,true)){
+    if(!access.customerId)throw new MaterialError('material_access_denied',403)
+    return {order_id:orderId,disposition:'shipped' as const}
+  }
   const named=await namedMaterialCreations(result)
   const covers=await createGeneratedPreviewCoverMap(named.data.map(row=>row.preview_job_id).filter((id):id is string=>typeof id==='string'))
   return {...named.result,items:named.result.items.map(item=>{

@@ -184,10 +184,16 @@ Owner explicitly accepted two Web prerequisite fixes after they were reported:
 - Download distinguishes an obsolete asset as409 ONLY after order and item access;
   denied access stays401/403. No asset bytes are read on a mismatch.
 - The existing DB denies shipped/delivered materials. Web can return ONLY
-  {order_id,disposition:shipped},after confirming the order customer or unrevoked
-  grant with an ordered item in scope. Refunded/cancelled/wrong owner/revoked or
-  empty scope still deny. No book/name/voice/address/payment data is returned.
+  {order_id,disposition:shipped},only after confirming the authenticated order customer. Guests keep generic
+  denial/recovery/support;no direct private grant-table SELECT is permitted.
+  Refunded/cancelled/wrong-owner states still deny. No book/name/voice/address/payment data is returned.
   POST/capture/download still use the unchanged DB eligibility;no SQL broadening.
 Existing order/success summary callers pass their already-authorized order status
 for the same notice. S1/S2 bytes,ordinary data access and all write rules stay frozen.
 Physical iPhone Safari format playback remains a combined-window checklist item.
+
+The initial5479a83 Web fallback incorrectly assumed service_role could SELECT
+order_material_grants. The07 migration explicitly revokes that access. No live
+execution occurred;mock tests did not model its ACL. Owner subsequently chose
+pureWeb/account-only shipped fallback,generic guest denial plus support. This
+supersedes the proposed grant fallback;the final candidate never reads that table.
