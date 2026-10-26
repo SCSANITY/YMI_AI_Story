@@ -9,48 +9,10 @@ import { RECIPIENT_ADDRESS_LIMITS, recipientAddressIssue } from '@/lib/shipping-
 import { CheckoutEmailOwnershipHint } from './CheckoutEmailOwnershipHint';
 import { ShippingPrice } from './ShippingPrice';
 
-type ShippingMethodCode = 'standard' | 'speedy';
-
-type CheckoutAddressForm = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  country: string;
-  shippingRegionKey: string;
-  shippingDestinationLabel: string;
-  region: string;
-  city: string;
-  addressLine1: string;
-  addressLine2: string;
-  addressLine3: string;
-  zip: string;
-  phone: string;
-  company: string;
-  recipientEmail: string;
-  vatNumber: string;
-  eoriNumber: string;
-  iossNumber: string;
-};
-
-type ShippingQuoteState = {
-  status: 'idle' | 'missing' | 'loading' | 'available' | 'unavailable' | 'error';
-  options: ShippingQuoteOption[];
-  selectedMethod: ShippingMethodCode | null;
-  message: string | null;
-};
-
-type ShippingQuoteOption = {
-  methodCode: ShippingMethodCode;
-  methodName: string;
-  methodDescription?: string | null;
-  speedLabel?: string | null;
-  amountUsd: number;
-  displayAmount?: string | null;
-  rateName?: string | null;
-  estimatedDelivery?: string | null;
-  message?: string | null;
-  snapshot: Record<string, unknown> | null;
-};
+import {
+  EMPTY_SHIPPING_QUOTE, type CheckoutAddressForm, type ShippingQuoteState,
+  type ShippingQuoteOption, type ShippingMethodCode,
+} from '@/lib/checkout-restoration';
 
 type ShippingDestinationOption = {
   id: string;
@@ -112,6 +74,8 @@ type ShippingQuoteApiOption = {
 
 type AddressFormSectionProps = {
   initialForm: CheckoutAddressForm;
+  initialFormIsAuthoritative?: boolean;
+  initialShippingQuote?: ShippingQuoteState;
   checkoutEmail: string;
   selectedCurrency: CheckoutCurrency;
   userCustomerId?: string | null;
@@ -121,13 +85,6 @@ type AddressFormSectionProps = {
     form: CheckoutAddressForm;
     shippingQuote: ShippingQuoteState;
   }) => void;
-};
-
-const EMPTY_SHIPPING_QUOTE: ShippingQuoteState = {
-  status: 'missing',
-  options: [],
-  selectedMethod: null,
-  message: null,
 };
 
 const FALLBACK_SHIPPING_DESTINATIONS: ShippingDestinationOption[] = [
@@ -236,6 +193,8 @@ function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDe
 
 function AddressFormSectionComponent({
   initialForm,
+  initialFormIsAuthoritative = false,
+  initialShippingQuote = EMPTY_SHIPPING_QUOTE,
   checkoutEmail,
   selectedCurrency,
   userCustomerId,
@@ -244,6 +203,7 @@ function AddressFormSectionComponent({
   onComplete,
 }: AddressFormSectionProps) {
   const [form, setForm] = useState<CheckoutAddressForm>(initialForm);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [formError, setFormError] = useState('');
   const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
   const [isAddressBookOpen, setIsAddressBookOpen] = useState(false);
@@ -254,10 +214,10 @@ function AddressFormSectionComponent({
   const [shippingDestinations, setShippingDestinations] = useState<ShippingDestinationOption[]>([]);
   const [isShippingDestinationOpen, setIsShippingDestinationOpen] = useState(false);
   const [isShippingDestinationsLoading, setIsShippingDestinationsLoading] = useState(false);
-  const [shippingQuote, setShippingQuote] = useState<ShippingQuoteState>(EMPTY_SHIPPING_QUOTE);
+  const [shippingQuote, setShippingQuote] = useState<ShippingQuoteState>(initialShippingQuote);
   const emailDropdownRef = useRef<HTMLDivElement | null>(null);
   const shippingDestinationRef = useRef<HTMLDivElement | null>(null);
-  const selectedShippingMethodRef = useRef<ShippingMethodCode | null>(null);
+  const selectedShippingMethodRef = useRef<ShippingMethodCode | null>(initialShippingQuote.selectedMethod);
   const hasLocalEditsRef = useRef(false);
 
   const availableShippingDestinations = shippingDestinations.length > 0
@@ -339,27 +299,29 @@ function AddressFormSectionComponent({
   }, [userCustomerId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const raw = window.localStorage.getItem('ymi_checkout_form');
-    if (!raw) return;
     try {
-      const parsed = JSON.parse(raw);
-      hasLocalEditsRef.current = true;
-      setForm((prev) => ({
-        ...prev,
-        ...parsed,
-        email: parsed.email || prev.email || '',
-      }));
+      // An existing order (or a form just completed here) beats the generic
+      // browser draft, including its empty and optional fields.
+      if (!initialFormIsAuthoritative) {
+        const raw = window.localStorage.getItem('ymi_checkout_form');
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          setForm(prev => Object.fromEntries(Object.entries(prev).map(([key, value]) =>
+            [key, typeof parsed[key] === 'string' && parsed[key] ? parsed[key] : value]
+          )) as CheckoutAddressForm);
+        }
+      }
     } catch {
-      // Ignore malformed local checkout drafts.
+      // Missing/malformed/blocked storage never prevents checkout.
     }
-  }, []);
+    setDraftLoaded(true);
+  }, [initialFormIsAuthoritative]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const raw = window.localStorage.getItem('ymi_checkout_email_history');
-    if (!raw) return;
     try {
+      const raw = window.localStorage.getItem('ymi_checkout_email_history');
+      if (!raw) return;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         setEmailHistory(parsed.filter((item) => typeof item === 'string'));
@@ -419,7 +381,7 @@ function AddressFormSectionComponent({
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!draftLoaded || typeof window === 'undefined') return;
     try {
       // Tax identifiers are only kept in the active form or an explicitly saved address.
       window.localStorage.setItem('ymi_checkout_form', JSON.stringify({
@@ -431,7 +393,7 @@ function AddressFormSectionComponent({
     } catch {
       // Checkout continues when private browsing blocks local storage.
     }
-  }, [form]);
+  }, [form, draftLoaded]);
 
   useEffect(() => {
     if (!isAddressBookOpen || typeof document === 'undefined') return;

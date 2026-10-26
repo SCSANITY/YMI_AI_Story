@@ -16,6 +16,8 @@ type DiscountSectionProps = {
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   isSignedIn: boolean;
   orderId: string | null;
+  canApply: boolean;
+  allowAutoApply: boolean;
   incomingDiscountCode: string;
   appliedDiscountCode: string | null;
   selectedRewardVoucherId: string | null;
@@ -45,6 +47,8 @@ function DiscountSectionComponent({
   t,
   isSignedIn,
   orderId,
+  canApply,
+  allowAutoApply,
   incomingDiscountCode,
   appliedDiscountCode,
   selectedRewardVoucherId,
@@ -74,22 +78,22 @@ function DiscountSectionComponent({
     if (incomingDiscountCode) {
       const nextCode = incomingDiscountCode.toUpperCase();
       setDiscountCodeInput(nextCode);
-      if (typeof window !== 'undefined') {
+      try {
         window.localStorage.setItem('ymi_discount_code', nextCode);
-      }
+      } catch { /* An optional browser cache must not block checkout. */ }
       return;
     }
 
     if (typeof window === 'undefined') return;
     if (appliedDiscountCode) return;
-    const storedCode = window.localStorage.getItem('ymi_discount_code');
-    if (storedCode) {
-      setDiscountCodeInput((current) => current || storedCode.toUpperCase());
-    }
+    try {
+      const storedCode = window.localStorage.getItem('ymi_discount_code');
+      if (storedCode) setDiscountCodeInput((current) => current || storedCode.toUpperCase());
+    } catch { /* Checkout works without local storage. */ }
   }, [incomingDiscountCode, appliedDiscountCode]);
 
   useEffect(() => {
-    if (!orderId) return;
+    if (!allowAutoApply || !canApply || isApplyingDiscount || !orderId) return;
     if (appliedDiscountCode || appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId) return;
     if (autoDiscountAttemptedRef.current) return;
 
@@ -101,6 +105,9 @@ function DiscountSectionComponent({
       if (applied) setDiscountCodeInput('');
     });
   }, [
+    allowAutoApply,
+    canApply,
+    isApplyingDiscount,
     appliedDiscountCode,
     appliedProductDiscountInstrumentId,
     appliedShippingDiscountInstrumentId,
@@ -174,7 +181,7 @@ function DiscountSectionComponent({
                 type="button"
                 variant="outline"
                 className="glass-action-btn glass-action-btn--amber h-12 shrink-0 rounded-2xl px-6 text-sm font-bold text-amber-700"
-                disabled={isApplyingDiscount || !orderId || !discountCodeInput.trim()}
+                disabled={!canApply || isApplyingDiscount || !orderId || !discountCodeInput.trim()}
                 onClick={() => void handleApplyCode()}
               >
                 {isApplyingDiscount ? t('common.loading') : t('checkout.applyCode')}
@@ -193,7 +200,7 @@ function DiscountSectionComponent({
                       type="button"
                       aria-label={t('checkout.removeCode')}
                       onClick={() => void onClearAppliedDiscount('product_discount')}
-                      disabled={isApplyingDiscount}
+                      disabled={!canApply || isApplyingDiscount}
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
                     >
                       <X className="h-4 w-4" />
@@ -211,7 +218,7 @@ function DiscountSectionComponent({
                       type="button"
                       aria-label={t('checkout.removeCode')}
                       onClick={() => void onClearAppliedDiscount('shipping_discount')}
-                      disabled={isApplyingDiscount}
+                      disabled={!canApply || isApplyingDiscount}
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
                     >
                       <X className="h-4 w-4" />
@@ -235,7 +242,7 @@ function DiscountSectionComponent({
                     <div className="relative flex-1">
                       <select
                         value={selectedRewardVoucherId ?? ''}
-                        disabled={isApplyingDiscount || !orderId}
+                        disabled={!canApply || isApplyingDiscount || !orderId}
                         onChange={(event) => void handleVoucherChange(event.target.value)}
                         className="h-12 w-full appearance-none rounded-2xl border-2 border-gray-200 bg-white px-4 pr-10 text-sm font-semibold text-gray-900 transition focus:border-amber-400 focus:outline-none disabled:opacity-60"
                       >
@@ -253,7 +260,7 @@ function DiscountSectionComponent({
                         type="button"
                         aria-label={t('checkout.removeCode')}
                         onClick={() => void handleClearAllDiscounts()}
-                        disabled={isApplyingDiscount}
+                        disabled={!canApply || isApplyingDiscount}
                         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-2 border-gray-200 text-gray-500 transition hover:border-red-200 hover:text-red-500 disabled:opacity-50"
                       >
                         <X className="h-5 w-5" />
@@ -264,9 +271,9 @@ function DiscountSectionComponent({
                     <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-emerald-700">
                       <CheckCircle2 className="h-4 w-4 shrink-0" />
                       <span className="truncate">{selectedRewardVoucherName}</span>
-                      {discountTotalUsd > 0 ? (
+                      {selectedRewardVoucherId === appliedProductDiscountInstrumentId && discountTotalUsd > 0 ? (
                         <span className="shrink-0">· -{formattedDiscount}</span>
-                      ) : shippingDiscountTotalUsd > 0 ? (
+                      ) : selectedRewardVoucherId === appliedShippingDiscountInstrumentId && shippingDiscountTotalUsd > 0 ? (
                         <span className="shrink-0">· -{formattedShippingDiscount}</span>
                       ) : null}
                     </div>

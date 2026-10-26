@@ -33,6 +33,11 @@ import {
   resolveCartItemPreviewCoverStatus,
 } from '@/lib/cart-cover';
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
+import type { OrderDiscountSummary } from '@/lib/discounts';
+import {
+  EMPTY_SHIPPING_QUOTE, restoreCheckoutOrder, shippingDiscountRefreshKey,
+  type CheckoutAddressForm, type ShippingQuoteState,
+} from '@/lib/checkout-restoration';
 
 const CheckoutIdentityModal = dynamic(
   () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
@@ -46,7 +51,6 @@ const CheckoutPolicyModal = dynamic(
 
 type CheckoutStep = 'address' | 'payment';
 type CheckoutIdentityMode = 'guest' | 'auth';
-type ShippingMethodCode = 'standard' | 'speedy';
 type CheckoutPolicyModal = 'shipping' | 'refund' | 'safety' | 'impact' | null;
 type RewardVoucher = {
   instrumentId: string;
@@ -58,55 +62,16 @@ type RewardVoucher = {
   minimumOrderAmountUsd?: number | null;
 };
 
-type CheckoutAddressForm = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  country: string;
-  shippingRegionKey: string;
-  shippingDestinationLabel: string;
-  region: string;
-  city: string;
-  addressLine1: string;
-  addressLine2: string;
-  addressLine3: string;
-  zip: string;
-  phone: string;
-  company: string;
-  recipientEmail: string;
-  vatNumber: string;
-  eoriNumber: string;
-  iossNumber: string;
-};
-
-type ShippingQuoteState = {
-  status: 'idle' | 'missing' | 'loading' | 'available' | 'unavailable' | 'error';
-  options: ShippingQuoteOption[];
-  selectedMethod: ShippingMethodCode | null;
-  message: string | null;
-};
-
-type ShippingQuoteOption = {
-  methodCode: ShippingMethodCode;
-  methodName: string;
-  methodDescription?: string | null;
-  speedLabel?: string | null;
-  amountUsd: number;
-  displayAmount?: string | null;
-  rateName?: string | null;
-  estimatedDelivery?: string | null;
-  message?: string | null;
-  snapshot: Record<string, unknown> | null;
-};
-
-const EMPTY_SHIPPING_QUOTE: ShippingQuoteState = {
-  status: 'missing',
-  options: [],
-  selectedMethod: null,
-  message: null,
-};
-
 const EMAIL_FORMAT_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function rememberDiscountCode(code: string | null) {
+  try {
+    if (code) window.localStorage.setItem('ymi_discount_code', code);
+    else window.localStorage.removeItem('ymi_discount_code');
+  } catch {
+    // Optional browser caching must not turn a successful server save into an error.
+  }
+}
 
 function CheckoutPageContent() {
   const router = useRouter();
@@ -141,6 +106,10 @@ function CheckoutPageContent() {
   );
   const isCheckoutPriceReady = items.length > 0 && !priceLoadError;
 
+  const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null } | null>(null);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [hasCompletedAddress, setHasCompletedAddress] = useState(false);
+  const [appliedShippingDiscountType, setAppliedShippingDiscountType] = useState<string | null>(null);
   const [step, setStep] = useState<CheckoutStep>('address');
   const [orderId, setOrderId] = useState<string | null>(null);
   const selectedCurrency = toChargeCurrency(displayCurrency);
@@ -313,6 +282,11 @@ function CheckoutPageContent() {
     const raw = searchParams?.get('step');
     return raw && raw.trim().length > 0 ? raw.trim() : null;
   }, [searchParams]);
+  const restoreKey = queryOrderId ? `${queryOrderId}:${user?.customerId ?? 'anon'}:${restoreAttempt}` : null;
+  const isOrderRestoring = Boolean(restoreKey && restoredOrder?.key !== restoreKey);
+  const orderRestoreError = restoredOrder?.key === restoreKey ? restoredOrder?.error : null;
+  const checkoutStateReady = !isOrderRestoring && !orderRestoreError;
+
   const queryIdentityVerified = useMemo(() => searchParams?.get('verified') === '1', [searchParams]);
   const queryIdentityMode = useMemo(() => {
     const raw = searchParams?.get('identityMode');
@@ -402,12 +376,13 @@ function CheckoutPageContent() {
   }, [isMultiOrderCheckout, primaryCheckoutItem, resolveCheckoutItemCoverUrl, t]);
 
   useEffect(() => {
-    if (queryOrderId && !orderId) {
+    if (queryOrderId && queryOrderId !== orderId) {
       setOrderId(queryOrderId);
     }
   }, [queryOrderId, orderId]);
 
   useEffect(() => {
+    if (!checkoutStateReady) return;
     if (queryStep !== 'payment') {
       checkoutPaymentResumeAppliedRef.current = false;
       return;
@@ -433,8 +408,10 @@ function CheckoutPageContent() {
       }
     }
 
-    setStep('payment');
+    setStep(canUseShippingQuote ? 'payment' : 'address');
   }, [
+    checkoutStateReady,
+    canUseShippingQuote,
     items.length,
     queryIdentityEmail,
     queryIdentityMode,
@@ -446,99 +423,70 @@ function CheckoutPageContent() {
     user?.email,
   ]);
 
-  useEffect(() => {
-    if (!queryOrderId) return;
-    if (checkoutItems.length > 0) return;
-
-    const url = user?.customerId
-      ? `/api/cart?orderId=${encodeURIComponent(queryOrderId)}&status=ordered&customerId=${encodeURIComponent(user.customerId)}`
-      : `/api/cart?orderId=${encodeURIComponent(queryOrderId)}&status=ordered`;
-
-    fetch(url, { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error(CART_PRICE_LOAD_ERROR);
-        return res.json();
-      })
-      .then((data) => {
-        if (!Array.isArray(data?.items)) throw new Error(CART_PRICE_LOAD_ERROR);
-        const rows = data.items;
-        if (!rows.length) return;
-        hydrateCheckoutItems(rows);
-      })
-      .catch(() => hydrateCheckoutItems(null));
-  }, [queryOrderId, checkoutItems.length, user?.customerId, hydrateCheckoutItems]);
+  const applyDiscountSummary = useCallback((summary: OrderDiscountSummary) => {
+    setDiscountAmountUsd(summary.productDiscountAmountUsd);
+    setShippingDiscountAmountUsd(summary.shippingDiscountAmountUsd);
+    setAppliedProductDiscountInstrumentId(summary.productDiscountInstrumentId);
+    setAppliedShippingDiscountInstrumentId(summary.shippingDiscountInstrumentId);
+    setAppliedProductCode(summary.productDiscount?.label ?? null);
+    setAppliedShippingCode(summary.shippingDiscount?.label ?? null);
+    setAppliedShippingDiscountType(summary.shippingDiscount?.instrumentType ?? null);
+    setAppliedDiscountCode(summary.productDiscount?.code ?? summary.shippingDiscount?.code ?? null);
+    const voucher = [summary.shippingDiscount, summary.productDiscount].find(slot => slot?.instrumentType === 'voucher');
+    setSelectedRewardVoucherId(voucher?.instrumentId ?? null);
+    setSelectedRewardVoucherName(voucher?.label ?? null);
+  }, []);
 
   useEffect(() => {
-    if (!queryOrderId) return;
+    if (!queryOrderId || !restoreKey || !isAuthResolved) return;
     let cancelled = false;
-
-    fetch(`/api/orders/${encodeURIComponent(queryOrderId)}`, { credentials: 'include', cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : { order: null }))
-      .then((data) => {
-        if (cancelled) return;
-        const current = data?.order;
-        if (!current) return;
-
-        const address = current.shipping_address ?? {};
-        setForm((prev) => ({
-          ...prev,
-          firstName: prev.firstName || address.firstName || '',
-          lastName: prev.lastName || address.lastName || '',
-          email: prev.email || current.email || '',
-          country: prev.country || address.country || '',
-          shippingRegionKey: prev.shippingRegionKey || address.shippingRegionKey || address.regionKey || '',
-          shippingDestinationLabel:
-            prev.shippingDestinationLabel || address.shippingDestinationLabel || address.destinationLabel || '',
-          region: prev.region || address.region || '',
-          addressLine1: prev.addressLine1 || address.addressLine1 || '',
-          addressLine2: prev.addressLine2 || address.addressLine2 || '',
-          addressLine3: prev.addressLine3 || address.addressLine3 || '',
-          city: prev.city || address.city || '',
-          zip: prev.zip || address.zip || '',
-          phone: prev.phone || address.phone || '',
-          company: prev.company || address.company || '',
-          recipientEmail: prev.recipientEmail || address.recipientEmail || '',
-          vatNumber: prev.vatNumber || address.vatNumber || '',
-          eoriNumber: prev.eoriNumber || address.eoriNumber || '',
-          iossNumber: prev.iossNumber || address.iossNumber || '',
-        }));
-        if (current.shipping_amount_usd && Number(current.shipping_amount_usd) > 0) {
-          const snapshot = current.shipping_rate_snapshot ?? null;
-          const methodCode = (current.shipping_method ?? snapshot?.methodCode ?? 'standard') as ShippingMethodCode;
-          const methodName = String(snapshot?.methodName ?? snapshot?.rateName ?? current.shipping_method ?? 'Shipping');
-          setShippingQuote({
-            status: 'available',
-            options: [
-              {
-                methodCode,
-                methodName,
-                amountUsd: Number(current.shipping_amount_usd),
-                estimatedDelivery: snapshot?.estimatedDelivery ?? null,
-                rateName: snapshot?.rateName ?? methodName,
-                snapshot,
-              },
-            ],
-            selectedMethod: methodCode,
-            message: null,
-          });
+    const controller = new AbortController();
+    const options = { credentials: 'include' as const, cache: 'no-store' as const, signal: controller.signal };
+    Promise.all([
+      fetch(`/api/orders/${encodeURIComponent(queryOrderId)}`, options),
+      fetch(`/api/cart?orderId=${encodeURIComponent(queryOrderId)}&status=ordered`, options),
+    ])
+      .then(async ([orderResponse, itemsResponse]) => {
+        if (!orderResponse.ok || !itemsResponse.ok) throw new Error('Unable to restore checkout. Please try again.');
+        const [data, cartData] = await Promise.all([orderResponse.json(), itemsResponse.json()]);
+        if (!data?.order || data.order.order_id !== queryOrderId || !Array.isArray(cartData?.items) || !cartData.items.length) {
+          throw new Error('Unable to restore checkout. Please try again.');
         }
-        if (!checkoutEmail && current.email) {
-          setCheckoutEmail(current.email);
-        }
-        setAppliedDiscountCode(null);
-        setSelectedRewardVoucherId(null);
-        setSelectedRewardVoucherName(null);
-        setDiscountAmountUsd(Number(current.discount_amount_usd ?? 0));
-        setShippingDiscountAmountUsd(Number(current.shipping_discount_amount_usd ?? 0));
-        setAppliedProductDiscountInstrumentId(current.applied_product_discount_instrument_id ?? null);
-        setAppliedShippingDiscountInstrumentId(current.applied_shipping_discount_instrument_id ?? null);
+        return { ...restoreCheckoutOrder(data.order), rows: cartData.items };
       })
-      .catch(() => {});
+      .then(({ form: address, quote, discounts, rows }) => {
+        if (cancelled) return;
+        hydrateCheckoutItems(rows);
+        setForm(address);
+        setShippingQuote(quote);
+        setHasCompletedAddress(true);
+        setCheckoutEmail(address.email);
+        applyDiscountSummary(discounts);
+        // Restoring is read-only. Reprice only after a later address/method edit.
+        shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(queryOrderId, discounts.shippingDiscountInstrumentId, quote);
+        setFormError('');
+        setDiscountError('');
+        checkoutPaymentResumeAppliedRef.current = false;
+        setRestoredOrder({ key: restoreKey, error: null });
+      })
+      .catch(() => {
+        if (!cancelled) setRestoredOrder({ key: restoreKey, error: 'Unable to restore checkout. Please try again.' });
+      });
+    return () => { cancelled = true; controller.abort(); };
+  }, [queryOrderId, restoreKey, isAuthResolved, setCheckoutEmail, hydrateCheckoutItems, applyDiscountSummary]);
 
-    return () => {
-      cancelled = true;
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      isPlacingOrderRef.current = false;
+      setIsPlacingOrder(false);
+      // bfcache restores React too; explicitly reload the saved order once.
+      checkoutPaymentResumeAppliedRef.current = false;
+      setRestoreAttempt(attempt => attempt + 1);
     };
-  }, [queryOrderId, checkoutEmail, setCheckoutEmail]);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
 
   useEffect(() => {
     if (!user?.customerId) {
@@ -574,6 +522,7 @@ function CheckoutPageContent() {
   }, [user?.customerId]);
 
   useEffect(() => {
+    if (queryOrderId) return;
     if (checkoutItems.length > 0) return;
     if (selectedIdsFromQuery.length === 0) return;
     const selected = cart.filter(item => selectedIdsFromQuery.includes(item.id));
@@ -598,7 +547,7 @@ function CheckoutPageContent() {
         hydrateCheckoutItems(items);
       })
       .catch(() => hydrateCheckoutItems(null));
-  }, [checkoutItems.length, cart, prepareCheckout, selectedIdsFromQuery, user?.customerId, hydrateCheckoutItems]);
+  }, [queryOrderId, checkoutItems.length, cart, prepareCheckout, selectedIdsFromQuery, user?.customerId, hydrateCheckoutItems]);
 
   const resetIdentityVerification = useCallback(() => {
     setIdentityOtpRequested(false);
@@ -665,6 +614,7 @@ function CheckoutPageContent() {
     shippingQuote: ShippingQuoteState;
   }) => {
     const normalizedEmail = nextForm.email.trim();
+    setHasCompletedAddress(true);
     setForm(nextForm);
     setShippingQuote(nextShippingQuote);
     setCheckoutEmail(normalizedEmail);
@@ -837,7 +787,7 @@ function CheckoutPageContent() {
   }, [identityEmail, t]);
 
   const applyDiscountCode = useCallback(async (rawCode: string) => {
-    if (!orderId) {
+    if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
       setDiscountError(t('checkout.orderNotReadyError'));
       return false;
     }
@@ -870,34 +820,10 @@ function CheckoutPageContent() {
         return false;
       }
 
-      const appliedCode = data.code ?? code ?? null;
-      const newProductInstrumentId = data.productDiscountInstrumentId ?? null;
-      const newShippingInstrumentId = data.shippingDiscountInstrumentId ?? null;
-      // This code filled a slot only if that slot's instrument changed; otherwise the
-      // slot keeps whichever code was already there (a different code holds the other slot).
-      setAppliedProductCode(
-        newProductInstrumentId
-          ? (newProductInstrumentId !== appliedProductDiscountInstrumentId ? appliedCode : appliedProductCode)
-          : null
-      );
-      setAppliedShippingCode(
-        newShippingInstrumentId
-          ? (newShippingInstrumentId !== appliedShippingDiscountInstrumentId ? appliedCode : appliedShippingCode)
-          : null
-      );
-      setAppliedDiscountCode(appliedCode);
-      setSelectedRewardVoucherId(null);
-      setSelectedRewardVoucherName(null);
-      setDiscountAmountUsd(Number(data.productDiscountAmountUsd ?? data.product_discount_amount_usd ?? 0));
-      setShippingDiscountAmountUsd(Number(data.shippingDiscountAmountUsd ?? data.shipping_discount_amount_usd ?? 0));
-      setAppliedProductDiscountInstrumentId(newProductInstrumentId);
-      setAppliedShippingDiscountInstrumentId(newShippingInstrumentId);
+      applyDiscountSummary(data);
+      shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(orderId, data.shippingDiscountInstrumentId, shippingQuote);
 
-      if (typeof window !== 'undefined') {
-        if (data.code) {
-          window.localStorage.setItem('ymi_discount_code', data.code);
-        }
-      }
+      if (data.code) rememberDiscountCode(data.code);
 
       return true;
     } catch {
@@ -906,10 +832,10 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [appliedProductCode, appliedProductDiscountInstrumentId, appliedShippingCode, appliedShippingDiscountInstrumentId, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, user?.customerId]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, user?.customerId]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
-    if (!orderId) {
+    if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
       setDiscountError(t('checkout.orderNotReadyError'));
       return false;
     }
@@ -918,7 +844,6 @@ function CheckoutPageContent() {
       return false;
     }
 
-    const selectedVoucher = rewardVouchers.find((voucher) => voucher.instrumentId === instrumentId) ?? null;
     setDiscountError('');
     setIsApplyingDiscount(true);
 
@@ -943,19 +868,10 @@ function CheckoutPageContent() {
         return false;
       }
 
-      setAppliedDiscountCode(null);
-      setAppliedProductCode(null);
-      setAppliedShippingCode(null);
-      setSelectedRewardVoucherId(data.instrumentId ?? instrumentId ?? null);
-      setSelectedRewardVoucherName(selectedVoucher?.name || selectedVoucher?.label || null);
-      setDiscountAmountUsd(Number(data.productDiscountAmountUsd ?? data.product_discount_amount_usd ?? 0));
-      setShippingDiscountAmountUsd(Number(data.shippingDiscountAmountUsd ?? data.shipping_discount_amount_usd ?? 0));
-      setAppliedProductDiscountInstrumentId(data.productDiscountInstrumentId ?? null);
-      setAppliedShippingDiscountInstrumentId(data.shippingDiscountInstrumentId ?? null);
+      applyDiscountSummary(data);
+      shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(orderId, data.shippingDiscountInstrumentId, shippingQuote);
 
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem('ymi_discount_code');
-      }
+      rememberDiscountCode(null);
 
       return true;
     } catch {
@@ -964,10 +880,10 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [checkoutShippingContext, orderId, rewardVouchers, shippingAmountUsd, t, user?.customerId]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, user?.customerId]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
-    if (!orderId) return false;
+    if (!checkoutStateReady || isApplyingDiscount || !orderId) return false;
     setDiscountError('');
     setIsApplyingDiscount(true);
     try {
@@ -982,18 +898,9 @@ function CheckoutPageContent() {
         setDiscountError(data?.error || t('checkout.discountApplyError'));
         return false;
       }
-      setDiscountAmountUsd(Number(data.productDiscountAmountUsd ?? 0));
-      setShippingDiscountAmountUsd(Number(data.shippingDiscountAmountUsd ?? 0));
-      setAppliedProductDiscountInstrumentId(data.productDiscountInstrumentId ?? null);
-      setAppliedShippingDiscountInstrumentId(data.shippingDiscountInstrumentId ?? null);
-      if (!data.productDiscountInstrumentId) setAppliedProductCode(null);
-      if (!data.shippingDiscountInstrumentId) setAppliedShippingCode(null);
-      if (!data.productDiscountInstrumentId && !data.shippingDiscountInstrumentId) {
-        setAppliedDiscountCode(null);
-        setSelectedRewardVoucherId(null);
-        setSelectedRewardVoucherName(null);
-        if (typeof window !== 'undefined') window.localStorage.removeItem('ymi_discount_code');
-      }
+      applyDiscountSummary(data);
+      shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(orderId, data.shippingDiscountInstrumentId, shippingQuote);
+      if (!data.productDiscountInstrumentId && !data.shippingDiscountInstrumentId) rememberDiscountCode(null);
       return true;
     } catch {
       setDiscountError(t('checkout.discountApplyError'));
@@ -1001,7 +908,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [orderId, t]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, orderId, shippingQuote, t]);
 
   useEffect(() => {
     if (discountError || appliedDiscountCode || selectedRewardVoucherId || appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId) {
@@ -1010,19 +917,23 @@ function CheckoutPageContent() {
   }, [appliedDiscountCode, appliedProductDiscountInstrumentId, appliedShippingDiscountInstrumentId, selectedRewardVoucherId, discountError]);
 
   useEffect(() => {
-    if (!orderId || !appliedShippingDiscountInstrumentId) return;
+    if (!checkoutStateReady || !canUseShippingQuote || isApplyingDiscount || !orderId || !appliedShippingDiscountInstrumentId) return;
     const refreshKey = `${orderId}:${appliedShippingDiscountInstrumentId}:${shippingAmountUsd}:${selectedShippingOption?.methodCode ?? ''}`;
     if (shippingDiscountRefreshKeyRef.current === refreshKey) return;
     shippingDiscountRefreshKeyRef.current = refreshKey;
-    if (selectedRewardVoucherId === appliedShippingDiscountInstrumentId) {
+    if (appliedShippingDiscountType === 'voucher') {
       void applyRewardVoucher(appliedShippingDiscountInstrumentId);
       return;
     }
-    if (appliedDiscountCode) {
-      void applyDiscountCode(appliedDiscountCode);
+    if (appliedShippingCode) {
+      void applyDiscountCode(appliedShippingCode);
     }
   }, [
-    appliedDiscountCode,
+    appliedShippingCode,
+    appliedShippingDiscountType,
+    checkoutStateReady,
+    canUseShippingQuote,
+    isApplyingDiscount,
     appliedShippingDiscountInstrumentId,
     applyDiscountCode,
     applyRewardVoucher,
@@ -1033,7 +944,7 @@ function CheckoutPageContent() {
   ]);
 
   const startStripeHostedCheckout = async (mode: 'guest' | 'auth') => {
-    if (!orderId) {
+    if (!checkoutStateReady || isApplyingDiscount || !orderId) {
       setFormError(t('checkout.orderNotReadyError'));
       isPlacingOrderRef.current = false;
       setIsPlacingOrder(false);
@@ -1074,6 +985,12 @@ function CheckoutPageContent() {
         setIsPlacingOrder(false);
         return;
       }
+      // A normal browser Back (including a full reload) must know which unpaid
+      // order to restore, even when the checkout originally started from ids.
+      const returnUrl = new URL(window.location.href);
+      returnUrl.searchParams.set('orderId', orderId);
+      returnUrl.searchParams.set('step', 'payment');
+      window.history.replaceState(window.history.state, '', returnUrl.pathname + returnUrl.search + returnUrl.hash);
       window.location.assign(data.url);
     } catch {
       setFormError(t('checkout.stripeStartError'));
@@ -1083,7 +1000,7 @@ function CheckoutPageContent() {
   };
 
   const handlePlaceOrder = () => {
-    if (isPlacingOrderRef.current || isPlacingOrder) return;
+    if (!checkoutStateReady || isApplyingDiscount || isPlacingOrderRef.current || isPlacingOrder) return;
 
     const normalizedEmail = checkoutContactEmail.trim();
     if (!normalizedEmail) {
@@ -1199,6 +1116,9 @@ function CheckoutPageContent() {
       setShippingDiscountAmountUsd(0);
       setAppliedProductDiscountInstrumentId(null);
       setAppliedShippingDiscountInstrumentId(null);
+      setAppliedProductCode(null);
+      setAppliedShippingCode(null);
+      setAppliedShippingDiscountType(null);
       setDiscountError('');
       return true;
     } catch (error) {
@@ -1228,6 +1148,7 @@ function CheckoutPageContent() {
   }, [addToCheckout, removeFromCheckout, startCheckoutForItems, t]);
 
   useEffect(() => {
+    if (!checkoutStateReady) return;
     if (!items.length || checkoutStarted) {
       if (!items.length && !checkoutStarted) {
         checkoutInitRef.current = false;
@@ -1246,7 +1167,7 @@ function CheckoutPageContent() {
         checkoutInitRef.current = false;
       }
     })();
-  }, [items, checkoutStarted, orderId, startCheckoutForItems]);
+  }, [checkoutStateReady, items, checkoutStarted, orderId, startCheckoutForItems]);
 
   useEffect(() => {
     if (!checkoutStarted || !orderId || items.length === 0) return;
@@ -1329,6 +1250,8 @@ function CheckoutPageContent() {
     </div>
   );
 
+  if (isOrderRestoring) return <CheckoutLoadingShell />;
+  if (orderRestoreError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{orderRestoreError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => setRestoreAttempt(attempt => attempt + 1)}>{t('common.retry')}</button></div>;
   if (priceLoadError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{priceLoadError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => router.push('/cart')}>Back to cart</button></div>;
 
   return (
@@ -1374,6 +1297,8 @@ function CheckoutPageContent() {
           {step === 'address' && (
             <AddressFormSection
               initialForm={form}
+              initialFormIsAuthoritative={hasCompletedAddress}
+              initialShippingQuote={shippingQuote}
               checkoutEmail={checkoutEmail}
               selectedCurrency={selectedCurrency}
               userCustomerId={user?.customerId ?? null}
@@ -1424,6 +1349,8 @@ function CheckoutPageContent() {
                   t={t}
                   isSignedIn={Boolean(user?.customerId)}
                   orderId={orderId}
+                  canApply={checkoutStateReady && canUseShippingQuote}
+                  allowAutoApply={!queryOrderId}
                   incomingDiscountCode={incomingDiscountCode}
                   appliedDiscountCode={appliedDiscountCode}
                   selectedRewardVoucherId={selectedRewardVoucherId}
@@ -1453,7 +1380,7 @@ function CheckoutPageContent() {
                   identityMode={identityMode}
                   identityEmail={identityEmail}
                   userEmail={user?.email ?? null}
-                  isPlacingOrder={isPlacingOrder}
+                  isPlacingOrder={isPlacingOrder || isApplyingDiscount}
                   stripeCheckoutEnabled={stripeCheckoutEnabled}
                   formError={formError}
                   policyAgreementNotice={policyAgreementNotice}
@@ -1504,7 +1431,7 @@ function CheckoutPageContent() {
         isPriceReady={isCheckoutPriceReady}
         totalLabel={formattedTotal}
         actionLabel={mobilePaymentActionLabel}
-        disabled={isPlacingOrder}
+        disabled={isPlacingOrder || isApplyingDiscount}
         t={t}
         onClick={handleMobilePaymentAction}
       />

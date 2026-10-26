@@ -29,6 +29,38 @@ export type OrderDiscountSummary = {
   shippingDiscountInstrumentId: string | null
   productDiscountAmountUsd: number
   shippingDiscountAmountUsd: number
+  productDiscount: OrderDiscountSlot | null
+  shippingDiscount: OrderDiscountSlot | null
+}
+
+export type OrderDiscountSlot = {
+  instrumentId: string
+  instrumentType: DiscountInstrumentType
+  code: string | null
+  label: string
+}
+
+// Called only after order access is established. Return display fields only for
+// the two instruments attached to that order, never a general coupon lookup.
+export async function loadOrderDiscountSlots(productId: string | null, shippingId: string | null) {
+  const ids = [...new Set([productId, shippingId].filter((id): id is string => Boolean(id)))]
+  if (!ids.length) return { productDiscount: null, shippingDiscount: null }
+  const { data, error } = await supabaseAdmin.from('discount_instruments')
+    .select('instrument_id, instrument_type, code, discount_offers:discount_offers(name)')
+    .in('instrument_id', ids)
+  if (error) throw new Error('Failed to restore order discount labels.')
+  const rows = new Map((data ?? []).map(row => [row.instrument_id, row]))
+  const slot = (id: string | null): OrderDiscountSlot | null => {
+    if (!id) return null
+    const row = rows.get(id)
+    if (!row || !['promo_code', 'voucher'].includes(row.instrument_type)) throw new Error('Order discount is unavailable.')
+    const offer = Array.isArray(row.discount_offers) ? row.discount_offers[0] : row.discount_offers
+    const code = row.instrument_type === 'promo_code' ? normalizeDiscountCode(row.code) : null
+    const label = code || offer?.name
+    if (!label) throw new Error('Order discount label is unavailable.')
+    return { instrumentId: id, instrumentType: row.instrument_type as DiscountInstrumentType, code, label }
+  }
+  return { productDiscount: slot(productId), shippingDiscount: slot(shippingId) }
 }
 
 export type DiscountedLineItemInput = {
@@ -309,6 +341,7 @@ export async function getOrderDiscountSummary(orderId: string): Promise<OrderDis
     shippingDiscountInstrumentId: data?.applied_shipping_discount_instrument_id ?? null,
     productDiscountAmountUsd: toMoney(data?.discount_amount_usd),
     shippingDiscountAmountUsd: toMoney(data?.shipping_discount_amount_usd),
+    ...await loadOrderDiscountSlots(data?.applied_product_discount_instrument_id ?? null, data?.applied_shipping_discount_instrument_id ?? null),
   }
 }
 

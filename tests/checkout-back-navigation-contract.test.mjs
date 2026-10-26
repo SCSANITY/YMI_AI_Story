@@ -6,13 +6,13 @@ const checkout = await readFile(new URL('../app/checkout/page.tsx', import.meta.
 
 test('Checkout applies a Stripe-cancel payment resume only once', () => {
   const resumeEffect = checkout.match(
-    /useEffect\(\(\) => \{\s*if \(queryStep !== 'payment'\)[\s\S]*?\n  \}, \[[\s\S]*?user\?\.email,\s*\n  \]\);/
+    /useEffect\(\(\) => \{\s*if \(!checkoutStateReady\) return;\s*if \(queryStep !== 'payment'\)[\s\S]*?\n  \}, \[[\s\S]*?user\?\.email,\s*\n  \]\);/
   )?.[0] ?? ''
 
   assert.match(checkout, /const checkoutPaymentResumeAppliedRef = useRef\(false\)/)
   assert.match(
     resumeEffect,
-    /if \(checkoutPaymentResumeAppliedRef\.current\) return;[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?setStep\('payment'\)/
+    /if \(checkoutPaymentResumeAppliedRef\.current\) return;[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?setStep\(canUseShippingQuote \? 'payment' : 'address'\)/
   )
 })
 

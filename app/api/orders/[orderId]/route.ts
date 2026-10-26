@@ -2,7 +2,7 @@ import { loadTrustedOrderMaterials } from '@/lib/order-materials-server'
 import { NextResponse } from 'next/server'
 import { noStoreJson } from '@/lib/http-response'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { releaseOrderDiscount } from '@/lib/discounts'
+import { loadOrderDiscountSlots, releaseOrderDiscount } from '@/lib/discounts'
 import {
   checkoutOwnerErrorResponse,
   parseOrderReference,
@@ -74,7 +74,14 @@ export async function GET(
     }
     const materials=['paid','production'].includes(String(order.order_status))
       ? await loadTrustedOrderMaterials(order.order_id) : null
-    return noStoreJson({ order:{...order,materials} })
+    const checkoutDiscounts = order.order_status === 'unpaid' ? {
+      productDiscountInstrumentId: order.applied_product_discount_instrument_id,
+      shippingDiscountInstrumentId: order.applied_shipping_discount_instrument_id,
+      productDiscountAmountUsd: order.discount_amount_usd,
+      shippingDiscountAmountUsd: order.shipping_discount_amount_usd,
+      ...await loadOrderDiscountSlots(order.applied_product_discount_instrument_id, order.applied_shipping_discount_instrument_id),
+    } : null
+    return noStoreJson({ order:{...order,materials,checkout_discounts:checkoutDiscounts} })
   } catch (error) {
     if (error instanceof CustomerOrderReadError) {
       return NextResponse.json({ error: error.message }, { status: error.status })

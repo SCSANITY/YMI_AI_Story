@@ -165,5 +165,9 @@ test('GlobalContext exposes cart and checkout load errors,clears them on a valid
  context.hydrateCheckoutItems([{...fixture,unit_price_usd:123}]);assert.equal(render().checkoutLoadError,null);assert.equal(context.checkoutItems[0].priceAtPurchase,123)
  context.hydrateCheckoutItems(null);render();context.restoreCheckout([]);assert.equal(render().checkoutLoadError,null)
  const checkout=readFileSync(new URL('../app/checkout/page.tsx',import.meta.url),'utf8')
- assert.equal(checkout.match(/\.catch\(\(\) => hydrateCheckoutItems\(null\)\)/g)?.length,2)
+ // New-order item hydration keeps its loud price error; returning orders now
+ // hydrate the complete order/items together and expose a retryable restore error.
+ assert.equal(checkout.match(/\.catch\(\(\) => hydrateCheckoutItems\(null\)\)/g)?.length,1)
+ assert.match(checkout,/Promise\.all\([\s\S]*?api\/orders\/[\s\S]*?api\/cart\?orderId=/)
+ assert.match(checkout,/if \(orderRestoreError\) return <div role="alert"/)
 })

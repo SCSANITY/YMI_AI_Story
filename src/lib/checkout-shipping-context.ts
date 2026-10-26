@@ -13,24 +13,27 @@ export async function updateUnpaidOrderShippingContext(
   orderId: string,
   input: ShippingContextInput
 ) {
-  const updates: Record<string, unknown> = {}
-  if (input.shippingAmountUsd !== undefined) {
-    updates.shipping_amount_usd = Math.max(0, Number(input.shippingAmountUsd ?? 0))
+  const values = [input.shippingAmountUsd, input.shippingMethod, input.shippingRateSnapshot, input.shippingZoneCode]
+  if (values.every(value => value === undefined)) return
+  // Never turn an unhydrated client's 0/null placeholders into persisted
+  // shipping. A real zero-priced quote still has its method and snapshot.
+  if (typeof input.shippingAmountUsd !== 'number' || !Number.isFinite(input.shippingAmountUsd) || input.shippingAmountUsd < 0 ||
+      !['standard', 'speedy'].includes(String(input.shippingMethod)) ||
+      !input.shippingRateSnapshot || typeof input.shippingRateSnapshot !== 'object' || Array.isArray(input.shippingRateSnapshot) ||
+      typeof input.shippingZoneCode !== 'string' || !input.shippingZoneCode.trim()) {
+    throw new Error('Please complete your shipping details before applying an offer.')
   }
-  if (input.shippingRateSnapshot !== undefined) {
-    updates.shipping_rate_snapshot = input.shippingRateSnapshot ?? null
+  const updates = {
+    shipping_amount_usd: input.shippingAmountUsd,
+    shipping_method: input.shippingMethod,
+    shipping_rate_snapshot: input.shippingRateSnapshot,
+    shipping_zone_code: input.shippingZoneCode,
   }
-  if (input.shippingMethod !== undefined) {
-    updates.shipping_method = input.shippingMethod ? String(input.shippingMethod) : null
-  }
-  if (input.shippingZoneCode !== undefined) {
-    updates.shipping_zone_code = input.shippingZoneCode ? String(input.shippingZoneCode) : null
-  }
-  if (Object.keys(updates).length === 0) return
 
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('orders')
     .update(updates)
     .eq('order_id', orderId)
     .eq('order_status', 'unpaid')
+  if (error) throw new Error('Failed to save shipping details.')
 }
