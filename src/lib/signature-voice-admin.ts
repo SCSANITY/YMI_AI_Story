@@ -40,6 +40,7 @@ export type AdminSignatureVoiceItem = {
   creationId: string
   title: string
   quantity: number
+  retainedSourceCount: number
   source: {
     assetId: string
     contentType: string | null

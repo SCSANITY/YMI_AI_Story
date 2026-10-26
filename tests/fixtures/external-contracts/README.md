@@ -138,3 +138,9 @@ review provenance, not the current upstream fixture identity.
 - S1 return corrects Admin replacement to distinct actor/evidence declarations
   (not customer v3 consent), and invalid payment snapshots to empty lines with
   Admin-visible reasons. The unexecuted SQL mirror is refreshed for delta review.
+
+- WEB-UIUX-001/19 S2 adds `20261026_120000_web_uiux_019_customer_voice_updates.sql`
+  byte-identical to Database isolated S2. It binds customer CAS/deadline,
+  nonrevoking links and the existing queue's provenance/support/shipment boundary.
+  It is OFFLINE,not APPLIED or an independent release. S1 bytes stay frozen;
+  S3 client/copy and combined T2 review/owner GO remain necessary.

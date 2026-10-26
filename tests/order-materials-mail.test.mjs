@@ -5,14 +5,14 @@ import ts from 'typescript'
 import React from 'react'
 import { readFileSync } from 'node:fs'
 
-function mailHarness(skip=false) {
+function mailHarness(skip=false,voiceReady=false) {
   const events=[],sent=[],reads=[],logs=[],fixtureModule={exports:{}}
   const model='a'.repeat(43)
   const injections={
     react:React,
     resend:{Resend:class {emails={send:async value=>{sent.push(value);return {data:{id:'synthetic-message'}}}}}},
     '@/lib/order-materials-server':{
-      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {dedication_deadline:'2026-10-23T12:00:00Z',items:[{cart_item_id:'synthetic-line',can_submit_voice:true}]}},
+      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {dedication_deadline:'2026-10-23T12:00:00Z',items:[{cart_item_id:'synthetic-line',package_type:'supreme',voice_ready:voiceReady,can_submit_voice:true}]}},
       issueOrderMaterialLink:async id=>{reads.push(['issue',id]);return `/orders/${id}/materials#token=${model}`},
     },
     '@/lib/locale-pricing':{normalizeCheckoutCurrency:()=> 'USD'},
@@ -89,4 +89,9 @@ test('materials page reuses the global header,orders entry,cover and explicit em
   assert.doesNotMatch(client,/template_id\.replace|toLocaleString/)
   assert.match(client,/dedication_deadline\)\.toUTCString\(\)/)
   assert.match(mail,/materialNotice.deadline\)\.toUTCString\(\)/)
+})
+
+test('a received recording eligible for replacement is not counted as missing in confirmation mail',async()=>{
+ const h=mailHarness(false,true);await h.api.sendOrderConfirmationEmail(input)
+ assert.equal(h.sent[0].react.props.materialNotice.pendingVoice,0)
 })

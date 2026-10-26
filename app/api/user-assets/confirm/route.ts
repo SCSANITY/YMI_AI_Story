@@ -122,7 +122,10 @@ export async function POST(request: Request) {
       verifiedVoiceDuration = Math.round(acceptedDuration * 100) / 100
     }
   } catch (error) {
-    await supabaseAdmin.storage.from('raw-private').remove([storagePath]).catch(() => undefined)
+    // A voice confirm can be replayed after a successful bind. Validation of a
+    // bad replay must not erase current/shared bytes; durable orphan cleanup
+    // owns unconfirmed recordings instead.
+    if(assetType!=='voice_sample') await supabaseAdmin.storage.from('raw-private').remove([storagePath]).catch(() => undefined)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Uploaded file could not be saved' },
       { status: 409 }
@@ -147,7 +150,6 @@ export async function POST(request: Request) {
   let assetError: { message?: string } | null = null
   if (assetType === 'voice_sample') {
     if (!voiceAuthorizationId || typeof voiceAuthorizationId !== 'string') {
-      await supabaseAdmin.storage.from('raw-private').remove([storagePath]).catch(() => undefined)
       return NextResponse.json({ error: 'Signature Voice authorization is required' }, { status: 400 })
     }
     const confirmation = await supabaseAdmin

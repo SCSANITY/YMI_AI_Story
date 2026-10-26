@@ -3,7 +3,7 @@ import type { OrderMaterials } from '@/lib/order-materials'
 
 export function OrderMaterialsSummary({materials}:{materials?:OrderMaterials|null}) {
   if (!materials) return null
-  const pendingVoice=materials.items.filter(item=>item.can_submit_voice).length
+  const pendingVoice=materials.items.filter(item=>item.package_type==='supreme' && !item.voice_ready).length
   return <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-left" aria-label="Book materials">
     <h2 className="font-serif text-lg font-bold">Your book&apos;s personal touches</h2>
     <p className="mt-2 text-sm leading-6">Dedication is optional. Add or edit it by {new Date(materials.dedication_deadline).toUTCString()}.</p>

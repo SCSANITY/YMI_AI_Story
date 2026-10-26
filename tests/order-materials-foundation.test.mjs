@@ -11,12 +11,13 @@ const challenge='00000000-0000-4000-8000-000000000060'
 const dto=()=>({order_id:order,dedication_deadline:'2026-10-23T12:00:00Z',items:[{
   cart_item_id:item,creation_id:creation,template_id:'Synthetic_story',package_type:'supreme',
   dedication:{decision:'skipped',body:null,revision:1},can_edit_dedication:true,voice_ready:false,can_submit_voice:true,
+  can_replace_voice:false,voice_asset_id:null,voice_revision:1,voice_uploaded_at:null,voice_replace_until:'2026-10-23T12:00:00Z',
 }]})
 function harness({owner=null,rpcResult,queryResult,storage,dependencies={}}={}) {
   const calls=[],sent=[],cache=new Map()
   const supabaseAdmin={
     storage,
-    rpc(name,args) {calls.push({name,args});const result=Promise.resolve(rpcResult?.(name,args) ?? {data:name==='materials_read'?dto():null,error:null});result.single=()=>result;return result},
+    rpc(name,args) {calls.push({name,args});const result=Promise.resolve(rpcResult?.(name,args) ?? {data:name==='materials_read'?dto():name==='materials_bind_voice'?{asset_id:args.p_asset,revision:args.p_expected_revision+1}:null,error:null});result.single=()=>result;return result},
     from(table) {
       const log={table,steps:[]};calls.push(log)
       const query={then(resolve,reject) {return Promise.resolve(queryResult?.(table,log.steps) ?? {data:null,error:null}).then(resolve,reject)}}
@@ -190,7 +191,7 @@ test('dedication POST sends authorized hash/order/revision to atomic RPC',async(
 })
 test('voice bind uses existing capture identity; no model/upload/email side effects',async()=>{
   const h=harness(),route=h.load('app/api/orders/[orderId]/materials/route.ts')
-  const result=await route.POST(request({action:'voice',itemId:item,assetId:creation,authorizationId:challenge}),context)
+  const result=await route.POST(request({action:'voice',itemId:item,assetId:creation,authorizationId:challenge,expectedAssetId:null,expectedRevision:1}),context)
   assert.equal(result.status,200);assert.equal(h.calls[0].name,'materials_bind_voice')
   assert.equal(h.calls[0].args.p_authorization,challenge);assert.equal(h.sent.length,0)
 })
@@ -277,8 +278,8 @@ test('cross-origin material capture fails before any material read',async()=>{
   await assert.rejects(h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest('https://foreign.test'),captureBody()),/origin_denied/)
   assert.equal(h.calls.length,0)
 })
-test('a completed Voice binding does not grant another upload or source replacement',async()=>{
-  const state=dto();state.items[0].voice_ready=true;state.items[0].can_submit_voice=false
+test('server-ineligible bound Voice cannot upload after the edit window',async()=>{
+  const state=dto();state.items[0].voice_ready=true;state.items[0].voice_asset_id=challenge;state.items[0].can_submit_voice=false
   const h=harness({rpcResult:()=>({data:state,error:null})})
   await assert.rejects(h.load('src/lib/order-material-capture.ts').resolveMaterialCaptureOwner(captureRequest(),captureBody()),/access_denied/)
   assert.ok(!h.calls.some(call=>call.table==='creations'))
@@ -369,12 +370,14 @@ test('Admin workspace separates same-Creation lines and exposes their current so
     table==='cart_items'?[item,second].map(id=>({cart_item_id:id,creations:{creation_id:creation,template_id:'Synthetic_story'}})):
     table==='order_line_voice'?[binding(item,customer,2),binding(second,challenge,1)]:
     table==='user_assets'?[customer,challenge].map(id=>({asset_id:id,asset_type:'voice_sample'})):
-    table==='signature_voice_production_states'?[{cart_item_id:item,narration_outdated:true}]:[]})})
+    table==='signature_voice_production_states'?[{cart_item_id:item,narration_outdated:true}]:
+    table==='user_asset_cleanup_provenance'?[{cart_item_id:item,asset_id:customer}]:[]})})
   const workspace=await h.load('src/lib/signature-voice-admin-server.ts').loadAdminSignatureVoiceWorkspace(order)
   assert.deepEqual(Array.from(workspace.items,x=>x.source.assetId),[customer,challenge])
   assert.deepEqual(Array.from(workspace.items,x=>x.triage.sourceRevision),[2,1])
   assert.deepEqual(Array.from(workspace.items,x=>x.triage.narrationOutdated),[true,false])
   assert.equal(workspace.items[0].declaration.replaceUntil,'2026-10-28T00:00:00.000Z')
+  assert.equal(workspace.items[0].retainedSourceCount,1);assert.equal(workspace.items[1].retainedSourceCount,0)
   for(const read of h.calls.filter(c=>['signature_voice_production_states','signature_voice_narration_tracks','signature_voice_hardware_attestations'].includes(c.table))) {
     assert.ok(read.steps.some(s=>s[0]==='in' && s[1]==='cart_item_id'))
   }
@@ -418,4 +421,52 @@ test('Admin pending list exposes a rejected payment snapshot reason without rest
   const result=await h.load('src/lib/signature-voice-admin-server.ts').loadAdminSignatureVoiceWorkspace(order)
   assert.equal(result.items.length,0)
   assert.equal(result.pendingItems[0].snapshotRejectedReason,'source_validation_failed')
+})
+
+const voiceWrite=()=>({itemId:item,assetId:creation,authorizationId:challenge,expectedAssetId:null,expectedRevision:1})
+test('ready Voice DTO can replace without losing its current source/revision',()=>{
+ const h=harness(),value=dto();Object.assign(value.items[0],{voice_ready:true,voice_asset_id:creation,can_replace_voice:true})
+ const result=h.load('src/lib/order-materials.ts').parseOrderMaterials(value)
+ assert.equal(result.items[0].voice_asset_id,creation);assert.equal(result.items[0].voice_revision,1)
+ assert.equal(result.items[0].can_replace_voice,true)
+})
+test('customer bind sends both CAS fields and rejects missing expectations before write',async()=>{
+ const h=harness(),m=h.load('src/lib/order-materials-server.ts'),access={customerId:customer,tokenHash:null}
+ const result=await m.bindOrderVoice(order,access,voiceWrite())
+ assert.equal(result.revision,2);assert.equal(h.calls[0].args.p_expected_asset,null);assert.equal(h.calls[0].args.p_expected_revision,1)
+ for(const input of [{...voiceWrite(),expectedAssetId:undefined},{...voiceWrite(),expectedRevision:0}])
+  await assert.rejects(m.bindOrderVoice(order,access,input),/invalid_material/)
+ assert.equal(h.calls.filter(c=>c.name==='materials_bind_voice').length,1)
+})
+test('unknown bind result reads back the exact new source/revision/authorization with no retry',async()=>{
+ const h=harness({rpcResult:name=>name==='materials_bind_voice'?{data:null,error:{code:'504'}}:{data:dto(),error:null},
+  queryResult:()=>({data:[{cart_item_id:item,creation_id:creation,voice_asset_id:creation,voice_capture_authorization_id:challenge,revision:2}],error:null})})
+ const result=await h.load('src/lib/order-materials-server.ts').bindOrderVoice(order,{customerId:customer,tokenHash:null},voiceWrite())
+ assert.equal(result.assetId,creation);assert.equal(h.calls.filter(c=>c.name==='materials_bind_voice').length,1)
+ assert.ok(h.calls.findIndex(c=>c.name==='materials_read')<h.calls.findIndex(c=>c.table==='order_line_voice'))
+ assert.ok(!h.calls.some(c=>c.steps?.some(s=>s[0]==='delete')))
+})
+test('unresolved bind outcomes stay unknown without resubmission or file deletion',async()=>{
+ const h=harness({rpcResult:name=>name==='materials_bind_voice'?{data:null,error:{code:'504'}}:{data:dto(),error:null},
+  queryResult:()=>({data:[{cart_item_id:item,creation_id:creation,voice_asset_id:challenge,revision:3}],error:null})})
+ await assert.rejects(h.load('src/lib/order-materials-server.ts').bindOrderVoice(order,{customerId:customer,tokenHash:null},voiceWrite()),/voice_update_unknown/)
+ assert.equal(h.calls.filter(c=>c.name==='materials_bind_voice').length,1)
+})
+test('definitive window/shipment/conflict errors keep distinct client codes without read-back',async()=>{
+ for(const [message,expected] of [['materials_voice_window_closed','voice_window_closed'],['materials_voice_shipped','voice_shipped'],['materials_voice_revision_conflict','voice_revision_conflict']]) {
+  const h=harness({rpcResult:()=>({data:null,error:{code:'PT409',message}})})
+  await assert.rejects(h.load('src/lib/order-materials-server.ts').bindOrderVoice(order,{customerId:customer,tokenHash:null},voiceWrite()),new RegExp(expected))
+  assert.equal(h.calls.length,1)
+ }
+})
+test('a bad replay of voice confirmation never deletes current or possibly bound bytes',async()=>{
+ let removed=0
+ const value=dto();Object.assign(value.items[0],{voice_ready:true,voice_asset_id:challenge,can_replace_voice:true})
+ const h=harness({dependencies:{'music-metadata':{parseBuffer:async()=>({})}},rpcResult:()=>({data:value,error:null}),
+  queryResult:()=>({data:{customer_id:customer},error:null}),storage:{from:()=>({info:async()=>({data:null,error:{message:'transient'}}),remove:async()=>{removed++;return {error:null}}})}})
+ const response=await h.load('app/api/user-assets/confirm/route.ts').POST(new Request('https://example.test/api/user-assets/confirm',{
+  method:'POST',headers:{'Content-Type':'application/json',authorization:'Bearer '+'a'.repeat(43)},body:JSON.stringify({
+   ...captureBody(),asset_id:challenge,storage_path:`user-assets/customer/${challenge}/voice_sample/${challenge}.wav`,
+   content_type:'audio/wav',size_bytes:100,voice_authorization_id:customer,metadata:{duration_seconds:12}})}))
+ assert.equal(response.status,409);assert.equal(removed,0)
 })

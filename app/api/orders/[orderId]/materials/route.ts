@@ -27,8 +27,9 @@ export async function POST(request: Request,context: Context) {
       return noStoreJson({dedication:await saveOrderDedication(orderId,access,body)})
     }
     if (body.action==='voice') {
-      await bindOrderVoice(orderId,access,{itemId:body.itemId,assetId:body.assetId,authorizationId:body.authorizationId})
-      return noStoreJson({saved:true})
+      const voice=await bindOrderVoice(orderId,access,{itemId:body.itemId,assetId:body.assetId,authorizationId:body.authorizationId,
+        expectedAssetId:body.expectedAssetId,expectedRevision:body.expectedRevision})
+      return noStoreJson({saved:true,voice})
     }
     if (body.action==='complete') {
       await completeMaterialGrant(orderId,access)

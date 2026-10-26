@@ -82,10 +82,39 @@ export async function saveOrderDedication(orderId: string,access: MaterialAccess
   }))
 }
 export async function bindOrderVoice(orderId: string,access: MaterialAccess,input: {
-  itemId: unknown;assetId: unknown;authorizationId: unknown
+  itemId: unknown;assetId: unknown;authorizationId: unknown;expectedAssetId:unknown;expectedRevision:unknown
 }) {
-  await rpc('materials_bind_voice',{...accessArgs(orderId,access),p_item:materialUuid(input.itemId),
-    p_asset:materialUuid(input.assetId),p_authorization:materialUuid(input.authorizationId)})
+  const itemId=materialUuid(input.itemId),assetId=materialUuid(input.assetId),authorizationId=materialUuid(input.authorizationId)
+  const expectedAssetId=input.expectedAssetId===null?null:materialUuid(input.expectedAssetId)
+  if(!Number.isSafeInteger(input.expectedRevision) || Number(input.expectedRevision)<1) throw new MaterialError('invalid_material',400)
+  const expectedRevision=Number(input.expectedRevision)
+  let result:unknown,error:{code?:string;message?:string}|null=null
+  try {
+    const response=await supabaseAdmin.rpc('materials_bind_voice',{...accessArgs(orderId,access),p_item:itemId,
+      p_asset:assetId,p_authorization:authorizationId,p_expected_asset:expectedAssetId,p_expected_revision:expectedRevision})
+    result=response.data;error=response.error
+  } catch { error={} } // Transport failure has an unknown outcome, never retry the write.
+  if(error?.code==='PT409') {
+    const message=error.message ?? ''
+    throw new MaterialError(message.includes('window_closed')?'voice_window_closed':message.includes('shipped')?'voice_shipped':'voice_revision_conflict',409)
+  }
+  if(error && (error.code==='42501' || ['23514','22023','P0001','P0002'].includes(error.code ?? ''))) failure(error)
+  if(!error && result && typeof result==='object' && !Array.isArray(result)) {
+    const saved=result as Record<string,unknown>
+    if(saved.asset_id===assetId && saved.revision===expectedRevision+1) return {assetId,revision:expectedRevision+1}
+  }
+  // A read-back is the sole recovery for timeout/unknown result. Re-prove scope
+  // before the private binding read; never delete possibly committed bytes.
+  try {
+    const materials=await loadOrderMaterials(orderId,access)
+    if(!materials.items.some(item=>item.cart_item_id===itemId)) throw new MaterialError('material_access_denied',403)
+    const [current]=await loadOrderLineVoiceBindings(orderId,[itemId])
+    if(current.voice_asset_id===assetId && current.voice_capture_authorization_id===authorizationId
+      && current.revision===expectedRevision+1) return {assetId,revision:expectedRevision+1}
+  } catch(readError) {
+    if(readError instanceof MaterialError && readError.status===403) throw readError
+  }
+  throw new MaterialError('voice_update_unknown',503)
 }
 export async function completeMaterialGrant(orderId: string,access: MaterialAccess) {
   if (!access.tokenHash) throw new MaterialError('material_access_required',401)

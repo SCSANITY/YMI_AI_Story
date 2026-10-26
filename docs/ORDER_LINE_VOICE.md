@@ -1,6 +1,6 @@
 # Paid order-line Voice ? S1 contract
 
-Offline foundation only. S2 customer replacement and S3 interface/copy follow;
+S1 foundation plus offline S2 server contract. S3 interface/copy follows;
 all three slices release together with the matching Database migration. This
 is component contract documentation, not platform status or a release GO.
 
@@ -73,9 +73,9 @@ See the Database runbook/manifest for every exact object, fence and backfill.
 
 ## Boundaries and verification
 
-S1 preserves first-only customer binding and existing completed-link semantics;
-S2 changes replacement CAS/window/read-back/link lifetime and replaced-source
-retention. No S1 standalone rollout, compatibility fallback, order deletion or
+S2 replaces the first-only binder with asset+revision CAS and server48h/late-first
+eligibility. Completion is nonrevoking acknowledgement;unknown results require
+scoped exact-source read-back without retry or possibly-bound deletion. No S1 standalone rollout, compatibility fallback, order deletion or
 trigger disabling. Ambiguous old artifact provenance stops for owner disposition.
 The one shared SQL mirror is checksum-bound; it is not a migration authority.
 
@@ -84,3 +84,38 @@ revoked/cross-line/replaced sources, customer-owned scoped uploads, two lines of
 one Creation in Admin, and stale same-asset source revisions in fulfillment.
 Database synthetic tests exercise actual RPC/trigger paths; they are not live
 Supabase, multi-backend concurrency or physical storage/print acceptance.
+
+## S2 server and scoped queue contract
+
+New bind takes explicit expectedAssetId (NULL initially) and expectedRevision;
+response/read-back identifies the new asset/revision. Failures distinguish closed
+window,shipment,stale revision and unknown outcome. One DTO exposes voice_ready,
+voice_asset_id,voice_revision,voice_uploaded_at,voice_replace_until,
+can_submit_voice and can_replace_voice. It is shared by capture upload/confirm.
+Replacement eligibility is not a missing-recording flag:confirmation mail and
+order summary count supreme && !voice_ready. Mail send/idempotency is unchanged.
+
+No deletion of voice bytes in confirmation-error paths:an invalid replay may
+refer to a current/shared source. Existing durable capture/orphan cleanup owns
+failed uploads. Unknown binding calls only read back authorization/source/revision
+after order access,never resubmit or delete.
+
+Customer changes stop at shipped_at. Admin after-shipment replacement stays
+allowed and displays retainedSourceCount. Existing batch20 cleanup API remains.
+The queue gains provenance;its private junction keeps every superseding order
+and marks shipped old files as retained without queueing. Claim pauses/reschedules
+1h for open support across ANY provenance order,then proceeds after closure.
+Shared references remain locked/rechecked;orphan/delete cannot bypass retention.
+No delivered lifecycle executor or Stripe/legal hold model is claimed:BL-073
+remains separate. See Database WEB_UIUX_019_S2.md for exact source/policy fences.
+
+S3 must freeze expected asset/revision at edit intent,send them on bind,keep the
+same grant after acknowledgement and consume current eligibility/update copy.
+It also owns cartItemId React keys and guest fetch-to-blob/Bearer playback.
+The existing OrderMaterialsClient is deliberately not the S2 delivery surface;
+no mixed S1/S2/S3 rollout or standalone deployment is permitted.
+
+React checklist for the bounded TSX delta:pending counts derive at render from
+server readiness;no new effect/state,client fetch or dependency;retained-source
+text uses existing markup and escapes evidence normally. Independent Admin
+provenance/declaration reads are parallel;counts are grouped once per line.

@@ -96,13 +96,21 @@ export async function loadAdminSignatureVoiceWorkspace(
   const assetIds = normalizedItems.map(({ creation }) => String(creation.voice_asset_id))
   const declarationIds=normalizedItems.map(({creation})=>nullableString(creation.voice_admin_authorization_id))
     .filter((id):id is string=>id!==null)
-  const {data:declarations,error:declarationsError}=declarationIds.length
-    ? await supabaseAdmin.from('order_line_voice_admin_authorizations')
+  const [declarationsResult,retainedResult]=await Promise.all([
+    declarationIds.length?supabaseAdmin.from('order_line_voice_admin_authorizations')
       .select('authorization_id,order_id,cart_item_id,asset_id,admin_customer_id,evidence_reference,declared_at,subject_name,subject_relationship')
-      .eq('order_id',orderId).in('authorization_id',declarationIds)
-    : {data:[],error:null}
-  if(declarationsError) throw new Error(declarationsError.message)
-  const declarationsById=new Map((declarations ?? []).map(row=>[row.authorization_id,row]))
+      .eq('order_id',orderId).in('authorization_id',declarationIds):Promise.resolve({data:[],error:null}),
+    supabaseAdmin.from('user_asset_cleanup_provenance').select('cart_item_id,asset_id')
+      .eq('order_id',orderId).eq('asset_type','voice_sample').eq('retained_after_shipment',true),
+  ])
+  if(declarationsResult.error) throw new Error(declarationsResult.error.message)
+  if(retainedResult.error) throw new Error(retainedResult.error.message)
+  const declarationsById=new Map((declarationsResult.data ?? []).map(row=>[row.authorization_id,row]))
+  const retainedByLine=new Map<string,Set<string>>()
+  for(const row of retainedResult.data ?? []) {
+    const ids=retainedByLine.get(row.cart_item_id) ?? new Set<string>()
+    ids.add(row.asset_id);retainedByLine.set(row.cart_item_id,ids)
+  }
 
   const [assetsResult, statesResult, tracksResult, attestationsResult, customerResult] = await Promise.all([
     assetIds.length > 0
@@ -224,6 +232,7 @@ export async function loadAdminSignatureVoiceWorkspace(
         customizeSnapshot: creation.customize_snapshot,
       }),
       quantity: positiveInteger(item.quantity),
+      retainedSourceCount:retainedByLine.get(cartItemId)?.size ?? 0,
       source: {
         assetId,
         contentType: normalizeUserAssetContentType(metadata.content_type) || null,

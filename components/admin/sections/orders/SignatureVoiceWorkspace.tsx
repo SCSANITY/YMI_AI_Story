@@ -741,6 +741,7 @@ function VoiceItem({
             </AdminStatusBadge>
           </div>
           <h3 className="mt-2 text-base font-bold text-[var(--admin-page-ink)]">{item.title}</h3>
+          {item.retainedSourceCount>0 && <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Previous recording retained after shipment ({item.retainedSourceCount}). It has not been scheduled for 30-day removal.</p>}
           <p className="mt-1 text-xs text-[var(--admin-page-muted)]">
             {item.declaration.subjectName} / {RELATIONSHIP_LABELS[item.declaration.subjectRelationship]} / Revision {item.triage.sourceRevision}
           </p>
