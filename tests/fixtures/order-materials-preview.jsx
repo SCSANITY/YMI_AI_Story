@@ -11,7 +11,7 @@ const items=[0,1].map(n=>({cart_item_id:`00000000-0000-4000-8000-00000000002${n}
  voice_ready:state!=='missing'&&state!=='late',can_submit_voice:state!=='closed',can_replace_voice:state!=='missing'&&state!=='late'&&state!=='closed',
  voice_asset_id:state==='missing'||state==='late'?null:`00000000-0000-4000-8000-00000000004${n}`,voice_revision:1,
  voice_uploaded_at:state==='missing'||state==='late'?null:new Date().toISOString(),voice_replace_until:deadline}))
-if(state!=='customer')location.hash='token='+('a'.repeat(43))
+if(state!=='customer'&&state!=='shipped')location.hash='token='+('a'.repeat(43))
 const payload=()=>({order_id:order,dedication_deadline:deadline,items})
 function syntheticAudio(){
  const bytes=new Uint8Array(44+12*8000*2),view=new DataView(bytes.buffer)
@@ -34,6 +34,7 @@ window.fetch=async(url,init={})=>{
  if(!String(url).startsWith('/api/orders/'))throw new Error('Fixture external request blocked')
  if(String(url).endsWith('/recovery'))return Response.json({challengeId:'fixture-challenge',accessPath:'/orders/'+order+'/materials#token='+('a'.repeat(43))},{status:202})
  if(state==='shipped')return Response.json({order_id:order,disposition:'shipped'})
+ if(state==='guest-shipped')return Response.json({error:'material_access_denied'},{status:403})
  if(state==='invalid')return Response.json({error:'material_access_denied'},{status:403})
  if(init.method==='POST'){
   const body=JSON.parse(init.body),item=items.find(i=>i.cart_item_id===body.itemId)
