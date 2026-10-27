@@ -19,6 +19,7 @@ function load(file, react) {
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx }
       if (name === 'react') return react
       if (name === 'next/image') return { default: 'img' }
+      if (name === 'next/dynamic') return { default: () => 'EditionImageViewer' }
       if (name.endsWith('.module.css')) return { default: new Proxy({}, { get: (_, key) => key }) }
       if (name.startsWith('@/lib/')) return load(`src/lib/${name.split('/').at(-1)}.ts`)
       if (name.startsWith('./')) return load(`components/personalize/product/${name.slice(2)}${name.endsWith('definitions') ? '.ts' : '.tsx'}`, react)
@@ -78,7 +79,7 @@ test('C selection renders new Voice frame five, independently of Hardcover, with
   const articles = tree => nodes(tree).filter(n => n.type === 'article')
   const initial = render()
   const voice = articles(initial)[1]
-  const buttons = nodes(voice).filter(n => n.type === 'button')
+  const buttons = nodes(voice).filter(n => n.type === 'button' && n.props['aria-pressed'] !== undefined)
   assert.equal(buttons.length, 5)
   buttons[4].props.onClick()
   const updated = articles(render())

@@ -16,6 +16,7 @@ export function loadUi(file,stubs={},globals={}) {
     if(name==='react/jsx-runtime')return {jsx,jsxs:jsx,Fragment:'fragment'}
     if(name==='react')return {memo:fn=>fn}
     if(name==='next/image')return {default:'img',__esModule:true}
+    if(name==='next/dynamic')return {default:()=> 'LazyComponent',__esModule:true}
     if(name==='lucide-react')return new Proxy({},{get:(_,key)=>key})
     if(name.endsWith('.css'))return {default:new Proxy({},{get:(_,key)=>key}),__esModule:true}
     let base=name.startsWith('@/')?name.replace('@/','').replace(/^lib\//,'src/lib/'):path.posix.join(path.posix.dirname(file),name)

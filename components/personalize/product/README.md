@@ -19,9 +19,18 @@ there is no separate price configuration or purchase path here.
   `edition-definitions.ts` is the shared gallery/copy/icon authority;
   `EditionPrice` preserves Catalog prices and the Admin display-percent override.
   Preview details may append `EDITION_COMPARISON_IMAGE`; C stays five frames.
-  Visible galleries loop their five images every four seconds. Offscreen cards,
+  Visible galleries loop their five images every four seconds. Manual thumbnail
+  selection holds that card for ten seconds, restarting on each selection. A
+  single local timeout schedules both cards; no polling or backend request.
+  Clicking the main image lazily mounts `EditionImageViewer`: both background
+  galleries pause, the viewer only changes by user action, and closing retains
+  its last image with a fresh ten-second hold. Viewer image resources load only
+  for its current image; no preload of another full-size gallery. The portal
+  reuses the existing close/Escape/focus/scroll restoration pattern, with safe
+  margins and viewport-bounded image sizing. No dependencies or gestures library.
+  Offscreen cards,
   background tabs and reduced-motion preferences pause autoplay; desktop hover
-  and keyboard focus pause that card. Manual selection restarts the interval.
+  and keyboard focus pause that card.
 - `ProductEnding`: cached Home `after_in_discount` banner and existing Footer.
 - `EditionComparison`: static native feature table between C and ProductEnding,
   frozen `Template_folder/Design/WEB-UIUX-001/24/v1`. Its independent reserved

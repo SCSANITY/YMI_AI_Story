@@ -671,6 +671,10 @@
   object-fit: contain;
 }
 .galleryMain {
+  display: block;
+  border: 0;
+  padding: 0;
+  cursor: zoom-in;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -679,6 +683,23 @@
   overflow: hidden;
   border-radius: 22px;
   background: #f6efe7;
+}
+.galleryMain:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+.enlargeHint {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid #efe1cf;
+  border-radius: 999px;
+  background: rgba(255, 250, 244, .94);
+  color: #1c1917;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
 }
 .galleryMain img {
   object-fit: contain;

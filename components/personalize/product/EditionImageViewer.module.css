@@ -1,0 +1,51 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(28, 25, 23, .72);
+}
+.panel {
+  width: min(100%, 1024px);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  border: 1px solid #efe1cf;
+  border-radius: 20px;
+  background: #fffaf4;
+  color: #1c1917;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .25);
+}
+.header, .controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 4px 12px;
+}
+.header h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.panel button {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid #efe1cf;
+  border-radius: 50%;
+  background: white;
+  color: inherit;
+  cursor: pointer;
+}
+.panel button:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+.image {
+  position: relative;
+  height: min(70dvh, 720px);
+  max-height: calc(100dvh - 168px);
+  margin: 0 16px;
+}
+.image img { object-fit: contain; }
+.controls { font-size: 13px; font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) {
+  .image { height: min(calc(100vw - 64px), calc(100dvh - 168px)); }
+}
