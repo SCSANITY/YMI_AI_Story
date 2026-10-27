@@ -23,8 +23,9 @@ there is no separate price configuration or purchase path here.
   selection holds that card for ten seconds, restarting on each selection. A
   single local timeout schedules both cards; no polling or backend request.
   Clicking the main image lazily mounts `EditionImageViewer`: both background
-  galleries pause, the viewer only changes by user action, and closing retains
-  its last image with a fresh ten-second hold. Viewer image resources load only
+  galleries pause, the viewer shows only the clicked image with a close button
+  (no navigation or counter), and closing retains it with a fresh ten-second hold.
+  Viewer image resources load only
   for its current image; no preload of another full-size gallery. The portal
   reuses the existing close/Escape/focus/scroll restoration pattern, with safe
   margins and viewport-bounded image sizing. No dependencies or gestures library.

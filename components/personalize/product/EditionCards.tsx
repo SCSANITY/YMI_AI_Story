@@ -209,7 +209,6 @@ export default function EditionCards({
           <EditionImageViewer
             edition={viewerEdition}
             index={selected[viewerEdition]}
-            onSelect={(index) => setSelected(previous => ({ ...previous, [viewerEdition]: index }))}
             onClose={closeViewer}
           />
         </Suspense>

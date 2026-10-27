@@ -124,7 +124,7 @@ test('manual hold is per edition, with no extra scheduler', () => {
   assert.equal(f.timers.size, 1)
 })
 
-test('enlarged viewer freezes both galleries; close preserves the final image and starts a fresh ten seconds', () => {
+test('current-image-only viewer freezes both galleries; close keeps it and starts a fresh ten seconds', () => {
   const f = fixture()
   assert.equal(f.viewer(), undefined)
   f.select('supreme', 3); f.open('supreme')
@@ -133,13 +133,34 @@ test('enlarged viewer freezes both galleries; close preserves the final image an
   f.advance(60000)
   assert.match(f.image('basic'), /c-hardcover-01/)
   assert.match(f.image('supreme'), /c-voice-04/)
-  f.viewer().props.onSelect(1); f.render()
+  assert.equal(f.viewer().props.onSelect, undefined)
   f.viewer().props.onClose(); f.render()
   assert.equal(f.viewer(), undefined)
   f.advance(9999)
-  assert.match(f.image('supreme'), /c-voice-02/)
+  assert.match(f.image('supreme'), /c-voice-04/)
   f.advance(1)
-  assert.match(f.image('supreme'), /c-voice-03/)
+  assert.match(f.image('supreme'), /c-voice-05/)
+})
+
+test('the actual viewer renders one selected image and only the close control', () => {
+  const Viewer = compile('components/personalize/product/EditionImageViewer.tsx', {
+    react: { useRef: initial => ({ current: initial }), useId: () => 'single-image', useEffect() {} },
+    'react/jsx-runtime': { jsx, jsxs: jsx }, 'react-dom': { createPortal: node => node },
+    'next/image': { default: 'img' }, 'lucide-react': { X: 'X' },
+    '@/lib/i18n-messages': messages, './edition-definitions': definitions,
+    './EditionImageViewer.module.css': { default: new Proxy({}, { get: (_, key) => key }) },
+  }, { document: { body: {} } }).default
+  let closed = false
+  const tree = Viewer({ edition: 'supreme', index: 2, onClose() { closed = true } })
+  const buttons = nodes(tree).filter(n => n.type === 'button')
+  const images = nodes(tree).filter(n => n.type === 'img')
+  assert.equal(buttons.length, 1)
+  assert.equal(buttons[0].props['aria-label'], 'Close image preview')
+  assert.equal(images.length, 1)
+  assert.match(images[0].props.src, /c-voice-03/)
+  assert.equal(nodes(tree).filter(n => n.type === 'nav').length, 0)
+  buttons[0].props.onClick()
+  assert.equal(closed, true)
 })
 
 test('background/offscreen/reduced-motion stop the timer; return does not burst through missed frames', () => {
