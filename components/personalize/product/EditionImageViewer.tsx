@@ -42,14 +42,12 @@ export default function EditionImageViewer({ edition, index, onClose }: {
   const image = definition.gallery[index];
   return createPortal(
     <div className={styles.backdrop} onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-      <div className={styles.panel} role="dialog" aria-modal="true" aria-labelledby={id}>
-        <header className={styles.header}>
-          <h2 id={id} className={styles.srOnly}>{t(definition.nameKey)}</h2>
-          <button ref={close} type="button" onClick={onClose} aria-label={t("product.closeImageViewer")}><X size={20} aria-hidden="true" /></button>
-        </header>
-        <div className={styles.image}>
-          <Image src={image.src} alt={t(image.altKey)} fill sizes="(max-width: 767px) calc(100vw - 64px), (max-height: 520px) 70vh, 720px" />
-        </div>
+      <div className={styles.image} role="dialog" aria-modal="true" aria-labelledby={id}>
+        <h2 id={id} className={styles.srOnly}>{t(definition.nameKey)}</h2>
+        <Image src={image.src} alt={t(image.altKey)} fill sizes="(max-width: 767px) min(880px, calc(100vw - 32px), calc(100dvh - 32px)), (orientation: landscape) and (max-height: 520px) min(880px, calc(100vw - 32px), calc(100dvh - 32px)), min(880px, calc(100vw - 96px), calc(100dvh - 96px))" />
+        <button className={styles.close} ref={close} type="button" onClick={onClose} aria-label={t("product.closeImageViewer")}>
+          <span className={styles.closeCircle}><X size={20} aria-hidden="true" /></span>
+        </button>
       </div>
     </div>, document.body,
   );

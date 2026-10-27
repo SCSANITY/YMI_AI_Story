@@ -28,7 +28,10 @@ there is no separate price configuration or purchase path here.
   Viewer image resources load only
   for its current image; no preload of another full-size gallery. The portal
   reuses the existing close/Escape/focus/scroll restoration pattern, with safe
-  margins and viewport-bounded image sizing. No dependencies or gestures library.
+  margins and viewport-bounded image sizing. The square gallery image itself is
+  the dialog box, capped at 880px, with no panel or header. Close overlays its
+  corner with a 44px target; compact layouts preserve safe-area margins.
+  No dependencies or gestures library.
   Offscreen cards,
   background tabs and reduced-motion preferences pause autoplay; desktop hover
   and keyboard focus pause that card.
