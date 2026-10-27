@@ -4,6 +4,7 @@ import { memo, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { BookOpen, ChevronDown, Eye, Sparkles, Star, UserRound } from 'lucide-react'
 import { Button } from '@/components/Button'
+import { ProductFaqAnswer } from './ProductFaqAnswer'
 import { isNightAtFloatingCta } from './product/presentation'
 
 type ProductFact = {
@@ -200,7 +201,7 @@ function PersonalizeProductIntroComponent({
                 <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
               </button>
               {isOpen ? (
-                <p id={contentId} className="pb-4 text-sm leading-6 text-slate-600">{item.answer}</p>
+                <ProductFaqAnswer id={contentId} text={item.answer} />
               ) : null}
             </div>
           )

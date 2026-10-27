@@ -656,11 +656,14 @@ export default function PersonalizePage({
     });
   }, []);
   const bookFaqItems = useMemo(() => {
-    const storyTitle = templateTitle || book?.title || 'this story';
     return [
       {
+        question: t('personalize.bookFaqVoiceQuestion'),
+        answer: t('personalize.bookFaqVoiceAnswer'),
+      },
+      {
         question: t('personalize.bookFaq1Question'),
-        answer: t('personalize.bookFaq1Answer', { title: storyTitle }),
+        answer: t('personalize.bookFaq1Answer'),
       },
       {
         question: t('personalize.bookFaq2Question'),
@@ -671,7 +674,7 @@ export default function PersonalizePage({
         answer: t('personalize.bookFaq3Answer'),
       },
     ];
-  }, [book?.title, t, templateTitle]);
+  }, [t]);
 
   const decodedPreviewCover = useDecodedPreviewCover(displayedPreviewJobId, previewUrl, setPreviewError);
   const hasReadyPreviewCover = decodedPreviewCover.isReady;
