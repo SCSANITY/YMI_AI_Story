@@ -6,6 +6,7 @@
   --image-radius: 18px;
   --close-inset: 8px;
   --close-circle: 34px;
+  --close-glyph: 16px;
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -50,6 +51,7 @@
   background: rgba(20, 16, 13, .55);
 }
 .close:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+.closeCircle svg { width: var(--close-glyph); height: var(--close-glyph); stroke-width: 2.3; }
 @media (max-width: 767px), (orientation: landscape) and (max-height: 520px) {
   .backdrop {
     --margin-top: max(16px, env(safe-area-inset-top));
@@ -59,5 +61,6 @@
     --image-radius: 14px;
     --close-inset: 4px;
     --close-circle: 30px;
+    --close-glyph: 14px;
   }
 }
