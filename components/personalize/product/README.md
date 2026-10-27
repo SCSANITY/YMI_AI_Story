@@ -23,6 +23,12 @@ there is no separate price configuration or purchase path here.
   background tabs and reduced-motion preferences pause autoplay; desktop hover
   and keyboard focus pause that card. Manual selection restarts the interval.
 - `ProductEnding`: cached Home `after_in_discount` banner and existing Footer.
+- `EditionComparison`: static native feature table between C and ProductEnding,
+  frozen `Template_folder/Design/WEB-UIUX-001/24/v1`. Its independent reserved
+  near-viewport slot uses the existing boundary/mount mechanism. Compact CSS
+  applies at <=767px; the later short-landscape override wins when both match.
+  Two semantic row groups and hidden inclusion labels carry the content; the
+  Voice pillar is decorative. No request, timer, animation or purchase control.
 - All start buttons call the parent's existing INTRO-to-PHOTO handler.
 
 Assets under `/customize-product/v1/` are public, versioned demo assets, served

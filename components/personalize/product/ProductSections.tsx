@@ -11,6 +11,7 @@ import type { PublishedHomepageBanner } from "@/lib/homepage-banners-core";
 const HowItWorks = dynamic(() => import("./HowItWorks"));
 const SignatureVoiceDemo = dynamic(() => import("./SignatureVoiceDemo"));
 const EditionCards = dynamic(() => import("./EditionCards"));
+const EditionComparison = dynamic(() => import("./EditionComparison"));
 const ProductEnding = dynamic(() => import("./ProductEnding"));
 const italicHeading = Playfair_Display({
   subsets: ["latin"],
@@ -75,6 +76,9 @@ export default function ProductSections({
       <div className={styles.dawn} aria-hidden="true" />
       <NearViewport className={styles.editionsSlot}>
         <EditionCards pricing={pricing} currency={currency} />
+      </NearViewport>
+      <NearViewport className={styles.comparisonSlot}>
+        <EditionComparison />
       </NearViewport>
       <NearViewport className={styles.endingSlot}>
         <ProductEnding bannerPromise={bannerPromise} onStart={onStart} />

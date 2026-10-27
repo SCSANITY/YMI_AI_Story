@@ -769,6 +769,16 @@
   background: rgba(245, 181, 68, 0.14);
   color: #f5b544;
 }
+.comparisonSlot {
+  /* Frozen prototype measured at font-ready geometry; heading scales at 1.1. */
+  min-block-size: calc(1164.6px + clamp(33px, 3.3vw, 48.4px));
+}
+@media (max-width: 767px) {
+  .comparisonSlot { min-block-size: 584px; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .comparisonSlot { min-block-size: 657px; }
+}
 .endingSlot {
   min-block-size: 700px;
 }
