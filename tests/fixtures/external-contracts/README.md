@@ -149,4 +149,4 @@ review provenance, not the current upstream fixture identity.
   starve queue batches;unbound expiry preserves provenance deadlines. App bytes
   stay unchanged from cf27d78. This remains OFFLINE pending delta review/S3.
 
-- WEB-UIUX-001/28 S1 adds `20261029_120000_web_uiux_028_safe_removal.sql` from private Database candidate d44bd6d. It pins atomic owner-scoped removal, archive share revocation, face reference protection and lookup indexes. OFFLINE / NOT APPLIED; it is not deployment or cleanup-run evidence.
+- WEB-UIUX-001/28 S1 adds `20261029_120000_web_uiux_028_safe_removal.sql` from private Database candidate 2a10522. It pins atomic owner-scoped removal, archive share revocation, face reference protection and lookup indexes. OFFLINE / NOT APPLIED; it is not deployment or cleanup-run evidence.
