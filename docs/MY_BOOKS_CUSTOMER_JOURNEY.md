@@ -4,11 +4,6 @@ This document describes only the customer-facing My Books and owned Reader
 flow in the Next.js application. Platform status remains in the root governance
 documentation.
 
-Issue28 S1 candidate note: the purchase paragraphs below describe the intended
-direct-checkout contract; the current Buy Again/Saved Buy Now still have the
-dedication detour until the separate S2 implementation. S1 changes only safe
-removal, protected face history and archived-version visibility, not checkout.
-
 ## Entry and shelf selection
 
 - `/my-books` loads the customer's creations and resolves each creation into
@@ -25,11 +20,16 @@ removal, protected face history and archived-version visibility, not checkout.
 - Opening a cover resumes that saved creation in Preview mode.
 - Back from a Preview opened by My Books returns directly to
   `/my-books?shelf=previews`; it does not show the Customize-draft confirmation.
+- The fixed `source=my-books` survives version URL updates and the
+  Preview -> Cart -> Preview round trip, along with the selected Creation/Job.
+  There is no purchased-origin variant or return-history stack.
 - **Add to Cart** keeps the customer on My Books and gives explicit success or
   failure feedback. Success includes a View Cart action.
 - **Buy Now** starts a one-copy order and enters Checkout directly. The action
   stays locked during navigation so rapid repeated clicks cannot create
   duplicate pending orders.
+- Optional dedication reads (including loading or failure) never gate Buy Now.
+  The explicit **Finish in Preview** message-editor entry remains available.
 - Delete requires confirmation and reports success or failure. The control is
   visible and labelled on both touch and pointer layouts.
 
@@ -54,6 +54,10 @@ removal, protected face history and archived-version visibility, not checkout.
 ## Commerce and failure invariants
 
 - Existing paid-order records are not modified by Buy Again.
+- Both purchase actions use the Creation's saved edition and any draft message
+  or recording. They do not copy the latest paid-line materials back into the
+  Creation, open the message editor, generate a Preview, or require a recording.
+  The payment-time initializer snapshots the draft through the existing chain.
 - The server remains authoritative for the creation's product, package, and
   price snapshot; the client supplies only the creation ID and quantity `1`.
 - A failed order start leaves the customer in place with a visible retryable
@@ -61,6 +65,15 @@ removal, protected face history and archived-version visibility, not checkout.
   Checkout can recover from the returned order and cart-item IDs.
 - Purchase-state query failures are returned as service errors and are never
   presented as an empty shelf or an unpurchased creation.
+
+The shared text beside both purchase buttons is:
+
+> We'll use your saved edition and any saved message or recording. After payment, you can add or update your message and Voice Edition recording within 48 hours, before shipment. If your recording is still missing, you can upload it later, before shipment.
+
+The optional-message status is **Optional message — add it now or after purchase.**
+These prompts do not change paid-line deadlines, consent, shipment eligibility
+or the materials page. Purchase errors remain in place for a user-initiated retry;
+there is no automatic checkout replay.
 
 ## Safe removal (issue28 S1, offline candidate)
 

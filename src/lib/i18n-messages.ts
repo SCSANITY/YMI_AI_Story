@@ -632,6 +632,8 @@ const en: MessageDictionary = {
   'myBooks.addToCartFailed': "We couldn't add this book to your cart. Please try again.",
   'myBooks.viewCart': 'View Cart',
   'myBooks.buyNow': 'Buy Now',
+  'myBooks.purchaseMaterialsHint': "We'll use your saved edition and any saved message or recording. After payment, you can add or update your message and Voice Edition recording within 48 hours, before shipment. If your recording is still missing, you can upload it later, before shipment.",
+  'myBooks.optionalMessageStatus': 'Optional message — add it now or after purchase.',
   'myBooks.checkoutFailed': "We couldn't start checkout. Please try again.",
   'myBooks.purchasedTitle': 'Purchased Books',
   'myBooks.purchasedSubtitle': 'Open books you have already bought. Refunded books stay visible for your records.',

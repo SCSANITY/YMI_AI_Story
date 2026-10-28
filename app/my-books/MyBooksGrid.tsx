@@ -136,7 +136,7 @@ export function MyBooksGrid({
                 {dedicationChoices[item.creation_id]?.decision === 'undecided' ? (
                   <div className="my-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-200/80 bg-amber-50/75 px-3 py-2 text-xs text-amber-900">
                     <PenLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    <span className="font-semibold">Dedication choice pending</span>
+                    <span className="font-semibold">{t('myBooks.optionalMessageStatus')}</span>
                     <button type="button" onClick={() => onFinishDedication(item)} className="font-bold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-amber-500">Finish in Preview</button>
                   </div>
                 ) : null}
@@ -188,6 +188,7 @@ export function MyBooksGrid({
                   <Sparkles className="h-4 w-4 mr-2" />
                   {activeAction === 'buy' ? t('common.loading') : t('myBooks.buyNow')}
                 </Button>
+                <p className="text-xs leading-5 text-gray-500">{t('myBooks.purchaseMaterialsHint')}</p>
               </div>
             </div>
           </div>

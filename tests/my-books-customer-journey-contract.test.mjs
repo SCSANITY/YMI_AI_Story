@@ -20,15 +20,15 @@ test('My Books fails visibly instead of turning data errors into an empty librar
   assert.match(purchaseState, /if \(finalJobsError\)/)
 })
 
-test('Buy Again reconfirms the saved dedication in Preview without incrementing the cart', async () => {
+test('Buy Again starts owned checkout without a Preview detour or cart increment', async () => {
   const [reader, checkoutClient] = await Promise.all([
     read('app/my-books/[creationId]/OwnedBookReader.tsx'),
     read('src/lib/owned-creation-checkout-client.ts'),
   ])
 
-  assert.match(reader, /dedication: '1', purchase: '1'/)
-  assert.match(reader, /router\.push\(`\/personalize\/\$\{creation\.templateId\}\?/)
-  assert.doesNotMatch(reader, /startOwnedCreationCheckout/)
+  assert.match(reader, /await startOwnedCreationCheckout\(/)
+  assert.match(reader, /router\.push\(checkout\.checkoutHref\)/)
+  assert.doesNotMatch(reader, /dedication: '1'|purchase: '1'|router\.push\(`\/personalize/)
   assert.doesNotMatch(reader, /\baddToCart\b/)
   assert.match(reader, /checkoutInFlightRef\.current/)
   assert.match(checkoutClient, /items: \[\{ creationId, quantity: 1 \}\]/)

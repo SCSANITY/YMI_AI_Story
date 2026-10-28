@@ -23,7 +23,7 @@ repository:
 - [`SHIPPING_PRICING.md`](SHIPPING_PRICING.md): shared shipping quotes, Admin
   promotion control, frozen prices and Checkout/Stripe boundaries.
 - [`MY_BOOKS_CUSTOMER_JOURNEY.md`](MY_BOOKS_CUSTOMER_JOURNEY.md): My Books,
-  Saved Preview, owned Reader, and direct-checkout customer journey.
+  Saved Preview, owned Reader, direct checkout, optional materials and return context.
 - [`EMAIL_CENTER.md`](EMAIL_CENTER.md): Admin outbound-email inventory,
   ownership, preview, and read-only security boundary.
 - [`OAUTH_RETURN_RECOVERY.md`](OAUTH_RETURN_RECOVERY.md): customer and Admin

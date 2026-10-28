@@ -27,6 +27,10 @@ function fixture() {
     '@/lib/useI18n':{useI18n:()=>({t:key=>key})},'framer-motion':{useReducedMotion:()=>false},
     '@/components/personalize/PreviewBookShell':{PreviewBookShell:'shell'},
     '@/components/SignatureVoiceEditionNotice':{SignatureVoiceEditionNotice:'voice-notice'},
+    '@/lib/owned-creation-checkout-client':{startOwnedCreationCheckout:async ({creationId,customerId})=>{
+      assert.equal(creationId,'book');assert.equal(customerId,'owner')
+      return {checkoutHref:'/checkout?ids=fresh-line&orderId=fresh-order',cartItems:[]}
+    }},
   },{URL,Image,fetch:async url=>{requests.push(url);return delayed?.promise??Response.json(payload)}}).OwnedBookReader
   runtime.mount(Reader,{creationId:'book'})
   const shell=()=>uiNodes(runtime.tree).find(n=>n.type==='shell')?.props
@@ -71,8 +75,19 @@ test('Reader uses full Final cover, single controls and personalized label; keep
   assert.ok(image.props.className.includes('object-contain'))
   assert.ok(uiNodes(h.runtime.tree).some(n=>n.props?.href==='/my-books?shelf=purchased'))
   const buy=uiNodes(h.runtime.tree).find(n=>n.type==='button'&&uiText(n).includes('myBooks.readerBuyAgain'))
-  buy.props.onClick();buy.props.onClick();assert.equal(h.pushes.length,1)
-  assert.match(h.pushes[0],/source=my-books&dedication=1&purchase=1/)
+  buy.props.onClick();buy.props.onClick();await h.runtime.flush();assert.equal(h.pushes.length,1)
+  assert.equal(h.pushes[0],'/checkout?ids=fresh-line&orderId=fresh-order')
+  h.runtime.unmount()
+})
+
+test('ready and preparing Reader both show the purchase material hint outside the Buy Again button',async()=>{
+  const h=fixture();await h.runtime.flush()
+  for(const finalReady of [true,false]){
+    if(!finalReady)await h.refresh({...data(),finalReady:false,pages:[]})
+    const nodes=uiNodes(h.runtime.tree)
+    assert.ok(nodes.some(n=>n.type==='p'&&uiText(n)==='myBooks.purchaseMaterialsHint'))
+    assert.ok(nodes.filter(n=>n.type==='button').every(n=>!uiText(n).includes('myBooks.purchaseMaterialsHint')))
+  }
   h.runtime.unmount()
 })
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import { AlertCircle, BookOpen, CheckCircle2, LogIn, RotateCw, X } from 'lucide-react'
 import { Book, PersonalizationData } from '@/types'
@@ -159,6 +159,7 @@ export default function MyBooksPage() {
   const { choices: dedicationChoices } = useDedicationChoices(dedicationIds)
   const [loading, setLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState<{ creationId: string; action: 'add' | 'buy' | 'delete' } | null>(null)
+  const checkoutInFlightRef = useRef(false)
   const [pendingReaderHref, setPendingReaderHref] = useState<string | null>(null)
   const [activeShelf, setActiveShelf] = useState<MyBooksShelf | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -194,7 +195,7 @@ export default function MyBooksPage() {
   }, [loadBooks])
 
   const handleAddToCart = async (item: CreationItem) => {
-    if (pendingAction) return
+    if (pendingAction || checkoutInFlightRef.current) return
     setNotice(null)
     setPendingAction({ creationId: item.creation_id, action: 'add' })
     const coverUrl = resolveCover(item)
@@ -246,12 +247,8 @@ export default function MyBooksPage() {
   }
 
   const handleBuyNow = async (item: CreationItem) => {
-    if (pendingAction) return
-    const choice = dedicationChoices[item.creation_id]
-    if (!choice || choice.decision === 'undecided' || choice.previouslyPurchased) {
-      goToPreview(item, { dedication: true, purchase: true })
-      return
-    }
+    if (pendingAction || checkoutInFlightRef.current) return
+    checkoutInFlightRef.current = true
     setNotice(null)
     setPendingAction({ creationId: item.creation_id, action: 'buy' })
     let checkoutStarted = false
@@ -261,17 +258,20 @@ export default function MyBooksPage() {
         customerId: user?.customerId,
       })
       if (checkout.cartItems.length > 0) hydrateCheckoutItems(checkout.cartItems)
-      checkoutStarted = true
       router.push(checkout.checkoutHref)
+      checkoutStarted = true
     } catch {
       setNotice({ tone: 'error', message: t('myBooks.checkoutFailed') })
     } finally {
-      if (!checkoutStarted) setPendingAction(null)
+      if (!checkoutStarted) {
+        checkoutInFlightRef.current = false
+        setPendingAction(null)
+      }
     }
   }
 
   const handleDelete = async (item: CreationItem) => {
-    if (pendingAction) return
+    if (pendingAction || checkoutInFlightRef.current) return
     setNotice(null)
     const confirmed = window.confirm(t('myBooks.deleteConfirm'))
     if (!confirmed) return
@@ -299,12 +299,11 @@ export default function MyBooksPage() {
     }
   }
 
-  const buildPreviewHref = (item: CreationItem, options?: { dedication?: boolean; purchase?: boolean }) => {
+  const buildPreviewHref = (item: CreationItem, options?: { dedication?: boolean }) => {
     const params = new URLSearchParams({ view: 'preview', source: 'my-books' })
     params.set('creationId', item.creation_id)
     if (item.preview_job_id) params.set('jobId', item.preview_job_id)
     if (options?.dedication) params.set('dedication', '1')
-    if (options?.purchase) params.set('purchase', '1')
     return `/personalize/${item.template_id}?${params.toString()}`
   }
 
@@ -322,7 +321,7 @@ export default function MyBooksPage() {
     router.prefetch(buildReaderHref(item))
   }
 
-  const goToPreview = (item: CreationItem, options?: { dedication?: boolean; purchase?: boolean }) => {
+  const goToPreview = (item: CreationItem, options?: { dedication?: boolean }) => {
     const coverUrl = resolveCover(item)
     void navigateToCustomize(buildPreviewHref(item, options), {
       onBeforeNavigate: () => {

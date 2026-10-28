@@ -7,6 +7,7 @@ type PreviewCartOrigin = {
   bookId: string
   creationId: string
   committedPreviewJobId: string
+  source?: string | null
 }
 
 export type CartBackNavigation = {
@@ -27,6 +28,7 @@ export function buildPreviewCartHref({
   bookId,
   creationId,
   committedPreviewJobId,
+  source,
 }: PreviewCartOrigin) {
   const safeBookId = normalizeBookId(bookId)
   if (!safeBookId || !isUuid(creationId) || !isUuid(committedPreviewJobId)) {
@@ -39,6 +41,7 @@ export function buildPreviewCartHref({
     creationId,
     jobId: committedPreviewJobId,
   })
+  if (source === 'my-books') params.set('source', source)
   return `/cart?${params.toString()}`
 }
 
@@ -67,6 +70,9 @@ export function resolvePreviewCartReturnPath(search: string | URLSearchParams) {
     creationId,
     jobId,
   })
+  if (hasSingleValue(params, 'source') && params.get('source') === 'my-books') {
+    previewParams.set('source', 'my-books')
+  }
   return `/personalize/${encodeURIComponent(bookId)}?${previewParams.toString()}`
 }
 

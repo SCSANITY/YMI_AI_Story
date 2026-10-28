@@ -9,6 +9,7 @@ import { PreviewBookShell } from '@/components/personalize/PreviewBookShell'
 import { usePreviewBookNavigation } from '@/components/personalize/usePreviewBookNavigation'
 import { useDecodedPreviewCover } from '@/components/personalize/useDecodedPreviewCover'
 import { useGlobalContext } from '@/contexts/GlobalContext'
+import { startOwnedCreationCheckout } from '@/lib/owned-creation-checkout-client'
 import type { TemplateCatalogRow } from '@/lib/book-catalog'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import {
@@ -59,7 +60,7 @@ function resolveReaderLoadIssue(status: number, response: ReaderResponse): Reade
 export function OwnedBookReader({ creationId }: { creationId: string }) {
   const router = useRouter()
   const { t } = useI18n()
-  const { user, isHydrated, openLoginModal } = useGlobalContext()
+  const { user, isHydrated, openLoginModal, hydrateCheckoutItems } = useGlobalContext()
   const [reader, setReader] = useState<ReaderResponse | null>(null)
   const [bookDisplay, setBookDisplay] = useState<ReaderBookDisplay | null>(null)
   const [loading, setLoading] = useState(true)
@@ -207,11 +208,19 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     checkoutInFlightRef.current = true
     setCheckoutPending(true)
     setCheckoutError(null)
-    const params = new URLSearchParams({ view: 'preview', creationId: creation.creationId,
-      source: 'my-books', dedication: '1', purchase: '1' })
-    if (creation.previewJobId) params.set('jobId', creation.previewJobId)
-    router.push(`/personalize/${creation.templateId}?${params.toString()}`)
-  }, [creation, router])
+    try {
+      const checkout = await startOwnedCreationCheckout({
+        creationId: creation.creationId,
+        customerId: user?.customerId,
+      })
+      if (checkout.cartItems.length > 0) hydrateCheckoutItems(checkout.cartItems)
+      router.push(checkout.checkoutHref)
+    } catch {
+      checkoutInFlightRef.current = false
+      setCheckoutPending(false)
+      setCheckoutError(t('myBooks.checkoutFailed'))
+    }
+  }, [creation, hydrateCheckoutItems, router, t, user?.customerId])
 
   if (!isHydrated || loading) return <MyBookReaderSkeleton />
 
@@ -260,6 +269,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
             {checkoutPending ? t('myBooks.readerStartingCheckout') : t('myBooks.readerBuyAgain')}
           </button>
         </div>
+        <p className="mt-3 max-w-md text-xs leading-5 text-gray-500">{t('myBooks.purchaseMaterialsHint')}</p>
         {checkoutError ? <p role="alert" className="mt-4 text-sm font-medium text-red-700">{checkoutError}</p> : null}
       </ReaderStateShell>
     )
@@ -328,6 +338,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
             <CreditCard className="h-4 w-4" aria-hidden="true" />
             {checkoutPending ? t('myBooks.readerStartingCheckout') : t('myBooks.readerBuyAgain')}
           </button>
+          <p className="text-xs leading-5 text-gray-500">{t('myBooks.purchaseMaterialsHint')}</p>
           {checkoutError ? <p role="alert" className="text-sm font-medium text-red-700">{checkoutError}</p> : null}
         </div>
       </div>

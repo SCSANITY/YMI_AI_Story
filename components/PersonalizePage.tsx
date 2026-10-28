@@ -2989,6 +2989,7 @@ export default function PersonalizePage({
                 bookId: bookID,
                 creationId: creationId ?? '',
                 committedPreviewJobId: previewJobId ?? '',
+                source: previewSource,
               })
             : '/cart'
         )}

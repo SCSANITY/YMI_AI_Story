@@ -70,3 +70,18 @@ test('normal Preview Back replaces Cart while translated Back performs a full na
 test('translated direct Cart also defers to the guarded ordinary Back behavior', () => {
   assert.deepEqual(resolveCartBackNavigation('', true), { href: '/', method: 'history' })
 })
+
+test('library origin survives Preview to Cart to Preview, including translated return', () => {
+  const cart = buildPreviewCartHref({ bookId: 'Explorer_story', creationId, committedPreviewJobId, source: 'my-books' })
+  const search = cart.slice(cart.indexOf('?'))
+  assert.equal(resolvePreviewCartReturnPath(search), `${expectedPreviewPath}&source=my-books`)
+  assert.deepEqual(resolveCartBackNavigation(search, true), { href: `${expectedPreviewPath}&source=my-books`, method: 'assign' })
+})
+
+test('only one fixed library source is carried; arbitrary and duplicate origins are ignored', () => {
+  for (const source of ['my-books-purchased', 'https://evil.example', '/admin', ' my-books']) {
+    assert.equal(buildPreviewCartHref({ bookId: 'Explorer_story', creationId, committedPreviewJobId, source }), validCartHref)
+    assert.equal(resolvePreviewCartReturnPath(`${validSearch}&source=${encodeURIComponent(source)}`), expectedPreviewPath)
+  }
+  assert.equal(resolvePreviewCartReturnPath(`${validSearch}&source=my-books&source=my-books`), expectedPreviewPath)
+})
