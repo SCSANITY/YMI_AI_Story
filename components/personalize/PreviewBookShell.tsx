@@ -20,9 +20,9 @@ export const PREVIEW_BOOK_GEOMETRY = Object.freeze({ width:820, height:440, page
 const coverEase = [.32,0,.18,1] as const
 const pageEase = [.45,.05,.35,1] as const
 
-export function PreviewBookShell({ coverUrl, ready, waitingLeft, waitingRight, currentSpread, transition, maxSpread, renderPage, onTurn, onCover, onComplete }: {
+export function PreviewBookShell({ coverUrl, ready, waitingLeft, waitingRight, currentSpread, transition, maxSpread, ariaLabel = "Storybook preview", renderPage, onTurn, onCover, onComplete }: {
   coverUrl: string | null; ready: boolean; waitingLeft: ReactNode; waitingRight: ReactNode
-  currentSpread: number; transition: PreviewBookTurn | null; maxSpread: number
+  currentSpread: number; transition: PreviewBookTurn | null; maxSpread: number; ariaLabel?: string
   renderPage: (side:'left'|'right',spread:number)=>ReactNode
   onTurn:(direction:'next'|'prev')=>void;onCover:()=>void;onComplete:(id:number)=>void
 }) {
@@ -61,7 +61,7 @@ export function PreviewBookShell({ coverUrl, ready, waitingLeft, waitingRight, c
   const completeCover=()=>{if(turn&&turn.kind!=='page')onComplete(turn.id)}
   return <div ref={stage} className={styles.stage} data-preview-book-stage="true" data-open={openTarget||undefined}
     style={{...BOOK_MATERIAL_STYLE,...geometryStyle,height:(metrics.portrait?PREVIEW_BOOK_GEOMETRY.boardHeight:PREVIEW_BOOK_GEOMETRY.height)*scale,transition:`height ${layoutDuration}s cubic-bezier(.32,0,.18,1)`}}
-    tabIndex={0} role="group" aria-label="Storybook preview" onContextMenu={event=>event.preventDefault()}
+    tabIndex={0} role="group" aria-label={ariaLabel} onContextMenu={event=>event.preventDefault()}
     onKeyDown={event=>{if(!ready||event.target instanceof HTMLElement&&event.target.closest('input,textarea,select'))return;if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();onTurn(event.key==='ArrowRight'?'next':'prev')}}}
     onPointerDown={event=>{if(event.pointerType==='mouse'||!ready)return;const control=event.target instanceof HTMLElement?event.target.closest('button'):null;if(control&&!control.hasAttribute('data-cover-open'))return;pointer.current={x:event.clientX,y:event.clientY};suppressClick.current=false}}
     onPointerCancel={()=>{pointer.current=null}}

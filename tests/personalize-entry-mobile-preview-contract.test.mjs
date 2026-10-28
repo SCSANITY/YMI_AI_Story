@@ -27,16 +27,17 @@ test('Header Back exits Customize rather than rewinding the form while Step Back
 })
 
 test('responsive Preview settles before paint and does not replay cover centering on mount', async () => {
-  const stage = await read('components/personalize/PreviewBookStage.tsx')
-  assert.match(stage, /useLayoutEffect\(\(\) =>/)
-  assert.match(stage, /Math\.abs\(availableWidth - lastWidth\) < 0\.5/)
-  assert.match(stage, /data-preview-book-model="true"[\s\S]*initial=\{false\}/)
-  assert.match(stage, /transform: `scale\(\$\{previewScale\}\)`[\s\S]*transformOrigin: 'top center'[\s\S]*width: pageWidth \* 2/)
+  const stage = await read('components/personalize/PreviewBookShell.tsx')
+  assert.match(stage, /useLayoutEffect\(\(\)=>/)
+  assert.match(stage, /Math\.abs\(previous\.width-next\.width\)<\.5/)
+  assert.match(stage, /data-preview-book-model="true" initial=\{false\}/)
+  assert.match(stage, /className=\{styles\.scale\} initial=\{false\} animate=\{\{scale\}\}/)
+  assert.match(stage, /new ResizeObserver\(update\)/)
   assert.doesNotMatch(stage, /previewBookShadow|filter:\s*previewBookShadow/)
   assert.doesNotMatch(stage, /transformStyle: 'preserve-3d'[^\n]*filter:/)
-  assert.match(stage, /initial=\{\{ rotateY: flipDirection === 'next' \? 0 : -180 \}\}/)
-  assert.match(stage, /animate=\{\{ rotateY: flipDirection === 'next' \? -180 : 0 \}\}/)
-  assert.match(stage, /resolvePreviewBookTurningLeafFaces\(currentSpread, flipDirection\)/)
+  assert.match(stage, /initial=\{\{rotateY:turn\.direction==='next'\?0:-180\}\}/)
+  assert.match(stage, /animate=\{\{rotateY:turn\.direction==='next'\?-180:0\}\}/)
+  assert.match(stage, /resolvePreviewBookTurningLeafFaces\(turn\.from,turn\.direction\)/)
 })
 
 test('one mobile page-level authority resets Product Intro and Preview entry without moving desktop', async () => {

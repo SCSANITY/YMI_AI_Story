@@ -47,7 +47,7 @@ test('My Books Reader composes structured leaves without filename or URL inferen
   const source = await readFile(readerPath, 'utf8')
 
   assert.match(source, /buildReaderBookDisplay\(\{/)
-  assert.match(source, /bookPresentation=\{bookDisplay\?\.presentation\}/)
+  assert.match(source, /bookPresentation=\{visiblePresentation\}/)
   assert.match(source, /getReaderSpreadUrls\(bookDisplay, index\)/)
   assert.doesNotMatch(source, /_L_|_R_|split\([^)]*url|includes\([^)]*page/)
 })

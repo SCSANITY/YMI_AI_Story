@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, BookOpen, Clock3, CreditCard, RefreshCw } from 'lucide-react'
 import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPageContent'
-import { PreviewBookStage } from '@/components/personalize/PreviewBookStage'
+import { PreviewBookShell } from '@/components/personalize/PreviewBookShell'
+import { usePreviewBookNavigation } from '@/components/personalize/usePreviewBookNavigation'
+import { useDecodedPreviewCover } from '@/components/personalize/useDecodedPreviewCover'
 import { useGlobalContext } from '@/contexts/GlobalContext'
 import type { TemplateCatalogRow } from '@/lib/book-catalog'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
@@ -19,10 +21,6 @@ import { useI18n } from '@/lib/useI18n'
 import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
 
-const PAGE_WIDTH = 380
-const PAGE_HEIGHT = 380
-const PREVIEW_HEIGHT = PAGE_HEIGHT + 40
-const ANIMATION_DURATION = 0.8
 type ReaderTemplate = TemplateCatalogRow
 
 type ReaderCreation = {
@@ -67,14 +65,9 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState<ReaderLoadIssue | null>(null)
-  const [windowWidth, setWindowWidth] = useState(1024)
-  const [currentSpread, setCurrentSpread] = useState(0)
-  const [isFlipping, setIsFlipping] = useState(false)
-  const [flipDirection, setFlipDirection] = useState<'next' | 'prev' | null>(null)
   const [imageErrors, setImageErrors] = useState<Set<string>>(() => new Set())
   const [checkoutPending, setCheckoutPending] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const flipTimerRef = useRef<number | null>(null)
   const checkoutInFlightRef = useRef(false)
   const loadRunIdRef = useRef(0)
 
@@ -134,13 +127,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   }, [loadReader])
 
   useEffect(() => {
-    const updateWidth = () => setWindowWidth(window.innerWidth)
-    updateWidth()
-    window.addEventListener('resize', updateWidth)
-    return () => window.removeEventListener('resize', updateWidth)
-  }, [])
-
-  useEffect(() => {
     const refreshVisibleReader = () => {
       if (document.visibilityState === 'visible') void loadReader({ silent: true })
     }
@@ -156,7 +142,6 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
 
   useEffect(() => () => {
     loadRunIdRef.current += 1
-    if (flipTimerRef.current !== null) window.clearTimeout(flipTimerRef.current)
   }, [])
 
   const creation = reader?.creation ?? null
@@ -169,9 +154,29 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     : '', [creation])
   const maxSpreadIndex = bookDisplay?.maxSpreadIndex ?? 0
 
-  useEffect(() => {
-    setCurrentSpread((current) => Math.min(current, maxSpreadIndex))
-  }, [maxSpreadIndex])
+  const canReadBook = Boolean(!loading && !loadError && reader?.eligible && reader.finalReady && bookDisplay)
+  const navigation = usePreviewBookNavigation(creationId, maxSpreadIndex, canReadBook)
+  const { currentSpread, isFlipping, turnPage, returnToCover, reconcile } = navigation
+  useLayoutEffect(() => {
+    reconcile(maxSpreadIndex, canReadBook)
+  }, [maxSpreadIndex, canReadBook, reconcile])
+
+  const handleImageError = useCallback((url: string) => {
+    if (url) setImageErrors((current) => new Set(current).add(url))
+    void loadReader({ silent: true })
+  }, [loadReader])
+  const coverCandidate = canReadBook ? bookDisplay?.coverUrl ?? null : null
+  const handleCoverError = useCallback(() => {
+    if (coverCandidate) setImageErrors((current) => new Set(current).add(coverCandidate))
+  }, [coverCandidate])
+  // A signing token is not a book identity. Decode offscreen and share the
+  // retained URL across the cover face and every board, just as Preview does.
+  const decodedCover = useDecodedPreviewCover(creationId, coverCandidate, handleCoverError)
+  const visiblePresentation = useMemo(() => {
+    const presentation = bookDisplay?.presentation
+    if (!presentation?.cover || !decodedCover.url) return presentation
+    return { ...presentation, cover: { ...presentation.cover, url: decodedCover.url } }
+  }, [bookDisplay, decodedCover.url])
 
   useEffect(() => {
     if (!reader?.finalReady || !bookDisplay) return
@@ -188,6 +193,8 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       void image.decode?.().catch(() => undefined)
     }
     immediateIndexes.forEach((index) => {
+      // Cover decode/prefetch is owned by useDecodedPreviewCover, not twice here.
+      if (index === 0) return
       getReaderSpreadUrls(bookDisplay, index).forEach((url) => {
         preload(url)
       })
@@ -205,62 +212,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     router.push(`/personalize/${creation.templateId}?${params.toString()}`)
   }, [creation, router])
 
-  const turnPage = useCallback((direction: 'next' | 'prev') => {
-    if (isFlipping) return
-    if (direction === 'next' && currentSpread >= maxSpreadIndex) return
-    if (direction === 'prev' && currentSpread <= 0) return
-    setFlipDirection(direction)
-    setIsFlipping(true)
-    flipTimerRef.current = window.setTimeout(() => {
-      setCurrentSpread((current) => direction === 'next' ? current + 1 : current - 1)
-      setIsFlipping(false)
-      setFlipDirection(null)
-      flipTimerRef.current = null
-    }, ANIMATION_DURATION * 1000)
-  }, [currentSpread, isFlipping, maxSpreadIndex])
-
-  const returnToCover = useCallback(() => {
-    if (flipTimerRef.current !== null) window.clearTimeout(flipTimerRef.current)
-    flipTimerRef.current = null
-    setIsFlipping(false)
-    setFlipDirection(null)
-    setCurrentSpread(0)
-  }, [])
-
-  const handleImageError = useCallback((url: string) => {
-    if (url) setImageErrors((current) => new Set(current).add(url))
-    void loadReader({ silent: true })
-  }, [loadReader])
-
-  const isMobile = windowWidth < 768
-  const previewScale = isMobile ? Math.min(0.58, Math.max(0.4, (windowWidth - 24) / (PAGE_WIDTH * 2))) : 1
-  const stageHeight = isMobile ? Math.round(PREVIEW_HEIGHT * previewScale) + 12 : PREVIEW_HEIGHT
-  const staticLeftIndex = isFlipping && flipDirection === 'prev' ? currentSpread - 1 : currentSpread
-  const isLeftPageVisible = staticLeftIndex > 0
-  const isClosing = isFlipping && flipDirection === 'prev' && currentSpread === 1
-  const isVisualBookOpen = currentSpread > 0 || (isFlipping && flipDirection === 'next' && currentSpread === 0)
-  const isBookClosed = !isVisualBookOpen
-  const pageStackPattern: React.CSSProperties = {
-    backgroundImage: 'repeating-linear-gradient(90deg, #fdfbf7, #fdfbf7 1px, #d1d5db 2px, #fdfbf7 3px)',
-    boxShadow: 'inset 2px 0 5px rgba(0,0,0,0.1), 10px 10px 20px rgba(0,0,0,0.15)',
-  }
-  const centerBindingPattern: React.CSSProperties = {
-    background: 'linear-gradient(90deg, #e5e5e5, #ffffff 30%, #ffffff 70%, #e5e5e5)',
-    boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.1)',
-    borderRadius: '2px',
-    opacity: isBookClosed || isClosing ? 0 : 1,
-    transition: isBookClosed || isClosing ? 'none' : 'opacity 0.2s ease-in-out 0.2s',
-  }
-  const faceStyle: React.CSSProperties = {
-    backfaceVisibility: 'hidden',
-    WebkitBackfaceVisibility: 'hidden',
-    position: 'absolute',
-    inset: 0,
-    backgroundColor: 'white',
-    transformStyle: 'preserve-3d',
-  }
-
-  if (!isHydrated || loading) return <MyBookReaderSkeleton />
+  if (!isHydrated || loading || (canReadBook && !decodedCover.isReady && !imageErrors.has(coverCandidate ?? ''))) return <MyBookReaderSkeleton />
 
   if (loadError || !reader || !reader.eligible || !creation || (reader.finalReady && !bookDisplay)) {
     const issue = loadError ?? 'invalid'
@@ -315,10 +267,11 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const renderPageContent = (side: 'left' | 'right', spreadIndex: number) => (
     <PreviewBookPageContent
       mode="reader"
+      controls={false}
       side={side}
       spreadIndex={spreadIndex}
       previewImageErrors={imageErrors}
-      bookPresentation={bookDisplay?.presentation}
+      bookPresentation={visiblePresentation}
       currentSpread={currentSpread}
       isFlipping={isFlipping}
       resolvedTitle={resolvedTitle}
@@ -353,21 +306,19 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
           {isSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" compact className="mx-auto mt-5 max-w-xl" /> : null}
         </header>
 
-        <PreviewBookStage
-          stageHeight={stageHeight}
-          previewScale={previewScale}
-          pageWidth={PAGE_WIDTH}
-          pageHeight={PAGE_HEIGHT}
-          animationDuration={ANIMATION_DURATION}
+        <PreviewBookShell
+          ariaLabel={resolvedTitle}
+          coverUrl={decodedCover.url}
+          ready={decodedCover.isReady}
+          waitingLeft={null}
+          waitingRight={<p className="p-8 text-center text-sm text-gray-500">{t('myBooks.readerPageUnavailable')}</p>}
           currentSpread={currentSpread}
-          isFlipping={isFlipping}
-          flipDirection={flipDirection}
-          isLeftPageVisible={isLeftPageVisible}
-          staticLeftIndex={staticLeftIndex}
-          centerBindingPattern={centerBindingPattern}
-          pageStackPattern={pageStackPattern}
-          faceStyle={faceStyle}
-          renderPageContent={renderPageContent}
+          transition={navigation.transition}
+          maxSpread={maxSpreadIndex}
+          renderPage={renderPageContent}
+          onTurn={turnPage}
+          onCover={returnToCover}
+          onComplete={navigation.complete}
         />
 
         <div className="mx-auto mt-3 flex max-w-md flex-col items-center gap-3 text-center">

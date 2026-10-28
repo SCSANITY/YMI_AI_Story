@@ -127,7 +127,9 @@ function readerFixture(initial = {}) {
     'next/navigation': { useRouter: () => ({ push() {} }) },
     '@/contexts/GlobalContext': { useGlobalContext: () => context },
     '@/lib/useI18n': { useI18n: () => ({ t: key => key }) },
-    '@/components/personalize/PreviewBookStage': { PreviewBookStage: 'book-stage' },
+    '@/components/personalize/PreviewBookShell': { PreviewBookShell: 'book-stage' },
+    '@/components/personalize/useDecodedPreviewCover': { useDecodedPreviewCover: (_identity, url) => ({ url, isReady: Boolean(url) }) },
+    'framer-motion': { useReducedMotion: () => false },
     '@/components/personalize/PreviewBookPageContent': { PreviewBookPageContent: 'book-content' },
     '@/components/SignatureVoiceEditionNotice': { SignatureVoiceEditionNotice: 'voice-notice' },
   }, { fetch: async url => { requests.push(url); return delayed?.promise ?? Response.json(status === 200 ? readerData(ready) : {}, { status }) } }).OwnedBookReader

@@ -22,6 +22,17 @@ export function usePreviewBookNavigation(identity: string | null, maxSpread: num
     active.current = null
     setState({ identity: identityRef.current, spread: 0, turn: null })
   }, [])
+  // Reader opt-in only: preserve its bounds/readiness contract without changing
+  // Preview's existing navigation or introducing a second spread state/timer.
+  const reconcile = useCallback((maximum: number, available: boolean) => {
+    const turn = active.current
+    if (!available || turn && (turn.from > maximum || turn.target > maximum)) active.current = null
+    setState(previous => {
+      const spread = available ? Math.min(previous.spread, maximum) : 0
+      const pending = available && previous.turn === active.current ? previous.turn : null
+      return spread === previous.spread && pending === previous.turn ? previous : { ...previous, spread, turn: pending }
+    })
+  }, [])
   const go = useCallback((target: number) => {
     if (!identity || !enabled || active.current || target === current.spread || target < 0 || target > maxSpread) return
     if (reduced) { setState({ identity, spread: target, turn: null }); return }
@@ -38,7 +49,7 @@ export function usePreviewBookNavigation(identity: string | null, maxSpread: num
     setState({ identity: turn.identity, spread: turn.target, turn: null })
   }, [])
   return { currentSpread: current.spread, transition: current.turn, isFlipping: Boolean(current.turn),
-    flipDirection: current.turn?.direction ?? null, reset, complete,
+    flipDirection: current.turn?.direction ?? null, reset, complete, reconcile,
     turnPage: (direction: 'next' | 'prev') => go(current.spread + (direction === 'next' ? 1 : -1)),
     returnToCover: () => go(0) }
 }
