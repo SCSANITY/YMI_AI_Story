@@ -34,11 +34,11 @@ export const uiText=node=>node==null?'':typeof node!=='object'?String(node):[nod
 
 // Runs the real hook body with retained state/refs and dependency-scoped effects.
 export function hookHarness(file,exportName,{reduced=false,globals={}}={}) {
- const cells=[],effects=[],refs=[];let cursor=0,dirty=false,args,output
+ const cells=[],effects=[],refs=[],callbacks=[];let cursor=0,dirty=false,args=[],output
  const react={
   useState(initial){const i=cursor++;if(!(i in cells))cells[i]=typeof initial==='function'?initial():initial;return[cells[i],value=>{cells[i]=typeof value==='function'?value(cells[i]):value;dirty=true}]},
   useRef(initial){const i=cursor++;return refs[i]??=( {current:initial} )},
-  useCallback(fn){cursor++;return fn},
+  useCallback(fn,deps){const i=cursor++,old=callbacks[i];if(!old||deps.some((d,n)=>d!==old.deps[n]))callbacks[i]={fn,deps};return callbacks[i].fn},
   useEffect(fn,deps){const i=cursor++,old=effects[i];if(!old||deps.some((d,n)=>d!==old.deps[n]))effects[i]={deps,fn,cleanup:old?.cleanup,pending:true}},
  }
  react.useLayoutEffect=react.useEffect

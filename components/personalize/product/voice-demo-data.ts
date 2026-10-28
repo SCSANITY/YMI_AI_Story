@@ -1,39 +1,42 @@
-import { getUiMessage as t } from "@/lib/i18n-messages";
-
-// Static demo content, independent of customer recordings and generation.
-// Replace null sources and sample timings together when real demo audio arrives.
-export const DEMO_WORDS = t("product.demoSentence").split(" ");
-export const DEMO_VOICES: Array<{
-  key: string;
-  initial: string;
-  color: string;
-  audioSrc: string | null;
-  wordStartsMs: number[];
-}> = [
+// Frozen WEB-UIUX-001/26 v1 audio metadata; no runtime fetch or decode.
+export const DEMO_VOICES = [
   {
     key: "mom",
     initial: "M",
-    color: "#f5b544",
-    audioSrc: null,
-    wordStartsMs: DEMO_WORDS.map((_, index) => index * 400),
+    color: "#f2b33d",
+    audioSrc: "/customize-product/v3/mom.mp3",
+    durationMs: 28965,
+    bars: [
+      0.525, 0.432, 0.668, 0.556, 0.722, 0.434, 0.675, 0.439, 0.74, 0.511, 0.443, 0.347, 0.402, 0.984, 0.874, 0.133,
+      0.619, 0.635, 0.493, 0.476, 0.776, 0.588, 0.139, 0.816, 0.875, 0.86, 0.754, 0.563, 0.788, 0.51, 0.176, 0.343,
+      0.769, 0.527, 0.541, 0.455, 0.462, 0.66, 0.453, 0.182, 1, 0.887, 0.965, 0.531, 0.127, 0.59, 0.507, 0.618,
+      0.37, 0.515, 0.607, 0.385, 0.133, 0.638, 0.899, 0.77, 0.557, 0.522, 0.803, 0.914, 0.71, 0.465, 0.57, 0.249,
+    ],
   },
   {
     key: "dad",
     initial: "D",
-    color: "#9cc3ea",
-    audioSrc: null,
-    wordStartsMs: DEMO_WORDS.map((_, index) => index * 460),
+    color: "#9cc3ef",
+    audioSrc: "/customize-product/v3/dad.mp3",
+    durationMs: 22858,
+    bars: [
+      0.535, 0.573, 0.52, 0.522, 0.503, 0.438, 0.481, 0.393, 0.532, 0.436, 0.469, 0.24, 0.607, 0.895, 0.713, 0.375,
+      0.121, 0.404, 0.77, 0.467, 0.493, 0.536, 0.599, 0.274, 0.773, 0.78, 0.754, 0.738, 0.451, 0.61, 0.484, 0.309,
+      0.38, 0.513, 0.488, 0.548, 0.483, 0.362, 0.47, 0.338, 0.247, 0.126, 1, 0.784, 0.885, 0.712, 0.144, 0.388,
+      0.569, 0.467, 0.426, 0.432, 0.404, 0.409, 0.183, 0.411, 0.932, 0.707, 0.36, 0.539, 0.845, 0.504, 0.498, 0.212,
+    ],
   },
   {
-    key: "grandma",
-    initial: "G",
-    color: "#f0a7b8",
-    audioSrc: null,
-    wordStartsMs: DEMO_WORDS.map((_, index) => index * 520),
+    key: "kid",
+    initial: "K",
+    color: "#f2a6c0",
+    audioSrc: "/customize-product/v3/kid.mp3",
+    durationMs: 25651,
+    bars: [
+      0.134, 0.41, 0.419, 0.494, 0.571, 0.475, 0.575, 0.568, 0.422, 0.779, 0.487, 0.408, 0.305, 0.312, 0.564, 0.155,
+      0.121, 0.233, 1, 0.373, 0.511, 0.794, 0.585, 0.15, 0.769, 0.544, 0.764, 0.753, 0.5, 0.428, 0.758, 0.231,
+      0.385, 0.535, 0.326, 0.369, 0.434, 0.513, 0.647, 0.185, 0.194, 0.827, 0.595, 0.531, 0.136, 0.577, 0.827, 0.445,
+      0.699, 0.486, 0.318, 0.51, 0.304, 0.131, 0.519, 0.641, 0.518, 0.24, 0.509, 0.426, 0.669, 0.567, 0.373, 0.162,
+    ],
   },
-];
-export const DEMO_BARS = [
-  10, 16, 24, 14, 30, 38, 22, 16, 34, 42, 28, 18, 24, 36, 44, 30, 20, 14, 26,
-  40, 32, 22, 16, 28, 38, 24, 18, 12, 22, 34, 28, 18, 14, 24, 32, 40, 26, 18,
-  30, 36, 22, 14, 20, 28, 18, 12, 16, 10,
 ];

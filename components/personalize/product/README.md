@@ -11,10 +11,15 @@ there is no separate price configuration or purchase path here.
   replace the entire Customize page with its route-level loading fallback.
 - `HowItWorks`: one five-step dataset; wide cycling pauses offscreen/hidden and
   under reduced motion; portrait activation follows the visible step.
-- `SignatureVoiceDemo`: approved static template with simulated word timings.
-  The three `audioSrc: null` entries intentionally have no audio request. Replace
-  audio and word timings together when approved recordings arrive; no generation
-  or microphone access is part of this module.
+- `SignatureVoiceDemo`: frozen WEB-UIUX-001/26/v1 static Cici open book with baked
+  text; no read-along. Shared `components/book/book-material.ts` supplies Preview
+  and B's complete page shadows/rim/head. CSS alone chooses the three B layouts.
+  Mom/Dad/Kid use one preload-none audio element, initially without src. Playback
+  starts in the click handler; rAF commits only changed seconds/bar counts.
+  Volume opens a four-second explanatory tip. Offscreen/hidden/unmount stops.
+  `voice-demo-data.ts` is static metadata, not a runtime fetch. The waiting-page
+  silent demo has separate data, preserving its prior behavior. No microphone,
+  generation or backend request is part of this module.
 - `EditionCards`: independent gallery selection per edition, shared price authority.
   `edition-definitions.ts` is the shared gallery/copy/icon authority;
   `EditionPrice` preserves Catalog prices and the Admin display-percent override.
@@ -57,3 +62,9 @@ Local fixture: `/personalize/design-preview` in development only; `?baseline=1`
 omits the new sections for first-screen comparison. Production returns not-found.
 The fixture uses synthetic prices and the same presentation components. It does
 not verify live catalog values, authentication, payment or generation.
+
+WEB-UIUX-001/26 publishes the four pre-sized baked-text pages, board texture and
+three unchanged MP3s under `/customize-product/v3/`, also immutable for one year.
+The existing `/customize-product/v1/b-play-button.png` is reused byte-for-byte;
+there is no duplicate button under v3. CSS and data are B-scoped; dusk/dawn and
+other sections retain their prior shared heading and transition styles.

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  activeWordAt,
   closestStep,
   isNightAtFloatingCta,
 } from "../components/personalize/product/presentation";
@@ -44,11 +43,4 @@ test("the floating CTA theme follows the section underneath the control, not a c
     isNightAtFloatingCta({ top: 853, bottom: 1300 }, 852, 84),
     false,
   );
-});
-test("word timing handles pre-start, boundaries and irregular static timestamps", () => {
-  assert.equal(activeWordAt([0, 260, 900], -1), -1);
-  assert.equal(activeWordAt([0, 260, 900], 259), 0);
-  assert.equal(activeWordAt([0, 260, 900], 260), 1);
-  assert.equal(activeWordAt([0, 260, 900], 1250), 2);
-  assert.equal(activeWordAt([], 100), -1);
 });

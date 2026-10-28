@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { Check, Pause, Sparkles, UserRound } from 'lucide-react'
 import type { BookPackagePricing, DisplayCurrency } from '@/types'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
 import { EDITION_DEFINITIONS, type EditionType } from './product/edition-definitions'
-import { DEMO_VOICES, DEMO_BARS } from './product/voice-demo-data'
+import { WAITING_DEMO_DURATION_MS, WAITING_DEMO_BARS } from './preview-waiting-demo-data'
 import styles from './PreviewWaitingPages.module.css'
 
 export type PreviewWaitingProgress = {countdownSeconds:number;fraction:number;step:number;reduced:boolean;hidden:boolean;interact:(step?:number)=>void}
@@ -43,24 +43,18 @@ function TypedMessage({text,reduced}:{text:string;reduced:boolean}) {
 
 function DemoVoice({name,interact,reduced}:{name:string;interact:()=>void;reduced:boolean}) {
   const [playing,setPlaying]=useState(false)
-  const [activated,setActivated]=useState(false)
-  const audio=useRef<HTMLAudioElement>(null)
-  const voice=DEMO_VOICES[0]
   useEffect(()=>{
     if(!playing)return
-    const element=audio.current
-    const stop=()=>{element?.pause();setPlaying(false)}
+    const stop=()=>{setPlaying(false)}
     const hidden=()=>{if(document.hidden)stop()}
-    const end=(voice.wordStartsMs.at(-1)??6000)+400
+    const end=WAITING_DEMO_DURATION_MS
     const timer=setTimeout(stop,end)
     document.addEventListener('visibilitychange',hidden)
-    if(voice.audioSrc)void element?.play().catch(stop)
-    return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',hidden);element?.pause()}
-  },[playing,voice])
+    return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',hidden)}
+  },[playing])
   return <><h3>Hear it in <em>your voice</em></h3><span className={styles.voiceTag}>✦ ONLY IN HARDCOVER + VOICE</span><div className={styles.demoVoice}>
-    <div className={styles.waveLine}><button type="button" aria-label={playing?'Stop demo narration':'Play demo narration'} aria-pressed={playing} onClick={()=>{interact();setActivated(true);setPlaying(value=>!value)}}>{playing?<Pause size={24}/>:<Image src="/customize-product/v1/b-play-button.png" alt="" width={58} height={58}/>}</button><span className={styles.waveBars} data-playing={playing&&!reduced||undefined}>{DEMO_BARS.slice(0,20).map((height,index)=><i key={index} style={{height,animationDelay:`${index*37}ms`}}/>)}</span></div>
+    <div className={styles.waveLine}><button type="button" aria-label={playing?'Stop demo narration':'Play demo narration'} aria-pressed={playing} onClick={()=>{interact();setPlaying(value=>!value)}}>{playing?<Pause size={24}/>:<Image src="/customize-product/v1/b-play-button.png" alt="" width={58} height={58}/>}</button><span className={styles.waveBars} data-playing={playing&&!reduced||undefined}>{WAITING_DEMO_BARS.map((height,index)=><i key={index} style={{height,animationDelay:`${index*37}ms`}}/>)}</span></div>
     <p>“Once upon a time, <em>{name}</em> found a door made of moonlight…”</p><small>{playing?'Playing · demo voice (Mom)':'Tap to hear · demo voice'}</small>
-    {activated&&voice.audioSrc?<audio ref={audio} preload="none" src={voice.audioSrc} onEnded={()=>setPlaying(false)}/>:null}
   </div></>
 }
 

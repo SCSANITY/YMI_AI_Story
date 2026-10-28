@@ -1,15 +1,5 @@
 export const PORTRAIT_JOURNEY_QUERY = "(max-aspect-ratio: 2/3)";
 
-export function activeWordAt(starts: number[], elapsedMs: number) {
-  let word = -1;
-  for (
-    let index = 0;
-    index < starts.length && starts[index] <= elapsedMs;
-    index++
-  )
-    word = index;
-  return word;
-}
 
 export function closestStep(
   rects: Array<{ top: number; bottom: number } | null>,
