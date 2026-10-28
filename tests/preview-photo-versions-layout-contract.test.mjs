@@ -20,7 +20,7 @@ test('the one shell scales against its column and clips its 820 coordinate box',
   const shell=read('components/personalize/PreviewBookShell.tsx'),css=read('components/personalize/PreviewBookShell.module.css')
   assert.match(shell,/new ResizeObserver\(update\)/)
   assert.match(shell,/element.getBoundingClientRect\(\).width/)
-  assert.match(shell,/metrics.width\/\(openTarget\?PREVIEW_BOOK_GEOMETRY.openWidth:PREVIEW_BOOK_GEOMETRY.closedWidth\)/)
+  assert.match(shell,/metrics.width\/\(openTarget\?PREVIEW_BOOK_GEOMETRY.openWidth:PREVIEW_BOOK_GEOMETRY.closedScaleDenominator\)/)
   assert.match(css,/overflow-x:clip/)
   assert.match(shell,/const layoutDuration=turn&&turn.kind!=='page'\?duration:0/)
 })

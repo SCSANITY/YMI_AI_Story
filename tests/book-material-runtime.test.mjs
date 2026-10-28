@@ -33,3 +33,24 @@ test('page and leaf outer top corners are square;only the correct bottom corner 
  }
  assert.doesNotMatch(css,/rightStack|leftStack|backThinEdge/)
 })
+
+test('portrait closed and waiting retain the pre-26 fill;open and nonportrait scales stay unchanged',()=>{
+ const metrics={width:361,portrait:true}
+ const {PreviewBookShell:Shell}=loadUi('components/personalize/PreviewBookShell.tsx',{
+  react:{...react,useState:()=>[metrics,()=>{}]},'framer-motion':{motion,useReducedMotion:()=>false}
+ })
+ const render=(ready,spread)=>uiNodes(Shell({ready,coverUrl:null,waitingLeft:null,waitingRight:null,currentSpread:spread,transition:null,maxSpread:2,renderPage:()=>null,onTurn(){},onCover(){},onComplete(){}}))
+ const measure=(ready,spread)=>{
+  const n=render(ready,spread),scale=n.find(e=>e.props?.className==='scale').props.animate.scale
+  return {coverWidth:g.coverWidth*scale,stageHeight:n.find(e=>e.props?.['data-preview-book-stage']).props.style.height,scale}
+ }
+ assert.equal(g.portraitClosedFill,384/475)
+ assert.equal(g.closedScaleDenominator,g.coverWidth/g.portraitClosedFill)
+ const closed=measure(true,0),waiting=measure(false,0)
+ assert.ok(Math.abs(closed.coverWidth-292)<1)
+ assert.ok(Math.abs(closed.stageHeight-296)<1)
+ assert.deepEqual(waiting,closed)
+ assert.equal(measure(true,1).scale,metrics.width/788)
+ metrics.portrait=false
+ for(const [ready,spread] of [[true,0],[true,1],[false,0]])assert.equal(measure(ready,spread).scale,metrics.width/820)
+})

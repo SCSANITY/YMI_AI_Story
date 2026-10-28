@@ -11,9 +11,12 @@ import { BOOK_MATERIAL, BOOK_MATERIAL_STYLE } from '@/components/book/book-mater
 const page = 380
 const top = BOOK_MATERIAL.head
 const coverWidth = page + BOOK_MATERIAL.rim
+// Preserve the pre-26 portrait closed cover's share of the measured stage.
+const portraitClosedFill = 384 / 475
 export const PREVIEW_BOOK_GEOMETRY = Object.freeze({ width:820, height:440, page, hinge:410, top, left:30,
   boardTop:top - BOOK_MATERIAL.head, boardHeight:BOOK_MATERIAL.head + page + BOOK_MATERIAL.rim, coverWidth,
-  openWidth:2 * coverWidth, closedWidth:coverWidth, closedOffset:-coverWidth / 2 })
+  openWidth:2 * coverWidth, closedWidth:coverWidth, closedOffset:-coverWidth / 2,
+  portraitClosedFill, closedScaleDenominator:coverWidth / portraitClosedFill })
 const coverEase = [.32,0,.18,1] as const
 const pageEase = [.45,.05,.35,1] as const
 
@@ -37,7 +40,7 @@ export function PreviewBookShell({ coverUrl, ready, waitingLeft, waitingRight, c
   const showStaticLeft=openCover&&!isCoverTurn
   const showMovingCoverBack=ready&&isCoverTurn
   const coverBackSpread=turn?.kind==='close'?turn.from:1
-  const scale=metrics.portrait?Math.min(1,metrics.width/(openTarget?PREVIEW_BOOK_GEOMETRY.openWidth:PREVIEW_BOOK_GEOMETRY.closedWidth)):Math.min(1,metrics.width/PREVIEW_BOOK_GEOMETRY.width)
+  const scale=metrics.portrait?Math.min(1,metrics.width/(openTarget?PREVIEW_BOOK_GEOMETRY.openWidth:PREVIEW_BOOK_GEOMETRY.closedScaleDenominator)):Math.min(1,metrics.width/PREVIEW_BOOK_GEOMETRY.width)
   const isPageTurn=turn?.kind==='page'
   const faces=isPageTurn?resolvePreviewBookTurningLeafFaces(turn.from,turn.direction):null
   const staticLeft=isPageTurn&&turn.direction==='prev'?turn.target:Math.max(1,currentSpread)
