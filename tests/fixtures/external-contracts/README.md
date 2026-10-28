@@ -152,3 +152,5 @@ review provenance, not the current upstream fixture identity.
 - WEB-UIUX-001/28 S1 adds `20261029_120000_web_uiux_028_safe_removal.sql` from private Database candidate 97f2742. It pins atomic owner-scoped removal, archive share revocation, face reference protection and lookup indexes. OFFLINE / NOT APPLIED; it is not deployment or cleanup-run evidence.
 
 - Issue28 S1 B1 return (2026-10-29): canonical date/job/attempt/page output paths and cancel_requested active-work protection; Web application code unchanged. Source review and synthetic tests do not prove live path shape or production cleanup execution.
+
+- WEB-UIUX-001/28 S3 adds `20261029_160000_web_uiux_028_draft_dedication.sql` from private Database e2879cd. The exact CPU-repaired body loses only its related-order/active-Checkout guard; ownership/content/CAS/PT409 stay. OFFLINE / NOT APPLIED; delivery requires combined review, live preflight and owner GO.

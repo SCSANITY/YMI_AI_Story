@@ -75,6 +75,12 @@ These prompts do not change paid-line deadlines, consent, shipment eligibility
 or the materials page. Purchase errors remain in place for a user-initiated retry;
 there is no automatic checkout replay.
 
+Saving a Creation draft message does not retrieve/expire a Stripe Session or
+clear its order lock. The private RPC still checks Creation ownership, content
+and revision CAS; stale revisions return PT409. The payment-time initializer
+reads a complete draft body/revision pair once per line. A later Creation edit
+never overwrites a paid line. Commercial Checkout locks are unchanged.
+
 ## Safe removal (issue28 S1, offline candidate)
 
 - Both archive and hard-delete revoke preview share links in the same owner-scoped

@@ -30,6 +30,7 @@ function route({ relatedOrderIds = [], lockedOrders = [], sessionStatus = 'open'
   }
   const supabaseAdmin = {
     from(table) {
+      calls.push({ kind: 'query', table })
       if (!Object.hasOwn(rows, table)) throw new Error(`Unexpected table ${table}`)
       const query = {
         select() { return this }, eq() { return this }, in() { return this }, not() { return this },
@@ -128,27 +129,41 @@ test('blank confirmation and invalid revision fail before owner or database acce
   }
 })
 
-test('an open old payment session is expired and unlocked before a dedication edit', async () => {
+test('an open old payment session is never queried, expired or unlocked by a draft edit', async () => {
   const { POST, calls } = route({
     relatedOrderIds: ['order-1'],
     lockedOrders: [{ order_id: 'order-1', order_status: 'unpaid', checkout_session_id: 'cs_old' }],
   })
   const response = await POST(post({ creationId, decision: 'confirmed', body: 'New message', expectedRevision: 1 }))
   assert.equal(response.status, 200)
-  assert.deepEqual(calls.map(call => call.kind), ['load', 'retrieve', 'expire', 'clear', 'rpc'])
+  assert.deepEqual(calls.map(call => call.kind), ['load', 'rpc'])
 })
 
-test('complete or unverified payment status prevents a dedication edit', async () => {
-  for (const sessionStatus of ['complete', 'unknown']) {
+test('confirmed and skipped draft saves are independent of complete, unknown or unavailable Stripe', async () => {
+  for (const sessionStatus of ['complete', 'unknown', 'open']) {
+   for (const decision of ['confirmed', 'skipped']) {
     const { POST, calls } = route({
       relatedOrderIds: ['order-1'],
       lockedOrders: [{ order_id: 'order-1', checkout_session_id: 'cs_old' }],
       sessionStatus,
+      stripeEnabled: false,
     })
-    const response = await POST(post({ creationId, decision: 'skipped', expectedRevision: 1 }))
-    assert.equal(response.status, sessionStatus === 'complete' ? 409 : 500)
-    assert.deepEqual(calls.map(call => call.kind), ['load', 'retrieve'])
+    const response = await POST(post({ creationId, decision, body: 'A draft message', expectedRevision: 1 }))
+    assert.equal(response.status, 200)
+    assert.deepEqual(calls.map(call => call.kind), ['load', 'rpc'])
+   }
   }
+})
+
+test('saving the same draft and then changed text makes only owner reads and CAS RPC calls', async () => {
+  const { POST, calls } = route({ relatedOrderIds: ['order-1'],
+    lockedOrders: [{ order_id: 'order-1', checkout_session_id: 'cs_old' }] })
+  for (const [index, body] of ['Same draft', 'Same draft', 'Changed draft'].entries()) {
+    const response = await POST(post({ creationId, decision: 'confirmed', body, expectedRevision: index + 1 }))
+    assert.equal(response.status, 200)
+  }
+  assert.deepEqual(calls.map(call => call.kind), ['load', 'rpc', 'load', 'rpc', 'load', 'rpc'])
+  assert.deepEqual(calls.filter(call => call.kind === 'rpc').map(call => call.args.p_expected_revision), [1, 2, 3])
 })
 
 test('ownership and revision conflicts fail closed without a successful save', async () => {

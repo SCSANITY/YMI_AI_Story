@@ -16,7 +16,7 @@ import {getUiMessage as t} from '../../src/lib/i18n-messages';
 const noop=()=>{};
 const items=[{creation_id:'demo',template_id:'Demo_story',templates:{name:'A Story for Alston',story_type:'Adventure'}}];
 const grid=React.createElement(MyBooksGrid,{items,gridClass:'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-10',
- displayCurrency:'USD',pendingAction:null,pendingCustomizeHref:null,dedicationChoices:{demo:{decision:'undecided'}},t,
+ displayCurrency:'USD',pendingAction:null,pendingCustomizeHref:null,dedicationChoices:{demo:{creationId:'demo',decision:'undecided',body:null,revision:null,previouslyPurchased:false}},t,
  resolveCover:()=>null,resolveTemplatePrice:()=>39,resolveTemplateCompareAtPrice:()=>49,resolveTemplateDiscountPercent:()=>20,
  buildPreviewHref:()=>'/fixture-only',onPreview:noop,onFinishDedication:noop,onPrefetchPreview:noop,onDelete:noop,onAddToCart:noop,onBuyNow:noop});
 export const markup=renderToStaticMarkup(React.createElement('main',{className:'mx-auto max-w-7xl px-4 py-8 md:px-8'},
