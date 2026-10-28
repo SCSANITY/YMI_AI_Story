@@ -141,4 +141,5 @@
 
 /* Match the standalone reference within the site reset, without touching shared headings. */
 .sec{line-height:normal}
-.chip,.ico{box-sizing:content-box}
+.chip{box-sizing:border-box}
+.ico{box-sizing:content-box}
