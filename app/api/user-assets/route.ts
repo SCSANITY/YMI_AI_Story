@@ -103,6 +103,11 @@ export async function DELETE(request: Request) {
   if (!owner) return NextResponse.json({ error: 'Missing owner context' }, { status: 401 })
   const filter = ownerFilter(owner)
 
+  const { data: target, error: targetError } = await supabaseAdmin.from('user_assets')
+    .select('asset_type').eq('asset_id', assetId).eq('owner_type', filter.owner_type).eq(filter.column, filter.value).maybeSingle()
+  if (targetError) return NextResponse.json({ error: 'Unable to inspect asset' }, { status: 500 })
+  if (!target) return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
+
   const { data: deletionResult, error: deleteError } = await supabaseAdmin
     .rpc('delete_owned_unbound_user_asset', {
       p_asset_id: assetId,
@@ -113,6 +118,9 @@ export async function DELETE(request: Request) {
     .single()
 
   if (deleteError) {
+    if (deleteError.message?.includes('face_asset_bound')) {
+      return NextResponse.json({ error: 'This photo is used by a personalized book and cannot be deleted' }, { status: 409 })
+    }
     if (deleteError.message?.includes('voice_asset_bound')) {
       return NextResponse.json(
         { error: 'This recording is bound to a personalized book and cannot be deleted' },
@@ -133,6 +141,10 @@ export async function DELETE(request: Request) {
   const cleanupId = deletion?.out_cleanup_id ? String(deletion.out_cleanup_id) : null
   const storagePath = deletion?.out_storage_path ? String(deletion.out_storage_path) : null
   let storageCleanupPending = false
+
+  if (target.asset_type === 'face_image') {
+    return NextResponse.json({ ok: true })
+  }
 
   if (cleanupId && storagePath) {
     const { error: storageError } = await supabaseAdmin.storage

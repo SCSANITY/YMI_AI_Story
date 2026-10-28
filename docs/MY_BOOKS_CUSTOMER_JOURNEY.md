@@ -4,6 +4,11 @@ This document describes only the customer-facing My Books and owned Reader
 flow in the Next.js application. Platform status remains in the root governance
 documentation.
 
+Issue28 S1 candidate note: the purchase paragraphs below describe the intended
+direct-checkout contract; the current Buy Again/Saved Buy Now still have the
+dedication detour until the separate S2 implementation. S1 changes only safe
+removal, protected face history and archived-version visibility, not checkout.
+
 ## Entry and shelf selection
 
 - `/my-books` loads the customer's creations and resolves each creation into
@@ -56,3 +61,18 @@ documentation.
   Checkout can recover from the returned order and cart-item IDs.
 - Purchase-state query failures are returned as service errors and are never
   presented as an empty shelf or an unpurchased creation.
+
+## Safe removal (issue28 S1, offline candidate)
+
+- Both archive and hard-delete revoke preview share links in the same owner-scoped
+  transaction. An existing public link then returns not found; share routes do
+  not add a second archive-state rule.
+- Photo-version members archive, retain ancestry/consumed changes, and disappear
+  from the picker. Only an independent original without transaction history may
+  hard-delete. Shared sources and paid facts remain protected.
+- Files are queued inside the transaction and removed only by the existing
+  post-commit cleanup consumer. The customer always sees "Removed from My Books."
+  Queue status is internal; this feedback is not a claim of physical erasure.
+- Manual history deletion and eight-photo pruning use the same face-reference
+  protection. The visible history stays bounded; an old referenced source is
+  retained even if it falls outside the latest eight history entries.

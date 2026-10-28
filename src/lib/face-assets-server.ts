@@ -1,10 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { pruneFaceHistory } from '@/lib/face-history-cleanup-server'
 import {
   isValidUserAssetStoragePath,
   validateStoredUserAssetMetadata,
 } from '@/lib/userAssetsStorage'
-
-const MAX_FACE_IMAGES = 8
 
 export type FaceAssetOwner = {
   ownerType: 'customer' | 'anon'
@@ -178,7 +177,6 @@ export async function confirmPendingFaceAsset(
     )
   }
 
-  const ownerKey = ownerColumn(owner)
   const { data: asset, error: assetError } = await supabaseAdmin
     .from('user_assets')
     .insert({
@@ -211,27 +209,7 @@ export async function confirmPendingFaceAsset(
     throw new FaceAssetServerError('Failed to record pending face asset', 500)
   }
 
-  const { data: assets } = await supabaseAdmin
-    .from('user_assets')
-    .select('asset_id, storage_path')
-    .eq('owner_type', owner.ownerType)
-    .eq(ownerKey, owner.ownerId)
-    .eq('asset_type', 'face_image')
-    .order('created_at', { ascending: true })
-
-  if (assets && assets.length > MAX_FACE_IMAGES) {
-    const toRemove = assets
-      .slice(0, assets.length - MAX_FACE_IMAGES)
-      .map((row) => row.asset_id)
-    if (toRemove.length) {
-      await supabaseAdmin.from('user_assets').delete().in('asset_id', toRemove)
-      const paths = assets
-        .slice(0, assets.length - MAX_FACE_IMAGES)
-        .map((row) => row.storage_path)
-        .filter((value): value is string => Boolean(value))
-      if (paths.length) await supabaseAdmin.storage.from('raw-private').remove(paths)
-    }
-  }
+  await pruneFaceHistory(owner.ownerType, owner.ownerId)
 
   return {
     asset_id: String(asset.asset_id),

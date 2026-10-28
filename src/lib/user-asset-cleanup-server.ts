@@ -79,11 +79,12 @@ export async function processUserAssetCleanup(params?: {
       removed += 1
     } catch (error) {
       failed += 1
-      await supabaseAdmin.rpc('fail_user_asset_cleanup_claim', {
+      const { data: recorded, error: recordError } = await supabaseAdmin.rpc('fail_user_asset_cleanup_claim', {
         p_cleanup_id: claim.out_cleanup_id,
         p_processing_token: claim.out_processing_token,
         p_error: error instanceof Error ? error.message : String(error),
       })
+      if (recordError || recorded !== true) throw new Error('Cleanup failure could not be recorded')
       console.warn('[user-assets] cleanup claim failed', {
         cleanupId: claim.out_cleanup_id,
         error: error instanceof Error ? error.message : String(error),

@@ -2,6 +2,16 @@ import { supabaseAdmin } from './supabaseAdmin'
 import { ownerFilter, type CheckoutOwner } from './checkout-owner'
 import { USER_ASSET_SIGN_TTL_SECONDS } from './userAssetsStorage'
 
+// Keep complete ancestry/counts in the RPC. Only picker enrichment is filtered.
+export async function readVisiblePreviewVersionIds(owner: CheckoutOwner, creationIds: string[]) {
+  const filter = ownerFilter(owner)
+  const { data, error } = await supabaseAdmin.from('creations')
+    .select('creation_id,is_archived,deleted_at').in('creation_id', creationIds)
+    .eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
+  if (error || !data || data.length !== new Set(creationIds).size) throw new Error('Version visibility unavailable')
+  return new Set<string>(data.filter(row => !row.is_archived && !row.deleted_at).map(row => String(row.creation_id)))
+}
+
 // Only the already-owned group is eligible. Raw snapshot/storage fields stay
 // server-side; the DTO receives signed images, as the existing asset reader does.
 export async function readPreviewVersionPhotos(owner: CheckoutOwner, creationIds: string[]) {

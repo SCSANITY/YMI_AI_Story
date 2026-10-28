@@ -66,7 +66,10 @@ function routeHarness(kind = 'customer', foreign = false) {
       from(table) { assert.equal(table, 'creations'); return query },
       rpc: async (name, args) => { calls.push([name, args]); return { data: rows, error: null } },
     } },
-    '@/lib/preview-version-photos-server': { readPreviewVersionPhotos: async () => new Map([[child, { photoUrl: 'https://signed.test/photo', faceAssetId: uuid(40) }]]) },
+    '@/lib/preview-version-photos-server': {
+      readVisiblePreviewVersionIds: async () => new Set([root, child]),
+      readPreviewVersionPhotos: async () => new Map([[child, { photoUrl: 'https://signed.test/photo', faceAssetId: uuid(40) }]]),
+    },
   })
   return { route, calls, filters }
 }

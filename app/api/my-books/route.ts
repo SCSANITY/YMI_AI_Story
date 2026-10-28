@@ -1,5 +1,6 @@
 import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
+import { UUID_REGEX } from '@/lib/validators'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import { getEmptyPurchaseSummary, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
@@ -9,12 +10,6 @@ import {
   scopeCheckoutOwnerQuery,
   type CheckoutOwner,
 } from '@/lib/checkout-owner'
-
-type JobOutputAssets = {
-  bucket?: string
-  pages?: Array<{ page_index: number; storage_path: string; storage_path_full?: string }>
-  pdf_path?: string
-} | null
 
 async function loadCreationsWithArchive(owner: CheckoutOwner) {
   const archiveSelect = `
@@ -124,146 +119,32 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const body = await request.json()
+  const body = await request.json().catch(() => null)
   const creationId = body?.creationId ?? body?.creation_id
-
-  if (!creationId) {
-    return NextResponse.json({ error: 'Missing creationId' }, { status: 400 })
+  if (typeof creationId !== 'string' || !UUID_REGEX.test(creationId)) {
+    return privateJson({ error: 'Invalid creationId' }, { status: 400 })
   }
-
   let owner
   try {
-    owner = await resolveCheckoutOwner(request, {
-      expectedCustomerId: body?.customerId ?? null,
-    })
+    owner = await resolveCheckoutOwner(request, { expectedCustomerId: body?.customerId ?? null })
   } catch (error) {
-    return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
+    return checkoutOwnerErrorResponse(error) ?? privateJson({ error: 'Failed to resolve owner' }, { status: 500 })
   }
-  if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const scopedCreationQuery = scopeCheckoutOwnerQuery(
-    supabaseAdmin.from('creations').select('creation_id').eq('creation_id', creationId),
-    owner
-  )
-  const { data: targetCreation } = await scopedCreationQuery.maybeSingle()
-  if (!targetCreation?.creation_id) {
-    return NextResponse.json({ error: 'Creation not found' }, { status: 404 })
+  if (!owner) return privateJson({ error: 'Unauthorized' }, { status: 401 })
+  const { data, error } = await supabaseAdmin.rpc('remove_owned_preview_creation', {
+    p_creation_id: creationId,
+    p_owner_type: owner.ownerType,
+    p_owner_id: owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId,
+  })
+  if (error) {
+    const status = error.code === 'P0002' ? 404 : error.code === 'PT409' ? 409 : 500
+    return privateJson({ error: status === 409 ? 'This preview is busy. Please try again later.' : 'Unable to remove this preview.' }, { status })
   }
-
-  const scopedCartQuery = scopeCheckoutOwnerQuery(
-    supabaseAdmin
-      .from('cart_items')
-      .select('cart_item_id, status, payment_id, order_id')
-      .eq('creation_id', creationId),
-    owner
-  )
-  const { data: cartItems, error: cartError } = await scopedCartQuery
-  if (cartError) {
-    return NextResponse.json({ error: 'Failed to inspect creation references' }, { status: 500 })
+  const result = data as { ok?: boolean; mode?: string } | null
+  if (!result?.ok || !['soft', 'hard'].includes(String(result.mode))) {
+    return privateJson({ error: 'Unable to confirm preview removal. Please reload My Books.' }, { status: 503 })
   }
-
-  const linkedItems = cartItems ?? []
-  const hasTransactionHistory = linkedItems.some(
-    (item: { status?: string | null; payment_id?: string | null; order_id?: string | null }) =>
-      item.status === 'ordered' || Boolean(item.payment_id) || Boolean(item.order_id)
-  )
-
-  // Scenario A: creation already entered transaction flow -> soft delete only.
-  if (hasTransactionHistory) {
-    const scopedArchiveQuery = scopeCheckoutOwnerQuery(
-      supabaseAdmin
-        .from('creations')
-        .update({
-          is_archived: true,
-          deleted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('creation_id', creationId),
-      owner
-    )
-    const { error: archiveError } = await scopedArchiveQuery
-
-    if (archiveError?.message?.includes('is_archived') || archiveError?.code === '42703') {
-      return NextResponse.json(
-        {
-          error: 'Archive columns are missing. Please run the creations soft-delete migration first.',
-        },
-        { status: 500 }
-      )
-    }
-
-    if (archiveError) {
-      return NextResponse.json({ error: 'Failed to archive creation' }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, mode: 'soft' })
-  }
-
-  // Scenario B: only draft/cart references -> hard delete + storage cleanup.
-  const scopedJobsQuery = scopeCheckoutOwnerQuery(
-    supabaseAdmin
-      .from('jobs')
-      .select('job_id, output_assets')
-      .eq('creation_id', creationId),
-    owner
-  )
-  const { data: jobs } = await scopedJobsQuery
-
-  const bucketToPaths = new Map<string, Set<string>>()
-  for (const job of jobs ?? []) {
-    const outputAssets = job.output_assets as JobOutputAssets
-    if (!outputAssets) continue
-    const bucket = outputAssets.bucket || 'raw-private'
-    if (!bucketToPaths.has(bucket)) {
-      bucketToPaths.set(bucket, new Set())
-    }
-    const bucketSet = bucketToPaths.get(bucket)
-    if (!bucketSet) continue
-    const pages = Array.isArray(outputAssets.pages) ? outputAssets.pages : []
-    for (const page of pages) {
-      if (page?.storage_path) bucketSet.add(page.storage_path)
-      if (page?.storage_path_full) bucketSet.add(page.storage_path_full)
-    }
-    if (outputAssets.pdf_path) {
-      bucketSet.add(outputAssets.pdf_path)
-    }
-  }
-
-  for (const [bucket, paths] of bucketToPaths.entries()) {
-    const toRemove = Array.from(paths)
-    if (toRemove.length === 0) continue
-    await supabaseAdmin.storage.from(bucket).remove(toRemove)
-  }
-
-  const scopedJobsDeleteQuery = scopeCheckoutOwnerQuery(
-    supabaseAdmin
-      .from('jobs')
-      .delete()
-      .eq('creation_id', creationId),
-    owner
-  )
-  await scopedJobsDeleteQuery
-
-  const scopedCartDeleteQuery = scopeCheckoutOwnerQuery(
-    supabaseAdmin
-      .from('cart_items')
-      .delete()
-      .eq('creation_id', creationId),
-    owner
-  )
-  await scopedCartDeleteQuery
-
-  const scopedCreationDeleteQuery = scopeCheckoutOwnerQuery(
-    supabaseAdmin
-      .from('creations')
-      .delete()
-      .eq('creation_id', creationId),
-    owner
-  )
-  const { error: deleteError } = await scopedCreationDeleteQuery
-  if (deleteError) {
-    return NextResponse.json({ error: 'Failed to delete creation' }, { status: 500 })
-  }
-
-  return NextResponse.json({ ok: true, mode: 'hard' })
+  // Physical cleanup is internal and post-commit. No Storage or cleanup batch is
+  // called from this request, and an unknown response is never auto-retried.
+  return privateJson({ ok: true, mode: result.mode })
 }

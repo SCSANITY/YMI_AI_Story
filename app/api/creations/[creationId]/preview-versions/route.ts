@@ -16,7 +16,7 @@ import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
 import { buildPreviewVersionGroup } from '@/lib/preview-version-group'
-import { readPreviewVersionPhotos } from '@/lib/preview-version-photos-server'
+import { readPreviewVersionPhotos, readVisiblePreviewVersionIds } from '@/lib/preview-version-photos-server'
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -74,10 +74,11 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
   if (!owner) return jsonNoStore({ code: 'unauthorized' }, 401)
   const filter = ownerFilter(owner)
   const { data: creation, error: lookupError } = await supabaseAdmin.from('creations')
-    .select('creation_id').eq('creation_id', creationId)
+    .select('creation_id,is_archived,deleted_at').eq('creation_id', creationId)
     .eq('owner_type', filter.owner_type).eq(filter.column, filter.value).maybeSingle()
   if (lookupError) return jsonNoStore({ code: 'creation_lookup_failed' }, 500)
   if (!creation) return jsonNoStore({ code: 'creation_not_found' }, 404)
+  if (creation.is_archived || creation.deleted_at) return jsonNoStore({ code: 'creation_archived' }, 409)
   const { data, error } = await supabaseAdmin.rpc('read_preview_version_group', {
     p_creation_id: creationId, p_owner_type: owner.ownerType,
     p_owner_id: owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId,
@@ -85,8 +86,10 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
   if (error) return jsonNoStore({ code: 'preview_version_group_unavailable' }, error.code === '42501' ? 404 : 409)
   try {
     const group = buildPreviewVersionGroup(data ?? [], creationId)
-    const photos = await readPreviewVersionPhotos(owner, group.versions.map(version => version.creationId)).catch(() => new Map<string, { photoUrl: string; faceAssetId: string }>())
-    return jsonNoStore({ ...group, versions: group.versions.map(version => ({ ...version, photoUrl: photos.get(version.creationId)?.photoUrl ?? null, faceAssetId: photos.get(version.creationId)?.faceAssetId ?? null })) })
+    const visibleIds = await readVisiblePreviewVersionIds(owner, group.versions.map(version => version.creationId))
+    const versions = group.versions.filter(version => visibleIds.has(version.creationId))
+    const photos = await readPreviewVersionPhotos(owner, versions.map(version => version.creationId)).catch(() => new Map<string, { photoUrl: string; faceAssetId: string }>())
+    return jsonNoStore({ ...group, versions: versions.map(version => ({ ...version, photoUrl: photos.get(version.creationId)?.photoUrl ?? null, faceAssetId: photos.get(version.creationId)?.faceAssetId ?? null })) })
   } catch {
     return jsonNoStore({ code: 'preview_version_group_unavailable' }, 409)
   }

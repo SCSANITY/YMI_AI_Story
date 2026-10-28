@@ -624,7 +624,7 @@ const en: MessageDictionary = {
   'myBooks.retry': 'Try Again',
   'myBooks.deleteConfirm': 'Delete this book? This action cannot be undone.',
   'myBooks.deleteBook': 'Delete {{title}}',
-  'myBooks.deleteSuccess': 'The saved preview was deleted.',
+  'myBooks.deleteSuccess': 'Removed from My Books.',
   'myBooks.deleteFailed': "We couldn't delete this preview. Please try again.",
   'myBooks.openPreview': 'Open preview for {{title}}',
   'myBooks.addToCart': 'Add to Cart',

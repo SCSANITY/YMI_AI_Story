@@ -3,6 +3,7 @@ import { MaterialError } from '@/lib/order-materials'
 import { NextResponse } from 'next/server'
 import { parseBuffer } from 'music-metadata'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { pruneFaceHistory } from '@/lib/face-history-cleanup-server'
 import {
   isValidUserAssetStoragePath,
   USER_ASSET_SIGN_TTL_SECONDS,
@@ -16,8 +17,6 @@ import {
 import { isVerifiedSignatureVoiceDuration } from '@/lib/signature-voice'
 
 export const runtime = 'nodejs'
-
-const MAX_FACE_IMAGES = 8
 
 type ConfirmedSignatureVoiceAsset = {
   out_asset_id: string
@@ -218,25 +217,7 @@ export async function POST(request: Request) {
   }
 
   if (assetType === 'face_image') {
-    const { data: assets } = await supabaseAdmin
-      .from('user_assets')
-      .select('asset_id, storage_path')
-      .eq('owner_type', filter.owner_type)
-      .eq(filter.column, filter.value)
-      .eq('asset_type', 'face_image')
-      .order('created_at', { ascending: true })
-
-    if (assets && assets.length > MAX_FACE_IMAGES) {
-      const toRemove = assets.slice(0, assets.length - MAX_FACE_IMAGES).map((row) => row.asset_id)
-      if (toRemove.length) {
-        await supabaseAdmin.from('user_assets').delete().in('asset_id', toRemove)
-        const paths = assets
-          .slice(0, assets.length - MAX_FACE_IMAGES)
-          .map((row) => row.storage_path)
-          .filter((value): value is string => Boolean(value))
-        if (paths.length) await supabaseAdmin.storage.from('raw-private').remove(paths)
-      }
-    }
+    await pruneFaceHistory(owner.ownerType, filter.value)
   }
 
   return NextResponse.json({ ...asset, signed_url: signed.signedUrl })
