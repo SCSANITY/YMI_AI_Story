@@ -169,14 +169,15 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const handleCoverError = useCallback(() => {
     if (coverCandidate) setImageErrors((current) => new Set(current).add(coverCandidate))
   }, [coverCandidate])
-  // A signing token is not a book identity. Decode offscreen and share the
-  // retained URL across the cover face and every board, just as Preview does.
+  // Never gate a paid book on its cover image. The first candidate is usable
+  // immediately; same-object renewals retain the decoded URL until the swap.
   const decodedCover = useDecodedPreviewCover(creationId, coverCandidate, handleCoverError)
+  const visibleCoverUrl = decodedCover.url ?? coverCandidate
   const visiblePresentation = useMemo(() => {
     const presentation = bookDisplay?.presentation
-    if (!presentation?.cover || !decodedCover.url) return presentation
-    return { ...presentation, cover: { ...presentation.cover, url: decodedCover.url } }
-  }, [bookDisplay, decodedCover.url])
+    if (!presentation?.cover || !visibleCoverUrl) return presentation
+    return { ...presentation, cover: { ...presentation.cover, url: visibleCoverUrl } }
+  }, [bookDisplay, visibleCoverUrl])
 
   useEffect(() => {
     if (!reader?.finalReady || !bookDisplay) return
@@ -212,7 +213,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     router.push(`/personalize/${creation.templateId}?${params.toString()}`)
   }, [creation, router])
 
-  if (!isHydrated || loading || (canReadBook && !decodedCover.isReady && !imageErrors.has(coverCandidate ?? ''))) return <MyBookReaderSkeleton />
+  if (!isHydrated || loading) return <MyBookReaderSkeleton />
 
   if (loadError || !reader || !reader.eligible || !creation || (reader.finalReady && !bookDisplay)) {
     const issue = loadError ?? 'invalid'
@@ -308,8 +309,8 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
 
         <PreviewBookShell
           ariaLabel={resolvedTitle}
-          coverUrl={decodedCover.url}
-          ready={decodedCover.isReady}
+          coverUrl={visibleCoverUrl}
+          ready={canReadBook}
           waitingLeft={null}
           waitingRight={<p className="p-8 text-center text-sm text-gray-500">{t('myBooks.readerPageUnavailable')}</p>}
           currentSpread={currentSpread}

@@ -40,7 +40,12 @@ function fixture() {
 }
 
 test('same-object token renewal keeps cover face and boards until one decode; spread and motion identity stay put',async()=>{
-  const h=fixture();await h.runtime.flush();assert.equal(h.shell(),undefined,'initial ready book waits for cover decode')
+  const h=fixture();await h.runtime.flush()
+  assert.equal(h.shell().ready,true,'paid Reader is ready before any cover decode')
+  assert.equal(h.shell().coverUrl,signed('0','one'))
+  const initialFace=uiNodes(h.shell().renderPage('right',0)).find(n=>n.type==='img')
+  assert.equal(initialFace.props.src,h.shell().coverUrl)
+  assert.ok(h.images.filter(i=>i.url===signed('0','one')).every(i=>!i.decodes),'cover is not decoded yet')
   const first=await h.decode('one');assert.equal(first.decodes,1)
   await h.turn('next');await h.turn('next');assert.equal(h.shell().currentSpread,2)
   await h.refresh(data('two'))
@@ -109,3 +114,42 @@ test('adjacent prefetch is bounded and Reader never polls; failed renewal keeps 
   h.runtime.unmount()
 })
 
+
+for (const failure of ['decode rejection','timeout']) {
+  test(`initial cover ${failure} never blocks paid Reader open, inner pages or close`,async()=>{
+    const h=fixture();await h.runtime.flush()
+    assert.equal(h.shell().ready,true)
+    const cover=h.images.find(i=>i.url===signed('0','one'))
+    if(failure==='decode rejection') {
+      cover.decode=()=>Promise.reject(new Error('Synthetic cover decode failure'))
+      cover.onload();await h.runtime.flush()
+    } else {
+      h.runtime.advance(15_000);await h.runtime.flush()
+    }
+    assert.equal(h.shell().ready,true)
+    assert.equal(h.shell().coverUrl,signed('0','one'))
+    assert.equal(h.requests.length,1,'background decode failure never retries the Reader')
+    await h.turn('next');assert.equal(h.shell().currentSpread,1)
+    const inner=uiNodes(h.shell().renderPage('right',1)).find(n=>n.type==='img')
+    assert.ok(inner,'released interior remains accessible')
+    await h.turn('next');assert.equal(h.shell().currentSpread,2)
+    h.shell().onCover();h.runtime.render();const closing=h.shell().transition
+    assert.equal(closing.kind,'close');h.shell().onComplete(closing.id);h.runtime.render()
+    assert.equal(h.shell().currentSpread,0);assert.equal(h.shell().ready,true)
+    h.runtime.unmount();assert.equal(h.runtime.lateWrites,0)
+  })
+}
+
+test('native cover error keeps the existing silent signed-URL recovery without blocking navigation',async()=>{
+  const h=fixture();await h.runtime.flush();await h.decode('one')
+  await h.turn('next');await h.turn('next')
+  h.payload=data('two')
+  const face=uiNodes(h.shell().renderPage('right',0)).find(n=>n.type==='img')
+  face.props.onError();await h.runtime.flush()
+  assert.equal(h.requests.length,2);assert.equal(h.shell().ready,true)
+  assert.equal(h.shell().currentSpread,2);assert.equal(h.shell().coverUrl,signed('0','one'))
+  await h.decode('two')
+  assert.equal(h.shell().coverUrl,signed('0','two'));assert.equal(h.shell().currentSpread,2)
+  await h.turn('next');assert.equal(h.shell().currentSpread,3)
+  h.runtime.unmount()
+})
