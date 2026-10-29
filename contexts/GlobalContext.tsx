@@ -12,6 +12,7 @@ import {
 } from '@/lib/personalized-book-title';
 import { getCurrencyRegionOption, resolveCurrencyRegionOption, resolveInitialCurrencyRegionOption } from '@/lib/currency-regions';
 import { CURRENCY_GEO_COOKIE, CURRENCY_USER_SELECTED_KEY, readCookieValue } from '@/lib/currency-geo';
+import { resolveReadIdentity, withReadIdentity } from '@/lib/read-identity';
 import {
   login as loginAction,
   requestPasswordReset as requestPasswordResetAction,
@@ -263,16 +264,16 @@ export const GlobalProvider: React.FC<{
   }, []);
 
   const readCartFromDb = useCallback(async () => {
-    const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-    const response = await fetch(`/api/cart${params}`, {
+    const identity = resolveReadIdentity(isAuthResolved, user?.customerId);
+    const response = await fetch('/api/cart', withReadIdentity(identity, {
       credentials: 'include',
       cache: 'no-store',
-    });
+    }));
     if (!response.ok) throw new Error(CART_PRICE_LOAD_ERROR);
     const data = await response.json();
     if (!Array.isArray(data?.items)) throw new Error(CART_PRICE_LOAD_ERROR);
     return mapCartItems(data.items);
-  }, [mapCartItems, user?.customerId]);
+  }, [isAuthResolved, mapCartItems, user?.customerId]);
 
   const refreshCartFromDb = useCallback(async () => {
     try {
@@ -298,6 +299,7 @@ export const GlobalProvider: React.FC<{
   }, []);
 
   useEffect(() => {
+    if (!isAuthResolved) return;
     let isActive = true;
 
     const loadCartFromDb = async () => {
@@ -318,18 +320,18 @@ export const GlobalProvider: React.FC<{
     return () => {
       isActive = false;
     };
-  }, [readCartFromDb]);
+  }, [isAuthResolved, readCartFromDb]);
 
   useEffect(() => {
-    if (!isHydrated) return;
+    if (!isHydrated || !isAuthResolved) return;
 
     let isActive = true;
     setIsFavoritesLoading(true);
 
     const loadFavoritesFromDb = async () => {
       try {
-        const params = user?.customerId ? `?customerId=${user.customerId}` : '';
-        const response = await fetch(`/api/favourites${params}`, { credentials: 'include', cache: 'no-store' });
+        const identity = resolveReadIdentity(isAuthResolved, user?.customerId);
+        const response = await fetch('/api/favourites', withReadIdentity(identity, { credentials: 'include', cache: 'no-store' }));
         if (!response.ok) return;
         const data = await response.json();
         if (!isActive || favoriteTogglePendingRef.current) return;
@@ -347,7 +349,7 @@ export const GlobalProvider: React.FC<{
     return () => {
       isActive = false;
     };
-  }, [isHydrated, mapFavouriteItems, user?.customerId]);
+  }, [isAuthResolved, isHydrated, mapFavouriteItems, user?.customerId]);
 
   useEffect(() => {
     if (user) localStorage.setItem('ymi_user', JSON.stringify(user));
@@ -473,6 +475,7 @@ export const GlobalProvider: React.FC<{
     if (typeof window === 'undefined' || !isHydrated) return;
 
     if (suspendAuthSync) {
+      setIsAuthResolved(true);
       return;
     }
 

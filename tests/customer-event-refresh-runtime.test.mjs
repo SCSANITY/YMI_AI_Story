@@ -30,7 +30,8 @@ function favoritesFixture() {
         owned.set(owner, ids.includes(body.templateId) ? ids.filter(id => id !== body.templateId) : [...ids, body.templateId])
         return Response.json({})
       }
-      const owner = parsed.searchParams.get('customerId') ?? 'anon', ids = [...(owned.get(owner) ?? [])]
+      const expectsCustomer = new Headers(options.headers ?? {}).get('X-YMI-Expect-Customer') === '1'
+      const owner = expectsCustomer ? (customer ?? 'anon') : 'anon', ids = [...(owned.get(owner) ?? [])]
       return pendingReads.get(owner)?.promise ?? response(ids)
     }
     if (parsed.pathname === '/api/customer/merge') return Response.json({ customerId: customer })
@@ -88,9 +89,8 @@ test('Favorites reload on real login/logout paths and discard a prior identity p
   h.context.logout(); await h.runtime.flush()
   assert.equal(h.context.user, null)
   assert.deepEqual(Array.from(h.context.favorites, b => b.bookID), [])
-  assert.equal(h.reads().filter(r => r.query.includes('customerId=a')).length, 1)
-  assert.equal(h.reads().filter(r => r.query.includes('customerId=b')).length, 1)
-  assert.equal(h.reads().filter(r => !r.query).length, 2)
+  assert.equal(h.reads().filter(r => r.query).length, 0)
+  assert.equal(h.reads().filter(r => !r.query).length, 4)
   h.runtime.advance(60_000); h.runtime.window.dispatch('focus'); await h.runtime.flush()
   assert.equal(h.reads().length, 4)
   h.runtime.unmount(); assert.deepEqual(h.unexpected, [])
@@ -120,12 +120,19 @@ function readerData(ready = false) {
 }
 function readerFixture(initial = {}) {
   const runtime = customerRuntime(), requests = []
-  const context = { user: { customerId: 'a' }, isHydrated: true, openLoginModal() {} }
+  const context = { user: { customerId: 'a' }, isHydrated: true, isAuthResolved: true, openLoginModal() {} }
+  const identityCache = new Map()
+  const readIdentity = () => {
+    const key = context.user?.customerId ? `customer:${context.user.customerId}` : 'anon'
+    if (!identityCache.has(key)) identityCache.set(key, { key, expectCustomer: key !== 'anon' })
+    return identityCache.get(key)
+  }
   let ready = initial.ready ?? false, status = initial.status ?? 200, delayed = null
   const Reader = runtime.load('app/my-books/[creationId]/OwnedBookReader.tsx', {
     'next/link': { default: 'a', __esModule: true },
     'next/navigation': { useRouter: () => ({ push() {} }) },
     '@/contexts/GlobalContext': { useGlobalContext: () => context },
+    '@/components/useReadIdentity': { useReadIdentity: readIdentity },
     '@/lib/useI18n': { useI18n: () => ({ t: key => key }) },
     '@/components/personalize/PreviewBookShell': { PreviewBookShell: props => ({ type: 'book-stage', props: { ...props, children: props.renderPage?.('left', 0) } }) },
     '@/components/personalize/useDecodedPreviewCover': { useDecodedPreviewCover: (_identity, url) => ({ url, isReady: Boolean(url) }) },
@@ -208,7 +215,8 @@ test('Reader retains runId fencing,auth dependency reload,Retry and unmount canc
   const h = readerFixture(); await h.runtime.flush()
   const late = deferred(); h.delayed = late; h.runtime.window.dispatch('focus'); await h.runtime.flush()
   h.delayed = null; h.ready = true; h.context.user = { customerId: 'b' }; h.runtime.render(); await h.runtime.flush()
-  assert.ok(h.requests.at(-1).includes('customerId=b'))
+  assert.ok(h.requests.at(-1).includes('/reader'))
+  assert.doesNotMatch(h.requests.at(-1), /customerId=/)
   assert.match(uiText(h.runtime.tree), /myBooks.readerFullBook/)
   late.resolve(Response.json(readerData(false))); await h.runtime.flush()
   assert.match(uiText(h.runtime.tree), /myBooks.readerFullBook/)
