@@ -1,3 +1,4 @@
+import { revalidateTag, unstable_cache } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   buildCustomizeAccessSettings,
@@ -14,6 +15,8 @@ type AdminSettingsRow = {
   updated_at: string | null
 }
 
+export const CUSTOMIZE_ACCESS_CACHE_TAG = 'ymi-customize-access-v1'
+
 async function loadCustomizeAccessRow() {
   const { data, error } = await supabaseAdmin
     .from('admin_settings')
@@ -28,12 +31,21 @@ async function loadCustomizeAccessRow() {
   return (data as AdminSettingsRow | null) ?? null
 }
 
+const getCachedCustomizeAccessRow = unstable_cache(
+  loadCustomizeAccessRow,
+  [CUSTOMIZE_ACCESS_CACHE_TAG],
+  {
+    revalidate: 300,
+    tags: [CUSTOMIZE_ACCESS_CACHE_TAG],
+  },
+)
+
 export async function getCustomizeAccessSettings(options?: {
   failOnError?: boolean
 }): Promise<CustomizeAccessSettings> {
   const row = options?.failOnError
     ? await loadCustomizeAccessRow()
-    : await loadCustomizeAccessRow().catch(() => null)
+    : await getCachedCustomizeAccessRow().catch(() => null)
   if (!row) {
     return buildCustomizeAccessSettings()
   }
@@ -58,6 +70,8 @@ export async function setCustomizeAccessEnabled(enabled: boolean, updatedBy?: st
   if (error) {
     throw error
   }
+
+  revalidateTag(CUSTOMIZE_ACCESS_CACHE_TAG, { expire: 0 })
 
   return next
 }

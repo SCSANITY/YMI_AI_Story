@@ -62,7 +62,8 @@ test('customer orders use one read model and one list and detail API contract', 
   assert.match(listRoute, /loadCustomerOrders/)
   assert.match(detailRoute, /loadCustomerOrders/)
   assert.match(readModel, /CUSTOMER_ORDER_SELECT/)
-  assert.match(nav, /fetch\('\/api\/orders\?limit=10'/)
+  assert.match(nav, /fetch\('\/api\/user\/notice-counts'/)
+  assert.doesNotMatch(nav, /\/api\/orders\?limit=10|\/api\/favourites\?customerId|\/api\/my-books\?customerId/)
   assert.match(ordersPage, /fetch\('\/api\/orders'/)
 
   for (const source of [nav, ordersPage, checkout, success]) {
@@ -96,6 +97,38 @@ test('Customize has one lifecycle authority and one Preview controller', async (
     access(path.join(root, 'components/personalize/usePersonalizeFlow.ts')),
     (error) => error?.code === 'ENOENT'
   )
+})
+
+test('S-A quick wins keep one identity-owned badge read and bounded gates', async () => {
+  const [noticeRoute, rewards, nav, myBooks, visibility, customizeServer, gate, jobs, reader] = await Promise.all([
+    read('app/api/user/notice-counts/route.ts'),
+    read('src/lib/reward-vouchers-server.ts'),
+    read('components/navbar/useNavNoticeCounts.ts'),
+    read('app/api/my-books/route.ts'),
+    read('src/lib/my-books-visibility.ts'),
+    read('src/lib/customize-access-server.ts'),
+    read('components/CustomizeAccessGate.tsx'),
+    read('app/api/jobs/route.js'),
+    read('app/my-books/[creationId]/OwnedBookReader.tsx'),
+  ])
+
+  assert.match(noticeRoute, /resolveCheckoutOwner/)
+  assert.match(noticeRoute, /Promise\.all\(/)
+  assert.match(noticeRoute, /select\('favourite_id', \{ count: 'exact', head: true \}/)
+  assert.match(noticeRoute, /select\('order_id', \{ count: 'exact', head: true \}/)
+  assert.match(rewards, /owner_customer_id\.is\.null/)
+  assert.doesNotMatch(noticeRoute, /claimVouchersForCustomerEmail/)
+  assert.match(nav, /fetch\('\/api\/user\/notice-counts'/)
+  assert.match(nav, /\.catch\(\(\) => \{\s*if \(cancelled\) return\s*\}\)/)
+  assert.match(myBooks, /isVisibleMyBookRow/)
+  assert.match(visibility, /purchaseState !== 'unpurchased'/)
+  assert.match(customizeServer, /unstable_cache/)
+  assert.match(customizeServer, /revalidateTag\(CUSTOMIZE_ACCESS_CACHE_TAG/)
+  assert.doesNotMatch(gate, /canEnterCustomize\(\{\s*force:/)
+  assert.match(jobs, /getCustomizeAccessSettings/)
+  assert.match(reader, /READER_REFRESH_COOLDOWN_MS/)
+  assert.match(reader, /allowReleased/)
+  assert.match(reader, /silentRefreshRef/)
 })
 
 test('retired compatibility surfaces cannot re-enter the production runtime', async () => {

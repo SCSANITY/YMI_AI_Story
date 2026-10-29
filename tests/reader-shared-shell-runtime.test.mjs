@@ -35,12 +35,13 @@ function fixture() {
   runtime.mount(Reader,{creationId:'book'})
   const shell=()=>uiNodes(runtime.tree).find(n=>n.type==='shell')?.props
   const refresh=async next=>{payload=next;runtime.window.dispatch('focus');await runtime.flush()}
+  const renew=async next=>{payload=next;const face=uiNodes(shell().renderPage('right',0)).find(n=>n.type==='img');face.props.onError();await runtime.flush()}
   const decode=async token=>{
     const image=images.findLast(i=>i.url===signed('0',token)&&i.onload)
     assert.ok(image,`one cover candidate awaiting decode for ${token}`);image.onload();await runtime.flush();return image
   }
   const turn=async direction=>{shell().onTurn(direction);runtime.render();const pending=shell().transition;assert.ok(pending);shell().onComplete(pending.id);runtime.render()}
-  return {runtime,images,requests,pushes,shell,refresh,decode,turn,set payload(value){payload=value},set delayed(value){delayed=value}}
+  return {runtime,images,requests,pushes,shell,refresh,renew,decode,turn,set payload(value){payload=value},set delayed(value){delayed=value}}
 }
 
 test('same-object token renewal keeps cover face and boards until one decode; spread and motion identity stay put',async()=>{
@@ -52,7 +53,7 @@ test('same-object token renewal keeps cover face and boards until one decode; sp
   assert.ok(h.images.filter(i=>i.url===signed('0','one')).every(i=>!i.decodes),'cover is not decoded yet')
   const first=await h.decode('one');assert.equal(first.decodes,1)
   await h.turn('next');await h.turn('next');assert.equal(h.shell().currentSpread,2)
-  await h.refresh(data('two'))
+  await h.renew(data('two'))
   assert.equal(h.shell().currentSpread,2);assert.equal(h.shell().coverUrl,signed('0','one'))
   const face=()=>uiNodes(h.shell().renderPage('right',0)).find(n=>n.type==='img')
   assert.equal(face().props.src,h.shell().coverUrl)
@@ -95,7 +96,7 @@ test('Reader reconciliation clamps a smaller Final and cancels stale completion 
   const h=fixture();await h.runtime.flush();await h.decode('one')
   for(let i=0;i<4;i++)await h.turn('next')
   h.shell().onTurn('next');h.runtime.render();const stale=h.shell().transition
-  await h.refresh(data('two',2))
+  await h.renew(data('two',2))
   assert.equal(h.shell().currentSpread,2);assert.equal(h.shell().transition,null)
   h.shell().onComplete(stale.id);h.runtime.render();assert.equal(h.shell().currentSpread,2)
   h.shell().onTurn('next');h.runtime.render();assert.equal(h.shell().transition,null)
@@ -105,9 +106,10 @@ test('Reader reconciliation clamps a smaller Final and cancels stale completion 
 test('ready-to-preparing and creation identity changes cancel turns; late decode/load after unmount does not write',async()=>{
   const h=fixture();await h.runtime.flush();await h.decode('one')
   h.shell().onTurn('next');h.runtime.render();const old=h.shell()
-  await h.refresh({...data('two'),finalReady:false,pages:[]})
+  await h.renew({...data('two'),finalReady:false,pages:[]})
   assert.equal(h.shell(),undefined);assert.match(uiText(h.runtime.tree),/readerPreparingTitle/)
   old.onComplete(old.transition.id);h.runtime.render()
+  h.runtime.advance(15_000)
   await h.refresh(data('three'));await h.decode('three');assert.equal(h.shell().currentSpread,0)
   h.shell().onTurn('next');h.runtime.render();const stale=h.shell()
   h.runtime.update({creationId:'different'});await h.runtime.flush()
@@ -121,7 +123,7 @@ test('adjacent prefetch is bounded and Reader never polls; failed renewal keeps 
   const h=fixture();await h.runtime.flush();await h.decode('one')
   assert.deepEqual([...new Set(h.images.map(i=>i.url))].sort(),[signed('0','one'),signed('1','one'),signed('2','one')].sort())
   await h.turn('next');await h.turn('next');h.images.length=0
-  await h.refresh(data('two'))
+  await h.renew(data('two'))
   const cover=h.images.find(i=>i.url===signed('0','two'));cover.onerror();await h.runtime.flush()
   assert.equal(h.shell().coverUrl,signed('0','one'));assert.equal(h.shell().currentSpread,2)
   assert.deepEqual([...new Set(h.images.map(i=>i.url))].sort(),Array.from({length:7},(_,i)=>signed(String(i),'two')).sort())

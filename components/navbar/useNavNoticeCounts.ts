@@ -31,31 +31,17 @@ async function fetchNoticeCounts(customerId: string): Promise<NavNoticeCounts> {
   if (existingRequest) return existingRequest
 
   const request = (async () => {
-    const encodedCustomerId = encodeURIComponent(customerId)
-    const [favoritesData, rewardsData, ordersData, booksData] = await Promise.all([
-      fetch(`/api/favourites?customerId=${encodedCustomerId}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      }).then((res) => (res.ok ? res.json() : { items: [] })),
-      fetch('/api/account/reward-vouchers', {
-        credentials: 'include',
-        cache: 'no-store',
-      }).then((res) => (res.ok ? res.json() : { active: [] })),
-      fetch('/api/orders?limit=10', {
-        credentials: 'include',
-        cache: 'no-store',
-      }).then((res) => (res.ok ? res.json() : { orders: [], count: 0 })),
-      fetch(`/api/my-books?customerId=${encodedCustomerId}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      }).then((res) => (res.ok ? res.json() : { items: [] })),
-    ])
-
+    const response = await fetch('/api/user/notice-counts', {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!response.ok) throw new Error(`Notice counts failed with ${response.status}`)
+    const data = await response.json() as Partial<NavNoticeCounts>
     const counts: NavNoticeCounts = {
-      favorites: Array.isArray(favoritesData?.items) ? favoritesData.items.length : 0,
-      rewards: Array.isArray(rewardsData?.active) ? rewardsData.active.length : 0,
-      orders: clampCount(ordersData?.count ?? (Array.isArray(ordersData?.orders) ? ordersData.orders.length : 0)),
-      books: Array.isArray(booksData?.items) ? booksData.items.length : 0,
+      favorites: clampCount(data.favorites),
+      rewards: clampCount(data.rewards),
+      orders: clampCount(data.orders),
+      books: clampCount(data.books),
     }
 
     noticeCountsCache.set(customerId, { counts, loadedAt: Date.now() })
@@ -182,7 +168,6 @@ export function useNavNoticeCounts({ customerId, pathname }: UseNavNoticeCountsP
         })
         .catch(() => {
           if (cancelled) return
-          setModuleCounts(EMPTY_NOTICE_COUNTS)
         })
     })
 

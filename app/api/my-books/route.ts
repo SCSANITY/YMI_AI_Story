@@ -4,6 +4,7 @@ import { UUID_REGEX } from '@/lib/validators'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import { getEmptyPurchaseSummary, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
+import { isVisibleMyBookRow } from '@/lib/my-books-visibility'
 import {
   checkoutOwnerErrorResponse,
   resolveCheckoutOwner,
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
   }
   const visibleRows = allRows.filter((row: { creation_id?: string | null; is_archived?: boolean | null }) => {
     const summary = purchaseSummaryByCreation.get(String(row.creation_id || '')) ?? getEmptyPurchaseSummary()
-    return summary.purchaseState !== 'unpurchased' || row?.is_archived !== true
+    return isVisibleMyBookRow(row, summary)
   })
   const jobIds = visibleRows
     .map((row: { preview_job_id?: string | null }) => row.preview_job_id)

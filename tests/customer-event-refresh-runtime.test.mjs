@@ -127,7 +127,7 @@ function readerFixture(initial = {}) {
     'next/navigation': { useRouter: () => ({ push() {} }) },
     '@/contexts/GlobalContext': { useGlobalContext: () => context },
     '@/lib/useI18n': { useI18n: () => ({ t: key => key }) },
-    '@/components/personalize/PreviewBookShell': { PreviewBookShell: 'book-stage' },
+    '@/components/personalize/PreviewBookShell': { PreviewBookShell: props => ({ type: 'book-stage', props: { ...props, children: props.renderPage?.('left', 0) } }) },
     '@/components/personalize/useDecodedPreviewCover': { useDecodedPreviewCover: (_identity, url) => ({ url, isReady: Boolean(url) }) },
     'framer-motion': { useReducedMotion: () => false },
     '@/components/personalize/PreviewBookPageContent': { PreviewBookPageContent: 'book-content' },
@@ -157,8 +157,50 @@ test('Reader reopen and focus/pageshow events still load current Final without i
   h.runtime.window.dispatch('focus'); await h.runtime.flush()
   h.runtime.window.dispatch('pageshow', { persisted: true }); await h.runtime.flush()
   assert.match(uiText(h.runtime.tree), /myBooks.readerFullBook/)
-  const count = h.requests.length; h.runtime.advance(3_600_000); await h.runtime.flush()
+  const count = h.requests.length
+  assert.equal(count, 1, 'released Readers skip lifecycle refetches')
+  h.runtime.advance(3_600_000); await h.runtime.flush()
   assert.equal(h.requests.length, count)
+  h.runtime.unmount()
+})
+
+test('Reader coalesces lifecycle bursts and applies a completion cooldown while Final is pending', async () => {
+  const h = readerFixture(); await h.runtime.flush()
+  h.runtime.window.dispatch('focus')
+  h.runtime.window.dispatch('pageshow')
+  h.runtime.document.dispatch('visibilitychange')
+  await h.runtime.flush()
+  assert.equal(h.requests.length, 2, 'one request for the lifecycle burst')
+
+  h.runtime.window.dispatch('focus')
+  h.runtime.window.dispatch('pageshow')
+  await h.runtime.flush()
+  assert.equal(h.requests.length, 2, 'cooldown suppresses a second burst')
+
+  h.runtime.advance(15_000)
+  h.runtime.window.dispatch('focus')
+  await h.runtime.flush()
+  assert.equal(h.requests.length, 3, 'refresh resumes after the cooldown')
+  h.runtime.unmount()
+})
+
+test('Reader image-error renewal shares the guard even after Final is released', async () => {
+  const h = readerFixture({ ready: true }); await h.runtime.flush()
+  const pageContent = uiNodes(h.runtime.tree).find(n => n.type === 'book-content')
+  assert.ok(pageContent?.props?.onImageError)
+  pageContent.props.onImageError('expired-url')
+  pageContent.props.onImageError('expired-url-2')
+  await h.runtime.flush()
+  assert.equal(h.requests.length, 2, 'image errors coalesce into one renewal')
+  h.runtime.unmount()
+})
+
+test('Reader error state still recovers on a visible lifecycle event', async () => {
+  const h = readerFixture({ status: 503 }); await h.runtime.flush()
+  h.status = 200; h.ready = true
+  h.runtime.window.dispatch('focus'); await h.runtime.flush()
+  assert.equal(h.requests.length, 2)
+  assert.match(uiText(h.runtime.tree), /myBooks.readerFullBook/)
   h.runtime.unmount()
 })
 

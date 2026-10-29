@@ -49,6 +49,8 @@ type ReaderResponse = {
 
 type ReaderLoadIssue = 'signed_out' | 'not_found' | 'not_purchased' | 'refunded' | 'service' | 'invalid'
 
+const READER_REFRESH_COOLDOWN_MS = 15_000
+
 function resolveReaderLoadIssue(status: number, response: ReaderResponse): ReaderLoadIssue {
   if (status === 401) return 'signed_out'
   if (status === 404) return 'not_found'
@@ -71,10 +73,19 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const checkoutInFlightRef = useRef(false)
   const loadRunIdRef = useRef(0)
+  const readerStateRef = useRef<ReaderResponse | null>(null)
+  const silentRefreshRef = useRef<Promise<void> | null>(null)
+  const silentRefreshRunIdRef = useRef(0)
+  const lastSilentRefreshCompletedAtRef = useRef(-READER_REFRESH_COOLDOWN_MS)
 
   const loadReader = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!isHydrated) return
     const runId = ++loadRunIdRef.current
+    if (!silent) {
+      readerStateRef.current = null
+      silentRefreshRef.current = null
+      silentRefreshRunIdRef.current = 0
+    }
     if (silent) setRefreshing(true)
     else setLoading(true)
     try {
@@ -109,6 +120,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         return
       }
       if (runId !== loadRunIdRef.current) return
+      readerStateRef.current = data
       setReader(data)
       setBookDisplay(nextBookDisplay)
       setLoadError(null)
@@ -123,13 +135,34 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     }
   }, [creationId, isHydrated, user?.customerId])
 
+  const refreshReaderSilently = useCallback(async ({ allowReleased = false } = {}) => {
+    if (!isHydrated) return
+    if (!allowReleased && readerStateRef.current?.finalReady === true) return
+    if (silentRefreshRef.current) return silentRefreshRef.current
+
+    const elapsed = Date.now() - lastSilentRefreshCompletedAtRef.current
+    if (elapsed < READER_REFRESH_COOLDOWN_MS) return
+
+    const request = loadReader({ silent: true })
+    silentRefreshRef.current = request
+    const runId = loadRunIdRef.current
+    silentRefreshRunIdRef.current = runId
+    void request.finally(() => {
+      if (silentRefreshRef.current !== request || silentRefreshRunIdRef.current !== runId) return
+      silentRefreshRef.current = null
+      silentRefreshRunIdRef.current = 0
+      lastSilentRefreshCompletedAtRef.current = Date.now()
+    })
+    return request
+  }, [isHydrated, loadReader])
+
   useEffect(() => {
     void loadReader()
   }, [loadReader])
 
   useEffect(() => {
     const refreshVisibleReader = () => {
-      if (document.visibilityState === 'visible') void loadReader({ silent: true })
+      if (document.visibilityState === 'visible') void refreshReaderSilently()
     }
     window.addEventListener('focus', refreshVisibleReader)
     window.addEventListener('pageshow', refreshVisibleReader)
@@ -139,10 +172,12 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
       window.removeEventListener('pageshow', refreshVisibleReader)
       document.removeEventListener('visibilitychange', refreshVisibleReader)
     }
-  }, [loadReader])
+  }, [refreshReaderSilently])
 
   useEffect(() => () => {
     loadRunIdRef.current += 1
+    silentRefreshRef.current = null
+    silentRefreshRunIdRef.current = 0
   }, [])
 
   const creation = reader?.creation ?? null
@@ -164,8 +199,8 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
 
   const handleImageError = useCallback((url: string) => {
     if (url) setImageErrors((current) => new Set(current).add(url))
-    void loadReader({ silent: true })
-  }, [loadReader])
+    void refreshReaderSilently({ allowReleased: true })
+  }, [refreshReaderSilently])
   const coverCandidate = canReadBook ? bookDisplay?.coverUrl ?? null : null
   const handleCoverError = useCallback(() => {
     if (coverCandidate) setImageErrors((current) => new Set(current).add(coverCandidate))
