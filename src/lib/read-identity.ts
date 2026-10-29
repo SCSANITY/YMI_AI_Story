@@ -3,15 +3,23 @@ export type ReadIdentity = {
   expectCustomer: boolean
 }
 
+export function nextReadIdentity(
+  previous: ReadIdentity | null,
+  customerId?: string | null
+): ReadIdentity {
+  const normalizedCustomerId = String(customerId ?? '').trim()
+  const next = normalizedCustomerId
+    ? { key: `customer:${normalizedCustomerId}`, expectCustomer: true }
+    : { key: 'anon', expectCustomer: false }
+  return previous?.key === next.key ? previous : next
+}
+
 export function resolveReadIdentity(
   isAuthResolved: boolean | undefined,
   customerId?: string | null
 ): ReadIdentity | null {
   if (isAuthResolved === false) return null
-  const normalizedCustomerId = String(customerId ?? '').trim()
-  return normalizedCustomerId
-    ? { key: `customer:${normalizedCustomerId}`, expectCustomer: true }
-    : { key: 'anon', expectCustomer: false }
+  return nextReadIdentity(null, customerId)
 }
 
 export function withReadIdentity(

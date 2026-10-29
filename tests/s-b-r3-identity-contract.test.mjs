@@ -10,8 +10,8 @@ test('R3 My Books and Reader reads use the shared identity helper without custom
   assert.match(myBooks, /useReadIdentity\(\)/)
   assert.match(myBooks, /withReadIdentity\(readIdentity/)
   assert.doesNotMatch(myBooks, /fetch\([^\n]*customerId/)
-  assert.match(reader, /useReadIdentity\(\)/)
-  assert.match(reader, /withReadIdentity\(readIdentity/)
+  assert.match(reader, /readIdentity, isHydrated/)
+  assert.match(reader, /withReadIdentity\(effectiveReadIdentity/)
   assert.doesNotMatch(reader, /reader\$\{suffix\}/)
 })
 

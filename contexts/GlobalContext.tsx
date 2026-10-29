@@ -12,7 +12,7 @@ import {
 } from '@/lib/personalized-book-title';
 import { getCurrencyRegionOption, resolveCurrencyRegionOption, resolveInitialCurrencyRegionOption } from '@/lib/currency-regions';
 import { CURRENCY_GEO_COOKIE, CURRENCY_USER_SELECTED_KEY, readCookieValue } from '@/lib/currency-geo';
-import { withReadIdentity, type ReadIdentity } from '@/lib/read-identity';
+import { nextReadIdentity, withReadIdentity, type ReadIdentity } from '@/lib/read-identity';
 import {
   login as loginAction,
   requestPasswordReset as requestPasswordResetAction,
@@ -476,7 +476,7 @@ export const GlobalProvider: React.FC<{
     if (typeof window === 'undefined' || !isHydrated) return;
 
     if (suspendAuthSync) {
-      setReadIdentity((previous) => previous?.key === 'anon' ? previous : { key: 'anon', expectCustomer: false });
+      setReadIdentity((previous) => nextReadIdentity(previous, null));
       setIsAuthResolved(true);
       return;
     }
@@ -487,10 +487,7 @@ export const GlobalProvider: React.FC<{
       setIsAuthResolved(false);
       try {
         const customerId = await syncSupabaseUserRef.current(authUser ?? null);
-        const nextIdentity = customerId
-          ? { key: `customer:${customerId}`, expectCustomer: true }
-          : { key: 'anon', expectCustomer: false };
-        setReadIdentity((previous) => previous?.key === nextIdentity.key ? previous : nextIdentity);
+        setReadIdentity((previous) => nextReadIdentity(previous, customerId));
       } catch (error) {
         console.warn('[auth] failed to resolve customer session', error);
       } finally {
@@ -516,7 +513,7 @@ export const GlobalProvider: React.FC<{
       if (event === 'SIGNED_OUT') {
         authResolutionRunIdRef.current += 1;
         setUser(null);
-        setReadIdentity((previous) => previous?.key === 'anon' ? previous : { key: 'anon', expectCustomer: false });
+        setReadIdentity((previous) => nextReadIdentity(previous, null));
         setIsAuthResolved(true);
       }
     });
@@ -565,10 +562,7 @@ export const GlobalProvider: React.FC<{
     const resolvedEmail = result?.user?.email ?? email;
     setCheckoutEmail(resolvedEmail);
     const customerId = await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
-    const nextIdentity = customerId
-      ? { key: `customer:${customerId}`, expectCustomer: true }
-      : { key: 'anon', expectCustomer: false };
-    setReadIdentity((previous) => previous?.key === nextIdentity.key ? previous : nextIdentity);
+    setReadIdentity((previous) => nextReadIdentity(previous, customerId));
     return {};
   }, [finalizeAuth]);
 
@@ -615,10 +609,7 @@ export const GlobalProvider: React.FC<{
     const resolvedEmail = result?.user?.email ?? email;
     setCheckoutEmail(resolvedEmail);
     const customerId = await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
-    const nextIdentity = customerId
-      ? { key: `customer:${customerId}`, expectCustomer: true }
-      : { key: 'anon', expectCustomer: false };
-    setReadIdentity((previous) => previous?.key === nextIdentity.key ? previous : nextIdentity);
+    setReadIdentity((previous) => nextReadIdentity(previous, customerId));
     return {};
   }, [finalizeAuth]);
 
@@ -643,7 +634,7 @@ export const GlobalProvider: React.FC<{
       await fetch('/api/anon/session', { method: 'DELETE', credentials: 'include' }).catch(() => null);
 
       setUser(null);
-      setReadIdentity((previous) => previous?.key === 'anon' ? previous : { key: 'anon', expectCustomer: false });
+      setReadIdentity((previous) => nextReadIdentity(previous, null));
       setCart([]);
       setFavorites([]);
       setCheckoutItems([]);

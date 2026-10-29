@@ -16,6 +16,7 @@ function fixture() {
   const runtime=customerRuntime(), images=[], requests=[], pushes=[]
   runtime.react.memo=fn=>fn
   let payload=data(), delayed=null
+  const readerIdentity={key:'customer:owner',expectCustomer:true}
   class Image {
     constructor(){images.push(this)}
     set src(url){this.url=url}
@@ -23,7 +24,10 @@ function fixture() {
   }
   const Reader=runtime.load('app/my-books/[creationId]/OwnedBookReader.tsx', {
     'next/link':{default:'a',__esModule:true},'next/navigation':{useRouter:()=>({push:url=>pushes.push(url)})},
-    '@/contexts/GlobalContext':{useGlobalContext:()=>({user:{customerId:'owner'},isHydrated:true,openLoginModal(){}})},
+    '@/contexts/GlobalContext':{useGlobalContext:()=>({user:{customerId:'owner'},readIdentity:readerIdentity,isHydrated:true,isAuthResolved:true,openLoginModal(){}})},
+    '@/components/useReadIdentity':{useReadIdentity:()=>({key:'customer:owner',expectCustomer:true})},
+    'components/useReadIdentity':{useReadIdentity:()=>({key:'customer:owner',expectCustomer:true})},
+    '@/lib/read-identity':{withReadIdentity:(_identity, init={})=>init},
     '@/lib/useI18n':{useI18n:()=>({t:key=>key})},'framer-motion':{useReducedMotion:()=>false},
     '@/components/personalize/PreviewBookShell':{PreviewBookShell:'shell'},
     '@/components/SignatureVoiceEditionNotice':{SignatureVoiceEditionNotice:'voice-notice'},

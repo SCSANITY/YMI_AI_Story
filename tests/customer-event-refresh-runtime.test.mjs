@@ -120,7 +120,7 @@ function readerData(ready = false) {
 }
 function readerFixture(initial = {}) {
   const runtime = customerRuntime(), requests = []
-  const context = { user: { customerId: 'a' }, isHydrated: true, isAuthResolved: true, openLoginModal() {} }
+  const context = { user: { customerId: 'a' }, readIdentity: { key: 'customer:a', expectCustomer: true }, isHydrated: true, isAuthResolved: true, openLoginModal() {} }
   let ready = initial.ready ?? false, status = initial.status ?? 200, delayed = null
   const Reader = runtime.load('app/my-books/[creationId]/OwnedBookReader.tsx', {
     'next/link': { default: 'a', __esModule: true },
@@ -156,6 +156,9 @@ test('Reader keeps one resolved identity stable across a token-refresh rerender'
   const count = h.requests.length
   h.runtime.render(); await h.runtime.flush()
   assert.equal(h.requests.length, count)
+  h.context.readIdentity = { key: 'customer:b', expectCustomer: true }
+  h.runtime.render(); await h.runtime.flush()
+  assert.equal(h.requests.length, count + 1)
 })
 
 test('Reader reopen and focus/pageshow events still load current Final without interval requests', async () => {
@@ -214,7 +217,7 @@ test('Reader error state still recovers on a visible lifecycle event', async () 
 test('Reader retains runId fencing,auth dependency reload,Retry and unmount cancellation', async () => {
   const h = readerFixture(); await h.runtime.flush()
   const late = deferred(); h.delayed = late; h.runtime.window.dispatch('focus'); await h.runtime.flush()
-  h.delayed = null; h.ready = true; h.context.user = { customerId: 'b' }; h.runtime.render(); await h.runtime.flush()
+  h.delayed = null; h.ready = true; h.context.user = { customerId: 'b' }; h.context.readIdentity = { key: 'customer:b', expectCustomer: true }; h.runtime.render(); await h.runtime.flush()
   assert.ok(h.requests.at(-1).includes('/reader'))
   assert.doesNotMatch(h.requests.at(-1), /customerId=/)
   assert.match(uiText(h.runtime.tree), /myBooks.readerFullBook/)
