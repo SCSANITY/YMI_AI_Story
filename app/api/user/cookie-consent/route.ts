@@ -4,7 +4,7 @@ import {
   normalizeCookieConsent,
   type CookieConsentPreferences,
 } from '@/lib/cookie-consent'
-import { getAuthenticatedUser } from '@/lib/authenticated-user'
+import { getAuthenticatedClaims, getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type CustomerConsentRow = {
@@ -18,8 +18,8 @@ function consentSelect() {
   return 'customer_id, cookie_consent, cookie_consent_version, cookie_consent_updated_at'
 }
 
-async function getAuthenticatedCustomer() {
-  const user = await getAuthenticatedUser()
+async function getAuthenticatedCustomer(verification: 'remote' | 'claims') {
+  const user = verification === 'claims' ? await getAuthenticatedClaims() : await getAuthenticatedUser()
 
   if (!user) return null
 
@@ -35,7 +35,7 @@ async function getAuthenticatedCustomer() {
 }
 
 export async function GET() {
-  const customer = await getAuthenticatedCustomer()
+  const customer = await getAuthenticatedCustomer('claims')
   if (!customer?.customer_id) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
@@ -49,7 +49,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const customer = await getAuthenticatedCustomer()
+  const customer = await getAuthenticatedCustomer('remote')
   if (!customer?.customer_id) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }

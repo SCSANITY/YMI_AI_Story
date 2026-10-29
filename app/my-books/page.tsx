@@ -25,6 +25,8 @@ import type { CreationItem } from './myBooksTypes'
 import { normalizeStoryLanguage } from '@/lib/story-language'
 import { templateRowToBook, templateStorageUrl } from '@/lib/book-catalog'
 import { useDedicationChoices } from '@/lib/use-dedication-choices'
+import { useReadIdentity } from '@/components/useReadIdentity'
+import { withReadIdentity } from '@/lib/read-identity'
 
 const resolveCover = (row: CreationItem) => {
   return row.preview_cover_url ? templateStorageUrl(row.preview_cover_url) : null
@@ -153,6 +155,7 @@ export default function MyBooksPage() {
   const router = useRouter()
   const { t } = useI18n()
   const { user, displayCurrency, addToCart, hydrateCheckoutItems, openLoginModal } = useGlobalContext()
+  const readIdentity = useReadIdentity()
   const { navigateToCustomize, pendingCustomizeHref, prefetchCustomizeHref } = useCustomizeNavigation()
   const [items, setItems] = useState<CreationItem[]>([])
   const dedicationIds = useMemo(() => items.filter(item => (item.purchaseState ?? 'unpurchased') === 'unpurchased').map(item => item.creation_id), [items])
@@ -166,12 +169,14 @@ export default function MyBooksPage() {
   const [notice, setNotice] = useState<MyBooksNotice | null>(null)
 
   const loadBooks = useCallback(async (signal?: AbortSignal) => {
-    const url = user?.customerId ? `/api/my-books?customerId=${user.customerId}` : '/api/my-books'
-
     setLoading(true)
     setLoadError(null)
     try {
-      const response = await fetch(url, { credentials: 'include', cache: 'no-store', signal })
+      const response = await fetch('/api/my-books', withReadIdentity(readIdentity, {
+        credentials: 'include',
+        cache: 'no-store',
+        signal,
+      }))
       if (!response.ok) throw new Error('Failed to load My Books')
       const data = await response.json()
       if (signal?.aborted) return
@@ -182,9 +187,10 @@ export default function MyBooksPage() {
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
-  }, [t, user?.customerId])
+  }, [readIdentity, t])
 
   useEffect(() => {
+    if (!readIdentity) return
     const controller = new AbortController()
     setActiveShelf(null)
     void loadBooks(controller.signal)
@@ -192,7 +198,7 @@ export default function MyBooksPage() {
     return () => {
       controller.abort()
     }
-  }, [loadBooks])
+  }, [loadBooks, readIdentity])
 
   const handleAddToCart = async (item: CreationItem) => {
     if (pendingAction || checkoutInFlightRef.current) return

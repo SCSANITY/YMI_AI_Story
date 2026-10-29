@@ -21,6 +21,8 @@ import {
 import { useI18n } from '@/lib/useI18n'
 import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
+import { withReadIdentity } from '@/lib/read-identity'
+import { useReadIdentity } from '@/components/useReadIdentity'
 
 type ReaderTemplate = TemplateCatalogRow
 
@@ -63,6 +65,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const router = useRouter()
   const { t } = useI18n()
   const { user, isHydrated, openLoginModal, hydrateCheckoutItems } = useGlobalContext()
+  const readIdentity = useReadIdentity()
   const [reader, setReader] = useState<ReaderResponse | null>(null)
   const [bookDisplay, setBookDisplay] = useState<ReaderBookDisplay | null>(null)
   const [loading, setLoading] = useState(true)
@@ -79,7 +82,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const lastSilentRefreshCompletedAtRef = useRef(-READER_REFRESH_COOLDOWN_MS)
 
   const loadReader = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!isHydrated) return
+    if (!isHydrated || !readIdentity) return
     const runId = ++loadRunIdRef.current
     if (!silent) {
       readerStateRef.current = null
@@ -89,11 +92,10 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     if (silent) setRefreshing(true)
     else setLoading(true)
     try {
-      const suffix = user?.customerId ? `?customerId=${encodeURIComponent(user.customerId)}` : ''
-      const response = await fetch(`/api/my-books/${encodeURIComponent(creationId)}/reader${suffix}`, {
+      const response = await fetch(`/api/my-books/${encodeURIComponent(creationId)}/reader`, withReadIdentity(readIdentity, {
         credentials: 'include',
         cache: 'no-store',
-      })
+      }))
       const data = await response.json().catch(() => ({})) as ReaderResponse
       if (!response.ok) {
         if (runId === loadRunIdRef.current && !silent) {
@@ -133,7 +135,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         setRefreshing(false)
       }
     }
-  }, [creationId, isHydrated, user?.customerId])
+  }, [creationId, isHydrated, readIdentity])
 
   const refreshReaderSilently = useCallback(async ({ allowReleased = false } = {}) => {
     if (!isHydrated) return
@@ -157,8 +159,9 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   }, [isHydrated, loadReader])
 
   useEffect(() => {
+    if (!readIdentity) return
     void loadReader()
-  }, [loadReader])
+  }, [loadReader, readIdentity])
 
   useEffect(() => {
     const refreshVisibleReader = () => {

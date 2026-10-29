@@ -81,7 +81,9 @@ export async function GET(
     }
     return privateJson({ error: 'Failed to resolve owner' }, { status: 500 })
   }
-  if (!owner) return privateJson({ error: 'Reader access requires the current session' }, { status: 401 })
+  if (!owner || (request.headers.get('x-ymi-expect-customer') === '1' && owner.ownerType !== 'customer')) {
+    return privateJson({ error: 'Reader access requires the current session' }, { status: 401 })
+  }
 
   const scopedCreationQuery = scopeCheckoutOwnerQuery(
     supabaseAdmin

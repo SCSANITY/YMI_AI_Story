@@ -44,7 +44,7 @@ function fixture(kind, choice) {
   })
   const forbidden = () => { throw Error('Purchase must not detour, edit materials, or add to cart') }
   const context = vm.createContext({
-    startOwnedCreationCheckout, user: { customerId: 'owner' }, creation: { creationId: 'saved' },
+    startOwnedCreationCheckout, user: { customerId: 'owner' }, readIdentity: { key: 'customer:owner', expectCustomer: true }, creation: { creationId: 'saved' },
     // Optional data can be absent, pending, failed, undecided or confirmed.
     dedicationChoices: { saved: choice }, pendingAction: null,
     existingCart: [{ creationId: 'saved', quantity: 7 }],

@@ -209,6 +209,7 @@ export interface GlobalContextType {
   checkoutEmail: string;
   isHydrated: boolean;
   isAuthResolved: boolean;
+  readIdentity: import('@/lib/read-identity').ReadIdentity | null;
 
   // Checkout State
   checkoutItems: CartItem[];

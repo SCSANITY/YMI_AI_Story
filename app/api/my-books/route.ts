@@ -43,6 +43,10 @@ export async function GET(request: Request) {
   } catch (error) {
     return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })
   }
+  const expectsCustomer = request.headers.get('x-ymi-expect-customer') === '1'
+  if (expectsCustomer && (!owner || owner.ownerType !== 'customer')) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
   if (!owner) return privateJson({ items: [] })
 
   const { data: items, error } = await loadCreationsWithArchive(owner)
