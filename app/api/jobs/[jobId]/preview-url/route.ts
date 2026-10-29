@@ -32,6 +32,7 @@ export async function GET(
   try {
     owner = await resolveCheckoutOwner(request, {
       expectedCustomerId: url.searchParams.get('customerId'),
+      verification: 'claims',
     })
   } catch (error) {
     const response = checkoutOwnerErrorResponse(error)
