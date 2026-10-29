@@ -46,6 +46,7 @@ export async function GET(request: Request) {
       createAnonIfMissing: false,
       expectedCustomerId: customerId,
       optional: true,
+      verification: 'claims',
     }))!
   } catch (error) {
     const response = checkoutOwnerErrorResponse(error)

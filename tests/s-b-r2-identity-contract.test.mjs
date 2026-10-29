@@ -24,12 +24,22 @@ test('the explicit claims read allowlist opts into claims verification', () => {
     'app/api/my-books/route.ts',
     'app/api/my-books/[creationId]/reader/route.ts',
     'app/api/user/notice-counts/route.ts',
+    'app/api/cart/route.ts',
     'app/api/community/posts/route.ts',
     'app/api/community/posts/[postId]/route.ts',
   ]
   for (const route of routes) {
     assert.match(read(route), /verification:\s*'claims'/, route)
   }
+})
+
+test('account profile and cart keep mutations on remote verification', () => {
+  const profile = read('app/api/user/account-profile/route.ts')
+  const cart = read('app/api/cart/route.ts')
+  assert.match(profile, /export async function GET\(\)[\s\S]*?getAuthenticatedClaims\(\)/)
+  assert.match(profile, /export async function PATCH\([\s\S]*?getAuthenticatedUser\(\)/)
+  assert.match(cart, /export async function GET\([\s\S]*?verification:\s*'claims'/)
+  assert.doesNotMatch(cart, /export async function POST\([\s\S]*?verification:\s*'claims'/)
 })
 
 test('sensitive administration and mutation helpers retain getUser verification', () => {
