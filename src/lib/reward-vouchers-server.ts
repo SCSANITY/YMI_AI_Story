@@ -14,6 +14,30 @@ export type RewardVoucherSummary = {
   expired: any[]
 }
 
+const VOUCHER_INSTRUMENT_SELECT = `
+  instrument_id,
+  offer_id,
+  is_active,
+  status,
+  max_redemptions,
+  max_redemptions_per_customer,
+  paid_count,
+  owner_customer_id,
+  owner_email,
+  created_at,
+  discount_offers:discount_offers (
+    offer_id,
+    name,
+    description,
+    effect_type,
+    effect_config,
+    stacking_group,
+    expires_at,
+    minimum_order_amount_usd,
+    is_active
+  )
+`
+
 function toNumber(value: unknown): number {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
@@ -25,6 +49,42 @@ function toMoney(value: unknown): number {
 
 export function normalizeRewardEmail(email?: string | null): string {
   return String(email || '').trim().toLowerCase()
+}
+
+async function loadVoucherInstruments({ customerId, email }: { customerId: string; email: string | null }) {
+  const customerQuery = supabaseAdmin
+    .from('discount_instruments')
+    .select(VOUCHER_INSTRUMENT_SELECT)
+    .eq('instrument_type', 'voucher')
+    .eq('owner_customer_id', customerId)
+    .order('created_at', { ascending: false })
+
+  const emailQuery = email
+    ? supabaseAdmin
+      .from('discount_instruments')
+      .select(VOUCHER_INSTRUMENT_SELECT)
+      .eq('instrument_type', 'voucher')
+      .is('owner_customer_id', null)
+      .eq('owner_email', email)
+      .order('created_at', { ascending: false })
+    : null
+
+  const [customerResult, emailResult] = await Promise.all([
+    customerQuery,
+    emailQuery ?? Promise.resolve({ data: [], error: null }),
+  ])
+  if (customerResult.error) throw new Error(`Failed to load vouchers: ${customerResult.error.message}`)
+  if (emailResult.error) throw new Error(`Failed to load vouchers: ${emailResult.error.message}`)
+
+  const byInstrumentId = new Map<string, any>()
+  for (const row of [...(customerResult.data ?? []), ...(emailResult.data ?? [])]) {
+    if (row.instrument_id) byInstrumentId.set(row.instrument_id, row)
+  }
+  return Array.from(byInstrumentId.values()).sort((left, right) => {
+    const leftTime = Date.parse(String(left.created_at || '')) || 0
+    const rightTime = Date.parse(String(right.created_at || '')) || 0
+    return rightTime - leftTime
+  })
 }
 
 function getOffer(row: any) {
@@ -75,44 +135,7 @@ export async function loadRewardVoucherSummary({
   email?: string | null
 }): Promise<RewardVoucherSummary> {
   const normalizedEmail = normalizeRewardEmail(email)
-  const ownerEmailFilter = normalizedEmail
-    ? `,and(owner_customer_id.is.null,owner_email.eq.${normalizedEmail})`
-    : ''
-  const { data: instruments, error: instrumentsError } = await supabaseAdmin
-    .from('discount_instruments')
-    .select(
-      `
-        instrument_id,
-        offer_id,
-        is_active,
-        status,
-        max_redemptions,
-        max_redemptions_per_customer,
-        paid_count,
-        owner_customer_id,
-        owner_email,
-        discount_offers:discount_offers (
-          offer_id,
-          name,
-          description,
-          effect_type,
-          effect_config,
-          stacking_group,
-          expires_at,
-          minimum_order_amount_usd,
-          is_active
-        )
-      `
-    )
-    .eq('instrument_type', 'voucher')
-    .or(`owner_customer_id.eq.${customerId}${ownerEmailFilter}`)
-    .order('created_at', { ascending: false })
-
-  if (instrumentsError) {
-    throw new Error(`Failed to load vouchers: ${instrumentsError.message}`)
-  }
-
-  const rows = instruments ?? []
+  const rows = await loadVoucherInstruments({ customerId, email: normalizedEmail || null })
   const instrumentIds = rows.map((row) => row.instrument_id).filter(Boolean)
   const paidUsageByInstrument = new Map<string, any[]>()
 
