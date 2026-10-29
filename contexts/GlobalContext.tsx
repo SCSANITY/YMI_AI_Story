@@ -12,7 +12,7 @@ import {
 } from '@/lib/personalized-book-title';
 import { getCurrencyRegionOption, resolveCurrencyRegionOption, resolveInitialCurrencyRegionOption } from '@/lib/currency-regions';
 import { CURRENCY_GEO_COOKIE, CURRENCY_USER_SELECTED_KEY, readCookieValue } from '@/lib/currency-geo';
-import { resolveReadIdentity, withReadIdentity } from '@/lib/read-identity';
+import { withReadIdentity, type ReadIdentity } from '@/lib/read-identity';
 import {
   login as loginAction,
   requestPasswordReset as requestPasswordResetAction,
@@ -100,7 +100,7 @@ export const GlobalProvider: React.FC<{
   const [user, setUser] = useState<User | null>(null);
   const userRef = useRef<User | null>(null);
   const authSyncInFlightRef = useRef<string | null>(null);
-  const authSyncPromiseRef = useRef<Promise<void> | null>(null);
+  const authSyncPromiseRef = useRef<Promise<string | null> | null>(null);
   const authResolutionRunIdRef = useRef(0);
   const favoriteTogglePendingRef = useRef(false);
   const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
@@ -113,6 +113,7 @@ export const GlobalProvider: React.FC<{
   const [checkoutEmail, setCheckoutEmail] = useState('');
   const [isHydrated, setIsHydrated] = useState(false);
   const [isAuthResolved, setIsAuthResolved] = useState(false);
+  const [readIdentity, setReadIdentity] = useState<ReadIdentity | null>(null);
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loginModalMode, setLoginModalMode] = useState<'login' | 'signup'>('login');
@@ -264,8 +265,7 @@ export const GlobalProvider: React.FC<{
   }, []);
 
   const readCartFromDb = useCallback(async () => {
-    const identity = resolveReadIdentity(isAuthResolved, user?.customerId);
-    const response = await fetch('/api/cart', withReadIdentity(identity, {
+    const response = await fetch('/api/cart', withReadIdentity(readIdentity, {
       credentials: 'include',
       cache: 'no-store',
     }));
@@ -273,7 +273,7 @@ export const GlobalProvider: React.FC<{
     const data = await response.json();
     if (!Array.isArray(data?.items)) throw new Error(CART_PRICE_LOAD_ERROR);
     return mapCartItems(data.items);
-  }, [isAuthResolved, mapCartItems, user?.customerId]);
+  }, [mapCartItems, readIdentity]);
 
   const refreshCartFromDb = useCallback(async () => {
     try {
@@ -299,7 +299,7 @@ export const GlobalProvider: React.FC<{
   }, []);
 
   useEffect(() => {
-    if (!isAuthResolved) return;
+    if (!readIdentity) return;
     let isActive = true;
 
     const loadCartFromDb = async () => {
@@ -320,18 +320,17 @@ export const GlobalProvider: React.FC<{
     return () => {
       isActive = false;
     };
-  }, [isAuthResolved, readCartFromDb]);
+  }, [readCartFromDb, readIdentity]);
 
   useEffect(() => {
-    if (!isHydrated || !isAuthResolved) return;
+    if (!isHydrated || !readIdentity) return;
 
     let isActive = true;
     setIsFavoritesLoading(true);
 
     const loadFavoritesFromDb = async () => {
       try {
-        const identity = resolveReadIdentity(isAuthResolved, user?.customerId);
-        const response = await fetch('/api/favourites', withReadIdentity(identity, { credentials: 'include', cache: 'no-store' }));
+        const response = await fetch('/api/favourites', withReadIdentity(readIdentity, { credentials: 'include', cache: 'no-store' }));
         if (!response.ok) return;
         const data = await response.json();
         if (!isActive || favoriteTogglePendingRef.current) return;
@@ -349,7 +348,7 @@ export const GlobalProvider: React.FC<{
     return () => {
       isActive = false;
     };
-  }, [isAuthResolved, isHydrated, mapFavouriteItems, user?.customerId]);
+  }, [isHydrated, mapFavouriteItems, readIdentity]);
 
   useEffect(() => {
     if (user) localStorage.setItem('ymi_user', JSON.stringify(user));
@@ -417,12 +416,13 @@ export const GlobalProvider: React.FC<{
 
     const profile = customerId ? await fetchAccountProfile().catch(() => null) : null;
     setUser(applyAccountProfileToUser(baseUser, profile));
+    return customerId ?? null;
   }, [cart, favorites, fetchAccountProfile]);
 
   const syncSupabaseUser = useCallback(async (authUser?: SupabaseUser | null) => {
     if (!authUser?.id || !authUser.email) {
       if (userRef.current) setUser(null);
-      return;
+      return null;
     }
 
     const resolvedEmail = authUser.email.trim().toLowerCase();
@@ -444,7 +444,7 @@ export const GlobalProvider: React.FC<{
       return;
     }
 
-    if (currentUser?.id === authUser.id && currentUser.customerId) return;
+    if (currentUser?.id === authUser.id && currentUser.customerId) return currentUser.customerId;
     if (authSyncInFlightRef.current === authUser.id && authSyncPromiseRef.current) {
       return authSyncPromiseRef.current;
     }
@@ -464,6 +464,7 @@ export const GlobalProvider: React.FC<{
         authSyncPromiseRef.current = null;
       }
     }
+    return syncPromise;
   }, [finalizeAuth]);
 
   const syncSupabaseUserRef = useRef(syncSupabaseUser);
@@ -475,6 +476,7 @@ export const GlobalProvider: React.FC<{
     if (typeof window === 'undefined' || !isHydrated) return;
 
     if (suspendAuthSync) {
+      setReadIdentity((previous) => previous?.key === 'anon' ? previous : { key: 'anon', expectCustomer: false });
       setIsAuthResolved(true);
       return;
     }
@@ -484,7 +486,11 @@ export const GlobalProvider: React.FC<{
       const runId = ++authResolutionRunIdRef.current;
       setIsAuthResolved(false);
       try {
-        await syncSupabaseUserRef.current(authUser ?? null);
+        const customerId = await syncSupabaseUserRef.current(authUser ?? null);
+        const nextIdentity = customerId
+          ? { key: `customer:${customerId}`, expectCustomer: true }
+          : { key: 'anon', expectCustomer: false };
+        setReadIdentity((previous) => previous?.key === nextIdentity.key ? previous : nextIdentity);
       } catch (error) {
         console.warn('[auth] failed to resolve customer session', error);
       } finally {
@@ -510,6 +516,7 @@ export const GlobalProvider: React.FC<{
       if (event === 'SIGNED_OUT') {
         authResolutionRunIdRef.current += 1;
         setUser(null);
+        setReadIdentity((previous) => previous?.key === 'anon' ? previous : { key: 'anon', expectCustomer: false });
         setIsAuthResolved(true);
       }
     });
@@ -557,7 +564,11 @@ export const GlobalProvider: React.FC<{
 
     const resolvedEmail = result?.user?.email ?? email;
     setCheckoutEmail(resolvedEmail);
-    await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
+    const customerId = await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
+    const nextIdentity = customerId
+      ? { key: `customer:${customerId}`, expectCustomer: true }
+      : { key: 'anon', expectCustomer: false };
+    setReadIdentity((previous) => previous?.key === nextIdentity.key ? previous : nextIdentity);
     return {};
   }, [finalizeAuth]);
 
@@ -603,7 +614,11 @@ export const GlobalProvider: React.FC<{
 
     const resolvedEmail = result?.user?.email ?? email;
     setCheckoutEmail(resolvedEmail);
-    await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
+    const customerId = await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
+    const nextIdentity = customerId
+      ? { key: `customer:${customerId}`, expectCustomer: true }
+      : { key: 'anon', expectCustomer: false };
+    setReadIdentity((previous) => previous?.key === nextIdentity.key ? previous : nextIdentity);
     return {};
   }, [finalizeAuth]);
 
@@ -628,6 +643,7 @@ export const GlobalProvider: React.FC<{
       await fetch('/api/anon/session', { method: 'DELETE', credentials: 'include' }).catch(() => null);
 
       setUser(null);
+      setReadIdentity((previous) => previous?.key === 'anon' ? previous : { key: 'anon', expectCustomer: false });
       setCart([]);
       setFavorites([]);
       setCheckoutItems([]);
@@ -1137,6 +1153,7 @@ export const GlobalProvider: React.FC<{
     loginModalEmail,
     isHydrated,
     isAuthResolved,
+    readIdentity,
 
     resumePersonalization,
 
@@ -1183,6 +1200,7 @@ export const GlobalProvider: React.FC<{
     loginModalEmail,
     isHydrated,
     isAuthResolved,
+    readIdentity,
     resumePersonalization,
     login,
     loginWithOAuth,

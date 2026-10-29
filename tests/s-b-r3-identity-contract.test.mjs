@@ -17,9 +17,9 @@ test('R3 My Books and Reader reads use the shared identity helper without custom
 
 test('GlobalContext deduplicates boot cart and favorites reads and waits for auth resolution', () => {
   const source = read('contexts/GlobalContext.tsx')
-  assert.match(source, /if \(!isAuthResolved\) return/)
-  assert.match(source, /fetch\('\/api\/cart', withReadIdentity\(identity/)
-  assert.match(source, /fetch\('\/api\/favourites', withReadIdentity\(identity/)
+  assert.match(source, /if \(!readIdentity\) return/)
+  assert.match(source, /fetch\('\/api\/cart', withReadIdentity\(readIdentity/)
+  assert.match(source, /fetch\('\/api\/favourites', withReadIdentity\(readIdentity/)
   assert.doesNotMatch(source, /fetch\(`\/api\/cart\$\{params\}/)
   assert.doesNotMatch(source, /fetch\(`\/api\/favourites\$\{params\}/)
 })

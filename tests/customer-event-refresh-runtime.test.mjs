@@ -121,18 +121,11 @@ function readerData(ready = false) {
 function readerFixture(initial = {}) {
   const runtime = customerRuntime(), requests = []
   const context = { user: { customerId: 'a' }, isHydrated: true, isAuthResolved: true, openLoginModal() {} }
-  const identityCache = new Map()
-  const readIdentity = () => {
-    const key = context.user?.customerId ? `customer:${context.user.customerId}` : 'anon'
-    if (!identityCache.has(key)) identityCache.set(key, { key, expectCustomer: key !== 'anon' })
-    return identityCache.get(key)
-  }
   let ready = initial.ready ?? false, status = initial.status ?? 200, delayed = null
   const Reader = runtime.load('app/my-books/[creationId]/OwnedBookReader.tsx', {
     'next/link': { default: 'a', __esModule: true },
     'next/navigation': { useRouter: () => ({ push() {} }) },
     '@/contexts/GlobalContext': { useGlobalContext: () => context },
-    '@/components/useReadIdentity': { useReadIdentity: readIdentity },
     '@/lib/useI18n': { useI18n: () => ({ t: key => key }) },
     '@/components/personalize/PreviewBookShell': { PreviewBookShell: props => ({ type: 'book-stage', props: { ...props, children: props.renderPage?.('left', 0) } }) },
     '@/components/personalize/useDecodedPreviewCover': { useDecodedPreviewCover: (_identity, url) => ({ url, isReady: Boolean(url) }) },
@@ -156,6 +149,13 @@ test('Reader does not poll while Final is pending; a visible tab return loads th
   assert.match(uiText(h.runtime.tree), /myBooks.readerFullBook/)
   assert.ok(uiNodes(h.runtime.tree).some(n => n.type === 'book-stage'))
   h.runtime.unmount(); assert.equal(h.runtime.window.listenerCount('focus'), 0); assert.equal(h.runtime.document.listenerCount('visibilitychange'), 0)
+})
+
+test('Reader keeps one resolved identity stable across a token-refresh rerender', async () => {
+  const h = readerFixture(); await h.runtime.flush()
+  const count = h.requests.length
+  h.runtime.render(); await h.runtime.flush()
+  assert.equal(h.requests.length, count)
 })
 
 test('Reader reopen and focus/pageshow events still load current Final without interval requests', async () => {

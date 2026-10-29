@@ -1,13 +1,18 @@
 'use client'
 
+'use client'
+
 import { useMemo } from 'react'
 import { useGlobalContext } from '@/contexts/GlobalContext'
-import { resolveReadIdentity } from '@/lib/read-identity'
 
 export function useReadIdentity() {
-  const { isAuthResolved, user } = useGlobalContext()
-  return useMemo(
-    () => resolveReadIdentity(isAuthResolved, user?.customerId),
-    [isAuthResolved, user?.customerId]
-  )
+  const context = useGlobalContext()
+  return useMemo(() => {
+    if (context.readIdentity !== undefined) return context.readIdentity
+    if (context.user?.customerId) {
+      return { key: `customer:${context.user.customerId}`, expectCustomer: true }
+    }
+    if (context.isAuthResolved === false) return null
+    return { key: 'anon', expectCustomer: false }
+  }, [context.readIdentity, context.isAuthResolved, context.user?.customerId])
 }
