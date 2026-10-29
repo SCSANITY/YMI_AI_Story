@@ -32,6 +32,7 @@ async function resolveOwner(request: Request, expectedCustomerId?: string | null
   const owner = await resolveCheckoutOwner(request, {
     expectedCustomerId,
     createAnonIfMissing: true,
+    verification: 'claims',
   })
   if (!owner) throw new Error('Unable to resolve owner')
   if (owner.ownerType === 'customer') {

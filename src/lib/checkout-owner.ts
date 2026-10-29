@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getAuthenticatedUser } from '@/lib/authenticated-user'
+import { getAuthenticatedClaims, getAuthenticatedUser } from '@/lib/authenticated-user'
 import { getOrCreateAnonSession } from '@/lib/session'
 import { UUID_REGEX } from '@/lib/validators'
 
@@ -58,15 +58,17 @@ function normalizeNullable(value: unknown) {
   return normalized || null
 }
 
-async function resolveCustomerFromAuth() {
-  const user = await getAuthenticatedUser()
+async function resolveCustomerFromAuth(verification: 'remote' | 'claims') {
+  const identity = verification === 'claims'
+    ? await getAuthenticatedClaims()
+    : await getAuthenticatedUser()
 
-  if (!user) return null
+  if (!identity) return null
 
   const { data: customer, error } = await supabaseAdmin
     .from('customers')
     .select('customer_id, email, auth_user_id')
-    .eq('auth_user_id', user.id)
+    .eq('auth_user_id', identity.id)
     .maybeSingle()
 
   if (error) {
@@ -77,8 +79,8 @@ async function resolveCustomerFromAuth() {
   return {
     ownerType: 'customer' as const,
     customerId: String(customer.customer_id),
-    email: customer.email ? String(customer.email).trim().toLowerCase() : user.email ?? null,
-    authUserId: user.id,
+    email: customer.email ? String(customer.email).trim().toLowerCase() : identity.email ?? null,
+    authUserId: identity.id,
     anonSessionId: null,
   }
 }
@@ -107,11 +109,12 @@ export async function resolveCheckoutOwner(
     expectedCustomerId?: string | null
     requireCustomer?: boolean
     optional?: boolean
+    verification?: 'remote' | 'claims'
   }
 ): Promise<CheckoutOwner | null> {
   const allowAnon = options?.allowAnon ?? true
   const expectedCustomerId = normalizeNullable(options?.expectedCustomerId)
-  const customer = await resolveCustomerFromAuth()
+  const customer = await resolveCustomerFromAuth(options?.verification ?? 'remote')
 
   if (customer) {
     if (expectedCustomerId && expectedCustomerId !== customer.customerId) {

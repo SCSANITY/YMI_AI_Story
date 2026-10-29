@@ -20,6 +20,7 @@ export async function GET(request: Request, context: { params: Promise<{ creatio
     owner = await resolveCheckoutOwner(request, {
       expectedCustomerId: url.searchParams.get('customerId'),
       createAnonIfMissing: true,
+      verification: 'claims',
     })
   } catch (error) {
     return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve owner' }, { status: 500 })

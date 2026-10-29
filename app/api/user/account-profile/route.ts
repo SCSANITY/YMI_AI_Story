@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthenticatedUser } from '@/lib/authenticated-user'
+import { getAuthenticatedClaims, getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 
@@ -64,7 +64,7 @@ async function updateCustomerProfile(customerId: string, updates: Record<string,
 }
 
 export async function GET() {
-  const user = await getAuthenticatedUser()
+  const user = await getAuthenticatedClaims()
 
   if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })

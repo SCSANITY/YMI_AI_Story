@@ -13,6 +13,7 @@ async function actorKeyFor(request: Request) {
   const owner = await resolveCheckoutOwner(request, {
     expectedCustomerId: url.searchParams.get('customerId'),
     createAnonIfMissing: true,
+    verification: 'claims',
   })
   if (!owner) throw new Error('Unable to resolve owner')
   return owner.ownerType === 'customer'

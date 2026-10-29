@@ -56,6 +56,7 @@ export async function GET(request: Request) {
       allowAnon: false,
       requireCustomer: true,
       optional: true,
+      verification: 'claims',
     })
   } catch (error) {
     return checkoutOwnerErrorResponse(error) ?? NextResponse.json({ error: 'Failed to resolve customer' }, { status: 500 })

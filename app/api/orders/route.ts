@@ -22,6 +22,7 @@ export async function GET(request: Request) {
       allowAnon: false,
       requireCustomer: true,
       optional: true,
+      verification: 'claims',
     })
   } catch (error) {
     const response = checkoutOwnerErrorResponse(error)
