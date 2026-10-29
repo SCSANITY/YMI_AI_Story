@@ -25,8 +25,7 @@ function fixture() {
   const Reader=runtime.load('app/my-books/[creationId]/OwnedBookReader.tsx', {
     'next/link':{default:'a',__esModule:true},'next/navigation':{useRouter:()=>({push:url=>pushes.push(url)})},
     '@/contexts/GlobalContext':{useGlobalContext:()=>({user:{customerId:'owner'},readIdentity:readerIdentity,isHydrated:true,isAuthResolved:true,openLoginModal(){}})},
-    '@/components/useReadIdentity':{useReadIdentity:()=>({key:'customer:owner',expectCustomer:true})},
-    'components/useReadIdentity':{useReadIdentity:()=>({key:'customer:owner',expectCustomer:true})},
+    '@/components/useReadIdentity':{useReadIdentity:()=>readerIdentity},
     '@/lib/read-identity':{withReadIdentity:(_identity, init={})=>init},
     '@/lib/useI18n':{useI18n:()=>({t:key=>key})},'framer-motion':{useReducedMotion:()=>false},
     '@/components/personalize/PreviewBookShell':{PreviewBookShell:'shell'},

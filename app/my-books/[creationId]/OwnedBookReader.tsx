@@ -22,6 +22,7 @@ import { useI18n } from '@/lib/useI18n'
 import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
 import { withReadIdentity } from '@/lib/read-identity'
+import { useReadIdentity } from '@/components/useReadIdentity'
 
 type ReaderTemplate = TemplateCatalogRow
 
@@ -63,10 +64,8 @@ function resolveReaderLoadIssue(status: number, response: ReaderResponse): Reade
 export function OwnedBookReader({ creationId }: { creationId: string }) {
   const router = useRouter()
   const { t } = useI18n()
-  const { user, readIdentity, isHydrated, isAuthResolved, openLoginModal, hydrateCheckoutItems } = useGlobalContext()
-  const effectiveReadIdentity = readIdentity == null && isAuthResolved === undefined
-    ? (user?.customerId ? { key: `customer:${user.customerId}`, expectCustomer: true } : { key: 'anon', expectCustomer: false })
-    : readIdentity
+  const { user, isHydrated, openLoginModal, hydrateCheckoutItems } = useGlobalContext()
+  const readIdentity = useReadIdentity()
   const [reader, setReader] = useState<ReaderResponse | null>(null)
   const [bookDisplay, setBookDisplay] = useState<ReaderBookDisplay | null>(null)
   const [loading, setLoading] = useState(true)
@@ -83,7 +82,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   const lastSilentRefreshCompletedAtRef = useRef(-READER_REFRESH_COOLDOWN_MS)
 
   const loadReader = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!isHydrated || !effectiveReadIdentity) return
+    if (!isHydrated || !readIdentity) return
     const runId = ++loadRunIdRef.current
     if (!silent) {
       readerStateRef.current = null
@@ -93,7 +92,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
     if (silent) setRefreshing(true)
     else setLoading(true)
     try {
-      const response = await fetch(`/api/my-books/${encodeURIComponent(creationId)}/reader`, withReadIdentity(effectiveReadIdentity, {
+      const response = await fetch(`/api/my-books/${encodeURIComponent(creationId)}/reader`, withReadIdentity(readIdentity, {
         credentials: 'include',
         cache: 'no-store',
       }))
@@ -136,7 +135,7 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
         setRefreshing(false)
       }
     }
-  }, [creationId, effectiveReadIdentity, isHydrated])
+  }, [creationId, isHydrated, readIdentity])
 
   const refreshReaderSilently = useCallback(async ({ allowReleased = false } = {}) => {
     if (!isHydrated) return
@@ -160,9 +159,9 @@ export function OwnedBookReader({ creationId }: { creationId: string }) {
   }, [isHydrated, loadReader])
 
   useEffect(() => {
-    if (!effectiveReadIdentity) return
+    if (!readIdentity) return
     void loadReader()
-  }, [effectiveReadIdentity, loadReader])
+  }, [loadReader, readIdentity])
 
   useEffect(() => {
     const refreshVisibleReader = () => {
