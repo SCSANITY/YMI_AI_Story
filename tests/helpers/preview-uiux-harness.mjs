@@ -13,6 +13,8 @@ export function loadUi(file,stubs={},globals={}) {
    module:mod,exports:mod.exports,AbortController,Request,Response,console,...globals,
    require(name){
     if(name in stubs)return stubs[name]
+    if(name==='node:async_hooks')return {AsyncLocalStorage:class {getStore(){return undefined}run(_context,callback){return callback()}}}
+    if(name==='node:crypto')return {randomUUID:()=> 'fixture-instance'}
     if(name==='react/jsx-runtime')return {jsx,jsxs:jsx,Fragment:'fragment'}
     if(name==='react')return {memo:fn=>fn}
     if(name==='next/image')return {default:'img',__esModule:true}

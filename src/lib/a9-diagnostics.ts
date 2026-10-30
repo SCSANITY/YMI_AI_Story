@@ -1,3 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { randomUUID } from 'node:crypto'
+
 type SupabaseCall = {
   method: string
   name: string
@@ -10,40 +13,13 @@ type A9RequestContext = {
   calls: SupabaseCall[]
 }
 
-type RequestStorage = {
-  getStore(): A9RequestContext | undefined
-  run<T>(context: A9RequestContext, callback: () => Promise<T>): Promise<T>
-}
-
-const fallbackStorage = {
-  getStore: () => undefined as A9RequestContext | undefined,
-  run<T>(_context: A9RequestContext, callback: () => Promise<T>) {
-    return callback()
-  },
-}
-let requestStorage: RequestStorage = fallbackStorage
-let instanceId = 'diagnostic-instance'
-let runtimeInitialized = false
+const requestStorage = new AsyncLocalStorage<A9RequestContext>()
+const instanceId = randomUUID()
 let requestSequence = 0
 let inFlight = 0
 
 export function isA9DiagnosticsEnabled() {
   return typeof process !== 'undefined' && process.env.YMI_A9_DIAGNOSTICS === 'true'
-}
-
-async function ensureRuntime() {
-  if (runtimeInitialized) return
-  runtimeInitialized = true
-  try {
-    const { AsyncLocalStorage } = await import('node:async_hooks')
-    if (typeof AsyncLocalStorage === 'function') {
-      requestStorage = new AsyncLocalStorage<A9RequestContext>()
-    }
-    const { randomUUID } = await import('node:crypto')
-    if (typeof randomUUID === 'function') instanceId = randomUUID()
-  } catch {
-    // The diagnostic flag is server-only; test harnesses may not expose Node built-ins.
-  }
 }
 
 function formatDuration(value: number) {
@@ -92,7 +68,6 @@ function appendServerTiming(response: Response, metrics: string[]) {
 
 export async function withA9Diagnostics<T extends Response>(handler: () => Promise<T>) {
   if (!isA9DiagnosticsEnabled()) return handler()
-  await ensureRuntime()
 
   const startedAt = performance.now()
   const sequence = ++requestSequence

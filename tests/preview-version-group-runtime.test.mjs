@@ -3,6 +3,8 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { randomUUID } from 'node:crypto'
 
 const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -57,6 +59,8 @@ function routeHarness(kind = 'customer', foreign = false) {
     maybeSingle: async () => ({ data: foreign ? null : { creation_id: child }, error: null }),
   }
   const route = load('app/api/creations/[creationId]/preview-versions/route.ts', {
+    'node:async_hooks': { AsyncLocalStorage },
+    'node:crypto': { randomUUID },
     '@/lib/http-response': { noStoreJson: (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Cache-Control': 'no-store' } }) },
     '@/lib/checkout-owner': {
       resolveCheckoutOwner: async (request, options) => { calls.push(['owner', options]); return owner },

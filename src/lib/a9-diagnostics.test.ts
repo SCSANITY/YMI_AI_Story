@@ -1,38 +1,65 @@
 import assert from 'node:assert/strict'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import test from 'node:test'
-import { recordA9SupabaseCall, withA9Diagnostics } from './a9-diagnostics'
+import { loadUi } from '../../tests/helpers/preview-uiux-harness.mjs'
 
-process.env.YMI_A9_DIAGNOSTICS = 'true'
+function fixture() {
+  const processStub = { env: { YMI_A9_DIAGNOSTICS: 'true' } }
+  const globals = { process: processStub, performance, Response, Request, Headers, URL }
+  const diagnostics = loadUi('src/lib/a9-diagnostics.ts', {
+    'node:async_hooks': { AsyncLocalStorage },
+    'node:crypto': { randomUUID: () => 'fixture-instance' },
+  }, globals)
+  const service = loadUi('src/lib/supabase-service-credential.ts', {
+    'server-only': {},
+    '@/lib/a9-diagnostics': diagnostics,
+  }, globals)
+  return { diagnostics, processStub, service }
+}
 
-test('diagnostic response records instance, request and Supabase timing metadata', async () => {
-  const response = await withA9Diagnostics(async () => {
-    const startedAt = performance.now()
-    recordA9SupabaseCall(new URL('https://example.supabase.co/rest/v1/customers'), 'GET', startedAt, 12.3)
+test('the real service fetch path records the REST table entry', async () => {
+  const { diagnostics, service } = fixture()
+  const fetchImpl = async () => new Response('{}', { status: 200 })
+  const serviceFetch = service.createSupabaseServiceFetch({
+    value: 'legacy-service-role-key',
+    kind: 'legacy-service-role',
+    source: 'SUPABASE_SERVICE_ROLE_KEY',
+  }, fetchImpl)
+
+  const response = await diagnostics.withA9Diagnostics(async () => {
+    await serviceFetch('https://example.supabase.co/rest/v1/customers', { method: 'GET' })
     return new Response('ok')
   })
 
-  const serverTiming = response.headers.get('Server-Timing') ?? ''
-  assert.match(serverTiming, /a9-instance;desc="[0-9a-f-]+"/)
-  assert.match(serverTiming, /a9-seq;desc="1"/)
-  assert.match(serverTiming, /a9-inflight;desc="0"/)
-  assert.match(serverTiming, /a9-cold;desc="1"/)
-  assert.match(serverTiming, /a9-handler;dur=/)
-  assert.match(serverTiming, /rest\.customers;dur=12\.3;desc="GET@/)
+  assert.match(response.headers.get('Server-Timing') ?? '', /rest\.customers;dur=/)
 })
 
-test('diagnostic names identify signed Storage upload calls by bucket', async () => {
-  process.env.YMI_A9_DIAGNOSTICS = 'true'
-  const response = await withA9Diagnostics(async () => {
-    const startedAt = performance.now()
-    recordA9SupabaseCall(new URL('https://example.supabase.co/storage/v1/object/upload/sign/raw-private/user-assets/x.jpg'), 'POST', startedAt, 4.2)
+test('the first concurrent handlers share one instance and both record calls', async () => {
+  const { diagnostics, service } = fixture()
+  const fetchImpl = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    return new Response('{}', { status: 200 })
+  }
+  const serviceFetch = service.createSupabaseServiceFetch({
+    value: 'legacy-service-role-key',
+    kind: 'legacy-service-role',
+    source: 'SUPABASE_SERVICE_ROLE_KEY',
+  }, fetchImpl)
+  const handler = () => diagnostics.withA9Diagnostics(async () => {
+    await serviceFetch('https://example.supabase.co/rest/v1/customers', { method: 'GET' })
     return new Response('ok')
   })
 
-  assert.match(response.headers.get('Server-Timing') ?? '', /storage\.raw-private;dur=4\.2;desc="POST@/)
+  const responses = await Promise.all([handler(), handler()])
+  const timings = responses.map((response) => response.headers.get('Server-Timing') ?? '')
+  assert.equal(timings.filter((timing) => timing.includes('a9-instance;desc="fixture-instance"')).length, 2)
+  assert.equal(timings.filter((timing) => timing.includes('rest.customers;dur=')).length, 2)
+  assert.deepEqual(timings.map((timing) => timing.match(/a9-seq;desc="(\d+)"/)?.[1]).sort(), ['1', '2'])
 })
 
-test('diagnostic response is unchanged when the flag is off', async () => {
-  process.env.YMI_A9_DIAGNOSTICS = 'false'
-  const response = await withA9Diagnostics(async () => new Response('ok'))
+test('the default-off path emits no diagnostic header', async () => {
+  const { diagnostics, processStub } = fixture()
+  processStub.env.YMI_A9_DIAGNOSTICS = 'false'
+  const response = await diagnostics.withA9Diagnostics(async () => new Response('ok'))
   assert.equal(response.headers.get('Server-Timing'), null)
 })

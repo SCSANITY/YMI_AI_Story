@@ -1,4 +1,5 @@
 import 'server-only'
+import { recordA9SupabaseCall } from '@/lib/a9-diagnostics'
 
 export type SupabaseServiceCredential = Readonly<{
   value: string
@@ -74,7 +75,6 @@ export function createSupabaseServiceFetch(
     }
     const response = await fetchImpl(input, { ...init, headers })
     if (diagnosticsEnabled) {
-      const { recordA9SupabaseCall } = await import('@/lib/a9-diagnostics')
       recordA9SupabaseCall(input, init?.method ?? 'GET', startedAt, performance.now() - startedAt)
     }
     return response
