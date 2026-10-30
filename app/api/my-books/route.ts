@@ -2,6 +2,7 @@ import { noStoreJson as privateJson } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
 import { UUID_REGEX } from '@/lib/validators'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import { getEmptyPurchaseSummary, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
 import { isVisibleMyBookRow } from '@/lib/my-books-visibility'
@@ -32,6 +33,10 @@ async function loadCreationsWithArchive(owner: CheckoutOwner) {
 }
 
 export async function GET(request: Request) {
+  return withA9Diagnostics(() => getMyBooks(request))
+}
+
+async function getMyBooks(request: Request) {
   const url = new URL(request.url)
   let owner
   try {

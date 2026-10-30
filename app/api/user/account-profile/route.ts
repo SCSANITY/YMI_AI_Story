@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedClaims, getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 
 async function signAvatarUrl(storagePath: string | null) {
@@ -64,6 +65,10 @@ async function updateCustomerProfile(customerId: string, updates: Record<string,
 }
 
 export async function GET() {
+  return withA9Diagnostics(() => getAccountProfile())
+}
+
+async function getAccountProfile() {
   const user = await getAuthenticatedClaims()
 
   if (!user) {

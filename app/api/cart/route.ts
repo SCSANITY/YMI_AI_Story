@@ -14,6 +14,7 @@ import {
   loadAuthoritativeCreationPackagePrice,
   packagePricingStoreErrorResponse,
 } from '@/lib/package-pricing-store'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 
 const CART_CACHE_CONTROL = 'private, no-store, max-age=0'
 
@@ -27,6 +28,10 @@ function cartJson(body: unknown, init?: { status?: number }) {
 }
 
 export async function GET(request: Request) {
+  return withA9Diagnostics(() => getCart(request))
+}
+
+async function getCart(request: Request) {
   const url = new URL(request.url)
   const customerId = url.searchParams.get('customerId')
   const statusParam = url.searchParams.get('status')

@@ -5,6 +5,7 @@ import {
 import { getEmptyPurchaseSummary, isFinalJobReleased, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
 import { buildReleasedReaderContract, type ReleasedReaderContract } from '@/lib/reader-page-contract'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import {
   checkoutOwnerErrorResponse,
@@ -58,6 +59,13 @@ function pickLatestFinalJob(finalJobs: FinalJobRow[]) {
 }
 
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ creationId: string }> }
+) {
+  return withA9Diagnostics(() => getReader(request, context))
+}
+
+async function getReader(
   request: Request,
   context: { params: Promise<{ creationId: string }> }
 ) {

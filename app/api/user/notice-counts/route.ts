@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { resolveCheckoutOwner, checkoutOwnerErrorResponse } from '@/lib/checkout-owner'
 import { noStoreJson } from '@/lib/http-response'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import { loadPurchaseSummaryByCreation, getEmptyPurchaseSummary } from '@/lib/purchase-state'
 import { isVisibleMyBookRow } from '@/lib/my-books-visibility'
 import { loadRewardVoucherSummary } from '@/lib/reward-vouchers-server'
@@ -50,6 +51,10 @@ async function countBooks(customerId: string) {
 }
 
 export async function GET(request: Request) {
+  return withA9Diagnostics(() => getNoticeCounts(request))
+}
+
+async function getNoticeCounts(request: Request) {
   let owner
   try {
     owner = await resolveCheckoutOwner(request, {

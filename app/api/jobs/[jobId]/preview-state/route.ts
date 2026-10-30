@@ -17,6 +17,7 @@ import {
 } from '@/lib/preview-job-state'
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import {
   assertSignableStorageBucket,
   STORAGE_BUCKET_NOT_SIGNABLE_CODE,
@@ -30,6 +31,13 @@ import {
 const SIGNED_URL_TTL_SECONDS = 60 * 10
 
 export async function GET(
+  request: Request,
+  context: { params: Promise<{ jobId: string }> }
+) {
+  return withA9Diagnostics(() => getPreviewState(request, context))
+}
+
+async function getPreviewState(
   request: Request,
   context: { params: Promise<{ jobId: string }> }
 ) {

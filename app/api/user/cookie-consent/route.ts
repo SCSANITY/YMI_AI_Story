@@ -6,6 +6,7 @@ import {
 } from '@/lib/cookie-consent'
 import { getAuthenticatedClaims, getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 
 type CustomerConsentRow = {
   customer_id: string
@@ -35,6 +36,10 @@ async function getAuthenticatedCustomer(verification: 'remote' | 'claims') {
 }
 
 export async function GET() {
+  return withA9Diagnostics(() => getCookieConsent())
+}
+
+async function getCookieConsent() {
   const customer = await getAuthenticatedCustomer('claims')
   if (!customer?.customer_id) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })

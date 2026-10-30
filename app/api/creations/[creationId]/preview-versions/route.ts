@@ -14,6 +14,7 @@ import {
 import { parseJobQueueAdmissionError } from '@/lib/jobQueueAdmission'
 import { PREVIEW_VARIANT_SESSION_CAP } from '@/lib/preview-variants'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import { isUuid } from '@/lib/validators'
 import { buildPreviewVersionGroup } from '@/lib/preview-version-group'
 import { readPreviewVersionPhotos, readVisiblePreviewVersionIds } from '@/lib/preview-version-photos-server'
@@ -61,6 +62,10 @@ function rpcConflictCode(error: { code?: string | null; message?: string | null 
 }
 
 export async function GET(request: Request, context: { params: Promise<{ creationId: string }> }) {
+  return withA9Diagnostics(() => getPreviewVersions(request, context))
+}
+
+async function getPreviewVersions(request: Request, context: { params: Promise<{ creationId: string }> }) {
   const { creationId } = await context.params
   if (!isUuid(creationId)) return jsonNoStore({ code: 'invalid_creation_id' }, 400)
   let owner

@@ -94,7 +94,11 @@ export async function proxy(request: NextRequest) {
     },
   })
 
+  const proxyStartedAt = performance.now()
   await supabase.auth.getClaims()
+  if (process.env.YMI_A9_DIAGNOSTICS === 'true') {
+    response.headers.append('Server-Timing', `a9-proxy;dur=${(performance.now() - proxyStartedAt).toFixed(1)}`)
+  }
 
   return response
 }

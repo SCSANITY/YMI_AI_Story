@@ -62,6 +62,8 @@ export function createSupabaseServiceFetch(
 ): typeof fetch {
   const validated = classifyServiceKey(credential.value, credential.source)
   return async (input, init) => {
+    const diagnosticsEnabled = process.env.YMI_A9_DIAGNOSTICS === 'true'
+    const startedAt = diagnosticsEnabled ? performance.now() : 0
     const headers = new Headers(init?.headers)
     if (!headers.has('apikey')) headers.set('apikey', validated.value)
     if (
@@ -70,7 +72,12 @@ export function createSupabaseServiceFetch(
     ) {
       headers.delete('Authorization')
     }
-    return fetchImpl(input, { ...init, headers })
+    const response = await fetchImpl(input, { ...init, headers })
+    if (diagnosticsEnabled) {
+      const { recordA9SupabaseCall } = await import('@/lib/a9-diagnostics')
+      recordA9SupabaseCall(input, init?.method ?? 'GET', startedAt, performance.now() - startedAt)
+    }
+    return response
   }
 }
 
