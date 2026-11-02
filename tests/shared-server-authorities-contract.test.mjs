@@ -98,7 +98,7 @@ test('internal scheduled routes share one constant-time authorization authority'
 })
 
 test('customer-owned queries share the checkout owner scope authority', async () => {
-  const [ownerStore, ...routes] = await Promise.all([
+  const [ownerStore, myBooksRoute, ...routes] = await Promise.all([
     read('src/lib/checkout-owner.ts'),
     read('app/api/my-books/route.ts'),
     read('app/api/my-books/[creationId]/reader/route.ts'),
@@ -112,4 +112,9 @@ test('customer-owned queries share the checkout owner scope authority', async ()
     assert.match(route, /scopeCheckoutOwnerQuery/)
     assert.doesNotMatch(route, /function buildOwnerScopedQuery|ownerFilter/)
   }
+  // My Books reads through the S-C1 owner-scoped RPC; the owner identity still
+  // comes from the shared checkout owner authority and never from the caller.
+  assert.match(myBooksRoute, /resolveCheckoutOwner\(request,/)
+  assert.match(myBooksRoute, /rpc\('get_my_books_page', \{\s*p_owner_type: owner\.ownerType,/)
+  assert.doesNotMatch(myBooksRoute, /function buildOwnerScopedQuery|ownerFilter/)
 })

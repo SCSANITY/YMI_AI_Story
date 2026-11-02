@@ -53,11 +53,10 @@ test('a legacy group over the cap remains readable in full and has zero remainin
 function routeHarness(kind = 'customer', foreign = false) {
   const calls = []
   const owner = kind === 'customer' ? { ownerType: 'customer', customerId: uuid(30) } : { ownerType: 'anon', anonSessionId: uuid(31) }
-  const filters = []
-  const query = {
-    select() { return this }, eq(column, value) { filters.push([column, value]); return this },
-    maybeSingle: async () => ({ data: foreign ? null : { creation_id: child }, error: null }),
-  }
+  const rpcRows = [
+    { root_creation_id: root, creation_id: root, job_id: rootJob, is_original: true, created_at: null, is_archived: false, deleted_at: null, photo_storage_path: null, face_asset_id: null },
+    { root_creation_id: root, creation_id: child, job_id: childJob, is_original: false, created_at: null, is_archived: false, deleted_at: null, photo_storage_path: 'user-assets/face.webp', face_asset_id: uuid(40) },
+  ]
   const route = load('app/api/creations/[creationId]/preview-versions/route.ts', {
     'node:async_hooks': { AsyncLocalStorage },
     'node:crypto': { randomUUID },
@@ -67,18 +66,20 @@ function routeHarness(kind = 'customer', foreign = false) {
       ownerFilter: () => ({ owner_type: kind, column: kind === 'customer' ? 'customer_id' : 'anon_session_id', value: kind === 'customer' ? owner.customerId : owner.anonSessionId }),
     },
     '@/lib/supabaseAdmin': { supabaseAdmin: {
-      from(table) { assert.equal(table, 'creations'); return query },
-      rpc: async (name, args) => { calls.push([name, args]); return { data: rows, error: null } },
+      from() { throw Error('no direct table reads in GET') },
+      rpc: async (name, args) => {
+        calls.push([name, args])
+        if (foreign) return { data: null, error: { code: 'P0404', message: 'creation_not_found' } }
+        return { data: rpcRows, error: null }
+      },
     } },
-    '@/lib/preview-version-photos-server': {
-      readVisiblePreviewVersionIds: async () => new Set([root, child]),
-      readPreviewVersionPhotos: async () => new Map([[child, { photoUrl: 'https://signed.test/photo', faceAssetId: uuid(40) }]]),
-    },
+    '@/lib/storage-signing': { createSignedStorageUrlMap: async requests => new Map(requests.map(r => [r.key, 'https://signed.test/photo'])) },
+    '@/lib/userAssetsStorage': { USER_ASSET_SIGN_TTL_SECONDS: 3600 },
   })
-  return { route, calls, filters }
+  return { route, calls }
 }
 
-for (const kind of ['customer', 'anon']) test(`GET restores ${kind} group and denies cross-owner before the RPC`, async () => {
+for (const kind of ['customer', 'anon']) test(`GET restores ${kind} group and the RPC enforces the owner scope`, async () => {
   const h = routeHarness(kind)
   const response = await h.route.GET(new Request('https://local.test/preview-versions'), { params: Promise.resolve({ creationId: child }) })
   assert.equal(response.status, 200)
@@ -88,12 +89,18 @@ for (const kind of ['customer', 'anon']) test(`GET restores ${kind} group and de
   assert.equal(dto.versions[1].photoUrl, 'https://signed.test/photo')
   assert.equal(dto.versions[1].faceAssetId, uuid(40))
   assert.doesNotMatch(JSON.stringify(dto), /storage_path|customize_snapshot|storagePath/)
-  assert.equal(h.calls[1][0], 'read_preview_version_group')
+  assert.equal(h.calls[1][0], 'get_preview_version_page')
+  assert.deepEqual(plain(h.calls[1][1]), {
+    p_creation_id: child,
+    p_owner_type: kind,
+    p_owner_id: kind === 'customer' ? uuid(30) : uuid(31),
+  })
   assert.deepEqual(plain(h.calls[0][1]), { allowAnon: true, createAnonIfMissing: false })
-  assert.ok(h.filters.some(([column]) => column === (kind === 'customer' ? 'customer_id' : 'anon_session_id')))
   const denied = routeHarness(kind, true)
-  assert.equal((await denied.route.GET(new Request('https://local.test/preview-versions'), { params: Promise.resolve({ creationId: child }) })).status, 404)
-  assert.equal(denied.calls.length, 1)
+  const deniedResponse = await denied.route.GET(new Request('https://local.test/preview-versions'), { params: Promise.resolve({ creationId: child }) })
+  assert.equal(deniedResponse.status, 404)
+  assert.equal((await deniedResponse.json()).code, 'creation_not_found')
+  assert.equal(denied.calls.length, 2)
 })
 
 test('reload reader uses GET only and preserves all existing identities without a generation request', async () => {

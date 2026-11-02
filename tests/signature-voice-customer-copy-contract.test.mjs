@@ -70,7 +70,7 @@ test('S6 My Books and Reader retain the latest paid package type end to end', as
   assert.match(purchaseState, /latestPackageType: BookPackageType \| null/)
   assert.match(purchaseState, /select\('cart_item_id, creation_id, order_id, final_job_id, package_type, status, created_at'\)/)
   assert.match(purchaseState, /latestPackageType: normalizeBookPackageType\(latest\?\.cartItem\.package_type\) \?\? null/)
-  assert.match(myBooksRoute, /\.\.\.purchaseSummary/)
+  assert.match(myBooksRoute, /rpc\('get_my_books_page'/)
   assert.match(grid, /isSignatureVoicePackage\(item\.latestPackageType\)/)
   assert.ok((readerRoute.match(/latestPackageType: purchaseSummary\.latestPackageType/g) ?? []).length >= 4)
   assert.doesNotMatch(reader, /buildCartContext|normalizeBookType/)

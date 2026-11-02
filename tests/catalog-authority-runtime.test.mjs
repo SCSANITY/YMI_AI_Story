@@ -78,17 +78,17 @@ test('public ISR handlers throw transient load errors instead of returning cache
 })
 
 function cartHarness({invalid=false}={}){
- const queries=[]
- const item={cart_item_id:'cart-a',creation_id:'creation-a',owner_type:'customer',customer_id:'owner-a',package_type:'supreme',quantity:2,status:'cart',order_id:null,price_at_purchase:70,creations:{template_id:'DB_only_story',templates:{...row(),package_prices:invalid?[]:packages}}}
+ const rpcCalls=[]
+ const item={cart_item_id:'cart-a',creation_id:'creation-a',package_type:'supreme',quantity:2,status:'cart',order_id:null,price_at_purchase:70,creations:{template_id:'DB_only_story',templates:{...row(),package_prices:invalid?[]:packages}},_cover_state:'pending',_cover_bucket:'raw-private',_cover_path:null}
  const owner={ownerType:'customer',customerId:'owner-a'}
  const api=loadUi('app/api/cart/route.ts',{
   'next/server':{NextResponse:{json:Response.json}},
   '@/lib/checkout-owner':{resolveCheckoutOwner:async()=>owner,ownerFilter:()=>({owner_type:'customer',column:'customer_id',value:'owner-a'})},
-  '@/lib/order-covers':{createGeneratedPreviewCoverMap:async()=>new Map(),getGeneratedPreviewCover:()=>({url:null,status:'pending'})},
+  '@/lib/storage-signing':{createSignedStorageUrlMap:async()=>new Map()},
   '@/lib/package-pricing-store':{},
-  '@/lib/supabaseAdmin':{supabaseAdmin:{from(table){const q={table,filters:[]};queries.push(q);const chain={select(){return chain},eq(k,v){q.filters.push([k,v]);return chain},in(){return chain},order(){return chain},then(resolve){return Promise.resolve({data:[item],error:null}).then(resolve)}};return chain}}},
+  '@/lib/supabaseAdmin':{supabaseAdmin:{from(table){throw new Error(`unexpected table read ${table}`)},async rpc(name,args){rpcCalls.push({name,args});return{data:{items:[item],linkedOrders:[]},error:null}}}},
  },{URL})
- return {api,item,queries}
+ return {api,item,rpcCalls}
 }
 
 test('active cart projects the selected edition current price without writing stored snapshots;non-active read keeps its amount',async()=>{
@@ -98,9 +98,11 @@ test('active cart projects the selected edition current price without writing st
  const line=(await response.json()).items[0]
  assert.equal(line.unit_price_usd,89);assert.equal(line.price_at_purchase,70)
  assert.equal(JSON.stringify(h.item),snapshot)
- assert.deepEqual(h.queries[0].filters,[['owner_type','customer'],['customer_id','owner-a']])
+ assert.equal(h.rpcCalls[0].name,'get_cart_page')
+ assert.equal(JSON.stringify(h.rpcCalls[0].args),JSON.stringify({p_owner_type:'customer',p_owner_id:'owner-a',p_ids:[],p_order_id:null,p_status:null}))
  const history=await h.api.GET(new Request('https://example.test/api/cart?orderId=history&status=ordered'))
  assert.equal((await history.json()).items[0].unit_price_usd,70)
+ assert.equal(JSON.stringify(h.rpcCalls[1].args),JSON.stringify({p_owner_type:'customer',p_owner_id:'owner-a',p_ids:[],p_order_id:'history',p_status:'ordered'}))
  const invalid=await cartHarness({invalid:true}).api.GET(new Request('https://example.test/api/cart'))
  assert.equal(invalid.status,503);assert.match(invalid.headers.get('cache-control'),/private, no-store/)
 })

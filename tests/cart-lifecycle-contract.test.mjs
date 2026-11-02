@@ -33,8 +33,8 @@ test('active cart projection is payment-authoritative and explicitly uncached', 
   const success = await read('app/checkout/success/page.tsx')
 
   assert.match(route, /filterActiveCartItems/)
-  assert.match(route, /query\.in\('status', \['cart', 'ordered'\]\)/)
-  assert.match(route, /select\('order_id, order_status, payment_id'\)/)
+  assert.match(route, /rpc\('get_cart_page'/)
+  assert.match(route, /p_status: statusParam/)
   assert.match(route, /private, no-store, max-age=0/)
   assert.match(success, /normalizedStatus === 'paid'/)
   assert.match(success, /void refreshCart\(\)/)
