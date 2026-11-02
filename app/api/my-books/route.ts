@@ -4,32 +4,17 @@ import { UUID_REGEX } from '@/lib/validators'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
-import { getEmptyPurchaseSummary, loadPurchaseSummaryByCreation } from '@/lib/purchase-state'
-import { isVisibleMyBookRow } from '@/lib/my-books-visibility'
 import {
   checkoutOwnerErrorResponse,
   resolveCheckoutOwner,
-  scopeCheckoutOwnerQuery,
-  type CheckoutOwner,
 } from '@/lib/checkout-owner'
 
-async function loadCreationsWithArchive(owner: CheckoutOwner) {
-  const archiveSelect = `
-    creation_id,
-    template_id,
-    customize_snapshot,
-    preview_job_id,
-    created_at,
-    is_archived,
-    deleted_at,
-    templates:templates (*, package_prices:template_package_prices(package_type,list_price_usd,sale_price_usd,display_discount_percent,row_version,updated_at))
-  `
+const MY_BOOKS_COVER_TTL_SECONDS = 60 * 10
 
-  const query = scopeCheckoutOwnerQuery(
-    supabaseAdmin.from('creations').select(archiveSelect).order('created_at', { ascending: false }),
-    owner
-  )
-  return await query
+type MyBooksPageRow = Record<string, unknown> & {
+  creation_id?: string | null
+  _cover_bucket?: unknown
+  _cover_path?: string | null
 }
 
 export async function GET(request: Request) {
@@ -54,75 +39,35 @@ async function getMyBooks(request: Request) {
   }
   if (!owner) return privateJson({ items: [] })
 
-  const { data: items, error } = await loadCreationsWithArchive(owner)
+  // S-C1: owner rows + template/package pricing + purchase summary + cover
+  // path arrive from one read-only RPC; only cover signing stays here.
+  const { data: items, error } = await supabaseAdmin.rpc('get_my_books_page', {
+    p_owner_type: owner.ownerType,
+    p_owner_id: owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId,
+  })
   if (error) {
     return NextResponse.json({ error: 'Failed to load items' }, { status: 500 })
   }
 
-  const allRows = items ?? []
-  let purchaseSummaryByCreation
-  try {
-    purchaseSummaryByCreation = await loadPurchaseSummaryByCreation(
-      allRows.map((row: { creation_id?: string | null }) => String(row.creation_id || '')).filter(Boolean)
-    )
-  } catch (error) {
-    console.error('[my-books] Failed to load purchase state', error)
-    return privateJson({ error: 'Failed to load purchase state' }, { status: 500 })
-  }
-  const visibleRows = allRows.filter((row: { creation_id?: string | null; is_archived?: boolean | null }) => {
-    const summary = purchaseSummaryByCreation.get(String(row.creation_id || '')) ?? getEmptyPurchaseSummary()
-    return isVisibleMyBookRow(row, summary)
-  })
-  const jobIds = visibleRows
-    .map((row: { preview_job_id?: string | null }) => row.preview_job_id)
-    .filter((value: string | null) => Boolean(value))
-
-  const previewUrlMap = new Map<string, string>()
-
-  if (jobIds.length > 0) {
-    const { data: jobs, error: jobsError } = await supabaseAdmin
-      .from('jobs')
-      .select('job_id, output_assets')
-      .in('job_id', jobIds as string[])
-
-    if (jobsError) {
-      console.error('[my-books] Failed to load Preview covers', jobsError)
-      return privateJson({ error: 'Failed to load Preview covers' }, { status: 500 })
-    }
-
-    const jobMap = new Map<string, { bucket: string; path: string }>()
-    for (const job of jobs ?? []) {
-      const outputAssets = job.output_assets as
-        | {
-            bucket?: string
-            pages?: { page_index: number; storage_path: string }[]
-          }
-        | null
-      const bucket = outputAssets?.bucket || 'raw-private'
-      const pages = Array.isArray(outputAssets?.pages) ? outputAssets.pages ?? [] : []
-      const coverPage = pages.find((page) => page.page_index === 0) ?? pages[0]
-      if (coverPage?.storage_path) {
-        jobMap.set(job.job_id, { bucket, path: coverPage.storage_path })
-      }
-    }
-
-    const signedUrls = await createSignedStorageUrlMap(
-      Array.from(jobMap.entries()).map(([jobId, info]) => ({
-        key: jobId,
-        bucket: info.bucket,
-        path: info.path,
-        expiresIn: 60 * 10,
+  const rows = (Array.isArray(items) ? items : []) as MyBooksPageRow[]
+  const signedCovers = await createSignedStorageUrlMap(
+    rows
+      .filter((row) => typeof row._cover_path === 'string' && row._cover_path.length > 0)
+      .map((row) => ({
+        key: String(row.creation_id),
+        bucket: typeof row._cover_bucket === 'string' && row._cover_bucket ? row._cover_bucket : 'raw-private',
+        path: String(row._cover_path),
+        expiresIn: MY_BOOKS_COVER_TTL_SECONDS,
       }))
-    )
-    signedUrls.forEach((signedUrl, jobId) => previewUrlMap.set(jobId, signedUrl))
-  }
+  )
 
-  const enriched = visibleRows.map((row: { creation_id?: string | null; preview_job_id?: string | null }) => {
-    const purchaseSummary = purchaseSummaryByCreation.get(String(row.creation_id || '')) ?? getEmptyPurchaseSummary()
+  const enriched = rows.map((row) => {
+    const publicRow = { ...row }
+    delete publicRow._cover_bucket
+    delete publicRow._cover_path
     return {
-      ...row,
-      ...purchaseSummary,
-      preview_cover_url: row.preview_job_id ? previewUrlMap.get(row.preview_job_id) ?? null : null,
+      ...publicRow,
+      preview_cover_url: signedCovers.get(String(row.creation_id ?? '')) ?? null,
     }
   })
 

@@ -14,7 +14,7 @@ test('My Books fails visibly instead of turning data errors into an empty librar
   assert.doesNotMatch(page, /res\.ok\s*\?\s*res\.json\(\)\s*:\s*\{\s*items:\s*\[\]\s*\}/)
   assert.match(page, /setLoadError\(t\('myBooks\.loadError'\)\)/)
   assert.match(page, /onClick=\{\(\) => void loadBooks\(\)\}/)
-  assert.match(route, /Failed to load purchase state/)
+  assert.match(route, /Failed to load items/)
   assert.match(purchaseState, /if \(cartItemsError\)/)
   assert.match(purchaseState, /if \(ordersError\)/)
   assert.match(purchaseState, /if \(finalJobsError\)/)

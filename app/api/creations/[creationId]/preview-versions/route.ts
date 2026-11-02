@@ -17,7 +17,8 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 import { isUuid } from '@/lib/validators'
 import { buildPreviewVersionGroup } from '@/lib/preview-version-group'
-import { readPreviewVersionPhotos, readVisiblePreviewVersionIds } from '@/lib/preview-version-photos-server'
+import { createSignedStorageUrlMap } from '@/lib/storage-signing'
+import { USER_ASSET_SIGN_TTL_SECONDS } from '@/lib/userAssetsStorage'
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -61,6 +62,46 @@ function rpcConflictCode(error: { code?: string | null; message?: string | null 
   return null
 }
 
+type PreviewVersionPageRow = {
+  root_creation_id: string
+  creation_id: string
+  job_id: string
+  is_original: boolean
+  created_at: string | null
+  is_archived: boolean | null
+  deleted_at: string | null
+  photo_storage_path: string | null
+  face_asset_id: string | null
+}
+
+// Only group members with both an owned face-asset match and a user-assets
+// storage path are signable, exactly like the previous photo reader.
+async function signPreviewVersionPhotos(rows: PreviewVersionPageRow[]) {
+  const signable = rows.filter(
+    (row) =>
+      typeof row.photo_storage_path === 'string' &&
+      row.photo_storage_path.length > 0 &&
+      row.face_asset_id
+  )
+  const photos = new Map<string, { photoUrl: string; faceAssetId: string }>()
+  if (!signable.length) return photos
+  const signedUrls = await createSignedStorageUrlMap(
+    signable.map((row) => ({
+      key: String(row.creation_id),
+      bucket: 'raw-private',
+      path: String(row.photo_storage_path),
+      expiresIn: USER_ASSET_SIGN_TTL_SECONDS,
+    }))
+  )
+  for (const row of signable) {
+    const photoUrl = signedUrls.get(String(row.creation_id))
+    if (photoUrl) {
+      photos.set(String(row.creation_id), { photoUrl, faceAssetId: String(row.face_asset_id) })
+    }
+  }
+  return photos
+}
+
 export async function GET(request: Request, context: { params: Promise<{ creationId: string }> }) {
   return withA9Diagnostics(() => getPreviewVersions(request, context))
 }
@@ -77,23 +118,28 @@ async function getPreviewVersions(request: Request, context: { params: Promise<{
     return response
   }
   if (!owner) return jsonNoStore({ code: 'unauthorized' }, 401)
-  const filter = ownerFilter(owner)
-  const { data: creation, error: lookupError } = await supabaseAdmin.from('creations')
-    .select('creation_id,is_archived,deleted_at').eq('creation_id', creationId)
-    .eq('owner_type', filter.owner_type).eq(filter.column, filter.value).maybeSingle()
-  if (lookupError) return jsonNoStore({ code: 'creation_lookup_failed' }, 500)
-  if (!creation) return jsonNoStore({ code: 'creation_not_found' }, 404)
-  if (creation.is_archived || creation.deleted_at) return jsonNoStore({ code: 'creation_archived' }, 409)
-  const { data, error } = await supabaseAdmin.rpc('read_preview_version_group', {
-    p_creation_id: creationId, p_owner_type: owner.ownerType,
+  // S-C1: creation gate + group walk + per-member ownership/visibility +
+  // photo path arrive from one read-only RPC. A foreign group member fails
+  // closed inside the RPC (42501), exactly like the old visibility throw.
+  const { data, error } = await supabaseAdmin.rpc('get_preview_version_page', {
+    p_creation_id: creationId,
+    p_owner_type: owner.ownerType,
     p_owner_id: owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId,
   })
-  if (error) return jsonNoStore({ code: 'preview_version_group_unavailable' }, error.code === '42501' ? 404 : 409)
+  if (error) {
+    const sqlState = String(error.code || '')
+    if (sqlState === 'P0404') return jsonNoStore({ code: 'creation_not_found' }, 404)
+    if (sqlState === 'PT409') return jsonNoStore({ code: 'creation_archived' }, 409)
+    if (sqlState === '42501') return jsonNoStore({ code: 'preview_version_group_unavailable' }, 404)
+    return jsonNoStore({ code: 'preview_version_group_unavailable' }, 409)
+  }
   try {
-    const group = buildPreviewVersionGroup(data ?? [], creationId)
-    const visibleIds = await readVisiblePreviewVersionIds(owner, group.versions.map(version => version.creationId))
+    const rows = (Array.isArray(data) ? data : []) as PreviewVersionPageRow[]
+    const group = buildPreviewVersionGroup(rows, creationId)
+    const visibleRows = rows.filter((row) => !row.is_archived && !row.deleted_at)
+    const visibleIds = new Set(visibleRows.map((row) => String(row.creation_id)))
     const versions = group.versions.filter(version => visibleIds.has(version.creationId))
-    const photos = await readPreviewVersionPhotos(owner, versions.map(version => version.creationId)).catch(() => new Map<string, { photoUrl: string; faceAssetId: string }>())
+    const photos = await signPreviewVersionPhotos(visibleRows).catch(() => new Map<string, { photoUrl: string; faceAssetId: string }>())
     return jsonNoStore({ ...group, versions: versions.map(version => ({ ...version, photoUrl: photos.get(version.creationId)?.photoUrl ?? null, faceAssetId: photos.get(version.creationId)?.faceAssetId ?? null })) })
   } catch {
     return jsonNoStore({ code: 'preview_version_group_unavailable' }, 409)

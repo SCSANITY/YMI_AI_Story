@@ -9,7 +9,7 @@ import {
 import { filterActiveCartItems } from '@/lib/cart-lifecycle'
 import { activeCartUnitPrice, requireCartUnitPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price'
 import { parseCartItemQuantity } from '@/lib/cart-quantity'
-import { createGeneratedPreviewCoverMap, getGeneratedPreviewCover } from '@/lib/order-covers'
+import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 import {
   loadAuthoritativeCreationPackagePrice,
   packagePricingStoreErrorResponse,
@@ -17,6 +17,7 @@ import {
 import { withA9Diagnostics } from '@/lib/a9-diagnostics'
 
 const CART_CACHE_CONTROL = 'private, no-store, max-age=0'
+const CART_COVER_TTL_SECONDS = 60 * 10
 
 function cartJson(body: unknown, init?: { status?: number }) {
   return NextResponse.json(body, {
@@ -69,95 +70,39 @@ async function getCart(request: Request) {
     !orderIdParam &&
     (!statusParam || statusParam === 'cart')
 
-  let query = supabaseAdmin
-    .from('cart_items')
-    .select(
-      `
-        cart_item_id,
-        creation_id,
-        quantity,
-        price_at_purchase,
-        package_type,
-        package_price_version,
-        status,
-        order_id,
-        creations:creations (
-          creation_id,
-          template_id,
-          customize_snapshot,
-          preview_job_id,
-          templates:templates (
-            *,
-            package_prices:template_package_prices(
-              package_type,
-              list_price_usd,
-              sale_price_usd,
-              display_discount_percent,
-              row_version,
-              updated_at
-            ),
-            home_placements:template_home_placements(section_key,position)
-          )
-        )
-      `
-    )
-    .eq('owner_type', filter.owner_type)
-    .eq(filter.column, filter.value)
-
-  if (ids.length > 0) {
-    query = query.in('cart_item_id', ids)
-  } else if (orderIdParam) {
-    query = query.eq('order_id', orderIdParam)
-    if (!statusParam || statusParam === 'cart') {
-      query = query.eq('status', 'ordered')
-    } else if (statusParam !== 'all') {
-      query = query.eq('status', statusParam)
-    }
-  } else if (isActiveCartRequest) {
-    query = query.in('status', ['cart', 'ordered'])
-  } else if (statusParam !== 'all') {
-    query = query.eq('status', statusParam)
-  }
-
-  const { data: items, error } = await query
+  // S-C1: cart lines + nested creation/template/pricing + linked order states
+  // + cover path arrive from one read-only RPC; lifecycle filtering, pricing
+  // and cover signing stay here.
+  const { data: page, error } = await supabaseAdmin.rpc('get_cart_page', {
+    p_owner_type: filter.owner_type,
+    p_owner_id: filter.value,
+    p_ids: ids,
+    p_order_id: orderIdParam,
+    p_status: statusParam,
+  })
 
   if (error) {
     return cartJson({ error: 'Failed to load cart' }, { status: 500 })
   }
 
   type CartRow = {
+    cart_item_id?: string | null
     status?: string | null
     order_id?: string | null
+    price_at_purchase?: number | null
     creations?: { preview_job_id?: string | null } | null
+    _cover_state?: string | null
+    _cover_bucket?: unknown
+    _cover_path?: string | null
     [key: string]: unknown
   }
-  let cartItems: CartRow[] = (items ?? []) as CartRow[]
+  let cartItems: CartRow[] = (Array.isArray(page?.items) ? page.items : []) as CartRow[]
   if (isActiveCartRequest) {
-    const linkedOrderIds = Array.from(
-      new Set(
-        cartItems
-          .map((row) => String(row.order_id || '').trim())
-          .filter(Boolean)
-      )
-    )
-    let linkedOrders: Array<{
+    const linkedOrders = (Array.isArray(page?.linkedOrders) ? page.linkedOrders : []) as Array<{
       order_id: string
       order_status: string | null
       payment_id: string | null
-    }> = []
-
-    if (linkedOrderIds.length > 0) {
-      const { data: orders, error: ordersError } = await supabaseAdmin
-        .from('orders')
-        .select('order_id, order_status, payment_id')
-        .in('order_id', linkedOrderIds)
-
-      if (ordersError) {
-        return cartJson({ error: 'Failed to load cart order state' }, { status: 500 })
-      }
-      linkedOrders = orders ?? []
-    }
-
+    }>
     cartItems = filterActiveCartItems(cartItems, linkedOrders)
   }
   // Read-only projection: active carts follow Catalog; checkout/history keep
@@ -170,18 +115,35 @@ async function getCart(request: Request) {
   } catch {
     return cartJson({ error: CART_PRICE_LOAD_ERROR }, { status: 503 })
   }
-  const jobIds = cartItems
-    .map((row) => row.creations?.preview_job_id)
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
 
-  const previewCoverMap = await createGeneratedPreviewCoverMap(jobIds)
+  const signedCovers = await createSignedStorageUrlMap(
+    cartItems
+      .filter((row) => row._cover_state === 'signable' && typeof row._cover_path === 'string' && row._cover_path.length > 0)
+      .map((row) => ({
+        key: String(row.cart_item_id),
+        bucket: typeof row._cover_bucket === 'string' && row._cover_bucket ? row._cover_bucket : 'raw-private',
+        path: String(row._cover_path),
+        expiresIn: CART_COVER_TTL_SECONDS,
+      }))
+  )
 
   const enriched = cartItems.map((row) => {
-    const cover = getGeneratedPreviewCover(previewCoverMap, row.creations?.preview_job_id)
+    const publicRow = { ...row }
+    delete publicRow._cover_state
+    delete publicRow._cover_bucket
+    delete publicRow._cover_path
+    const signedUrl = signedCovers.get(String(row.cart_item_id ?? '')) ?? null
     return {
-      ...row,
-      preview_cover_url: cover.url,
-      preview_cover_status: cover.status,
+      ...publicRow,
+      preview_cover_url: signedUrl,
+      preview_cover_status:
+        row._cover_state === 'signable'
+          ? signedUrl
+            ? 'ready'
+            : 'pending'
+          : row._cover_state === 'pending'
+            ? 'pending'
+            : 'unavailable',
     }
   })
 

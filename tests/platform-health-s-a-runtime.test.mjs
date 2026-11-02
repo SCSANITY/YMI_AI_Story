@@ -23,25 +23,18 @@ function queryBuilder(result, calls, table) {
   return query
 }
 
-test('notice-counts keeps list semantics, email vouchers, signed-out zeros and failures', async () => {
-  let owner = { ownerType: 'customer', customerId: 'customer-1', email: 'Mia@Example.test' }
-  let failTable = null
+test('notice-counts reads one RPC, keeps signed-out zeros and failures', async () => {
+  let owner = { ownerType: 'customer', customerId: 'customer-1', authUserId: 'auth-1', email: 'mia@example.test' }
+  let failRpc = false
   const calls = []
-  const rows = [
-    { creation_id: 'archived-unpurchased', is_archived: true },
-    { creation_id: 'refunded', is_archived: true },
-    { creation_id: 'unpaid', is_archived: false },
-  ]
   const supabaseAdmin = {
-    from(table) {
-      if (table === failTable) return queryBuilder({ data: null, count: null, error: new Error('read failed') }, calls, table)
-      if (table === 'favourites') return queryBuilder({ count: 4, error: null }, calls, table)
-      if (table === 'orders') return queryBuilder({ count: 3, error: null }, calls, table)
-      if (table === 'creations') return queryBuilder({ data: rows, error: null }, calls, table)
-      throw new Error(`unexpected table ${table}`)
+    from(table) { throw new Error(`unexpected table read ${table}`) },
+    async rpc(name, args) {
+      calls.push({ name, args })
+      if (failRpc) return { data: null, error: new Error('read failed') }
+      return { data: { favorites: 4, rewards: 1, orders: 3, books: 2 }, error: null }
     },
   }
-  const rewardSummary = { active: [{ couponCodeId: 'email-unclaimed' }], redeemed: [], expired: [] }
   const route = loadUi('app/api/user/notice-counts/route.ts', {
     'next/server': { NextResponse: { json: (body, init) => jsonResponse(body, init?.status ?? 200) } },
     '@/lib/checkout-owner': {
@@ -50,29 +43,23 @@ test('notice-counts keeps list semantics, email vouchers, signed-out zeros and f
     },
     '@/lib/http-response': { noStoreJson: (body, init) => jsonResponse(body, typeof init === 'number' ? init : init?.status ?? 200) },
     '@/lib/supabaseAdmin': { supabaseAdmin },
-    '@/lib/purchase-state': {
-      getEmptyPurchaseSummary: () => ({ purchaseState: 'unpurchased' }),
-      loadPurchaseSummaryByCreation: async () => new Map([
-        ['archived-unpurchased', { purchaseState: 'unpurchased' }],
-        ['refunded', { purchaseState: 'refunded' }],
-        ['unpaid', { purchaseState: 'unpurchased' }],
-      ]),
-    },
-    '@/lib/reward-vouchers-server': { loadRewardVoucherSummary: async () => rewardSummary },
   }).GET
 
   let response = await route(new Request('https://fixture.test/api/user/notice-counts'))
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), { favorites: 4, rewards: 1, orders: 3, books: 2 })
-  assert.equal(calls.filter(call => call.table === 'favourites' || call.table === 'orders' || call.table === 'creations').length > 0, true)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].name, 'get_nav_notice_counts')
+  assert.equal(JSON.stringify(calls[0].args), JSON.stringify({ p_auth_user_id: 'auth-1', p_email: 'mia@example.test' }))
 
   owner = null
   response = await route(new Request('https://fixture.test/api/user/notice-counts'))
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), { favorites: 0, rewards: 0, orders: 0, books: 0 })
+  assert.equal(calls.length, 1, 'signed-out requests never reach the RPC')
 
-  owner = { ownerType: 'customer', customerId: 'customer-1', email: 'mia@example.test' }
-  failTable = 'orders'
+  owner = { ownerType: 'customer', customerId: 'customer-1', authUserId: 'auth-1', email: 'mia@example.test' }
+  failRpc = true
   const originalError = console.error
   console.error = () => {}
   try {
