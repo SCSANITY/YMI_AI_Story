@@ -31,6 +31,7 @@
     "reader-pages:tests": "tsx --test src/lib/reader-page-contract.test.ts",
     "worker-cloud:tests": "tsx --test src/lib/jobQueue.test.ts tests/worker-cloud-contract.test.mjs tests/worker-queue-wakeup-contract.test.mjs",
     "test:contracts": "node --test tests/*.test.mjs",
+    "dead-code-scan:tests": "tsx --test tests/dead-code-scan.test.mts",
     "covers:normalize": "node scripts/normalize-template-covers.mjs",
     "images:optimize": "node scripts/optimize-images.mjs",
     "products:optimize": "node scripts/optimize-template-products.mjs",
