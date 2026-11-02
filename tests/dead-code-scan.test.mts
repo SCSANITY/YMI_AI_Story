@@ -90,6 +90,17 @@ test("top-level directory chunks never demote unrelated files", () => {
   assert.ok(inv.candidates.unreferencedFiles.some((f) => f.file.includes("unrelated")), "unrelated.ts must stay a candidate");
 });
 
+test("fs readFile with ../ (file-dir) relative path still demotes the real target", () => {
+  const dir = makeRepo({
+    "app/page.tsx": "import { load } from '../src/entry'\nexport default function Page() { return load }\n",
+    "src/entry.ts": "export { load } from './lib/reader'\n",
+    "src/lib/reader.ts": "import { readFileSync } from 'node:fs'\nimport path from 'node:path'\nexport const load = () => readFileSync(path.join(__dirname, '../data/x.sql'), 'utf8')\n",
+    "src/data/x.sql": "SELECT 1;\n",
+  });
+  const inv = buildInventory(dir);
+  assert.ok(inv.unknownKeep.some((f) => f.file.includes("data/x.sql")), "../ file-dir relative fs path must demote x.sql to keep");
+});
+
 test("Worker fixture SHA256SUMS manifest closure is re-hashed and verified", () => {
   const sql = "SELECT 42;\n";
   const hash = createHash("sha256").update(sql).digest("hex");

@@ -185,6 +185,11 @@ export function buildInventory(root: string) {
         c = rel(path.resolve(path.dirname(file), raw)); // import specifiers are file-relative
       } else {
         c = c.replace(/^\.\//, ""); // fs paths resolve against process cwd (repo root)
+        if (raw.startsWith("..")) {
+          // __dirname-style usage: also record the file-dir-resolved form
+          const alt = rel(path.resolve(path.dirname(file), raw));
+          if (alt.length >= 3 && !alt.startsWith("..")) info.unresolvedChunks.push(alt);
+        }
       }
       if (c.length >= 3) info.unresolvedChunks.push(c);
     };
