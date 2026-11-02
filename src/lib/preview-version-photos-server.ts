@@ -1,3 +1,4 @@
+import { createSignedStorageUrlMap } from './storage-signing'
 import { supabaseAdmin } from './supabaseAdmin'
 import { ownerFilter, type CheckoutOwner } from './checkout-owner'
 import { USER_ASSET_SIGN_TTL_SECONDS } from './userAssetsStorage'
@@ -31,9 +32,18 @@ export async function readPreviewVersionPhotos(owner: CheckoutOwner, creationIds
     .eq('asset_type', 'face_image').eq('owner_type', filter.owner_type).eq(filter.column, filter.value)
   if (assetError) throw new Error('Version photos unavailable')
   const allowed = new Map((assets ?? []).map(asset => [asset.storage_path, String(asset.asset_id)]))
-  const signed = await Promise.all([...paths].filter(([, path]) => allowed.has(path)).map(async ([id, path]) => {
-    const { data } = await supabaseAdmin.storage.from('raw-private').createSignedUrl(path, USER_ASSET_SIGN_TTL_SECONDS)
-    return data?.signedUrl ? [id, { photoUrl: data.signedUrl, faceAssetId: allowed.get(path)! }] as const : null
-  }))
-  return new Map(signed.filter((entry): entry is NonNullable<typeof entry> => entry !== null))
+  const signable = [...paths].filter(([, path]) => allowed.has(path))
+  const signedUrls = await createSignedStorageUrlMap(
+    signable.map(([id, path]) => ({
+      key: id,
+      bucket: 'raw-private',
+      path,
+      expiresIn: USER_ASSET_SIGN_TTL_SECONDS,
+    }))
+  )
+  return new Map(
+    signable
+      .filter(([id]) => signedUrls.has(id))
+      .map(([id, path]) => [id, { photoUrl: signedUrls.get(id)!, faceAssetId: allowed.get(path)! }])
+  )
 }

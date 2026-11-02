@@ -26,6 +26,7 @@ for(const kind of ['customer','anon'])test(`photo restoration signs only ${kind}
  }},storage:{from(bucket){assert.equal(bucket,'raw-private');return{async createSignedUrl(path,ttl){signed.push([path,ttl]);return{data:{signedUrl:'https://signed.test/photo'}}}}}}}
  const fn=loadUi('src/lib/preview-version-photos-server.ts',{
   './supabaseAdmin':{supabaseAdmin:client},'./userAssetsStorage':{USER_ASSET_SIGN_TTL_SECONDS:600},
+  './storage-signing':{createSignedStorageUrlMap:async(requests)=>{for(const r of requests)signed.push([r.path,r.expiresIn]);return new Map(requests.map(r=>[r.key,'https://signed.test/photo']))}},
   './checkout-owner':{ownerFilter:()=>({owner_type:kind,column,value:ownerValue})},
  }).readPreviewVersionPhotos
  const result=await fn({},['one','two','wrong-bucket','cross-owner'])

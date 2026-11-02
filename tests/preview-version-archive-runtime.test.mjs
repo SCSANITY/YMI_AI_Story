@@ -31,6 +31,7 @@ for(const kind of ['anon','customer'])test(`visibility query retains ${kind} own
  const {readVisiblePreviewVersionIds}=loadUi('src/lib/preview-version-photos-server.ts',{
   './supabaseAdmin':{supabaseAdmin:{from(){return{select(){return this},in(key,ids){filters.push([key,ids]);return this},eq(key,value){filters.push([key,value]);return this},then(resolve){resolve({data:missing?[]:[{creation_id:uid(1),is_archived:true},{creation_id:uid(4),is_archived:false}],error:null})}}}}},
   './checkout-owner':{ownerFilter:()=>({owner_type:kind,column,value:uid(30)})},'./userAssetsStorage':{},
+  './storage-signing':{createSignedStorageUrlMap:async()=>new Map()},
  })
  const visible=await readVisiblePreviewVersionIds({},[uid(1),uid(4)])
  assert.deepEqual([...visible],[uid(4)]);assert.ok(filters.some(([k,v])=>k==='owner_type'&&v===kind));assert.ok(filters.some(([k,v])=>k===column&&v===uid(30)))
