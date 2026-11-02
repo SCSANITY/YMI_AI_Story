@@ -1,5 +1,5 @@
 /**
- * Scanner contract tests for scripts/dead-code-scan.mts (PLATFORM-HEALTH-001 S-E-1).
+ * Scanner contract tests for scripts/dead-code-scan.ts (PLATFORM-HEALTH-001 S-E-1).
  * Each case builds a minimal fixture repo in a temp dir and runs buildInventory.
  * Covers the fail-closed semantics from plan v2 / Codex scanner review:
  * literal dynamic import preserves exports; unresolved chunks demote to keep;
@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { buildInventory } from "../scripts/dead-code-scan.mts";
+import { buildInventory } from "../scripts/dead-code-scan";
 
 function makeRepo(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dead-code-scan-"));

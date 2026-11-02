@@ -18,7 +18,7 @@
  *
  * This script never modifies the repository.
  *
- * Usage: tsx scripts/dead-code-scan.mts --out <inventory.json>
+ * Usage: tsx scripts/dead-code-scan.ts --out <inventory.json>
  */
 import fs from "node:fs";
 import path from "node:path";
