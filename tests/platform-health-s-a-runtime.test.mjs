@@ -87,7 +87,7 @@ test('customize-access cache does not retain thrown reads and failed writes do n
       )
     },
   }
-  const module = loadUi('src/lib/customize-access-server.ts', {
+  const customizeAccessModule = loadUi('src/lib/customize-access-server.ts', {
     'next/cache': {
       unstable_cache: (fn) => async () => {
         cacheCalls += 1
@@ -112,14 +112,14 @@ test('customize-access cache does not retain thrown reads and failed writes do n
     } },
   })
 
-  assert.equal((await module.getCustomizeAccessSettings()).enabled, true)
-  assert.equal((await module.getCustomizeAccessSettings()).enabled, true)
+  assert.equal((await customizeAccessModule.getCustomizeAccessSettings()).enabled, true)
+  assert.equal((await customizeAccessModule.getCustomizeAccessSettings()).enabled, true)
   assert.equal(cacheCalls, 2, 'a thrown cached read is not retained')
 
   readError = false
-  await assert.rejects(module.setCustomizeAccessEnabled(false), /write failed/)
+  await assert.rejects(customizeAccessModule.setCustomizeAccessEnabled(false), /write failed/)
   assert.equal(invalidations, 0)
   upsertError = false
-  await module.setCustomizeAccessEnabled(false)
+  await customizeAccessModule.setCustomizeAccessEnabled(false)
   assert.equal(invalidations, 1)
 })
