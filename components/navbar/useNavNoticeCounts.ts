@@ -6,7 +6,7 @@ import { runAfterIdle } from '@/lib/schedule-idle'
 export type NavNoticeModule = 'favorites' | 'rewards' | 'orders' | 'books'
 export type NavNoticeCounts = Record<NavNoticeModule, number>
 
-export const EMPTY_NOTICE_COUNTS: NavNoticeCounts = {
+const EMPTY_NOTICE_COUNTS: NavNoticeCounts = {
   favorites: 0,
   rewards: 0,
   orders: 0,

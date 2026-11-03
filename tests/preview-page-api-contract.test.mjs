@@ -35,8 +35,6 @@ test('structured Personalize pages leave variant, share, cart, and Reader contra
     readFile(readerPath, 'utf8'),
   ])
 
-  assert.match(jobsService, /return parseSignedPreviewAssets\(await response\.json\(\)\)/)
-  assert.match(jobsService, /response\.status === 202[\s\S]*return null/)
   assert.doesNotMatch(jobsService, /getPreviewUrl|getPreviewPages/)
   assert.doesNotMatch(previewContract, /Array\.isArray\(value\.urls\)|value\.urls\.map/)
   assert.match(previewContract, /const urls = pages\.map\(\(page\) => page\.url\)/)

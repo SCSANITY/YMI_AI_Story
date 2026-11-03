@@ -2,7 +2,7 @@
 
 import { ShieldCheck } from 'lucide-react'
 
-export const PRIVACY_REASSURANCE_COPY = 'Private and secure. No third-party reuse.'
+const PRIVACY_REASSURANCE_COPY = 'Private and secure. No third-party reuse.'
 
 export function PrivacyReassurance() {
   return (
