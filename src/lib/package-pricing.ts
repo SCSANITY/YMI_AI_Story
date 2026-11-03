@@ -5,7 +5,7 @@ import type {
   BookPackageType,
 } from '@/types'
 
-export const SELLABLE_BOOK_PACKAGE_TYPES = ['basic', 'supreme'] as const
+const SELLABLE_BOOK_PACKAGE_TYPES = ['basic', 'supreme'] as const
 
 export type TemplatePackagePriceRow = {
   package_type?: unknown

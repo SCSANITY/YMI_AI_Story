@@ -13,7 +13,7 @@ export type CheckoutCurrency =
   | 'KRW'
   | 'CNY'
 
-export const SUPPORTED_CHECKOUT_CURRENCIES: CheckoutCurrency[] = [
+const SUPPORTED_CHECKOUT_CURRENCIES: CheckoutCurrency[] = [
   'USD',
   'EUR',
   'GBP',
@@ -58,10 +58,6 @@ export const normalizeCheckoutCurrency = (value: unknown): CheckoutCurrency => {
     return raw as CheckoutCurrency
   }
   return 'USD'
-}
-
-export const normalizeDisplayCurrency = (value: unknown): DisplayCurrency => {
-  return normalizeCheckoutCurrency(value) as DisplayCurrency
 }
 
 export const toChargeCurrency = (currency: DisplayCurrency): CheckoutCurrency => {
