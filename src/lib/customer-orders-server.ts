@@ -316,7 +316,7 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
   return { orders, count: count ?? orders.length }
 }
 
-export type CustomerOrderReadModel = Awaited<
+type CustomerOrderReadModel = Awaited<
   ReturnType<typeof loadCustomerOrders>
 >['orders'][number]
 

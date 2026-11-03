@@ -1,4 +1,4 @@
-export type OrdersPageState = 'loading' | 'signed_out' | 'error' | 'empty' | 'ready'
+type OrdersPageState = 'loading' | 'signed_out' | 'error' | 'empty' | 'ready'
 
 type ResolveOrdersPageStateInput = {
   isHydrated: boolean

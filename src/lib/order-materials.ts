@@ -95,7 +95,7 @@ export function parseDedicationWrite(value: unknown) {
   return { itemId:materialUuid(row.itemId),expectedRevision:Number(row.expectedRevision),body }
 }
 
-export type OrderMaterialsPage = OrderMaterials | {order_id:string;disposition:'shipped'}
+type OrderMaterialsPage = OrderMaterials | {order_id:string;disposition:'shipped'}
 export function parseOrderMaterialsPage(value:unknown):OrderMaterialsPage {
   const row=materialRecord(value)
   if(row.disposition==='shipped')return {order_id:materialUuid(row.order_id),disposition:'shipped'}

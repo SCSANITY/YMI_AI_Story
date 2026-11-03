@@ -47,7 +47,7 @@ type SupportedMethodRow = {
   method_code: string
 }
 
-export type ShippingQuoteOption = {
+type ShippingQuoteOption = {
   methodCode: string
   methodName: string
   methodDescription: string | null
@@ -149,7 +149,7 @@ function choosePricingRule(rules: PricingRuleRow[], methodCode: string, zoneCode
   )
 }
 
-export type ShippingQuoteResult = {
+type ShippingQuoteResult = {
   available: boolean
   reason: string | null
   options: ShippingQuoteOption[]

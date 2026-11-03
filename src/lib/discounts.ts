@@ -2,9 +2,9 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export type DiscountStackingGroup = 'product_discount' | 'shipping_discount'
 export type DiscountEffectType = 'free_shipping' | 'fixed_amount' | 'percentage'
-export type DiscountInstrumentType = 'promo_code' | 'voucher'
+type DiscountInstrumentType = 'promo_code' | 'voucher'
 
-export type DiscountRpcResult = {
+type DiscountRpcResult = {
   redemption_id: string
   product_discount_amount_usd: number | string | null
   shipping_discount_amount_usd: number | string | null
@@ -33,7 +33,7 @@ export type OrderDiscountSummary = {
   shippingDiscount: OrderDiscountSlot | null
 }
 
-export type OrderDiscountSlot = {
+type OrderDiscountSlot = {
   instrumentId: string
   instrumentType: DiscountInstrumentType
   code: string | null
@@ -63,7 +63,7 @@ export async function loadOrderDiscountSlots(productId: string | null, shippingI
   return { productDiscount: slot(productId), shippingDiscount: slot(shippingId) }
 }
 
-export type DiscountedLineItemInput = {
+type DiscountedLineItemInput = {
   id: string
   name: string
   quantity: number
@@ -71,7 +71,7 @@ export type DiscountedLineItemInput = {
   metadata?: Record<string, string>
 }
 
-export type DiscountedLineItem = DiscountedLineItemInput & {
+type DiscountedLineItem = DiscountedLineItemInput & {
   originalLineTotalUsd: number
   discountedLineTotalUsd: number
 }

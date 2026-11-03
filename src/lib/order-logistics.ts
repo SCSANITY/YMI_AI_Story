@@ -1,4 +1,4 @@
-export type LogisticsDetails = {
+type LogisticsDetails = {
   trackingNumber: string | null
   trackingCarrier: string | null
   trackingUrl: string | null

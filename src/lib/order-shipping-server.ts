@@ -6,7 +6,7 @@ import { loadLogisticsOrder, notifyLogisticsUpdate } from '@/lib/order-logistics
 import type { AdminShippingDetails, ShippingDetails } from '@/lib/order-shipping'
 
 const SHIPPING_STATE_SELECT = 'provider,tracking_number,binding_version,revision,auto_delivery,last_synced_at,sync_error_code,delivery_notification_pending'
-export function dealerSendConfig() { return readDealerSendConfig(process.env) }
+function dealerSendConfig() { return readDealerSendConfig(process.env) }
 
 type ShippingState={provider:'dealer_send'|null;tracking_number:string|null;binding_version:number;last_synced_at:string|null;sync_error_code:string|null}
 async function savedShippingDetails(orderId:string,trackingNumber:string|null,state:ShippingState|null):Promise<ShippingDetails> {
