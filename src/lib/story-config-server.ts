@@ -11,9 +11,9 @@ import {
 } from '@/lib/supabase-service-credential'
 
 const PRIVATE_STORY_CONFIG_BUCKET = 'story-config-private' as const
-export const PRIVATE_STORY_CONFIG_PREFIX = 'story-configs/image-edit/v1' as const
-export const PRIVATE_STORY_CONFIG_MAX_BYTES = 8 * 1024 * 1024
-export const PRIVATE_STORY_CONFIG_TIMEOUT_MS = 15_000
+const PRIVATE_STORY_CONFIG_PREFIX = 'story-configs/image-edit/v1' as const
+const PRIVATE_STORY_CONFIG_MAX_BYTES = 8 * 1024 * 1024
+const PRIVATE_STORY_CONFIG_TIMEOUT_MS = 15_000
 
 const IMAGE_EDIT_MAX_PROMPT_CHARACTERS = 32_000
 
@@ -30,7 +30,7 @@ export const STORY_CONFIG_ERROR_CODES = [
   'story_config_contract_invalid',
 ] as const
 
-export type StoryConfigErrorCode = (typeof STORY_CONFIG_ERROR_CODES)[number]
+type StoryConfigErrorCode = (typeof STORY_CONFIG_ERROR_CODES)[number]
 
 export class StoryConfigError extends Error {
   constructor(readonly code: StoryConfigErrorCode) {
@@ -54,14 +54,14 @@ type PrivateStoryConfigAddress = Readonly<{
   contentSha256: string
 }>
 
-export type StoryConfigAddress = LegacyStoryConfigAddress | PrivateStoryConfigAddress
+type StoryConfigAddress = LegacyStoryConfigAddress | PrivateStoryConfigAddress
 
 type PrivateStoryConfigResponse = Readonly<{
   status: number
   body: Buffer
 }>
 
-export type PrivateStoryConfigTransport = (args: Readonly<{
+type PrivateStoryConfigTransport = (args: Readonly<{
   url: string
   serviceCredential: SupabaseServiceCredential
   signal: AbortSignal
@@ -389,7 +389,7 @@ function contentLength(response: IncomingMessage): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
 }
 
-export const nativePrivateStoryConfigTransport: PrivateStoryConfigTransport = async (args) => {
+const nativePrivateStoryConfigTransport: PrivateStoryConfigTransport = async (args) => {
   const trustedOrigin = configuredSupabaseOrigin()
   let parsed: URL
   try {

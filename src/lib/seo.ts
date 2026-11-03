@@ -13,7 +13,7 @@ export function absoluteUrl(path: string) {
   return `${SITE_URL}${normalizedPath}`
 }
 
-export function canonicalUrl(path: string) {
+function canonicalUrl(path: string) {
   return absoluteUrl(path)
 }
 

@@ -13,9 +13,9 @@ import {
   type TemplatePackagePriceRow,
 } from '@/lib/package-pricing'
 
-export type AgeGroup = 'ages_2_plus' | 'ages_6_plus'
+type AgeGroup = 'ages_2_plus' | 'ages_6_plus'
 
-export const AGE_GROUP_LABELS: Record<AgeGroup, string> = {
+const AGE_GROUP_LABELS: Record<AgeGroup, string> = {
   ages_2_plus: 'Ages 2+',
   ages_6_plus: 'Ages 6+',
 }
@@ -109,11 +109,11 @@ export function parseStoryTypes(value: unknown): string[] {
     })
 }
 
-export function formatStoryTypeLabel(storyTypes: string[], fallback = 'Story'): string {
+function formatStoryTypeLabel(storyTypes: string[], fallback = 'Story'): string {
   return storyTypes.length ? storyTypes.join(' / ') : fallback
 }
 
-export function normalizeAgeGroup(value: unknown): AgeGroup {
+function normalizeAgeGroup(value: unknown): AgeGroup {
   return value === 'ages_6_plus' ? 'ages_6_plus' : 'ages_2_plus'
 }
 
@@ -254,7 +254,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   }
 }
 
-export function sortCatalogBooks(books: CatalogBook[]): CatalogBook[] {
+function sortCatalogBooks(books: CatalogBook[]): CatalogBook[] {
   return [...books].sort((a, b) => {
     const aOrder = a.displayOrder ?? Number.POSITIVE_INFINITY
     const bOrder = b.displayOrder ?? Number.POSITIVE_INFINITY
