@@ -5,7 +5,7 @@ const FINAL_SOURCE_SQUARE_TOLERANCE = 0.02
 
 const SUPPORTED_FINAL_SOURCE_FORMATS = new Set(['jpeg', 'png', 'webp'])
 
-export type FinalSourceDimensions = {
+type FinalSourceDimensions = {
   width: number
   height: number
 }

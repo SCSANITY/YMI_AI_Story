@@ -17,13 +17,13 @@ const DEFAULT_MAX_PDF_BYTES = 50 * 1024 * 1024
 const DEFAULT_MIN_SOURCE_EDGE = DEFAULT_FINAL_SOURCE_MIN_EDGE
 const DEFAULT_INTERIOR_GUTTER = 24
 
-export type StructuredFinalPdfInteriorSpread = {
+type StructuredFinalPdfInteriorSpread = {
   spreadIndex: number
   left: FinalPageMetadata
   right: FinalPageMetadata
 }
 
-export type StructuredFinalPdfPlan = {
+type StructuredFinalPdfPlan = {
   frontCover: FinalPageMetadata
   interiors: FinalPageMetadata[]
   interiorSpreads: StructuredFinalPdfInteriorSpread[]
@@ -31,7 +31,7 @@ export type StructuredFinalPdfPlan = {
   orderedSourcePageIndices: number[]
 }
 
-export type StructuredFinalPdfResult = {
+type StructuredFinalPdfResult = {
   buffer: Buffer
   pdfPageCount: number
   sourcePageCount: number
@@ -41,7 +41,7 @@ export type StructuredFinalPdfResult = {
   interiorSpread: { width: number; height: number; gutter: number }
 }
 
-export class StructuredFinalPdfError extends Error {
+class StructuredFinalPdfError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'StructuredFinalPdfError'

@@ -1,11 +1,11 @@
-export type PreviewBookPageSide = 'left' | 'right'
+type PreviewBookPageSide = 'left' | 'right'
 
-export type PreviewBookPageAddress = Readonly<{
+type PreviewBookPageAddress = Readonly<{
   side: PreviewBookPageSide
   spreadIndex: number
 }>
 
-export type PreviewBookTurningLeafFaces = Readonly<{
+type PreviewBookTurningLeafFaces = Readonly<{
   front: PreviewBookPageAddress
   back: PreviewBookPageAddress
 }>

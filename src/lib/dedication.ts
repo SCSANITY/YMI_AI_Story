@@ -1,4 +1,4 @@
-export type DedicationDecision = 'undecided' | 'skipped' | 'confirmed'
+type DedicationDecision = 'undecided' | 'skipped' | 'confirmed'
 
 export type DedicationChoice = {
   creationId: string

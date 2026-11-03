@@ -1,4 +1,4 @@
-export type FinalJobReleaseLike = {
+type FinalJobReleaseLike = {
   released_at?: string | null
   review_status?: string | null
 }

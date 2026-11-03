@@ -9,7 +9,7 @@ import { EDITION_DEFINITIONS, type EditionType } from './product/edition-definit
 import { WAITING_DEMO_DURATION_MS, WAITING_DEMO_BARS } from './preview-waiting-demo-data'
 import styles from './PreviewWaitingPages.module.css'
 
-export type PreviewWaitingProgress = {countdownSeconds:number;fraction:number;step:number;reduced:boolean;hidden:boolean;interact:(step?:number)=>void}
+type PreviewWaitingProgress = {countdownSeconds:number;fraction:number;step:number;reduced:boolean;hidden:boolean;interact:(step?:number)=>void}
 
 function PhotoRing({photo,fraction}:{photo:string|null;fraction:number}) {
   return <span className={styles.photoRing}><svg aria-hidden="true" viewBox="0 0 112 112"><circle cx="56" cy="56" r="51"/><circle cx="56" cy="56" r="51" pathLength="1" strokeDasharray="1" strokeDashoffset={1-fraction}/></svg><span>{photo?<Image src={photo} alt="" fill unoptimized sizes="100px" draggable={false}/>:<UserRound size={28}/>}</span></span>

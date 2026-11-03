@@ -1,4 +1,4 @@
-export type PreviewPageRole =
+type PreviewPageRole =
   | 'preview_cover'
   | 'preview_interior'
 
@@ -33,7 +33,7 @@ export type SignedPreviewAssets = {
   assetLayout: 'single-page'
 }
 
-export type PreviewSignTarget = {
+type PreviewSignTarget = {
   storagePath: string
   assetSize: 'small' | 'full'
   page: StoredPreviewPage

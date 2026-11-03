@@ -5,7 +5,7 @@ import type { SignatureVoiceSpeakerKind } from '@/lib/signature-voice'
 import type { UserTextProfile } from '@/lib/user-profile-history'
 import type { RecentFaceItem } from '@/components/personalize/RecentFacesStrip'
 
-export type RecentVoiceItem = {
+type RecentVoiceItem = {
   asset_id: string
   storage_path?: string | null
   playback_url?: string | null

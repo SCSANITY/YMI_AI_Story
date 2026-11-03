@@ -1,6 +1,6 @@
 // Historical job transport labels, not the current sellable package allowlist.
 // Paid fulfillment can still finish a previously purchased retired edition.
-export type SelectedBookTypeDisplay =
+type SelectedBookTypeDisplay =
   | 'Cloud Explorer'
   | 'Classic'
   | 'Immersive'
