@@ -26,7 +26,7 @@ export function getCachedCustomizeAccess(): CustomizeAccessSettings | null {
   return isCustomizeAccessCacheFresh() ? cachedCustomizeAccess : null
 }
 
-export async function fetchCustomizeAccess(options?: { force?: boolean }): Promise<CustomizeAccessSettings> {
+async function fetchCustomizeAccess(options?: { force?: boolean }): Promise<CustomizeAccessSettings> {
   if (!options?.force && isCustomizeAccessCacheFresh() && cachedCustomizeAccess) {
     return cachedCustomizeAccess
   }
@@ -78,7 +78,7 @@ export function preloadCustomizeAccess() {
   void fetchCustomizeAccess()
 }
 
-export function openCustomizeAccessBlocked(message: string) {
+function openCustomizeAccessBlocked(message: string) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(
     new CustomEvent(CUSTOMIZE_ACCESS_BLOCKED_EVENT, {

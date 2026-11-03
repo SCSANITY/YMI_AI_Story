@@ -1,6 +1,6 @@
 import type { StoryLanguage } from '@/types'
 
-export const DEFAULT_STORY_LANGUAGE: StoryLanguage = 'English'
+const DEFAULT_STORY_LANGUAGE: StoryLanguage = 'English'
 
 export function normalizeStoryLanguage(value: unknown): StoryLanguage {
   const raw = String(value ?? '').trim().toLowerCase()

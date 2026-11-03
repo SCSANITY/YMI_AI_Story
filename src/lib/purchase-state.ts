@@ -1,13 +1,10 @@
-import {
-  isFinalJobReleased,
-  type FinalJobReleaseLike,
-} from '@/lib/final-job-release'
+import { isFinalJobReleased } from '@/lib/final-job-release'
 import { isPaidLikeOrderStatus, normalizeOrderStatus } from '@/lib/order-status'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { BookPackageType } from '@/types'
 
-export { isFinalJobReleased, type FinalJobReleaseLike }
+export { isFinalJobReleased }
 
 export type PurchaseState = 'purchased' | 'refunded' | 'unpurchased'
 

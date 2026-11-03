@@ -39,7 +39,7 @@ export type PreviewSignTarget = {
   page: StoredPreviewPage
 }
 
-export function sortPreviewPages(pages: StoredPreviewPage[]) {
+function sortPreviewPages(pages: StoredPreviewPage[]) {
   return [...pages].sort((a, b) => {
     const orderA = typeof a.preview_order === 'number'
       ? a.preview_order
@@ -91,7 +91,7 @@ export function selectPreviewSignTargets(args: {
   return selectedPages.map((page) => resolvePageTarget(page, args.sizeParam))
 }
 
-export function toSignedPreviewPage(target: PreviewSignTarget, url: string): SignedPreviewPage {
+function toSignedPreviewPage(target: PreviewSignTarget, url: string): SignedPreviewPage {
   const page = target.page
   const role = page.role === 'preview_cover' || page.role === 'preview_interior' ? page.role : null
   const side = page.side === 'left' || page.side === 'right' || page.side === null ? page.side : undefined
