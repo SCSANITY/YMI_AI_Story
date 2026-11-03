@@ -8,9 +8,9 @@ import {
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const GENERAL_MAIL_ATTACHMENT_BUCKET = 'general-mail-private'
-export const MAX_GENERAL_MAIL_ATTACHMENTS = 10
-export const MAX_GENERAL_MAIL_ATTACHMENT_BYTES = 10 * 1024 * 1024
-export const MAX_GENERAL_MAIL_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024
+const MAX_GENERAL_MAIL_ATTACHMENTS = 10
+const MAX_GENERAL_MAIL_ATTACHMENT_BYTES = 10 * 1024 * 1024
+const MAX_GENERAL_MAIL_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 export type GeneralMailAttachmentRow = {
   attachment_id: string
@@ -67,7 +67,7 @@ export function buildGeneralMailAttachmentPath(params: {
   return 'drafts/' + params.messageId + '/' + params.attachmentId + '/' + params.safeFileName
 }
 
-export async function downloadAndVerifyGeneralMailAttachment(
+async function downloadAndVerifyGeneralMailAttachment(
   attachment: GeneralMailAttachmentRow
 ) {
   if (

@@ -37,7 +37,7 @@ const SITE = 'https://www.ymistory.com'
  * the accounts are live; every email footer updates automatically.
  * Icons are code-generated from SVG by scripts/prepare-email-assets.mjs.
  */
-export const SOCIAL_LINKS = [
+const SOCIAL_LINKS = [
   { label: 'Instagram', href: 'https://www.instagram.com/ymi.story/', icon: 'icon-instagram.png' },
   { label: 'Facebook', href: 'https://www.facebook.com/profile.php?id=61587283844755', icon: 'icon-facebook.png' },
   // No TikTok account yet — points to TikTok home until one exists.

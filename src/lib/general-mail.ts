@@ -83,7 +83,7 @@ export function normalizeGeneralMailRecipients(params: {
   return { to, cc, bcc }
 }
 
-export function normalizeGeneralMailSubject(value: unknown) {
+function normalizeGeneralMailSubject(value: unknown) {
   const subject = String(value ?? '')
     .replace(/[\r\n\0]+/g, ' ')
     .trim()
