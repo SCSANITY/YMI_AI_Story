@@ -2,7 +2,7 @@
 
 import { downloadZip } from 'client-zip'
 
-export type ApprovedSourceExportClientFile = {
+type ApprovedSourceExportClientFile = {
   page_index: number
   output_order: number
   role: string

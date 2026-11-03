@@ -9,7 +9,7 @@ export type ApprovedSourceReviewPage = {
   reviewed_at: string | null
 }
 
-export type ApprovedSourceExportFile = {
+type ApprovedSourceExportFile = {
   page_index: number
   output_order: number
   role: 'final_front_cover' | 'final_interior'
@@ -22,7 +22,7 @@ export type ApprovedSourceExportFile = {
   storage_path: string
 }
 
-export type ApprovedSourceExportPlan = {
+type ApprovedSourceExportPlan = {
   archive_name: string
   manifest_name: 'manifest.json'
   manifest: {

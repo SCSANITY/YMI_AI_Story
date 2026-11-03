@@ -1,7 +1,7 @@
 import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export type AdminCustomer = {
+type AdminCustomer = {
   customer_id: string
   email: string | null
   display_name: string | null

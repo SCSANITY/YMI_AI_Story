@@ -8,14 +8,14 @@ export type FinalReviewPageItem = {
   downloadNumber: number
 }
 
-export type FinalReviewPageGroup = {
+type FinalReviewPageGroup = {
   key: string
   label: string
   kind: 'cover' | 'spread'
   items: FinalReviewPageItem[]
 }
 
-export type FinalReviewWorkspace = {
+type FinalReviewWorkspace = {
   items: FinalReviewPageItem[]
   groups: FinalReviewPageGroup[]
 }
