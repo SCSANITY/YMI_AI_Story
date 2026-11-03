@@ -24,7 +24,7 @@ export type AdminFinalPageSource = {
   updated_at: string
 }
 
-export type AdminFinalPageReadModel = {
+type AdminFinalPageReadModel = {
   page_contract: {
     schema_version: 3
     asset_layout: 'single-page'

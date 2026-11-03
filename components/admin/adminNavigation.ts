@@ -15,9 +15,9 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type AdminNavigationGroup = 'Review' | 'Communication' | 'Growth' | 'System'
+type AdminNavigationGroup = 'Review' | 'Communication' | 'Growth' | 'System'
 
-export type AdminNavigationItem = {
+type AdminNavigationItem = {
   label: string
   shortLabel: string
   icon: LucideIcon
@@ -43,7 +43,7 @@ export const adminNavigationItems: AdminNavigationItem[] = [
   { label: 'Catalog Pricing', shortLabel: 'Catalog', icon: BookMarked, href: '/admin/catalog', group: 'Growth' },
 ]
 
-export const ADMIN_NAVIGATION_GROUPS: AdminNavigationGroup[] = [
+const ADMIN_NAVIGATION_GROUPS: AdminNavigationGroup[] = [
   'Review',
   'Communication',
   'Growth',

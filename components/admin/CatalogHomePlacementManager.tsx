@@ -6,7 +6,7 @@ import { AdminButton, AdminNotice, AdminPanel, adminFieldClass } from '@/compone
 import { invalidateBookCatalogClientCache } from '@/components/useBookCatalog'
 import type { BookPackagePricing, BookPackageType, HomeBookSectionKey } from '@/types'
 
-export type CatalogPlacementTemplate = {
+type CatalogPlacementTemplate = {
   templateId: string
   name: string
   isActive: boolean

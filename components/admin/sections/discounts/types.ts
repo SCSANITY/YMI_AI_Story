@@ -1,4 +1,4 @@
-export type DiscountOffer = {
+type DiscountOffer = {
   name?: string | null
   effect_type?: 'free_shipping' | 'fixed_amount' | 'percentage'
   effect_config?: Record<string, unknown> | null

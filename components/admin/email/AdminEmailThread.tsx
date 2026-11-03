@@ -6,7 +6,7 @@ import {
   type AdminStatusTone,
 } from '@/components/admin/AdminUi'
 
-export type AdminEmailDirection = 'inbound' | 'outbound'
+type AdminEmailDirection = 'inbound' | 'outbound'
 
 function senderInitial(value: string, fallback: string) {
   return value.trim().charAt(0).toUpperCase() || fallback

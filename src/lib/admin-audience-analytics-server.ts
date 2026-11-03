@@ -13,7 +13,7 @@ import {
 const VERCEL_ANALYTICS_API = 'https://api.vercel.com/v1/query/web-analytics/visits/aggregate'
 const REQUEST_TIMEOUT_MS = 8_000
 
-export type AudienceAnalyticsLoadResult =
+type AudienceAnalyticsLoadResult =
   | { status: 'ready'; data: AudienceAnalyticsData; unavailablePanels: string[] }
   | { status: 'unconfigured'; missing: string[] }
   | { status: 'error'; message: string }

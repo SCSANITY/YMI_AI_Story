@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-export type DiscountSection = 'instruments' | 'shipping'
+type DiscountSection = 'instruments' | 'shipping'
 
 const SECTIONS = [
   { id: 'instruments', label: 'Promo codes & vouchers', href: '/admin/discounts' },

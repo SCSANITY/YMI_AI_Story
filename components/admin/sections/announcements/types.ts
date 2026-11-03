@@ -1,7 +1,7 @@
 export type BlogPostStatus = 'draft' | 'published' | 'hidden' | 'archived'
 export type AdminTab = 'list' | 'edit' | 'preview'
 
-export type BlogLink = {
+type BlogLink = {
   label: string
   url: string
 }
@@ -37,7 +37,7 @@ const BLOG_POST_STATUSES = new Set<BlogPostStatus>([
   'archived',
 ])
 
-export function createEmptyAnnouncementForm(): AnnouncementForm {
+function createEmptyAnnouncementForm(): AnnouncementForm {
   return {
     postId: null,
     title: '',
