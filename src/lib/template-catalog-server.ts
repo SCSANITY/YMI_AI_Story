@@ -16,7 +16,7 @@ import {
 
 const PRODUCT_IMAGE_PATTERN = /^product(\d+)\.webp$/i
 
-export const TEMPLATE_LIST_COLUMNS = [
+const TEMPLATE_LIST_COLUMNS = [
   'template_id',
   'name',
   'description',
@@ -38,7 +38,7 @@ export const TEMPLATE_LIST_COLUMNS = [
   'home_placements:template_home_placements(section_key,position)',
 ].join(',')
 
-export class TemplateCatalogLoadError extends Error {
+class TemplateCatalogLoadError extends Error {
   constructor(message: string, readonly status = 500) {
     super(message)
     this.name = 'TemplateCatalogLoadError'
