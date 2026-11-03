@@ -1,4 +1,4 @@
-export type LocaleCurrency =
+type LocaleCurrency =
   | 'USD'
   | 'EUR'
   | 'GBP'

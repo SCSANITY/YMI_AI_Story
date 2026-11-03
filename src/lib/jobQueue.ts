@@ -10,7 +10,7 @@ type QueueTypeStats = {
   running: number
 }
 
-export type JobQueueStats = {
+type JobQueueStats = {
   collectedAt: string
   totals: QueueTypeStats
   byType: {

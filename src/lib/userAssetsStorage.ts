@@ -1,4 +1,4 @@
-export type UserAssetOwnerType = 'customer' | 'anon'
+type UserAssetOwnerType = 'customer' | 'anon'
 export type UploadableUserAssetType = 'face_image' | 'voice_sample' | 'profile_avatar'
 export const USER_ASSET_SIGN_TTL_SECONDS = 60 * 60
 

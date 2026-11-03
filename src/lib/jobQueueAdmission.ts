@@ -3,11 +3,11 @@ export const JOB_QUEUE_ADMISSION_LIMITS = Object.freeze({
   maxActivePreviewPerOwner: 6,
 })
 
-export type JobQueueAdmissionReason =
+type JobQueueAdmissionReason =
   | 'queued_preview'
   | 'preview_owner_active'
 
-export type JobQueueAdmissionError = {
+type JobQueueAdmissionError = {
   code: 'queue_overloaded'
   reason: JobQueueAdmissionReason
   message: string

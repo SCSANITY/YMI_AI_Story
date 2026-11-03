@@ -51,7 +51,7 @@ export const GENERAL_MAILBOX_DEFINITIONS = [
 ] as const
 
 export type GeneralMailboxKey = (typeof GENERAL_MAILBOX_DEFINITIONS)[number]['key']
-export type GeneralMailboxDefinition = (typeof GENERAL_MAILBOX_DEFINITIONS)[number]
+type GeneralMailboxDefinition = (typeof GENERAL_MAILBOX_DEFINITIONS)[number]
 
 export const GENERAL_OPERATIONAL_LOCAL_PARTS = ['orders', 'delivery'] as const
 export const GENERAL_INBOUND_LOCAL_PARTS = [

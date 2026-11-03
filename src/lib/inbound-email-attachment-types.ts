@@ -1,4 +1,4 @@
-export type InboundEmailAttachmentStatus =
+type InboundEmailAttachmentStatus =
   | 'pending'
   | 'processing'
   | 'stored'

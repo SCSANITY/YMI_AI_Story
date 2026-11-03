@@ -2,9 +2,9 @@ import { isPaidLikeOrderStatus } from '@/lib/order-status'
 
 export const YMI_TRACKING_EVENT = 'ymi:tracking-event'
 
-export type TrackingVendor = 'google-analytics' | 'meta'
+type TrackingVendor = 'google-analytics' | 'meta'
 
-export type AllowedTrackingEventName =
+type AllowedTrackingEventName =
   | 'view_catalog'
   | 'start_personalization'
   | 'preview_ready'
@@ -12,7 +12,7 @@ export type AllowedTrackingEventName =
   | 'begin_checkout'
   | 'purchase'
 
-export type TrackingEventPayload = {
+type TrackingEventPayload = {
   format?: 'pdf' | 'physical'
   item_count?: number
   currency?: string
@@ -20,14 +20,14 @@ export type TrackingEventPayload = {
   transaction_id?: string
 }
 
-export type GoogleAnalyticsCommerceItem = {
+type GoogleAnalyticsCommerceItem = {
   item_id: 'ymi_storybook' | 'ymi_storybook_pdf' | 'ymi_storybook_physical'
   item_name: 'Personalized Storybook'
   quantity: number
   item_variant?: 'pdf' | 'physical'
 }
 
-export type GoogleAnalyticsEventPayload = TrackingEventPayload & {
+type GoogleAnalyticsEventPayload = TrackingEventPayload & {
   items?: GoogleAnalyticsCommerceItem[]
 }
 
@@ -48,7 +48,7 @@ export type SafePageView = {
   page_referrer: ''
 }
 
-export type TrackingActivation = {
+type TrackingActivation = {
   googleAnalytics: boolean
   googleAds: boolean
   meta: boolean

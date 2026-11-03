@@ -9,7 +9,7 @@ export type FinalReviewApprovalTask = {
   reviewIntentId: string
 }
 
-export type FinalReviewApprovalResult = {
+type FinalReviewApprovalResult = {
   pageIndex: number
   approvedPath?: string
   superseded?: boolean

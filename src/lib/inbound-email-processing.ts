@@ -22,7 +22,7 @@ import { projectGeneralMailInbound } from '@/lib/general-mail-server'
 const PROCESSING_STALE_SECONDS = 120
 const BACKLOG_LIMIT = 20
 
-export type ResendEmailReceivedEvent = {
+type ResendEmailReceivedEvent = {
   type: 'email.received'
   data: {
     email_id: string
@@ -69,7 +69,7 @@ type InboundEnvelopeRow = {
   updated_at: string
 }
 
-export type PersistedInboundEnvelope = {
+type PersistedInboundEnvelope = {
   envelope: InboundEnvelopeRow
   duplicate: boolean
   shouldProcess: boolean

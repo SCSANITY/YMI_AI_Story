@@ -60,7 +60,7 @@ export type KolPartnershipLead = {
   updated_at: string
 }
 
-export type KolPartnershipApplicant = {
+type KolPartnershipApplicant = {
   customer_id: string
   email: string | null
   display_name: string | null

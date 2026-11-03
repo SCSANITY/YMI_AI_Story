@@ -8,8 +8,8 @@ const RESEND_DELIVERY_EVENT_TYPES = [
   'email.suppressed',
 ] as const
 
-export type ResendDeliveryEventType = (typeof RESEND_DELIVERY_EVENT_TYPES)[number]
-export type ResendWebhookEventKind = 'received' | 'delivery' | 'ignored'
+type ResendDeliveryEventType = (typeof RESEND_DELIVERY_EVENT_TYPES)[number]
+type ResendWebhookEventKind = 'received' | 'delivery' | 'ignored'
 
 export type NormalizedResendWebhookEvent = {
   eventType: string

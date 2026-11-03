@@ -18,10 +18,10 @@ export const EMAIL_TEMPLATE_CATEGORIES = [
 ] as const
 
 export type EmailTemplateCategory = (typeof EMAIL_TEMPLATE_CATEGORIES)[number]
-export type EmailTemplateOwnership = 'web' | 'supabase' | 'stripe' | 'admin_composer'
-export type EmailTemplateTriggerMode = 'automatic' | 'workflow' | 'human'
+type EmailTemplateOwnership = 'web' | 'supabase' | 'stripe' | 'admin_composer'
+type EmailTemplateTriggerMode = 'automatic' | 'workflow' | 'human'
 
-export type EmailTemplatePreviewVariant = {
+type EmailTemplatePreviewVariant = {
   id: string
   label: string
 }

@@ -3,7 +3,7 @@ import {
   type FinalPageRole,
 } from '@/lib/final-page-metadata'
 
-export type FinalReviewMutationPage = {
+type FinalReviewMutationPage = {
   page_index: number
   output_order: number
   storage_page_number: number
