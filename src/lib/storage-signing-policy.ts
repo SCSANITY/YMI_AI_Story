@@ -2,7 +2,7 @@ export const STORAGE_BUCKET_NOT_SIGNABLE_CODE = 'storage_bucket_not_signable' as
 
 export const SIGNABLE_STORAGE_BUCKETS = ['raw-private'] as const
 
-export class StorageSigningPolicyError extends Error {
+class StorageSigningPolicyError extends Error {
   readonly code = STORAGE_BUCKET_NOT_SIGNABLE_CODE
 
   constructor() {

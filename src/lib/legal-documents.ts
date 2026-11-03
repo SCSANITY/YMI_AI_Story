@@ -74,13 +74,13 @@ export const CANONICAL_LEGAL_DOCUMENT_KEYS = [
   'refund',
 ] as const satisfies readonly CanonicalLegalDocumentKey[]
 
-export function getCanonicalLegalDocumentDefinition(
+function getCanonicalLegalDocumentDefinition(
   key: CanonicalLegalDocumentKey,
 ): LegalDocumentDefinition {
   return LEGAL_DOCUMENT_DEFINITIONS[key]
 }
 
-export function getCanonicalLegalDocument(
+function getCanonicalLegalDocument(
   key: CanonicalLegalDocumentKey,
 ): CanonicalLegalDocument {
   const definition = getCanonicalLegalDocumentDefinition(key)

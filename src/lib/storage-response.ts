@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { assertSignableStorageBucket } from '@/lib/storage-signing-policy'
 
-export function normalizeBucketStoragePath(bucket: string, storagePath: string) {
+function normalizeBucketStoragePath(bucket: string, storagePath: string) {
   if (bucket !== 'app-templates') return storagePath.replace(/^\/+/, '')
   return storagePath.replace(/^app-templates\//, '').replace(/^\/+/, '')
 }

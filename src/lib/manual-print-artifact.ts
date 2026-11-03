@@ -1,8 +1,8 @@
 export const MANUAL_PRINT_PDF_BUCKET = 'raw-private'
-export const MANUAL_PRINT_PDF_CONTENT_TYPE = 'application/pdf'
+const MANUAL_PRINT_PDF_CONTENT_TYPE = 'application/pdf'
 export const MANUAL_PRINT_PDF_MAX_BYTES = 600 * 1024 * 1024
-export const MANUAL_PRINT_PDF_HEADER_TIMEOUT_MS = 12_000
-export const MANUAL_PRINT_PDF_HEADER_ATTEMPTS = 2
+const MANUAL_PRINT_PDF_HEADER_TIMEOUT_MS = 12_000
+const MANUAL_PRINT_PDF_HEADER_ATTEMPTS = 2
 
 const PDF_HEADER = '%PDF-'
 import { isUuid } from '@/lib/validators'

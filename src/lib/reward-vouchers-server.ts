@@ -6,9 +6,9 @@ import {
 } from '@/lib/discounts'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export type RewardVoucherStatus = 'active' | 'redeemed' | 'expired'
+type RewardVoucherStatus = 'active' | 'redeemed' | 'expired'
 
-export type RewardVoucherSummary = {
+type RewardVoucherSummary = {
   active: any[]
   redeemed: any[]
   expired: any[]
@@ -47,7 +47,7 @@ function toMoney(value: unknown): number {
   return Math.round(Math.max(0, toNumber(value)) * 100) / 100
 }
 
-export function normalizeRewardEmail(email?: string | null): string {
+function normalizeRewardEmail(email?: string | null): string {
   return String(email || '').trim().toLowerCase()
 }
 
