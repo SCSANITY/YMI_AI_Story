@@ -27,7 +27,7 @@ export type CheckoutAssetOwner =
   | {ownerType:'customer';customerId:string;anonSessionId:null}
   | {ownerType:'anon';customerId:null;anonSessionId:string}
 
-export class CheckoutOwnerError extends Error {
+class CheckoutOwnerError extends Error {
   status: number
 
   constructor(message: string, status = 403) {

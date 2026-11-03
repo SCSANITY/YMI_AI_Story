@@ -32,7 +32,7 @@ export type PurchaseOwnershipRecoveryStore = {
   transferAnonymousCreations(creationIds: string[], customerId: string): Promise<number>
 }
 
-export type PurchaseOwnershipRecoveryResult = {
+type PurchaseOwnershipRecoveryResult = {
   eligibleCreationCount: number
   recoveredCreationCount: number
   recoveredJobCount: number

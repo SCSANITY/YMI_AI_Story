@@ -2,7 +2,7 @@ const PURCHASE_PACKAGE_TYPES = ['basic', 'supreme'] as const
 
 export type PurchasePackageType = (typeof PURCHASE_PACKAGE_TYPES)[number]
 
-export function isPurchasePackageType(value: unknown): value is PurchasePackageType {
+function isPurchasePackageType(value: unknown): value is PurchasePackageType {
   return PURCHASE_PACKAGE_TYPES.includes(String(value ?? '').trim().toLowerCase() as PurchasePackageType)
 }
 

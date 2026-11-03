@@ -75,7 +75,6 @@ export const CURRENCY_REGION_OPTIONS = [
   label: string
 }>
 
-export type CurrencyRegionCode = (typeof CURRENCY_REGION_OPTIONS)[number]['region']
 export type CurrencyRegionOption = (typeof CURRENCY_REGION_OPTIONS)[number]
 
 export function getCurrencyRegionOption(region: unknown): CurrencyRegionOption | null {

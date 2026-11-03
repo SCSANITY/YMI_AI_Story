@@ -6,9 +6,9 @@ import type { BookPackageType } from '@/types'
 
 export { isFinalJobReleased }
 
-export type PurchaseState = 'purchased' | 'refunded' | 'unpurchased'
+type PurchaseState = 'purchased' | 'refunded' | 'unpurchased'
 
-export type ReleasedFinalPdfAsset = {
+type ReleasedFinalPdfAsset = {
   jobId: string
   pdfPath: string
   createdAt: string | null
@@ -26,7 +26,7 @@ export type PurchaseSummary = {
   finalReleasedAt: string | null
 }
 
-export type CreationPhotoLockState = {
+type CreationPhotoLockState = {
   purchaseState: PurchaseState
   hasCartAttachment: boolean
 }
@@ -64,7 +64,7 @@ type PurchaseEntry = {
   order: OrderPurchaseRow
 }
 
-export function classifyPurchaseState(orderRows: Array<{ order_status?: string | null }>): PurchaseState {
+function classifyPurchaseState(orderRows: Array<{ order_status?: string | null }>): PurchaseState {
   if (orderRows.some((row) => isPaidLikeOrderStatus(row.order_status))) return 'purchased'
   if (orderRows.some((row) => normalizeOrderStatus(row.order_status) === 'refunded')) return 'refunded'
   return 'unpurchased'
