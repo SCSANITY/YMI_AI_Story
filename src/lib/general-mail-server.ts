@@ -24,7 +24,7 @@ import type {
 } from '@/lib/general-mail-workspace'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export const GENERAL_MAIL_MESSAGE_FIELDS =
+const GENERAL_MAIL_MESSAGE_FIELDS =
   'message_id, thread_id, direction, message_state, admin_customer_id, email_event_id, provider, provider_message_id, internet_message_id, from_address, to_addresses, cc_addresses, bcc_addresses, reply_to_addresses, subject, body_text, body_html, body_document, in_reply_to, references_header, received_at, sent_at, failed_at, send_attempt_count, send_claimed_at, delivery_observed_at, delivery_event_priority, delivery_error, created_at, updated_at'
 
 export type GeneralMailMessageRow = {
@@ -308,7 +308,7 @@ export async function loadGeneralMailMessage(messageId: string) {
   return (data as GeneralMailMessageRow | null) ?? null
 }
 
-export async function loadGeneralMailThread(threadId: string) {
+async function loadGeneralMailThread(threadId: string) {
   const { data, error } = await supabaseAdmin
     .from('general_mail_threads')
     .select('thread_id, mailbox_key, subject, updated_at')
@@ -517,7 +517,7 @@ export async function sendGeneralMailDraft(params: {
   }
 }
 
-export async function loadGeneralMailReplyContext(threadId: string) {
+async function loadGeneralMailReplyContext(threadId: string) {
   const thread = await loadGeneralMailThread(threadId)
   if (!thread) return null
   const { data, error } = await supabaseAdmin

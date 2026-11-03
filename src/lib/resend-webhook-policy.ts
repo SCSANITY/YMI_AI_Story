@@ -1,4 +1,4 @@
-export const RESEND_DELIVERY_EVENT_TYPES = [
+const RESEND_DELIVERY_EVENT_TYPES = [
   'email.sent',
   'email.delivered',
   'email.delivery_delayed',

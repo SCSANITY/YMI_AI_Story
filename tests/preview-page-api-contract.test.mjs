@@ -36,6 +36,8 @@ test('structured Personalize pages leave variant, share, cart, and Reader contra
   ])
 
   assert.doesNotMatch(jobsService, /getPreviewUrl|getPreviewPages/)
+  assert.doesNotMatch(jobsService, /export async function getJob\b/)
+  assert.doesNotMatch(jobsService, /export async function getPreviewPageAssets\b/)
   assert.doesNotMatch(previewContract, /Array\.isArray\(value\.urls\)|value\.urls\.map/)
   assert.match(previewContract, /const urls = pages\.map\(\(page\) => page\.url\)/)
   assert.match(personalize, /usePreviewController/)

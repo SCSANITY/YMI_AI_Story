@@ -10,7 +10,7 @@ import {
   type SupabaseServiceCredential,
 } from '@/lib/supabase-service-credential'
 
-export const PRIVATE_STORY_CONFIG_BUCKET = 'story-config-private' as const
+const PRIVATE_STORY_CONFIG_BUCKET = 'story-config-private' as const
 export const PRIVATE_STORY_CONFIG_PREFIX = 'story-configs/image-edit/v1' as const
 export const PRIVATE_STORY_CONFIG_MAX_BYTES = 8 * 1024 * 1024
 export const PRIVATE_STORY_CONFIG_TIMEOUT_MS = 15_000

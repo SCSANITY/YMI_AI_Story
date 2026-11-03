@@ -94,7 +94,7 @@ function normalizeInlineList(value: unknown, counter: { value: number }) {
   return value.map(normalizeInline)
 }
 
-export function createPlainGeneralMailDocument(value: unknown): GeneralMailDocument {
+function createPlainGeneralMailDocument(value: unknown): GeneralMailDocument {
   const text = String(value ?? '').replace(/\r\n?/g, '\n').slice(0, MAX_TEXT_LENGTH)
   const paragraphs = text.split(/\n{2,}/)
   return {
@@ -169,7 +169,7 @@ function renderInlineText(content: GeneralMailInline[]) {
   return content.map((inline) => inline.text).join('')
 }
 
-export function renderGeneralMailDocument(document: GeneralMailDocument): NormalizedGeneralMailContent {
+function renderGeneralMailDocument(document: GeneralMailDocument): NormalizedGeneralMailContent {
   const bodyText = document.blocks
     .map((block) => {
       if (block.type === 'bulletList' || block.type === 'orderedList') {
