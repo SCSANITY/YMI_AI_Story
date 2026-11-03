@@ -29,21 +29,3 @@ export function validDedicationBody(value: string) {
   const { characters, lineBreaks } = dedicationBodyMetrics(value)
   return characters > 0 && characters <= DEDICATION_MAX_CHARACTERS && lineBreaks <= DEDICATION_MAX_LINE_BREAKS
 }
-
-const acknowledgementKey = (creationId: string) => `ymi_dedication_ack_${creationId}`
-
-export function rememberDedicationAcknowledgement(creationId: string, acknowledgement: { decision: 'skipped' | 'confirmed'; revision: number }) {
-  try { window.sessionStorage.setItem(acknowledgementKey(creationId), JSON.stringify(acknowledgement)) } catch { /* private browsing */ }
-}
-
-export function readDedicationAcknowledgement(creationId: string) {
-  try {
-    const value = JSON.parse(window.sessionStorage.getItem(acknowledgementKey(creationId)) || 'null')
-    return (value?.decision === 'skipped' || value?.decision === 'confirmed') && Number.isSafeInteger(value?.revision)
-      ? value as { decision: 'skipped' | 'confirmed'; revision: number } : null
-  } catch { return null }
-}
-
-export function clearDedicationAcknowledgement(creationId: string) {
-  try { window.sessionStorage.removeItem(acknowledgementKey(creationId)) } catch { /* private browsing */ }
-}

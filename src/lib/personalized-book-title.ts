@@ -67,7 +67,7 @@ export function resolveChildNameFromCustomization(input: {
   )
 }
 
-export function resolveTemplateDisplayTitle(input: {
+function resolveTemplateDisplayTitle(input: {
   templateName?: unknown
   fallbackTitle?: unknown
   templateId?: unknown

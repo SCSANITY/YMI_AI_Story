@@ -15,7 +15,7 @@ type AdminSettingsRow = {
   updated_at: string | null
 }
 
-export const CUSTOMIZE_ACCESS_CACHE_TAG = 'ymi-customize-access-v1'
+const CUSTOMIZE_ACCESS_CACHE_TAG = 'ymi-customize-access-v1'
 
 async function loadCustomizeAccessRow() {
   const { data, error } = await supabaseAdmin

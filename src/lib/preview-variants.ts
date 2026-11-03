@@ -1,4 +1,4 @@
-export const PREVIEW_VARIANT_KIND = 'change_photo' as const
+const PREVIEW_VARIANT_KIND = 'change_photo' as const
 export const PREVIEW_VARIANT_SESSION_CAP = 3
 
 export type PreviewVariantMarker = {
@@ -40,7 +40,6 @@ type PreviewVariantCommitGateInput = {
 }
 
 const COUNTED_VARIANT_STATUSES = new Set(['queued', 'running', 'done'])
-const IN_FLIGHT_VARIANT_STATUSES = new Set(['queued', 'running'])
 
 export function getPreviewVariantMarker(inputSnapshot: unknown): PreviewVariantMarker | null {
   if (!inputSnapshot || typeof inputSnapshot !== 'object' || Array.isArray(inputSnapshot)) {
@@ -66,28 +65,6 @@ export function getPreviewVariantMarker(inputSnapshot: unknown): PreviewVariantM
   return value as PreviewVariantMarker
 }
 
-export function getPreviewVariantCommitMarker(
-  inputSnapshot: unknown
-): PreviewVariantCommitMarker | null {
-  if (!inputSnapshot || typeof inputSnapshot !== 'object' || Array.isArray(inputSnapshot)) {
-    return null
-  }
-
-  const marker = (inputSnapshot as Record<string, unknown>).preview_variant_commit
-  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return null
-
-  const value = marker as Record<string, unknown>
-  if (
-    typeof value.creation_id !== 'string' ||
-    typeof value.committed_at !== 'string' ||
-    typeof value.expected_preview_job_id !== 'string'
-  ) {
-    return null
-  }
-
-  return value as PreviewVariantCommitMarker
-}
-
 export function isPreviewVariantInvalidated(inputSnapshot: unknown) {
   if (!inputSnapshot || typeof inputSnapshot !== 'object' || Array.isArray(inputSnapshot)) {
     return false
@@ -104,14 +81,6 @@ export function isCountedPreviewVariant(job: PreviewVariantJobLike, sessionId: s
     marker?.session_id === sessionId &&
       job.status &&
       COUNTED_VARIANT_STATUSES.has(job.status)
-  )
-}
-
-export function isInFlightPreviewVariant(job: PreviewVariantJobLike) {
-  return Boolean(
-    getPreviewVariantMarker(job.input_snapshot) &&
-      job.status &&
-      IN_FLIGHT_VARIANT_STATUSES.has(job.status)
   )
 }
 
