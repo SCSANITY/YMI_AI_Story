@@ -1,7 +1,7 @@
 import sharp, { type Metadata } from 'sharp'
 
 export const DEFAULT_FINAL_SOURCE_MIN_EDGE = 512
-export const FINAL_SOURCE_SQUARE_TOLERANCE = 0.02
+const FINAL_SOURCE_SQUARE_TOLERANCE = 0.02
 
 const SUPPORTED_FINAL_SOURCE_FORMATS = new Set(['jpeg', 'png', 'webp'])
 

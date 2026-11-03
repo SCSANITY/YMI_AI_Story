@@ -1,7 +1,7 @@
 import { parseFinalPageMetadataContract } from '@/lib/final-page-metadata'
 
 export type FinalProductionMode = 'manual' | 'auto'
-export const MANUAL_FINAL_PENDING_STATUS = 'manual_pending' as const
+const MANUAL_FINAL_PENDING_STATUS = 'manual_pending' as const
 
 export function resolveNewFinalProductionMode(value: unknown): FinalProductionMode {
   if (value === undefined || value === null || value === '' || value === 'manual') return 'manual'

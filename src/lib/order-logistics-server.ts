@@ -5,7 +5,7 @@ import { loadOrderCoverUrl } from '@/lib/orderFulfillment'
 import { stampSignatureVoiceShipmentIntegrity } from '@/lib/signature-voice-fulfillment-server'
 import { shouldSendLogisticsUpdateEmail, type LogisticsPatch } from '@/lib/order-logistics'
 
-export const LOGISTICS_ORDER_SELECT = 'order_id,display_id,order_status,payment_id,customer_id,email,created_at,checkout_currency,shipping_method,shipping_zone_code,tracking_number,tracking_carrier,tracking_url,logistics_note,shipped_at,delivered_at,logistics_updated_at'
+const LOGISTICS_ORDER_SELECT = 'order_id,display_id,order_status,payment_id,customer_id,email,created_at,checkout_currency,shipping_method,shipping_zone_code,tracking_number,tracking_carrier,tracking_url,logistics_note,shipped_at,delivered_at,logistics_updated_at'
 
 export async function loadLogisticsOrder(orderId: string) {
   const { data, error } = await supabaseAdmin.from('orders').select(LOGISTICS_ORDER_SELECT).eq('order_id', orderId).maybeSingle()

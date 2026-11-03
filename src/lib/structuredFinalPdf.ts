@@ -15,7 +15,7 @@ const DEFAULT_MAX_IMAGE_EDGE = 1800
 const DEFAULT_JPEG_QUALITY = 82
 const DEFAULT_MAX_PDF_BYTES = 50 * 1024 * 1024
 const DEFAULT_MIN_SOURCE_EDGE = DEFAULT_FINAL_SOURCE_MIN_EDGE
-export const DEFAULT_INTERIOR_GUTTER = 24
+const DEFAULT_INTERIOR_GUTTER = 24
 
 export type StructuredFinalPdfInteriorSpread = {
   spreadIndex: number

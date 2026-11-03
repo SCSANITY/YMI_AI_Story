@@ -4,7 +4,7 @@ export const FINAL_REPLACEMENT_UPLOAD_BUCKET = 'raw-private'
 export const FINAL_REPLACEMENT_UPLOAD_MAX_BYTES = 40 * 1024 * 1024
 export const FINAL_REPLACEMENT_STAGING_TTL_MS = 24 * 60 * 60 * 1000
 
-export type FinalReplacementUpload = {
+type FinalReplacementUpload = {
   fileName: string
   sizeBytes: number
   contentType: 'image/jpeg' | 'image/png' | 'image/webp'

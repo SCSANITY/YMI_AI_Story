@@ -1,6 +1,6 @@
 export const FINAL_PAGE_SCHEMA_VERSION = 3 as const
 export const FINAL_PAGE_SOURCE_COUNT = 31
-export const FINAL_INTERIOR_PAGE_COUNT = 30
+const FINAL_INTERIOR_PAGE_COUNT = 30
 
 export type FinalPageRole = 'final_front_cover' | 'final_interior'
 

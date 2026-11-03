@@ -1,4 +1,4 @@
-export const MAX_CART_ITEM_QUANTITY = 99
+const MAX_CART_ITEM_QUANTITY = 99
 
 export function parseCartItemQuantity(value: unknown, fallback = 1) {
   const quantity = value === undefined || value === null ? fallback : Number(value)

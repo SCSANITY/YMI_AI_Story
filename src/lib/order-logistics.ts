@@ -66,7 +66,7 @@ export function parseAdminLogisticsPatch(value: unknown) {
   return { patch,expectedUpdatedAt:body.expectedUpdatedAt as string|null }
 }
 
-export function normalizeOptionalLogisticsText(value: unknown) {
+function normalizeOptionalLogisticsText(value: unknown) {
   const normalized = typeof value === 'string' ? value.trim() : ''
   return normalized || null
 }
