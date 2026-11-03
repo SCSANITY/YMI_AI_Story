@@ -331,7 +331,7 @@ export async function createTransactionSurrogate(rawOrderId: string): Promise<st
   return `ymi_${hex.slice(0, 32)}`
 }
 
-export function listTrackingCookieNames(
+function listTrackingCookieNames(
   cookieHeader: string,
   scope: 'all' | 'analytics' | 'marketing' = 'all',
 ): string[] {

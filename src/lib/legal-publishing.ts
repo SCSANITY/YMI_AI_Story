@@ -3,7 +3,7 @@ import type { CanonicalLegalDocumentKey } from '@/lib/legal-documents'
 
 export type LegalRevisionStatus = 'draft' | 'published' | 'archived'
 
-export type LegalLocaleContent = {
+type LegalLocaleContent = {
   sections: LegalSection[]
   effectiveDate: string
   version: string
@@ -177,7 +177,7 @@ function normalizeTextItems(
   return items.length > 0 ? items : undefined
 }
 
-export function normalizeLegalSections(value: unknown): LegalSection[] {
+function normalizeLegalSections(value: unknown): LegalSection[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new LegalPublishingValidationError('At least one legal section is required')
   }

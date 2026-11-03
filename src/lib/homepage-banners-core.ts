@@ -6,7 +6,7 @@ export const HOMEPAGE_BANNER_SLOT_KEYS = [
 export type HomepageBannerSlotKey = (typeof HOMEPAGE_BANNER_SLOT_KEYS)[number]
 export type HomepageBannerAssetSource = 'builtin' | 'storage'
 
-export type HomepageBannerAsset = {
+type HomepageBannerAsset = {
   src: string
   width: number
   height: number

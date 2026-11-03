@@ -12,7 +12,7 @@ import { normalizeUserAssetContentType } from '@/lib/userAssetsStorage'
 
 type UnknownRecord = Record<string, unknown>
 
-export type SignatureVoiceNarrationManifest = {
+type SignatureVoiceNarrationManifest = {
   orderId: string
   cartItemId: string
   creationId: string
@@ -21,7 +21,7 @@ export type SignatureVoiceNarrationManifest = {
   trackCount: number
 }
 
-export class SignatureVoiceFulfillmentError extends Error {
+class SignatureVoiceFulfillmentError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'SignatureVoiceFulfillmentError'

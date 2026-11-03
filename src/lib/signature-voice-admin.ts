@@ -5,7 +5,7 @@ import {
 import { normalizeUserAssetContentType, validateUserAssetUpload } from '@/lib/userAssetsStorage'
 import { isUuid } from '@/lib/validators'
 
-export const SIGNATURE_VOICE_TRIAGE_STATUSES = ['pending', 'accepted', 'rejected'] as const
+const SIGNATURE_VOICE_TRIAGE_STATUSES = ['pending', 'accepted', 'rejected'] as const
 export const SIGNATURE_VOICE_NARRATION_MIN_SECONDS = 3
 export const SIGNATURE_VOICE_NARRATION_MAX_SECONDS = 600
 export const SIGNATURE_VOICE_REPLACEMENT_MIN_SECONDS = 10
@@ -17,7 +17,7 @@ export const SIGNATURE_VOICE_NARRATION_SLOTS = Array.from(
 
 export type SignatureVoiceTriageStatus = (typeof SIGNATURE_VOICE_TRIAGE_STATUSES)[number]
 
-export type AdminSignatureVoiceNarrationTrack = {
+type AdminSignatureVoiceNarrationTrack = {
   assetId: string
   sourceAssetId: string
   contentType: string
@@ -94,7 +94,7 @@ export type AdminSignatureVoiceWorkspace = {
   items: AdminSignatureVoiceItem[]
 }
 
-export class SignatureVoiceAdminError extends Error {
+class SignatureVoiceAdminError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'SignatureVoiceAdminError'

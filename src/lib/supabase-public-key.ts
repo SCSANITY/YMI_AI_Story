@@ -1,4 +1,4 @@
-export type SupabasePublicKey = Readonly<{
+type SupabasePublicKey = Readonly<{
   value: string
   kind: 'publishable' | 'legacy-anon'
 }>

@@ -3,7 +3,7 @@ export { isUuid } from '@/lib/validators'
 const DEFAULT_INBOUND_DOMAIN = 'reply.ymistory.com'
 const REPLY_ALIAS_PATTERN = /^[23456789abcdefghjkmnpqrstuvwxyz]{12}$/
 
-export const SUPPORT_TICKET_STATUSES = [
+const SUPPORT_TICKET_STATUSES = [
   'new',
   'waiting_customer',
   'customer_replied',

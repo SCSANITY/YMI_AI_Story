@@ -29,7 +29,7 @@ export type SignatureVoiceCaptureAuthorization = {
   speakerKind: 'authorized_speaker'
 }
 
-export type SignatureVoiceBindingRequest = {
+type SignatureVoiceBindingRequest = {
   assetId: string
 }
 

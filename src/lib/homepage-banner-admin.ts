@@ -13,8 +13,8 @@ import {
 } from '@/lib/homepage-banners-core'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export const HOMEPAGE_BANNER_MAX_BYTES = 5 * 1024 * 1024
-export const HOMEPAGE_BANNER_CONTENT_TYPES = new Set([
+const HOMEPAGE_BANNER_MAX_BYTES = 5 * 1024 * 1024
+const HOMEPAGE_BANNER_CONTENT_TYPES = new Set([
   'image/webp',
   'image/png',
   'image/jpeg',
@@ -143,7 +143,7 @@ export function buildHomepageBannerStoragePath(adminCustomerId: string, contentT
   return `homepage-banners/admin/${adminCustomerId}/${randomUUID()}.${extension}`
 }
 
-export function isHomepageBannerStoragePath(path: string) {
+function isHomepageBannerStoragePath(path: string) {
   return /^homepage-banners\/admin\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(webp|png|jpe?g)$/i.test(path)
 }
 
