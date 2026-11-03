@@ -28,7 +28,7 @@ export type ShippingAddress = {
 }
 
 /** A stored address has real content (i.e. was entered at checkout). */
-export function hasShippingAddress(addr: Record<string, unknown> | null | undefined): boolean {
+function hasShippingAddress(addr: Record<string, unknown> | null | undefined): boolean {
   if (!addr) return false
   return Boolean(
     String((addr.addressLine1 as string) ?? '').trim() ||
@@ -104,7 +104,7 @@ export function recipientAddressIssue(address: ShippingAddress): string | null {
  * and are used ONLY as a fallback when the order has no stored shipping address — never to
  * overlay/clobber the address the customer entered at checkout.
  */
-export function stripeDetailsToShippingAddress(
+function stripeDetailsToShippingAddress(
   details: Stripe.Checkout.Session.CustomerDetails | null | undefined
 ): ShippingAddress {
   const address = details?.address

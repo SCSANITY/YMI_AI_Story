@@ -103,11 +103,11 @@ export function getFinalPagePath(orderId: string, pageNumber: number) {
   return `orders/${orderId}/final/pages/approved/page_${String(pageNumber).padStart(2, '0')}.png`
 }
 
-export function getFinalPdfPath(orderId: string) {
+function getFinalPdfPath(orderId: string) {
   return `orders/${orderId}/final/pdf/final.pdf`
 }
 
-export async function downloadStorageBuffer(path: string): Promise<Buffer> {
+async function downloadStorageBuffer(path: string): Promise<Buffer> {
   const { data, error } = await supabaseAdmin.storage.from(STORAGE_BUCKET).download(path)
   if (error || !data) {
     throw new Error(error?.message || `Failed to download ${path}`)
@@ -115,7 +115,7 @@ export async function downloadStorageBuffer(path: string): Promise<Buffer> {
   return Buffer.from(await data.arrayBuffer())
 }
 
-export async function signStorageUrl(path: string | null, ttlSeconds = FINAL_PDF_TTL_SECONDS) {
+async function signStorageUrl(path: string | null, ttlSeconds = FINAL_PDF_TTL_SECONDS) {
   if (!path) return null
   const { data } = await supabaseAdmin.storage.from(STORAGE_BUCKET).createSignedUrl(path, ttlSeconds)
   return data?.signedUrl ?? null

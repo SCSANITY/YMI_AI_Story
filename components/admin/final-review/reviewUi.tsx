@@ -31,10 +31,6 @@ export function formatDate(value: string | null | undefined) {
   }).format(new Date(value))
 }
 
-export function pageNumberLabel(index: number) {
-  return String(index + 1).padStart(2, '0')
-}
-
 export function pagePreviewUrl(page: FinalJobPageRow) {
   return page.approved_url || page.manual_url || page.ai_url || null
 }

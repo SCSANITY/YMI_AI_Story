@@ -35,7 +35,7 @@ export type PlaybackFailureReason='network'|'access'|'not-current'|'format'|'una
 export class RecordingPlaybackError extends Error {
   constructor(public readonly reason:PlaybackFailureReason){super(reason)}
 }
-export function playbackHttpReason(status:number):PlaybackFailureReason {
+function playbackHttpReason(status:number):PlaybackFailureReason {
   if(status===401||status===403)return 'access'
   if(status===409)return 'not-current'
   return status>=500?'network':'unavailable'

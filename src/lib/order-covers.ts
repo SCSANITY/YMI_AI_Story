@@ -8,7 +8,7 @@ export type GeneratedCoverResult = {
   status: GeneratedCoverStatus
 }
 
-export const EMPTY_GENERATED_COVER: GeneratedCoverResult = {
+const EMPTY_GENERATED_COVER: GeneratedCoverResult = {
   url: null,
   status: 'unavailable',
 }
