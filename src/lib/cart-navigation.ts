@@ -10,7 +10,7 @@ type PreviewCartOrigin = {
   source?: string | null
 }
 
-export type CartBackNavigation = {
+type CartBackNavigation = {
   href: string
   method: 'assign' | 'history' | 'replace'
 }

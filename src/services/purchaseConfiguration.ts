@@ -1,6 +1,6 @@
 import type { PurchasePackageType } from '@/lib/purchase-configuration'
 
-export type PurchaseConfigurationResult = {
+type PurchaseConfigurationResult = {
   packageType: PurchasePackageType
   priceAtPurchase: number
   packagePriceVersion: number

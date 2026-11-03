@@ -2,7 +2,7 @@ import type { CartItem } from '@/types'
 
 type CartCoverFields = Pick<CartItem, 'book' | 'coverStatus'>
 
-export type CartCoverStatus = 'ready' | 'pending' | 'unavailable'
+type CartCoverStatus = 'ready' | 'pending' | 'unavailable'
 
 export function resolveCartItemPreviewCover(item: CartCoverFields): string | null {
   if (item.coverStatus !== 'ready') return null

@@ -6,7 +6,7 @@ type StartOwnedCreationCheckoutOptions = {
   fetcher?: FetchLike
 }
 
-export type OwnedCreationCheckout = {
+type OwnedCreationCheckout = {
   checkoutHref: string
   cartItems: unknown[]
   cartItemIds: string[]

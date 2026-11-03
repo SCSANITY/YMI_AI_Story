@@ -1,8 +1,8 @@
-export type ActiveCartItemRow = {
+type ActiveCartItemRow = {
   status?: string | null
   order_id?: string | null
 }
-export type ActiveCartOrderRow = {
+type ActiveCartOrderRow = {
   order_id: string
   order_status?: string | null
   payment_id?: string | null

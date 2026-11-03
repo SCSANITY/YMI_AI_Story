@@ -3,9 +3,9 @@ import type { Detection, FaceDetector } from '@mediapipe/tasks-vision'
 import type { SignatureVoiceCaptureAuthorization } from '@/lib/signature-voice'
 import { prepareUndecodableHeicUpload } from '@/lib/heic-upload'
 
-export type AssetType = 'face_image' | 'text_profile' | 'voice_sample' | 'profile_avatar'
+type AssetType = 'face_image' | 'text_profile' | 'voice_sample' | 'profile_avatar'
 
-export interface UserAssetRecord {
+interface UserAssetRecord {
   asset_id: string
   owner_type: 'anon' | 'customer'
   anon_session_id?: string | null
@@ -60,7 +60,7 @@ const FACE_AUTO_CROP_SIDE_MARGIN_RATIO = 0.8
 const FACE_AUTO_CROP_TOP_MARGIN_RATIO = 0.8
 const FACE_AUTO_CROP_BOTTOM_MARGIN_RATIO = 1.25
 
-export type FaceImageValidationCode =
+type FaceImageValidationCode =
   | 'missing'
   | 'notImage'
   | 'unreadable'
@@ -79,7 +79,7 @@ export type FaceImageValidationCode =
   | 'tooBright'
   | 'eyesClosed'
 
-export type FaceImageFaceMetrics = {
+type FaceImageFaceMetrics = {
   originX: number
   originY: number
   width: number
@@ -90,7 +90,7 @@ export type FaceImageFaceMetrics = {
   score: number
 }
 
-export type FaceImageAnalysis = {
+type FaceImageAnalysis = {
   width: number
   height: number
   brightness?: number

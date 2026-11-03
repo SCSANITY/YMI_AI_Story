@@ -4,7 +4,7 @@ import type { PreviewCapacityState } from '@/lib/preview-capacity'
 import { parsePreviewJobState, type PreviewJobState } from '@/lib/preview-job-state'
 import type { SaveTextProfileResult } from '@/lib/user-profile-history'
 
-export interface JobRecord {
+interface JobRecord {
   job_id: string
   job_type: 'preview' | 'final'
   story_language?: 'English' | 'Simplified Chinese' | 'Traditional Chinese' | 'Spanish' | null
@@ -21,7 +21,7 @@ export interface JobRecord {
   updated_at?: string
 }
 
-export type CreatePreviewVersionInput = {
+type CreatePreviewVersionInput = {
   creationId: string
   expectedPreviewJobId: string
   variantSessionId: string
@@ -30,7 +30,7 @@ export type CreatePreviewVersionInput = {
   pendingFaceAsset?: PendingUserAssetUpload
 }
 
-export type CreatePreviewVersionResult = {
+type CreatePreviewVersionResult = {
   jobId: string
   creationId: string
   variantSessionId: string
@@ -39,17 +39,17 @@ export type CreatePreviewVersionResult = {
   sessionVariantCap: number
 }
 
-export type CreatePreviewVoiceBinding = {
+type CreatePreviewVoiceBinding = {
   assetId: string
 }
 
-export type CreatePreviewJobResult = {
+type CreatePreviewJobResult = {
   jobId: string
   creationId: string
   textProfile: SaveTextProfileResult | null
 }
 
-export type RetryPreviewJobResult = {
+type RetryPreviewJobResult = {
   jobId: string
   creationId: string
   status: Extract<JobRecord['status'], 'queued' | 'running' | 'done'>
@@ -203,34 +203,7 @@ export async function createPreviewVersion(
   }
 }
 
-export async function updatePreviewJobInput(
-  jobId: string,
-  faceSourcePath: string,
-  textOverrides?: Record<string, unknown>,
-  params?: Record<string, unknown>
-): Promise<void> {
-  if (!jobId || !faceSourcePath) {
-    throw new Error('Job ID and face source path are required')
-  }
-
-  const response = await fetch('/api/jobs', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jobId,
-      face_source_path: faceSourcePath,
-      textOverrides: textOverrides ?? null,
-      params: params ?? null,
-    }),
-    credentials: 'include',
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to update job input')
-  }
-}
-
-export class JobRequestError extends Error {
+class JobRequestError extends Error {
   readonly status: number
   readonly code: string | null
 
