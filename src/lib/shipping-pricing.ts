@@ -1,4 +1,4 @@
-export type ShippingPricingAdjustments = {
+type ShippingPricingAdjustments = {
   fuel_surcharge_percent: number | string | null
   handling_fee_hkd: number | string | null
   margin_percent: number | string | null

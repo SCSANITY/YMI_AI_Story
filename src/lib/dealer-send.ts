@@ -10,14 +10,14 @@ export type DealerSendEvent = {
   apiType: string | null
 }
 
-export type DeliveryMapping = {
+type DeliveryMapping = {
   carrierId: string
   apiType: string
   status: string
   reference: string
 }
 
-export type DealerSendCredentials = {
+type DealerSendCredentials = {
   baseUrl: string
   apiKey: string
 }

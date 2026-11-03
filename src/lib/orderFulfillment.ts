@@ -19,14 +19,14 @@ import {
 import { loadStoryConfigForFinal } from '@/lib/story-config-server'
 import { assertSignableStorageBucket } from '@/lib/storage-signing-policy'
 
-export type CheckoutItemInput = {
+type CheckoutItemInput = {
   id: string
   bookID?: string
   quantity?: number
   priceAtPurchase?: number
 }
 
-export type ResolveCustomerResult = {
+type ResolveCustomerResult = {
   customer_id: string
   is_guest: boolean
 }
@@ -364,7 +364,7 @@ export async function loadOrderCoverUrl(orderId: string): Promise<string | undef
   return (await loadOrderCover(orderId))?.coverImageUrl
 }
 
-export type OrderItemWithCover = {
+type OrderItemWithCover = {
   name: string
   quantity: number
   childName?: string

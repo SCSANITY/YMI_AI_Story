@@ -1,7 +1,7 @@
 import { DealerSendError, fetchDealerSendTracking, verifiedDelivery, type DealerSendConfig, type DealerSendEvent } from './dealer-send'
 
 export type ShippingLease = { token: string; trackingNumber: string; revision: number; bindingVersion: number }
-export type ShippingSyncResult = { stale?: boolean; synced?: boolean; delivered?: boolean; statusEventId?: string | null; skipped?: boolean; errorCode?: string }
+type ShippingSyncResult = { stale?: boolean; synced?: boolean; delivered?: boolean; statusEventId?: string | null; skipped?: boolean; errorCode?: string }
 export type ShippingSyncStore = {
   claim: (orderId: string, force: boolean) => Promise<ShippingLease | null>
   finish: (orderId: string, lease: ShippingLease, events: DealerSendEvent[], errorCode: string | null,

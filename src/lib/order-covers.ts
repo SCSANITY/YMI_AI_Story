@@ -1,9 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { createSignedStorageUrlMap } from '@/lib/storage-signing'
 
-export type GeneratedCoverStatus = 'ready' | 'pending' | 'unavailable'
+type GeneratedCoverStatus = 'ready' | 'pending' | 'unavailable'
 
-export type GeneratedCoverResult = {
+type GeneratedCoverResult = {
   url: string | null
   status: GeneratedCoverStatus
 }
