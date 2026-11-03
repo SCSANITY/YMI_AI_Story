@@ -20,7 +20,7 @@ import {
 const MAX_RECIPIENTS = 50
 const MAX_SUBJECT_LENGTH = 1000
 
-export type GeneralMailRecipients = {
+type GeneralMailRecipients = {
   to: string[]
   cc: string[]
   bcc: string[]
@@ -34,7 +34,7 @@ export type GeneralMailDraftInput = GeneralMailRecipients & {
   bodyDocument: GeneralMailDocument
 }
 
-export type GeneralMailReplySource = {
+type GeneralMailReplySource = {
   fromAddress: string
   toAddresses: string[]
   ccAddresses: string[]
@@ -42,7 +42,7 @@ export type GeneralMailReplySource = {
   referencesHeader: string | null
 }
 
-export type GeneralMailReplyEnvelope = {
+type GeneralMailReplyEnvelope = {
   to: string[]
   cc: string[]
   inReplyTo: string | null

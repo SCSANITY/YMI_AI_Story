@@ -10,7 +10,7 @@ export type FaceAssetOwner = {
   ownerId: string
 }
 
-export type PendingFaceAsset = {
+type PendingFaceAsset = {
   asset_id: string
   storage_path: string
   asset_type: 'face_image'
@@ -20,7 +20,7 @@ export type PendingFaceAsset = {
   size_bytes: number
 }
 
-export type ConfirmedFaceAsset = {
+type ConfirmedFaceAsset = {
   asset_id: string
   storage_path: string
 }

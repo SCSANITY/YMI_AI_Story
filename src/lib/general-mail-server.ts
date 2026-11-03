@@ -27,7 +27,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 const GENERAL_MAIL_MESSAGE_FIELDS =
   'message_id, thread_id, direction, message_state, admin_customer_id, email_event_id, provider, provider_message_id, internet_message_id, from_address, to_addresses, cc_addresses, bcc_addresses, reply_to_addresses, subject, body_text, body_html, body_document, in_reply_to, references_header, received_at, sent_at, failed_at, send_attempt_count, send_claimed_at, delivery_observed_at, delivery_event_priority, delivery_error, created_at, updated_at'
 
-export type GeneralMailMessageRow = {
+type GeneralMailMessageRow = {
   message_id: string
   thread_id: string
   direction: 'inbound' | 'outbound'

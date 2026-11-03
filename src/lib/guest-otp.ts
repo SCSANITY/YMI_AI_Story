@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto'
 
-export type GuestOtpRateLimitDecision = {
+type GuestOtpRateLimitDecision = {
   allowed: boolean
   retryAfterSeconds: number
   scope: string

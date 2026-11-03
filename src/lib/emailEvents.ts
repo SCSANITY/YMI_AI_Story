@@ -1,8 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
-export type EmailEventStatus = 'pending' | 'sent' | 'failed' | 'external_observed'
+type EmailEventStatus = 'pending' | 'sent' | 'failed' | 'external_observed'
 
-export type EmailEventRow = {
+type EmailEventRow = {
   email_event_id: string
   email_key: string
   provider: string
@@ -35,7 +35,7 @@ type EmailEventBase = {
   context?: Record<string, unknown>
 }
 
-export type PreparedEmailEvent = {
+type PreparedEmailEvent = {
   event: EmailEventRow | null
   shouldSend: boolean
 }

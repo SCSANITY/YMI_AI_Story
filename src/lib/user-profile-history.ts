@@ -1,4 +1,4 @@
-export type ChildProfileMetadata = {
+type ChildProfileMetadata = {
   child_name?: string
   child_age?: number
   name?: string

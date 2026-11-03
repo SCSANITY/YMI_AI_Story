@@ -2,7 +2,7 @@ import * as React from 'react'
 import { Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, emailAsset, emailTheme, emailButtons } from './EmailLayout'
 
-export type AbandonmentItem = {
+type AbandonmentItem = {
   name: string
   quantity: number
   childName?: string

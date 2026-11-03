@@ -1,4 +1,4 @@
-export type BrowserBackAction =
+type BrowserBackAction =
   | { method: 'history' }
   | { method: 'assign'; href: string }
 
