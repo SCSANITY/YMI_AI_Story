@@ -11,7 +11,7 @@ export type ApprovedFinalPdfPage = {
   approved_output_path: string
 }
 
-export type FinalPdfReleaseArtifact = {
+type FinalPdfReleaseArtifact = {
   buffer: Buffer
   outputAssets: Record<string, unknown>
   structuredProof: StructuredFinalPdfReleaseProof

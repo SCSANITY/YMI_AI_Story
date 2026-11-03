@@ -1,7 +1,7 @@
 const PREVIEW_VARIANT_KIND = 'change_photo' as const
 export const PREVIEW_VARIANT_SESSION_CAP = 3
 
-export type PreviewVariantMarker = {
+type PreviewVariantMarker = {
   kind: typeof PREVIEW_VARIANT_KIND
   session_id: string
   request_id: string
@@ -17,13 +17,13 @@ export type PreviewVariantCommitMarker = {
   expected_preview_job_id: string
 }
 
-export type PreviewVariantJobLike = {
+type PreviewVariantJobLike = {
   job_id?: string | null
   status?: string | null
   input_snapshot?: unknown
 }
 
-export type PreviewVariantCommitGate =
+type PreviewVariantCommitGate =
   | 'proceed'
   | 'idempotent'
   | 'conflict'

@@ -2,9 +2,9 @@
 
 import { useCallback, useState } from 'react'
 
-export type PersonalizeStage = 'INIT' | 'FORM' | 'GENERATING' | 'PREVIEW'
-export type ExitIntent = 'NONE' | 'CHECKOUT' | 'EXIT'
-export type ExitPhase = 'IDLE' | 'REQUESTED' | 'EXECUTING'
+type PersonalizeStage = 'INIT' | 'FORM' | 'GENERATING' | 'PREVIEW'
+type ExitIntent = 'NONE' | 'CHECKOUT' | 'EXIT'
+type ExitPhase = 'IDLE' | 'REQUESTED' | 'EXECUTING'
 
 type RestorePayload = {
   hasDraft: boolean

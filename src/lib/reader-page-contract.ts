@@ -12,12 +12,12 @@ export type ApprovedFinalReaderPage = {
   approvedPath: string
 }
 
-export type ReaderPageRole = Extract<
+type ReaderPageRole = Extract<
   BookLeafRole,
   'final_front_cover' | 'final_interior'
 >
 
-export type ReleasedReaderPagePlan = {
+type ReleasedReaderPagePlan = {
   pageIndex: number
   status: string | null
   approvedPath: string

@@ -13,7 +13,7 @@ export type FinalPageMetadata = {
   page_number: number | null
 }
 
-export type FinalPageMetadataContract = {
+type FinalPageMetadataContract = {
   schemaVersion: typeof FINAL_PAGE_SCHEMA_VERSION
   assetLayout: 'single-page'
   pages: FinalPageMetadata[]

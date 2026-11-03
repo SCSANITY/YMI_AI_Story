@@ -2,7 +2,7 @@ export type PreviewFailureCode =
   | 'retryable_generation_failure'
   | 'generation_failed'
 
-export type PreviewRetryDecision = {
+type PreviewRetryDecision = {
   failureCode: PreviewFailureCode
   retryable: boolean
 }

@@ -1,4 +1,4 @@
-export type BookLeafSide = 'left' | 'right'
+type BookLeafSide = 'left' | 'right'
 
 export type BookLeafRole =
   | 'preview_cover'
@@ -6,7 +6,7 @@ export type BookLeafRole =
   | 'final_front_cover'
   | 'final_interior'
 
-export type BookLeafSource = { layout: 'single-page' }
+type BookLeafSource = { layout: 'single-page' }
 
 export type BookLeaf = {
   id: string
@@ -21,7 +21,7 @@ export type BookLeaf = {
   source: BookLeafSource
 }
 
-export type BookSpread = {
+type BookSpread = {
   spreadIndex: number
   displayIndex?: number
   left: BookLeaf | null
