@@ -816,7 +816,6 @@ const en: MessageDictionary = {
   'personalize.ageRangeConfirmTitle': 'Age outside this book range',
   'personalize.ageRangeConfirmBody': 'This book is recommended for {{ageRange}}. Continuing with this age may make the generated story less suitable.',
   'personalize.ageRangeContinueAnyway': 'Continue Anyway',
-  'personalize.noHistory': 'No history',
   'personalize.storyLanguageEnglish': 'English',
   'personalize.storyLanguageChinese': 'Chinese',
   'personalize.storyLanguageSimplifiedChinese': 'Simplified Chinese',

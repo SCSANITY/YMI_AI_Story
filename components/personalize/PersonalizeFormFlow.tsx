@@ -46,7 +46,6 @@ type PersonalizeFormFlowProps = {
     namePlaceholder: string
     ageLabel: string
     agePlaceholder: string
-    noHistory: string
   }
   ageRangeWarning?: string | null
   minimumRecommendedAge?: number

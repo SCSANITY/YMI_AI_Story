@@ -3100,7 +3100,6 @@ export default function PersonalizePage({
                           namePlaceholder: t('personalize.namePlaceholder'),
                           ageLabel: t('personalize.ageLabel'),
                           agePlaceholder: t('personalize.agePlaceholder'),
-                          noHistory: t('personalize.noHistory'),
                         }}
                         ageRangeWarning={ageRangeWarningText}
                         minimumRecommendedAge={minimumRecommendedAge}

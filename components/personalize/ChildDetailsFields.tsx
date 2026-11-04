@@ -16,7 +16,6 @@ type ChildDetailsFieldsProps = {
     namePlaceholder: string
     ageLabel: string
     agePlaceholder: string
-    noHistory: string
   }
   ageRangeWarning?: string | null
   minimumRecommendedAge?: number
@@ -128,7 +127,7 @@ function ChildDetailsFieldsComponent({
           placeholder={labels.namePlaceholder}
           className={`${styles.control} h-11 w-full min-w-0 max-w-full rounded-xl px-4 text-base font-semibold text-slate-950 placeholder:text-slate-400/70 md:text-sm`}
         />
-        {showNameHistory && (
+        {showNameHistory && nameHistory.length > 0 && (
           <div
             className="absolute z-30 mt-2 max-h-44 w-full min-w-0 max-w-full overflow-auto rounded-2xl border border-white/70 bg-white/92 p-2 shadow-[0_18px_44px_rgba(16,24,40,0.14)] backdrop-blur-xl"
             onMouseDown={(event) => {
@@ -136,10 +135,7 @@ function ChildDetailsFieldsComponent({
               event.stopPropagation()
             }}
           >
-            {nameHistory.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-gray-400">{labels.noHistory}</div>
-            ) : (
-              nameHistory.map((value) => (
+            {nameHistory.map((value) => (
                 <div
                   key={value}
                   className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-amber-50 transition"
@@ -166,8 +162,7 @@ function ChildDetailsFieldsComponent({
                     <X className="h-3 w-3" />
                   </button>
                 </div>
-              ))
-            )}
+              ))}
           </div>
         )}
       </div>
@@ -187,7 +182,7 @@ function ChildDetailsFieldsComponent({
             {ageRangeWarning}
           </p>
         ) : null}
-        {showAgeHistory && (
+        {showAgeHistory && ageHistory.length > 0 && (
           <div
             className="absolute z-30 mt-2 max-h-44 w-full min-w-0 max-w-full overflow-auto rounded-2xl border border-white/70 bg-white/92 p-2 shadow-[0_18px_44px_rgba(16,24,40,0.14)] backdrop-blur-xl"
             onMouseDown={(event) => {
@@ -195,10 +190,7 @@ function ChildDetailsFieldsComponent({
               event.stopPropagation()
             }}
           >
-            {ageHistory.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-gray-400">{labels.noHistory}</div>
-            ) : (
-              ageHistory.map((value) => (
+            {ageHistory.map((value) => (
                 <div
                   key={value}
                   className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-amber-50 transition"
@@ -225,8 +217,7 @@ function ChildDetailsFieldsComponent({
                     <X className="h-3 w-3" />
                   </button>
                 </div>
-              ))
-            )}
+              ))}
           </div>
         )}
       </div>
