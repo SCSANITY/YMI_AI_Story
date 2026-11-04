@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties, type RefObject } from 'react'
 import Image from 'next/image'
 import { Check, Pause, Sparkles, UserRound } from 'lucide-react'
 import type { BookPackagePricing, DisplayCurrency } from '@/types'
 import { formatDisplayCurrency } from '@/lib/locale-pricing'
+import { getUiMessage as t } from '@/lib/i18n-messages'
 import { EDITION_DEFINITIONS, type EditionType } from './product/edition-definitions'
-import { WAITING_DEMO_DURATION_MS, WAITING_DEMO_BARS } from './preview-waiting-demo-data'
+import { DEMO_VOICES } from './product/voice-demo-data'
+import { useVoiceDemoPlayback } from './product/useVoiceDemoPlayback'
 import styles from './PreviewWaitingPages.module.css'
 
-type PreviewWaitingProgress = {countdownSeconds:number;fraction:number;step:number;reduced:boolean;hidden:boolean;interact:(step?:number)=>void}
+type PreviewWaitingProgress = {countdownSeconds:number;fraction:number;step:number;reduced:boolean;hidden:boolean;interact:(step?:number)=>void;holdPlaying?:(on:boolean)=>void}
 
 function PhotoRing({photo,fraction}:{photo:string|null;fraction:number}) {
   return <span className={styles.photoRing}><svg aria-hidden="true" viewBox="0 0 112 112"><circle cx="56" cy="56" r="51"/><circle cx="56" cy="56" r="51" pathLength="1" strokeDasharray="1" strokeDashoffset={1-fraction}/></svg><span>{photo?<Image src={photo} alt="" fill unoptimized sizes="100px" draggable={false}/>:<UserRound size={28}/>}</span></span>
@@ -41,28 +43,60 @@ function TypedMessage({text,reduced}:{text:string;reduced:boolean}) {
   return <>{reduced?text:text.slice(0,length)}{!reduced&&length<text.length?<span className={styles.caret} aria-hidden="true"/>:null}</>
 }
 
-function DemoVoice({name,interact,reduced}:{name:string;interact:()=>void;reduced:boolean}) {
-  const [playing,setPlaying]=useState(false)
-  useEffect(()=>{
-    if(!playing)return
-    const stop=()=>{setPlaying(false)}
-    const hidden=()=>{if(document.hidden)stop()}
-    const end=WAITING_DEMO_DURATION_MS
-    const timer=setTimeout(stop,end)
-    document.addEventListener('visibilitychange',hidden)
-    return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',hidden)}
-  },[playing])
-  return <><h3>Hear it in <em>your voice</em></h3><span className={styles.voiceTag}>✦ ONLY IN HARDCOVER + VOICE</span><div className={styles.demoVoice}>
-    <div className={styles.waveLine}><button type="button" aria-label={playing?'Stop demo narration':'Play demo narration'} aria-pressed={playing} onClick={()=>{interact();setPlaying(value=>!value)}}>{playing?<Pause size={24}/>:<Image src="/customize-product/v1/b-play-button.png" alt="" width={58} height={58}/>}</button><span className={styles.waveBars} data-playing={playing&&!reduced||undefined}>{WAITING_DEMO_BARS.map((height,index)=><i key={index} style={{height,animationDelay:`${index*37}ms`}}/>)}</span></div>
-    <p>“Once upon a time, <em>{name}</em> found a door made of moonlight…”</p><small>{playing?'Playing · demo voice (Mom)':'Tap to hear · demo voice'}</small>
-  </div></>
+const clock=(second:number)=>`${Math.floor(second/60)}:${String(second%60).padStart(2,'0')}`
+
+// Miniature physical book with real demo narration. Mirrors the B-section
+// (SignatureVoiceDemo) material language and reuses its playback engine.
+function DemoVoice({interact,holdPlaying}:{interact:()=>void;holdPlaying?:(on:boolean)=>void}) {
+  const [voice,setVoice]=useState(0)
+  const {audioRef,sectionRef,playing,progress,start,stop}=useVoiceDemoPlayback()
+  // Mirror the playing state into the carousel hold; this effect never stops audio.
+  useEffect(()=>{holdPlaying?.(playing)},[playing,holdPlaying])
+  // Unmount-only teardown: stop and holdPlaying are stable callbacks, so this
+  // cleanup fires once — a playing-state change can never cancel fresh playback.
+  useEffect(()=>()=>{stop();holdPlaying?.(false)},[stop,holdPlaying])
+  const selected=DEMO_VOICES[voice]
+  return <><h3>Hear it in <em>your voice</em></h3><span className={styles.voiceTag}>✦ ONLY IN HARDCOVER + VOICE</span>
+  <div className={styles.miniBook} ref={sectionRef as RefObject<HTMLDivElement>}>
+    <div className={styles.miniFloor} aria-hidden="true"/>
+    <div className={`${styles.miniBoard} ${styles.miniBoardL}`} aria-hidden="true"/>
+    <div className={`${styles.miniBoard} ${styles.miniBoardR}`} aria-hidden="true"/>
+    {(['left','right'] as const).map(side=><div key={side} className={`${styles.miniPage} ${side==='left'?styles.miniPageL:styles.miniPageR}`}>
+      {/* Pre-sized immutable WebPs: bypassing the optimizer avoids a redundant first-request transform. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className={styles.miniArt} src={`/customize-product/v3/s1-${side}-640.webp`}
+        srcSet={`/customize-product/v3/s1-${side}-640.webp 640w, /customize-product/v3/s1-${side}-1200.webp 1200w`}
+        sizes="118px" width={640} height={640} loading="lazy" decoding="async"
+        alt={t(`product.demoPage${side==='left'?'Left':'Right'}Alt`)}/>
+    </div>)}
+    <div className={styles.miniGutter} aria-hidden="true"/>
+    <button type="button" className={styles.miniPlay} aria-label={playing?'Stop demo narration':'Play demo narration'} aria-pressed={playing}
+      onClick={()=>{if(playing)stop();else start(voice)}}>
+      <span className={styles.miniRing} aria-hidden="true"/><span className={`${styles.miniRing} ${styles.miniRing2}`} aria-hidden="true"/>
+      <Image src="/customize-product/v1/b-play-button.png" alt="" width={32} height={32}/>
+      <span className={styles.pauseGlyph} aria-hidden="true"><Pause size={10}/></span>
+    </button>
+  </div>
+  <div className={styles.voiceChips}>
+    {DEMO_VOICES.map((item,index)=><button type="button" key={item.key} className={styles.voiceChip} aria-pressed={voice===index}
+      onClick={()=>{setVoice(index);if(playing)start(index);else interact()}}>
+      <span className={styles.voiceAvatar} style={{background:item.color}} aria-hidden="true">{item.initial}</span>{t(`product.${item.key}`)}
+    </button>)}
+  </div>
+  <div className={styles.voiceWave} aria-hidden="true">
+    <span className={styles.voiceElapsed}>{clock(progress.second)}</span>
+    <span className={styles.voiceBars}>{Array.from({length:40},(_,index)=><i key={index} style={{'--h':selected.bars[Math.floor(index*selected.bars.length/40)]} as CSSProperties} data-on={index<progress.filled40||undefined}/>)}</span>
+    <span className={styles.voiceTotal}>{clock(Math.round(selected.durationMs/1000))}</span>
+  </div>
+  <p className={styles.voiceName}>Demo narration · <b>{t(`product.${selected.key}`)}’s voice</b></p>
+  <audio ref={audioRef} preload="none" onEnded={stop} onError={stop}/>
+  </>
 }
 
 export function PreviewWaitingPages({name,value,pricing,currency,progress,generating=true,disabled=false,onChange,onMessage}:{name:string;value:EditionType;pricing:BookPackagePricing;currency:DisplayCurrency;progress:PreviewWaitingProgress;generating?:boolean;disabled?:boolean;onChange:(value:EditionType)=>void;onMessage:()=>void}) {
   return <div className={styles.waitingRight} data-hidden={progress.hidden||undefined}>
     <div className={styles.waitingHeader}><span className={styles.eyebrow}>{generating?'WHILE YOU WAIT':'YOUR BOOK'} · {progress.step+1}/3</span><span className={styles.dots}>{[0,1,2].map(index=><button key={index} type="button" aria-label={`Show waiting step ${index+1}`} aria-pressed={progress.step===index} onClick={()=>progress.interact(index)}><i/></button>)}</span></div>
-    <div key={progress.step}> {progress.step===0?<><h3>How will {name}’s story be kept?</h3><div className={styles.editionTiles}>{EDITION_DEFINITIONS.map(edition=><button key={edition.type} type="button" disabled={disabled} aria-pressed={value===edition.type} onClick={()=>{progress.interact();onChange(edition.type)}}><Image src={edition.gallery[0].src} alt={edition.type==='basic'?'Hardcover':'Hardcover + Voice'} width={150} height={150} sizes="150px"/><span><strong>{edition.type==='basic'?'Hardcover':'Hardcover + Voice'}</strong><small>{pricing[edition.type].salePriceUsd!==null?<s>{formatDisplayCurrency(pricing[edition.type].listPriceUsd,currency)}</s>:null} <b>{formatDisplayCurrency(pricing[edition.type].effectivePriceUsd,currency)}</b></small></span></button>)}</div></>:progress.step===1?<DemoVoice name={name} interact={progress.interact} reduced={progress.reduced}/>:<><h3>A message for <em>{name}</em></h3><div className={styles.messageSample}><p><TypedMessage key={name} text={`For ${name} — the bravest explorer we know. Love always, Mom & Dad`} reduced={progress.reduced}/></p></div><button className={styles.writeMessage} type="button" disabled={disabled} onClick={()=>{progress.interact();onMessage()}}>Write my message</button></>}
+    <div key={progress.step}> {progress.step===0?<><h3>How will {name}’s story be kept?</h3><div className={styles.editionTiles}>{EDITION_DEFINITIONS.map(edition=><button key={edition.type} type="button" disabled={disabled} aria-pressed={value===edition.type} onClick={()=>{progress.interact();onChange(edition.type)}}><Image src={edition.gallery[0].src} alt={edition.type==='basic'?'Hardcover':'Hardcover + Voice'} width={150} height={150} sizes="150px"/><span><strong>{edition.type==='basic'?'Hardcover':'Hardcover + Voice'}</strong><small>{pricing[edition.type].salePriceUsd!==null?<s>{formatDisplayCurrency(pricing[edition.type].listPriceUsd,currency)}</s>:null} <b>{formatDisplayCurrency(pricing[edition.type].effectivePriceUsd,currency)}</b></small></span></button>)}</div></>:progress.step===1?<DemoVoice interact={progress.interact} holdPlaying={progress.holdPlaying}/>:<><h3>A message for <em>{name}</em></h3><div className={styles.messageSample}><p><TypedMessage key={name} text={`For ${name} — the bravest explorer we know. Love always, Mom & Dad`} reduced={progress.reduced}/></p></div><button className={styles.writeMessage} type="button" disabled={disabled} onClick={()=>{progress.interact();onMessage()}}>Write my message</button></>}
     </div>
-    {progress.step===2?<span className={styles.unlockNote}>Full page unlocks after order</span>:null}
   </div>
 }

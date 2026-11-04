@@ -35,7 +35,8 @@ export const uiNodes=node=>!node||typeof node!=='object'?[]:[node,...[node.props
 export const uiText=node=>node==null?'':typeof node!=='object'?String(node):[node.props?.children].flat(Infinity).map(uiText).join('')
 
 // Runs the real hook body with retained state/refs and dependency-scoped effects.
-export function hookHarness(file,exportName,{reduced=false,globals={}}={}) {
+// Optional stubs replace module imports (e.g. a shared hook) inside the loaded file.
+export function hookHarness(file,exportName,{reduced=false,globals={},stubs={}}={}) {
  const cells=[],effects=[],refs=[],callbacks=[];let cursor=0,dirty=false,args=[],output
  const react={
   useState(initial){const i=cursor++;if(!(i in cells))cells[i]=typeof initial==='function'?initial():initial;return[cells[i],value=>{cells[i]=typeof value==='function'?value(cells[i]):value;dirty=true}]},
@@ -44,7 +45,7 @@ export function hookHarness(file,exportName,{reduced=false,globals={}}={}) {
   useEffect(fn,deps){const i=cursor++,old=effects[i];if(!old||deps.some((d,n)=>d!==old.deps[n]))effects[i]={deps,fn,cleanup:old?.cleanup,pending:true}},
  }
  react.useLayoutEffect=react.useEffect
- const hook=loadUi(file,{react,'framer-motion':{useReducedMotion:()=>reduced}},globals)[exportName]
+ const hook=loadUi(file,{react,'framer-motion':{useReducedMotion:()=>reduced},...stubs},globals)[exportName]
  const render=(...next)=>{if(next.length)args=next;let count=0;do{dirty=false;cursor=0;output=hook(...args);if(++count>20)throw Error('Render loop')}while(dirty);for(const e of effects)if(e?.pending){e.pending=false;e.cleanup?.();e.cleanup=e.fn()}return output}
  return{render,unmount:()=>effects.forEach(e=>e?.cleanup?.())}
 }
