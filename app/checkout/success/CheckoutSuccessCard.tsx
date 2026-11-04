@@ -3,7 +3,7 @@ import type { OrderMaterials } from '@/lib/order-materials';
 
 import { useState } from 'react';
 import { OrderMaterialsSummary } from '@/components/orders/OrderMaterialsSummary';
-import { BookMarked, CheckCircle2, Loader2, MailCheck } from 'lucide-react';
+import { CheckCircle2, Loader2, MailCheck } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
 import { formatMajorCurrencyValue, type CheckoutCurrency } from '@/lib/locale-pricing';
@@ -31,7 +31,6 @@ type CheckoutSuccessCardProps = {
   showPdfDeliveryNote: boolean;
   accountPromptEmail?: string | null;
   onCreateAccount: () => void;
-  onSignIn: () => void;
   onTrackOrder: () => void;
   onBackHome: () => void;
 };
@@ -43,12 +42,12 @@ export function CheckoutSuccessCard({
   showPdfDeliveryNote,
   accountPromptEmail,
   onCreateAccount,
-  onSignIn,
   onTrackOrder,
   onBackHome,
 }: CheckoutSuccessCardProps) {
   const { t } = useI18n();
   const [pendingAction, setPendingAction] = useState<'track' | 'home' | null>(null);
+  const [isAccountPromptDismissed, setIsAccountPromptDismissed] = useState(false);
   const hasSignatureVoice = order?.items?.some(item => isSignatureVoicePackage(item.package_type)) ?? false;
 
   const handleTrackOrder = () => {
@@ -116,38 +115,27 @@ export function CheckoutSuccessCard({
           <SignatureVoiceEditionNotice variant="postPurchase" className="mx-auto mt-5 max-w-xl" />
         ) : null}
 
-        {accountPromptEmail ? (
-          <section className="mt-6 border-y border-emerald-100 bg-emerald-50/65 px-4 py-4 text-left">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                <BookMarked className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="font-semibold text-gray-900">
-                  {t('checkout.accountContinuityTitle')}
-                </h2>
-                <p className="mt-1 break-words text-sm leading-6 text-gray-600">
-                  {t('checkout.accountContinuityDescription', { email: accountPromptEmail })}
-                </p>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full rounded-full sm:w-auto"
-                    onClick={onCreateAccount}
-                  >
-                    {t('checkout.createAccount')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="w-full rounded-full sm:w-auto"
-                    onClick={onSignIn}
-                  >
-                    {t('checkout.signIn')}
-                  </Button>
-                </div>
-              </div>
+        {accountPromptEmail && !isAccountPromptDismissed ? (
+          <section className="mt-6 flex flex-col items-center gap-3 border-y border-emerald-100 bg-emerald-50/65 px-4 py-4">
+            <p className="text-sm font-semibold text-gray-900">
+              {t('checkout.accountContinuityTitle')}
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                size="sm"
+                className="w-full rounded-full sm:w-auto"
+                onClick={onCreateAccount}
+              >
+                {t('checkout.createAccount')}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="w-full rounded-full sm:w-auto"
+                onClick={() => setIsAccountPromptDismissed(true)}
+              >
+                {t('checkout.maybeLater')}
+              </Button>
             </div>
           </section>
         ) : null}

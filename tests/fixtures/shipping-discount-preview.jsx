@@ -32,7 +32,7 @@ function Preview() {
       </div>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="space-y-5 rounded-3xl border border-white bg-white/60 p-4 sm:p-6">
-          <AddressFormSection key={version} initialForm={form} checkoutEmail={form.email} selectedCurrency={currency} isAuthResolved={true} t={t} onComplete={({ shippingQuote }) => setQuote(shippingQuote)} />
+          <AddressFormSection key={version} initialForm={form} selectedCurrency={currency} t={t} onFormChange={() => {}} onComplete={({ shippingQuote }) => setQuote(shippingQuote)} />
         </section>
         <CheckoutSummaryPanel hiddenOnPaymentStep={false} isPriceReady={true} showShipping={true} shippingStatus={quote ? 'available' : 'missing'}
           discountTotalUsd={0} shippingDiscountTotalUsd={free ? shipping : 0} shippingAmountUsd={shipping} shippingRateSnapshot={option?.snapshot} currency={currency}

@@ -19,7 +19,7 @@ const order = () => ({ order_id: 'order-1', order_status: 'unpaid', shipping_add
 const item = { id: 'line-1', bookID: 'Birthdayboy_story', priceAtPurchase: 39, quantity: 1, book: { price: 999 }, personalization: {} }
 const component = type => props => ({ type, props })
 
-function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, search = '?orderId=order-1&step=payment' } = {}) {
+function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment', draft } = {}) {
   const runtime = customerRuntime(), calls = [], pending = deferred()
   let currentOrder = order(), responseStatus = status
   runtime.react.Suspense = ({ children }) => children
@@ -27,11 +27,13 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
   runtime.window.history = { state: {}, replaceState(_state, _unused, url) {
     const next = new URL(url, 'https://fixture.test'); Object.assign(runtime.window.location, { href: next.href, search: next.search, hash: next.hash })
   } }
-  runtime.localStorage.setItem('ymi_checkout_form', JSON.stringify({ ...empty, country: 'US', addressLine1: 'Wrong browser draft' }))
+  if (draft !== null) {
+    runtime.localStorage.setItem('ymi_checkout_form', typeof draft === 'string' ? draft : JSON.stringify(draft ?? { ...empty, country: 'US', addressLine1: 'Wrong browser draft' }))
+  }
   runtime.localStorage.setItem('ymi_discount_code', 'LAST_CACHED_CODE')
   const context = {
     user: signedIn ? { customerId: 'customer-1', email: address.email } : null,
-    cart: [], checkoutItems: [item], checkoutLoadError: null, checkoutEmail: '', isAuthResolved: true, displayCurrency: 'USD',
+    cart: [], checkoutItems: withItem ? [item] : [], checkoutLoadError: null, checkoutEmail: '', isAuthResolved: authResolved, displayCurrency: 'USD',
     setCheckoutEmail(value) { context.checkoutEmail = value },
     hydrateCheckoutItems(rows) { context.checkoutItems = rows; context.checkoutLoadError = null },
     reconcileCartItemPrices() {}, prepareCheckout() {}, addToCheckout() {}, removeFromCheckout() {},
@@ -49,6 +51,7 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
       if (deferItems) await new Promise(() => {})
       return Response.json({ items: itemsStatus === 200 ? [item] : [] }, { status: itemsStatus })
     }
+    if (path.startsWith('/api/cart?ids=')) return Response.json({ items: [item] })
     if (path === '/api/checkout/vouchers') return Response.json({ active: [] })
     if (path === '/api/checkout/session') return Response.json({ url: 'https://checkout.example.test/session' })
     if (path.startsWith('/api/checkout/apply-')) return Response.json({ ok: true, code: options.body ? JSON.parse(options.body).code : undefined, ...summary })
@@ -60,6 +63,7 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
     '@/contexts/GlobalContext': { useGlobalContext: () => context },
     '@/lib/useI18n': { useI18n: () => ({ t: translate }) },
     './AddressFormSection': { AddressFormSection: component('address-form') },
+    './CheckoutContactSection': { CheckoutContactSection: component('contact-form') },
     './CheckoutItemsSection': { CheckoutItemsSection: component('items') },
     './CheckoutSummaryPanel': { CheckoutSummaryPanel: component('summary') },
     './CurrencyPicker': { CurrencyPicker: component('currency') },
@@ -89,29 +93,32 @@ test('Stripe cancel/full reload waits for complete order,items,quote and both di
   const back = uiNodes(h.runtime.tree).find(n => n.type === 'button' && uiText(n) === 'checkout.backPrevious')
   back.props.onClick(); await h.runtime.flush()
   assert.equal(h.node('address-form').props.initialForm.addressLine1, address.addressLine1)
-  assert.equal(h.node('address-form').props.initialFormIsAuthoritative, true)
   assert.equal(h.node('address-form').props.initialShippingQuote.selectedMethod, 'speedy')
   assert.ok(!h.runtime.window.location.search.includes('step=payment'))
   assert.ok(h.calls.every(call => call.method === 'GET'))
   h.runtime.unmount()
 })
 
-test('guest return preserves the same saved state without acquiring a new identity or applying a cached code', async () => {
+test('guest return preserves the same saved state without applying a cached code', async () => {
   const h = checkoutFixture({ signedIn: false }); await h.runtime.flush()
   assert.equal(h.node('discount').props.appliedProductCode, 'BOOK5')
   assert.equal(h.node('discount').props.appliedShippingCode, 'SHIP3')
-  assert.equal(h.node('payment').props.identityVerified, false)
+  assert.equal(h.node('payment').props.contactEmail, 'reader@example.test')
+  assert.equal(h.node('payment').props.isSignedIn, false)
   assert.ok(h.calls.every(call => call.method === 'GET')); h.runtime.unmount()
 })
 
-test('fresh checkout still starts normally and carries the completed address/method back from payment', async () => {
+test('fresh checkout walks contact then delivery and carries the completed address/method back from payment', async () => {
   const h = checkoutFixture({ search: '' }); await h.runtime.flush()
+  assert.ok(h.node('contact-form')); assert.equal(h.node('address-form'), undefined)
   const quote = { status: 'available', options: [{ methodCode: 'speedy', methodName: 'Speedy', amountUsd: 8, snapshot }], selectedMethod: 'speedy', message: null }
+  h.node('contact-form').props.onComplete({ form: address }); await h.runtime.flush()
+  assert.ok(h.node('address-form')); assert.equal(h.node('contact-form'), undefined)
   h.node('address-form').props.onComplete({ form: address, shippingQuote: quote }); await h.runtime.flush()
   assert.equal(h.node('discount').props.allowAutoApply, true)
   assert.equal(h.node('discount').props.canApply, true)
   uiNodes(h.runtime.tree).find(n => n.type === 'button' && uiText(n) === 'checkout.backPrevious').props.onClick(); await h.runtime.flush()
-  assert.equal(h.node('address-form').props.initialFormIsAuthoritative, true)
+  assert.equal(h.node('address-form').props.initialForm.addressLine1, address.addressLine1)
   assert.equal(h.node('address-form').props.initialShippingQuote.selectedMethod, 'speedy')
   assert.equal(h.calls.filter(call => call.path === '/api/orders/start').length, 1)
   h.runtime.unmount()
@@ -218,51 +225,161 @@ test('changing the order during a delayed restore discards the previous response
   h.runtime.unmount()
 })
 
-const addressStubs = { 'react-dom': { createPortal: node => node }, '@/components/Button': { Button: 'button' },
-  './CheckoutEmailOwnershipHint': { CheckoutEmailOwnershipHint: 'hint' }, './ShippingPrice': { ShippingPrice: 'price' } }
-const addressProps = { initialForm: empty, checkoutEmail: '', selectedCurrency: 'USD', isAuthResolved: true, t: translate, onComplete() {} }
-test('a transient first passive commit cannot overwrite a saved address draft before hydration renders', () => {
-  let cursor = 0; const cells = [], effects = [], writes = [], store = new Map([['ymi_checkout_form', JSON.stringify(address)]])
-  const localStorage = { getItem: key => store.get(key) ?? null, setItem: (key, value) => { writes.push(key); store.set(key, value) } }
-  const react = { memo: fn => fn, useMemo: fn => fn(), useCallback: fn => fn,
-    useState(initial) { const i = cursor++; cells[i] ??= { value: typeof initial === 'function' ? initial() : initial }; return [cells[i].value, next => { cells[i].value = typeof next === 'function' ? next(cells[i].value) : next }] },
-    useRef(initial) { const i = cursor++; cells[i] ??= { value: { current: initial } }; return cells[i].value }, useEffect: fn => effects.push(fn) }
-  const dom = { addEventListener() {}, removeEventListener() {}, body: { style: {} } }
-  const Component = loadUi('app/checkout/AddressFormSection.tsx', { ...addressStubs, react: { ...react, default: react, __esModule: true } },
-    { window: { localStorage, ...dom, setTimeout: () => 1, clearTimeout() {} }, document: dom, fetch: async () => Response.json({ addresses: [], destinations: [] }) }).AddressFormSection
-  Component(addressProps)
-  const cleanups = effects.map(fn => fn()) // parent unmounts before the queued hydration render
-  assert.equal(JSON.parse(store.get('ymi_checkout_form')).country, 'HK')
-  assert.ok(!writes.includes('ymi_checkout_form'))
-  cleanups.forEach(fn => typeof fn === 'function' && fn())
-})
-
-test('restored or completed address wins over a blank or different global draft;tax identifiers are not persisted', async () => {
-  for (const draft of [empty, { ...address, addressLine1: 'Wrong draft' }]) {
-    const runtime = customerRuntime(); runtime.react.memo = fn => fn
-    runtime.document.body = { style: {} }; runtime.localStorage.setItem('ymi_checkout_form', JSON.stringify(draft))
-    const Component = runtime.load('app/checkout/AddressFormSection.tsx', addressStubs,
-      { fetch: async () => Response.json({ addresses: [], destinations: [] }) }).AddressFormSection
-    runtime.mount(Component, { ...addressProps, initialForm: { ...address, vatNumber: 'private-id' }, initialFormIsAuthoritative: true })
-    await runtime.flush()
-    assert.ok(uiNodes(runtime.tree).some(node => node.type === 'input' && node.props.value === '1 Example Street'))
-    const saved = JSON.parse(runtime.localStorage.getItem('ymi_checkout_form'))
-    assert.equal(saved.country, 'HK'); assert.equal(saved.vatNumber, '')
-    runtime.unmount()
-  }
-})
-
-test('a fresh checkout still hydrates a valid browser draft,and blocked/malformed storage is tolerated', async () => {
+test('the page is the single draft owner: a fresh checkout hydrates a valid browser draft, and blocked or malformed storage is tolerated', async () => {
   for (const draft of [JSON.stringify(address), '{broken', 'blocked']) {
-    const runtime = customerRuntime(); runtime.react.memo = fn => fn; runtime.document.body = { style: {} }
-    runtime.localStorage.setItem('ymi_checkout_form', draft)
-    if (draft === 'blocked') runtime.localStorage.getItem = () => { throw Error('Storage blocked') }
-    const Component = runtime.load('app/checkout/AddressFormSection.tsx', addressStubs,
-      { fetch: async () => Response.json({ addresses: [], destinations: [] }) }).AddressFormSection
-    runtime.mount(Component, addressProps); await runtime.flush()
-    assert.equal(uiNodes(runtime.tree).some(node => node.type === 'input' && node.props.value === '1 Example Street'), draft.startsWith('{"'))
-    runtime.unmount()
+    const h = checkoutFixture({ search: '', draft })
+    if (draft === 'blocked') h.runtime.localStorage.getItem = () => { throw Error('Storage blocked') }
+    await h.runtime.flush()
+    assert.equal(h.node('contact-form').props.initialForm.addressLine1, draft.startsWith('{"') ? '1 Example Street' : '')
+    h.runtime.unmount()
   }
+})
+
+test('the first passive commit cannot overwrite a saved address draft before hydration renders', async () => {
+  const h = checkoutFixture({ search: '', draft: JSON.stringify(address) })
+  await h.runtime.flush()
+  const saved = JSON.parse(h.runtime.localStorage.getItem('ymi_checkout_form'))
+  assert.equal(saved.country, 'HK')
+  assert.equal(saved.addressLine1, '1 Example Street')
+  h.runtime.unmount()
+})
+
+test('a restored order wins over a stale browser draft, and tax identifiers are not persisted', async () => {
+  const h = checkoutFixture({ delayed: true })
+  h.order = { ...order(), shipping_address: { ...address, vatNumber: 'private-id' } }
+  h.pending.resolve(); await h.runtime.flush()
+  assert.equal(h.node('payment').props.contactEmail, 'reader@example.test')
+  const saved = JSON.parse(h.runtime.localStorage.getItem('ymi_checkout_form'))
+  assert.equal(saved.country, 'HK')
+  assert.equal(saved.addressLine1, '1 Example Street')
+  assert.equal(saved.vatNumber, '')
+  h.runtime.unmount()
+})
+
+test('a pending or failed order restore never overwrites the saved browser draft', async () => {
+  const pendingRestore = checkoutFixture({ delayed: true, draft: JSON.stringify(address) })
+  await pendingRestore.runtime.flush()
+  assert.equal(JSON.parse(pendingRestore.runtime.localStorage.getItem('ymi_checkout_form')).addressLine1, '1 Example Street')
+  pendingRestore.runtime.unmount()
+  const failedRestore = checkoutFixture({ status: 503, draft: JSON.stringify(address) })
+  await failedRestore.runtime.flush()
+  assert.match(uiText(failedRestore.runtime.tree), /Unable to restore checkout/)
+  assert.equal(JSON.parse(failedRestore.runtime.localStorage.getItem('ymi_checkout_form')).addressLine1, '1 Example Street')
+  failedRestore.runtime.unmount()
+})
+
+test('an unresolved cached session stays guest until Supabase resolves it', async () => {
+  const quote = { status: 'available', options: [{ methodCode: 'speedy', methodName: 'Speedy', amountUsd: 8, snapshot }], selectedMethod: 'speedy', message: null }
+  const walkToPayment = async (h, expectedCustomerId) => {
+    await h.runtime.flush()
+    assert.equal(h.node('contact-form').props.userCustomerId, expectedCustomerId)
+    h.node('contact-form').props.onComplete({ form: address }); await h.runtime.flush()
+    assert.equal(h.node('address-form').props.userCustomerId, expectedCustomerId)
+    h.node('address-form').props.onComplete({ form: address, shippingQuote: quote }); await h.runtime.flush()
+  }
+  const unresolved = checkoutFixture({ search: '', authResolved: false })
+  await walkToPayment(unresolved, null)
+  assert.equal(unresolved.node('payment').props.isSignedIn, false)
+  assert.equal(unresolved.node('payment').props.accountEmail, null)
+  assert.equal(unresolved.node('discount').props.isSignedIn, false)
+  // Every checkout action sends guest ownership while the session is unresolved.
+  assert.equal(await unresolved.node('discount').props.onApplyDiscountCode('BOOK5'), true)
+  assert.equal(unresolved.calls.find(call => call.path === '/api/checkout/apply-promo-code').body.customerId, null)
+  // The voucher guard refuses account-only discounts without a resolved session.
+  assert.equal(await unresolved.node('discount').props.onApplyRewardVoucher('voucher-1'), false)
+  assert.ok(!unresolved.calls.some(call => call.path === '/api/checkout/apply-voucher'))
+  unresolved.node('payment').props.onPlaceOrder(); await unresolved.runtime.flush()
+  const guestSession = unresolved.calls.find(call => call.path === '/api/checkout/session')
+  assert.equal(guestSession.body.isGuest, true)
+  assert.equal(guestSession.body.customerId, null)
+  assert.equal(unresolved.calls.find(call => call.path === '/api/orders/start').body.customerId, null)
+  unresolved.runtime.unmount()
+
+  const resolved = checkoutFixture({ search: '', authResolved: true })
+  await walkToPayment(resolved, 'customer-1')
+  assert.equal(resolved.node('payment').props.isSignedIn, true)
+  assert.equal(resolved.node('payment').props.accountEmail, 'reader@example.test')
+  assert.equal(await resolved.node('discount').props.onApplyDiscountCode('BOOK5'), true)
+  assert.equal(resolved.calls.find(call => call.path === '/api/checkout/apply-promo-code').body.customerId, 'customer-1')
+  assert.equal(await resolved.node('discount').props.onApplyRewardVoucher('voucher-1'), true)
+  assert.ok(resolved.calls.some(call => call.path === '/api/checkout/apply-voucher'))
+  resolved.node('payment').props.onPlaceOrder(); await resolved.runtime.flush()
+  const authSession = resolved.calls.find(call => call.path === '/api/checkout/session')
+  assert.equal(authSession.body.isGuest, false)
+  assert.equal(authSession.body.customerId, 'customer-1')
+  assert.equal(resolved.calls.find(call => call.path === '/api/orders/start').body.customerId, 'customer-1')
+  resolved.runtime.unmount()
+
+  // Item removal carries the resolved ownership too (cancel ends the order, so it runs on its own fixtures).
+  for (const [authResolved, expectedCustomerId] of [[false, null], [true, 'customer-1']]) {
+    const h = checkoutFixture({ search: '', authResolved })
+    await walkToPayment(h, expectedCustomerId)
+    assert.equal(await h.node('items').props.onRemoveItem('line-1'), true)
+    assert.equal(h.calls.find(call => call.path === '/api/orders/cancel').body.customerId, expectedCustomerId)
+    h.runtime.unmount()
+  }
+})
+
+test('selected-id cart prefetch carries no stale identity before the session resolves', async () => {
+  const unresolved = checkoutFixture({ search: '?ids=line-1', withItem: false, authResolved: false })
+  await unresolved.runtime.flush()
+  const guestPrefetch = unresolved.calls.find(call => call.path.startsWith('/api/cart?ids='))
+  assert.ok(guestPrefetch)
+  assert.equal(guestPrefetch.path.includes('customerId'), false)
+  unresolved.runtime.unmount()
+
+  const resolved = checkoutFixture({ search: '?ids=line-1', withItem: false, authResolved: true })
+  await resolved.runtime.flush()
+  const authPrefetch = resolved.calls.find(call => call.path.startsWith('/api/cart?ids='))
+  assert.ok(authPrefetch)
+  assert.ok(authPrefetch.path.includes('customerId=customer-1'))
+  resolved.runtime.unmount()
+})
+
+test('an edited address invalidates the previous quote until the refetch resolves', async () => {
+  const runtime = customerRuntime(); runtime.react.memo = fn => fn
+  const completed = [], fetchLog = []
+  const fetch = async (url) => {
+    const path = String(url); fetchLog.push(path)
+    if (path.startsWith('/api/user/addresses')) return Response.json({ addresses: [] })
+    if (path === '/api/checkout/shipping-destinations') return Response.json({ destinations: [] })
+    if (path === '/api/checkout/shipping-quote') return Response.json({ available: true, selectedMethod: 'speedy', options: [{ methodCode: 'speedy', methodName: 'Speedy', amountUsd: 8, snapshot }] })
+    throw Error('Unexpected fixture request: ' + path)
+  }
+  const restoredAddress = { ...address, shippingDestinationLabel: 'Hong Kong' }
+  const restoredQuote = { status: 'available', options: [{ methodCode: 'speedy', methodName: 'Speedy', amountUsd: 8, snapshot }], selectedMethod: 'speedy', message: null }
+  const Component = runtime.load('app/checkout/AddressFormSection.tsx', {
+    'react-dom': { createPortal: node => node },
+    'lucide-react': { ChevronDown: 'svg' },
+    '@/components/Button': { Button: 'button' },
+    '@/lib/shipping-address': { RECIPIENT_ADDRESS_LIMITS: {}, recipientAddressIssue: () => null },
+    '@/lib/checkout-restoration': { EMPTY_SHIPPING_QUOTE: { status: 'missing', options: [], selectedMethod: null, message: null } },
+    './ShippingPrice': { ShippingPrice: 'span' },
+  }, { fetch }).AddressFormSection
+  runtime.mount(Component, {
+    initialForm: restoredAddress, initialShippingQuote: restoredQuote, selectedCurrency: 'USD', userCustomerId: null,
+    t: translate, onFormChange() {}, onComplete: payload => completed.push(payload),
+  })
+  await runtime.flush()
+  const continueButton = () => uiNodes(runtime.tree).find(n => n.type === 'button' && uiText(n) === 'checkout.continue')
+  // A quote fetched for the current address is submittable right away.
+  continueButton().props.onClick(); await runtime.flush()
+  assert.equal(completed.length, 1)
+  // Editing a quoted field hides the old quote and blocks Continue while refetching.
+  assert.ok(uiNodes(runtime.tree).some(n => uiText(n).includes('checkout.speedyShipping')))
+  const zipInput = uiNodes(runtime.tree).find(n => n.type === 'input' && n.props.value === '000000')
+  zipInput.props.onChange({ target: { value: '999077' } }); await runtime.flush()
+  assert.ok(!uiNodes(runtime.tree).some(n => uiText(n).includes('checkout.speedyShipping')))
+  continueButton().props.onClick(); await runtime.flush()
+  assert.equal(completed.length, 1)
+  assert.match(uiText(runtime.tree), /checkout\.shippingCalculating/)
+  // The debounced refetch resolves; the fresh quote is shown and submittable.
+  runtime.advance(600); await runtime.flush()
+  assert.ok(fetchLog.includes('/api/checkout/shipping-quote'))
+  assert.ok(uiNodes(runtime.tree).some(n => uiText(n).includes('checkout.speedyShipping')))
+  continueButton().props.onClick(); await runtime.flush()
+  assert.equal(completed.length, 2)
+  runtime.unmount()
 })
 
 function discountFixture(overrides = {}) {
