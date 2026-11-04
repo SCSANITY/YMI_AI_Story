@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useEffect, useRef, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { RECIPIENT_ADDRESS_LIMITS } from '@/lib/shipping-address';
@@ -51,6 +51,7 @@ function CheckoutContactSectionComponent({
   const [signupInfo, setSignupInfo] = useState('');
   const [isSignupPending, setIsSignupPending] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   // A locally cached user is not proof of a live session; wait for resolution
   // so the signup card never races a stale identity.
@@ -228,13 +229,13 @@ function CheckoutContactSectionComponent({
           <span className="block pl-3.5 text-xs font-medium text-gray-700">
             {t('checkout.firstName')} <span className="text-amber-500">*</span>
           </span>
-          <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="given-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.firstName')} value={form.firstName} onChange={updateField('firstName')} />
+          <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="given-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" value={form.firstName} onChange={updateField('firstName')} />
         </label>
         <label className="space-y-1.5">
           <span className="block pl-3.5 text-xs font-medium text-gray-700">
             {t('checkout.lastName')} <span className="text-amber-500">*</span>
           </span>
-          <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="family-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.lastName')} value={form.lastName} onChange={updateField('lastName')} />
+          <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="family-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" value={form.lastName} onChange={updateField('lastName')} />
         </label>
         <div className="relative space-y-1.5 md:col-span-2" ref={emailDropdownRef}>
           <span className="block pl-3.5 text-xs font-medium text-gray-700">
@@ -244,7 +245,6 @@ function CheckoutContactSectionComponent({
             type="email"
             autoComplete="email"
             className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm"
-            placeholder={t('checkout.emailRequired')}
             value={form.email}
             onChange={updateField('email')}
             onBlur={() => {
@@ -322,22 +322,37 @@ function CheckoutContactSectionComponent({
         </div>
       ) : (
         <>
-          <div className="rounded-2xl border border-amber-100/90 bg-[linear-gradient(135deg,rgba(255,250,235,0.92),rgba(255,255,255,0.78))] px-4 py-4">
-            <div className="text-sm font-semibold text-gray-900">{t('checkout.createAccountTitle')}</div>
-            <p className="mt-1 text-xs leading-5 text-slate-500">{t('checkout.createAccountHint')}</p>
-            {signupStage === 'password' ? (
-              <input
-                type="password"
-                autoComplete="new-password"
-                className="mt-3 h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm"
-                placeholder={t('checkout.createPasswordPlaceholder')}
-                value={signupPassword}
-                onChange={(event) => {
-                  setSignupPassword(event.target.value);
-                  setSignupError('');
-                }}
-              />
-            ) : (
+          <div className="rounded-[18px] bg-[linear-gradient(135deg,rgba(245,158,11,0.75),rgba(251,146,60,0.35)_40%,rgba(245,158,11,0.15)_60%,rgba(217,119,6,0.6))] p-px shadow-[0_14px_34px_rgba(217,119,6,0.14)]">
+            <div className="rounded-[17px] bg-[radial-gradient(320px_120px_at_95%_0%,rgba(253,186,116,0.22),transparent_70%),linear-gradient(150deg,rgba(255,251,240,0.97),rgba(255,247,234,0.9))] px-4 py-4 backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-bold text-gray-900">{t('checkout.createAccountTitle')}</div>
+                <span className="rounded-full border border-amber-200/80 bg-amber-50/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600">{t('checkout.createAccountOptional')}</span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{t('checkout.createAccountHint')}</p>
+              {signupStage === 'password' ? (
+                <div className="relative mt-3">
+                  <input
+                    type={showSignupPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    className="h-11 w-full rounded-xl glass-input px-3.5 pr-11 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm"
+                    placeholder={t('checkout.createPasswordPlaceholder')}
+                    value={signupPassword}
+                    onChange={(event) => {
+                      setSignupPassword(event.target.value);
+                      setSignupError('');
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupPassword((value) => !value)}
+                    className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#b3a08b] transition hover:bg-amber-500/10 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    aria-label={showSignupPassword ? t('login.hidePassword') : t('login.showPassword')}
+                    aria-pressed={showSignupPassword}
+                  >
+                    {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              ) : (
               <div className="mt-3 space-y-2.5">
                 {signupInfo ? <p className="text-xs font-medium text-emerald-700">{signupInfo}</p> : null}
                 <input
@@ -381,6 +396,7 @@ function CheckoutContactSectionComponent({
               </div>
             )}
             {signupError ? <p className="mt-2 text-xs text-red-500">{signupError}</p> : null}
+            </div>
           </div>
           <div className="text-center">
             <button
