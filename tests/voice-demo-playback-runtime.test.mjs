@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import test from 'node:test'
-import {hookHarness,loadUi,uiNodes} from './helpers/preview-uiux-harness.mjs'
+import {hookHarness,loadUi,uiNodes,uiText} from './helpers/preview-uiux-harness.mjs'
 
 function fixture(){
  const frames=new Map(),listeners=new Map(),calls=[],promises=[];let next=0,observer
@@ -67,18 +67,47 @@ test('actual B markup carries the accessible contracts,one silent-until-press au
  assert.match(css,/\.sec button:focus-visible\{outline:2px solid #f5b544;outline-offset:3px\}/)
  assert.match(css,/@media \(prefers-reduced-motion:reduce\)/)
 })
-test('waiting-page minimal decouple retains8800ms and the exact20 decorative heights,without B audio',()=>{
- const {WAITING_DEMO_DURATION_MS,WAITING_DEMO_BARS}=loadUi('components/personalize/preview-waiting-demo-data.ts')
- assert.equal(WAITING_DEMO_DURATION_MS,8800);assert.deepEqual(Array.from(WAITING_DEMO_BARS),[10,16,24,14,30,38,22,16,34,42,28,18,24,36,44,30,20,14,26,40])
+test('waiting voice segment reuses the shared B metadata and wires sectionRef;the old decouple module is gone',()=>{
+ assert.equal(fs.existsSync(new URL('../components/personalize/preview-waiting-demo-data.ts',import.meta.url)),false)
+ const source=fs.readFileSync(new URL('../components/personalize/PreviewWaitingPages.tsx',import.meta.url),'utf8')
+ assert.match(source,/from '\.\/product\/voice-demo-data'/)
+ assert.match(source,/from '\.\/product\/useVoiceDemoPlayback'/)
+ // The miniature-book root carries the hook's sectionRef, so the engine's
+ // IntersectionObserver actually registers (offscreen stop is pinned by the B fixture above).
+ assert.match(source,/ref=\{sectionRef/)
 })
-test('actual waiting-page control keeps its silent8800ms play/stop behavior without requesting the new B audio',()=>{
- const timers=new Map(),listeners=new Map();let serial=0
- const h=hookHarness('components/personalize/PreviewWaitingPages.tsx','PreviewWaitingPages',{globals:{setTimeout(fn,ms){timers.set(++serial,{fn,ms});return serial},clearTimeout(id){timers.delete(id)},document:{hidden:false,addEventListener(k,fn){listeners.set(k,fn)},removeEventListener(k){listeners.delete(k)}}}})
- const props={name:'Test',value:'basic',pricing:{},currency:'USD',progress:{step:1,interact(){},reduced:false},onChange(){},onMessage(){}}
- let nodes=uiNodes(h.render(props)),play=nodes.find(n=>n.props?.['aria-label']==='Play demo narration')
- play.props.onClick();nodes=uiNodes(h.render());assert.ok(nodes.find(n=>n.props?.['aria-label']==='Stop demo narration'))
- assert.equal(nodes.filter(n=>n.type==='audio').length,0)
- const end=[...timers.values()].find(timer=>timer.ms===8800);assert.ok(end);end.fn()
- nodes=uiNodes(h.render());assert.ok(nodes.find(n=>n.props?.['aria-label']==='Play demo narration'))
- h.unmount();assert.equal(listeners.size,0)
+test('waiting voice panel drives the shared engine:audio contract,chip semantics,hold calls,teardown',()=>{
+ const starts=[],stops=[],holdCalls=[];let playing=false,interactCount=0
+ const startFn=index=>{starts.push(index);playing=true}
+ const stopFn=()=>{stops.push(playing);playing=false}
+ const holdFn=on=>holdCalls.push(on)
+ const stubs={'./product/useVoiceDemoPlayback':{useVoiceDemoPlayback:()=>({audioRef:{current:null},sectionRef:{current:null},playing,progress:{second:0,filled64:0,filled40:0},start:startFn,stop:stopFn,toggle:()=>{}})}}
+ const globals={setInterval:()=>0,clearInterval:()=>{},document:{hidden:false,addEventListener(){},removeEventListener(){}}}
+ const h=hookHarness('components/personalize/PreviewWaitingPages.tsx','PreviewWaitingPages',{stubs,globals})
+ const props={name:'Test',value:'basic',pricing:{},currency:'USD',progress:{step:1,interact(){interactCount++},reduced:false,holdPlaying:holdFn},onChange(){},onMessage(){}}
+ const playBtn=tree=>tree.find(n=>n.props?.['aria-label']==='Play demo narration'||n.props?.['aria-label']==='Stop demo narration')
+ const chips=tree=>tree.filter(n=>n.props?.className==='voiceChip')
+ let nodes=uiNodes(h.render(props))
+ const audio=nodes.filter(n=>n.type==='audio');assert.equal(audio.length,1);assert.equal(audio[0].props.preload,'none');assert.equal(audio[0].props.src,undefined)
+ assert.deepEqual(holdCalls,[false])
+ assert.equal(playBtn(nodes).props['aria-pressed'],false)
+ playBtn(nodes).props.onClick();assert.deepEqual(starts,[0])
+ nodes=uiNodes(h.render())
+ // Regression (advisor blocking): the false→true transition must not cancel fresh playback.
+ assert.equal(stops.length,0)
+ assert.equal(playBtn(nodes).props['aria-label'],'Stop demo narration')
+ assert.deepEqual(holdCalls,[false,true])
+ chips(nodes)[2].props.onClick();assert.deepEqual(starts,[0,2])
+ nodes=uiNodes(h.render());assert.equal(chips(nodes)[2].props['aria-pressed'],true)
+ assert.ok(uiText(nodes.find(n=>n.props?.className==='voiceName')).includes('Kid'))
+ playBtn(nodes).props.onClick();assert.equal(stops.length,1)
+ nodes=uiNodes(h.render());assert.deepEqual(holdCalls,[false,true,false])
+ chips(nodes)[1].props.onClick();assert.equal(starts.length,2);assert.equal(interactCount,1)
+ nodes=uiNodes(h.render());assert.equal(chips(nodes)[1].props['aria-pressed'],true)
+ assert.ok(uiText(nodes.find(n=>n.props?.className==='voiceName')).includes('Dad'))
+ assert.equal(nodes.find(n=>n.props?.className==='voiceBars').props.children.length,40)
+ const pageImgs=nodes.filter(n=>n.props?.className==='miniArt');assert.equal(pageImgs.length,2);assert.match(pageImgs[0].props.srcSet,/640w.*1200w/)
+ nodes=uiNodes(h.render({...props,progress:{...props.progress,step:2}}))
+ assert.ok(!nodes.map(n=>uiText(n)).join('').includes('Full page unlocks'))
+ h.unmount();assert.equal(stops.length,2);assert.deepEqual(holdCalls,[false,true,false,false])
 })

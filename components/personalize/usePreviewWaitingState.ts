@@ -35,5 +35,12 @@ export function usePreviewWaitingState(identity: string | null, startedAt: numbe
     return()=>{if(timer)clearInterval(timer);document.removeEventListener('visibilitychange',visibility)}
   }, [identity,startedAt,active,reduced])
   const interact=useCallback((next?:number)=>{hold.current=15000;if(next!==undefined)setState(previous=>({...previous,step:next}))},[])
-  return {...getPreviewGenerationEstimate(current.elapsed),step:current.step,interact,reduced:Boolean(reduced),hidden}
+  // Playback pins the carousel indefinitely; releasing an intact playback hold
+  // leaves a short grace so the panel does not rotate the moment audio ends.
+  // An explicit interact() hold (e.g. a dot click) is never shortened here.
+  const holdPlaying=useCallback((on:boolean)=>{
+    if(on)hold.current=Number.POSITIVE_INFINITY
+    else if(hold.current===Number.POSITIVE_INFINITY)hold.current=4000
+  },[])
+  return {...getPreviewGenerationEstimate(current.elapsed),step:current.step,interact,holdPlaying,reduced:Boolean(reduced),hidden}
 }
