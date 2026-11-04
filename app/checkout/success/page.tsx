@@ -250,7 +250,6 @@ function CheckoutSuccessPageContent() {
       showPdfDeliveryNote={showPdfDeliveryNote}
       accountPromptEmail={accountPromptEmail}
       onCreateAccount={() => openLoginModal('signup', accountPromptEmail ?? undefined)}
-      onSignIn={() => openLoginModal('login', accountPromptEmail ?? undefined)}
       onTrackOrder={() => {
         const targetOrderId = order?.order_id || orderId
         const suffix = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''

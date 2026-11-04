@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
@@ -7,6 +7,7 @@ import { Lock, ChevronLeft } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price';
 import { AddressFormSection } from './AddressFormSection';
+import { CheckoutContactSection } from './CheckoutContactSection';
 import { CheckoutItemsSection } from './CheckoutItemsSection';
 import { CheckoutSummaryPanel } from './CheckoutSummaryPanel';
 import { CurrencyPicker } from './CurrencyPicker';
@@ -39,18 +40,12 @@ import {
   type CheckoutAddressForm, type ShippingQuoteState,
 } from '@/lib/checkout-restoration';
 
-const CheckoutIdentityModal = dynamic(
-  () => import('./CheckoutIdentityModal').then((module) => module.CheckoutIdentityModal),
-  { ssr: false, loading: () => null }
-);
-
 const CheckoutPolicyModal = dynamic(
   () => import('./CheckoutPolicyModal').then((module) => module.CheckoutPolicyModal),
   { ssr: false, loading: () => null }
 );
 
-type CheckoutStep = 'address' | 'payment';
-type CheckoutIdentityMode = 'guest' | 'auth';
+type CheckoutStep = 'contact' | 'delivery' | 'payment';
 type CheckoutPolicyModal = 'shipping' | 'refund' | 'safety' | 'impact' | null;
 type RewardVoucher = {
   instrumentId: string;
@@ -87,7 +82,6 @@ function CheckoutPageContent() {
     hydrateCheckoutItems,
     reconcileCartItemPrices,
     removeFromCheckout,
-    openLoginModal,
     checkoutEmail,
     setCheckoutEmail,
     updateCheckoutQuantity,
@@ -95,6 +89,10 @@ function CheckoutPageContent() {
     setDisplayCurrency,
     isAuthResolved,
   } = useGlobalContext();
+
+  // Identity decisions must only trust the session after Supabase has resolved
+  // it; before that, `user` may be a stale local cache entry.
+  const sessionUser = isAuthResolved ? user : null;
 
   const items = checkoutItems;
   const remainingCartItems = cart.filter(item => !items.some(current => current.id === item.id));
@@ -108,9 +106,8 @@ function CheckoutPageContent() {
 
   const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null; closed?: 'paid' | 'closed' } | null>(null);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
-  const [hasCompletedAddress, setHasCompletedAddress] = useState(false);
   const [appliedShippingDiscountType, setAppliedShippingDiscountType] = useState<string | null>(null);
-  const [step, setStep] = useState<CheckoutStep>('address');
+  const [step, setStep] = useState<CheckoutStep>('contact');
   const [orderId, setOrderId] = useState<string | null>(null);
   const selectedCurrency = toChargeCurrency(displayCurrency);
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
@@ -133,15 +130,6 @@ function CheckoutPageContent() {
   const [rewardVouchers, setRewardVouchers] = useState<RewardVoucher[]>([]);
   const [isRewardVouchersLoading, setIsRewardVouchersLoading] = useState(false);
   const [formError, setFormError] = useState('');
-  const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
-  const [identityMode, setIdentityMode] = useState<CheckoutIdentityMode | null>(null);
-  const [identityEmail, setIdentityEmail] = useState('');
-  const [identityOtpRequested, setIdentityOtpRequested] = useState(false);
-  const [identityOtpError, setIdentityOtpError] = useState('');
-  const [identityOtpDevCode, setIdentityOtpDevCode] = useState('');
-  const [identityVerified, setIdentityVerified] = useState(false);
-  const [pendingAuthIdentity, setPendingAuthIdentity] = useState(false);
-  const [isIdentityRequesting, setIsIdentityRequesting] = useState(false);
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const checkoutInitRef = useRef(false);
   const checkoutPaymentResumeAppliedRef = useRef(false);
@@ -150,7 +138,6 @@ function CheckoutPageContent() {
   const isPlacingOrderRef = useRef(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const stripeCheckoutEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
-  const skipIdentityVerification = Boolean(user?.email);
   const resolveCheckoutItemCoverUrl = resolveCartItemPreviewCover;
   const resolveCheckoutItemCoverStatus = resolveCartItemPreviewCoverStatus;
 
@@ -288,15 +275,6 @@ function CheckoutPageContent() {
   const closedOrderState = restoredOrder?.key === restoreKey ? restoredOrder?.closed : null;
   const checkoutStateReady = !isOrderRestoring && !orderRestoreError && !closedOrderState;
 
-  const queryIdentityVerified = useMemo(() => searchParams?.get('verified') === '1', [searchParams]);
-  const queryIdentityMode = useMemo(() => {
-    const raw = searchParams?.get('identityMode');
-    return raw === 'guest' || raw === 'auth' ? raw : null;
-  }, [searchParams]);
-  const queryIdentityEmail = useMemo(() => {
-    const raw = searchParams?.get('identityEmail');
-    return raw && raw.trim().length > 0 ? raw.trim() : '';
-  }, [searchParams]);
   const incomingDiscountCode = useMemo(() => {
     const raw = searchParams?.get('ref');
     return raw && raw.trim().length > 0 ? raw.trim().toUpperCase() : '';
@@ -382,6 +360,43 @@ function CheckoutPageContent() {
     }
   }, [queryOrderId, orderId]);
 
+  // The page is the single owner of the browser checkout draft: it hydrates
+  // once on a fresh checkout and persists every synced form change, so the
+  // contact and delivery steps never overwrite each other's fields.
+  const [isCheckoutDraftHydrated, setIsCheckoutDraftHydrated] = useState(false);
+  useEffect(() => {
+    // A pending order restore owns the form until it resolves; persisting the
+    // untouched default form now would destroy the shopper's saved draft.
+    if (queryOrderId) return;
+    try {
+      const raw = window.localStorage.getItem('ymi_checkout_form');
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        setForm(prev => Object.fromEntries(Object.entries(prev).map(([key, value]) =>
+          [key, typeof parsed[key] === 'string' && parsed[key] ? parsed[key] : value]
+        )) as CheckoutAddressForm);
+      }
+    } catch {
+      // Missing/malformed/blocked storage never prevents checkout.
+    }
+    setIsCheckoutDraftHydrated(true);
+  }, [queryOrderId]);
+
+  useEffect(() => {
+    if (!isCheckoutDraftHydrated || typeof window === 'undefined') return;
+    try {
+      // Tax identifiers are only kept in the active form or an explicitly saved address.
+      window.localStorage.setItem('ymi_checkout_form', JSON.stringify({
+        ...form,
+        vatNumber: '',
+        eoriNumber: '',
+        iossNumber: '',
+      }));
+    } catch {
+      // Checkout continues when private browsing blocks local storage.
+    }
+  }, [form, isCheckoutDraftHydrated]);
+
   useEffect(() => {
     if (!checkoutStateReady) return;
     if (queryStep !== 'payment') {
@@ -389,39 +404,19 @@ function CheckoutPageContent() {
       return;
     }
     if (checkoutPaymentResumeAppliedRef.current) return;
-    if (step !== 'address') return;
+    if (step !== 'contact') return;
     if (!queryOrderId && items.length === 0) return;
 
     checkoutPaymentResumeAppliedRef.current = true;
 
-    if (queryIdentityVerified) {
-      setIdentityVerified(true);
-      setIsIdentityModalOpen(false);
-      if (queryIdentityMode) {
-        setIdentityMode(queryIdentityMode);
-      } else if (skipIdentityVerification) {
-        setIdentityMode('auth');
-      }
-      if (queryIdentityEmail) {
-        setIdentityEmail(queryIdentityEmail);
-      } else if (skipIdentityVerification && user?.email) {
-        setIdentityEmail(user.email);
-      }
-    }
-
-    setStep(canUseShippingQuote ? 'payment' : 'address');
+    setStep(canUseShippingQuote ? 'payment' : 'delivery');
   }, [
     checkoutStateReady,
     canUseShippingQuote,
     items.length,
-    queryIdentityEmail,
-    queryIdentityMode,
-    queryIdentityVerified,
     queryOrderId,
     queryStep,
-    skipIdentityVerification,
     step,
-    user?.email,
   ]);
 
   const applyDiscountSummary = useCallback((summary: OrderDiscountSummary) => {
@@ -464,8 +459,10 @@ function CheckoutPageContent() {
         if (cancelled) return;
         hydrateCheckoutItems(rows);
         setForm(address);
+        // The restored order becomes the draft baseline; only now may the
+        // persistence effect resume writing to the browser draft.
+        setIsCheckoutDraftHydrated(true);
         setShippingQuote(quote);
-        setHasCompletedAddress(true);
         setCheckoutEmail(address.email);
         applyDiscountSummary(discounts);
         // Restoring is read-only. Reprice only after a later address/method edit.
@@ -499,7 +496,7 @@ function CheckoutPageContent() {
   }, []);
 
   useEffect(() => {
-    if (!user?.customerId) {
+    if (!sessionUser?.customerId) {
       setRewardVouchers([]);
       setSelectedRewardVoucherId(null);
       return;
@@ -529,7 +526,7 @@ function CheckoutPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [user?.customerId]);
+  }, [sessionUser?.customerId]);
 
   useEffect(() => {
     if (queryOrderId) return;
@@ -541,8 +538,8 @@ function CheckoutPageContent() {
       return;
     }
 
-    const url = user?.customerId
-      ? `/api/cart?ids=${encodeURIComponent(selectedIdsFromQuery.join(','))}&customerId=${user.customerId}`
+    const url = sessionUser?.customerId
+      ? `/api/cart?ids=${encodeURIComponent(selectedIdsFromQuery.join(','))}&customerId=${sessionUser.customerId}`
       : `/api/cart?ids=${encodeURIComponent(selectedIdsFromQuery.join(','))}`;
 
     fetch(url, { credentials: 'include' })
@@ -557,109 +554,49 @@ function CheckoutPageContent() {
         hydrateCheckoutItems(items);
       })
       .catch(() => hydrateCheckoutItems(null));
-  }, [queryOrderId, checkoutItems.length, cart, prepareCheckout, selectedIdsFromQuery, user?.customerId, hydrateCheckoutItems]);
+  }, [queryOrderId, checkoutItems.length, cart, prepareCheckout, selectedIdsFromQuery, sessionUser?.customerId, hydrateCheckoutItems]);
 
-  const resetIdentityVerification = useCallback(() => {
-    setIdentityOtpRequested(false);
-    setIdentityOtpDevCode('');
-    setIdentityOtpError('');
-    setIdentityVerified(false);
-    setIsIdentityRequesting(false);
+  const handleFormChange = useCallback((nextForm: CheckoutAddressForm) => {
+    setForm(nextForm);
   }, []);
 
-  const requestIdentityOtp = useCallback(async (email: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) {
-      setIdentityOtpError('Email is required before verification.');
-      return { sent: false };
-    }
-    setIsIdentityRequesting(true);
-    setIdentityOtpError('');
-    setIdentityOtpDevCode('');
+  const handleContactComplete = useCallback(({ form: nextForm }: {
+    form: CheckoutAddressForm;
+  }) => {
+    setForm(nextForm);
+    setCheckoutEmail(nextForm.email.trim());
+    setFormError('');
+    setStep('delivery');
+  }, [setCheckoutEmail]);
 
-    try {
-      const response = await fetch('/api/guest/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail }),
-      });
-      const data = await response.json().catch(() => null);
-      if (response.status === 429) {
-        const retryAfterSeconds = Math.max(1, Number(data?.retryAfterSeconds) || 60);
-        setIdentityOtpError(t('checkout.codeRateLimited', { seconds: retryAfterSeconds }));
-        return { sent: false, retryAfterSeconds };
-      }
-      if (!response.ok || !data?.sent) {
-        setIdentityOtpError(t('checkout.sendCodeError'));
-        return { sent: false };
-      }
-      setIdentityOtpRequested(true);
-      setIdentityOtpDevCode(data.devCode || '');
-      setIdentityEmail(normalizedEmail);
-      return {
-        sent: true,
-        retryAfterSeconds: Math.max(1, Number(data.resendAfterSeconds) || 60),
-      };
-    } catch {
-      setIdentityOtpError(t('checkout.sendCodeError'));
-      return { sent: false };
-    } finally {
-      setIsIdentityRequesting(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    if (!pendingAuthIdentity || !user?.email) return;
-    setPendingAuthIdentity(false);
-    resetIdentityVerification();
-    setIdentityMode('auth');
-    setIdentityEmail(user.email);
-    setIdentityVerified(true);
-    setIsIdentityModalOpen(false);
-    setStep('payment');
-  }, [pendingAuthIdentity, resetIdentityVerification, user?.email]);
-
-  const handleAddressComplete = useCallback(({ form: nextForm, shippingQuote: nextShippingQuote }: {
+  const handleDeliveryComplete = useCallback(({ form: nextForm, shippingQuote: nextShippingQuote }: {
     form: CheckoutAddressForm;
     shippingQuote: ShippingQuoteState;
   }) => {
-    const normalizedEmail = nextForm.email.trim();
-    setHasCompletedAddress(true);
     setForm(nextForm);
     setShippingQuote(nextShippingQuote);
-    setCheckoutEmail(normalizedEmail);
+    setCheckoutEmail(nextForm.email.trim());
     setFormError('');
     setDiscountError('');
-    if (skipIdentityVerification) {
-      setIdentityMode('auth');
-      setIdentityEmail(user?.email || normalizedEmail);
-      setIdentityVerified(true);
-      setIsIdentityModalOpen(false);
-      setStep('payment');
-      return;
-    }
-
-    setIdentityMode(null);
-    setIdentityEmail('');
-    setIdentityVerified(false);
-    resetIdentityVerification();
-    setIsIdentityModalOpen(true);
-  }, [resetIdentityVerification, setCheckoutEmail, skipIdentityVerification, user?.email]);
+    setStep('payment');
+  }, [setCheckoutEmail]);
 
   const stepNumber = useMemo(() => {
     switch (step) {
-      case 'address':
+      case 'contact':
         return 1;
-      case 'payment':
+      case 'delivery':
         return 2;
+      case 'payment':
+        return 3;
       default:
         return 1;
     }
   }, [step]);
-  const totalSteps = 2;
+  const totalSteps = 3;
 
-  const canGoBackStep = step === 'payment';
-  const canGoBackToSource = step === 'address';
+  const canGoBackStep = step !== 'contact';
+  const canGoBackToSource = step === 'contact';
 
   const goBackStep = useCallback(() => {
     setFormError('');
@@ -677,8 +614,11 @@ function CheckoutPageContent() {
               window.history.replaceState(window.history.state, '', nextHref);
             }
           }
-          setStep('address');
+          setStep('delivery');
         }
+        break;
+      case 'delivery':
+        setStep('contact');
         break;
       default:
         break;
@@ -709,93 +649,6 @@ function CheckoutPageContent() {
     })();
   }, [checkoutSourceTarget, router]);
 
-  const openIdentityModal = useCallback(() => {
-    setIsIdentityModalOpen(true);
-  }, []);
-
-  const closeIdentityModal = useCallback(() => {
-    setIsIdentityModalOpen(false);
-  }, []);
-
-  const chooseGuestIdentity = useCallback(async () => {
-    const targetEmail = form.email.trim();
-    if (!targetEmail) {
-      setIdentityOtpError(t('checkout.identityEmailRequiredError'));
-      return;
-    }
-    if (!EMAIL_FORMAT_PATTERN.test(targetEmail)) {
-      setIdentityOtpError(t('checkout.emailInvalidError'));
-      return;
-    }
-    setIdentityMode('guest');
-    setIdentityEmail(targetEmail);
-    setIdentityVerified(false);
-    await requestIdentityOtp(targetEmail);
-  }, [form.email, requestIdentityOtp, t]);
-
-  const chooseAuthIdentity = useCallback(async () => {
-    if (user?.email) {
-      resetIdentityVerification();
-      setIdentityMode('auth');
-      setIdentityEmail(user.email);
-      setIdentityVerified(true);
-      setIsIdentityModalOpen(false);
-      setStep('payment');
-      return;
-    }
-
-    setPendingAuthIdentity(true);
-    resetIdentityVerification();
-    setIsIdentityModalOpen(false);
-    openLoginModal('login', form.email.trim() || undefined);
-  }, [form.email, openLoginModal, resetIdentityVerification, user?.email]);
-
-  const confirmIdentityModeSwitch = useCallback(async (nextMode: CheckoutIdentityMode | null) => {
-    if (!nextMode || nextMode === identityMode) {
-      closeIdentityModal();
-      return;
-    }
-
-    if (nextMode === 'guest') {
-      await chooseGuestIdentity();
-      return;
-    }
-
-    await chooseAuthIdentity();
-  }, [chooseAuthIdentity, chooseGuestIdentity, closeIdentityModal, identityMode]);
-
-  const verifyIdentityOtp = useCallback(async (code: string) => {
-    if (!identityEmail) {
-      setIdentityOtpError(t('checkout.identityMissingEmailError'));
-      return;
-    }
-    setIsIdentityRequesting(true);
-    setIdentityOtpError('');
-    try {
-      const response = await fetch('/api/guest/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: identityEmail,
-          code: code.trim(),
-        }),
-      });
-      const data = response.ok ? await response.json() : null;
-      if (!response.ok || !data?.verified) {
-        setIdentityOtpError(t('checkout.invalidOrExpiredCode'));
-        return;
-      }
-      setIdentityVerified(true);
-      setIsIdentityModalOpen(false);
-      setStep('payment');
-      setFormError('');
-    } catch {
-      setIdentityOtpError(t('checkout.identityVerifyError'));
-    } finally {
-      setIsIdentityRequesting(false);
-    }
-  }, [identityEmail, t]);
-
   const applyDiscountCode = useCallback(async (rawCode: string) => {
     if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
       setDiscountError(t('checkout.orderNotReadyError'));
@@ -815,7 +668,7 @@ function CheckoutPageContent() {
         body: JSON.stringify({
           orderId,
           code,
-          customerId: user?.customerId ?? null,
+          customerId: sessionUser?.customerId ?? null,
           email: checkoutContactEmail.trim().toLowerCase() || null,
           shippingAmountUsd,
           shippingMethod: checkoutShippingContext.shippingMethod,
@@ -842,14 +695,14 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, user?.customerId]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
     if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
       setDiscountError(t('checkout.orderNotReadyError'));
       return false;
     }
-    if (!user?.customerId) {
+    if (!sessionUser?.customerId) {
       setDiscountError(t('checkout.rewardVoucherAccountRequired'));
       return false;
     }
@@ -890,7 +743,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, user?.customerId]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
     if (!checkoutStateReady || isApplyingDiscount || !orderId) return false;
@@ -965,7 +818,7 @@ function CheckoutPageContent() {
     const payload = {
       orderId,
       email: checkoutContactEmail,
-      customerId: user?.customerId ?? null,
+      customerId: sessionUser?.customerId ?? null,
       isGuest: mode === 'guest',
       currency: selectedCurrency,
       shippingAddress: checkoutShippingContext.shippingAddress,
@@ -1028,20 +881,7 @@ function CheckoutPageContent() {
       return;
     }
 
-    if (!skipIdentityVerification && (!identityMode || !identityVerified)) {
-      setFormError(t('checkout.identityRequiredError'));
-      setIsIdentityModalOpen(true);
-      return;
-    }
-
-    if (!skipIdentityVerification && identityMode === 'auth' && !user) {
-      setFormError(t('checkout.sessionExpiredError'));
-      setIdentityVerified(false);
-      setIsIdentityModalOpen(true);
-      return;
-    }
-
-    const effectiveIdentityMode: 'guest' | 'auth' = skipIdentityVerification ? 'auth' : (identityMode as 'guest' | 'auth');
+    const effectiveIdentityMode: 'guest' | 'auth' = sessionUser?.email ? 'auth' : 'guest';
 
     isPlacingOrderRef.current = true;
     if (!stripeCheckoutEnabled) {
@@ -1052,18 +892,10 @@ function CheckoutPageContent() {
     void startStripeHostedCheckout(effectiveIdentityMode);
   };
 
-  const handleMobilePaymentAction = useCallback(() => {
-    if (!identityVerified && !skipIdentityVerification) {
-      openIdentityModal();
-      return;
-    }
-    handlePlaceOrder();
-  }, [handlePlaceOrder, identityVerified, openIdentityModal, skipIdentityVerification]);
-
   const startCheckoutForItems = useCallback(async (selected: typeof items) => {
     if (!selected.length) return;
     const payload = {
-      customerId: user?.customerId ?? null,
+      customerId: sessionUser?.customerId ?? null,
       orderId,
       email: checkoutContactEmail || null,
         items: selected.map(item => ({
@@ -1089,7 +921,7 @@ function CheckoutPageContent() {
     }
     setCheckoutStarted(true);
     return true;
-  }, [user?.customerId, orderId, checkoutContactEmail, reconcileCartItemPrices]);
+  }, [sessionUser?.customerId, orderId, checkoutContactEmail, reconcileCartItemPrices]);
 
   const handleRemoveCheckoutItem = useCallback(async (itemId: string) => {
     const removedItem = items.find(item => item.id === itemId);
@@ -1104,7 +936,7 @@ function CheckoutPageContent() {
         credentials: 'include',
         body: JSON.stringify({
           cartItemIds: [itemId],
-          customerId: user?.customerId ?? null,
+          customerId: sessionUser?.customerId ?? null,
           orderId,
         }),
       });
@@ -1137,7 +969,7 @@ function CheckoutPageContent() {
       setFormError(t('checkout.removeItemError'));
       return false;
     }
-  }, [addToCheckout, items, orderId, removeFromCheckout, t, user?.customerId]);
+  }, [addToCheckout, items, orderId, removeFromCheckout, t, sessionUser?.customerId]);
 
   const handleAddFromCartItems = useCallback(async (selected: typeof items) => {
     if (!selected.length) {
@@ -1204,9 +1036,7 @@ function CheckoutPageContent() {
   const isPaymentStep = step === 'payment';
   const shouldShowMobilePaymentBar = isPaymentStep;
   const mobilePaymentActionLabel =
-    !identityVerified && !skipIdentityVerification
-      ? t('checkout.identityTitle')
-      : isPlacingOrder
+    isPlacingOrder
       ? t('common.loading')
       : stripeCheckoutEnabled
       ? t('checkout.payWithStripe')
@@ -1312,17 +1142,26 @@ function CheckoutPageContent() {
 
       <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr] lg:gap-8">
         <div className="glass-panel !overflow-visible rounded-[28px] border border-white/70 p-4 sm:p-5 md:p-6 space-y-5 md:space-y-6">
-          {step === 'address' && (
-            <AddressFormSection
+          {step === 'contact' && (
+            <CheckoutContactSection
               initialForm={form}
-              initialFormIsAuthoritative={hasCompletedAddress}
-              initialShippingQuote={shippingQuote}
               checkoutEmail={checkoutEmail}
-              selectedCurrency={selectedCurrency}
-              userCustomerId={user?.customerId ?? null}
+              userCustomerId={sessionUser?.customerId ?? null}
               isAuthResolved={isAuthResolved}
               t={t}
-              onComplete={handleAddressComplete}
+              onFormChange={handleFormChange}
+              onComplete={handleContactComplete}
+            />
+          )}
+          {step === 'delivery' && (
+            <AddressFormSection
+              initialForm={form}
+              initialShippingQuote={shippingQuote}
+              selectedCurrency={selectedCurrency}
+              userCustomerId={sessionUser?.customerId ?? null}
+              t={t}
+              onFormChange={handleFormChange}
+              onComplete={handleDeliveryComplete}
             />
           )}
           {step === 'payment' && (
@@ -1365,7 +1204,7 @@ function CheckoutPageContent() {
                   isOpen={isPaymentOffersOpen}
                   onToggleOpen={() => setIsPaymentOffersOpen((prev) => !prev)}
                   t={t}
-                  isSignedIn={Boolean(user?.customerId)}
+                  isSignedIn={Boolean(sessionUser?.customerId)}
                   orderId={orderId}
                   canApply={checkoutStateReady && canUseShippingQuote}
                   allowAutoApply={!queryOrderId}
@@ -1393,17 +1232,14 @@ function CheckoutPageContent() {
                 />
 
                 <PaymentActions
-                  identityVerified={identityVerified}
-                  skipIdentityVerification={skipIdentityVerification}
-                  identityMode={identityMode}
-                  identityEmail={identityEmail}
-                  userEmail={user?.email ?? null}
+                  contactEmail={checkoutContactEmail}
+                  accountEmail={sessionUser?.email ?? null}
+                  isSignedIn={Boolean(sessionUser?.customerId)}
                   isPlacingOrder={isPlacingOrder || isApplyingDiscount}
                   stripeCheckoutEnabled={stripeCheckoutEnabled}
                   formError={formError}
                   policyAgreementNotice={policyAgreementNotice}
                   t={t}
-                  onOpenIdentityModal={openIdentityModal}
                   onPlaceOrder={handlePlaceOrder}
                   onOpenImpactPolicy={() => setOpenPolicyModal('impact')}
                 />
@@ -1451,26 +1287,8 @@ function CheckoutPageContent() {
         actionLabel={mobilePaymentActionLabel}
         disabled={isPlacingOrder || isApplyingDiscount}
         t={t}
-        onClick={handleMobilePaymentAction}
+        onClick={handlePlaceOrder}
       />
-      {isIdentityModalOpen && !skipIdentityVerification ? (
-        <CheckoutIdentityModal
-          identityMode={identityMode}
-          identityEmail={identityEmail}
-          formEmail={form.email}
-          userEmail={user?.email ?? null}
-          identityOtpRequested={identityOtpRequested}
-          identityOtpError={identityOtpError}
-          identityOtpDevCode={identityOtpDevCode}
-          identityVerified={identityVerified}
-          isIdentityRequesting={isIdentityRequesting}
-          t={t}
-          onClose={closeIdentityModal}
-          onConfirmMode={confirmIdentityModeSwitch}
-          onRequestOtp={requestIdentityOtp}
-          onVerifyOtp={verifyIdentityOtp}
-        />
-      ) : null}
 
       {openPolicyModal ? (
         <CheckoutPolicyModal

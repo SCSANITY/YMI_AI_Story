@@ -24,8 +24,10 @@ test('decorative tracking stays within the shared readable range', () => {
       const tracking = Number(match[1])
       if (tracking <= 0.14) continue
 
+      const relativePath = relative('.', path).replaceAll('\\', '/')
       const isVerificationCodeSpacing =
-        relative('.', path).replaceAll('\\', '/') === 'components/LoginModal.tsx'
+        (relative('.', path).replaceAll('\\', '/') === 'components/LoginModal.tsx'
+          || relativePath === 'app/checkout/CheckoutContactSection.tsx')
         && tracking === 0.3
 
       if (!isVerificationCodeSpacing) oversizedTracking.push(`${path}: ${match[0]}`)

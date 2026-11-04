@@ -55,8 +55,11 @@ test('Preview purchase gives immediate protected handoff and Checkout owns a rou
 })
 
 test('mobile Checkout address fields prevent browser auto-zoom without changing desktop density', async () => {
-  const address = await read('app/checkout/AddressFormSection.tsx')
-  const inputs = address.match(/<input[\s\S]*?>/g) ?? []
+  const [address, contact] = await Promise.all([
+    read('app/checkout/AddressFormSection.tsx'),
+    read('app/checkout/CheckoutContactSection.tsx'),
+  ])
+  const inputs = [...address.matchAll(/<input[\s\S]*?>/g), ...contact.matchAll(/<input[\s\S]*?>/g)].map((match) => match[0])
   const addressInputs = inputs.filter((input) => !input.includes('type="checkbox"'))
 
   assert.ok(addressInputs.length >= 10)

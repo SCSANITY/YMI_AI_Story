@@ -6,21 +6,21 @@ const checkout = await readFile(new URL('../app/checkout/page.tsx', import.meta.
 
 test('Checkout applies a Stripe-cancel payment resume only once', () => {
   const resumeEffect = checkout.match(
-    /useEffect\(\(\) => \{\s*if \(!checkoutStateReady\) return;\s*if \(queryStep !== 'payment'\)[\s\S]*?\n  \}, \[[\s\S]*?user\?\.email,\s*\n  \]\);/
+    /useEffect\(\(\) => \{\s*if \(!checkoutStateReady\) return;\s*if \(queryStep !== 'payment'\)[\s\S]*?\n  \}, \[[\s\S]*?step,\s*\n  \]\);/
   )?.[0] ?? ''
 
   assert.match(checkout, /const checkoutPaymentResumeAppliedRef = useRef\(false\)/)
   assert.match(
     resumeEffect,
-    /if \(checkoutPaymentResumeAppliedRef\.current\) return;[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?setStep\(canUseShippingQuote \? 'payment' : 'address'\)/
+    /if \(checkoutPaymentResumeAppliedRef\.current\) return;[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?setStep\(canUseShippingQuote \? 'payment' : 'delivery'\)/
   )
 })
 
-test('Checkout Back consumes the payment resume marker before returning to address', () => {
+test('Checkout Back consumes the payment resume marker before returning to delivery', () => {
   const backHandler = checkout.match(/const goBackStep = useCallback\([\s\S]*?\n  \}, \[step\]\);/)?.[0] ?? ''
 
   assert.match(
     backHandler,
-    /removeCheckoutPaymentResumeStep[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?window\.history\.replaceState\(window\.history\.state, '', nextHref\)[\s\S]*?setStep\('address'\)/
+    /removeCheckoutPaymentResumeStep[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?window\.history\.replaceState\(window\.history\.state, '', nextHref\)[\s\S]*?setStep\('delivery'\)/
   )
 })

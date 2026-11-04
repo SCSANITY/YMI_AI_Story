@@ -58,8 +58,9 @@ test('retired edition validation precedes owner/database writes and payment sess
 test('physical-only Checkout preserves address, ownership, shipping, and PDF lifecycle modules', async () => {
   const checkout = await read('app/checkout/page.tsx')
   assert.doesNotMatch(checkout, /checkoutItemRequiresShipping|digital-checkout-email|!requiresShipping/)
-  assert.match(checkout, /const totalSteps = 2/)
+  assert.match(checkout, /const totalSteps = 3/)
   assert.match(checkout, /<AddressFormSection/)
+  assert.match(checkout, /<CheckoutContactSection/)
   await Promise.all([
     access(new URL('../src/lib/finalPdfRelease.ts', import.meta.url)),
     access(new URL('../components/admin/final-review/PdfVersionReview.tsx', import.meta.url)),

@@ -20,13 +20,14 @@ test('Checkout email ownership guidance waits for resolved auth state', async ()
 })
 
 test('physical Checkout email keeps the ownership guidance after digital product retirement', async () => {
-  const address = await read('app/checkout/AddressFormSection.tsx')
+  const contact = await read('app/checkout/CheckoutContactSection.tsx')
   const checkout = await read('app/checkout/page.tsx')
   const messages = await read('src/lib/i18n-messages.ts')
 
-  assert.match(address, /<CheckoutEmailOwnershipHint[\s\S]*isAuthResolved=\{isAuthResolved\}[\s\S]*isSignedIn=\{Boolean\(userCustomerId\)\}/)
+  assert.match(contact, /<CheckoutEmailOwnershipHint[\s\S]*isAuthResolved=\{isAuthResolved\}[\s\S]*isSignedIn=\{Boolean\(userCustomerId\)\}/)
+  assert.match(contact, /const isSignedIn = isAuthResolved && Boolean\(signedInEmail\)/)
   assert.doesNotMatch(checkout, /digital-checkout-email/)
-  assert.match(checkout, /<AddressFormSection[\s\S]*isAuthResolved=\{isAuthResolved\}/)
+  assert.match(checkout, /<CheckoutContactSection[\s\S]*isAuthResolved=\{isAuthResolved\}/)
   assert.match(messages, /checkout\.emailGuestOwnershipHint/)
   assert.match(messages, /checkout\.emailAccountDeliveryHint/)
 })

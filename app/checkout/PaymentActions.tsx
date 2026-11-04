@@ -1,23 +1,18 @@
 'use client';
 
 import { memo, type ReactNode } from 'react';
-import { CheckCircle2, Lock } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/Button';
 
-type CheckoutIdentityMode = 'guest' | 'auth';
-
 type PaymentActionsProps = {
-  identityVerified: boolean;
-  skipIdentityVerification: boolean;
-  identityMode: CheckoutIdentityMode | null;
-  identityEmail: string;
-  userEmail?: string | null;
+  contactEmail: string;
+  accountEmail: string | null;
+  isSignedIn: boolean;
   isPlacingOrder: boolean;
   stripeCheckoutEnabled: boolean;
   formError: string;
   policyAgreementNotice: ReactNode;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
-  onOpenIdentityModal: () => void;
   onPlaceOrder: () => void;
   onOpenImpactPolicy: () => void;
 };
@@ -55,77 +50,28 @@ function ImpactNotice({
 }
 
 function PaymentActionsComponent({
-  identityVerified,
-  skipIdentityVerification,
-  identityMode,
-  identityEmail,
-  userEmail,
+  contactEmail,
+  accountEmail,
+  isSignedIn,
   isPlacingOrder,
   stripeCheckoutEnabled,
   formError,
   policyAgreementNotice,
   t,
-  onOpenIdentityModal,
   onPlaceOrder,
   onOpenImpactPolicy,
 }: PaymentActionsProps) {
-  if (!identityVerified && !skipIdentityVerification) {
-    return (
-      <div className="rounded-[26px] border border-white/80 bg-white/78 p-4 shadow-[0_14px_28px_rgba(148,93,34,0.08)] backdrop-blur-xl md:p-5">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
-            <Lock className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-gray-900">{t('checkout.identityTitle')}</div>
-            <p className="mt-1 text-sm leading-6 text-slate-600">{t('cart.verifyHint')}</p>
-          </div>
-        </div>
-        <ImpactNotice t={t} onOpenImpactPolicy={onOpenImpactPolicy} />
-        {policyAgreementNotice}
-        <div className="mt-4 hidden md:block">
-          <Button
-            size="lg"
-            className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-5 text-sm font-semibold md:h-12 md:text-base"
-            onClick={onOpenIdentityModal}
-          >
-            {t('checkout.identityTitle')}
-          </Button>
-        </div>
-        {formError ? <p className="mt-3 text-xs text-red-500">{formError}</p> : null}
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-[26px] border border-white/80 bg-white/78 p-4 shadow-[0_14px_28px_rgba(148,93,34,0.08)] backdrop-blur-xl md:p-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-            <CheckCircle2 className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
-            {skipIdentityVerification ? (
-              <>{t('checkout.paymentSignedIn', { email: userEmail ?? '' })}</>
-            ) : (
-              t('checkout.verifiedAs', {
-                mode: identityMode === 'auth' ? t('checkout.authTitle') : t('checkout.guestTitle'),
-                emailSuffix: identityEmail ? ` (${identityEmail})` : '',
-              })
-            )}
-          </div>
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+          <CheckCircle2 className="h-5 w-5" />
         </div>
-        {!skipIdentityVerification ? (
-          <Button
-            size="lg"
-            variant="outline"
-            className="glass-action-btn glass-action-btn--neutral h-11 rounded-full px-5 text-sm font-semibold text-slate-700 md:h-12 md:text-base"
-            onClick={onOpenIdentityModal}
-            disabled={isPlacingOrder}
-          >
-            {t('checkout.changeCheckoutMethod')}
-          </Button>
-        ) : null}
+        <div className="min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+          {isSignedIn
+            ? t('checkout.paymentSignedIn', { email: accountEmail || contactEmail })
+            : t('checkout.paymentGuestNotice', { email: contactEmail })}
+        </div>
       </div>
       <ImpactNotice t={t} onOpenImpactPolicy={onOpenImpactPolicy} />
       {policyAgreementNotice}
