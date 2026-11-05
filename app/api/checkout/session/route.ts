@@ -12,6 +12,12 @@ import {
   getOrderDiscountSummary,
   refreshAppliedOrderDiscounts,
 } from '@/lib/discounts'
+import {
+  capMultiBookOfferToHeadroom,
+  computeMultiBookDiscountUsd,
+  computeMultiBookSubtotalUsd,
+} from '@/lib/multi-book-offer-core'
+import { getMultiBookOfferRule } from '@/lib/multi-book-offer'
 import { recordExternalEmailObserved } from '@/lib/emailEvents'
 import {
   checkoutOwnerErrorResponse,
@@ -227,6 +233,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
     }
 
+    // Multi-book offer: the server is the pricing authority. The effective
+    // amount is the raw rule offer capped by the headroom left after product
+    // discount instruments, and it is frozen on the order for this session.
+    const multiBookRule = await getMultiBookOfferRule()
+    const multiBookItems = cartItems.map((item: { quantity?: unknown; price_at_purchase?: unknown }) => ({
+      quantity: item.quantity,
+      unitPriceUsd: item.price_at_purchase,
+    }))
+    const multiBookSubtotalUsd = computeMultiBookSubtotalUsd(multiBookItems)
+    const multiBookDiscountUsd = capMultiBookOfferToHeadroom(
+      computeMultiBookDiscountUsd(multiBookItems, multiBookRule),
+      multiBookSubtotalUsd,
+      discountSummary.productDiscountAmountUsd
+    )
+
+    const { error: multiBookUpdateError } = await supabaseAdmin
+      .from('orders')
+      .update({ multi_book_discount_amount_usd: multiBookDiscountUsd })
+      .eq('order_id', orderId)
+    if (multiBookUpdateError) {
+      return NextResponse.json({ error: 'Failed to update order offer' }, { status: 500 })
+    }
+
     const discountedItems = allocateProductDiscountToLineItems(
       cartItems.map((item: any) => {
         const qty = Math.max(1, Number(item.quantity ?? 1))
@@ -248,7 +277,9 @@ export async function POST(request: Request) {
           },
         }
       }),
-      discountSummary.productDiscountAmountUsd
+      // Single allocation path: product instruments + the capped offer share
+      // one remainder-to-last-line pass; the sum never exceeds the subtotal.
+      discountSummary.productDiscountAmountUsd + multiBookDiscountUsd
     )
 
     const lineItems: any[] = discountedItems
@@ -318,6 +349,7 @@ export async function POST(request: Request) {
         applied_shipping_discount_instrument_id: String(discountSummary.shippingDiscountInstrumentId || ''),
         discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
         shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
+        multi_book_discount_amount_usd: String(multiBookDiscountUsd || 0),
         shipping_amount_usd: String(shippingAmountUsd || 0),
         checkout_fingerprint: checkoutFingerprint,
       },
@@ -329,6 +361,7 @@ export async function POST(request: Request) {
           applied_shipping_discount_instrument_id: String(discountSummary.shippingDiscountInstrumentId || ''),
           discount_amount_usd: String(discountSummary.productDiscountAmountUsd || 0),
           shipping_discount_amount_usd: String(discountSummary.shippingDiscountAmountUsd || 0),
+          multi_book_discount_amount_usd: String(multiBookDiscountUsd || 0),
           shipping_amount_usd: String(shippingAmountUsd || 0),
         },
       },

@@ -20,6 +20,9 @@ type CheckoutSummaryPanelProps = {
   formattedNetShipping: string;
   formattedDiscount: string;
   formattedShippingDiscount: string;
+  multiBookDiscountTotalUsd?: number;
+  formattedMultiBookDiscount?: string;
+  multiBookBadgeLabel?: string;
   formattedTotal: string;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
 };
@@ -40,6 +43,9 @@ export function CheckoutSummaryPanel({
   formattedNetShipping,
   formattedDiscount,
   formattedShippingDiscount,
+  multiBookDiscountTotalUsd = 0,
+  formattedMultiBookDiscount = '',
+  multiBookBadgeLabel = '',
   formattedTotal,
   t,
 }: CheckoutSummaryPanelProps) {
@@ -97,6 +103,19 @@ export function CheckoutSummaryPanel({
           <div className="flex items-center justify-between">
             <span>{t('checkout.shipping')} {t('checkout.discountLine').toLowerCase()}</span>
             <span className="font-semibold text-emerald-700">-{formattedShippingDiscount}</span>
+          </div>
+        ) : null}
+        {multiBookDiscountTotalUsd > 0 ? (
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="flex items-center gap-2 font-cormorant text-[15px] text-[#9d6e27]">
+              {t('checkout.multiBookOffer')}
+              {multiBookBadgeLabel ? (
+                <span className="inline-flex -translate-y-px items-center rounded-full bg-gradient-to-r from-[#d2691e] to-[#c1531a] px-2 py-0.5 font-sans text-[8.5px] font-extrabold not-italic tracking-[0.09em] text-[#fff3da]">
+                  {multiBookBadgeLabel}
+                </span>
+              ) : null}
+            </span>
+            <span className="font-bold tabular-nums text-[#c47f17]">−{formattedMultiBookDiscount}</span>
           </div>
         ) : null}
         <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-base">

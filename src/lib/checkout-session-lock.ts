@@ -7,6 +7,7 @@ type CheckoutSnapshotOrder = {
   discount_amount_usd?: unknown
   shipping_amount_usd?: unknown
   shipping_discount_amount_usd?: unknown
+  multi_book_discount_amount_usd?: unknown
   applied_product_discount_instrument_id?: unknown
   applied_shipping_discount_instrument_id?: unknown
   shipping_method?: unknown
@@ -33,7 +34,7 @@ export async function createOrderCheckoutFingerprint(orderId: string) {
     supabaseAdmin
       .from('orders')
       .select(
-        'order_status, checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id, shipping_method, shipping_zone_code'
+        'order_status, checkout_currency, discount_amount_usd, shipping_amount_usd, shipping_discount_amount_usd, multi_book_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id, shipping_method, shipping_zone_code'
       )
       .eq('order_id', orderId)
       .maybeSingle(),
@@ -58,6 +59,7 @@ export async function createOrderCheckoutFingerprint(orderId: string) {
       productDiscount: normalizedNumber(orderRow.discount_amount_usd),
       shipping: normalizedNumber(orderRow.shipping_amount_usd),
       shippingDiscount: normalizedNumber(orderRow.shipping_discount_amount_usd),
+      multiBookDiscount: normalizedNumber(orderRow.multi_book_discount_amount_usd),
       productInstrument: String(orderRow.applied_product_discount_instrument_id || ''),
       shippingInstrument: String(orderRow.applied_shipping_discount_instrument_id || ''),
       shippingMethod: String(orderRow.shipping_method || ''),

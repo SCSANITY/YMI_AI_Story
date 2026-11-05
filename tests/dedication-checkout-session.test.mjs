@@ -85,6 +85,12 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
       clearOrderCheckoutSessionLock: async () => { calls.push({ kind: 'clear' }) },
     },
     '@/lib/site-url': { getSiteUrl: () => 'http://localhost' },
+    '@/lib/multi-book-offer': { getMultiBookOfferRule: async () => null },
+    '@/lib/multi-book-offer-core': {
+      computeMultiBookSubtotalUsd: () => 0,
+      computeMultiBookDiscountUsd: () => 0,
+      capMultiBookOfferToHeadroom: () => 0,
+    },
     '@/lib/package-pricing': { normalizeBookPackageType: value => value === 'basic' ? 'basic' : null },
     '@/lib/shipping-address': { normalizeShippingAddress: value => value, recipientAddressIssue: () => null },
     '@/lib/dedication-server': { prepareOrderDedications: async () => {

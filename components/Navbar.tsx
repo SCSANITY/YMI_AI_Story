@@ -273,7 +273,7 @@ export const Navbar: React.FC = () => {
   if (isPersonalizeRoute) return null
 
   return (
-    <nav className={`fixed left-0 right-0 top-0 ${isUserMenuOpen || isCartOpen ? 'z-[150]' : 'z-40'} w-full transition-all duration-500 ${isHomePage ? homeStyles.mobileHomeNav : ''} ${
+    <nav className={`fixed left-0 right-0 top-[var(--launch-banner-h,0px)] ${isUserMenuOpen || isCartOpen ? 'z-[150]' : 'z-40'} w-full transition-all duration-500 ${isHomePage ? homeStyles.mobileHomeNav : ''} ${
       isTransparent
         ? 'md:bg-transparent backdrop-blur-none border-b border-transparent shadow-none'
         : 'bg-white/60 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_1px_0_rgba(255,255,255,0.6),0_4px_20px_rgba(0,0,0,0.06)] border-b border-white/40'

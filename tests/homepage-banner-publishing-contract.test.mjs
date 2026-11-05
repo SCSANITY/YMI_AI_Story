@@ -124,8 +124,8 @@ test('Home renders Hero directly followed by categories with no retired Banner o
     read('components/HomePosterBanner.tsx'),
   ])
 
-  assert.match(page, /await getPublishedHomepageBanners\(\)/)
-  assert.match(page, /<Hero \/>\s*<HomeBookCategories banners=\{banners\} \/>/)
+  assert.match(page, /getPublishedHomepageBanners\(\),/)
+  assert.match(page, /<LaunchOfferBanner rule=\{multiBookRule\} \/>\s*<Hero \/>\s*<HomeBookCategories banners=\{banners\} \/>/)
   assert.doesNotMatch(page, /HomePosterBanner|after_hero|After Hero|-mt-2|-mt-3/)
   assert.match(categories, /banners\.after_for_boys/)
   assert.match(categories, /banners\.after_in_discount/)

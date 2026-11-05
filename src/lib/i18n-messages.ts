@@ -451,6 +451,7 @@ const en: MessageDictionary = {
   'checkout.rewardVoucherAccountRequired': 'Please log in to use vouchers.',
   'checkout.discountApplyError': 'Unable to apply that code.',
   'checkout.discountLine': 'Discount',
+  'checkout.multiBookOffer': 'Christmas 2+ Books Offer',
   'checkout.appliedDiscountSummary': '{{code}} · -{{amount}}',
   'checkout.decreaseQuantity': 'Decrease quantity',
   'checkout.increaseQuantity': 'Increase quantity',
