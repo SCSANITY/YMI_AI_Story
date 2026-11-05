@@ -124,7 +124,7 @@ export const Hero: React.FC = () => {
       <div className={`relative w-full md:min-h-[100svh] md:bg-transparent ${styles.mobileHero}`}>
 
         {/* The poster paints immediately while device-sized autoplay video starts. */}
-        <div className="absolute inset-x-0 top-0 z-0 h-[calc(4rem+56.25vw)] overflow-hidden bg-[#fff9f2] md:inset-0 md:h-auto md:bg-[#f7e2d0]">
+        <div className="absolute inset-x-0 top-0 z-0 h-[calc(4rem+var(--launch-banner-h,0px)+56.25vw)] overflow-hidden bg-[#fff9f2] md:inset-0 md:h-auto md:bg-[#f7e2d0]">
           <video
             autoPlay={Boolean(videoSrc)}
             muted
@@ -134,9 +134,9 @@ export const Hero: React.FC = () => {
             poster="/hero-poster-v2.webp"
             src={videoSrc ?? undefined}
             aria-hidden="true"
-            className="absolute inset-x-0 top-16 aspect-video w-full bg-[#f4d5bd] object-cover md:inset-0 md:h-full md:bg-[#f7e2d0]"
+            className="absolute inset-x-0 top-[calc(4rem+var(--launch-banner-h,0px))] aspect-video w-full bg-[#f4d5bd] object-cover md:inset-0 md:h-full md:bg-[#f7e2d0]"
           />
-          <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-16 h-4 md:hidden ${styles.mobileVideoTop}`} />
+          <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-[calc(4rem+var(--launch-banner-h,0px))] h-4 md:hidden ${styles.mobileVideoTop}`} />
         </div>
 
         {/* ── Gradient overlays ──────────────────────────────────────────── */}
@@ -164,7 +164,7 @@ export const Hero: React.FC = () => {
         <div className="relative z-20 flex flex-col md:min-h-[100svh]">
 
           {/* Reserve only the shared 64px toolbar and edge-to-edge 16:9 video. */}
-          <div className="relative h-[calc(4rem+56.25vw)] shrink-0 md:hidden" aria-hidden="true">
+          <div className="relative h-[calc(4rem+var(--launch-banner-h,0px)+56.25vw)] shrink-0 md:hidden" aria-hidden="true">
             {/* An open storybook edge joins the film to its paper surface.
                 Decorative, server-rendered geometry: no media, state or motion. */}
             <div className={`pointer-events-none absolute inset-x-0 bottom-0 ${styles.mobileVideoTransition}`}>

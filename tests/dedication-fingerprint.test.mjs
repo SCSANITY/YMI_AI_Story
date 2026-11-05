@@ -55,6 +55,7 @@ test('payment completion retains commercial fingerprint and active Session fenci
   const missingSnapshot = fingerprintModule({ snapshot: false })
   const oldSnapshot = {
     order: { currency: 'USD', productDiscount: 0, shipping: 0, shippingDiscount: 0,
+      multiBookDiscount: 0,
       productInstrument: '', shippingInstrument: '', shippingMethod: '', shippingZone: '' },
     items: [{ id: 'item-1', creationId: 'creation-1', productType: 'physical',
       packageType: 'basic', packagePriceVersion: 1, quantity: 1, unitPrice: 30 }],

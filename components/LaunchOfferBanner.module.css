@@ -1,0 +1,55 @@
+.bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  height: var(--launch-banner-h, 36px);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: linear-gradient(90deg, #d2691e, #c1531a 55%, #d2691e);
+}
+.bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #fff3da55 20%, #fff3da99 50%, #fff3da55 80%, transparent);
+}
+.track {
+  display: flex;
+  width: max-content;
+  animation: launch-banner-slide 30s linear infinite;
+}
+.trackMobile {
+  animation-duration: 24s;
+}
+.group {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.group b {
+  font: 600 12.5px/1 Inter, 'Segoe UI', system-ui, sans-serif;
+  color: #fff3da;
+  letter-spacing: 0.045em;
+  padding: 0 14px;
+}
+.group i {
+  font-style: normal;
+  font-size: 10px;
+  color: #fff3da80;
+}
+.trackMobile .group b {
+  font-size: 11px;
+  padding: 0 10px;
+}
+@keyframes launch-banner-slide {
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .track { animation: none; }
+}

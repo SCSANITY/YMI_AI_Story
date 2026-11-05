@@ -36,6 +36,14 @@ import {
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
 import type { OrderDiscountSummary } from '@/lib/discounts';
 import {
+  capMultiBookOfferToHeadroom,
+  computeMultiBookDiscountUsd,
+  computeMultiBookSubtotalUsd,
+  getMultiBookOfferBadgeLabel,
+  normalizeMultiBookOfferRule,
+  type MultiBookOfferRule,
+} from '@/lib/multi-book-offer-core';
+import {
   EMPTY_SHIPPING_QUOTE, CheckoutReturnStateError, restoreCheckoutOrder, shippingDiscountRefreshKey,
   type CheckoutAddressForm, type ShippingQuoteState,
 } from '@/lib/checkout-restoration';
@@ -166,7 +174,41 @@ function CheckoutPageContent() {
   }, [openPolicyModal]);
 
   const discountTotalUsd = useMemo(() => Math.min(total, Math.max(0, discountAmountUsd)), [discountAmountUsd, total]);
-  const discountedTotalUsd = useMemo(() => Math.max(0, total - discountTotalUsd), [discountTotalUsd, total]);
+
+  // Multi-book offer: display-only client recalculation; the session route is
+  // authoritative. Client uses the same effective-amount cap as the server.
+  const [multiBookRule, setMultiBookRule] = useState<MultiBookOfferRule | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/multi-book-offer', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (active) setMultiBookRule(normalizeMultiBookOfferRule(data)); })
+      .catch(() => { if (active) setMultiBookRule(null); });
+    return () => { active = false; };
+  }, []);
+  const multiBookItems = useMemo(
+    () => items.map((item) => ({ quantity: item.quantity, unitPriceUsd: cartItemUnitPrice(item) })),
+    [items]
+  );
+  const multiBookSubtotalUsd = useMemo(() => computeMultiBookSubtotalUsd(multiBookItems), [multiBookItems]);
+  const multiBookDiscountUsd = useMemo(
+    () => capMultiBookOfferToHeadroom(
+      computeMultiBookDiscountUsd(multiBookItems, multiBookRule),
+      multiBookSubtotalUsd,
+      discountTotalUsd
+    ),
+    [multiBookItems, multiBookRule, multiBookSubtotalUsd, discountTotalUsd]
+  );
+  const multiBookBadgeLabel = useMemo(() => getMultiBookOfferBadgeLabel(multiBookRule), [multiBookRule]);
+  const formattedMultiBookDiscount = useMemo(
+    () => formatCurrencyAmount(multiBookDiscountUsd, selectedCurrency),
+    [multiBookDiscountUsd, selectedCurrency]
+  );
+
+  const discountedTotalUsd = useMemo(
+    () => Math.max(0, total - discountTotalUsd - multiBookDiscountUsd),
+    [discountTotalUsd, multiBookDiscountUsd, total]
+  );
   const formattedSubtotal = useMemo(() => formatCurrencyAmount(total, selectedCurrency), [selectedCurrency, total]);
   const formattedDiscount = useMemo(
     () => formatCurrencyAmount(discountTotalUsd, selectedCurrency),
@@ -215,6 +257,9 @@ function CheckoutPageContent() {
     if (discountTotalUsd > 0) {
       lines.push(`${appliedProductCode || selectedRewardVoucherName || 'YMI'} · -${formattedDiscount}`);
     }
+    if (multiBookDiscountUsd > 0) {
+      lines.push(`${t('checkout.multiBookOffer')} · -${formattedMultiBookDiscount}`);
+    }
     if (shippingDiscountTotalUsd > 0) {
       lines.push(`${appliedShippingCode || selectedRewardVoucherName || 'Free shipping'} · -${formattedShippingDiscount}`);
     }
@@ -224,9 +269,12 @@ function CheckoutPageContent() {
     appliedShippingCode,
     discountTotalUsd,
     formattedDiscount,
+    formattedMultiBookDiscount,
     formattedShippingDiscount,
+    multiBookDiscountUsd,
     selectedRewardVoucherName,
     shippingDiscountTotalUsd,
+    t,
   ]);
   const [form, setForm] = useState<CheckoutAddressForm>({
     firstName: '',
@@ -1275,6 +1323,9 @@ function CheckoutPageContent() {
           formattedNetShipping={formattedNetShipping}
           formattedDiscount={formattedDiscount}
           formattedShippingDiscount={formattedShippingDiscount}
+          multiBookDiscountTotalUsd={multiBookDiscountUsd}
+          formattedMultiBookDiscount={formattedMultiBookDiscount}
+          multiBookBadgeLabel={multiBookBadgeLabel}
           formattedTotal={formattedTotal}
           t={t}
         />

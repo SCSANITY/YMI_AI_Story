@@ -28,6 +28,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     shipping_country_method_support: ['standard', 'speedy'].map(method => ({ method_code: method, country_code: 'HK', enabled: true })),
     shipping_base_rates: ['standard', 'speedy'].map((method, i) => ({ method_code: method, zone_code: 'HK', weight_kg: 1, base_cost_hkd: 78 * (i + 1), enabled: true })),
     orders: [order], cart_items: items,
+    multi_book_offer_rule: [],
     discount_instruments: freeShipping ? [{ instrument_id: 'free-shipping', instrument_type: 'voucher', code: null, discount_offers: { name: 'Free shipping' } }] : [],
   }
   const calls = [], stripeCalls = [], rpcCalls = []

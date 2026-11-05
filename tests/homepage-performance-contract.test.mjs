@@ -12,8 +12,8 @@ test('mobile Hero is edge-to-edge and content-height while desktop keeps its ful
 
   assert.equal((hero.match(/<video\b/g) ?? []).length, 1)
   assert.match(hero, /relative w-full md:min-h-\[100svh\] md:bg-transparent \$\{styles.mobileHero\}/)
-  assert.match(hero, /className="absolute inset-x-0 top-16 aspect-video w-full bg-\[#f4d5bd\] object-cover md:inset-0 md:h-full md:bg-\[#f7e2d0\]"/)
-  assert.match(hero, /h-\[calc\(4rem\+56\.25vw\)\] shrink-0 md:hidden/)
+  assert.match(hero, /className="absolute inset-x-0 top-\[calc\(4rem\+var\(--launch-banner-h,0px\)\)\] aspect-video w-full bg-\[#f4d5bd\] object-cover md:inset-0 md:h-full md:bg-\[#f7e2d0\]"/)
+  assert.match(hero, /h-\[calc\(4rem\+var\(--launch-banner-h,0px\)\+56\.25vw\)\] shrink-0 md:hidden/)
   assert.match(hero, /className="hidden flex-1 md:block"/)
   assert.match(hero, /md:text-\[clamp\(2\.4rem,5\.5vw,5rem\)\]/)
   assert.doesNotMatch(hero, /minHeight: '100svh'|min-h-\[330px\]|top-24|w-\[calc\(100%-2rem\)\]|object-contain/)

@@ -5,6 +5,8 @@ import { Footer } from '@/components/Footer';
 import { HomeBookCategories } from '@/components/HomeBookCategories';
 import { HomeBooksHashRedirect } from '@/components/HomeBooksHashRedirect';
 import { getPublishedHomepageBanners } from '@/lib/homepage-banners';
+import { getMultiBookOfferRule } from '@/lib/multi-book-offer';
+import { LaunchOfferBanner } from '@/components/LaunchOfferBanner';
 import { DEFAULT_SITE_TITLE, publicPageMetadata } from '@/lib/seo';
 
 export const revalidate = 300;
@@ -17,11 +19,16 @@ export const metadata: Metadata = publicPageMetadata({
 });
 
 export default async function HomePage() {
-  const banners = await getPublishedHomepageBanners();
+  const [banners, multiBookRule] = await Promise.all([
+    getPublishedHomepageBanners(),
+    // Fail-closed: a rule read error simply renders no banner this paint.
+    getMultiBookOfferRule().catch(() => null),
+  ]);
 
   return (
     <>
       <HomeBooksHashRedirect />
+      <LaunchOfferBanner rule={multiBookRule} />
       <Hero />
       <HomeBookCategories banners={banners} />
       <Footer />

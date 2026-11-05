@@ -1,15 +1,16 @@
 import Link from 'next/link'
 
-type DiscountSection = 'instruments' | 'shipping'
+type DiscountSection = 'instruments' | 'shipping' | 'multi-book'
 
 const SECTIONS = [
   { id: 'instruments', label: 'Promo codes & vouchers', href: '/admin/discounts' },
   { id: 'shipping', label: 'Shipping discount', href: '/admin/discounts?view=shipping' },
+  { id: 'multi-book', label: 'Multi-book offer', href: '/admin/discounts?view=multi-book' },
 ] as const
 
 export function DiscountSectionTabs({ activeSection }: { activeSection: DiscountSection }) {
   return (
-    <nav aria-label="Discount sections" className="admin-v2-panel grid grid-cols-2 gap-1 p-1.5">
+    <nav aria-label="Discount sections" className="admin-v2-panel grid grid-cols-3 gap-1 p-1.5">
       {SECTIONS.map(section => (
         <Link key={section.id} href={section.href} aria-current={section.id === activeSection ? 'page' : undefined}
           className={`flex min-h-11 min-w-0 items-center justify-center rounded-lg px-3 py-2 text-center text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)] ${
