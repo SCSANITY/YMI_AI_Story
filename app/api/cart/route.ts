@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   checkoutOwnerErrorResponse,
+  getRequestAnonSessionId,
   ownerFilter,
   requireCheckoutOrderAccess,
+  requireCheckoutOrderReadAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
 import { filterActiveCartItems } from '@/lib/cart-lifecycle'
@@ -64,7 +66,25 @@ async function getCart(request: Request) {
     return cartJson({ items: [] })
   }
 
-  const filter = ownerFilter(owner)
+  // Order restore reads must authorize the order first and then query through
+  // the identity that actually owns it: a signed-in customer whose guest order
+  // is not yet claimed reads it back via the anon cookie fallback, and the
+  // cart RPC must use that anon filter to return the rows.
+  let readOwner = owner
+  if (orderIdParam) {
+    try {
+      const access = await requireCheckoutOrderReadAccess(orderIdParam, owner, {
+        fallbackAnonSessionId: getRequestAnonSessionId(request),
+      })
+      readOwner = access.readOwner
+    } catch (error) {
+      const response = checkoutOwnerErrorResponse(error)
+      if (response) return response
+      throw error
+    }
+  }
+
+  const filter = ownerFilter(readOwner)
   const isActiveCartRequest =
     ids.length === 0 &&
     !orderIdParam &&

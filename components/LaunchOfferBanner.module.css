@@ -22,10 +22,10 @@
 .track {
   display: flex;
   width: max-content;
-  animation: launch-banner-slide 30s linear infinite;
+  animation: launch-banner-slide 60s linear infinite;
 }
 .trackMobile {
-  animation-duration: 24s;
+  animation-duration: 48s;
 }
 .group {
   display: flex;

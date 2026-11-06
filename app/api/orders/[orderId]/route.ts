@@ -5,8 +5,9 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { loadOrderDiscountSlots, releaseOrderDiscount } from '@/lib/discounts'
 import {
   checkoutOwnerErrorResponse,
+  getRequestAnonSessionId,
   parseOrderReference,
-  requireCheckoutOrderAccess,
+  requireCheckoutOrderReadAccess,
   resolveCheckoutOwner,
 } from '@/lib/checkout-owner'
 import {
@@ -58,7 +59,9 @@ export async function GET(
           { status: 401 }
         )
       }
-      await requireCheckoutOrderAccess(rawOrderId, owner)
+      await requireCheckoutOrderReadAccess(rawOrderId, owner, {
+        fallbackAnonSessionId: getRequestAnonSessionId(request),
+      })
     } catch (error) {
       const response = checkoutOwnerErrorResponse(error)
       if (response) return response

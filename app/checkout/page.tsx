@@ -44,7 +44,8 @@ import {
   type MultiBookOfferRule,
 } from '@/lib/multi-book-offer-core';
 import {
-  EMPTY_SHIPPING_QUOTE, CheckoutReturnStateError, restoreCheckoutOrder, shippingDiscountRefreshKey,
+  EMPTY_SHIPPING_QUOTE, CheckoutReturnStateError, mergeRestoredFormWithDraft,
+  restoreCheckoutOrder, shippingDiscountRefreshKey,
   type CheckoutAddressForm, type ShippingQuoteState,
 } from '@/lib/checkout-restoration';
 
@@ -485,6 +486,20 @@ function CheckoutPageContent() {
     if (!queryOrderId || !restoreKey || !isAuthResolved) return;
     let cancelled = false;
     const controller = new AbortController();
+    // Capture the browser draft before the restore starts. The effect is keyed
+    // by restoreKey (orderId + customerId + attempt), so order switches and
+    // retries always re-capture; a late response is dropped by `cancelled`
+    // before it can touch the next order's form.
+    let draftSnapshot: Partial<CheckoutAddressForm> | null = null;
+    try {
+      const rawDraft = window.localStorage.getItem('ymi_checkout_form');
+      const parsedDraft = rawDraft ? JSON.parse(rawDraft) : null;
+      if (parsedDraft && typeof parsedDraft === 'object' && !Array.isArray(parsedDraft)) {
+        draftSnapshot = parsedDraft as Partial<CheckoutAddressForm>;
+      }
+    } catch {
+      // Missing/malformed/blocked storage never prevents checkout restore.
+    }
     const options = { credentials: 'include' as const, cache: 'no-store' as const, signal: controller.signal };
     const itemsResponsePromise = fetch(`/api/cart?orderId=${encodeURIComponent(queryOrderId)}&status=ordered`, options).catch(() => null);
     fetch(`/api/orders/${encodeURIComponent(queryOrderId)}`, options)
@@ -506,7 +521,7 @@ function CheckoutPageContent() {
       .then(({ form: address, quote, discounts, rows }) => {
         if (cancelled) return;
         hydrateCheckoutItems(rows);
-        setForm(address);
+        setForm(mergeRestoredFormWithDraft(address, draftSnapshot));
         // The restored order becomes the draft baseline; only now may the
         // persistence effect resume writing to the browser draft.
         setIsCheckoutDraftHydrated(true);
