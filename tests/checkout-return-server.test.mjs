@@ -48,7 +48,8 @@ function orderRoute({ allowed = true, customer = true, paid = false } = {}) {
     '@/lib/checkout-owner': {
       parseOrderReference: value => ({ column: 'order_id', value }),
       resolveCheckoutOwner: async () => ({ ownerType: customer ? 'customer' : 'anon' }),
-      requireCheckoutOrderAccess: async () => { events.push(['access']); if (!allowed) throw Error('Forbidden') },
+      getRequestAnonSessionId: () => null,
+      requireCheckoutOrderReadAccess: async () => { events.push(['access']); if (!allowed) throw Error('Forbidden') },
       checkoutOwnerErrorResponse: error => error.message === 'Forbidden' ? Response.json({ error: 'Forbidden' }, { status: 403 }) : null,
     },
     '@/lib/customer-orders-server': { CustomerOrderReadError: class extends Error {}, loadCustomerOrders: async () => { events.push(['order']); return { orders: [order] } } },

@@ -83,7 +83,7 @@ function cartHarness({invalid=false}={}){
  const owner={ownerType:'customer',customerId:'owner-a'}
  const api=loadUi('app/api/cart/route.ts',{
   'next/server':{NextResponse:{json:Response.json}},
-  '@/lib/checkout-owner':{resolveCheckoutOwner:async()=>owner,ownerFilter:()=>({owner_type:'customer',column:'customer_id',value:'owner-a'})},
+  '@/lib/checkout-owner':{resolveCheckoutOwner:async()=>owner,ownerFilter:()=>({owner_type:'customer',column:'customer_id',value:'owner-a'}),getRequestAnonSessionId:()=>null,requireCheckoutOrderReadAccess:async(_id,owner)=>({order:{},readOwner:owner}),checkoutOwnerErrorResponse:()=>null},
   '@/lib/storage-signing':{createSignedStorageUrlMap:async()=>new Map()},
   '@/lib/package-pricing-store':{},
   '@/lib/supabaseAdmin':{supabaseAdmin:{from(table){throw new Error(`unexpected table read ${table}`)},async rpc(name,args){rpcCalls.push({name,args});return{data:{items:[item],linkedOrders:[]},error:null}}}},

@@ -53,6 +53,12 @@ function getCookieValue(request: Request, name: string) {
   return entry ? decodeURIComponent(entry.split('=').slice(1).join('=')) : null
 }
 
+// Read-only access to the raw anon cookie. Never creates a session; the caller
+// decides whether the value may be used as a guest-order read fallback.
+export function getRequestAnonSessionId(request: Request) {
+  return normalizeNullable(getCookieValue(request, ANON_COOKIE_NAME))
+}
+
 function normalizeNullable(value: unknown) {
   const normalized = String(value || '').trim()
   return normalized || null
@@ -215,6 +221,83 @@ export async function requireCheckoutOrderAccess(
   }
 
   return order
+}
+
+// Read-only dual-identity access for the checkout restore GET endpoints. A
+// signed-in customer may read back their own unclaimed guest order when the
+// browser still carries the matching anon cookie (the merge claim may lag the
+// first restore request). The returned readOwner is the identity the caller
+// must use for any follow-up owner-scoped query, so a customer falling back to
+// a guest order reads it through the anon filter. Write paths never use this.
+export async function requireCheckoutOrderReadAccess(
+  orderIdOrDisplayId: string,
+  owner: CheckoutOwner,
+  options?: {
+    fallbackAnonSessionId?: string | null
+  }
+) {
+  if (owner.ownerType === 'anon') {
+    const order = await requireCheckoutOrderAccess(orderIdOrDisplayId, owner)
+    return { order, readOwner: owner as CheckoutOwner }
+  }
+
+  const reference = parseOrderReference(orderIdOrDisplayId)
+  const { data: order, error: orderError } = await supabaseAdmin
+    .from('orders')
+    .select('order_id, display_id, order_status, payment_id, customer_id, email, checkout_session_id')
+    .eq(reference.column, reference.value)
+    .maybeSingle()
+
+  if (orderError) {
+    throw new CheckoutOwnerError('Failed to load order', 500)
+  }
+  if (!order?.order_id) {
+    throw new CheckoutOwnerError('Order not found', 404)
+  }
+  if (order.customer_id === owner.customerId) {
+    return { order, readOwner: owner as CheckoutOwner }
+  }
+
+  // Guest-order fallback: only an unpaid, unpaid-for, unclaimed order whose
+  // rows all belong to this browser's anon session may be read.
+  const fallbackAnonSessionId = normalizeNullable(options?.fallbackAnonSessionId)
+  const fallbackDenied = () => new CheckoutOwnerError('Order does not belong to the current session', 403)
+  if (!fallbackAnonSessionId) throw fallbackDenied()
+  if (order.order_status !== 'unpaid' || order.payment_id || order.customer_id) {
+    throw fallbackDenied()
+  }
+
+  const { data: cartItems, error: cartItemsError } = await supabaseAdmin
+    .from('cart_items')
+    .select('cart_item_id, owner_type, anon_session_id, status')
+    .eq('order_id', order.order_id)
+
+  if (cartItemsError) {
+    throw new CheckoutOwnerError('Failed to load order items', 500)
+  }
+
+  const linkedItems = cartItems ?? []
+  const belongsToFallbackSession =
+    linkedItems.length > 0 &&
+    linkedItems.every(
+      (item) =>
+        item.owner_type === 'anon' &&
+        item.anon_session_id === fallbackAnonSessionId &&
+        item.status === 'ordered'
+    )
+
+  if (!belongsToFallbackSession) {
+    throw fallbackDenied()
+  }
+
+  const readOwner: CheckoutOwner = {
+    ownerType: 'anon',
+    customerId: null,
+    email: null,
+    authUserId: null,
+    anonSessionId: fallbackAnonSessionId,
+  }
+  return { order, readOwner }
 }
 
 export function checkoutOwnerErrorResponse(error: unknown) {

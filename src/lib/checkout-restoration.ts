@@ -74,3 +74,28 @@ export function shippingDiscountRefreshKey(orderId: string, instrumentId: string
   const option = quote.options.find(option => option.methodCode === quote.selectedMethod)
   return instrumentId && option ? `${orderId}:${instrumentId}:${option.amountUsd}:${option.methodCode}` : ''
 }
+
+// Tax identifiers are never re-injected from a browser draft; the draft writer
+// already blanks them and they must only come from the active form or an
+// explicitly saved address.
+const DRAFT_REFILL_BLOCKED_KEYS: ReadonlySet<keyof CheckoutAddressForm> = new Set([
+  'vatNumber', 'eoriNumber', 'iossNumber',
+])
+
+// Merge a browser draft into a freshly restored order form: the order is the
+// authoritative baseline, and a draft value (trimmed, non-empty) may only fill
+// a field the order left empty. Drafts never overwrite order data.
+export function mergeRestoredFormWithDraft(
+  orderForm: CheckoutAddressForm,
+  draft: Partial<CheckoutAddressForm> | null,
+): CheckoutAddressForm {
+  if (!draft) return orderForm
+  const merged = { ...orderForm }
+  for (const key of Object.keys(orderForm) as (keyof CheckoutAddressForm)[]) {
+    if (DRAFT_REFILL_BLOCKED_KEYS.has(key)) continue
+    if (typeof orderForm[key] === 'string' && orderForm[key].trim()) continue
+    const draftValue = typeof draft[key] === 'string' ? draft[key].trim() : ''
+    if (draftValue) merged[key] = draftValue
+  }
+  return merged
+}

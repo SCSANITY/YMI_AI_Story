@@ -106,6 +106,7 @@ const en: MessageDictionary = {
   'common.next': 'Next',
   'common.personalizedStorybook': 'Personalized storybook',
   'common.remove': 'Remove',
+  'common.retry': 'Retry',
   'common.savedAddress': 'Saved address',
   'common.total': 'Total',
   'common.unknown': 'Unknown',

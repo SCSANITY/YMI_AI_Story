@@ -268,6 +268,49 @@ test('a pending or failed order restore never overwrites the saved browser draft
   failedRestore.runtime.unmount()
 })
 
+test('restore fills order-empty fields from the browser draft while order data and tax-field exclusion win', async () => {
+  const draft = JSON.stringify({ ...empty, firstName: 'Drafty', addressLine1: 'Wrong browser draft', vatNumber: 'DRAFT-VAT' })
+  const h = checkoutFixture({ delayed: true, draft })
+  h.order = { ...order(), shipping_address: { ...address, firstName: '', vatNumber: '' } }
+  h.pending.resolve(); await h.runtime.flush()
+  const saved = JSON.parse(h.runtime.localStorage.getItem('ymi_checkout_form'))
+  assert.equal(saved.firstName, 'Drafty') // order left it empty; draft refills
+  assert.equal(saved.addressLine1, '1 Example Street') // order data wins over the draft
+  assert.equal(saved.country, 'HK')
+  assert.equal(saved.vatNumber, '') // tax identifiers are never re-injected
+  h.runtime.unmount()
+})
+
+test('a restore retry re-captures the current browser draft instead of the first attempt', async () => {
+  const h = checkoutFixture({ status: 503, draft: JSON.stringify({ ...empty, firstName: 'DraftA' }) })
+  await h.runtime.flush()
+  assert.match(uiText(h.runtime.tree), /Unable to restore checkout/)
+  h.runtime.localStorage.setItem('ymi_checkout_form', JSON.stringify({ ...empty, firstName: 'DraftB' }))
+  h.status = 200
+  h.order = { ...order(), shipping_address: { ...address, firstName: '' } }
+  uiNodes(h.runtime.tree).find(n => n.type === 'button' && uiText(n) === 'common.retry').props.onClick()
+  await h.runtime.flush()
+  const saved = JSON.parse(h.runtime.localStorage.getItem('ymi_checkout_form'))
+  assert.equal(saved.firstName, 'DraftB')
+  h.runtime.unmount()
+})
+
+test('mergeRestoredFormWithDraft keeps order values, fills only empty fields and blocks tax identifiers', async () => {
+  const { mergeRestoredFormWithDraft } = loadUi('src/lib/checkout-restoration.ts', {})
+  const orderForm = { ...empty, firstName: ' Order ', addressLine1: '1 Example Street', country: 'HK' }
+  const draft = { firstName: 'Drafty', lastName: '  Draft Last  ', vatNumber: 'DRAFT-VAT', eoriNumber: 'DRAFT-EORI', iossNumber: 'DRAFT-IOSS', country: 'US' }
+  const merged = mergeRestoredFormWithDraft(orderForm, draft)
+  assert.equal(merged.firstName, ' Order ') // non-empty order value kept verbatim
+  assert.equal(merged.addressLine1, '1 Example Street')
+  assert.equal(merged.country, 'HK')
+  assert.equal(merged.lastName, 'Draft Last') // trimmed draft fills an empty field
+  assert.equal(merged.vatNumber, '')
+  assert.equal(merged.eoriNumber, '')
+  assert.equal(merged.iossNumber, '')
+  assert.equal(mergeRestoredFormWithDraft(orderForm, null), orderForm)
+  assert.equal(mergeRestoredFormWithDraft(orderForm, { lastName: '   ' }).lastName, '') // whitespace-only draft ignored
+})
+
 test('an unresolved cached session stays guest until Supabase resolves it', async () => {
   const quote = { status: 'available', options: [{ methodCode: 'speedy', methodName: 'Speedy', amountUsd: 8, snapshot }], selectedMethod: 'speedy', message: null }
   const walkToPayment = async (h, expectedCustomerId) => {
