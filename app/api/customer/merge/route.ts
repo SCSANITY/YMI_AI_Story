@@ -93,7 +93,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to resolve customer' }, { status: 500 })
   }
 
-  const anonSessionId = getCookieValue(request.headers.get('cookie') || '', COOKIE_NAME)
+  const rawAnonSessionId = getCookieValue(request.headers.get('cookie') || '', COOKIE_NAME)
+  // The claim RPC takes uuid; a malformed cookie just means there is no anon
+  // session to claim (self-heal still runs), not a hard failure.
+  const anonSessionId = rawAnonSessionId && isUuid(rawAnonSessionId) ? rawAnonSessionId : null
 
   const { error: kolOwnershipError } = await supabaseAdmin.rpc(
     'claim_kol_collaboration_leads_for_customer',
@@ -125,135 +128,93 @@ export async function POST(request: Request) {
     }
   }
 
-  if (anonSessionId) {
-    const { data: anonOrderedItems } = await supabaseAdmin
-      .from('cart_items')
-      .select('order_id')
-      .eq('owner_type', 'anon')
-      .eq('anon_session_id', anonSessionId)
-      .eq('status', 'ordered')
-      .not('order_id', 'is', null)
+  // WEB-UIUX-001/34: the whole anon -> customer ownership migration runs as one
+  // transactional RPC (orders included; the previous inline UPDATE silently
+  // failed on orders.updated_at). Any failure is explicit so the client keeps
+  // the session but opens a retry path instead of leaving mixed ownership.
+  const { data: claimData, error: claimError } = await supabaseAdmin.rpc(
+    'claim_anon_checkout_for_customer',
+    {
+      p_customer_id: customer.customer_id,
+      p_anon_session_id: anonSessionId,
+      p_email: email,
+      p_first_reminder_minutes: Number.isFinite(FIRST_REMINDER_MINUTES) ? FIRST_REMINDER_MINUTES : 1,
+      p_repeat_reminder_days: Number.isFinite(REPEAT_REMINDER_DAYS) ? REPEAT_REMINDER_DAYS : 3,
+    }
+  )
+  if (claimError) {
+    console.error('[customer-merge] ownership claim RPC failed', {
+      customerId: customer.customer_id,
+      message: claimError.message,
+    })
+    return NextResponse.json({ error: 'Account merge incomplete', code: 'MERGE_CLAIM_FAILED' }, { status: 500 })
+  }
+  // deferred=true: an active Stripe checkout session is being protected; no
+  // ownership moved, and favourites stay with the anon session until a retry.
+  const ownershipDeferred = claimData?.deferred === true
 
-    const anonOrderIds = Array.from(
-      new Set((anonOrderedItems ?? []).map((row) => row.order_id).filter(Boolean))
+  if (anonSessionId && !ownershipDeferred) {
+    // Favourites stay best-effort and warn-and-continue. Tombstoned removals
+    // (unfavourites made while a previous deferred merge kept local state) are
+    // honoured and never re-merged.
+    const removedFavorites = new Set(
+      Array.isArray(body?.removedFavorites)
+        ? body.removedFavorites.filter((id: unknown) => typeof id === 'string' && id.length > 0)
+        : []
     )
 
-    await supabaseAdmin
-      .from('user_assets')
-      .update({
-        owner_type: 'customer',
-        customer_id: customer.customer_id,
-        anon_session_id: null,
-      })
-      .eq('owner_type', 'anon')
-      .eq('anon_session_id', anonSessionId)
-
-    await supabaseAdmin
-      .from('jobs')
-      .update({
-        owner_type: 'customer',
-        customer_id: customer.customer_id,
-        anon_session_id: null,
-      })
-      .eq('owner_type', 'anon')
-      .eq('anon_session_id', anonSessionId)
-
-    await supabaseAdmin
-      .from('creations')
-      .update({
-        owner_type: 'customer',
-        customer_id: customer.customer_id,
-        anon_session_id: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('owner_type', 'anon')
-      .eq('anon_session_id', anonSessionId)
-
-    await supabaseAdmin
-      .from('cart_items')
-      .update({
-        owner_type: 'customer',
-        customer_id: customer.customer_id,
-        anon_session_id: null,
-      })
-      .eq('owner_type', 'anon')
-      .eq('anon_session_id', anonSessionId)
-
-    if (anonOrderIds.length > 0) {
-      await supabaseAdmin
-        .from('orders')
-        .update({
-          customer_id: customer.customer_id,
-          email,
-          updated_at: new Date().toISOString(),
-        })
-        .in('order_id', anonOrderIds)
-        .eq('order_status', 'unpaid')
-        .is('customer_id', null)
-
-      const { data: customerBoundOrders } = await supabaseAdmin
-        .from('orders')
-        .select('order_id, customer_id, order_status')
-        .in('order_id', anonOrderIds)
-        .eq('order_status', 'unpaid')
-        .eq('customer_id', customer.customer_id)
-
-      const now = Date.now()
-      const reminderRows = (customerBoundOrders ?? []).map((order) => ({
-        order_id: order.order_id,
-        customer_id: order.customer_id,
-        next_send_at: new Date(now + FIRST_REMINDER_MINUTES * 60 * 1000).toISOString(),
-        repeat_every_days: REPEAT_REMINDER_DAYS,
-        active: true,
-        updated_at: new Date().toISOString(),
-      }))
-
-      if (reminderRows.length > 0) {
-        await supabaseAdmin
-          .from('order_reminder_schedules')
-          .upsert(reminderRows, { onConflict: 'order_id' })
-      }
-    }
-
-    const { data: anonFavourites } = await supabaseAdmin
+    const { data: anonFavourites, error: anonFavouritesError } = await supabaseAdmin
       .from('favourites')
       .select('favourite_id, template_id')
       .eq('owner_type', 'anon')
       .eq('anon_session_id', anonSessionId)
 
-    const anonTemplateIds = Array.from(
-      new Set((anonFavourites ?? []).map((row) => row.template_id).filter(Boolean))
-    )
+    if (anonFavouritesError) {
+      console.warn('[customer-merge] anon favourites read failed; continuing', {
+        customerId: customer.customer_id,
+        message: anonFavouritesError.message,
+      })
+    } else {
+      const anonTemplateIds = Array.from(
+        new Set((anonFavourites ?? []).map((row) => row.template_id).filter(Boolean))
+      ).filter((templateId) => !removedFavorites.has(templateId))
 
-    if (anonTemplateIds.length > 0) {
-      const { data: customerExistingFavs } = await supabaseAdmin
-        .from('favourites')
-        .select('template_id')
-        .eq('owner_type', 'customer')
-        .eq('customer_id', customer.customer_id)
-        .in('template_id', anonTemplateIds)
+      if (anonTemplateIds.length > 0) {
+        const { data: customerExistingFavs } = await supabaseAdmin
+          .from('favourites')
+          .select('template_id')
+          .eq('owner_type', 'customer')
+          .eq('customer_id', customer.customer_id)
+          .in('template_id', anonTemplateIds)
 
-      const customerTemplateSet = new Set(
-        (customerExistingFavs ?? []).map((row) => row.template_id).filter(Boolean)
-      )
+        const customerTemplateSet = new Set(
+          (customerExistingFavs ?? []).map((row) => row.template_id).filter(Boolean)
+        )
 
-      const rowsToInsert = anonTemplateIds
-        .filter((templateId) => !customerTemplateSet.has(templateId))
-        .map((templateId) => ({
-          owner_type: 'customer',
-          customer_id: customer.customer_id,
-          template_id: templateId,
-        }))
+        const rowsToInsert = anonTemplateIds
+          .filter((templateId) => !customerTemplateSet.has(templateId))
+          .map((templateId) => ({
+            owner_type: 'customer',
+            customer_id: customer.customer_id,
+            template_id: templateId,
+          }))
 
-      if (rowsToInsert.length > 0) {
-        await supabaseAdmin.from('favourites').insert(rowsToInsert)
+        if (rowsToInsert.length > 0) {
+          const { error: favouritesInsertError } = await supabaseAdmin.from('favourites').insert(rowsToInsert)
+          if (favouritesInsertError) {
+            console.warn('[customer-merge] favourites merge insert failed; continuing', {
+              customerId: customer.customer_id,
+              message: favouritesInsertError.message,
+            })
+          }
+        }
+
+        await supabaseAdmin
+          .from('favourites')
+          .delete()
+          .eq('owner_type', 'anon')
+          .eq('anon_session_id', anonSessionId)
       }
-
-      await supabaseAdmin
-        .from('favourites')
-        .delete()
-        .eq('owner_type', 'anon')
-        .eq('anon_session_id', anonSessionId)
     }
   }
 
@@ -327,7 +288,7 @@ export async function POST(request: Request) {
     }
   }
 
-  await supabaseAdmin
+  const { error: voucherClaimError } = await supabaseAdmin
     .from('discount_instruments')
     .update({
       owner_customer_id: customer.customer_id,
@@ -337,10 +298,18 @@ export async function POST(request: Request) {
     .is('owner_customer_id', null)
     .eq('owner_email', email)
 
+  if (voucherClaimError) {
+    console.warn('[customer-merge] voucher ownership claim failed; continuing', {
+      customerId: customer.customer_id,
+      message: voucherClaimError.message,
+    })
+  }
+
   return NextResponse.json({
     customerId: customer.customer_id,
     email: customer.email,
     authUserId: customer.auth_user_id,
     displayName: customer.display_name,
+    deferred: ownershipDeferred,
   })
 }

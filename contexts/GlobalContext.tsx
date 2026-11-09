@@ -93,6 +93,78 @@ const catalogTemplateToBook = (templateId: string, template: any): Book | null =
   }
 };
 
+// WEB-UIUX-001/34: while a merge is deferred (active Stripe session protected),
+// local favourites stay with the browser. An unfavourite in that window is
+// recorded here so the next successful merge never re-adds it from the anon
+// server rows. Tombstones are consumed by /api/customer/merge and cleared on
+// a completed merge, on account switch, and on logout.
+const FAVOURITE_REMOVAL_TOMBSTONES_KEY = 'ymi_favourite_removal_tombstones';
+
+const readFavouriteRemovalTombstones = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(FAVOURITE_REMOVAL_TOMBSTONES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const appendFavouriteRemovalTombstone = (templateId: string) => {
+  if (typeof window === 'undefined' || !templateId) return;
+  try {
+    const current = readFavouriteRemovalTombstones();
+    if (current.includes(templateId)) return;
+    window.localStorage.setItem(FAVOURITE_REMOVAL_TOMBSTONES_KEY, JSON.stringify([...current, templateId]));
+  } catch {
+    // Tombstones are best-effort; a storage failure never blocks unfavouriting.
+  }
+};
+
+const clearFavouriteRemovalTombstones = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(FAVOURITE_REMOVAL_TOMBSTONES_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
+// An incomplete (failed or deferred) merge is persisted per auth user so a
+// fresh browser session re-runs the claim instead of trusting the
+// already-synced short-circuit on the cached customer id.
+const MERGE_PENDING_CLAIM_KEY = 'ymi_customer_merge_pending_claim';
+
+const readMergePendingClaim = (authUserId: string): boolean => {
+  if (typeof window === 'undefined' || !authUserId) return false;
+  try {
+    return window.localStorage.getItem(MERGE_PENDING_CLAIM_KEY) === authUserId;
+  } catch {
+    return false;
+  }
+};
+
+const writeMergePendingClaim = (authUserId: string) => {
+  if (typeof window === 'undefined' || !authUserId) return;
+  try {
+    window.localStorage.setItem(MERGE_PENDING_CLAIM_KEY, authUserId);
+  } catch {
+    // Best-effort marker; the in-session retry path still works without it.
+  }
+};
+
+const clearMergePendingClaim = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(MERGE_PENDING_CLAIM_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
 export const GlobalProvider: React.FC<{
   children: ReactNode;
   suspendAuthSync?: boolean;
@@ -100,9 +172,15 @@ export const GlobalProvider: React.FC<{
   const [user, setUser] = useState<User | null>(null);
   const userRef = useRef<User | null>(null);
   const authSyncInFlightRef = useRef<string | null>(null);
-  const authSyncPromiseRef = useRef<Promise<string | null> | null>(null);
+  const authSyncPromiseRef = useRef<Promise<{ customerId: string | null; mergeComplete: boolean }> | null>(null);
   const authResolutionRunIdRef = useRef(0);
   const favoriteTogglePendingRef = useRef(false);
+  // WEB-UIUX-001/34: true when the last customer merge either failed outright
+  // or was deferred (active Stripe session protected). Login itself is kept;
+  // checkout shows a retry path and gates ownership-sensitive writes.
+  const [customerMergeFailed, setCustomerMergeFailed] = useState(false);
+  const customerMergeFailedRef = useRef(false);
+  const mergeRetryInFlightRef = useRef<Promise<boolean> | null>(null);
   const [displayCurrency, setDisplayCurrencyState] = useState<DisplayCurrency>('USD');
   const [displayRegion, setDisplayRegionState] = useState('US');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -300,6 +378,10 @@ export const GlobalProvider: React.FC<{
 
   useEffect(() => {
     if (!readIdentity) return;
+    // While the customer merge is incomplete, server reads resolve to the
+    // logged-in customer whose rows have not moved yet; keep the local
+    // anon-aligned cart instead of overwriting it from those reads.
+    if (customerMergeFailed) return;
     let isActive = true;
 
     const loadCartFromDb = async () => {
@@ -320,10 +402,17 @@ export const GlobalProvider: React.FC<{
     return () => {
       isActive = false;
     };
-  }, [readCartFromDb, readIdentity]);
+  }, [readCartFromDb, readIdentity, customerMergeFailed]);
 
   useEffect(() => {
     if (!isHydrated || !readIdentity) return;
+
+    // Same incomplete-merge guard as the cart loader: never overwrite local
+    // favourites from customer-scoped reads whose rows have not migrated yet.
+    if (customerMergeFailed) {
+      setIsFavoritesLoading(false);
+      return;
+    }
 
     let isActive = true;
     setIsFavoritesLoading(true);
@@ -348,7 +437,7 @@ export const GlobalProvider: React.FC<{
     return () => {
       isActive = false;
     };
-  }, [isHydrated, mapFavouriteItems, readIdentity]);
+  }, [isHydrated, mapFavouriteItems, readIdentity, customerMergeFailed]);
 
   useEffect(() => {
     if (user) localStorage.setItem('ymi_user', JSON.stringify(user));
@@ -379,8 +468,18 @@ export const GlobalProvider: React.FC<{
     authUserId?: string | null,
     metadata?: { displayName?: string | null; avatarUrl?: string | null }
   ) => {
+    // Staleness guard (WEB-UIUX-001/34): captured before any await; every state
+    // write below re-checks it so a late result from a switched-away account
+    // can never pollute the new session.
+    const entryRunId = authResolutionRunIdRef.current;
+    const isStale = () => authResolutionRunIdRef.current !== entryRunId;
+
     let customerId: string | undefined = undefined;
     let resolvedDisplayName = metadata?.displayName ?? null;
+    // A merge completes only when the server finished the ownership claim;
+    // HTTP 200 with deferred=true (active Stripe session protected) is not a
+    // completed merge.
+    let mergeComplete = false;
 
     try {
       const response = await fetch('/api/customer/merge', {
@@ -391,19 +490,28 @@ export const GlobalProvider: React.FC<{
           displayName: metadata?.displayName ?? null,
           favorites,
           cart,
+          removedFavorites: readFavouriteRemovalTombstones(),
         }),
       });
 
       const data = response.ok ? await response.json() : null;
       customerId = data?.customerId ?? undefined;
       resolvedDisplayName = data?.displayName ?? resolvedDisplayName;
-
-      if (response.ok) {
-        setCart([]);
-        setFavorites([]);
-      }
+      mergeComplete = response.ok && data?.deferred !== true;
     } catch (error) {
       console.error('Login merge failed:', error);
+    }
+
+    if (isStale()) return { customerId: userRef.current?.customerId ?? null, mergeComplete: false };
+
+    customerMergeFailedRef.current = !mergeComplete;
+    setCustomerMergeFailed(!mergeComplete);
+    // Persist the incomplete state so a fresh browser session re-runs the
+    // claim instead of trusting the already-synced short-circuit on the
+    // cached customer id.
+    if (authUserId) {
+      if (mergeComplete) clearMergePendingClaim();
+      else writeMergePendingClaim(authUserId);
     }
 
     const baseUser: User = {
@@ -415,9 +523,62 @@ export const GlobalProvider: React.FC<{
     };
 
     const profile = customerId ? await fetchAccountProfile().catch(() => null) : null;
+    if (isStale()) return { customerId: userRef.current?.customerId ?? null, mergeComplete: false };
+
+    if (mergeComplete) {
+      // Only a completed merge owns the local hand-off; a deferred or failed
+      // merge keeps local cart/favourites aligned with the still-anon server
+      // rows until a retry succeeds.
+      setCart([]);
+      setFavorites([]);
+      clearFavouriteRemovalTombstones();
+    }
     setUser(applyAccountProfileToUser(baseUser, profile));
-    return customerId ?? null;
+    // Publish the customer read identity only once ownership actually moved:
+    // a deferred/failed merge leaves the anon server rows authoritative, so
+    // cart/favorites reads must stay on the anon identity until a retry
+    // completes (otherwise the readIdentity effect would refetch as the
+    // customer and wipe the local state we deliberately kept).
+    if (mergeComplete && customerId) {
+      setReadIdentity((previous) => nextReadIdentity(previous, customerId));
+    }
+    return { customerId: customerId ?? null, mergeComplete };
   }, [cart, favorites, fetchAccountProfile]);
+
+  // Explicit merge retry for the checkout recovery path. Bypasses the
+  // syncSupabaseUser "already synced" short-circuit on purpose: a deferred
+  // merge still produced a customerId, so only a forced finalizeAuth re-run
+  // can complete the claim. All retry triggers (manual, focus,
+  // visibilitychange, payment-inline) share one in-flight promise.
+  const retryCustomerMerge = useCallback(async (): Promise<boolean> => {
+    if (mergeRetryInFlightRef.current) return mergeRetryInFlightRef.current;
+
+    const pending = (async (): Promise<boolean> => {
+      try {
+        if (authSyncPromiseRef.current) {
+          await authSyncPromiseRef.current.catch(() => null);
+        }
+        const { data } = await supabase.auth.getUser();
+        const authUser = data?.user;
+        if (!authUser?.id || !authUser.email) return false;
+        await finalizeAuth(authUser.email.trim().toLowerCase(), authUser.id, {
+          displayName: getAuthDisplayName(authUser),
+          avatarUrl: getAuthAvatarUrl(authUser),
+        });
+        return customerMergeFailedRef.current === false;
+      } catch (error) {
+        console.error('Customer merge retry failed:', error);
+        return false;
+      }
+    })();
+
+    mergeRetryInFlightRef.current = pending;
+    try {
+      return await pending;
+    } finally {
+      if (mergeRetryInFlightRef.current === pending) mergeRetryInFlightRef.current = null;
+    }
+  }, [finalizeAuth]);
 
   const syncSupabaseUser = useCallback(async (authUser?: SupabaseUser | null) => {
     if (!authUser?.id || !authUser.email) {
@@ -441,10 +602,19 @@ export const GlobalProvider: React.FC<{
       localStorage.removeItem('ymi_user');
       localStorage.removeItem('ymi_cart');
       localStorage.removeItem('ymi_favorites');
+      clearFavouriteRemovalTombstones();
+      clearMergePendingClaim();
+      customerMergeFailedRef.current = false;
+      setCustomerMergeFailed(false);
       return;
     }
 
-    if (currentUser?.id === authUser.id && currentUser.customerId) return currentUser.customerId;
+    if (currentUser?.id === authUser.id && currentUser.customerId && !readMergePendingClaim(authUser.id)) {
+      // Already synced AND the claim completed in a past session (no pending
+      // marker): nothing to merge, and the caller may publish the customer
+      // read identity straight away.
+      return { customerId: currentUser.customerId, mergeComplete: true };
+    }
     if (authSyncInFlightRef.current === authUser.id && authSyncPromiseRef.current) {
       return authSyncPromiseRef.current;
     }
@@ -483,11 +653,27 @@ export const GlobalProvider: React.FC<{
 
     let active = true;
     const resolveAuthUser = async (authUser?: SupabaseUser | null) => {
-      const runId = ++authResolutionRunIdRef.current;
+      // A same-account event (TOKEN_REFRESHED, re-emitted SIGNED_IN) must not
+      // invalidate an in-flight merge by bumping the run id; only an account
+      // change or a sign-out starts a new resolution generation.
+      const sameAccount = Boolean(
+        authUser?.id
+        && (authUser.id === authSyncInFlightRef.current || authUser.id === userRef.current?.id)
+      );
+      const runId = sameAccount ? authResolutionRunIdRef.current : ++authResolutionRunIdRef.current;
       setIsAuthResolved(false);
       try {
-        const customerId = await syncSupabaseUserRef.current(authUser ?? null);
-        setReadIdentity((previous) => nextReadIdentity(previous, customerId));
+        const result = await syncSupabaseUserRef.current(authUser ?? null);
+        if (!active || runId !== authResolutionRunIdRef.current) return;
+        // finalizeAuth publishes the customer read identity itself once a
+        // fresh merge completes; the already-synced short-circuit reports
+        // mergeComplete directly. An incomplete merge stays on the anon
+        // identity while customerMergeFailed gates state-overwriting reads.
+        if (result?.mergeComplete && result.customerId) {
+          setReadIdentity((previous) => nextReadIdentity(previous, result.customerId));
+        } else {
+          setReadIdentity((previous) => nextReadIdentity(previous, null));
+        }
       } catch (error) {
         console.warn('[auth] failed to resolve customer session', error);
       } finally {
@@ -561,8 +747,8 @@ export const GlobalProvider: React.FC<{
 
     const resolvedEmail = result?.user?.email ?? email;
     setCheckoutEmail(resolvedEmail);
-    const customerId = await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
-    setReadIdentity((previous) => nextReadIdentity(previous, customerId));
+    // finalizeAuth owns the read-identity handoff (gated on a completed merge).
+    await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
     return {};
   }, [finalizeAuth]);
 
@@ -608,8 +794,8 @@ export const GlobalProvider: React.FC<{
 
     const resolvedEmail = result?.user?.email ?? email;
     setCheckoutEmail(resolvedEmail);
-    const customerId = await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
-    setReadIdentity((previous) => nextReadIdentity(previous, customerId));
+    // finalizeAuth owns the read-identity handoff (gated on a completed merge).
+    await finalizeAuth(resolvedEmail, result?.user?.id ?? null);
     return {};
   }, [finalizeAuth]);
 
@@ -644,6 +830,10 @@ export const GlobalProvider: React.FC<{
       localStorage.removeItem('ymi_cart');
       localStorage.removeItem('ymi_favorites');
       localStorage.removeItem('ymi_checkout_email');
+      clearFavouriteRemovalTombstones();
+      clearMergePendingClaim();
+      customerMergeFailedRef.current = false;
+      setCustomerMergeFailed(false);
 
       if (typeof window !== 'undefined') {
         window.location.assign('/');
@@ -1059,6 +1249,10 @@ export const GlobalProvider: React.FC<{
   const toggleFavorite = useCallback((book: Book): ToggleFavoriteResult => {
     const exists = favorites.some((fav) => fav.bookID === book.bookID);
 
+    // Honour unfavourite intent across a deferred merge (WEB-UIUX-001/34): the
+    // anon server row still exists and must not come back on the next merge.
+    if (exists && customerMergeFailedRef.current) appendFavouriteRemovalTombstone(book.bookID);
+
     favoriteTogglePendingRef.current = true;
     setFavorites((prev) =>
       exists ? prev.filter((fav) => fav.bookID !== book.bookID) : [...prev, book]
@@ -1145,6 +1339,7 @@ export const GlobalProvider: React.FC<{
     isHydrated,
     isAuthResolved,
     readIdentity,
+    customerMergeFailed,
 
     resumePersonalization,
 
@@ -1153,6 +1348,7 @@ export const GlobalProvider: React.FC<{
     verifySignupOtp,
     requestPasswordReset,
     logout,
+    retryCustomerMerge,
     addToCart,
     removeFromCart,
     updateCartQuantity,
@@ -1192,12 +1388,14 @@ export const GlobalProvider: React.FC<{
     isHydrated,
     isAuthResolved,
     readIdentity,
+    customerMergeFailed,
     resumePersonalization,
     login,
     loginWithOAuth,
     verifySignupOtp,
     requestPasswordReset,
     logout,
+    retryCustomerMerge,
     addToCart,
     removeFromCart,
     updateCartQuantity,

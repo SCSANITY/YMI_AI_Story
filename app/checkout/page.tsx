@@ -97,6 +97,8 @@ function CheckoutPageContent() {
     displayCurrency,
     setDisplayCurrency,
     isAuthResolved,
+    customerMergeFailed,
+    retryCustomerMerge,
   } = useGlobalContext();
 
   // Identity decisions must only trust the session after Supabase has resolved
@@ -115,6 +117,66 @@ function CheckoutPageContent() {
 
   const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null; closed?: 'paid' | 'closed' } | null>(null);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
+
+  // WEB-UIUX-001/34: while the customer merge is incomplete (failed or
+  // deferred), checkout reads keep working through the anon-cookie fallback
+  // but ownership-sensitive writes would 403. A persistent banner carries the
+  // retry entry; every mutation handler below goes through guardMergeHealthy.
+  const mergeBannerRef = useRef<HTMLDivElement | null>(null);
+  const [isMergeRetrying, setIsMergeRetrying] = useState(false);
+  const pendingPaymentAfterMergeRef = useRef(false);
+  const handlePlaceOrderRef = useRef<() => void>(() => {});
+
+  const focusMergeBanner = useCallback(() => {
+    mergeBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const handleMergeRetry = useCallback(async (): Promise<boolean> => {
+    setIsMergeRetrying(true);
+    try {
+      const ok = await retryCustomerMerge();
+      if (ok) {
+        // customerId is unchanged in the deferred case, so the restore cannot
+        // rely on restoreKey turning over; bump the explicit restore version.
+        setRestoreAttempt((attempt) => attempt + 1);
+      } else {
+        pendingPaymentAfterMergeRef.current = false;
+      }
+      return ok;
+    } finally {
+      setIsMergeRetrying(false);
+    }
+  }, [retryCustomerMerge]);
+
+  const guardMergeHealthy = useCallback((): boolean => {
+    if (!customerMergeFailed) return true;
+    focusMergeBanner();
+    return false;
+  }, [customerMergeFailed, focusMergeBanner]);
+
+  // Quantity changes mutate local state and PATCH the server; while the merge
+  // is incomplete both would diverge from the still-anon order rows, so the
+  // handler is gated too (zero request, zero local change).
+  const handleQuantityChange = useCallback((itemId: string, quantity: number) => {
+    if (!guardMergeHealthy()) return;
+    updateCheckoutQuantity(itemId, quantity);
+  }, [guardMergeHealthy, updateCheckoutQuantity]);
+
+  // Focus/visibility return heals a deferred merge once the Stripe session has
+  // settled; manual banner Retry, payment-inline retry and these listeners all
+  // share the single in-flight retry inside GlobalContext.
+  useEffect(() => {
+    if (!customerMergeFailed || typeof document === 'undefined') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void handleMergeRetry();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [customerMergeFailed, handleMergeRetry]);
   const [appliedShippingDiscountType, setAppliedShippingDiscountType] = useState<string | null>(null);
   const [step, setStep] = useState<CheckoutStep>('contact');
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -713,6 +775,7 @@ function CheckoutPageContent() {
   }, [checkoutSourceTarget, router]);
 
   const applyDiscountCode = useCallback(async (rawCode: string) => {
+    if (!guardMergeHealthy()) return false;
     if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
       setDiscountError(t('checkout.orderNotReadyError'));
       return false;
@@ -758,9 +821,10 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
+    if (!guardMergeHealthy()) return false;
     if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
       setDiscountError(t('checkout.orderNotReadyError'));
       return false;
@@ -806,9 +870,10 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
+    if (!guardMergeHealthy()) return false;
     if (!checkoutStateReady || isApplyingDiscount || !orderId) return false;
     setDiscountError('');
     setIsApplyingDiscount(true);
@@ -834,7 +899,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, orderId, shippingQuote, t]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, orderId, shippingQuote, t, guardMergeHealthy]);
 
   useEffect(() => {
     if (discountError || appliedDiscountCode || selectedRewardVoucherId || appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId) {
@@ -928,6 +993,15 @@ function CheckoutPageContent() {
   const handlePlaceOrder = () => {
     if (!checkoutStateReady || isApplyingDiscount || isPlacingOrderRef.current || isPlacingOrder) return;
 
+    if (customerMergeFailed) {
+      // Heal the account link before starting payment. On success the effect
+      // below re-enters with fresh state, so no stale closure drives the
+      // payment request; on failure the banner explains the pause.
+      pendingPaymentAfterMergeRef.current = true;
+      void handleMergeRetry();
+      return;
+    }
+
     const normalizedEmail = checkoutContactEmail.trim();
     if (!normalizedEmail) {
       setFormError(t('checkout.emailRequiredError'));
@@ -955,8 +1029,23 @@ function CheckoutPageContent() {
     void startStripeHostedCheckout(effectiveIdentityMode);
   };
 
+  // Keep a fresh-closure ref so the post-merge re-entry never runs stale state.
+  useEffect(() => {
+    handlePlaceOrderRef.current = handlePlaceOrder;
+  });
+
+  useEffect(() => {
+    // Consume the pending payment intent only once the post-merge restore has
+    // finished; otherwise handlePlaceOrder early-returns on checkoutStateReady
+    // and the intent would be lost.
+    if (customerMergeFailed || !checkoutStateReady || !pendingPaymentAfterMergeRef.current) return;
+    pendingPaymentAfterMergeRef.current = false;
+    handlePlaceOrderRef.current();
+  }, [customerMergeFailed, checkoutStateReady]);
+
   const startCheckoutForItems = useCallback(async (selected: typeof items) => {
     if (!selected.length) return;
+    if (!guardMergeHealthy()) return false;
     const payload = {
       customerId: sessionUser?.customerId ?? null,
       orderId,
@@ -984,11 +1073,12 @@ function CheckoutPageContent() {
     }
     setCheckoutStarted(true);
     return true;
-  }, [sessionUser?.customerId, orderId, checkoutContactEmail, reconcileCartItemPrices]);
+  }, [sessionUser?.customerId, orderId, checkoutContactEmail, reconcileCartItemPrices, guardMergeHealthy]);
 
   const handleRemoveCheckoutItem = useCallback(async (itemId: string) => {
     const removedItem = items.find(item => item.id === itemId);
     if (!removedItem) return false;
+    if (!guardMergeHealthy()) return false;
 
     setFormError('');
     removeFromCheckout(itemId);
@@ -1032,12 +1122,13 @@ function CheckoutPageContent() {
       setFormError(t('checkout.removeItemError'));
       return false;
     }
-  }, [addToCheckout, items, orderId, removeFromCheckout, t, sessionUser?.customerId]);
+  }, [addToCheckout, items, orderId, removeFromCheckout, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const handleAddFromCartItems = useCallback(async (selected: typeof items) => {
     if (!selected.length) {
       return true;
     }
+    if (!guardMergeHealthy()) return false;
     setFormError('');
     addToCheckout(selected);
     try {
@@ -1050,10 +1141,11 @@ function CheckoutPageContent() {
     selected.forEach(item => removeFromCheckout(item.id));
     setFormError(t('checkout.addItemsError'));
     return false;
-  }, [addToCheckout, removeFromCheckout, startCheckoutForItems, t]);
+  }, [addToCheckout, removeFromCheckout, startCheckoutForItems, t, guardMergeHealthy]);
 
   useEffect(() => {
     if (!checkoutStateReady) return;
+    if (customerMergeFailed) return;
     if (!items.length || checkoutStarted) {
       if (!items.length && !checkoutStarted) {
         checkoutInitRef.current = false;
@@ -1072,7 +1164,7 @@ function CheckoutPageContent() {
         checkoutInitRef.current = false;
       }
     })();
-  }, [checkoutStateReady, items, checkoutStarted, orderId, startCheckoutForItems]);
+  }, [checkoutStateReady, items, checkoutStarted, orderId, startCheckoutForItems, customerMergeFailed]);
 
   useEffect(() => {
     if (!checkoutStarted || !orderId || items.length === 0) return;
@@ -1162,7 +1254,22 @@ function CheckoutPageContent() {
       </a>
     </div>
   );
-  if (orderRestoreError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{orderRestoreError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => setRestoreAttempt(attempt => attempt + 1)}>{t('common.retry')}</button></div>;
+  if (orderRestoreError) return (
+    <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700">
+      <p>{customerMergeFailed ? t('checkout.restoreAccountLinkFailed') : orderRestoreError}</p>
+      <button
+        type="button"
+        className="mt-4 font-semibold underline disabled:opacity-60"
+        disabled={isMergeRetrying}
+        onClick={() => {
+          // A merge-linked restore failure retries the merge first; only a
+          // completed claim makes the customer-path restore succeed.
+          if (customerMergeFailed) void handleMergeRetry();
+          else setRestoreAttempt(attempt => attempt + 1);
+        }}
+      >{t('common.retry')}</button>
+    </div>
+  );
   if (priceLoadError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{priceLoadError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => router.push('/cart')}>Back to cart</button></div>;
 
   return (
@@ -1176,6 +1283,24 @@ function CheckoutPageContent() {
           <p className="text-gray-500 text-sm">{t('checkout.step', { step: stepNumber, total: totalSteps })}</p>
         </div>
       </div>
+
+      {customerMergeFailed && (
+        <div
+          ref={mergeBannerRef}
+          role="alert"
+          className="mb-4 flex flex-col items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-800 sm:flex-row sm:justify-between sm:text-left"
+        >
+          <p>{t('checkout.accountLinkPaused')}</p>
+          <button
+            type="button"
+            onClick={() => void handleMergeRetry()}
+            disabled={isMergeRetrying}
+            className="shrink-0 rounded-full border border-amber-300 bg-white px-4 py-1.5 font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
 
       {canGoBackToSource && (
         <div className="mb-4">
@@ -1222,6 +1347,7 @@ function CheckoutPageContent() {
               initialShippingQuote={shippingQuote}
               selectedCurrency={selectedCurrency}
               userCustomerId={sessionUser?.customerId ?? null}
+              allowAddressBookWrite={!customerMergeFailed}
               t={t}
               onFormChange={handleFormChange}
               onComplete={handleDeliveryComplete}
@@ -1316,7 +1442,7 @@ function CheckoutPageContent() {
             t={t}
             resolveCoverUrl={resolveCheckoutItemCoverUrl}
             resolveCoverStatus={resolveCheckoutItemCoverStatus}
-            onQuantityChange={updateCheckoutQuantity}
+            onQuantityChange={handleQuantityChange}
             onRemoveItem={handleRemoveCheckoutItem}
             onAddFromCartItems={handleAddFromCartItems}
           />

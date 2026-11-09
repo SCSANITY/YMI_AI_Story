@@ -19,8 +19,8 @@ const order = () => ({ order_id: 'order-1', order_status: 'unpaid', shipping_add
 const item = { id: 'line-1', bookID: 'Birthdayboy_story', priceAtPurchase: 39, quantity: 1, book: { price: 999 }, personalization: {} }
 const component = type => props => ({ type, props })
 
-function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment', draft } = {}) {
-  const runtime = customerRuntime(), calls = [], pending = deferred()
+function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment', draft, mergeFailed = false, healOnRetry = true } = {}) {
+  const runtime = customerRuntime(), calls = [], pending = deferred(), retryCalls = [], quantityCalls = []
   let currentOrder = order(), responseStatus = status
   runtime.react.Suspense = ({ children }) => children
   runtime.window.location = { ...runtime.window.location, href: 'https://fixture.test/checkout' + search, pathname: '/checkout', search, hash: '' }
@@ -37,7 +37,9 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
     setCheckoutEmail(value) { context.checkoutEmail = value },
     hydrateCheckoutItems(rows) { context.checkoutItems = rows; context.checkoutLoadError = null },
     reconcileCartItemPrices() {}, prepareCheckout() {}, addToCheckout() {}, removeFromCheckout() {},
-    openLoginModal() {}, updateCheckoutQuantity() {}, setDisplayCurrency() {},
+    openLoginModal() {}, updateCheckoutQuantity(...args) { quantityCalls.push(args) }, setDisplayCurrency() {},
+    customerMergeFailed: mergeFailed,
+    retryCustomerMerge: async () => { retryCalls.push('retry'); if (healOnRetry) context.customerMergeFailed = false; return context.customerMergeFailed !== true },
   }
   const fetch = async (url, options = {}) => {
     const path = String(url); calls.push({ path, method: options.method ?? 'GET', body: options.body ? JSON.parse(options.body) : null })
@@ -74,7 +76,7 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
     '@/lib/tracking-policy': { countTrackingItems: () => 1, resolveTrackingFormat: () => 'voice', emitYmiTrackingEvent() {} },
   }, { fetch, process: { env: { NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'fixture-public-key' } } }).default
   runtime.mount(Page, {})
-  return { runtime, calls, context, pending, node: type => uiNodes(runtime.tree).find(n => n.type === type),
+  return { runtime, calls, context, pending, retryCalls, quantityCalls, node: type => uiNodes(runtime.tree).find(n => n.type === type),
     set order(value) { currentOrder = value }, set status(value) { responseStatus = value } }
 }
 function translate(key) { return key }
@@ -486,4 +488,48 @@ test('server rejects an unhydrated shipping tuple before any update;valid zero q
   const valid = { shippingAmountUsd: 0, shippingMethod: 'speedy', shippingRateSnapshot: snapshot, shippingZoneCode: 'HK' }
   await helper.updateUnpaidOrderShippingContext('order-1', valid); assert.equal(writes[0].shipping_amount_usd, 0)
   fail = true; await assert.rejects(helper.updateUnpaidOrderShippingContext('order-1', valid), /Failed to save/)
+})
+
+test('an incomplete customer merge pauses ownership writes behind a banner while retries fail', async () => {
+  const h = checkoutFixture({ mergeFailed: true, healOnRetry: false }); await h.runtime.flush()
+  const banner = () => uiNodes(h.runtime.tree).find(n => n.props?.role === 'alert' && uiText(n).includes('checkout.accountLinkPaused'))
+  assert.ok(banner(), 'merge banner is visible')
+  const posts = () => h.calls.filter(c => c.method === 'POST').length
+  const before = posts()
+  await h.node('discount').props.onApplyDiscountCode('NEWCODE'); await h.runtime.flush()
+  assert.equal(posts(), before, 'discount apply is gated while the merge is incomplete')
+  const bannerRetry = uiNodes(banner()).find(n => n.type === 'button')
+  await bannerRetry.props.onClick(); await h.runtime.flush()
+  assert.equal(h.retryCalls.length, 1, 'banner retry runs the shared merge retry')
+  assert.ok(banner(), 'banner stays while the retry keeps failing')
+  await h.node('payment').props.onPlaceOrder(); await h.runtime.flush()
+  assert.equal(h.retryCalls.length, 2, 'payment triggers the inline merge retry instead of charging')
+  assert.ok(!h.calls.some(c => c.path === '/api/checkout/session' && c.method === 'POST'), 'no Stripe session while the merge is incomplete')
+  h.runtime.unmount()
+})
+
+test('a focus-return retry heals the merge: banner clears, writes reopen and no payment fires without intent', async () => {
+  const h = checkoutFixture({ mergeFailed: true }); await h.runtime.flush()
+  const banner = () => uiNodes(h.runtime.tree).find(n => n.props?.role === 'alert' && uiText(n).includes('checkout.accountLinkPaused'))
+  assert.ok(banner(), 'merge banner is visible before focus')
+  h.runtime.window.dispatch('focus'); await h.runtime.flush()
+  assert.equal(h.retryCalls.length, 1, 'focus return runs the merge retry once')
+  assert.ok(!banner(), 'banner clears after a successful retry')
+  assert.ok(!h.calls.some(c => c.path === '/api/checkout/session' && c.method === 'POST'), 'a bare focus heal never starts payment on its own')
+  const before = h.calls.filter(c => c.method === 'POST').length
+  await h.node('discount').props.onApplyDiscountCode('NEWCODE'); await h.runtime.flush()
+  assert.ok(h.calls.filter(c => c.method === 'POST').length > before, 'writes reopen after the merge heals')
+  h.runtime.unmount()
+})
+
+test('quantity changes are gated too: zero requests and zero local mutation while the merge is incomplete', async () => {
+  const h = checkoutFixture({ mergeFailed: true, healOnRetry: false }); await h.runtime.flush()
+  const before = h.calls.filter(c => c.method !== 'GET').length
+  h.node('items').props.onQuantityChange('line-1', 3); await h.runtime.flush()
+  assert.equal(h.quantityCalls.length, 0, 'no local quantity mutation while gated')
+  assert.equal(h.calls.filter(c => c.method !== 'GET').length, before, 'no quantity PATCH while gated')
+  h.context.customerMergeFailed = false; h.runtime.render(); await h.runtime.flush()
+  h.node('items').props.onQuantityChange('line-1', 3); await h.runtime.flush()
+  assert.equal(h.quantityCalls.length, 1, 'quantity changes resume after the merge heals')
+  h.runtime.unmount()
 })

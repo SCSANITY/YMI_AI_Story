@@ -524,6 +524,45 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     }
   }
 
+  // Ownership-overwrite detection (observability only, per approved plan v5):
+  // a claim RPC may have re-assigned this order between the webhook's early
+  // read and this write. We never change the write — we only log the
+  // conflict so support can reconcile manually. A failed pre-read must not
+  // affect the payment flow either.
+  try {
+    const { data: preReadOrder, error: preReadQueryError } = await supabaseAdmin
+      .from('orders')
+      .select('customer_id')
+      .eq('order_id', orderId)
+      .maybeSingle()
+    if (preReadQueryError) {
+      console.error('[order-ownership-conflict] pre-read failed', {
+        orderId,
+        provider,
+        providerRef,
+        error: preReadQueryError.message,
+      })
+    } else {
+      const existingCustomerId = preReadOrder?.customer_id ?? null
+      if (existingCustomerId && existingCustomerId !== customerId) {
+        console.error('[order-ownership-conflict]', {
+          orderId,
+          existingCustomerId,
+          writingCustomerId: customerId,
+          provider,
+          providerRef,
+        })
+      }
+    }
+  } catch (preReadError) {
+    console.error('[order-ownership-conflict] pre-read failed', {
+      orderId,
+      provider,
+      providerRef,
+      error: preReadError instanceof Error ? preReadError.message : String(preReadError),
+    })
+  }
+
   const { error: orderUpdateError } = await supabaseAdmin
     .from('orders')
     .update({

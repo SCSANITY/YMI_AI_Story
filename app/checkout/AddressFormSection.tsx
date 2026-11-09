@@ -76,6 +76,12 @@ type AddressFormSectionProps = {
   initialShippingQuote?: ShippingQuoteState;
   selectedCurrency: CheckoutCurrency;
   userCustomerId?: string | null;
+  /**
+   * When false, the "save to address book" POST is skipped (e.g. while a
+   * customer merge is still pending so writes scoped to the pre-merge
+   * identity cannot race the claim RPC).
+   */
+  allowAddressBookWrite?: boolean;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
   onFormChange: (form: CheckoutAddressForm) => void;
   onComplete: (payload: {
@@ -193,6 +199,7 @@ function AddressFormSectionComponent({
   initialShippingQuote = EMPTY_SHIPPING_QUOTE,
   selectedCurrency,
   userCustomerId,
+  allowAddressBookWrite = true,
   t,
   onFormChange,
   onComplete,
@@ -501,7 +508,7 @@ function AddressFormSectionComponent({
 
     const normalizedForm = normalizeAddressForm(form, selectedShippingDestination);
 
-    if (saveAddress) {
+    if (saveAddress && allowAddressBookWrite) {
       fetch('/api/user/addresses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
