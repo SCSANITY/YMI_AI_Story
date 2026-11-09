@@ -210,6 +210,11 @@ export interface GlobalContextType {
   isHydrated: boolean;
   isAuthResolved: boolean;
   readIdentity: import('@/lib/read-identity').ReadIdentity | null;
+  // WEB-UIUX-001/34: true while the customer merge is incomplete (failed or
+  // deferred); retryCustomerMerge forces a fresh merge attempt and resolves
+  // true when the ownership claim completed.
+  customerMergeFailed: boolean;
+  retryCustomerMerge: () => Promise<boolean>;
 
   // Checkout State
   checkoutItems: CartItem[];

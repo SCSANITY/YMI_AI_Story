@@ -392,6 +392,8 @@ const en: MessageDictionary = {
   'checkout.speedyShipping': 'Speedy Shipping',
   'checkout.speedyShippingDescription': 'Express delivery option.',
   'checkout.saveAddress': 'Save this address for future use',
+  'checkout.accountLinkPaused': "We're still connecting your account — some checkout actions are paused. Tap Retry to continue.",
+  'checkout.restoreAccountLinkFailed': "We're having trouble connecting your account. Don't worry — your order is safe. Please wait a moment and tap Retry.",
   'checkout.continue': 'Continue',
   'checkout.itemsTitle': 'Items',
   'checkout.noBookSelected': 'No book selected',
