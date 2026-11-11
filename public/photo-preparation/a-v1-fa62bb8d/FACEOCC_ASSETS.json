@@ -1,0 +1,100 @@
+{
+  "modelRevision": "03f229dc75fa14ae480cca9810f983912c2730ad",
+  "runtime": "onnxruntime-web@1.22.0",
+  "checkpointSha256": "5d6d27a9cb221692425840a80eb4efc07e6245670b233e2eb618e83fd9b7caf6",
+  "files": [
+    {
+      "path": "model.safetensors",
+      "bytes": 57377516,
+      "sha256": "5d6d27a9cb221692425840a80eb4efc07e6245670b233e2eb618e83fd9b7caf6",
+      "origin": "https://huggingface.co/mertakin/FaceOcc/resolve/03f229dc75fa14ae480cca9810f983912c2730ad/model.safetensors"
+    },
+    {
+      "path": "config.json",
+      "bytes": 336,
+      "sha256": "00b9fd9f91720b4cf666c847671b2c72e4e7163fab18169fa6d338b04cc67bc4",
+      "origin": "https://huggingface.co/mertakin/FaceOcc/resolve/03f229dc75fa14ae480cca9810f983912c2730ad/config.json"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1132,
+      "sha256": "244cb9a3c35452a7354015128179c638f3f0e26335315e4637a4dfd8e6032310",
+      "origin": "https://huggingface.co/mertakin/FaceOcc/resolve/03f229dc75fa14ae480cca9810f983912c2730ad/LICENSE"
+    },
+    {
+      "path": "NOTICE.md",
+      "bytes": 1728,
+      "sha256": "11c49363f47733e53ba56ed94f17a846294b60d2a02d07aeca8add78d1f0d6dd",
+      "origin": "https://huggingface.co/mertakin/FaceOcc/resolve/03f229dc75fa14ae480cca9810f983912c2730ad/NOTICE.md"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5116,
+      "sha256": "54cd0abb982f8850de2e2daa548c647235f18ac25c04937e7904525ae9540f3a",
+      "origin": "https://huggingface.co/mertakin/FaceOcc/resolve/03f229dc75fa14ae480cca9810f983912c2730ad/README.md"
+    },
+    {
+      "path": "vendor/ort.wasm.min.mjs",
+      "bytes": 48259,
+      "sha256": "6ef726f355b791129f7ddf3f62e7877a16b9b777abe87004b8ab306e6b9cf265",
+      "origin": "https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.22.0.tgz#package/dist/ort.wasm.min.mjs"
+    },
+    {
+      "path": "vendor/ort-wasm-simd-threaded.mjs",
+      "bytes": 20856,
+      "sha256": "30dd851d9c00622940500f71ddd2ff8820c5cb65270816080175b958705385a8",
+      "origin": "https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.22.0.tgz#package/dist/ort-wasm-simd-threaded.mjs"
+    },
+    {
+      "path": "vendor/ort-wasm-simd-threaded.wasm",
+      "bytes": 11210254,
+      "sha256": "71aef04959c5c1b6de461b6538e2058e306610034a85aad2742d0c7fd4533fe4",
+      "origin": "https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.22.0.tgz#package/dist/ort-wasm-simd-threaded.wasm"
+    },
+    {
+      "path": "vendor/LICENSE",
+      "bytes": 1073,
+      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+      "origin": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.22.0/LICENSE"
+    },
+    {
+      "path": "vendor/ThirdPartyNotices.txt",
+      "bytes": 326866,
+      "sha256": "e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc",
+      "origin": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.22.0/ThirdPartyNotices.txt"
+    },
+    {
+      "path": "faceocc.onnx",
+      "bytes": 57311868,
+      "sha256": "4f0b081af467515e5d3c7b1afc628f451ba933e587ddddbb7ba9884742044c4c",
+      "origin": "local FP32 export from pinned SafeTensors; opset17/dynamo=False"
+    }
+  ],
+  "exportPackages": {
+    "torch": "2.10.0+cpu",
+    "torchvision": "0.25.0+cpu",
+    "segmentation-models-pytorch": "0.5.0",
+    "safetensors": "0.7.0",
+    "onnx": "1.20.1",
+    "onnxruntime": "1.24.1"
+  },
+  "equivalence": [
+    {
+      "seed": 35,
+      "maxAbsoluteError": 2.384185791015625e-06,
+      "binaryAgreement": 1.0
+    },
+    {
+      "seed": 36,
+      "maxAbsoluteError": 2.5033950805664062e-06,
+      "binaryAgreement": 1.0
+    },
+    {
+      "seed": 37,
+      "maxAbsoluteError": 2.6226043701171875e-06,
+      "binaryAgreement": 1.0
+    }
+  ],
+  "totalBytes": 126305004,
+  "servedBytes": 68591237
+}

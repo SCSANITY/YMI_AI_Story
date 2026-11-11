@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Check, LoaderCircle, Pencil, Sparkles, TriangleA
 import { Button } from '@/components/Button'
 import { ChildDetailsFields, type RecentProfileItem } from '@/components/personalize/ChildDetailsFields'
 import { GeneratePreviewAction, type GeneratePreviewConsent } from '@/components/personalize/GeneratePreviewAction'
-import { PhotoUploadPanel } from '@/components/personalize/PhotoUploadPanel'
+import { PhotoPreparationActions, PhotoUploadPanel, type PhotoUploadPanelProps } from '@/components/personalize/PhotoUploadPanel'
 import { PrivacyReassurance } from '@/components/personalize/PrivacyReassurance'
 import { RecentFacesStrip, type RecentFaceItem } from '@/components/personalize/RecentFacesStrip'
 import { StoryLanguageSelector } from '@/components/personalize/StoryLanguageSelector'
@@ -13,28 +13,10 @@ import type { StoryLanguage } from '@/types'
 
 export type PersonalizeFormStep = 'INTRO' | 'PHOTO' | 'DETAILS' | 'REVIEW'
 
-type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed'
-
-type PersonalizeFormFlowProps = {
+type PersonalizeFormFlowProps = Omit<PhotoUploadPanelProps, 'labels'> & {
   step: Exclude<PersonalizeFormStep, 'INTRO'>
-  photoPreview: string | null
   hasUsablePhoto: boolean
-  facePrepareStatus: FacePrepareStatus
-  facePrepareError: string | null
-  faceAutoCropped?: boolean
-  photoLabels: {
-    uploadChildPhoto: string
-    photoChecking: string
-    photoPreparing: string
-    photoReady: string
-    photoAutoCentered: string
-    photoPrepareFailed: string
-    photoQualityReason: string
-    clickToChangePhoto: string
-    uploadPhotoHint: string
-    photoTips: string
-  }
-  onPhotoUpload: (event: React.ChangeEvent<HTMLInputElement>) => void
+  photoLabels: PhotoUploadPanelProps['labels']
   recentFaces: RecentFaceItem[]
   onSelectFace: (face: RecentFaceItem) => void
   onDeleteFace: (assetId: string) => void
@@ -187,13 +169,11 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
   const stepNumber = STEP_META[props.step]
   const title = props.step === 'PHOTO' ? props.labels.photoTitle : props.step === 'DETAILS' ? props.labels.detailsTitle : props.labels.reviewTitle
   const body = props.step === 'PHOTO' ? props.labels.photoBody : props.step === 'DETAILS' ? props.labels.detailsBody : props.labels.reviewBody
-  const reviewPhotoStatus = props.facePrepareStatus === 'checking'
-    ? props.photoLabels.photoChecking
-    : props.facePrepareStatus === 'preparing'
-      ? props.photoLabels.photoPreparing
-      : props.facePrepareStatus === 'failed'
-        ? props.facePrepareError ?? props.photoLabels.photoPrepareFailed
-        : props.photoLabels.photoReady
+  const reviewPhotoStatus = props.facePrepareStatus === 'loading' ? props.photoLabels.photoLoading
+    : props.facePrepareStatus === 'checking' ? props.photoLabels.photoChecking
+    : props.facePrepareStatus === 'preparing' ? props.photoLabels.photoPreparing
+    : props.facePrepareStatus === 'failed' ? props.facePrepareError ?? props.photoLabels.photoPrepareFailed
+    : props.hasUsablePhoto ? props.photoLabels.photoReady : props.labels.photoNeedsFix
 
   return (
     <section className="w-full min-w-0 max-w-full rounded-[1.5rem] bg-white p-4 shadow-[0_24px_65px_-48px_rgba(69,44,15,0.48)] sm:p-5 lg:p-6">
@@ -209,6 +189,8 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
               faceAutoCropped={props.faceAutoCropped}
               labels={props.photoLabels}
               onPhotoUpload={props.onPhotoUpload}
+              onRetryPhoto={props.onRetryPhoto}
+              onCancelPhoto={props.onCancelPhoto}
             />
             <PrivacyReassurance />
             <RecentFacesStrip faces={props.recentFaces} onSelectFace={props.onSelectFace} onDeleteFace={props.onDeleteFace} />
@@ -244,7 +226,7 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
                 <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
                 {props.labels.back}
               </Button>
-              <Button type="button" disabled={!props.isDetailsReady} onClick={() => props.onStepChange('REVIEW')} className="glass-action-btn glass-action-btn--brand h-11 rounded-xl px-6">
+              <Button type="button" disabled={!props.isDetailsReady || !props.hasUsablePhoto} onClick={() => props.onStepChange('REVIEW')} className="glass-action-btn glass-action-btn--brand h-11 rounded-xl px-6">
                 {props.labels.reviewDetails}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
@@ -270,25 +252,29 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
                   <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
                     {props.isFacePreparing ? (
                       <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-amber-600" aria-hidden="true" />
-                    ) : props.isPhotoFailed ? (
+                    ) : !props.hasUsablePhoto ? (
                       <TriangleAlert className="h-4 w-4 shrink-0 text-rose-500" aria-hidden="true" />
                     ) : (
                       <Check className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
                     )}
-                    <span className={props.isPhotoFailed ? 'text-rose-600' : undefined}>{reviewPhotoStatus}</span>
+                    <span role="status" className={props.isPhotoFailed ? 'text-rose-600' : undefined}>{reviewPhotoStatus}</span>
                   </p>
                 </div>
-                <label className={`relative rounded-full p-2 text-slate-500 transition-colors focus-within:ring-2 focus-within:ring-amber-500 ${props.isFacePreparing ? 'cursor-wait opacity-50' : 'cursor-pointer hover:bg-slate-100 hover:text-slate-950'}`} aria-label={`${props.labels.edit} ${props.labels.photoSummary}`}>
+                <label className={`relative rounded-full p-2 text-slate-500 transition-colors focus-within:ring-2 focus-within:ring-amber-500 cursor-pointer hover:bg-slate-100 hover:text-slate-950`} aria-label={`${props.labels.edit} ${props.labels.photoSummary}`}>
                   <input
                     type="file"
                     accept="image/*"
-                    disabled={props.isFacePreparing}
                     onChange={props.onPhotoUpload}
                     className="sr-only"
                   />
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                 </label>
               </div>
+              {(props.onRetryPhoto || props.onCancelPhoto) && (
+                <div className="flex gap-2 border-b border-slate-200 px-3 pb-2">
+                  <PhotoPreparationActions labels={props.photoLabels} onRetryPhoto={props.onRetryPhoto} onCancelPhoto={props.onCancelPhoto} />
+                </div>
+              )}
               <div className="border-b border-slate-200 p-3">
                 <dl
                   className="grid min-w-0 flex-1 grid-cols-2 gap-x-5"

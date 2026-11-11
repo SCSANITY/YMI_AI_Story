@@ -1,0 +1,9 @@
+# Preserve the exact bytes of the pinned artifacts and notices on every OS.
+*.mjs -text
+*.onnx -text
+*.task -text
+*.wasm -text
+*LICENSE -text
+FACEOCC_NOTICE.md -text
+ORT_ThirdPartyNotices.txt -text
+ort-wasm-simd-threaded.mjs whitespace=-blank-at-eol

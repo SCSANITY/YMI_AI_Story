@@ -31,6 +31,10 @@ const nextConfig: NextConfig = {
 
     return [
       {
+        source: '/photo-preparation/a-v1-fa62bb8d/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+      {
         source: '/customize-product/v3/:path*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
       },

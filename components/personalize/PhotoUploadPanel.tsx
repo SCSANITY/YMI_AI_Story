@@ -4,7 +4,9 @@ import React, { memo } from 'react'
 import Image from 'next/image'
 import { Camera, Check, X } from 'lucide-react'
 
-type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed'
+import type { PhotoPhase } from '@/lib/photo-preparation/protocol'
+
+type FacePrepareStatus = 'idle' | PhotoPhase | 'ready' | 'failed'
 
 const GOOD_PHOTO_EXAMPLES = [
   { src: '/personalize-photo-samples/optimized/good-01.webp', alt: 'Good photo example 1' },
@@ -18,7 +20,7 @@ const BAD_PHOTO_EXAMPLES = [
   { src: '/personalize-photo-samples/optimized/bad-03.webp', alt: 'Bad photo example 3' },
 ]
 
-type PhotoUploadPanelProps = {
+export type PhotoUploadPanelProps = {
   photoPreview: string | null
   facePrepareStatus: FacePrepareStatus
   facePrepareError: string | null
@@ -26,15 +28,19 @@ type PhotoUploadPanelProps = {
   labels: {
     uploadChildPhoto: string
     photoChecking: string
+    photoLoading: string
+    photoRetry: string
+    photoCancel: string
     photoPreparing: string
     photoReady: string
     photoAutoCentered: string
     photoPrepareFailed: string
-    photoQualityReason: string
     clickToChangePhoto: string
     uploadPhotoHint: string
     photoTips: string
   }
+  onRetryPhoto?: () => void
+  onCancelPhoto?: () => void
   onPhotoUpload: (event: React.ChangeEvent<HTMLInputElement>) => void
 }
 
@@ -45,49 +51,24 @@ function PhotoUploadPanelComponent({
   faceAutoCropped = false,
   labels,
   onPhotoUpload,
+  onRetryPhoto,
+  onCancelPhoto,
 }: PhotoUploadPanelProps) {
-  const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing'
+  const status = facePrepareStatus === 'loading' ? labels.photoLoading
+    : facePrepareStatus === 'checking' ? labels.photoChecking
+    : facePrepareStatus === 'preparing' ? labels.photoPreparing
+    : facePrepareStatus === 'ready' ? (faceAutoCropped ? labels.photoAutoCentered : labels.photoReady)
+    : facePrepareStatus === 'failed' ? (facePrepareError ?? labels.photoPrepareFailed) : null
 
   return (
-    <div className="group relative cursor-pointer rounded-[1rem] border-2 border-dashed border-amber-200 bg-amber-50/60 p-2.5 text-center transition-colors hover:bg-amber-50 sm:p-3">
-      <input type="file" onChange={onPhotoUpload} className="absolute inset-0 z-30 cursor-pointer opacity-0" accept="image/*" />
+    <div className="relative rounded-[1rem] border-2 border-dashed border-amber-200 bg-amber-50/60 p-2.5 text-center transition-colors hover:bg-amber-50 sm:p-3">
       {photoPreview ? (
         <div className="pointer-events-none relative z-10">
           <div className="relative mx-auto w-20 sm:w-22">
+            {/* Local blob and signed image URLs are intentionally not optimized. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={photoPreview} alt={labels.uploadChildPhoto} className="mx-auto h-20 w-20 rounded-full border-4 border-white object-cover shadow-lg sm:h-22 sm:w-22" />
-            {isFacePreparing ? (
-              <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-amber-100">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-              </span>
-            ) : facePrepareStatus === 'ready' ? (
-              <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md ring-2 ring-white">
-                <Check className="h-4 w-4" />
-              </span>
-            ) : facePrepareStatus === 'failed' ? (
-              <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-white shadow-md ring-2 ring-white">
-                <X className="h-4 w-4" />
-              </span>
-            ) : null}
           </div>
-          {isFacePreparing ? (
-            <p className="mt-2 text-xs font-semibold text-amber-700">
-              {facePrepareStatus === 'checking' ? labels.photoChecking : labels.photoPreparing}
-            </p>
-          ) : facePrepareStatus === 'ready' ? (
-            <p className="mt-2 text-xs font-semibold text-emerald-600">
-              {faceAutoCropped ? labels.photoAutoCentered : labels.photoReady}
-            </p>
-          ) : facePrepareStatus === 'failed' ? (
-            <div className="mx-auto mt-2 max-w-xs space-y-1">
-              <p className="text-xs font-semibold leading-5 text-rose-600">
-                {facePrepareError ?? labels.photoPrepareFailed}
-              </p>
-              <p className="text-[11px] font-medium leading-4 text-rose-500/90">
-                {labels.photoQualityReason}
-              </p>
-            </div>
-          ) : null}
-          <p className="mt-1.5 text-xs font-medium text-amber-600">{labels.clickToChangePhoto}</p>
         </div>
       ) : (
         <div className="pointer-events-none flex flex-col gap-1.5">
@@ -148,8 +129,24 @@ function PhotoUploadPanelComponent({
           </div>
         </div>
       )}
+      {status && <p role="status" className={`mt-2 text-xs font-semibold ${facePrepareStatus === 'failed' ? 'text-rose-600' : facePrepareStatus === 'ready' ? 'text-emerald-600' : 'text-amber-700'}`}>{status}</p>}
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold">
+        <label className="cursor-pointer rounded-lg bg-white px-3 py-2 text-amber-700 ring-1 ring-amber-200 focus-within:ring-2 focus-within:ring-amber-500">
+          {photoPreview ? labels.clickToChangePhoto : labels.uploadChildPhoto}
+          <input aria-label={photoPreview ? labels.clickToChangePhoto : labels.uploadChildPhoto} type="file" onChange={onPhotoUpload} className="sr-only" accept="image/*" />
+        </label>
+        <PhotoPreparationActions labels={labels} onRetryPhoto={onRetryPhoto} onCancelPhoto={onCancelPhoto} />
+      </div>
     </div>
   )
+}
+
+export function PhotoPreparationActions({ labels, onRetryPhoto, onCancelPhoto }: Pick<PhotoUploadPanelProps, 'labels' | 'onRetryPhoto' | 'onCancelPhoto'>) {
+  const className = 'rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-white focus-visible:ring-2 focus-visible:ring-amber-500';
+  return <>
+    {onRetryPhoto && <button className={className} type="button" onClick={onRetryPhoto}>{labels.photoRetry}</button>}
+    {onCancelPhoto && <button className={className} type="button" onClick={onCancelPhoto}>{labels.photoCancel}</button>}
+  </>;
 }
 
 export const PhotoUploadPanel = memo(PhotoUploadPanelComponent)

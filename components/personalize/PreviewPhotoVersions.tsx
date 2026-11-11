@@ -6,10 +6,11 @@ import type { ChangeEvent } from 'react'
 import type { PreviewVariantView } from '@/lib/preview-variant-view'
 import styles from './PreviewExperience.module.css'
 
-export function PreviewPhotoVersions({ versions, selectedJobId, cap, changeCount, waiting, disabled, changing, error, onUpload, onSelect }: {
+export function PreviewPhotoVersions({ versions, selectedJobId, cap, changeCount, waiting, disabled, changing, error, onUpload, onSelect, onRetry, onCancel }: {
   versions: PreviewVariantView[]; selectedJobId: string | null; cap: number; changeCount: number
   waiting: boolean; disabled: boolean; changing: boolean; error: string | null
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void; onSelect: (version: PreviewVariantView) => void
+  onRetry?: () => void; onCancel?: () => void
 }) {
   const remaining = Math.max(0, cap - changeCount)
   const caption = error || (remaining === 0 ? `You've used all ${cap} photo changes.` : waiting ? 'Change photo once your preview is ready' : '')
@@ -31,5 +32,7 @@ export function PreviewPhotoVersions({ versions, selectedJobId, cap, changeCount
       <span className={styles.changesLeft}>{remaining} {remaining===1?'change':'changes'} left</span>
     </div>
     <p className={styles.versionCaption} role={error?'alert':undefined}>{caption || <span className={styles.phoneRemainingCount}>{remaining} {remaining===1?'change':'changes'} left</span>}</p>
+    {onRetry && !disabled && <button type="button" className={styles.changePhoto} onClick={onRetry}>Retry photo check</button>}
+    {onCancel && <button type="button" className={styles.changePhoto} onClick={onCancel}>Cancel photo check</button>}
   </div>
 }

@@ -4,8 +4,10 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
-import { autoCropFaceImage, faceQualityCheck, prepareFaceImage, prepareRawHeicFallback, uploadUserAsset, validateFaceImage, type FaceImageValidationResult, type PendingUserAssetUpload } from '@/services/assets';
-import { HeicUploadTooLargeError } from '@/lib/heic-upload';
+import { uploadUserAsset } from '@/services/assets';
+import { usePhotoPreparation } from '@/components/personalize/usePhotoPreparation';
+import { IDLE_PHOTO, type PhotoReceipt } from '@/lib/photo-preparation/controller';
+import { loadSavedPhoto } from '@/lib/photo-preparation/saved-photo';
 import {
   cancelPreviewJob,
   createPreviewJob,
@@ -91,14 +93,9 @@ import {
   savePurchaseConfiguration,
 } from '@/services/purchaseConfiguration';
 
-type FacePrepareStatus = 'idle' | 'checking' | 'preparing' | 'ready' | 'failed';
+type PreviewVariantDispatchStatus = 'idle' | 'preparing' | 'failed';
 
 const ProductSections = dynamic(() => import('@/components/personalize/product/ProductSections'));
-
-type FacePreparationOutcome =
-  | { status: 'ready'; file: File; autoCropped: boolean }
-  | { status: 'failed'; error: FaceImageValidationResult | null }
-  | { status: 'cancelled' };
 
 const logPreviewDebug = (...args: unknown[]) => {
   if (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PREVIEW_DEBUG === 'true') {
@@ -120,27 +117,6 @@ const createGenerateTimer = () => {
 const getBookMinimumAge = (book?: Pick<CatalogBook, 'ageGroup'> | null) => (
   book?.ageGroup === 'ages_6_plus' ? 6 : 2
 );
-
-const AUTO_FACE_CROP_TIMEOUT_MS = 2500;
-const AUTO_CROP_FIXABLE_CODES = new Set(['faceTooSmall', 'faceNotCentered']);
-
-type TimedResult<T> =
-  | { status: 'done'; value: T }
-  | { status: 'timeout' };
-
-function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<TimedResult<T>> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  const timeout = new Promise<TimedResult<T>>((resolve) => {
-    timeoutId = setTimeout(() => resolve({ status: 'timeout' }), timeoutMs);
-  });
-
-  return Promise.race([
-    work.then((value): TimedResult<T> => ({ status: 'done', value })),
-    timeout,
-  ]).finally(() => {
-    if (timeoutId) clearTimeout(timeoutId);
-  });
-}
 
 const parseChildAge = (value: string) => {
   const parsed = Number.parseFloat(value.trim());
@@ -252,17 +228,25 @@ export default function PersonalizePage({
   const previewCancelRequestedRef = useRef(false);
   const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
   const [generationJobId, setGenerationJobId] = useState<string | null>(null);
-  const [facePrepareStatus, setFacePrepareStatus] = useState<FacePrepareStatus>('idle');
-  const [preparedFaceFile, setPreparedFaceFile] = useState<File | null>(null);
-  const [facePrepareError, setFacePrepareError] = useState<string | null>(null);
-  const [faceAutoCropped, setFaceAutoCropped] = useState(false);
-  const facePrepareRunIdRef = useRef(0);
+  const photoScope = bookID + ':' + personalizeDraftOwnerKey;
+  const { controller: photoPreparation, state: photoInspection } = usePhotoPreparation(photoScope);
+  const formPhotoInspection = photoInspection.status !== 'idle' && photoInspection.intent.surface === 'form'
+    && (photoInspection.intent.source.kind === 'file'
+      ? photoInspection.intent.source.file === photo
+      : !photo && photoInspection.intent.source.assetId === photoAssetId)
+    ? photoInspection : IDLE_PHOTO;
+  const variantPhotoInspection = photoInspection.status !== 'idle' && photoInspection.intent.surface === 'variant'
+    ? photoInspection : IDLE_PHOTO;
+  const formReceipt = formPhotoInspection.status === 'ready' ? formPhotoInspection.receipt : null;
+  const facePrepareStatus = formPhotoInspection.status;
+  const facePrepareError = formPhotoInspection.status === 'failed'
+    ? t('personalize.photoCheck.' + formPhotoInspection.reason) : null;
   const localPhotoPreviewUrlRef = useRef<string | null>(null);
-  const photoRef = useRef<File | null>(photo);
-  const photoAssetIdRef = useRef<string | null>(photoAssetId);
-  const preparedFaceFileRef = useRef<File | null>(preparedFaceFile);
-  const facePrepareStatusRef = useRef<FacePrepareStatus>(facePrepareStatus);
-  const facePrepareErrorRef = useRef<string | null>(facePrepareError);
+  const selectedPhotoRef = useRef({ scope: photoScope, assetId: photoAssetId });
+  useLayoutEffect(() => {
+    selectedPhotoRef.current = { scope: photoScope, assetId: photoAssetId };
+  }, [photoScope, photoAssetId]);
+  const generationPhotoReceiptRef = useRef<PhotoReceipt | null>(null);
   const dataGenerationConsentRef = useRef(false);
   const personalizationStartTrackedRef = useRef(false);
   const uploadPanelRef = useRef<HTMLDivElement | null>(null);
@@ -286,22 +270,15 @@ export default function PersonalizePage({
   }, [handleStartPersonalization]);
 
   const handleFormStepChange = useCallback((nextStep: PersonalizeFormStep) => {
+    if (nextStep === 'REVIEW' && (!formReceipt || !photoPreparation.isCurrent(formReceipt))) return;
     setFormStep(nextStep);
-  }, []);
+  }, [formReceipt, photoPreparation]);
 
   const trackPreviewReady = useCallback((jobId: string) => {
     if (!jobId || previewReadyTrackedJobIdsRef.current.has(jobId)) return;
     previewReadyTrackedJobIdsRef.current.add(jobId);
     emitYmiTrackingEvent('preview_ready');
   }, []);
-
-  useEffect(() => {
-    photoRef.current = photo;
-    photoAssetIdRef.current = photoAssetId;
-    preparedFaceFileRef.current = preparedFaceFile;
-    facePrepareStatusRef.current = facePrepareStatus;
-    facePrepareErrorRef.current = facePrepareError;
-  }, [photo, photoAssetId, preparedFaceFile, facePrepareStatus, facePrepareError]);
 
   const showLocalPhotoPreview = useCallback((file: File) => {
     const nextUrl = URL.createObjectURL(file);
@@ -317,13 +294,9 @@ export default function PersonalizePage({
     }
   }, []);
 
-  const resolveFaceValidationError = useCallback((result: FaceImageValidationResult) => {
-    return result.code
-      ? t(`personalize.faceValidation.${result.code}`)
-      : result.message ?? t('personalize.photoPrepareFailed');
-  }, [t]);
-
-
+  useEffect(() => {
+    if (formReceipt) showLocalPhotoPreview(formReceipt.file);
+  }, [formReceipt, showLocalPhotoPreview]);
 
   // --- Flipbook Engine State ---
   const TOTAL_SPREADS = 15;
@@ -331,6 +304,13 @@ export default function PersonalizePage({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAgeRangeConfirm, setShowAgeRangeConfirm] = useState(false);
   const [formStep, setFormStep] = useState<PersonalizeFormStep>('INTRO');
+  useEffect(() => {
+    if (viewState.showForm && formStep === 'PHOTO') photoPreparation.warmup();
+  }, [formStep, photoPreparation, viewState.showForm]);
+  useLayoutEffect(() => {
+    const current = photoPreparation.snapshot();
+    if (!viewState.showPreview && current.status !== 'idle' && current.intent.surface === 'variant') photoPreparation.clear();
+  }, [photoPreparation, viewState.showPreview]);
   const lastMobileTopSurfaceRef = useRef<'INTRO' | 'PREVIEW' | null>(null);
   const mobileTopSurface = viewState.showPreview
     ? 'PREVIEW'
@@ -360,7 +340,7 @@ export default function PersonalizePage({
     });
   }, [formStep, viewState.showForm]);
 
-  const pendingGenerateConsentRef = useRef<GeneratePreviewConsent | null>(null);
+  const pendingGenerateConsentRef = useRef<{ consent: GeneratePreviewConsent; receipt: PhotoReceipt } | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
   const [voiceDurationSeconds, setVoiceDurationSeconds] = useState<number | null>(null);
@@ -419,7 +399,7 @@ export default function PersonalizePage({
     customerId: user?.customerId ?? null,
   });
   const [previewVariantSessionCount, setPreviewVariantSessionCount] = useState(0);
-  const [previewVariantPrepareStatus, setPreviewVariantPrepareStatus] = useState<FacePrepareStatus>('idle');
+  const [previewVariantPrepareStatus, setPreviewVariantPrepareStatus] = useState<PreviewVariantDispatchStatus>('idle');
   const [previewVariantError, setPreviewVariantError] = useState<string | null>(null);
   const previewVariantGenerationRef = useRef(false);
   const previewVariantPhotoUrlsRef = useRef<Set<string>>(new Set());
@@ -510,7 +490,7 @@ export default function PersonalizePage({
   }, []);
 
   const isPreviewVariantBusy =
-    previewVariantPrepareStatus === 'checking' ||
+    ['loading', 'checking', 'preparing'].includes(variantPhotoInspection.status) ||
     previewVariantPrepareStatus === 'preparing' ||
     previewVariants.some((variant) => variant.status === 'generating');
   const isPreviewVariantLimitReached =
@@ -852,7 +832,7 @@ export default function PersonalizePage({
     setPhotoAssetId(data.assetId || null)
     setPhotoStoragePath(data.storagePath || null)
     setFaceImageUrl(data.faceImageUrl || null)
-    setFaceAutoCropped(false)
+    photoPreparation.clear()
     setVoiceAssetId(data.voiceAssetId || null)
     setVoiceStoragePath(data.voiceStoragePath || null)
     setVoicePlaybackUrl(null)
@@ -873,7 +853,7 @@ export default function PersonalizePage({
     initializedPersonalizeDraftKeyRef.current = `${bookID}:${personalizeDraftOwnerKey}`
     setIsPersonalizeDraftReady(true)
     resumePersonalization(null)
-  }, [resumeData, bookID, personalizeDraftOwnerKey, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization, viewMode])
+  }, [resumeData, bookID, personalizeDraftOwnerKey, photoPreparation, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization, viewMode])
 
   useEffect(() => {
     if (resumeData && resumeData.bookID !== bookID) {
@@ -1151,11 +1131,7 @@ export default function PersonalizePage({
     setPhotoAssetId(draft?.faceAssetId ?? null)
     setPhotoStoragePath(draft?.faceStoragePath ?? null)
     setFaceImageUrl(null)
-    setPreparedFaceFile(null)
-    setFacePrepareStatus(draft?.faceAssetId ? 'ready' : 'idle')
-    setFacePrepareError(null)
-    setFaceAutoCropped(false)
-    facePrepareRunIdRef.current += 1
+    photoPreparation.clear()
     setTemplateCoverUrl(initialBook?.coverUrl || null)
     setTemplateTitle(initialBook?.title || null)
     setTemplateDescription(initialBook?.description || null)
@@ -1173,7 +1149,7 @@ export default function PersonalizePage({
     setPreviewPages([])
     setPreviewBookPresentation(null)
     setIsPersonalizeDraftReady(true)
-  }, [bookID, creationId, creationIdParam, initialBook, isHydrated, personalizeDraftOwnerKey, previewJobId, previewJobIdParam, resumeData, setAge, setBookType, setCreationId, setFaceImageUrl, setName, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, setPreviewBookPresentation, setPreviewJobId, setPreviewPages, setPreviewUrl, setSelectedLang, setTemplateCoverUrl, setTemplateDescription, setTemplateInnerDescription, setTemplateTitle, setVoiceAssetId, setVoiceStoragePath, stage, viewMode])
+  }, [bookID, creationId, creationIdParam, initialBook, isHydrated, personalizeDraftOwnerKey, photoPreparation, previewJobId, previewJobIdParam, resumeData, setAge, setBookType, setCreationId, setFaceImageUrl, setName, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, setPreviewBookPresentation, setPreviewJobId, setPreviewPages, setPreviewUrl, setSelectedLang, setTemplateCoverUrl, setTemplateDescription, setTemplateInnerDescription, setTemplateTitle, setVoiceAssetId, setVoiceStoragePath, stage, viewMode])
 
   const replacePersonalizeUrl = useCallback((params?: URLSearchParams | null) => {
     if (typeof window === 'undefined') return;
@@ -1218,48 +1194,31 @@ export default function PersonalizePage({
         const markGenerateTiming = createGenerateTimer()
         markGenerateTiming('generate_clicked')
         const currentCustomerId = user?.customerId ?? null
-        const currentPhoto = photoRef.current
-        let faceAssetId = photoAssetIdRef.current
-        let pendingFaceAsset: PendingUserAssetUpload | undefined
-        const currentPreparedFaceFile = preparedFaceFileRef.current
-        const currentFacePrepareStatus = facePrepareStatusRef.current
-        const currentFacePrepareError = facePrepareErrorRef.current
+        const receipt = generationPhotoReceiptRef.current
         const hasDataGenerationConsent = dataGenerationConsentRef.current
         const currentName = nameRef.current
         const currentAge = ageRef.current
 
         if (!book) throw new Error('Book not found')
-        if (!currentPhoto && !faceAssetId) throw new Error('Please upload a photo before generating the preview')
+        if (!receipt || receipt.intent.scope !== photoScope || !photoPreparation.isCurrent(receipt)) {
+          throw new Error(t('personalize.photoNeedsFix'))
+        }
         if (!hasDataGenerationConsent) throw new Error(t('personalize.dataConsentRequired'))
 
         setPreviewUrl(null)
         setPreviewPages([])
         setPreviewBookPresentation(null)
 
-        if (!faceAssetId) {
-          if (currentFacePrepareStatus === 'checking' || currentFacePrepareStatus === 'preparing') {
-            throw new Error(t('personalize.photoPreparing'))
-          }
-          if (currentFacePrepareStatus === 'failed') {
-            throw new Error(currentFacePrepareError ?? t('personalize.photoPrepareFailed'))
-          }
-          const uploadFile = currentPreparedFaceFile ?? currentPhoto
-          if (!uploadFile) {
-            throw new Error('Missing face asset for preview')
-          }
-          const faceAsset = await uploadUserAsset(uploadFile, 'face_image', 'face', currentCustomerId ?? undefined, {
-            skipFacePreparation: Boolean(currentPreparedFaceFile),
-            originalName: currentPhoto?.name ?? uploadFile.name,
-            deferConfirm: true,
-            onTiming: markGenerateTiming,
-          })
-          if (!isActive) return
-          if (!('bucket' in faceAsset)) {
-            throw new Error('Pending face upload missing upload metadata')
-          }
-          pendingFaceAsset = faceAsset
-          faceAssetId = faceAsset.asset_id
-        }
+        // The crop is a new JPEG; existing assets and their results stay intact.
+        const pendingFaceAsset = await uploadUserAsset(receipt.file, 'face_image', 'face', currentCustomerId ?? undefined, {
+          skipFacePreparation: true,
+          originalName: receipt.originalName,
+          deferConfirm: true,
+          onTiming: markGenerateTiming,
+        })
+        if (!isActive || previewCancelRequestedRef.current) return
+        if (!photoPreparation.isCurrent(receipt)) throw new Error(t('personalize.photoNeedsFix'))
+        const faceAssetId = pendingFaceAsset.asset_id
 
         const parsedAge = Number.parseInt(currentAge, 10)
         const textOverrides = {
@@ -1267,10 +1226,6 @@ export default function PersonalizePage({
           child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
           language: selectedLang,
           book_type: 'basic',
-        }
-
-        if (!faceAssetId) {
-          throw new Error('Missing face asset for preview')
         }
 
         const generationConsentParams = {
@@ -1308,7 +1263,7 @@ export default function PersonalizePage({
         pendingVoiceRecordingRef.current = null
         setPendingVoiceRecording(null)
         if (pendingFaceAsset) {
-          photoAssetIdRef.current = pendingFaceAsset.asset_id
+          setFaceImageUrl(null)
           setPhotoAssetId(pendingFaceAsset.asset_id)
           setPhotoStoragePath(pendingFaceAsset.storage_path)
           void refreshPersonalizeHistory().catch(() => undefined)
@@ -1356,39 +1311,37 @@ export default function PersonalizePage({
     };
   // State setters from usePersonalizeState are stable; keeping them out avoids dev-time dependency shape churn during preview generation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, selectedLang, finishGenerating, book, user?.customerId, reset, replacePreviewUrl, replacePersonalizeUrl, t, rememberProfile, refreshPersonalizeHistory]);
+  }, [stage, selectedLang, finishGenerating, book, user?.customerId, photoScope, photoPreparation, reset, replacePreviewUrl, replacePersonalizeUrl, t, rememberProfile, refreshPersonalizeHistory]);
+
+  const prepareSavedPhoto = useCallback((assetId: string, url: string | null) => {
+    return photoPreparation.select({ scope: photoScope, surface: 'form', source: {
+      kind: 'saved', assetId,
+      load: signal => loadSavedPhoto(url, async refreshSignal => {
+        const data = await refreshPersonalizeHistory({ signal: refreshSignal });
+        return data.faces?.find(face => face.asset_id === assetId)?.signed_url ?? null;
+      }, signal),
+    } });
+  }, [photoPreparation, photoScope, refreshPersonalizeHistory]);
 
   useEffect(() => {
-    if (!viewState.showForm || !photoAssetId || photo || photoPreview) return
-    if (personalizeHistoryStatus !== 'ready') return
-
-    const persistedFace = recentFaces.find((face) => face.asset_id === photoAssetId)
-    if (!persistedFace?.signed_url) {
-      setPhotoAssetId(null)
-      setPhotoStoragePath(null)
-      setFaceImageUrl(null)
-      setFacePrepareStatus('idle')
-      if (formStep !== 'INTRO') setFormStep('PHOTO')
-      return
+    if (!viewState.showForm || formStep === 'INTRO' || !photoAssetId || photo || formPhotoInspection.status !== 'idle') return;
+    if (personalizeHistoryStatus !== 'ready' && personalizeHistoryStatus !== 'error') return;
+    const persistedFace = recentFaces.find(face => face.asset_id === photoAssetId);
+    if (!persistedFace?.signed_url && personalizeHistoryStatus === 'ready') {
+      setPhotoAssetId(null);
+      setPhotoStoragePath(null);
+      setPhotoPreview(null);
+      setFaceImageUrl(null);
+      setFormStep('PHOTO');
+      return;
     }
-
-    setPhotoStoragePath(persistedFace.storage_path ?? null)
-    setPhotoPreview(persistedFace.signed_url)
-    setFaceImageUrl(persistedFace.signed_url)
-    setFacePrepareStatus('ready')
-  }, [
-    formStep,
-    personalizeHistoryStatus,
-    photo,
-    photoAssetId,
-    photoPreview,
-    recentFaces,
-    setFaceImageUrl,
-    setPhotoAssetId,
-    setPhotoPreview,
-    setPhotoStoragePath,
-    viewState.showForm,
-  ])
+    if (persistedFace?.signed_url) {
+      setPhotoStoragePath(persistedFace.storage_path ?? null);
+      setPhotoPreview(persistedFace.signed_url);
+    }
+    void prepareSavedPhoto(photoAssetId, persistedFace?.signed_url ?? null);
+  }, [formPhotoInspection.status, formStep, personalizeHistoryStatus, photo, photoAssetId, prepareSavedPhoto,
+    recentFaces, setFaceImageUrl, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, viewState.showForm]);
 
   useEffect(() => {
     if (voicePlaybackUrl) return;
@@ -1463,37 +1416,49 @@ export default function PersonalizePage({
       if (!response.ok) return
 
       forgetFace(assetId)
-      if (photoAssetId === assetId) {
+      const current = photoPreparation.snapshot();
+      if (selectedPhotoRef.current.scope === photoScope && selectedPhotoRef.current.assetId === assetId
+        && (current.status === 'idle' || (current.intent.surface === 'form'
+          && current.intent.source.kind === 'saved' && current.intent.source.assetId === assetId))) {
         setPhotoAssetId(null)
         setPhotoStoragePath(null)
         setFaceImageUrl(null)
         setPhotoPreview(null)
         setPhoto(null)
-        setPreparedFaceFile(null)
-        setFacePrepareStatus('idle')
-        setFacePrepareError(null)
-        setFaceAutoCropped(false)
-        facePrepareRunIdRef.current += 1
+        photoPreparation.clear()
       }
     } catch {
       // no-op
     }
-  }, [forgetFace, photoAssetId, setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, user?.customerId]);
+  }, [forgetFace, photoScope, photoPreparation, setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, user?.customerId]);
 
   const handleSelectRecentFace = useCallback((face: RecentFaceItem) => {
     if (!face.signed_url) return;
-
-    facePrepareRunIdRef.current += 1;
     setPhoto(null);
-    setPreparedFaceFile(null);
-    setFacePrepareStatus('ready');
-    setFacePrepareError(null);
-    setFaceAutoCropped(false);
     setPhotoPreview(face.signed_url);
-    setFaceImageUrl(face.signed_url);
+    setFaceImageUrl(null);
     setPhotoAssetId(face.asset_id);
     setPhotoStoragePath(face.storage_path ?? null);
-  }, [setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath]);
+    void prepareSavedPhoto(face.asset_id, face.signed_url);
+  }, [prepareSavedPhoto, setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath]);
+
+  const retryFormPhoto = useCallback(() => {
+    if (formPhotoInspection.status === 'failed') void photoPreparation.select(formPhotoInspection.intent);
+  }, [formPhotoInspection, photoPreparation]);
+
+  const clearFormPhoto = useCallback(() => {
+    photoPreparation.clear();
+    setPhoto(null);
+    setPhotoPreview(null);
+    setPhotoAssetId(null);
+    setPhotoStoragePath(null);
+    setFaceImageUrl(null);
+    if (localPhotoPreviewUrlRef.current) {
+      URL.revokeObjectURL(localPhotoPreviewUrlRef.current);
+      localPhotoPreviewUrlRef.current = null;
+    }
+    setFormStep('PHOTO');
+  }, [photoPreparation, setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath]);
 
   const handleDeleteProfile = useCallback(async (payload: { assetId?: string; field?: 'name' | 'age'; value?: string | number }) => {
     try {
@@ -2003,6 +1968,7 @@ export default function PersonalizePage({
             clearVoice: !choices.voiceAssetId, customerId: user?.customerId ?? null, signal: abort.signal }),
         });
       if (!isCurrent()) return;
+      photoPreparation.clear();
       cancelPreviewWatch(sourceJobId);
       selectedPreviewCreationIdRef.current = version.creationId;
       creationIdRef.current = version.creationId;
@@ -2015,7 +1981,7 @@ export default function PersonalizePage({
       setPreviewBookPresentation(assets.presentation);
       setPreviewImageErrors(new Set());
       resetBookNavigation();
-      setPhoto(null); setPreparedFaceFile(null);
+      setPhoto(null);
       setPhotoPreview(version.photoPreviewUrl);
       setPhotoAssetId(version.faceAssetId);
       setPhotoStoragePath(version.faceStoragePath);
@@ -2032,7 +1998,7 @@ export default function PersonalizePage({
         setIsSwitchingPreviewVersion(false);
       }
     }
-  }, [cancelPreviewWatch, displayedPreviewJobId, isPreviewVariantBusy, isSavingVoice, previewVariants,
+  }, [cancelPreviewWatch, displayedPreviewJobId, isPreviewVariantBusy, isSavingVoice, photoPreparation, previewVariants,
     replacePreviewUrl, resetBookNavigation, restoredPreviewGroup.ready, selectPreviewJobId, setCreationId, setFaceImageUrl,
     setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, setPreviewBookPresentation,
     setPreviewJobId, setPreviewPages, setPreviewUrl, user?.customerId]);
@@ -2426,103 +2392,6 @@ export default function PersonalizePage({
 
 
 
-    const prepareFaceForUpload = useCallback(async (
-      file: File,
-      runId: number,
-      onPhase: (phase: 'checking' | 'preparing') => void
-    ): Promise<FacePreparationOutcome> => {
-      const isCurrent = () => facePrepareRunIdRef.current === runId;
-      onPhase('checking');
-
-      try {
-        const rawHeic = await prepareRawHeicFallback(file);
-        if (!isCurrent()) return { status: 'cancelled' };
-        if (rawHeic) return { status: 'ready', file: rawHeic, autoCropped: false };
-      } catch (error) {
-        if (!isCurrent()) return { status: 'cancelled' };
-        return { status: 'failed', error: error instanceof HeicUploadTooLargeError ? { ok: false, message: error.message } : null };
-      }
-
-      const validation = await validateFaceImage(file);
-      if (!isCurrent()) return { status: 'cancelled' };
-      if (!validation.ok) return { status: 'failed', error: validation };
-
-      const quality = await faceQualityCheck(file);
-      if (!isCurrent()) return { status: 'cancelled' };
-
-      if (!quality.ok) {
-        const canAttemptAutoCrop =
-          Boolean(quality.analysis?.autoCropCandidate) &&
-          Boolean(quality.code && AUTO_CROP_FIXABLE_CODES.has(quality.code));
-
-        if (!canAttemptAutoCrop) {
-          return { status: 'failed', error: quality };
-        }
-
-        onPhase('preparing');
-        const cropAttempt = await withTimeout(
-          (async () => {
-            const cropped = await autoCropFaceImage(file, quality.analysis);
-            if (!cropped) return { file: null, error: null as FaceImageValidationResult | null };
-
-            const croppedValidation = await validateFaceImage(cropped);
-            if (!croppedValidation.ok) return { file: null, error: croppedValidation };
-
-            const croppedQuality = await faceQualityCheck(cropped);
-            if (!croppedQuality.ok) return { file: null, error: croppedQuality };
-
-            return { file: cropped, error: null as FaceImageValidationResult | null };
-          })(),
-          AUTO_FACE_CROP_TIMEOUT_MS
-        );
-        if (!isCurrent()) return { status: 'cancelled' };
-        if (cropAttempt.status === 'done' && cropAttempt.value.file) {
-          return { status: 'ready', file: cropAttempt.value.file, autoCropped: true };
-        }
-        return {
-          status: 'failed',
-          error: cropAttempt.status === 'done' && cropAttempt.value.error
-            ? cropAttempt.value.error
-            : quality,
-        };
-      }
-
-      onPhase('preparing');
-      try {
-        const prepared = await prepareFaceImage(file);
-        if (!isCurrent()) return { status: 'cancelled' };
-        return { status: 'ready', file: prepared, autoCropped: false };
-      } catch {
-        if (!isCurrent()) return { status: 'cancelled' };
-        return { status: 'failed', error: null };
-      }
-    }, []);
-
-    const startFacePreparation = useCallback(async (file: File, runId: number) => {
-      setFacePrepareError(null);
-      setPreparedFaceFile(null);
-      setFaceAutoCropped(false);
-
-      const result = await prepareFaceForUpload(file, runId, setFacePrepareStatus);
-      if (result.status === 'cancelled') return;
-      if (result.status === 'failed') {
-        setFacePrepareStatus('failed');
-        setFacePrepareError(
-          result.error
-            ? resolveFaceValidationError(result.error)
-            : t('personalize.photoPrepareFailed')
-        );
-        return;
-      }
-
-      setPreparedFaceFile(result.file);
-      setFaceAutoCropped(result.autoCropped);
-      if (result.autoCropped) {
-        showLocalPhotoPreview(result.file);
-      }
-      setFacePrepareStatus('ready');
-    }, [prepareFaceForUpload, resolveFaceValidationError, showLocalPhotoPreview, t]);
-
     const resolvePreviewVariantError = useCallback((error: unknown) => {
       if (error instanceof PreviewVariantRequestError) {
         if (error.code === 'preview_variant_limit') {
@@ -2534,19 +2403,20 @@ export default function PersonalizePage({
     }, [t]);
 
     const startPreviewVariantGeneration = useCallback(async (
-      originalFile: File,
-      preparedFile: File,
-      preparedPhotoUrl: string
+      receipt: PhotoReceipt,
+      sourceCreationId: string,
+      sourcePreviewJobId: string,
     ) => {
-      const sourceCreationId = creationIdRef.current ?? creationId;
-      const sourcePreviewJobId = previewJobIdRef.current ?? previewJobId;
-      if (!sourceCreationId || !sourcePreviewJobId || previewVariantGenerationRef.current
-        || !restoredPreviewGroup.ready) return;
+      if (receipt.intent.scope !== photoScope || !photoPreparation.isCurrent(receipt)
+        || creationIdRef.current !== sourceCreationId || previewJobIdRef.current !== sourcePreviewJobId
+        || previewVariantGenerationRef.current || !restoredPreviewGroup.ready) return;
       if (isPreviewVariantLimitReached) {
         setPreviewVariantError(t('personalize.previewVariantLimit'));
         return;
       }
 
+      const preparedPhotoUrl = URL.createObjectURL(receipt.file);
+      previewVariantPhotoUrlsRef.current.add(preparedPhotoUrl);
       previewVariantGenerationRef.current = true;
       setPreviewVariantError(null);
       setPreviewVariantPrepareStatus('preparing');
@@ -2556,13 +2426,13 @@ export default function PersonalizePage({
 
       try {
         const pendingFaceAsset = await uploadUserAsset(
-          preparedFile,
+          receipt.file,
           'face_image',
           'face',
           user?.customerId ?? undefined,
           {
             skipFacePreparation: true,
-            originalName: originalFile.name,
+            originalName: receipt.originalName,
             deferConfirm: true,
           }
         );
@@ -2574,7 +2444,7 @@ export default function PersonalizePage({
         // authority before dispatch so it cannot clone a pending older choice.
         const confirmedSource = await ensureCurrentPurchaseConfiguration();
         if (!confirmedSource) throw new Error('Please save your book options before changing the photo.');
-        if (creationIdRef.current !== sourceCreationId || previewJobIdRef.current !== sourcePreviewJobId) {
+        if (!photoPreparation.isCurrent(receipt) || creationIdRef.current !== sourceCreationId || previewJobIdRef.current !== sourcePreviewJobId) {
           previewVariantPhotoUrlsRef.current.delete(preparedPhotoUrl);
           URL.revokeObjectURL(preparedPhotoUrl);
           setPreviewVariantPrepareStatus('idle');
@@ -2622,10 +2492,7 @@ export default function PersonalizePage({
         setPreviewImageErrors(() => new Set());
         resetBookNavigation();
         setPhoto(null);
-        setPreparedFaceFile(null);
-        setFacePrepareStatus('ready');
-        setFacePrepareError(null);
-        setFaceAutoCropped(false);
+        photoPreparation.clear();
         setPhotoPreview(preparedPhotoUrl);
         setPhotoAssetId(pendingFaceAsset.asset_id);
         setPhotoStoragePath(pendingFaceAsset.storage_path);
@@ -2673,11 +2540,11 @@ export default function PersonalizePage({
       }
     }, [
       cancelPreviewWatch,
-      creationId,
+      photoPreparation,
+      photoScope,
       watchPreviewJob,
       ensurePreviewVariantSession,
       ensureCurrentPurchaseConfiguration,
-      previewJobId,
       isPreviewVariantLimitReached,
       restoredPreviewGroup.ready,
       resetBookNavigation,
@@ -2700,52 +2567,36 @@ export default function PersonalizePage({
       user?.customerId,
     ]);
 
+    const preparePreviewPhoto = async (file: File) => {
+      const current = photoPreparation.snapshot();
+      if (previewError || isPreviewCoverPending || isPreviewVariantBusy || isPreviewVariantLimitReached
+        || (current.status !== 'idle' && current.intent.surface === 'variant'
+          && ['loading', 'checking', 'preparing'].includes(current.status))
+        || versionSelectionAbortRef.current || previewVariantGenerationRef.current || isSavingVoice || isSavingEdition
+        || isSwitchingPreviewVersion || !restoredPreviewGroup.ready) return;
+      const sourceCreationId = creationIdRef.current;
+      const sourceJobId = previewJobIdRef.current;
+      if (!sourceCreationId || !sourceJobId) return;
+      setPreviewVariantError(null);
+      const receipt = await photoPreparation.select({ scope: photoScope, surface: 'variant', source: { kind: 'file', file } });
+      if (receipt) await startPreviewVariantGeneration(receipt, sourceCreationId, sourceJobId);
+    };
+
     const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       event.target.value = '';
       if (!file) return;
-
-      const nextRunId = facePrepareRunIdRef.current + 1;
-      facePrepareRunIdRef.current = nextRunId;
-
       if (viewState.showPreview) {
-        if (isPreviewVariantBusy || isPreviewVariantLimitReached || isSavingVoice || isSavingEdition || isSwitchingPreviewVersion || !restoredPreviewGroup.ready) return;
-        setPreviewVariantError(null);
-        setPreviewVariantPrepareStatus('checking');
-        void (async () => {
-          const result = await prepareFaceForUpload(
-            file,
-            nextRunId,
-            setPreviewVariantPrepareStatus
-          );
-          if (result.status === 'cancelled') return;
-          if (result.status === 'failed') {
-            setPreviewVariantPrepareStatus('failed');
-            setPreviewVariantError(
-              result.error
-                ? resolveFaceValidationError(result.error)
-                : t('personalize.photoPrepareFailed')
-            );
-            return;
-          }
-
-          const preparedPhotoUrl = URL.createObjectURL(result.file);
-          previewVariantPhotoUrlsRef.current.add(preparedPhotoUrl);
-          await startPreviewVariantGeneration(file, result.file, preparedPhotoUrl);
-        })();
+        void preparePreviewPhoto(file);
         return;
       }
-
       setPhoto(file);
       showLocalPhotoPreview(file);
       setPhotoAssetId(null);
       setPhotoStoragePath(null);
       setFaceImageUrl(null);
-      setPreparedFaceFile(null);
-      setFacePrepareError(null);
-      setFaceAutoCropped(false);
       setPreviewUrl(null);
-      void startFacePreparation(file, nextRunId);
+      void photoPreparation.select({ scope: photoScope, surface: 'form', source: { kind: 'file', file } });
     };
 
   useEffect(() => {
@@ -2839,12 +2690,9 @@ export default function PersonalizePage({
       onReturnToCover={returnToPreviewCover}
     />
   );
-  const isFacePreparing = facePrepareStatus === 'checking' || facePrepareStatus === 'preparing';
-  const hasUsablePhoto = Boolean(
-    (photoAssetId && photoPreview)
-    || (photo && preparedFaceFile && facePrepareStatus === 'ready')
-  );
-  const isFormReady = areChildDetailsReady && hasUsablePhoto && !isFacePreparing && facePrepareStatus !== 'failed';
+  const isFacePreparing = ['loading', 'checking', 'preparing'].includes(facePrepareStatus);
+  const hasUsablePhoto = Boolean(formReceipt);
+  const isFormReady = areChildDetailsReady && hasUsablePhoto;
   const fromPackagePrice = book
     ? [getBookPackagePrice(book, 'basic'), getBookPackagePrice(book, 'supreme')]
         .reduce((lowest, price) => price.effectivePriceUsd < lowest.effectivePriceUsd ? price : lowest)
@@ -2854,32 +2702,35 @@ export default function PersonalizePage({
     // A confirmed face draft restores its fresh signed URL asynchronously. Do
     // not demote the saved Details step during that owner-scoped lookup; the
     // history resolver below moves to Photo if the asset is truly unavailable.
-    if (photoAssetId && !photoPreview && personalizeHistoryStatus !== 'error') return;
+    if (photoAssetId && facePrepareStatus === 'idle' && personalizeHistoryStatus !== 'error') return;
     if (!hasUsablePhoto && !isFacePreparing && formStep !== 'PHOTO' && formStep !== 'REVIEW') {
       setFormStep('PHOTO');
       return;
     }
-  }, [formStep, hasUsablePhoto, isFacePreparing, personalizeHistoryStatus, photoAssetId, photoPreview, viewState.showForm]);
+  }, [facePrepareStatus, formStep, hasUsablePhoto, isFacePreparing, personalizeHistoryStatus, photoAssetId, viewState.showForm]);
 
   const isAgeBelowRecommendedRange = useCallback((value: string) => {
     const parsedAge = parseChildAge(value);
     return parsedAge !== null && parsedAge < minimumRecommendedAge;
   }, [minimumRecommendedAge]);
 
-  const startGeneratePreview = useCallback((consent: GeneratePreviewConsent) => {
+  const startGeneratePreview = useCallback((consent: GeneratePreviewConsent, receipt: PhotoReceipt) => {
+    if (!consent.dataGeneration || !photoPreparation.isCurrent(receipt) || receipt.intent.scope !== photoScope) return;
     dataGenerationConsentRef.current = consent.dataGeneration;
+    generationPhotoReceiptRef.current = receipt;
     primaryAction();
-  }, [primaryAction]);
+  }, [photoPreparation, photoScope, primaryAction]);
 
   const handleGeneratePreviewAction = useCallback((consent: GeneratePreviewConsent) => {
+    if (!formReceipt || !photoPreparation.isCurrent(formReceipt)) return;
     if (isAgeBelowRecommendedRange(ageRef.current)) {
-      pendingGenerateConsentRef.current = consent;
+      pendingGenerateConsentRef.current = { consent, receipt: formReceipt };
       setShowAgeRangeConfirm(true);
       return;
     }
 
-    startGeneratePreview(consent);
-  }, [isAgeBelowRecommendedRange, startGeneratePreview]);
+    startGeneratePreview(consent, formReceipt);
+  }, [formReceipt, isAgeBelowRecommendedRange, photoPreparation, startGeneratePreview]);
 
   const handleCloseAgeRangeConfirm = useCallback(() => {
     pendingGenerateConsentRef.current = null;
@@ -2887,11 +2738,11 @@ export default function PersonalizePage({
   }, []);
 
   const handleContinueAgeRangeConfirm = useCallback(() => {
-    const consent = pendingGenerateConsentRef.current;
+    const pending = pendingGenerateConsentRef.current;
     pendingGenerateConsentRef.current = null;
     setShowAgeRangeConfirm(false);
-    if (!consent) return;
-    startGeneratePreview(consent);
+    if (!pending) return;
+    startGeneratePreview(pending.consent, pending.receipt);
   }, [startGeneratePreview]);
 
   if (!book) {
@@ -3075,15 +2926,20 @@ export default function PersonalizePage({
                         hasUsablePhoto={hasUsablePhoto}
                         facePrepareStatus={facePrepareStatus}
                         facePrepareError={facePrepareError}
-                        faceAutoCropped={faceAutoCropped}
+                        faceAutoCropped={hasUsablePhoto}
+                        onCancelPhoto={isFacePreparing ? clearFormPhoto : undefined}
+                        onRetryPhoto={formPhotoInspection.status === 'failed' &&
+                          ['technical', 'saved-photo-unavailable'].includes(formPhotoInspection.reason) ? retryFormPhoto : undefined}
                         photoLabels={{
                           uploadChildPhoto: t('personalize.uploadChildPhoto'),
                           photoChecking: t('personalize.photoChecking'),
+                          photoLoading: t('personalize.photoCheck.loading'),
+                          photoRetry: t('personalize.photoCheck.retry'),
+                          photoCancel: t('personalize.photoCheck.cancel'),
                           photoPreparing: t('personalize.photoPreparing'),
                           photoReady: t('personalize.photoReady'),
                           photoAutoCentered: t('personalize.photoAutoCentered'),
                           photoPrepareFailed: t('personalize.photoPrepareFailed'),
-                          photoQualityReason: t('personalize.photoQualityReason'),
                           clickToChangePhoto: t('personalize.clickToChangePhoto'),
                           uploadPhotoHint: t('personalize.uploadPhotoHint'),
                           photoTips: t('personalize.photoTips'),
@@ -3191,7 +3047,16 @@ export default function PersonalizePage({
                     changeCount={Math.max(previewVariantSessionCount, restoredPreviewGroup.group?.changeCount ?? 0)}
                     waiting={isPreviewCoverPending} changing={isSwitchingPreviewVersion || isPreviewVariantBusy}
                     disabled={Boolean(previewError) || isPreviewCoverPending || isPreviewVariantBusy || isSavingVoice || isSavingEdition || isSwitchingPreviewVersion || !restoredPreviewGroup.ready}
-                    error={previewVariantError ?? restoredPreviewGroup.error}
+                    error={previewVariantError ?? (variantPhotoInspection.status === 'failed'
+                      ? t('personalize.photoCheck.' + variantPhotoInspection.reason) : restoredPreviewGroup.error)}
+                    onRetry={variantPhotoInspection.status === 'failed' && variantPhotoInspection.reason === 'technical'
+                      && variantPhotoInspection.intent.source.kind === 'file'
+                      ? () => {
+                        const source = variantPhotoInspection.intent.source;
+                        if (source.kind === 'file') void preparePreviewPhoto(source.file);
+                      } : undefined}
+                    onCancel={['loading', 'checking', 'preparing'].includes(variantPhotoInspection.status)
+                      ? photoPreparation.clear : undefined}
                     onUpload={handlePhotoUpload} onSelect={version => void handleSelectPhotoVersion(version)} />}
                   purchase={
                     <PreviewYourBookPanel

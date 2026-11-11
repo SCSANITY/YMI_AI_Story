@@ -1,0 +1,26 @@
+{
+  "sourceSha256": "4f0b081af467515e5d3c7b1afc628f451ba933e587ddddbb7ba9884742044c4c",
+  "compute": "FP32; no activation quantization or promised compute/RAM gain",
+  "variants": [
+    {
+      "id": "fp16-storage",
+      "file": "fp16-storage.onnx",
+      "bytes": 28680605,
+      "gzipBytes": 26587836,
+      "sha256": "c633eff2724f1c00a34e65fe9d25aa0528afaae0c1b867b46b1e90ef3b42ae8d",
+      "changedWeights": 31
+    },
+    {
+      "id": "int8-storage",
+      "file": "int8-storage.onnx",
+      "bytes": 14396624,
+      "gzipBytes": 12578785,
+      "sha256": "fa62bb8dfde02c6183829cb5d82d1ca63e8b862d6840cd920f115361648b80a2",
+      "changedWeights": 31
+    }
+  ],
+  "baseline": {
+    "bytes": 57311868,
+    "gzipBytes": 53377934
+  }
+}

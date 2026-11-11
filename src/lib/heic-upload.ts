@@ -9,11 +9,8 @@ export class HeicUploadTooLargeError extends Error {
   }
 }
 
-export async function prepareUndecodableHeicUpload(args: {
-  file: File
-  canDecode: (file: File) => Promise<boolean>
-}): Promise<File | null> {
-  const header = new Uint8Array(await args.file.slice(0, 64).arrayBuffer())
+export async function detectHeicContentType(file: Blob): Promise<'image/heic' | 'image/heif' | null> {
+  const header = new Uint8Array(await file.slice(0, 64).arrayBuffer())
   const text = (start: number) => String.fromCharCode(...header.slice(start, start + 4))
   if (header.length < 16 || text(4) !== 'ftyp') return null
   const brand = text(8)
@@ -22,8 +19,16 @@ export async function prepareUndecodableHeicUpload(args: {
   for (let p = 16; p + 4 <= Math.min(header.length, declaredBoxSize); p += 4) compatible.push(text(p))
   const heic = HEIC_BRANDS.has(brand) || compatible.some((value) => HEIC_BRANDS.has(value))
   if (!heic && !HEIF_BRANDS.has(brand)) return null
+  return heic ? 'image/heic' : 'image/heif'
+}
+
+export async function prepareUndecodableHeicUpload(args: {
+  file: File
+  canDecode: (file: File) => Promise<boolean>
+}): Promise<File | null> {
+  const contentType = await detectHeicContentType(args.file)
+  if (!contentType) return null
   if (await args.canDecode(args.file)) return null
-  const contentType = heic ? 'image/heic' : 'image/heif'
   try {
     validateUserAssetUpload({ assetType: 'face_image', contentType, sizeBytes: args.file.size })
   } catch {
@@ -32,7 +37,7 @@ export async function prepareUndecodableHeicUpload(args: {
   }
   const stem = args.file.name.replace(/\.[^.]+$/, '') || 'photo'
   // Bytes remain original; only a missing/misleading browser MIME/name is fixed.
-  return new File([args.file], `${stem}.${heic ? 'heic' : 'heif'}`, {
+  return new File([args.file], `${stem}.${contentType === 'image/heic' ? 'heic' : 'heif'}`, {
     type: contentType, lastModified: args.file.lastModified,
   })
 }

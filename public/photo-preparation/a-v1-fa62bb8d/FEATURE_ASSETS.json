@@ -1,0 +1,29 @@
+{
+  "model": "MediaPipe FaceLandmarker float16/v1",
+  "origin": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task?generation=1683136941916318",
+  "bytes": 3758596,
+  "modelSha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+  "sdk": "@mediapipe/tasks-vision@0.10.35",
+  "declaredModelLicense": "Apache-2.0 (model cards)",
+  "notices": [
+    {
+      "path": "FACEMESH_V2_CARD.pdf",
+      "origin": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20MediaPipe%20Face%20Mesh%20V2.pdf",
+      "bytes": 3476420,
+      "sha256": "c6add060f4ebfb37b2690136b6c711c7e5fcb7038baa2649ae3338b83979565a"
+    },
+    {
+      "path": "BLENDSHAPE_V2_CARD.pdf",
+      "origin": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Blendshape%20V2.pdf",
+      "bytes": 2324099,
+      "sha256": "c8e9cf60a39998f4b341740623917590e050d1c97004e2de4568d84e026445ae"
+    },
+    {
+      "path": "BLAZEFACE_CARD.pdf",
+      "origin": "https://storage.googleapis.com/mediapipe-assets/MediaPipe%20BlazeFace%20Model%20Card%20(Short%20Range).pdf",
+      "bytes": 434425,
+      "sha256": "cd335c06fc0de7807cd815a0777a697932598bcdb28fa98adaaabf847485f758"
+    }
+  ],
+  "photoTransmission": false
+}

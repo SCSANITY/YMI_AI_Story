@@ -1,0 +1,50 @@
+{
+  "engine": "a-v1-fa62bb8d",
+  "assets": [
+    {
+      "file": "faceocc.onnx",
+      "bytes": 14396624,
+      "sha256": "fa62bb8dfde02c6183829cb5d82d1ca63e8b862d6840cd920f115361648b80a2"
+    },
+    {
+      "file": "face_landmarker.task",
+      "bytes": 3758596,
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
+    },
+    {
+      "file": "ort.wasm.min.mjs",
+      "bytes": 48259,
+      "sha256": "6ef726f355b791129f7ddf3f62e7877a16b9b777abe87004b8ab306e6b9cf265"
+    },
+    {
+      "file": "ort-wasm-simd-threaded.mjs",
+      "bytes": 20856,
+      "sha256": "30dd851d9c00622940500f71ddd2ff8820c5cb65270816080175b958705385a8"
+    },
+    {
+      "file": "ort-wasm-simd-threaded.wasm",
+      "bytes": 11210254,
+      "sha256": "71aef04959c5c1b6de461b6538e2058e306610034a85aad2742d0c7fd4533fe4"
+    },
+    {
+      "file": "FACEOCC_LICENSE",
+      "bytes": 1132,
+      "sha256": "244cb9a3c35452a7354015128179c638f3f0e26335315e4637a4dfd8e6032310"
+    },
+    {
+      "file": "FACEOCC_NOTICE.md",
+      "bytes": 1728,
+      "sha256": "11c49363f47733e53ba56ed94f17a846294b60d2a02d07aeca8add78d1f0d6dd"
+    },
+    {
+      "file": "ORT_LICENSE",
+      "bytes": 1073,
+      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+    },
+    {
+      "file": "ORT_ThirdPartyNotices.txt",
+      "bytes": 326866,
+      "sha256": "e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc"
+    }
+  ]
+}

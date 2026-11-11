@@ -49,11 +49,13 @@ export function usePersonalizeHistory({
     }
 
     const data = await response.json() as UserAssetsResponse
+    options?.signal?.throwIfAborted()
     setRecentFaces(Array.isArray(data.faces) ? data.faces : [])
     setRecentProfiles(Array.isArray(data.profiles) ? data.profiles : [])
     setRecentVoices(Array.isArray(data.voices) ? data.voices : [])
     setLoadedOwnerKey(ownerKey)
     setStatus('ready')
+    return data
   }, [customerId, ownerKey])
 
   useEffect(() => {
