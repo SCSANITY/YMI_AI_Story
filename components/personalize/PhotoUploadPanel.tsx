@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo } from 'react'
+import React, { memo, useRef } from 'react'
 import Image from 'next/image'
 import { Camera, Check, X } from 'lucide-react'
 
@@ -54,6 +54,8 @@ function PhotoUploadPanelComponent({
   onRetryPhoto,
   onCancelPhoto,
 }: PhotoUploadPanelProps) {
+  const photoInput = useRef<HTMLInputElement>(null)
+  const photoActionLabel = photoPreview ? labels.clickToChangePhoto : labels.uploadChildPhoto
   const status = facePrepareStatus === 'loading' ? labels.photoLoading
     : facePrepareStatus === 'checking' ? labels.photoChecking
     : facePrepareStatus === 'preparing' ? labels.photoPreparing
@@ -62,24 +64,33 @@ function PhotoUploadPanelComponent({
 
   return (
     <div className="relative rounded-[1rem] border-2 border-dashed border-amber-200 bg-amber-50/60 p-2.5 text-center transition-colors hover:bg-amber-50 sm:p-3">
-      {photoPreview ? (
-        <div className="pointer-events-none relative z-10">
-          <div className="relative mx-auto w-20 sm:w-22">
+      <button
+        type="button"
+        aria-label={photoActionLabel}
+        title={photoActionLabel}
+        onClick={() => photoInput.current?.click()}
+        className="relative mx-auto block cursor-pointer rounded-full focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-4"
+      >
+        {photoPreview ? (
+          <>
             {/* Local blob and signed image URLs are intentionally not optimized. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photoPreview} alt={labels.uploadChildPhoto} className="mx-auto h-20 w-20 rounded-full border-4 border-white object-cover shadow-lg sm:h-22 sm:w-22" />
-          </div>
-        </div>
-      ) : (
-        <div className="pointer-events-none flex flex-col gap-1.5">
-          <div className="relative mx-auto h-16 w-16 animate-bounce sm:h-18 sm:w-18" style={{ animationDuration: '2.4s' }}>
+            <img src={photoPreview} alt="" className="h-20 w-20 rounded-full border-4 border-white object-cover shadow-lg sm:h-22 sm:w-22" />
+          </>
+        ) : (
+          <span aria-hidden="true" className="relative block h-16 w-16 motion-safe:animate-bounce sm:h-18 sm:w-18" style={{ animationDuration: '2.4s' }}>
             <span className="absolute inset-0 animate-pulse-slow rounded-full bg-amber-300/45 blur-2xl" />
             <span className="absolute inset-3 animate-pulse rounded-full bg-orange-200/50 blur-xl" />
-            <div className="absolute inset-2 rounded-full border border-amber-300/60" />
-            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-white via-amber-50 to-amber-100 text-amber-600 shadow-[0_14px_34px_rgba(245,158,11,0.34)] ring-4 ring-white/80 sm:h-18 sm:w-18">
+            <span className="absolute inset-2 rounded-full border border-amber-300/60" />
+            <span className="relative flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-white via-amber-50 to-amber-100 text-amber-600 shadow-[0_14px_34px_rgba(245,158,11,0.34)] ring-4 ring-white/80">
               <Camera className="h-7 w-7 sm:h-8 sm:w-8" />
-            </div>
-          </div>
+            </span>
+          </span>
+        )}
+      </button>
+      <input ref={photoInput} type="file" onChange={onPhotoUpload} className="hidden" accept="image/*" />
+      {!photoPreview && (
+        <div className="mt-1.5 flex flex-col gap-1.5">
           <div>
             <h4 className="text-sm font-bold text-gray-900 sm:text-base">{labels.uploadChildPhoto}</h4>
             <p className="mt-0.5 text-xs font-medium text-amber-700">{labels.uploadPhotoHint}</p>
@@ -130,13 +141,11 @@ function PhotoUploadPanelComponent({
         </div>
       )}
       {status && <p role="status" className={`mt-2 text-xs font-semibold ${facePrepareStatus === 'failed' ? 'text-rose-600' : facePrepareStatus === 'ready' ? 'text-emerald-600' : 'text-amber-700'}`}>{status}</p>}
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold">
-        <label className="cursor-pointer rounded-lg bg-white px-3 py-2 text-amber-700 ring-1 ring-amber-200 focus-within:ring-2 focus-within:ring-amber-500">
-          {photoPreview ? labels.clickToChangePhoto : labels.uploadChildPhoto}
-          <input aria-label={photoPreview ? labels.clickToChangePhoto : labels.uploadChildPhoto} type="file" onChange={onPhotoUpload} className="sr-only" accept="image/*" />
-        </label>
-        <PhotoPreparationActions labels={labels} onRetryPhoto={onRetryPhoto} onCancelPhoto={onCancelPhoto} />
-      </div>
+      {(onRetryPhoto || onCancelPhoto) && (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+          <PhotoPreparationActions labels={labels} onRetryPhoto={onRetryPhoto} onCancelPhoto={onCancelPhoto} />
+        </div>
+      )}
     </div>
   )
 }
