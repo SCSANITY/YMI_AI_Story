@@ -59,12 +59,18 @@ test('actual Preview POST rejects retired editions before access lookup or provi
   assert.equal(touched, false)
 })
 
+const shippingAddress = {
+  firstName: 'Test', lastName: 'Reader', country: 'HK', region: 'Hong Kong',
+  city: 'Hong Kong', addressLine1: '1 Example Street', zip: '000000', phone: '+85212345678',
+}
+
 function sessionHandler(items) {
   const operations = []
   const supabaseAdmin = { from(table) {
     operations.push(`read:${table}`)
     const result = table === 'orders'
-      ? { data: { order_id: 'synthetic', order_status: 'unpaid', checkout_session_id: 'synthetic-session' }, error: null }
+      ? { data: { order_id: 'synthetic', order_status: 'unpaid', checkout_session_id: 'synthetic-session',
+          checkout_currency: 'USD', shipping_method: 'standard', shipping_address: shippingAddress }, error: null }
       : { data: items, error: null }
     const query = {
       select() { return this }, eq() { return this },
@@ -104,7 +110,7 @@ function sessionHandler(items) {
 }
 const sessionRequest = () => new Request('http://localhost/api/checkout/session', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ orderId: 'synthetic', email: 'fixture@example.invalid' }),
+  body: JSON.stringify({ orderId: 'synthetic', email: 'fixture@example.invalid', shippingAddress, shippingMethod: 'standard' }),
 })
 
 test('actual checkout handler refuses retired unpaid items before Stripe reuse or order writes', async () => {

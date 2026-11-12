@@ -33,7 +33,7 @@ import {
 } from '@/lib/checkout-session-lock'
 import { getSiteUrl } from '@/lib/site-url'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
-import { normalizeShippingAddress, recipientAddressIssue } from '@/lib/shipping-address'
+import { normalizeShippingAddress, recipientAddressIssue, type ShippingAddress } from '@/lib/shipping-address'
 
 function checkoutSessionMatchesSiteOrigin(
   session: { success_url?: string | null; cancel_url?: string | null },
@@ -48,6 +48,14 @@ function checkoutSessionMatchesSiteOrigin(
   } catch {
     return false
   }
+}
+
+function matchesSavedShippingAddress(requested: ShippingAddress, saved: unknown) {
+  const stored = normalizeShippingAddress(saved)
+  return Object.keys({ ...requested, ...stored }).every((field) => {
+    const key = field as keyof ShippingAddress
+    return (requested[key] ?? '') === (stored[key] ?? '')
+  })
 }
 
 export async function POST(request: Request) {
@@ -82,7 +90,7 @@ export async function POST(request: Request) {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('order_id, order_status, checkout_session_id, discount_amount_usd, shipping_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
+      .select('order_id, order_status, checkout_session_id, checkout_currency, shipping_method, shipping_address, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
       .eq('order_id', orderId)
       .maybeSingle()
     if (orderError || !order?.order_id) {
@@ -114,38 +122,11 @@ export async function POST(request: Request) {
 
     const stripe = getStripeServer()
     const baseUrl = getSiteUrl(request.url)
-    if (order.checkout_session_id) {
-      const existingSession = await stripe.checkout.sessions.retrieve(order.checkout_session_id)
-      let existingFingerprintMatches = false
-      if (existingSession.status === 'open') {
-        try {
-          existingFingerprintMatches = Boolean(existingSession.metadata?.checkout_fingerprint) &&
-            existingSession.metadata?.checkout_fingerprint === await createOrderCheckoutFingerprint(orderId)
-        } catch {
-          existingFingerprintMatches = false
-        }
-      }
-      if (
-        existingSession.status === 'open' &&
-        existingSession.url &&
-        existingFingerprintMatches &&
-        checkoutSessionMatchesSiteOrigin(existingSession, baseUrl)
-      ) {
-        return NextResponse.json({
-          ok: true,
-          orderId,
-          sessionId: existingSession.id,
-          url: existingSession.url,
-          reused: true,
-        })
-      }
-      if (existingSession.status === 'complete') {
-        return NextResponse.json({ error: 'Order payment is already being processed' }, { status: 409 })
-      }
-      if (existingSession.status === 'open') {
-        await stripe.checkout.sessions.expire(existingSession.id)
-      }
-      await clearOrderCheckoutSessionLock(orderId, existingSession.id)
+    const existingSession = order.checkout_session_id
+      ? await stripe.checkout.sessions.retrieve(order.checkout_session_id)
+      : null
+    if (existingSession?.status === 'complete') {
+      return NextResponse.json({ error: 'Order payment is already being processed' }, { status: 409 })
     }
 
     const addressIssue = recipientAddressIssue(shippingAddress)
@@ -153,8 +134,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid recipient address', field: addressIssue }, { status: 400 })
     }
 
+    let shippingQuote: Awaited<ReturnType<typeof calculateShippingQuote>> | undefined
+
+    // The fingerprint binds the session to the saved order. The request must
+    // also match that order before reusing its price and delivery.
+    if (
+      existingSession?.status === 'open' &&
+      existingSession.url &&
+      order.checkout_currency === currency &&
+      (requestedShippingMethod === null || order.shipping_method === requestedShippingMethod) &&
+      matchesSavedShippingAddress(shippingAddress, order.shipping_address) &&
+      checkoutSessionMatchesSiteOrigin(existingSession, baseUrl)
+    ) {
+      const savedFingerprint = existingSession.metadata?.checkout_fingerprint
+      const currentFingerprint = savedFingerprint
+        ? await createOrderCheckoutFingerprint(orderId).catch(() => null)
+        : null
+      if (savedFingerprint && savedFingerprint === currentFingerprint) {
+        // Older callers can omit the method, which selects the current default.
+        if (!requestedShippingMethod) shippingQuote = await calculateShippingQuote(shippingAddress)
+        const effectiveMethod = requestedShippingMethod ?? shippingQuote?.selectedMethod
+        if (effectiveMethod && effectiveMethod === order.shipping_method) {
+          return NextResponse.json({
+            ok: true,
+            orderId,
+            sessionId: existingSession.id,
+            url: existingSession.url,
+            reused: true,
+          })
+        }
+      }
+    }
+
     {
-      const authoritativeQuote = await calculateShippingQuote(shippingAddress)
+      const authoritativeQuote = shippingQuote ?? await calculateShippingQuote(shippingAddress)
       if (!authoritativeQuote.available) {
         return NextResponse.json(
           { error: authoritativeQuote.message || 'Shipping is not available for this destination.' },
@@ -176,6 +189,14 @@ export async function POST(request: Request) {
       shippingRateSnapshot = selectedShippingOption.snapshot
       shippingMethod = selectedShippingOption.methodCode
       shippingZoneCode = String(selectedShippingOption.snapshot.zoneCode || '').trim() || null
+    }
+
+    // Validate the new quote before expiring a still-payable session.
+    if (existingSession) {
+      if (existingSession.status === 'open') {
+        await stripe.checkout.sessions.expire(existingSession.id)
+      }
+      await clearOrderCheckoutSessionLock(orderId, existingSession.id)
     }
 
     const { error: orderUpdateError } = await supabaseAdmin

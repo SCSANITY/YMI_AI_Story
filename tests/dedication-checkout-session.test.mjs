@@ -13,7 +13,8 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
   changedAfterLock = false, existingSession = null } = {}) {
   const calls = []
   const order = { order_id: 'order-1', order_status: 'unpaid', checkout_session_id: existingSession ? 'cs_old' : null,
-    applied_product_discount_instrument_id: null, applied_shipping_discount_instrument_id: null }
+    applied_product_discount_instrument_id: null, applied_shipping_discount_instrument_id: null,
+    checkout_currency: 'USD', shipping_method: 'standard', shipping_address: { country: 'HK' } }
   const supabaseAdmin = { from(table) {
     const query = {
       operation: 'select', selected: '', updateValue: null,
@@ -111,7 +112,7 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
 
 const request = () => new Request('http://localhost/api/checkout/session', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ orderId: 'order-1', email: 'buyer@example.test', shippingAddress: { country: 'HK' } }),
+  body: JSON.stringify({ orderId: 'order-1', email: 'buyer@example.test', shippingMethod: 'standard', shippingAddress: { country: 'HK' } }),
 })
 
 test('missing dedication does not block Stripe Session creation', async () => {

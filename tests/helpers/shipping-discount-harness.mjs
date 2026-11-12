@@ -68,9 +68,25 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
       return { data: null, error: null }
     },
   }
+  const stripeSessions = new Map()
   const stripe = { checkout: { sessions: {
-    async create(input) { stripeCalls.push(input); return { id: 'session-test', url: 'https://checkout.example.test/session-test' } },
-    async expire() { throw new Error('Unexpected session expiry') },
+    async create(input) {
+      stripeCalls.push(input)
+      const id = `session-test-${stripeCalls.length}`
+      const session = { ...input, id, status: 'open', url: `https://checkout.example.test/${id}` }
+      stripeSessions.set(id, session)
+      return session
+    },
+    async retrieve(id) {
+      const session = stripeSessions.get(id)
+      if (!session) throw new Error('Missing fixture session')
+      return session
+    },
+    async expire(id) {
+      const session = await stripe.checkout.sessions.retrieve(id)
+      if (session.status !== 'open') throw new Error('Only open fixture sessions can expire')
+      session.status = 'expired'
+    },
   } } }
   const mocks = {
     'server-only': {}, 'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
@@ -114,12 +130,12 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
   const patch = value => load('app/api/admin/shipping-discount/route.ts').PATCH(new Request('https://example.test/api/admin/shipping-discount', {
     method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ discountPercent: value }),
   }))
-  const checkout = (currency = 'USD', method = 'standard') => load('app/api/checkout/session/route.ts').POST(new Request('https://example.test/api/checkout/session', {
+  const checkout = (currency = 'USD', method = 'standard', shippingAddress = address) => load('app/api/checkout/session/route.ts').POST(new Request('https://example.test/api/checkout/session', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ orderId: order.order_id, email: 'reader@example.test', shippingAddress: address, shippingMethod: method,
+    body: JSON.stringify({ orderId: order.order_id, email: 'reader@example.test', shippingAddress, shippingMethod: method,
       currency, shippingAmountUsd: 0.01, shippingRateSnapshot: { originalShippingAmountUsd: 9999 } }),
   }))
-  return { load, rules, order, tables, calls, stripeCalls, rpcCalls, patch, checkout,
+  return { load, rules, order, tables, calls, stripeCalls, stripeSessions, rpcCalls, patch, checkout,
     quote: () => load('src/lib/shipping-quote-server.ts').calculateShippingQuote(address) }
 }
 
