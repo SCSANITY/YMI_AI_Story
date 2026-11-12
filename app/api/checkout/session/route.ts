@@ -134,15 +134,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid recipient address', field: addressIssue }, { status: 400 })
     }
 
-    let shippingQuote: Awaited<ReturnType<typeof calculateShippingQuote>> | undefined
-
     // The fingerprint binds the session to the saved order. The request must
     // also match that order before reusing its price and delivery.
     if (
       existingSession?.status === 'open' &&
       existingSession.url &&
       order.checkout_currency === currency &&
-      (requestedShippingMethod === null || order.shipping_method === requestedShippingMethod) &&
+      requestedShippingMethod !== null &&
+      order.shipping_method === requestedShippingMethod &&
       matchesSavedShippingAddress(shippingAddress, order.shipping_address) &&
       checkoutSessionMatchesSiteOrigin(existingSession, baseUrl)
     ) {
@@ -151,23 +150,18 @@ export async function POST(request: Request) {
         ? await createOrderCheckoutFingerprint(orderId).catch(() => null)
         : null
       if (savedFingerprint && savedFingerprint === currentFingerprint) {
-        // Older callers can omit the method, which selects the current default.
-        if (!requestedShippingMethod) shippingQuote = await calculateShippingQuote(shippingAddress)
-        const effectiveMethod = requestedShippingMethod ?? shippingQuote?.selectedMethod
-        if (effectiveMethod && effectiveMethod === order.shipping_method) {
-          return NextResponse.json({
-            ok: true,
-            orderId,
-            sessionId: existingSession.id,
-            url: existingSession.url,
-            reused: true,
-          })
-        }
+        return NextResponse.json({
+          ok: true,
+          orderId,
+          sessionId: existingSession.id,
+          url: existingSession.url,
+          reused: true,
+        })
       }
     }
 
     {
-      const authoritativeQuote = shippingQuote ?? await calculateShippingQuote(shippingAddress)
+      const authoritativeQuote = await calculateShippingQuote(shippingAddress)
       if (!authoritativeQuote.available) {
         return NextResponse.json(
           { error: authoritativeQuote.message || 'Shipping is not available for this destination.' },

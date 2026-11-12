@@ -83,17 +83,14 @@ test('changed inputs cannot replace a session that has already completed', async
 })
 
 
-test('a request without a shipping method uses the authoritative default', async () => {
+test('an omitted shipping method does not establish a matching session', async () => {
   const fixture = shippingHarness({ percent: 60 })
-  const speedy = await openCheckout(fixture, 'USD', 'speedy')
-  const standard = await openCheckout(fixture, 'USD', null)
-  const retried = await openCheckout(fixture, 'USD', null)
+  const first = await openCheckout(fixture, 'USD', 'standard')
+  const replacement = await openCheckout(fixture, 'USD', null)
 
-  assert.notEqual(standard.sessionId, speedy.sessionId)
-  assert.equal(fixture.stripeSessions.get(speedy.sessionId).status, 'expired')
+  assert.notEqual(replacement.sessionId, first.sessionId)
+  assert.equal(fixture.stripeSessions.get(first.sessionId).status, 'expired')
   assert.equal(fixture.order.shipping_method, 'standard')
-  assert.equal(retried.reused, true)
-  assert.equal(retried.sessionId, standard.sessionId)
   assert.equal(fixture.stripeCalls.length, 2)
 })
 
