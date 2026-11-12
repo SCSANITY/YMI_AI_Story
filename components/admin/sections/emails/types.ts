@@ -3,7 +3,6 @@ export const EMAIL_EVENT_STATUS_OPTIONS = [
   'pending',
   'sent',
   'failed',
-  'external_observed',
 ] as const
 
 export const EMAIL_EVENT_PROVIDER_OPTIONS = [
@@ -25,8 +24,7 @@ export const EMAIL_EVENT_KEY_OPTIONS = [
   'kol_partnership_reply',
   'general_mail_message',
   'stripe_receipt',
-  'supabase_signup_otp',
-  'supabase_password_recovery',
+  'supabase_auth_email',
 ] as const
 
 export type EmailEventStatus = (typeof EMAIL_EVENT_STATUS_OPTIONS)[number]

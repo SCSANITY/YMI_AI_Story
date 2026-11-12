@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
 import { getOrderDiscountSummary, refreshAppliedOrderDiscounts } from '@/lib/discounts'
-import { recordExternalEmailObserved } from '@/lib/emailEvents'
 import { checkoutOwnerErrorResponse } from '@/lib/checkout-owner'
 import { clearOrderCheckoutSessionLock, createOrderCheckoutFingerprint } from '@/lib/checkout-session-lock'
 import { CheckoutQuoteError, loadCheckoutPricingItems, prepareCheckoutQuote, priceCheckout } from '@/lib/checkout-quote-server'
@@ -192,24 +191,6 @@ export async function POST(request: Request) {
       await stripe.checkout.sessions.expire(session.id)
       await clearOrderCheckoutSessionLock(orderId, session.id)
       throw snapshotError
-    }
-
-    try {
-      await recordExternalEmailObserved({
-        emailKey: 'stripe_receipt',
-        provider: 'stripe',
-        idempotencyKey: `stripe_external:${session.id}`,
-        toEmail: email,
-        subject: 'Stripe payment receipt',
-        orderId,
-        customerId,
-        context: {
-          checkoutSessionId: session.id,
-          trigger: 'checkout_session_created',
-        },
-      })
-    } catch (emailEventError) {
-      console.error('[email-events] failed to record stripe external email observation', emailEventError)
     }
 
     return NextResponse.json({

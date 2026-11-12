@@ -80,3 +80,21 @@ No per-address Resend account or new domain/MX setup is part of this change.
   rendering.
 - `npm run support:tests`, `npm run admin:contracts`, `npm run test:contracts`,
   TypeScript, ESLint, and the production build cover the wider boundaries.
+
+## Delivery evidence
+
+Delivery Events excludes historical `external_observed` rows. These capture
+business triggers such as Auth requests or Checkout Session creation.
+The original rows remain in the database.
+
+- YMI mail uses the existing Resend message ID and delivery webhook.
+- Supabase Auth SMTP events can be included through that same signed webhook.
+  Set `EMAIL_FROM_SUPABASE_AUTH` to an address reserved for the project's Auth
+  SMTP. Verify the address is exclusive and that actual SMTP mail reaches the
+  configured webhook before setting it. Incoming evidence records the Resend
+  ID and a fixed Auth subject label so OTPs in subjects are excluded.
+- The existing daily email recovery job checks up to 50 recent positive Stripe
+  payments from the last seven days. Only a matching successful live charge
+  with a receipt number enters the list. Stripe's receipt number confirms
+  sending, and the UI shows the time the app confirmed it and that delivery is
+  unconfirmed.

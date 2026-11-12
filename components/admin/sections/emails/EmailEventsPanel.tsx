@@ -39,7 +39,6 @@ function formatDate(value: string | null) {
 function statusTone(status: string): AdminStatusTone {
   if (status === 'sent' || status === 'delivered') return 'success'
   if (['failed', 'bounced', 'complained', 'suppressed'].includes(status)) return 'danger'
-  if (status === 'external_observed') return 'info'
   return 'warning'
 }
 
@@ -58,6 +57,11 @@ function buildEmailEventsHref(filters: EmailEventFilters) {
   if (filters.emailKey !== 'all') params.set('email_key', filters.emailKey)
   const query = params.toString()
   return `/admin/emails?${query}`
+}
+
+function deliveryLabel(event: EmailEventRow) {
+  if (event.provider_delivery_status) return formatOption(event.provider_delivery_status)
+  return event.provider === 'stripe' ? 'Delivery unconfirmed' : '-'
 }
 
 function eventActivityAt(event: EmailEventRow) {
@@ -377,9 +381,9 @@ function EmailEventCard({ event }: { event: EmailEventRow }) {
       </div>
       <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
         <EventDetail label="Created" value={formatDate(event.created_at)} />
-        <EventDetail label="Activity" value={formatDate(eventActivityAt(event))} />
+        <EventDetail label={event.provider === 'stripe' ? 'Confirmed' : 'Activity'} value={formatDate(eventActivityAt(event))} />
         <EventDetail label="Provider" value={formatOption(event.provider)} />
-        <EventDetail label="Delivery" value={event.provider_delivery_status ? formatOption(event.provider_delivery_status) : '-'} />
+        <EventDetail label="Delivery" value={deliveryLabel(event)} />
         <EventDetail label="Recipient" value={event.to_email || '-'} breakWords />
         <EventDetail label="Order" value={event.order_id || '-'} breakWords />
         <EventDetail label="Final job" value={event.final_job_id || '-'} breakWords />
@@ -412,7 +416,9 @@ function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
         {events.map((event) => (
           <tr key={event.email_event_id} className="text-[#4d524b] hover:bg-white/50">
             <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--admin-page-muted)]">
-              {formatDate(event.created_at)}
+              {event.provider === 'stripe' && event.observed_at ? (
+                <p title="Time the receipt was confirmed">{formatDate(event.observed_at)} <span>Confirmed</span></p>
+              ) : formatDate(event.created_at)}
             </td>
             <td className="px-4 py-3">
               <p className="font-semibold text-[var(--admin-page-ink)]">{formatOption(event.email_key)}</p>
@@ -427,7 +433,7 @@ function EmailEventsTable({ events }: { events: EmailEventRow[] }) {
               <StatusBadge status={event.status} />
             </td>
             <td className="px-4 py-3">
-              {event.provider_delivery_status ? <StatusBadge status={event.provider_delivery_status} /> : <span className="text-[var(--admin-page-muted)]">-</span>}
+              {event.provider_delivery_status ? <StatusBadge status={event.provider_delivery_status} /> : <span className="text-[var(--admin-page-muted)]">{deliveryLabel(event)}</span>}
             </td>
             <td className="max-w-[240px] break-all px-4 py-3 text-[#5f645c]">
               {event.to_email || '-'}
