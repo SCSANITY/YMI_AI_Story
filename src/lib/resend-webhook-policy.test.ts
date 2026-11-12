@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { normalizeResendWebhookEvent } from './resend-webhook-policy'
+import { getSupabaseAuthEmailEvidence } from './supabase-auth-email-evidence'
 
 test('Resend delivery events retain transport ids and bounded operational detail', () => {
   const event = normalizeResendWebhookEvent({
@@ -59,4 +60,29 @@ test('malformed delivery events fail closed before persistence', () => {
     }),
     null
   )
+})
+
+test('only verified delivery evidence from a configured dedicated Auth sender is projected', () => {
+  const payload = {
+    type: 'email.delivered',
+    created_at: '2026-08-11T12:00:00.000Z',
+    data: {
+      email_id: 'auth-message-id',
+      from: 'Security <auth@example.com>',
+      to: ['user@example.com'],
+      subject: 'Verify with 123456',
+    },
+  }
+  const event = normalizeResendWebhookEvent(payload)
+  assert.ok(event)
+  assert.equal(getSupabaseAuthEmailEvidence(payload, event, undefined), null)
+  assert.equal(getSupabaseAuthEmailEvidence(payload, event, 'other@example.com'), null)
+  const evidence = getSupabaseAuthEmailEvidence(payload, event, 'auth@example.com')
+  assert.equal(evidence?.provider, 'supabase_auth')
+  assert.equal(evidence?.resendMessageId, 'auth-message-id')
+  assert.equal(evidence?.sentAt, undefined)
+  assert.doesNotMatch(JSON.stringify(evidence), /123456/)
+  assert.equal(getSupabaseAuthEmailEvidence({
+    ...payload, data: { ...payload.data, to: ['one@example.com', 'two@example.com'] },
+  }, event, 'auth@example.com'), null)
 })

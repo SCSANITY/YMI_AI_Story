@@ -171,6 +171,7 @@ export default async function AdminEmailsPage({
         .select(
           'email_event_id, email_key, provider, status, to_email, subject, order_id, final_job_id, error_message, created_at, sent_at, failed_at, observed_at, provider_delivery_status, provider_event_type, provider_event_at'
         )
+        .neq('status', 'external_observed')
         .order('created_at', { ascending: false })
         .limit(100)
 

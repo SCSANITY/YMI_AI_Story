@@ -15,6 +15,8 @@ import {
   reconcileResendDeliveryEvent,
 } from '@/lib/resend-webhook-events'
 import { normalizeResendWebhookEvent } from '@/lib/resend-webhook-policy'
+import { getSupabaseAuthEmailEvidence } from '@/lib/supabase-auth-email-evidence'
+import { recordProviderEmailEvidence } from '@/lib/emailEvents'
 import { getSupportInboundDomain } from '@/lib/support-ticket'
 
 export const maxDuration = 60
@@ -55,6 +57,11 @@ export async function POST(request: Request) {
 
   let claimed: Awaited<ReturnType<typeof claimResendWebhookEvent>>
   try {
+    const authEmail = getSupabaseAuthEmailEvidence(
+      verified, event, process.env.EMAIL_FROM_SUPABASE_AUTH
+    )
+    // Project the message before claiming so a replay can recover an insert failure.
+    if (authEmail) await recordProviderEmailEvidence(authEmail)
     claimed = await claimResendWebhookEvent(webhookEventId, event)
   } catch (error) {
     console.error('[resend-webhook] durable event claim failed', {

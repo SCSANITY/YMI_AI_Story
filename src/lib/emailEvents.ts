@@ -178,6 +178,37 @@ export async function markEmailEventFailed(emailEventId: string, errorMessage: s
   }
 }
 
+export async function recordProviderEmailEvidence(params: EmailEventBase & {
+  status: 'sent' | 'failed'
+  resendMessageId?: string
+  sentAt?: string
+  failedAt?: string
+}) {
+  const now = new Date().toISOString()
+  const { error } = await supabaseAdmin
+    .from('email_events')
+    .upsert({
+      email_key: params.emailKey,
+      provider: params.provider,
+      status: params.status,
+      idempotency_key: params.idempotencyKey,
+      to_email: params.toEmail ?? null,
+      subject: params.subject ?? null,
+      order_id: params.orderId ?? null,
+      customer_id: params.customerId ?? null,
+      resend_message_id: params.resendMessageId ?? null,
+      sent_at: params.sentAt ?? null,
+      failed_at: params.failedAt ?? null,
+      observed_at: now,
+      context: normalizeContext(params.context),
+    }, { onConflict: 'idempotency_key', ignoreDuplicates: true })
+
+  // An existing Resend id already has a row for the normal reconciliation.
+  if (error && !(params.resendMessageId && error.code === '23505')) {
+    throw new Error(`Failed to record provider email evidence: ${error.message}`)
+  }
+}
+
 export async function recordExternalEmailObserved(params: EmailEventBase) {
   const now = new Date().toISOString()
   const { error } = await supabaseAdmin
