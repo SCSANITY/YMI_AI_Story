@@ -41,7 +41,7 @@ test('Customize keeps details focused while Preview owns the image-led edition c
   assert.doesNotMatch(formFlow, /BookPackageSelector|VoiceRecorderPanel|bookType/)
   assert.match(purchasePanel, /type="radio"/)
   assert.match(purchasePanel, /name="preview-edition"/)
-  assert.match(purchasePanel, /edition\.gallery\[0\]\.src/)
+  assert.match(purchasePanel, /src=\{edition\.previewOptionImage\}/)
   assert.match(purchasePanel, /value === 'supreme'/)
   assert.match(languageSelector, /styles\.control/)
   assert.match(childDetails, /styles\.control/g)
