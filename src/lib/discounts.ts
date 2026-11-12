@@ -63,19 +63,6 @@ export async function loadOrderDiscountSlots(productId: string | null, shippingI
   return { productDiscount: slot(productId), shippingDiscount: slot(shippingId) }
 }
 
-type DiscountedLineItemInput = {
-  id: string
-  name: string
-  quantity: number
-  unitPriceUsd: number
-  metadata?: Record<string, string>
-}
-
-type DiscountedLineItem = DiscountedLineItemInput & {
-  originalLineTotalUsd: number
-  discountedLineTotalUsd: number
-}
-
 function toNumber(value: unknown): number {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
@@ -343,43 +330,6 @@ export async function getOrderDiscountSummary(orderId: string): Promise<OrderDis
     shippingDiscountAmountUsd: toMoney(data?.shipping_discount_amount_usd),
     ...await loadOrderDiscountSlots(data?.applied_product_discount_instrument_id ?? null, data?.applied_shipping_discount_instrument_id ?? null),
   }
-}
-
-export function allocateProductDiscountToLineItems(
-  items: DiscountedLineItemInput[],
-  productDiscountAmountUsd: number
-): DiscountedLineItem[] {
-  const normalizedItems = items.map((item) => {
-    const quantity = Math.max(1, Number(item.quantity ?? 1))
-    const unitPriceUsd = toMoney(item.unitPriceUsd)
-    return {
-      ...item,
-      quantity,
-      unitPriceUsd,
-      originalLineTotalUsd: toMoney(unitPriceUsd * quantity),
-      discountedLineTotalUsd: toMoney(unitPriceUsd * quantity),
-    }
-  })
-
-  const subtotalCents = normalizedItems.reduce(
-    (sum, item) => sum + Math.round(item.originalLineTotalUsd * 100), 0,
-  )
-  const discountCents = Math.min(subtotalCents, Math.round(toMoney(productDiscountAmountUsd) * 100))
-  if (discountCents <= 0) return normalizedItems
-
-  let subtotalSoFar = 0
-  let allocated = 0
-  return normalizedItems.map((item) => {
-    const lineCents = Math.round(item.originalLineTotalUsd * 100)
-    subtotalSoFar += lineCents
-    const allocation = Math.round(discountCents * subtotalSoFar / subtotalCents)
-    const lineDiscount = allocation - allocated
-    allocated = allocation
-    return {
-      ...item,
-      discountedLineTotalUsd: (lineCents - lineDiscount) / 100,
-    }
-  })
 }
 
 export function getDiscountLabel(voucher: CheckoutVoucher): string {

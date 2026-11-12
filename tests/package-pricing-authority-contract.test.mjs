@@ -34,7 +34,8 @@ test('paid rows stay immutable while unpaid checkout receives authoritative item
   assert.match(cartRoute, /requireCheckoutOrderAccess\(String\(existingItem\.order_id\), owner, \{ requireUnpaid: true \}\)/)
   assert.match(orderStart, /items: pricedItems/)
   assert.match(checkoutSession, /price_at_purchase/)
-  assert.match(checkoutSession, /allocateProductDiscountToLineItems/)
+  assert.match(checkoutSession, /calculateCheckoutPricing/)
+  assert.match(await read('src/lib/checkout-pricing.ts'), /allocateProductDiscountToLineItems/)
   assert.doesNotMatch(checkoutSession, /body\?\.priceAtPurchase/)
 })
 

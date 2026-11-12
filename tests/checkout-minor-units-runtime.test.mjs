@@ -43,7 +43,7 @@ test('zero-decimal currencies get nonnegative whole units and a reconciled total
 })
 
 test('USD discount allocation cannot spend more cents than the approved discount', () => {
-  const { allocateProductDiscountToLineItems } = shippingHarness().load('src/lib/discounts.ts')
+  const { allocateProductDiscountToLineItems } = shippingHarness().load('src/lib/checkout-pricing.ts')
   const items = Array.from({ length: 4 }, (_, index) => ({
     id: `item-${index}`, name: 'Book', quantity: 1, unitPriceUsd: 0.01,
   }))

@@ -63,7 +63,6 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
       convertUsdToCurrency: value => value, normalizeCheckoutCurrency: () => 'USD', toMinorUnit: value => value * 100,
     },
     '@/lib/discounts': {
-      allocateProductDiscountToLineItems: items => items.map(item => ({ ...item, discountedLineTotalUsd: item.unitPriceUsd * item.quantity })),
       getOrderDiscountSummary: async () => ({ productDiscountAmountUsd: 0, shippingDiscountAmountUsd: 0 }),
       refreshAppliedOrderDiscounts: async () => undefined,
     },
@@ -99,24 +98,22 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
       if (prepareFails) throw new Error('Undecided dedication')
     } },
   }
+  function requireModule(name) {
+    if (Object.hasOwn(dependencies, name)) return dependencies[name]
+    if (name === '@/lib/checkout-pricing' || name === '@/lib/checkout-line-items') {
+      const source = readFileSync(new URL(`../src/${name.slice(2)}.ts`, import.meta.url), 'utf8')
+      const loaded = { exports: {} }
+      vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
+        module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
+      } }).outputText, { module: loaded, exports: loaded.exports, require: requireModule })
+      return loaded.exports
+    }
+    throw new Error(`Unmocked ${name}`)
+  }
+
   const loaded = { exports: {} }
   vm.runInNewContext(js, {
-    module: loaded, exports: loaded.exports, Response, Request, URL, console,
-    require(name) {
-      if (Object.hasOwn(dependencies, name)) return dependencies[name]
-      if (name === '@/lib/checkout-line-items') {
-        const lineItemSource = readFileSync(new URL('../src/lib/checkout-line-items.ts', import.meta.url), 'utf8')
-        const lineItemModule = { exports: {} }
-        vm.runInNewContext(ts.transpileModule(lineItemSource, { compilerOptions: {
-          module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-        } }).outputText, {
-          module: lineItemModule, exports: lineItemModule.exports,
-          require: dependency => dependencies[dependency],
-        })
-        return lineItemModule.exports
-      }
-      throw new Error(`Unmocked ${name}`)
-    },
+    module: loaded, exports: loaded.exports, Response, Request, URL, console, require: requireModule,
   }, { filename: 'app/api/checkout/session/route.ts' })
   return { POST: loaded.exports.POST, calls }
 }

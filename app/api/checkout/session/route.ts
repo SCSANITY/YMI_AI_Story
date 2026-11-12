@@ -6,15 +6,9 @@ import {
   normalizeCheckoutCurrency,
 } from '@/lib/locale-pricing'
 import {
-  allocateProductDiscountToLineItems,
   getOrderDiscountSummary,
   refreshAppliedOrderDiscounts,
 } from '@/lib/discounts'
-import {
-  capMultiBookOfferToHeadroom,
-  computeMultiBookDiscountUsd,
-  computeMultiBookSubtotalUsd,
-} from '@/lib/multi-book-offer-core'
 import { getMultiBookOfferRule } from '@/lib/multi-book-offer'
 import { recordExternalEmailObserved } from '@/lib/emailEvents'
 import {
@@ -30,7 +24,7 @@ import {
   createOrderCheckoutFingerprint,
 } from '@/lib/checkout-session-lock'
 import { getSiteUrl } from '@/lib/site-url'
-import { buildCheckoutLineItems } from '@/lib/checkout-line-items'
+import { calculateCheckoutPricing } from '@/lib/checkout-pricing'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { normalizeShippingAddress, recipientAddressIssue, type ShippingAddress } from '@/lib/shipping-address'
 
@@ -247,20 +241,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
     }
 
-    // Multi-book offer: the server is the pricing authority. The effective
-    // amount is the raw rule offer capped by the headroom left after product
-    // discount instruments, and it is frozen on the order for this session.
     const multiBookRule = await getMultiBookOfferRule()
-    const multiBookItems = cartItems.map((item: { quantity?: unknown; price_at_purchase?: unknown }) => ({
-      quantity: item.quantity,
-      unitPriceUsd: item.price_at_purchase,
-    }))
-    const multiBookSubtotalUsd = computeMultiBookSubtotalUsd(multiBookItems)
-    const multiBookDiscountUsd = capMultiBookOfferToHeadroom(
-      computeMultiBookDiscountUsd(multiBookItems, multiBookRule),
-      multiBookSubtotalUsd,
-      discountSummary.productDiscountAmountUsd
-    )
+    const { lineItems, totalMinor, multiBookDiscountUsd } = calculateCheckoutPricing({
+      items: cartItems.map(item => {
+        const quantity = Math.max(1, Number(item.quantity ?? 1))
+        const creation = Array.isArray(item.creations) ? item.creations[0] : item.creations
+        const template = Array.isArray(creation?.templates) ? creation.templates[0] : creation?.templates
+        const templateId = creation?.template_id ?? 'custom-story-book'
+        const title = resolvePersonalizedBookTitle({
+          templateId,
+          templateName: template?.name,
+          customizeSnapshot: creation?.customize_snapshot,
+        })
+        return {
+          id: item.cart_item_id,
+          name: quantity > 1 ? `${title} x${quantity}` : title,
+          quantity,
+          unitPriceUsd: Math.max(0, Number(item.price_at_purchase ?? 0)),
+          metadata: {
+            template_id: String(templateId),
+            cart_item_id: String(item.cart_item_id),
+          },
+        }
+      }),
+      currency,
+      multiBookRule,
+      productDiscountUsd: discountSummary.productDiscountAmountUsd,
+      shippingDiscountUsd: discountSummary.shippingDiscountAmountUsd,
+      shipping: {
+        amountUsd: shippingAmountUsd,
+        metadata: {
+          order_id: orderId,
+          shipping_rate: String(shippingRateSnapshot?.rateName || shippingRateSnapshot?.methodName || ''),
+          shipping_method: String(shippingMethod || ''),
+          shipping_zone_code: String(shippingZoneCode || ''),
+        },
+      },
+    })
 
     const { error: multiBookUpdateError } = await supabaseAdmin
       .from('orders')
@@ -270,54 +287,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to update order offer' }, { status: 500 })
     }
 
-    const discountedItems = allocateProductDiscountToLineItems(
-      [...cartItems].sort((left, right) => left.cart_item_id.localeCompare(right.cart_item_id)).map((item: any) => {
-        const qty = Math.max(1, Number(item.quantity ?? 1))
-        const unitPriceUsd = Math.max(0, Number(item.price_at_purchase ?? 0))
-        const templateId = item?.creations?.template_id ?? 'custom-story-book'
-        const title = resolvePersonalizedBookTitle({
-          templateId,
-          templateName: item?.creations?.templates?.name,
-          customizeSnapshot: item?.creations?.customize_snapshot,
-        })
-        return {
-          id: item.cart_item_id,
-          name: qty > 1 ? `${title} x${qty}` : title,
-          quantity: qty,
-          unitPriceUsd,
-          metadata: {
-            template_id: String(templateId),
-            cart_item_id: String(item.cart_item_id),
-          },
-        }
-      }),
-      // Single allocation path: product instruments + the capped offer share
-      // one allocation pass across the ordered product lines.
-      discountSummary.productDiscountAmountUsd + multiBookDiscountUsd
-    )
-
-    const charges = discountedItems.map(item => ({
-      name: item.name,
-      amountUsd: item.discountedLineTotalUsd,
-      metadata: item.metadata ?? {},
-    }))
-
-    const chargeableShippingUsd = Math.max(0, shippingAmountUsd - discountSummary.shippingDiscountAmountUsd)
-    if (chargeableShippingUsd > 0) {
-      charges.push({
-        name: 'Shipping',
-        amountUsd: chargeableShippingUsd,
-        metadata: {
-          order_id: orderId,
-          shipping_rate: String(shippingRateSnapshot?.rateName || shippingRateSnapshot?.methodName || ''),
-          shipping_method: String(shippingMethod || ''),
-          shipping_zone_code: String(shippingZoneCode || ''),
-        },
-      })
-    }
-
-    const { lineItems } = buildCheckoutLineItems(charges, currency)
-    if (lineItems.length === 0) {
+    if (totalMinor <= 0) {
       return NextResponse.json({ error: 'Zero-total checkout is not supported yet' }, { status: 400 })
     }
 

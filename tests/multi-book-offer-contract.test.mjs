@@ -103,11 +103,13 @@ test('module boundary: the client-safe core never pulls in server dependencies',
 test('server session route persists and allocates one effective amount', async () => {
   const route = read('app/api/checkout/session/route.ts')
 
+  const pricing = read('src/lib/checkout-pricing.ts')
   assert.match(route, /getMultiBookOfferRule\(\)/)
-  assert.match(route, /capMultiBookOfferToHeadroom\(\s*computeMultiBookDiscountUsd\(multiBookItems, multiBookRule\),\s*multiBookSubtotalUsd,\s*discountSummary\.productDiscountAmountUsd\s*\)/)
+  assert.match(route, /calculateCheckoutPricing\([\s\S]*?productDiscountUsd: discountSummary\.productDiscountAmountUsd/)
+  assert.match(pricing, /capMultiBookOfferToHeadroom\(\s*computeMultiBookDiscountUsd\(items, multiBookRule\),\s*computeMultiBookSubtotalUsd\(items\),\s*productDiscountUsd,?\s*\)/)
   assert.match(route, /multi_book_discount_amount_usd: multiBookDiscountUsd/)
   // single allocation path: product instruments + the capped offer together
-  assert.match(route, /allocateProductDiscountToLineItems\([\s\S]*?discountSummary\.productDiscountAmountUsd \+ multiBookDiscountUsd\s*\)/)
+  assert.match(pricing, /allocateProductDiscountToLineItems\([\s\S]*?productDiscountUsd \+ multiBookDiscountUsd,?\s*\)/)
   // Stripe session + payment intent metadata carry the same effective amount
   assert.equal((route.match(/multi_book_discount_amount_usd: String\(multiBookDiscountUsd \|\| 0\)/g) || []).length, 2)
 })
