@@ -376,7 +376,7 @@ type OrderItemWithCover = {
  * cover URL (long-lived signed). Used by the unpaid-reminder email's cover gallery.
  */
 export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderItemWithCover[]> {
-  const { data: rows } = await supabaseAdmin
+  const { data: rows, error } = await supabaseAdmin
     .from('cart_items')
     .select(
       `
@@ -391,6 +391,7 @@ export async function loadOrderItemsWithCovers(orderId: string): Promise<OrderIt
     )
     .eq('order_id', orderId)
 
+  if (error) throw new Error('Unable to load reminder order items')
   const items = (rows ?? []) as unknown as OrderItemCoverLookupRow[]
   if (items.length === 0) return []
 

@@ -45,7 +45,7 @@ function normalizeContext(context?: Record<string, unknown>) {
 }
 
 export async function prepareEmailEvent(
-  params: EmailEventBase & { retryFailed?: boolean; retryPendingAfterMs?: number }
+  params: EmailEventBase & { retryFailed?: boolean; retryPendingAfterMs?: number; retryWithinMs?: number }
 ): Promise<PreparedEmailEvent> {
   const now = new Date().toISOString()
   const insertPayload = {
@@ -88,6 +88,11 @@ export async function prepareEmailEvent(
 
   const existingRow = existing as EmailEventRow | null
   if (!existingRow) return { event: null, shouldSend: false }
+
+  // An ambiguous provider attempt must not be replayed past its dedupe window.
+  if (params.retryWithinMs && Date.now() - Date.parse(existingRow.created_at) >= params.retryWithinMs) {
+    return { event: existingRow, shouldSend: false }
+  }
 
   if (existingRow.status === 'pending' && params.retryPendingAfterMs) {
     const pendingAge = Date.now() - new Date(existingRow.updated_at).getTime()

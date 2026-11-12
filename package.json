@@ -50,6 +50,7 @@
     "@tiptap/extension-list": "^3.30.4",
     "@tiptap/react": "^3.30.4",
     "@tiptap/starter-kit": "^3.30.4",
+    "@upstash/qstash": "2.12.2",
     "@vercel/analytics": "^2.0.1",
     "client-zip": "^1.6.0",
     "email-reply-parser": "^2.3.9",

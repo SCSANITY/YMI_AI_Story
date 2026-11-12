@@ -98,3 +98,36 @@ The original rows remain in the database.
   with a receipt number enters the list. Stripe's receipt number confirms
   sending, and the UI shows the time the app confirmed it and that delivery is
   unconfirmed.
+
+## Unpaid order reminders
+
+New orders at or after `UNPAID_REMINDER_START_AT` use the creation timestamp
+for the 30-minute, 24-hour and six-day checkpoints. Each order and checkpoint
+has a distinct event key. The callback checks the order and its payment before
+sending, and moves straight to the latest due checkpoint if an earlier
+checkpoint was missed. Existing orders are not backfilled.
+
+Order Start persists the first task after saving the order items, before the
+response. It publishes to QStash after the response. Each callback only looks
+up the referenced task and order and creates the next task if needed. The
+existing daily cron does not send from the legacy schedule table. It keeps
+discount cleanup and republishes at most 25 incomplete tasks from the outbox
+recovery index. The pre-existing guest claim RPC may still write legacy rows;
+these have no sender. Registration failure is logged without blocking checkout.
+
+The runtime uses the US-East-1 QStash endpoint. Configure that region's
+`QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, and `QSTASH_NEXT_SIGNING_KEY`
+as server secrets. `UNPAID_REMINDER_CALLBACK_URL` is the full canonical HTTPS
+URL of `/api/internal/reminders/unpaid`; avoid a redirect at this URL.
+The callback requires a signed request from QStash; it has no browser or cron
+secret bypass. The provider payload contains only the order ID and stage.
+The checkout link uses the same site as the configured callback.
+
+Keep these settings absent until the Database migration and callback are
+independently reviewed and authorized. Check the production provider and
+sender metadata without displaying secrets. Verify in a test environment with
+a synthetic order and a test sender before enabling the production cutoff.
+Missing settings disable the new path; they do not restart legacy sending.
+
+Use `node --test tests/unpaid-reminders-runtime.test.mjs` for the offline
+timing, payment, idempotent task and real SDK verification fixtures.

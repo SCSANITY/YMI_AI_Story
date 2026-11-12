@@ -77,6 +77,7 @@ type ManagedEmailParams = SendEmailParams & {
   context?: Record<string, unknown>
   retryFailed?: boolean
   retryPendingAfterMs?: number
+  retryWithinMs?: number
 }
 
 type SenderResolution = {
@@ -256,6 +257,7 @@ async function sendManagedEmail(params: ManagedEmailParams) {
     context,
     retryFailed: params.retryFailed,
     retryPendingAfterMs: params.retryPendingAfterMs,
+    retryWithinMs: params.retryWithinMs,
   })
 
   if (!shouldSend || !event) {
@@ -412,18 +414,22 @@ type SendUnpaidReminderEmailParams = {
   resumeUrl?: string
   items?: { name: string; quantity: number; childName?: string; coverImageUrl?: string }[]
   customerId?: string | null
-  reminderDate?: string
+  stage: 1 | 2 | 3
 }
+
+export const UNPAID_REMINDER_RETRY_WINDOW_MS = 20 * 60 * 60 * 1000
 
 export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailParams) {
   const resumeUrl = params.resumeUrl || buildAbsoluteUrl(`/checkout?orderId=${params.orderId}`) || ''
-  const reminderDate = params.reminderDate || new Date().toISOString().slice(0, 10)
   const items = params.items || []
   const reminderCopy = buildAbandonmentEmailCopy(items)
 
   return sendManagedEmail({
     emailKey: 'unpaid_reminder',
-    idempotencyKey: `unpaid_reminder:${params.orderId}:${reminderDate}`,
+    idempotencyKey: `unpaid_reminder:${params.orderId}:stage:${params.stage}`,
+    retryFailed: true,
+    retryPendingAfterMs: 60_000,
+    retryWithinMs: UNPAID_REMINDER_RETRY_WINDOW_MS,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_SUPPORT',
     subject: reminderCopy.subject,
@@ -431,7 +437,7 @@ export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailPar
     customerId: params.customerId ?? null,
     context: {
       displayId: params.displayId ?? null,
-      reminderDate,
+      reminderStage: params.stage,
       itemCount: params.items?.length ?? 0,
     },
     react: (

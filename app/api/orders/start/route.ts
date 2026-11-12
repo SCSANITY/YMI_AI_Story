@@ -11,58 +11,7 @@ import {
   packagePricingStoreErrorResponse,
 } from '@/lib/package-pricing-store'
 import { parseCartItemQuantity } from '@/lib/cart-quantity'
-
-const FIRST_REMINDER_MINUTES = Number(
-  process.env.UNPAID_REMINDER_FIRST_MINUTES ?? process.env.UNPAID_REMINDER_MINUTES ?? 1
-)
-const REPEAT_REMINDER_DAYS = Number(process.env.UNPAID_REMINDER_REPEAT_DAYS ?? 3)
-
-async function ensureUnpaidOrderReminderSchedule(orderId: string) {
-  const { data: orderRow, error: orderError } = await supabaseAdmin
-    .from('orders')
-    .select('order_id, customer_id, order_status')
-    .eq('order_id', orderId)
-    .maybeSingle()
-
-  if (orderError) throw orderError
-  if (orderRow?.order_status !== 'unpaid' || !orderRow.customer_id) return
-
-  const { data: schedule, error: scheduleError } = await supabaseAdmin
-    .from('order_reminder_schedules')
-    .select('order_id, active')
-    .eq('order_id', orderId)
-    .maybeSingle()
-
-  if (scheduleError) throw scheduleError
-
-  const now = Date.now()
-  if (!schedule) {
-    const { error } = await supabaseAdmin.from('order_reminder_schedules').insert({
-      order_id: orderId,
-      customer_id: orderRow.customer_id,
-      next_send_at: new Date(now + FIRST_REMINDER_MINUTES * 60 * 1000).toISOString(),
-      repeat_every_days: REPEAT_REMINDER_DAYS,
-      active: true,
-      updated_at: new Date(now).toISOString(),
-    })
-    if (error) throw error
-    return
-  }
-
-  if (!schedule.active) {
-    const { error } = await supabaseAdmin
-      .from('order_reminder_schedules')
-      .update({
-        customer_id: orderRow.customer_id,
-        next_send_at: new Date(now + FIRST_REMINDER_MINUTES * 60 * 1000).toISOString(),
-        repeat_every_days: REPEAT_REMINDER_DAYS,
-        active: true,
-        updated_at: new Date(now).toISOString(),
-      })
-      .eq('order_id', orderId)
-    if (error) throw error
-  }
-}
+import { registerUnpaidReminder } from '@/lib/unpaid-reminder-server'
 
 export async function POST(request: Request) {
   const body = await request.json()
@@ -305,16 +254,20 @@ export async function POST(request: Request) {
 
   const reminderOrderId = orderId
   if (reminderOrderId) {
-    after(async () => {
-      try {
-        await ensureUnpaidOrderReminderSchedule(reminderOrderId)
-      } catch (error) {
-        console.error('[order-start] deferred unpaid reminder scheduling failed', {
-          orderId: reminderOrderId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    })
+    try {
+      // Keep the durable task even if the server stops after the response.
+      const dispatch = await registerUnpaidReminder(reminderOrderId)
+      if (dispatch) after(async () => {
+        try {
+          await dispatch()
+        } catch {
+          console.warn('[unpaid-reminders] initial dispatch deferred to recovery')
+        }
+      })
+    } catch {
+      // Checkout remains usable even if reminder registration is unavailable.
+      console.error('[unpaid-reminders] initial task could not be registered', { orderId: reminderOrderId })
+    }
   }
 
   return NextResponse.json({ cartItemIds, orderId, items: pricedItems })

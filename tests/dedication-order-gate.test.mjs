@@ -36,6 +36,7 @@ function handler(choice, { allowWrites = true } = {}) {
       packagePricingStoreErrorResponse: () => null,
     },
     '@/lib/cart-quantity': { parseCartItemQuantity: () => 1 },
+    '@/lib/unpaid-reminder-server': { registerUnpaidReminder: async () => null },
     '@/lib/dedication-server': { loadOwnedDedicationChoices: async () => Array.isArray(choice) ? choice : [choice] },
   }
   const loaded = { exports: {} }
