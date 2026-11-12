@@ -231,7 +231,7 @@ export interface GlobalContextType {
   addToCart: (book: Book,personalization?: PersonalizationData,step?: number,finalPrice?: number,previewCoverUrl?: string) => Promise<CartItem | null>;
   removeFromCart: (itemId: string) => Promise<boolean>;
   updateCartQuantity: (itemId: string, quantity: number) => Promise<boolean>;
-  updateCheckoutQuantity: (itemId: string, quantity: number) => void;
+  updateCheckoutQuantity: (itemId: string, quantity: number) => Promise<boolean>;
   prepareCheckout: (items: CartItem[]) => void;
   addToCheckout: (items: CartItem[]) => void;
   hydrateCheckoutItems: (items: unknown) => void;

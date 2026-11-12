@@ -104,10 +104,11 @@ test('server session route persists and allocates one effective amount', async (
   const route = read('app/api/checkout/session/route.ts')
 
   const pricing = read('src/lib/checkout-pricing.ts')
-  assert.match(route, /getMultiBookOfferRule\(\)/)
-  assert.match(route, /calculateCheckoutPricing\([\s\S]*?productDiscountUsd: discountSummary\.productDiscountAmountUsd/)
+  const quote = read('src/lib/checkout-quote-server.ts')
+  assert.match(quote, /getMultiBookOfferRule\(\)/)
+  assert.match(route, /priceCheckout\([\s\S]*?productDiscountUsd: discountSummary\.productDiscountAmountUsd/)
   assert.match(pricing, /capMultiBookOfferToHeadroom\(\s*computeMultiBookDiscountUsd\(items, multiBookRule\),\s*computeMultiBookSubtotalUsd\(items\),\s*productDiscountUsd,?\s*\)/)
-  assert.match(route, /multi_book_discount_amount_usd: multiBookDiscountUsd/)
+  assert.match(route, /multi_book_discount_amount_usd: quote.multiBookDiscountUsd/)
   // single allocation path: product instruments + the capped offer together
   assert.match(pricing, /allocateProductDiscountToLineItems\([\s\S]*?productDiscountUsd \+ multiBookDiscountUsd,?\s*\)/)
   // Stripe session + payment intent metadata carry the same effective amount

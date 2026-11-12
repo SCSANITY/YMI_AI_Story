@@ -40,15 +40,17 @@ test('all live edition UI and copy exclude the retired product and artwork', asy
 })
 
 test('retired edition validation precedes owner/database writes and payment session reuse', async () => {
-  const [configuration, session, store, merge] = await Promise.all([
+  const [configuration, session, store, merge, quote] = await Promise.all([
     read('app/api/creations/[creationId]/purchase-configuration/route.ts'),
     read('app/api/checkout/session/route.ts'), read('src/lib/package-pricing-store.ts'),
     read('app/api/customer/merge/route.ts'),
+    read('src/lib/checkout-quote-server.ts'),
   ])
   assert.ok(configuration.indexOf('if (!packageType ||') < configuration.indexOf('owner = await resolveCheckoutOwner'))
-  assert.ok(session.indexOf('edition_no_longer_available') < session.indexOf('stripe.checkout.sessions.retrieve'))
-  assert.ok(session.indexOf('edition_no_longer_available') < session.indexOf('.update({'))
-  assert.match(session, /!normalizeBookPackageType\(item\.package_type\)/)
+  assert.match(quote, /!normalizeBookPackageType\(item\.package_type\)/)
+  assert.match(quote, /edition_no_longer_available/)
+  assert.ok(quote.indexOf('await loadCheckoutPricingItems(orderId, filter)') < quote.indexOf('.checkout.sessions.retrieve'))
+  assert.ok(session.indexOf('await prepareCheckoutQuote(request, body)') < session.indexOf('.update({'))
   assert.doesNotMatch(session, /hasOnlyEbookItems/)
   assert.match(store, /if \(!packageType\)[\s\S]*unsupported book package/)
   assert.match(merge, /loadAuthoritativeCreationPackagePrice/)

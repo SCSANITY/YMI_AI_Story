@@ -16,6 +16,8 @@ function load(path, dependencies = {}) {
     module: loadedModule, exports: loadedModule.exports, Response, console, URL,
     require(name) {
       if (Object.hasOwn(dependencies, name)) return dependencies[name]
+      if (name === 'server-only') return {}
+      if (name === '@/lib/checkout-quote-server') return load('src/lib/checkout-quote-server.ts', dependencies)
       if (name === 'next/server') return { NextResponse: { json: Response.json } }
       if (name === '@/lib/package-pricing') return load('src/lib/package-pricing.ts')
       if (name === '@/lib/purchase-configuration') return load('src/lib/purchase-configuration.ts')
@@ -93,13 +95,14 @@ function sessionHandler(items) {
       return 'synthetic-fingerprint'
     } },
     '@/lib/site-url': { getSiteUrl: () => 'http://localhost' },
+    '@/lib/personalized-book-title': { resolvePersonalizedBookTitle: () => 'Fixture book' },
     '@/lib/stripe': {
       isStripeEnabled: () => true,
       getStripeServer() {
         operations.push('stripe:init')
         return { checkout: { sessions: { async retrieve() {
           operations.push('stripe:retrieve')
-          return { id: 'synthetic-session', status: 'open', url: 'https://checkout.example/fixture',
+          return { id: 'synthetic-session', status: 'open', amount_total: 3000, currency: 'usd', url: 'https://checkout.example/fixture',
             metadata: { checkout_fingerprint: 'synthetic-fingerprint' },
             success_url: 'http://localhost/success', cancel_url: 'http://localhost/cancel' }
         } } } }
@@ -110,7 +113,7 @@ function sessionHandler(items) {
 }
 const sessionRequest = () => new Request('http://localhost/api/checkout/session', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ orderId: 'synthetic', email: 'fixture@example.invalid', shippingAddress, shippingMethod: 'standard' }),
+  body: JSON.stringify({ orderId: 'synthetic', email: 'fixture@example.invalid', shippingAddress, shippingMethod: 'standard', expectedTotalMinor: 3000 }),
 })
 
 test('actual checkout handler refuses retired unpaid items before Stripe reuse or order writes', async () => {

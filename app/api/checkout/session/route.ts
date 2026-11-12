@@ -1,53 +1,17 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
-import {
-  CheckoutCurrency,
-  normalizeCheckoutCurrency,
-} from '@/lib/locale-pricing'
-import {
-  getOrderDiscountSummary,
-  refreshAppliedOrderDiscounts,
-} from '@/lib/discounts'
-import { getMultiBookOfferRule } from '@/lib/multi-book-offer'
+import { getOrderDiscountSummary, refreshAppliedOrderDiscounts } from '@/lib/discounts'
 import { recordExternalEmailObserved } from '@/lib/emailEvents'
-import {
-  checkoutOwnerErrorResponse,
-  ownerFilter,
-  requireCheckoutOrderAccess,
-  resolveCheckoutOwner,
-} from '@/lib/checkout-owner'
-import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
-import { calculateShippingQuote } from '@/lib/shipping-quote-server'
-import {
-  clearOrderCheckoutSessionLock,
-  createOrderCheckoutFingerprint,
-} from '@/lib/checkout-session-lock'
-import { getSiteUrl } from '@/lib/site-url'
-import { calculateCheckoutPricing } from '@/lib/checkout-pricing'
-import { normalizeBookPackageType } from '@/lib/package-pricing'
-import { normalizeShippingAddress, recipientAddressIssue, type ShippingAddress } from '@/lib/shipping-address'
+import { checkoutOwnerErrorResponse } from '@/lib/checkout-owner'
+import { clearOrderCheckoutSessionLock, createOrderCheckoutFingerprint } from '@/lib/checkout-session-lock'
+import { CheckoutQuoteError, loadCheckoutPricingItems, prepareCheckoutQuote, priceCheckout } from '@/lib/checkout-quote-server'
+import type { CheckoutQuote } from '@/lib/checkout-quote'
 
-function checkoutSessionMatchesSiteOrigin(
-  session: { success_url?: string | null; cancel_url?: string | null },
-  siteUrl: string
-) {
-  try {
-    const expectedOrigin = new URL(siteUrl).origin
-    return (
-      new URL(session.success_url || '').origin === expectedOrigin &&
-      new URL(session.cancel_url || '').origin === expectedOrigin
-    )
-  } catch {
-    return false
-  }
-}
-
-function matchesSavedShippingAddress(requested: ShippingAddress, saved: unknown) {
-  const stored = normalizeShippingAddress(saved)
-  return Object.keys({ ...requested, ...stored }).every((field) => {
-    const key = field as keyof ShippingAddress
-    return (requested[key] ?? '') === (stored[key] ?? '')
+function changedQuote(quote: CheckoutQuote) {
+  return NextResponse.json({ code: 'checkout_quote_changed', quote }, {
+    status: 409,
+    headers: { 'Cache-Control': 'private, no-store' },
   })
 }
 
@@ -58,125 +22,25 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const orderId = String(body?.orderId || '').trim()
-    const email = String(body?.email || '').trim().toLowerCase()
-    const shippingAddress = normalizeShippingAddress(body?.shippingAddress)
-    let shippingAmountUsd = 0
-    let shippingRateSnapshot: Record<string, unknown> | null = null
-    let shippingMethod: string | null = null
-    let shippingZoneCode: string | null = null
-    const requestedShippingMethod = String(body?.shippingMethod || '').trim() || null
+    const context = await prepareCheckoutQuote(request, body)
+    const { order, orderId, email, discountEmail, customerId, shippingAddress, currency, baseUrl,
+      filter, existingSession, quote, reuse, fresh } = context
+    const expectedTotal = body?.expectedTotalMinor
+    if (!Number.isSafeInteger(expectedTotal) || quote.totalMinor !== expectedTotal) {
+      return changedQuote(quote)
+    }
+    if (reuse) {
+      return NextResponse.json({ ok: true, orderId, sessionId: reuse.id, url: reuse.url, reused: true })
+    }
+    if (!fresh) throw new Error('Missing shipping quote')
+
+    const { option, shippingZoneCode, shipping, multiBookRule } = fresh
+    const shippingAmountUsd = shipping.amountUsd
+    const shippingRateSnapshot = option.snapshot
+    const shippingMethod = option.methodCode
     const billingAddress = body?.billingAddress ?? null
     const isGuest = Boolean(body?.isGuest)
-    const currency = normalizeCheckoutCurrency(body?.currency) as CheckoutCurrency
-    if (!orderId || !email) {
-      return NextResponse.json({ error: 'Missing orderId or email' }, { status: 400 })
-    }
-    const owner = (await resolveCheckoutOwner(request, {
-      allowAnon: true,
-      createAnonIfMissing: false,
-      expectedCustomerId: body?.customerId ?? null,
-    }))!
-    const filter = ownerFilter(owner)
-    await requireCheckoutOrderAccess(orderId, owner, { requireUnpaid: true })
-    const customerId = owner.ownerType === 'customer' ? owner.customerId : null
-
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from('orders')
-      .select('order_id, order_status, checkout_session_id, checkout_currency, shipping_method, shipping_address, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
-      .eq('order_id', orderId)
-      .maybeSingle()
-    if (orderError || !order?.order_id) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-    }
-    if (order.order_status !== 'unpaid') {
-      return NextResponse.json({ error: 'Order is no longer payable' }, { status: 400 })
-    }
-
-    // Validate current products before returning a pre-existing payment session,
-    // calculating shipping, or changing any order/Stripe state. Retired unpaid
-    // editions must be removed and reconfigured; paid history is untouched.
-    const { data: cartItemTypes, error: cartItemTypesError } = await supabaseAdmin
-      .from('cart_items')
-      .select('cart_item_id, product_type, package_type')
-      .eq('order_id', orderId)
-      .eq('status', 'ordered')
-      .eq('owner_type', filter.owner_type)
-      .eq(filter.column, filter.value)
-    if (cartItemTypesError || !cartItemTypes || cartItemTypes.length === 0) {
-      return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
-    }
-    if (cartItemTypes.some((item) => item.product_type !== 'physical' || !normalizeBookPackageType(item.package_type))) {
-      return NextResponse.json({
-        error: 'An edition in this order is no longer available. Remove it and select a hardcover edition in Preview.',
-        code: 'edition_no_longer_available',
-      }, { status: 409 })
-    }
-
     const stripe = getStripeServer()
-    const baseUrl = getSiteUrl(request.url)
-    const existingSession = order.checkout_session_id
-      ? await stripe.checkout.sessions.retrieve(order.checkout_session_id)
-      : null
-    if (existingSession?.status === 'complete') {
-      return NextResponse.json({ error: 'Order payment is already being processed' }, { status: 409 })
-    }
-
-    const addressIssue = recipientAddressIssue(shippingAddress)
-    if (addressIssue) {
-      return NextResponse.json({ error: 'Invalid recipient address', field: addressIssue }, { status: 400 })
-    }
-
-    // The fingerprint binds the session to the saved order. The request must
-    // also match that order before reusing its price and delivery.
-    if (
-      existingSession?.status === 'open' &&
-      existingSession.url &&
-      order.checkout_currency === currency &&
-      requestedShippingMethod !== null &&
-      order.shipping_method === requestedShippingMethod &&
-      matchesSavedShippingAddress(shippingAddress, order.shipping_address) &&
-      checkoutSessionMatchesSiteOrigin(existingSession, baseUrl)
-    ) {
-      const savedFingerprint = existingSession.metadata?.checkout_fingerprint
-      const currentFingerprint = savedFingerprint
-        ? await createOrderCheckoutFingerprint(orderId).catch(() => null)
-        : null
-      if (savedFingerprint && savedFingerprint === currentFingerprint) {
-        return NextResponse.json({
-          ok: true,
-          orderId,
-          sessionId: existingSession.id,
-          url: existingSession.url,
-          reused: true,
-        })
-      }
-    }
-
-    {
-      const authoritativeQuote = await calculateShippingQuote(shippingAddress)
-      if (!authoritativeQuote.available) {
-        return NextResponse.json(
-          { error: authoritativeQuote.message || 'Shipping is not available for this destination.' },
-          { status: 400 }
-        )
-      }
-
-      const selectedShippingOption = requestedShippingMethod
-        ? authoritativeQuote.options.find((option) => option.methodCode === requestedShippingMethod)
-        : authoritativeQuote.options.find(
-            (option) => option.methodCode === authoritativeQuote.selectedMethod
-          )
-
-      if (!selectedShippingOption) {
-        return NextResponse.json({ error: 'The selected shipping method is not available.' }, { status: 400 })
-      }
-
-      shippingAmountUsd = selectedShippingOption.amountUsd
-      shippingRateSnapshot = selectedShippingOption.snapshot
-      shippingMethod = selectedShippingOption.methodCode
-      shippingZoneCode = String(selectedShippingOption.snapshot.zoneCode || '').trim() || null
-    }
 
     // Validate the new quote before expiring a still-payable session.
     if (existingSession) {
@@ -186,7 +50,7 @@ export async function POST(request: Request) {
       await clearOrderCheckoutSessionLock(orderId, existingSession.id)
     }
 
-    const { error: orderUpdateError } = await supabaseAdmin
+    const profileUpdate = supabaseAdmin
       .from('orders')
       .update({
         email,
@@ -198,11 +62,25 @@ export async function POST(request: Request) {
         shipping_zone_code: shippingZoneCode,
         billing_address: billingAddress,
         checkout_currency: currency,
+        ...(!order.applied_product_discount_instrument_id ? { discount_amount_usd: 0 } : {}),
+        ...(!order.applied_shipping_discount_instrument_id ? { shipping_discount_amount_usd: 0 } : {}),
       })
       .eq('order_id', orderId)
+      .eq('order_status', 'unpaid')
+      .is('payment_id', null)
+      .is('checkout_session_id', null)
 
+    for (const field of ['applied_product_discount_instrument_id', 'applied_shipping_discount_instrument_id'] as const) {
+      const instrumentId = order[field]
+      if (instrumentId) profileUpdate.eq(field, instrumentId)
+      else profileUpdate.is(field, null)
+    }
+    const { data: updatedOrder, error: orderUpdateError } = await profileUpdate.select('order_id').maybeSingle()
     if (orderUpdateError) {
       return NextResponse.json({ error: 'Failed to update order profile' }, { status: 500 })
+    }
+    if (!updatedOrder) {
+      return NextResponse.json({ error: 'Checkout changed while payment was starting. Please review and try again.' }, { status: 409 })
     }
 
     if (order.applied_product_discount_instrument_id || order.applied_shipping_discount_instrument_id) {
@@ -211,90 +89,38 @@ export async function POST(request: Request) {
         productInstrumentId: order.applied_product_discount_instrument_id ?? null,
         shippingInstrumentId: order.applied_shipping_discount_instrument_id ?? null,
         customerId,
-        email,
+        email: discountEmail,
       })
     }
 
-    const discountSummary = await getOrderDiscountSummary(orderId)
-
-    const cartItemsQuery = supabaseAdmin
-      .from('cart_items')
-      .select(
-        `
-        cart_item_id,
-        quantity,
-        price_at_purchase,
-        creations:creations(
-          template_id,
-          customize_snapshot,
-          templates:templates(name)
-        )
-      `
-      )
-      .eq('order_id', orderId)
-      .eq('status', 'ordered')
-      .eq('owner_type', filter.owner_type)
-      .eq(filter.column, filter.value)
-
-    const { data: cartItems, error: cartItemsError } = await cartItemsQuery
-    if (cartItemsError || !cartItems || cartItems.length === 0) {
-      return NextResponse.json({ error: 'No payable items found for this order' }, { status: 400 })
-    }
-
-    const multiBookRule = await getMultiBookOfferRule()
-    const { lineItems, totalMinor, multiBookDiscountUsd } = calculateCheckoutPricing({
-      items: cartItems.map(item => {
-        const quantity = Math.max(1, Number(item.quantity ?? 1))
-        const creation = Array.isArray(item.creations) ? item.creations[0] : item.creations
-        const template = Array.isArray(creation?.templates) ? creation.templates[0] : creation?.templates
-        const templateId = creation?.template_id ?? 'custom-story-book'
-        const title = resolvePersonalizedBookTitle({
-          templateId,
-          templateName: template?.name,
-          customizeSnapshot: creation?.customize_snapshot,
-        })
-        return {
-          id: item.cart_item_id,
-          name: quantity > 1 ? `${title} x${quantity}` : title,
-          quantity,
-          unitPriceUsd: Math.max(0, Number(item.price_at_purchase ?? 0)),
-          metadata: {
-            template_id: String(templateId),
-            cart_item_id: String(item.cart_item_id),
-          },
-        }
-      }),
-      currency,
-      multiBookRule,
-      productDiscountUsd: discountSummary.productDiscountAmountUsd,
-      shippingDiscountUsd: discountSummary.shippingDiscountAmountUsd,
-      shipping: {
-        amountUsd: shippingAmountUsd,
-        metadata: {
-          order_id: orderId,
-          shipping_rate: String(shippingRateSnapshot?.rateName || shippingRateSnapshot?.methodName || ''),
-          shipping_method: String(shippingMethod || ''),
-          shipping_zone_code: String(shippingZoneCode || ''),
-        },
-      },
-    })
-
     const { error: multiBookUpdateError } = await supabaseAdmin
       .from('orders')
-      .update({ multi_book_discount_amount_usd: multiBookDiscountUsd })
+      .update({ multi_book_discount_amount_usd: quote.multiBookDiscountUsd })
       .eq('order_id', orderId)
+      .eq('order_status', 'unpaid')
     if (multiBookUpdateError) {
       return NextResponse.json({ error: 'Failed to update order offer' }, { status: 500 })
     }
 
-    if (totalMinor <= 0) {
-      return NextResponse.json({ error: 'Zero-total checkout is not supported yet' }, { status: 400 })
-    }
-
+    // Capture the snapshot before re-reading the items and reserved discounts.
+    // The existing post-lock check detects mutations during assembly.
     const checkoutFingerprint = await createOrderCheckoutFingerprint(orderId)
+    const [items, discountSummary] = await Promise.all([
+      loadCheckoutPricingItems(orderId, filter),
+      getOrderDiscountSummary(orderId),
+    ])
+    const { lineItems, multiBookDiscountUsd, quote: payableQuote } = priceCheckout({
+      items, currency, multiBookRule, shipping,
+      productDiscountUsd: discountSummary.productDiscountAmountUsd,
+      shippingDiscountUsd: discountSummary.shippingDiscountAmountUsd,
+    })
+    if (payableQuote.totalMinor !== expectedTotal || multiBookDiscountUsd !== quote.multiBookDiscountUsd) {
+      return changedQuote(payableQuote)
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      adaptive_pricing: { enabled: false },
       client_reference_id: orderId,
       customer_email: email,
       line_items: lineItems,
@@ -337,6 +163,8 @@ export async function POST(request: Request) {
       })
       .eq('order_id', orderId)
       .eq('order_status', 'unpaid')
+      .eq('checkout_currency', currency)
+      .eq('shipping_method', shippingMethod)
       .is('checkout_session_id', null)
       .select('order_id')
       .maybeSingle()
@@ -390,11 +218,14 @@ export async function POST(request: Request) {
       sessionId: session.id,
       url: session.url,
     })
-  } catch (error: any) {
+  } catch (error) {
+    if (error instanceof CheckoutQuoteError) {
+      return NextResponse.json({ error: error.message, ...error.details }, { status: error.status })
+    }
     const response = checkoutOwnerErrorResponse(error)
     if (response) return response
     return NextResponse.json(
-      { error: error?.message || 'Failed to create Stripe checkout session' },
+      { error: error instanceof Error ? error.message : 'Failed to create Stripe checkout session' },
       { status: 500 }
     )
   }

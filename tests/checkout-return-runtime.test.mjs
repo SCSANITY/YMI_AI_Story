@@ -18,8 +18,10 @@ const order = () => ({ order_id: 'order-1', order_status: 'unpaid', shipping_add
   applied_product_discount_instrument_id: 'product', applied_shipping_discount_instrument_id: 'shipping', checkout_discounts: summary })
 const item = { id: 'line-1', bookID: 'Birthdayboy_story', priceAtPurchase: 39, quantity: 1, book: { price: 999 }, personalization: {} }
 const component = type => props => ({ type, props })
+const isReadOnlyRequest = call => call.method === 'GET' ||
+  (call.method === 'POST' && call.path === '/api/checkout/quote')
 
-function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment', draft, mergeFailed = false, healOnRetry = true } = {}) {
+function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment', draft, mergeFailed = false, healOnRetry = true, onPayment, onQuote, onQuantity } = {}) {
   const runtime = customerRuntime(), calls = [], pending = deferred(), retryCalls = [], quantityCalls = []
   let currentOrder = order(), responseStatus = status
   runtime.react.Suspense = ({ children }) => children
@@ -37,7 +39,7 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
     setCheckoutEmail(value) { context.checkoutEmail = value },
     hydrateCheckoutItems(rows) { context.checkoutItems = rows; context.checkoutLoadError = null },
     reconcileCartItemPrices() {}, prepareCheckout() {}, addToCheckout() {}, removeFromCheckout() {},
-    openLoginModal() {}, updateCheckoutQuantity(...args) { quantityCalls.push(args) }, setDisplayCurrency() {},
+    openLoginModal() {}, updateCheckoutQuantity(...args) { quantityCalls.push(args); return onQuantity?.(...args) ?? Promise.resolve(true) }, setDisplayCurrency(currency) { context.displayCurrency = currency },
     customerMergeFailed: mergeFailed,
     retryCustomerMerge: async () => { retryCalls.push('retry'); if (healOnRetry) context.customerMergeFailed = false; return context.customerMergeFailed !== true },
   }
@@ -55,7 +57,12 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
     }
     if (path.startsWith('/api/cart?ids=')) return Response.json({ items: [item] })
     if (path === '/api/checkout/vouchers') return Response.json({ active: [] })
-    if (path === '/api/checkout/session') return Response.json({ url: 'https://checkout.example.test/session' })
+    if (path === '/api/checkout/quote') {
+      const body = JSON.parse(options.body)
+      return onQuote?.(body) ?? Response.json({ quote: { currency: body.currency, totalMinor: 3900, subtotalUsd: 39,
+        productDiscountUsd: 5, shippingDiscountUsd: Math.min(3, currentOrder.shipping_amount_usd), multiBookDiscountUsd: 0, shippingAmountUsd: currentOrder.shipping_amount_usd } })
+    }
+    if (path === '/api/checkout/session') return onPayment?.(JSON.parse(options.body)) ?? Response.json({ url: 'https://checkout.example.test/session' })
     if (path.startsWith('/api/checkout/apply-')) return Response.json({ ok: true, code: options.body ? JSON.parse(options.body).code : undefined, ...summary })
     throw Error('Unexpected fixture request: ' + path)
   }
@@ -81,7 +88,7 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
 }
 function translate(key) { return key }
 
-test('Stripe cancel/full reload waits for complete order,items,quote and both discount slots; GET-only', async () => {
+test('Stripe cancel/full reload waits for complete order,items,quote and both discount slots without writes', async () => {
   const h = checkoutFixture({ delayed: true }); await h.runtime.flush()
   assert.ok(uiNodes(h.runtime.tree).some(n => n.props?.['data-checkout-loading-shell']))
   assert.equal(h.node('address-form'), undefined); assert.equal(h.node('discount'), undefined)
@@ -97,7 +104,7 @@ test('Stripe cancel/full reload waits for complete order,items,quote and both di
   assert.equal(h.node('address-form').props.initialForm.addressLine1, address.addressLine1)
   assert.equal(h.node('address-form').props.initialShippingQuote.selectedMethod, 'speedy')
   assert.ok(!h.runtime.window.location.search.includes('step=payment'))
-  assert.ok(h.calls.every(call => call.method === 'GET'))
+  assert.ok(h.calls.every(isReadOnlyRequest))
   h.runtime.unmount()
 })
 
@@ -107,7 +114,7 @@ test('guest return preserves the same saved state without applying a cached code
   assert.equal(h.node('discount').props.appliedShippingCode, 'SHIP3')
   assert.equal(h.node('payment').props.contactEmail, 'reader@example.test')
   assert.equal(h.node('payment').props.isSignedIn, false)
-  assert.ok(h.calls.every(call => call.method === 'GET')); h.runtime.unmount()
+  assert.ok(h.calls.every(isReadOnlyRequest)); h.runtime.unmount()
 })
 
 test('fresh checkout walks contact then delivery and carries the completed address/method back from payment', async () => {
@@ -133,7 +140,7 @@ test('failed restore stays an explicit error; only user Retry reloads and expose
   const count = h.calls.length; h.runtime.advance(300000); await h.runtime.flush(); assert.equal(h.calls.length, count)
   h.status = 200
   uiNodes(h.runtime.tree).find(n => n.type === 'button' && uiText(n) === 'common.retry').props.onClick()
-  await h.runtime.flush(); assert.ok(h.node('payment')); assert.ok(h.calls.every(call => call.method === 'GET'))
+  await h.runtime.flush(); assert.ok(h.node('payment')); assert.ok(h.calls.every(isReadOnlyRequest))
   h.runtime.unmount()
 })
 
@@ -146,7 +153,7 @@ test('paid,production,shipped and delivered returns show the order link without 
     assert.ok(uiNodes(h.runtime.tree).some(n => n.type === 'a' && n.props.href === '/orders/order-1'))
     assert.ok(!uiNodes(h.runtime.tree).some(n => n.type === 'button' && uiText(n) === 'common.retry'))
     assert.equal(h.node('address-form'), undefined); assert.equal(h.node('payment'), undefined)
-    assert.ok(h.calls.every(call => call.method === 'GET'))
+    assert.ok(h.calls.every(isReadOnlyRequest))
     assert.equal(h.calls.filter(call => call.path.startsWith('/api/orders/')).length, 1)
     h.runtime.unmount()
   }
@@ -170,7 +177,7 @@ test('cancelled,expired and other closed returns show cart link without Retry or
     assert.ok(uiNodes(h.runtime.tree).some(n => n.type === 'a' && n.props.href === '/cart'))
     assert.ok(!uiNodes(h.runtime.tree).some(n => n.type === 'button' && uiText(n) === 'common.retry'))
     assert.equal(h.node('payment'), undefined); assert.equal(h.node('discount'), undefined)
-    assert.ok(h.calls.every(call => call.method === 'GET')); h.runtime.unmount()
+    assert.ok(h.calls.every(isReadOnlyRequest)); h.runtime.unmount()
   }
 })
 
@@ -186,19 +193,19 @@ test('an unpaid cart-read failure or unreadable order status remains a real read
   }
 })
 
-test('bfcache return clears redirect busy state and performs one GET-only recovery; normal pageshow does nothing', async () => {
+test('bfcache return clears redirect busy state and performs one read-only recovery; normal pageshow does nothing', async () => {
   const h = checkoutFixture(); await h.runtime.flush()
   h.node('payment').props.onPlaceOrder(); await h.runtime.flush()
   assert.equal(h.runtime.navigations.length, 1)
   assert.match(h.runtime.window.location.search, /orderId=order-1/)
-  const writes = h.calls.filter(call => call.method === 'POST').length
+  const writes = h.calls.filter(call => !isReadOnlyRequest(call)).length
   const reads = h.calls.filter(call => call.path.startsWith('/api/orders/')).length
   h.runtime.window.dispatch('pageshow', { persisted: false }); await h.runtime.flush()
   assert.equal(h.calls.filter(call => call.path.startsWith('/api/orders/')).length, reads)
   h.runtime.window.dispatch('pageshow', { persisted: true }); await h.runtime.flush()
   assert.equal(h.node('payment').props.isPlacingOrder, false)
   assert.equal(h.calls.filter(call => call.path.startsWith('/api/orders/')).length, reads + 1)
-  assert.equal(h.calls.filter(call => call.method === 'POST').length, writes)
+  assert.equal(h.calls.filter(call => !isReadOnlyRequest(call)).length, writes)
   h.runtime.unmount()
 })
 
@@ -208,7 +215,7 @@ test('zero-priced saved shipping is restored; incomplete quotes return to addres
   h.runtime.unmount()
   const missing = checkoutFixture({ delayed: true }); missing.order = { ...order(), shipping_method: null, shipping_rate_snapshot: null }
   missing.pending.resolve(); await missing.runtime.flush(); assert.ok(missing.node('address-form')); assert.equal(missing.node('payment'), undefined)
-  assert.ok(missing.calls.every(call => call.method === 'GET')); missing.runtime.unmount()
+  assert.ok(missing.calls.every(isReadOnlyRequest)); missing.runtime.unmount()
 })
 
 test('an abandoned restore cannot update checkout after unmount', async () => {
@@ -531,5 +538,68 @@ test('quantity changes are gated too: zero requests and zero local mutation whil
   h.context.customerMergeFailed = false; h.runtime.render(); await h.runtime.flush()
   h.node('items').props.onQuantityChange('line-1', 3); await h.runtime.flush()
   assert.equal(h.quantityCalls.length, 1, 'quantity changes resume after the merge heals')
+  h.runtime.unmount()
+})
+
+
+test('payment updates both visible totals after a price change and waits for a second click', async () => {
+  const h = checkoutFixture({ onPayment: body => body.expectedTotalMinor === 3900
+    ? Response.json({ code: 'checkout_quote_changed', quote: { currency: 'USD', totalMinor: 4100,
+      subtotalUsd: 39, productDiscountUsd: 5, shippingDiscountUsd: 3, multiBookDiscountUsd: 0, shippingAmountUsd: 10 } }, { status: 409 })
+    : Response.json({ url: 'https://checkout.example.test/session' }) })
+  await h.runtime.flush()
+  assert.equal(h.node('summary').props.formattedTotal, '$39.00')
+  h.node('payment').props.onPlaceOrder()
+  await h.runtime.flush()
+  assert.equal(h.runtime.navigations.length, 0)
+  assert.match(uiText(h.runtime.tree), /checkout.quoteChanged/)
+  assert.equal(h.node('summary').props.formattedTotal, '$41.00')
+  assert.equal(h.node('mobile-payment').props.totalLabel, '$41.00')
+  assert.equal(h.calls.filter(call => call.path === '/api/checkout/session').length, 1)
+
+  h.node('payment').props.onPlaceOrder()
+  await h.runtime.flush()
+  assert.deepEqual(h.calls.filter(call => call.path === '/api/checkout/session').map(call => call.body.expectedTotalMinor), [3900, 4100])
+  assert.equal(h.runtime.navigations.length, 1)
+  h.runtime.unmount()
+})
+
+test('switching currency ignores a late quote and disables payment until the new quote arrives', async () => {
+  const usd = deferred(), hkd = deferred()
+  const h = checkoutFixture({ onQuote: body => body.currency === 'USD' ? usd.promise : hkd.promise })
+  await h.runtime.flush()
+  h.context.displayCurrency = 'HKD'
+  h.runtime.render()
+  await h.runtime.flush()
+  usd.resolve(Response.json({ quote: { currency: 'USD', totalMinor: 3900 } }))
+  await h.runtime.flush()
+  assert.equal(h.node('payment').props.canPay, false)
+  assert.equal(h.node('mobile-payment').props.isPriceReady, false)
+
+  hkd.resolve(Response.json({ quote: { currency: 'HKD', totalMinor: 30420,
+    subtotalUsd: 39, productDiscountUsd: 5, shippingDiscountUsd: 3, multiBookDiscountUsd: 0, shippingAmountUsd: 8 } }))
+  await h.runtime.flush()
+  assert.equal(h.node('payment').props.canPay, true)
+  assert.match(h.node('mobile-payment').props.totalLabel, /304\.20/)
+  h.runtime.unmount()
+})
+
+test('changing a quantity clears the payable total until the save is acknowledged and a new quote arrives', async () => {
+  const saved = deferred()
+  const h = checkoutFixture({ onQuantity: () => saved.promise })
+  await h.runtime.flush()
+  const quoteCount = () => h.calls.filter(call => call.path === '/api/checkout/quote').length
+  const initialQuotes = quoteCount()
+  assert.equal(h.node('payment').props.canPay, true)
+  h.node('items').props.onQuantityChange('line-1', 2)
+  await h.runtime.flush()
+  assert.equal(quoteCount(), initialQuotes)
+  assert.equal(h.node('payment').props.canPay, false)
+  h.node('payment').props.onPlaceOrder()
+  assert.equal(h.calls.filter(call => call.path === '/api/checkout/session').length, 0)
+  saved.resolve(true)
+  await h.runtime.flush()
+  assert.equal(quoteCount(), initialQuotes + 1)
+  assert.equal(h.node('payment').props.canPay, true)
   h.runtime.unmount()
 })

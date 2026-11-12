@@ -60,11 +60,18 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
       return query
     },
     async rpc(name, params) {
+      if (name === 'quote_checkout_discounts') {
+        rpcCalls.push({ name, params })
+        return { data: [{ product_discount_amount_usd: order.discount_amount_usd,
+          shipping_discount_amount_usd: freeShipping ? params.p_shipping_amount_usd : order.shipping_discount_amount_usd }], error: null }
+      }
       assertOperation(name, 'apply_discount_instrument')
       rpcCalls.push({ name, params })
       // SQL free-shipping effect is the transport boundary: re-price against the
       // updated promotional shipping amount, rather than the original tariff.
-      order.shipping_discount_amount_usd = Math.round(order.shipping_amount_usd * 100) / 100
+      if (params.p_instrument_id === 'free-shipping') {
+        order.shipping_discount_amount_usd = Math.round(order.shipping_amount_usd * 100) / 100
+      }
       return { data: null, error: null }
     },
   }
@@ -73,7 +80,9 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     async create(input) {
       stripeCalls.push(input)
       const id = `session-test-${stripeCalls.length}`
-      const session = { ...input, id, status: 'open', url: `https://checkout.example.test/${id}` }
+      const session = { ...input, id, status: 'open',
+        amount_total: input.line_items.reduce((total, item) => total + item.price_data.unit_amount * item.quantity, 0),
+        currency: input.line_items[0].price_data.currency, url: `https://checkout.example.test/${id}` }
       stripeSessions.set(id, session)
       return session
     },
@@ -94,7 +103,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     '@/lib/adminAuth': { requireAdminCustomer: async () => admin ? { customer_id: 'test-admin' } : null },
     '@/lib/stripe': { isStripeEnabled: () => true, getStripeServer: () => stripe },
     '@/lib/checkout-owner': {
-      resolveCheckoutOwner: async () => ({ ownerType: 'customer', customerId: 'test-customer' }),
+      resolveCheckoutOwner: async () => ({ ownerType: 'customer', customerId: 'test-customer', email: 'reader@example.test' }),
       ownerFilter: () => ({ owner_type: 'customer', column: 'customer_id', value: 'test-customer' }),
       requireCheckoutOrderAccess: async () => {}, checkoutOwnerErrorResponse: () => null,
     },
@@ -130,12 +139,23 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
   const patch = value => load('app/api/admin/shipping-discount/route.ts').PATCH(new Request('https://example.test/api/admin/shipping-discount', {
     method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ discountPercent: value }),
   }))
-  const checkout = (currency = 'USD', method = 'standard', shippingAddress = address) => load('app/api/checkout/session/route.ts').POST(new Request('https://example.test/api/checkout/session', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ orderId: order.order_id, email: 'reader@example.test', shippingAddress, shippingMethod: method,
-      currency, shippingAmountUsd: 0.01, shippingRateSnapshot: { originalShippingAmountUsd: 9999 } }),
+  const checkoutInput = (currency, method, shippingAddress) => ({
+    orderId: order.order_id, email: 'reader@example.test', shippingAddress, shippingMethod: method,
+    currency, shippingAmountUsd: 0.01, shippingRateSnapshot: { originalShippingAmountUsd: 9999 },
+  })
+  const postCheckout = (action, body) => load(`app/api/checkout/${action}/route.ts`).POST(new Request(`https://example.test/api/checkout/${action}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   }))
-  return { load, rules, order, tables, calls, stripeCalls, stripeSessions, rpcCalls, patch, checkout,
+  const paymentQuote = (currency = 'USD', method = 'standard', shippingAddress = address) =>
+    postCheckout('quote', checkoutInput(currency, method, shippingAddress))
+  const checkout = async (currency = 'USD', method = 'standard', shippingAddress = address, expectedTotalMinor) => {
+    if (expectedTotalMinor === undefined) {
+      const response = await paymentQuote(currency, method, shippingAddress)
+      if (response.ok) expectedTotalMinor = (await response.json()).quote.totalMinor
+    }
+    return postCheckout('session', { ...checkoutInput(currency, method, shippingAddress), expectedTotalMinor })
+  }
+  return { load, rules, order, tables, calls, stripeCalls, stripeSessions, rpcCalls, patch, checkout, paymentQuote,
     quote: () => load('src/lib/shipping-quote-server.ts').calculateShippingQuote(address) }
 }
 

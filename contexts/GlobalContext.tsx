@@ -1091,9 +1091,7 @@ export const GlobalProvider: React.FC<{
 
   const updateCheckoutQuantity = useCallback((itemId: string, quantity: number) => {
     const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
-    setCheckoutItems(prev => prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item));
-    setCart(prev => prev.map(item => item.id === itemId ? { ...item, quantity: safeQuantity } : item));
-    void fetch('/api/cart', {
+    return fetch('/api/cart', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1106,12 +1104,17 @@ export const GlobalProvider: React.FC<{
       if (!response.ok) throw new Error('Order quantity update failed')
       const data = await response.json().catch(() => null)
       const authoritativePrice = Number(data?.priceAtPurchase)
-      if (Number.isFinite(authoritativePrice) && authoritativePrice > 0) {
-        setCart(prev => prev.map(item => item.id === itemId ? { ...item, priceAtPurchase: authoritativePrice } : item))
-        setCheckoutItems(prev => prev.map(item => item.id === itemId ? { ...item, priceAtPurchase: authoritativePrice } : item))
-      }
+      const updateItem = (item: CartItem) => item.id === itemId ? {
+        ...item,
+        quantity: safeQuantity,
+        ...(Number.isFinite(authoritativePrice) && authoritativePrice > 0 ? { priceAtPurchase: authoritativePrice } : {}),
+      } : item;
+      setCart(prev => prev.map(updateItem));
+      setCheckoutItems(prev => prev.map(updateItem));
+      return true;
     }).catch((error) => {
-      console.error('Order quantity update failed:', error)
+      console.error('Order quantity update failed:', error);
+      return false;
     });
   }, [user?.customerId]);
 

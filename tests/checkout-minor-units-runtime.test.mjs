@@ -16,6 +16,8 @@ test('real Checkout session apportions HKD rounding to match the whole order', a
   fixture.tables.cart_items[0].price_at_purchase = 39.99
   addBook(fixture, 'item-2', 49.99)
   fixture.order.discount_amount_usd = 5
+  fixture.order.applied_product_discount_instrument_id = "product-offer"
+  fixture.tables.discount_instruments.push({ instrument_id: "product-offer", instrument_type: "promo_code", code: "TEST5" })
   fixture.tables.multi_book_offer_rule.push({
     singleton_key: 'global', enabled: true, effect_type: 'percentage', value: 20, min_items: 2,
   })

@@ -18,6 +18,8 @@ import {
   CheckoutCurrency,
   convertUsdToCurrency,
   formatCurrencyAmount,
+  formatMajorCurrencyValue,
+  fromMinorUnit,
   toChargeCurrency,
 } from '@/lib/locale-pricing';
 import { fetchPublishedLegalContentSnapshot } from '@/lib/published-legal-content-client';
@@ -34,6 +36,7 @@ import {
   resolveCartItemPreviewCoverStatus,
 } from '@/lib/cart-cover';
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
+import type { CheckoutQuote } from '@/lib/checkout-quote';
 import type { OrderDiscountSummary } from '@/lib/discounts';
 import {
   capMultiBookOfferToHeadroom,
@@ -45,7 +48,7 @@ import {
 } from '@/lib/multi-book-offer-core';
 import {
   EMPTY_SHIPPING_QUOTE, CheckoutReturnStateError, mergeRestoredFormWithDraft,
-  restoreCheckoutOrder, shippingDiscountRefreshKey,
+  restoreCheckoutOrder,
   type CheckoutAddressForm, type ShippingQuoteState,
 } from '@/lib/checkout-restoration';
 
@@ -157,10 +160,26 @@ function CheckoutPageContent() {
   // Quantity changes mutate local state and PATCH the server; while the merge
   // is incomplete both would diverge from the still-anon order rows, so the
   // handler is gated too (zero request, zero local change).
+  const quantityQueue = useRef(Promise.resolve());
+  const pendingQuantities = useRef(0);
+  const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false);
   const handleQuantityChange = useCallback((itemId: string, quantity: number) => {
     if (!guardMergeHealthy()) return;
-    updateCheckoutQuantity(itemId, quantity);
-  }, [guardMergeHealthy, updateCheckoutQuantity]);
+    pendingQuantities.current += 1;
+    setIsUpdatingQuantity(true);
+    quantityQueue.current = quantityQueue.current.then(async () => {
+      const saved = await updateCheckoutQuantity(itemId, quantity);
+      if (saved === false) {
+        setFormError(t('checkout.quantitySaveError'));
+      }
+    }).finally(() => {
+      pendingQuantities.current -= 1;
+      if (pendingQuantities.current === 0) {
+        setQuoteRevision(revision => revision + 1);
+        setIsUpdatingQuantity(false);
+      }
+    });
+  }, [guardMergeHealthy, t, updateCheckoutQuantity]);
 
   // Focus/visibility return heals a deferred merge once the Stripe session has
   // settled; manual banner Retry, payment-inline retry and these listeners all
@@ -177,7 +196,6 @@ function CheckoutPageContent() {
       window.removeEventListener('focus', onVisible);
     };
   }, [customerMergeFailed, handleMergeRetry]);
-  const [appliedShippingDiscountType, setAppliedShippingDiscountType] = useState<string | null>(null);
   const [step, setStep] = useState<CheckoutStep>('contact');
   const [orderId, setOrderId] = useState<string | null>(null);
   const selectedCurrency = toChargeCurrency(displayCurrency);
@@ -185,6 +203,7 @@ function CheckoutPageContent() {
   const [selectedRewardVoucherId, setSelectedRewardVoucherId] = useState<string | null>(null);
   const [selectedRewardVoucherName, setSelectedRewardVoucherName] = useState<string | null>(null);
   const [discountAmountUsd, setDiscountAmountUsd] = useState(0);
+  const [quoteRevision, setQuoteRevision] = useState(0);
   const [shippingDiscountAmountUsd, setShippingDiscountAmountUsd] = useState(0);
   const [appliedProductDiscountInstrumentId, setAppliedProductDiscountInstrumentId] = useState<string | null>(null);
   const [appliedShippingDiscountInstrumentId, setAppliedShippingDiscountInstrumentId] = useState<string | null>(null);
@@ -205,7 +224,6 @@ function CheckoutPageContent() {
   const checkoutInitRef = useRef(false);
   const checkoutPaymentResumeAppliedRef = useRef(false);
   const trackedCheckoutOrderIdsRef = useRef<Set<string>>(new Set());
-  const shippingDiscountRefreshKeyRef = useRef('');
   const isPlacingOrderRef = useRef(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const stripeCheckoutEnabled = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
@@ -236,8 +254,6 @@ function CheckoutPageContent() {
     };
   }, [openPolicyModal]);
 
-  const discountTotalUsd = useMemo(() => Math.min(total, Math.max(0, discountAmountUsd)), [discountAmountUsd, total]);
-
   // Multi-book offer: display-only client recalculation; the session route is
   // authoritative. Client uses the same effective-amount cap as the server.
   const [multiBookRule, setMultiBookRule] = useState<MultiBookOfferRule | null>(null);
@@ -254,29 +270,6 @@ function CheckoutPageContent() {
     [items]
   );
   const multiBookSubtotalUsd = useMemo(() => computeMultiBookSubtotalUsd(multiBookItems), [multiBookItems]);
-  const multiBookDiscountUsd = useMemo(
-    () => capMultiBookOfferToHeadroom(
-      computeMultiBookDiscountUsd(multiBookItems, multiBookRule),
-      multiBookSubtotalUsd,
-      discountTotalUsd
-    ),
-    [multiBookItems, multiBookRule, multiBookSubtotalUsd, discountTotalUsd]
-  );
-  const multiBookBadgeLabel = useMemo(() => getMultiBookOfferBadgeLabel(multiBookRule), [multiBookRule]);
-  const formattedMultiBookDiscount = useMemo(
-    () => formatCurrencyAmount(multiBookDiscountUsd, selectedCurrency),
-    [multiBookDiscountUsd, selectedCurrency]
-  );
-
-  const discountedTotalUsd = useMemo(
-    () => Math.max(0, total - discountTotalUsd - multiBookDiscountUsd),
-    [discountTotalUsd, multiBookDiscountUsd, total]
-  );
-  const formattedSubtotal = useMemo(() => formatCurrencyAmount(total, selectedCurrency), [selectedCurrency, total]);
-  const formattedDiscount = useMemo(
-    () => formatCurrencyAmount(discountTotalUsd, selectedCurrency),
-    [discountTotalUsd, selectedCurrency]
-  );
   const [shippingQuote, setShippingQuote] = useState<ShippingQuoteState>(EMPTY_SHIPPING_QUOTE);
   const selectedShippingOption = useMemo(() => {
     if (shippingQuote.status !== 'available') return null;
@@ -287,58 +280,6 @@ function CheckoutPageContent() {
     );
   }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
   const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
-  const shippingDiscountTotalUsd = useMemo(
-    () => Math.min(shippingAmountUsd, Math.max(0, shippingDiscountAmountUsd)),
-    [shippingAmountUsd, shippingDiscountAmountUsd]
-  );
-  const netShippingAmountUsd = useMemo(
-    () => Math.max(0, shippingAmountUsd - shippingDiscountTotalUsd),
-    [shippingAmountUsd, shippingDiscountTotalUsd]
-  );
-  const orderTotalUsd = useMemo(
-    () => discountedTotalUsd + netShippingAmountUsd,
-    [discountedTotalUsd, netShippingAmountUsd]
-  );
-  const formattedShipping = useMemo(
-    () => formatCurrencyAmount(shippingAmountUsd, selectedCurrency),
-    [selectedCurrency, shippingAmountUsd]
-  );
-  const formattedShippingDiscount = useMemo(
-    () => formatCurrencyAmount(shippingDiscountTotalUsd, selectedCurrency),
-    [selectedCurrency, shippingDiscountTotalUsd]
-  );
-  const formattedNetShipping = useMemo(
-    () => formatCurrencyAmount(netShippingAmountUsd, selectedCurrency),
-    [selectedCurrency, netShippingAmountUsd]
-  );
-  const formattedTotal = useMemo(
-    () => formatCurrencyAmount(orderTotalUsd, selectedCurrency),
-    [orderTotalUsd, selectedCurrency]
-  );
-  const discountSummaryLabel = useMemo(() => {
-    const lines: string[] = [];
-    if (discountTotalUsd > 0) {
-      lines.push(`${appliedProductCode || selectedRewardVoucherName || 'YMI'} · -${formattedDiscount}`);
-    }
-    if (multiBookDiscountUsd > 0) {
-      lines.push(`${t('checkout.multiBookOffer')} · -${formattedMultiBookDiscount}`);
-    }
-    if (shippingDiscountTotalUsd > 0) {
-      lines.push(`${appliedShippingCode || selectedRewardVoucherName || 'Free shipping'} · -${formattedShippingDiscount}`);
-    }
-    return lines.join(' + ');
-  }, [
-    appliedProductCode,
-    appliedShippingCode,
-    discountTotalUsd,
-    formattedDiscount,
-    formattedMultiBookDiscount,
-    formattedShippingDiscount,
-    multiBookDiscountUsd,
-    selectedRewardVoucherName,
-    shippingDiscountTotalUsd,
-    t,
-  ]);
   const [form, setForm] = useState<CheckoutAddressForm>({
     firstName: '',
     lastName: '',
@@ -422,6 +363,145 @@ function CheckoutPageContent() {
   }, [selectedShippingOption, shippingAddressPayload, shippingAmountUsd]);
 
   const canUseShippingQuote = shippingQuote.status === 'available' && Boolean(selectedShippingOption);
+
+  const quoteRequest = useMemo(() => {
+    if (step !== 'payment' || !checkoutStateReady || !isCheckoutPriceReady || !orderId ||
+      !canUseShippingQuote || isApplyingDiscount || isUpdatingQuantity || customerMergeFailed ||
+      !EMAIL_FORMAT_PATTERN.test(checkoutContactEmail)) return null;
+    return {
+      orderId,
+      email: checkoutContactEmail,
+      customerId: sessionUser?.customerId ?? null,
+      currency: selectedCurrency,
+      shippingAddress: shippingAddressPayload,
+      shippingMethod: selectedShippingOption?.methodCode,
+    };
+  }, [step, checkoutStateReady, isCheckoutPriceReady, orderId, canUseShippingQuote, isApplyingDiscount, isUpdatingQuantity,
+    customerMergeFailed, checkoutContactEmail, sessionUser?.customerId, selectedCurrency,
+    shippingAddressPayload, selectedShippingOption?.methodCode]);
+  const quoteKey = quoteRequest
+    ? JSON.stringify([quoteRequest, quoteRevision, items.map(item => [item.id, item.quantity, cartItemUnitPrice(item)])])
+    : null;
+  const [quoteState, setQuoteState] = useState<{
+    key: string;
+    quote?: CheckoutQuote;
+    error?: 'offer' | 'unavailable';
+    changed?: boolean;
+  } | null>(null);
+  const visibleQuote = quoteState?.key === quoteKey ? quoteState : null;
+  const paymentQuote = visibleQuote?.quote;
+  const quoteKeyRef = useRef(quoteKey);
+  useEffect(() => { quoteKeyRef.current = quoteKey; }, [quoteKey]);
+
+  useEffect(() => {
+    if (!quoteKey || !quoteRequest) return;
+    const controller = new AbortController();
+    let active = true;
+    fetch('/api/checkout/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      cache: 'no-store',
+      body: JSON.stringify(quoteRequest),
+      signal: controller.signal,
+    }).then(async response => {
+      const data = await response.json();
+      if (!active) return;
+      if (response.ok && data?.quote?.currency === quoteRequest.currency && Number.isSafeInteger(data.quote.totalMinor)) {
+        setQuoteState({ key: quoteKey, quote: data.quote });
+      } else {
+        setQuoteState({ key: quoteKey, error: data?.code === 'checkout_offer_unavailable' ? 'offer' : 'unavailable' });
+      }
+    }).catch(() => {
+      if (active) setQuoteState({ key: quoteKey, error: 'unavailable' });
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [quoteKey, quoteRequest]);
+
+  const displayedSubtotalUsd = paymentQuote?.subtotalUsd ?? total;
+  const displayedShippingAmountUsd = paymentQuote?.shippingAmountUsd ?? shippingAmountUsd;
+  const discountTotalUsd = paymentQuote?.productDiscountUsd ?? Math.min(total, Math.max(0, discountAmountUsd));
+
+  const multiBookDiscountUsd = useMemo(
+    () => paymentQuote?.multiBookDiscountUsd ?? capMultiBookOfferToHeadroom(
+      computeMultiBookDiscountUsd(multiBookItems, multiBookRule),
+      multiBookSubtotalUsd,
+      discountTotalUsd
+    ),
+    [multiBookItems, multiBookRule, multiBookSubtotalUsd, discountTotalUsd, paymentQuote]
+  );
+  const multiBookBadgeLabel = useMemo(() => getMultiBookOfferBadgeLabel(multiBookRule), [multiBookRule]);
+  const formattedMultiBookDiscount = useMemo(
+    () => formatCurrencyAmount(multiBookDiscountUsd, selectedCurrency),
+    [multiBookDiscountUsd, selectedCurrency]
+  );
+
+  const discountedTotalUsd = useMemo(
+    () => Math.max(0, total - discountTotalUsd - multiBookDiscountUsd),
+    [discountTotalUsd, multiBookDiscountUsd, total]
+  );
+  const formattedSubtotal = useMemo(() => formatCurrencyAmount(displayedSubtotalUsd, selectedCurrency), [selectedCurrency, displayedSubtotalUsd]);
+  const formattedDiscount = useMemo(
+    () => formatCurrencyAmount(discountTotalUsd, selectedCurrency),
+    [discountTotalUsd, selectedCurrency]
+  );
+  const shippingDiscountTotalUsd = useMemo(
+    () => paymentQuote?.shippingDiscountUsd ?? Math.min(shippingAmountUsd, Math.max(0, shippingDiscountAmountUsd)),
+    [shippingAmountUsd, shippingDiscountAmountUsd, paymentQuote]
+  );
+  const netShippingAmountUsd = useMemo(
+    () => Math.max(0, displayedShippingAmountUsd - shippingDiscountTotalUsd),
+    [displayedShippingAmountUsd, shippingDiscountTotalUsd]
+  );
+  const orderTotalUsd = useMemo(
+    () => discountedTotalUsd + netShippingAmountUsd,
+    [discountedTotalUsd, netShippingAmountUsd]
+  );
+  const formattedShipping = useMemo(
+    () => formatCurrencyAmount(displayedShippingAmountUsd, selectedCurrency),
+    [selectedCurrency, displayedShippingAmountUsd]
+  );
+  const formattedShippingDiscount = useMemo(
+    () => formatCurrencyAmount(shippingDiscountTotalUsd, selectedCurrency),
+    [selectedCurrency, shippingDiscountTotalUsd]
+  );
+  const formattedNetShipping = useMemo(
+    () => formatCurrencyAmount(netShippingAmountUsd, selectedCurrency),
+    [selectedCurrency, netShippingAmountUsd]
+  );
+  const formattedTotal = useMemo(
+    () => paymentQuote
+      ? formatMajorCurrencyValue(fromMinorUnit(paymentQuote.totalMinor, paymentQuote.currency), paymentQuote.currency)
+      : formatCurrencyAmount(orderTotalUsd, selectedCurrency),
+    [orderTotalUsd, selectedCurrency, paymentQuote]
+  );
+  const discountSummaryLabel = useMemo(() => {
+    const lines: string[] = [];
+    if (discountTotalUsd > 0) {
+      lines.push(`${appliedProductCode || selectedRewardVoucherName || 'YMI'} · -${formattedDiscount}`);
+    }
+    if (multiBookDiscountUsd > 0) {
+      lines.push(`${t('checkout.multiBookOffer')} · -${formattedMultiBookDiscount}`);
+    }
+    if (shippingDiscountTotalUsd > 0) {
+      lines.push(`${appliedShippingCode || selectedRewardVoucherName || 'Free shipping'} · -${formattedShippingDiscount}`);
+    }
+    return lines.join(' + ');
+  }, [
+    appliedProductCode,
+    appliedShippingCode,
+    discountTotalUsd,
+    formattedDiscount,
+    formattedMultiBookDiscount,
+    formattedShippingDiscount,
+    multiBookDiscountUsd,
+    selectedRewardVoucherName,
+    shippingDiscountTotalUsd,
+    t,
+  ]);
 
   const handleCurrencyChange = useCallback((currency: CheckoutCurrency) => {
     setDisplayCurrency(currency);
@@ -531,13 +611,13 @@ function CheckoutPageContent() {
   ]);
 
   const applyDiscountSummary = useCallback((summary: OrderDiscountSummary) => {
+    setQuoteRevision(revision => revision + 1);
     setDiscountAmountUsd(summary.productDiscountAmountUsd);
     setShippingDiscountAmountUsd(summary.shippingDiscountAmountUsd);
     setAppliedProductDiscountInstrumentId(summary.productDiscountInstrumentId);
     setAppliedShippingDiscountInstrumentId(summary.shippingDiscountInstrumentId);
     setAppliedProductCode(summary.productDiscount?.label ?? null);
     setAppliedShippingCode(summary.shippingDiscount?.label ?? null);
-    setAppliedShippingDiscountType(summary.shippingDiscount?.instrumentType ?? null);
     setAppliedDiscountCode(summary.productDiscount?.code ?? summary.shippingDiscount?.code ?? null);
     const voucher = [summary.shippingDiscount, summary.productDiscount].find(slot => slot?.instrumentType === 'voucher');
     setSelectedRewardVoucherId(voucher?.instrumentId ?? null);
@@ -590,8 +670,6 @@ function CheckoutPageContent() {
         setShippingQuote(quote);
         setCheckoutEmail(address.email);
         applyDiscountSummary(discounts);
-        // Restoring is read-only. Reprice only after a later address/method edit.
-        shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(queryOrderId, discounts.shippingDiscountInstrumentId, quote);
         setFormError('');
         setDiscountError('');
         checkoutPaymentResumeAppliedRef.current = false;
@@ -703,6 +781,7 @@ function CheckoutPageContent() {
     setCheckoutEmail(nextForm.email.trim());
     setFormError('');
     setDiscountError('');
+    setQuoteRevision(revision => revision + 1);
     setStep('payment');
   }, [setCheckoutEmail]);
 
@@ -810,7 +889,6 @@ function CheckoutPageContent() {
       }
 
       applyDiscountSummary(data);
-      shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(orderId, data.shippingDiscountInstrumentId, shippingQuote);
 
       if (data.code) rememberDiscountCode(data.code);
 
@@ -821,7 +899,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
     if (!guardMergeHealthy()) return false;
@@ -859,7 +937,6 @@ function CheckoutPageContent() {
       }
 
       applyDiscountSummary(data);
-      shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(orderId, data.shippingDiscountInstrumentId, shippingQuote);
 
       rememberDiscountCode(null);
 
@@ -870,7 +947,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, shippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
     if (!guardMergeHealthy()) return false;
@@ -890,7 +967,6 @@ function CheckoutPageContent() {
         return false;
       }
       applyDiscountSummary(data);
-      shippingDiscountRefreshKeyRef.current = shippingDiscountRefreshKey(orderId, data.shippingDiscountInstrumentId, shippingQuote);
       if (!data.productDiscountInstrumentId && !data.shippingDiscountInstrumentId) rememberDiscountCode(null);
       return true;
     } catch {
@@ -899,7 +975,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, orderId, shippingQuote, t, guardMergeHealthy]);
+  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, orderId, t, guardMergeHealthy]);
 
   useEffect(() => {
     if (discountError || appliedDiscountCode || selectedRewardVoucherId || appliedProductDiscountInstrumentId || appliedShippingDiscountInstrumentId) {
@@ -907,35 +983,8 @@ function CheckoutPageContent() {
     }
   }, [appliedDiscountCode, appliedProductDiscountInstrumentId, appliedShippingDiscountInstrumentId, selectedRewardVoucherId, discountError]);
 
-  useEffect(() => {
-    if (!checkoutStateReady || !canUseShippingQuote || isApplyingDiscount || !orderId || !appliedShippingDiscountInstrumentId) return;
-    const refreshKey = `${orderId}:${appliedShippingDiscountInstrumentId}:${shippingAmountUsd}:${selectedShippingOption?.methodCode ?? ''}`;
-    if (shippingDiscountRefreshKeyRef.current === refreshKey) return;
-    shippingDiscountRefreshKeyRef.current = refreshKey;
-    if (appliedShippingDiscountType === 'voucher') {
-      void applyRewardVoucher(appliedShippingDiscountInstrumentId);
-      return;
-    }
-    if (appliedShippingCode) {
-      void applyDiscountCode(appliedShippingCode);
-    }
-  }, [
-    appliedShippingCode,
-    appliedShippingDiscountType,
-    checkoutStateReady,
-    canUseShippingQuote,
-    isApplyingDiscount,
-    appliedShippingDiscountInstrumentId,
-    applyDiscountCode,
-    applyRewardVoucher,
-    orderId,
-    selectedRewardVoucherId,
-    selectedShippingOption?.methodCode,
-    shippingAmountUsd,
-  ]);
-
   const startStripeHostedCheckout = async (mode: 'guest' | 'auth') => {
-    if (!checkoutStateReady || isApplyingDiscount || !orderId) {
+    if (!checkoutStateReady || isApplyingDiscount || !orderId || !paymentQuote || !quoteKey) {
       setFormError(t('checkout.orderNotReadyError'));
       isPlacingOrderRef.current = false;
       setIsPlacingOrder(false);
@@ -943,12 +992,14 @@ function CheckoutPageContent() {
     }
 
     setIsPlacingOrder(true);
+    setFormError('');
     const payload = {
       orderId,
       email: checkoutContactEmail,
       customerId: sessionUser?.customerId ?? null,
       isGuest: mode === 'guest',
-      currency: selectedCurrency,
+      currency: paymentQuote.currency,
+      expectedTotalMinor: paymentQuote.totalMinor,
       shippingAddress: checkoutShippingContext.shippingAddress,
       shippingAmountUsd: checkoutShippingContext.shippingAmountUsd,
       shippingMethod: checkoutShippingContext.shippingMethod,
@@ -969,7 +1020,19 @@ function CheckoutPageContent() {
         body: JSON.stringify(payload),
       });
 
-      const data = response.ok ? await response.json() : null;
+      const data = await response.json();
+      if (quoteKeyRef.current !== quoteKey) {
+        isPlacingOrderRef.current = false;
+        setIsPlacingOrder(false);
+        return;
+      }
+      if (response.status === 409 && data?.code === 'checkout_quote_changed' &&
+        data.quote?.currency === paymentQuote.currency && Number.isSafeInteger(data.quote.totalMinor)) {
+        setQuoteState({ key: quoteKey, quote: data.quote, changed: true });
+        isPlacingOrderRef.current = false;
+        setIsPlacingOrder(false);
+        return;
+      }
       if (!response.ok || !data?.url) {
         setFormError(data?.error || t('checkout.stripeStartError'));
         isPlacingOrderRef.current = false;
@@ -991,7 +1054,7 @@ function CheckoutPageContent() {
   };
 
   const handlePlaceOrder = () => {
-    if (!checkoutStateReady || isApplyingDiscount || isPlacingOrderRef.current || isPlacingOrder) return;
+    if (!checkoutStateReady || isApplyingDiscount || pendingQuantities.current || isPlacingOrderRef.current || isPlacingOrder) return;
 
     if (customerMergeFailed) {
       // Heal the account link before starting payment. On success the effect
@@ -1018,6 +1081,8 @@ function CheckoutPageContent() {
       return;
     }
 
+    if (!paymentQuote) return;
+
     const effectiveIdentityMode: 'guest' | 'auth' = sessionUser?.email ? 'auth' : 'guest';
 
     isPlacingOrderRef.current = true;
@@ -1038,10 +1103,10 @@ function CheckoutPageContent() {
     // Consume the pending payment intent only once the post-merge restore has
     // finished; otherwise handlePlaceOrder early-returns on checkoutStateReady
     // and the intent would be lost.
-    if (customerMergeFailed || !checkoutStateReady || !pendingPaymentAfterMergeRef.current) return;
+    if (customerMergeFailed || !checkoutStateReady || !paymentQuote || !pendingPaymentAfterMergeRef.current) return;
     pendingPaymentAfterMergeRef.current = false;
     handlePlaceOrderRef.current();
-  }, [customerMergeFailed, checkoutStateReady]);
+  }, [customerMergeFailed, checkoutStateReady, paymentQuote]);
 
   const startCheckoutForItems = useCallback(async (selected: typeof items) => {
     if (!selected.length) return;
@@ -1113,7 +1178,6 @@ function CheckoutPageContent() {
       setAppliedShippingDiscountInstrumentId(null);
       setAppliedProductCode(null);
       setAppliedShippingCode(null);
-      setAppliedShippingDiscountType(null);
       setDiscountError('');
       return true;
     } catch (error) {
@@ -1190,6 +1254,8 @@ function CheckoutPageContent() {
 
   const isPaymentStep = step === 'payment';
   const shouldShowMobilePaymentBar = isPaymentStep;
+  const canPay = Boolean(paymentQuote) || customerMergeFailed;
+  const summaryPriceReady = isCheckoutPriceReady && (!isPaymentStep || Boolean(paymentQuote));
   const mobilePaymentActionLabel =
     isPlacingOrder
       ? t('common.loading')
@@ -1368,10 +1434,10 @@ function CheckoutPageContent() {
                           {stripeCheckoutEnabled ? t('checkout.payWithStripe') : t('checkout.placeOrder')}
                         </div>
                         <div
-                          aria-busy={!isCheckoutPriceReady}
+                          aria-busy={!paymentQuote}
                           className="mt-1 min-h-10 text-3xl font-bold tracking-tight text-slate-900 md:text-[2rem]"
                         >
-                          {isCheckoutPriceReady ? formattedTotal : null}
+                          {paymentQuote ? formattedTotal : null}
                         </div>
                         {discountTotalUsd > 0 ? (
                           <div className="mt-2 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -1389,6 +1455,19 @@ function CheckoutPageContent() {
                   </div>
                 </div>
 
+                {visibleQuote?.changed ? (
+                  <p role="status" className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {t('checkout.quoteChanged')}
+                  </p>
+                ) : null}
+                {visibleQuote?.error ? (
+                  <div role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                    <p>{t(visibleQuote.error === 'offer' ? 'checkout.quoteOfferUnavailable' : 'checkout.quoteUnavailable')}</p>
+                    <button type="button" className="mt-2 font-semibold underline" onClick={() => setQuoteRevision(revision => revision + 1)}>
+                      {t('common.retry')}
+                    </button>
+                  </div>
+                ) : null}
                 <DiscountSection
                   isOpen={isPaymentOffersOpen}
                   onToggleOpen={() => setIsPaymentOffersOpen((prev) => !prev)}
@@ -1425,6 +1504,7 @@ function CheckoutPageContent() {
                   accountEmail={sessionUser?.email ?? null}
                   isSignedIn={Boolean(sessionUser?.customerId)}
                   isPlacingOrder={isPlacingOrder || isApplyingDiscount}
+                  canPay={canPay}
                   stripeCheckoutEnabled={stripeCheckoutEnabled}
                   formError={formError}
                   policyAgreementNotice={policyAgreementNotice}
@@ -1450,14 +1530,14 @@ function CheckoutPageContent() {
 
         <CheckoutSummaryPanel
           hiddenOnPaymentStep={isPaymentStep}
-          isPriceReady={isCheckoutPriceReady}
+          isPriceReady={summaryPriceReady}
           showShipping
           shippingStatus={shippingQuote.status}
           estimatedDelivery={selectedShippingOption?.estimatedDelivery}
           discountTotalUsd={discountTotalUsd}
           shippingDiscountTotalUsd={shippingDiscountTotalUsd}
-          shippingAmountUsd={shippingAmountUsd}
-          shippingRateSnapshot={selectedShippingOption?.snapshot}
+          shippingAmountUsd={displayedShippingAmountUsd}
+          shippingRateSnapshot={isPaymentStep ? null : selectedShippingOption?.snapshot}
           currency={selectedCurrency}
           formattedSubtotal={formattedSubtotal}
           formattedShipping={formattedShipping}
@@ -1466,7 +1546,7 @@ function CheckoutPageContent() {
           formattedShippingDiscount={formattedShippingDiscount}
           multiBookDiscountTotalUsd={multiBookDiscountUsd}
           formattedMultiBookDiscount={formattedMultiBookDiscount}
-          multiBookBadgeLabel={multiBookBadgeLabel}
+          multiBookBadgeLabel={isPaymentStep ? '' : multiBookBadgeLabel}
           formattedTotal={formattedTotal}
           t={t}
         />
@@ -1474,10 +1554,10 @@ function CheckoutPageContent() {
 
       <MobilePaymentBar
         visible={shouldShowMobilePaymentBar}
-        isPriceReady={isCheckoutPriceReady}
+        isPriceReady={Boolean(paymentQuote)}
         totalLabel={formattedTotal}
         actionLabel={mobilePaymentActionLabel}
-        disabled={isPlacingOrder || isApplyingDiscount}
+        disabled={!canPay || isPlacingOrder || isApplyingDiscount}
         t={t}
         onClick={handlePlaceOrder}
       />

@@ -9,6 +9,7 @@ type PaymentActionsProps = {
   accountEmail: string | null;
   isSignedIn: boolean;
   isPlacingOrder: boolean;
+  canPay: boolean;
   stripeCheckoutEnabled: boolean;
   formError: string;
   policyAgreementNotice: ReactNode;
@@ -54,6 +55,7 @@ function PaymentActionsComponent({
   accountEmail,
   isSignedIn,
   isPlacingOrder,
+  canPay,
   stripeCheckoutEnabled,
   formError,
   policyAgreementNotice,
@@ -80,7 +82,7 @@ function PaymentActionsComponent({
           size="lg"
           className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-6 text-sm font-semibold md:h-12 md:text-base"
           onClick={onPlaceOrder}
-          disabled={isPlacingOrder}
+          disabled={!canPay || isPlacingOrder}
         >
           {isPlacingOrder
             ? t('common.loading')

@@ -24,8 +24,9 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
       async maybeSingle() {
         if (table !== 'orders') throw new Error(`Unexpected maybeSingle on ${table}`)
         if (this.operation === 'update') {
-          calls.push({ kind: 'lock' })
-          return { data: lockFails ? null : { order_id: 'order-1' }, error: null }
+          const isLock = Boolean(this.updateValue.checkout_session_id)
+          calls.push({ kind: isLock ? 'lock' : 'profile' })
+          return { data: isLock && lockFails ? null : { order_id: 'order-1' }, error: null }
         }
         return { data: order, error: null }
       },
@@ -36,7 +37,7 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
         }
         if (table === 'cart_items') {
           const data = String(this.selected).includes('creations:creations')
-            ? [{ cart_item_id: 'line-1', quantity: 1, price_at_purchase: 30,
+            ? [{ cart_item_id: 'line-1', quantity: 1, price_at_purchase: 30, product_type: 'physical', package_type: 'basic',
               creations: { template_id: 'story-1', customize_snapshot: {}, templates: { name: 'Story' } } }]
             : [{ cart_item_id: 'line-1', product_type: 'physical', package_type: 'basic' }]
           return Promise.resolve({ data, error: null }).then(resolve, reject)
@@ -56,6 +57,7 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
     async expire(id) { calls.push({ kind: 'expire', id }) },
   } } }
   const dependencies = {
+    'server-only': {},
     'next/server': { NextResponse: { json: Response.json } },
     '@/lib/supabaseAdmin': { supabaseAdmin },
     '@/lib/stripe': { getStripeServer: () => stripe, isStripeEnabled: () => true },
@@ -100,12 +102,12 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
   }
   function requireModule(name) {
     if (Object.hasOwn(dependencies, name)) return dependencies[name]
-    if (name === '@/lib/checkout-pricing' || name === '@/lib/checkout-line-items') {
+    if (['@/lib/checkout-pricing', '@/lib/checkout-line-items', '@/lib/checkout-quote-server'].includes(name)) {
       const source = readFileSync(new URL(`../src/${name.slice(2)}.ts`, import.meta.url), 'utf8')
       const loaded = { exports: {} }
       vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
         module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-      } }).outputText, { module: loaded, exports: loaded.exports, require: requireModule })
+      } }).outputText, { module: loaded, exports: loaded.exports, require: requireModule, URL })
       return loaded.exports
     }
     throw new Error(`Unmocked ${name}`)
@@ -120,7 +122,7 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
 
 const request = () => new Request('http://localhost/api/checkout/session', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ orderId: 'order-1', email: 'buyer@example.test', shippingMethod: 'standard', shippingAddress: { country: 'HK' } }),
+  body: JSON.stringify({ orderId: 'order-1', email: 'buyer@example.test', shippingMethod: 'standard', shippingAddress: { country: 'HK' }, expectedTotalMinor: 3000 }),
 })
 
 test('missing dedication does not block Stripe Session creation', async () => {
@@ -165,7 +167,7 @@ test('fingerprint drift after lock expires and clears the Session', async () => 
 })
 
 test('a matching open Session is reused without resnapshot or new issuance', async () => {
-  const { POST, calls } = checkoutRoute({ existingSession: { id: 'cs_old', status: 'open',
+  const { POST, calls } = checkoutRoute({ existingSession: { id: 'cs_old', status: 'open', amount_total: 3000, currency: 'usd',
     url: 'https://checkout.stripe.test/cs_old', success_url: 'http://localhost/checkout/success',
     cancel_url: 'http://localhost/api/checkout/session/cancel',
     metadata: { checkout_fingerprint: 'dedication-fingerprint' } } })

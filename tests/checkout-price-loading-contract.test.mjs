@@ -16,15 +16,15 @@ test('checkout keeps unresolved prices blank while order items are restored', as
 
   assert.match(
     page,
-    /aria-busy=\{!isCheckoutPriceReady\}[\s\S]{0,240}\{isCheckoutPriceReady \? formattedTotal : null\}/
+    /aria-busy=\{!paymentQuote\}[\s\S]{0,240}\{paymentQuote \? formattedTotal : null\}/
   )
   assert.match(
     page,
-    /<CheckoutSummaryPanel[\s\S]{0,500}isPriceReady=\{isCheckoutPriceReady\}/
+    /<CheckoutSummaryPanel[\s\S]{0,500}isPriceReady=\{summaryPriceReady\}/
   )
   assert.match(
     page,
-    /<MobilePaymentBar[\s\S]{0,220}isPriceReady=\{isCheckoutPriceReady\}/
+    /<MobilePaymentBar[\s\S]{0,220}isPriceReady=\{Boolean\(paymentQuote\)\}/
   )
 
   assert.match(summary, /isPriceReady: boolean/)

@@ -87,7 +87,7 @@ test('free-shipping voucher is refreshed against the promotional rate and omits 
   assert.equal(response.status, 200, await response.text())
   close(h.order.shipping_amount_usd, 4)
   assert.equal(h.order.shipping_discount_amount_usd, 4)
-  assert.equal(h.rpcCalls.length, 1)
+  assert.equal(h.rpcCalls.filter(call => call.name === 'apply_discount_instrument').length, 1)
   assert.equal(h.stripeCalls[0].line_items.some(item => item.price_data.product_data.name === 'Shipping'), false)
   assert.equal(h.stripeCalls[0].metadata.shipping_discount_amount_usd, '4')
 })

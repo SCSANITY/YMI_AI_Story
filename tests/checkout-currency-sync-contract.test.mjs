@@ -23,8 +23,9 @@ test('checkout display and payment currency share the global currency authority'
 test('shipping, summary, items, and Stripe session consume the synchronized currency', async () => {
   const checkout = await read('app/checkout/page.tsx')
 
-  assert.match(checkout, /formatCurrencyAmount\(shippingAmountUsd, selectedCurrency\)/)
+  assert.match(checkout, /formatCurrencyAmount\(displayedShippingAmountUsd, selectedCurrency\)/)
   assert.match(checkout, /<AddressFormSection[\s\S]*?selectedCurrency=\{selectedCurrency\}/)
   assert.match(checkout, /<CheckoutItemsSection[\s\S]*?selectedCurrency=\{selectedCurrency\}/)
-  assert.match(checkout, /const payload = \{[\s\S]*?currency: selectedCurrency,[\s\S]*?fetch\('\/api\/checkout\/session'/)
+  assert.match(checkout, /const quoteRequest = useMemo[\s\S]*?currency: selectedCurrency,/ )
+  assert.match(checkout, /const payload = \{[\s\S]*?currency: paymentQuote\.currency,[\s\S]*?fetch\('\/api\/checkout\/session'/)
 })

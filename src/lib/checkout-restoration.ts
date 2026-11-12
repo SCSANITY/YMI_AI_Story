@@ -70,10 +70,6 @@ export function restoreCheckoutOrder(order: Record<string, unknown>) {
   return { form, quote, discounts }
 }
 
-export function shippingDiscountRefreshKey(orderId: string, instrumentId: string | null, quote: ShippingQuoteState) {
-  const option = quote.options.find(option => option.methodCode === quote.selectedMethod)
-  return instrumentId && option ? `${orderId}:${instrumentId}:${option.amountUsd}:${option.methodCode}` : ''
-}
 
 // Tax identifiers are never re-injected from a browser draft; the draft writer
 // already blanks them and they must only come from the active form or an
