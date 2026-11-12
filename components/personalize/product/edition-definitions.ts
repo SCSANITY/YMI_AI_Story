@@ -8,6 +8,7 @@ export const EDITION_DEFINITIONS = [
     nameKey: "product.hardcover",
     titleKey: "product.hardcover",
     titleAccentKey: null,
+    previewOptionImage: "/customize-product/v1/preview-book-type-hardcover.png",
     gallery: [
       { src: "/customize-product/v1/c-hardcover-01.jpg", altKey: "product.hardcoverGallery1" },
       { src: "/customize-product/v1/c-hardcover-02.jpg", altKey: "product.hardcoverGallery2" },
@@ -26,6 +27,7 @@ export const EDITION_DEFINITIONS = [
     nameKey: "product.voiceEdition",
     titleKey: "product.hardcover",
     titleAccentKey: "product.voiceWord",
+    previewOptionImage: "/customize-product/v1/preview-book-type-hardcover-voice.png",
     gallery: [
       { src: "/customize-product/v1/c-voice-01.jpg", altKey: "product.voiceEditionGallery1" },
       { src: "/customize-product/v1/c-voice-02.jpg", altKey: "product.voiceEditionGallery2" },

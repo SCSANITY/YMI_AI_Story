@@ -22,7 +22,7 @@ export function PreviewYourBookPanel({ value, pricing, currency, childName, disa
         {edition.type === 'supreme' ? <span className={styles.popular}>✦ MOST POPULAR</span> : null}
         <label className={styles.editionRadio}>
           <input type="radio" name="preview-edition" aria-label={t(edition.nameKey)} value={edition.type} checked={value === edition.type} disabled={disabled} onChange={() => onChange(edition.type)} />
-          <Image src={edition.gallery[0].src} alt={t(edition.gallery[0].altKey)} width={60} height={60} sizes="60px" />
+          <Image src={edition.previewOptionImage} alt={t(edition.nameKey)} width={60} height={60} sizes="60px" />
           <span className={styles.editionText}><strong>{t(edition.nameKey)}</strong><EditionPrice as="span" price={pricing[edition.type]} currency={currency} className={styles.compactPrice} /></span>
           <span className={styles.radioDot} aria-hidden="true" />
         </label>
