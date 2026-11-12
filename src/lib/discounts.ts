@@ -361,29 +361,23 @@ export function allocateProductDiscountToLineItems(
     }
   })
 
-  const subtotal = toMoney(normalizedItems.reduce((sum, item) => sum + item.originalLineTotalUsd, 0))
-  const discount = Math.min(subtotal, toMoney(productDiscountAmountUsd))
-  if (discount <= 0 || subtotal <= 0) return normalizedItems
+  const subtotalCents = normalizedItems.reduce(
+    (sum, item) => sum + Math.round(item.originalLineTotalUsd * 100), 0,
+  )
+  const discountCents = Math.min(subtotalCents, Math.round(toMoney(productDiscountAmountUsd) * 100))
+  if (discountCents <= 0) return normalizedItems
 
+  let subtotalSoFar = 0
   let allocated = 0
-  let lastDiscountableIndex = -1
-  for (let index = normalizedItems.length - 1; index >= 0; index -= 1) {
-    if (normalizedItems[index].originalLineTotalUsd > 0) {
-      lastDiscountableIndex = index
-      break
-    }
-  }
-
-  return normalizedItems.map((item, index) => {
-    if (item.originalLineTotalUsd <= 0) return item
-    const share =
-      index === lastDiscountableIndex
-        ? toMoney(discount - allocated)
-        : toMoney(discount * (item.originalLineTotalUsd / subtotal))
-    allocated = toMoney(allocated + share)
+  return normalizedItems.map((item) => {
+    const lineCents = Math.round(item.originalLineTotalUsd * 100)
+    subtotalSoFar += lineCents
+    const allocation = Math.round(discountCents * subtotalSoFar / subtotalCents)
+    const lineDiscount = allocation - allocated
+    allocated = allocation
     return {
       ...item,
-      discountedLineTotalUsd: toMoney(Math.max(0, item.originalLineTotalUsd - share)),
+      discountedLineTotalUsd: (lineCents - lineDiscount) / 100,
     }
   })
 }

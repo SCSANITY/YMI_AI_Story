@@ -3,9 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getStripeServer, isStripeEnabled } from '@/lib/stripe'
 import {
   CheckoutCurrency,
-  convertUsdToCurrency,
   normalizeCheckoutCurrency,
-  toMinorUnit,
 } from '@/lib/locale-pricing'
 import {
   allocateProductDiscountToLineItems,
@@ -32,6 +30,7 @@ import {
   createOrderCheckoutFingerprint,
 } from '@/lib/checkout-session-lock'
 import { getSiteUrl } from '@/lib/site-url'
+import { buildCheckoutLineItems } from '@/lib/checkout-line-items'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { normalizeShippingAddress, recipientAddressIssue, type ShippingAddress } from '@/lib/shipping-address'
 
@@ -272,7 +271,7 @@ export async function POST(request: Request) {
     }
 
     const discountedItems = allocateProductDiscountToLineItems(
-      cartItems.map((item: any) => {
+      [...cartItems].sort((left, right) => left.cart_item_id.localeCompare(right.cart_item_id)).map((item: any) => {
         const qty = Math.max(1, Number(item.quantity ?? 1))
         const unitPriceUsd = Math.max(0, Number(item.price_at_purchase ?? 0))
         const templateId = item?.creations?.template_id ?? 'custom-story-book'
@@ -293,53 +292,31 @@ export async function POST(request: Request) {
         }
       }),
       // Single allocation path: product instruments + the capped offer share
-      // one remainder-to-last-line pass; the sum never exceeds the subtotal.
+      // one allocation pass across the ordered product lines.
       discountSummary.productDiscountAmountUsd + multiBookDiscountUsd
     )
 
-    const lineItems: any[] = discountedItems
-      .filter((item) => item.discountedLineTotalUsd > 0)
-      .map((item) => {
-      const qty = Math.max(1, Number(item.quantity ?? 1))
-      const lineTotal = convertUsdToCurrency(item.discountedLineTotalUsd, currency)
-      const amountMinor = toMinorUnit(lineTotal, currency)
-      return {
-        quantity: 1,
-        price_data: {
-          currency: currency.toLowerCase(),
-          unit_amount: amountMinor,
-          product_data: {
-            name: qty > 1 && !item.name.endsWith(`x${qty}`) ? `${item.name} x${qty}` : item.name,
-            metadata: item.metadata ?? {},
-          },
-        },
-      }
-    })
+    const charges = discountedItems.map(item => ({
+      name: item.name,
+      amountUsd: item.discountedLineTotalUsd,
+      metadata: item.metadata ?? {},
+    }))
 
     const chargeableShippingUsd = Math.max(0, shippingAmountUsd - discountSummary.shippingDiscountAmountUsd)
     if (chargeableShippingUsd > 0) {
-      const shippingAmount = convertUsdToCurrency(chargeableShippingUsd, currency)
-      const shippingAmountMinor = toMinorUnit(shippingAmount, currency)
-      if (shippingAmountMinor > 0) {
-        lineItems.push({
-          quantity: 1,
-          price_data: {
-            currency: currency.toLowerCase(),
-            unit_amount: shippingAmountMinor,
-            product_data: {
-              name: 'Shipping',
-              metadata: {
-                order_id: orderId,
-                shipping_rate: String(shippingRateSnapshot?.rateName || shippingRateSnapshot?.methodName || ''),
-                shipping_method: String(shippingMethod || ''),
-                shipping_zone_code: String(shippingZoneCode || ''),
-              },
-            },
-          },
-        })
-      }
+      charges.push({
+        name: 'Shipping',
+        amountUsd: chargeableShippingUsd,
+        metadata: {
+          order_id: orderId,
+          shipping_rate: String(shippingRateSnapshot?.rateName || shippingRateSnapshot?.methodName || ''),
+          shipping_method: String(shippingMethod || ''),
+          shipping_zone_code: String(shippingZoneCode || ''),
+        },
+      })
     }
 
+    const { lineItems } = buildCheckoutLineItems(charges, currency)
     if (lineItems.length === 0) {
       return NextResponse.json({ error: 'Zero-total checkout is not supported yet' }, { status: 400 })
     }

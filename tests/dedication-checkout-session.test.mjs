@@ -104,6 +104,17 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
     module: loaded, exports: loaded.exports, Response, Request, URL, console,
     require(name) {
       if (Object.hasOwn(dependencies, name)) return dependencies[name]
+      if (name === '@/lib/checkout-line-items') {
+        const lineItemSource = readFileSync(new URL('../src/lib/checkout-line-items.ts', import.meta.url), 'utf8')
+        const lineItemModule = { exports: {} }
+        vm.runInNewContext(ts.transpileModule(lineItemSource, { compilerOptions: {
+          module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
+        } }).outputText, {
+          module: lineItemModule, exports: lineItemModule.exports,
+          require: dependency => dependencies[dependency],
+        })
+        return lineItemModule.exports
+      }
       throw new Error(`Unmocked ${name}`)
     },
   }, { filename: 'app/api/checkout/session/route.ts' })
