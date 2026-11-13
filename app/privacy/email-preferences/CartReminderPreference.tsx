@@ -5,7 +5,7 @@ import { useGlobalContext } from '@/contexts/GlobalContext'
 
 const ENDPOINT = '/api/user/cart-reminder-preference'
 const buttonClass = 'rounded-full border border-amber-400 px-5 py-2.5 text-sm font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-amber-600 disabled:opacity-60'
-type Preference = { enabled: boolean; canEnable: boolean; paused: boolean }
+type Preference = { enabled: boolean; canEnable: boolean; paused: boolean; defaultOn: boolean }
 
 function MemberPreference({ userId }: { userId: string }) {
   const [preference, setPreference] = useState<Preference | null>(null)
@@ -62,6 +62,7 @@ function MemberPreference({ userId }: { userId: string }) {
       }}>Try again</button>}
       {preference && (
         <div className="space-y-3">
+          {preference.defaultOn && <p className="text-sm text-slate-600">Cart reminders are on by default. You can turn them off at any time.</p>}
           {preference.paused && <p className="text-sm text-slate-600">Reminders are paused because your account email changed or isn’t confirmed.</p>}
           <div className="flex flex-wrap items-center gap-3">
             {(!preference.enabled || preference.paused) && <button className={buttonClass} type="button"
@@ -84,7 +85,7 @@ export function CartReminderPreference() {
   return (
     <section aria-labelledby="cart-reminder-heading" className="space-y-4 rounded-2xl border border-amber-100 bg-white p-6 text-slate-800">
       <h2 id="cart-reminder-heading" className="font-title text-2xl font-semibold">Weekly shopping cart reminders</h2>
-      <p>With your permission, YMI Story will use your account email to send up to one promotional reminder a week about books you left in your cart. You can turn reminders off here or unsubscribe from any reminder email, free of charge.</p>
+      <p>When cart reminders are on, YMI Story sends up to one promotional email a week to your confirmed account email about books you left in your cart. You can turn reminders off here or unsubscribe from any reminder email, free of charge.</p>
       {!isAuthResolved && !user ? <p role="status">Checking your account…</p>
         : user ? <MemberPreference key={user.id} userId={user.id} />
           : <button type="button" className={buttonClass} onClick={() => openLoginModal()}>Sign in to manage email preferences</button>}

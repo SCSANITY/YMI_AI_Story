@@ -82,7 +82,9 @@ function fixture(overrides = {}) {
       supabaseAdmin: {
         rpc(name, args) {
           calls.rpc.push([name, args])
-          if (name === 'list_cart_reminder_candidates') return { data: [{ customer_id: id(1) }, { customer_id: id(2) }] }
+          if (name === 'list_cart_reminder_candidates' || name === 'list_default_cart_reminder_candidates') {
+            return { data: [{ customer_id: id(1) }, { customer_id: id(2) }] }
+          }
           if (name === 'unsubscribe_cart_reminder') return { maybeSingle: async () => {
             if (args.p_grant_id !== grantId) return { data: null }
             if (unsubscribed) {
@@ -99,7 +101,7 @@ function fixture(overrides = {}) {
             if (restored) { undoAvailable = false; unsubscribed = false; grantId = id(5) }
             return { data: restored }
           }
-          assert.equal(name, 'get_cart_reminder_recipient')
+          assert.ok(['get_cart_reminder_recipient', 'prepare_default_cart_reminder_recipient'].includes(name))
           return {
             maybeSingle: async () => ({
               data: !unsubscribed && args.p_customer_id === id(2) ? { customer_id: id(2), grant_id: grantId, email: 'reader@example.test' } : null,
@@ -118,6 +120,19 @@ test('weekly dispatcher requires Production and both settings before any DB or p
     assert.equal(await server.dispatchCartReminderBatch('2026-11-18'), null)
     assert.deepEqual(calls, { rpc: [], sends: [], writes: [] })
   }
+})
+
+test('default policy uses the cart-first candidates and signs the prepared grant', async () => {
+  const { server, calls } = fixture({ CART_REMINDER_DEFAULT_ON: 'true' })
+  const result = await server.dispatchCartReminderBatch('2026-11-18')
+  assert.equal(result.sent, 1)
+  assert.deepEqual(calls.rpc.map(([name]) => name), [
+    'list_default_cart_reminder_candidates',
+    'prepare_default_cart_reminder_recipient',
+    'prepare_default_cart_reminder_recipient',
+  ])
+  const token = new URL(calls.sends[0].unsubscribeUrl).searchParams.get('token')
+  assert.equal(server.verifyCartReminderToken(token, 'unsubscribe'), id(3))
 })
 
 test('cron rejects unauthenticated requests, dispatches only on Wednesday and sets no-store', async () => {
@@ -191,13 +206,15 @@ test('native RFC one-click accepts both encodings, with no login, confirmation o
 test('member preference ignores foreign identity and cross-origin writes; only confirmed email can opt in', async () => {
   const url = 'https://example.test/api/user/cart-reminder-preference'
   let user = { id: id(1), email: ' Reader@example.test ', email_confirmed_at: 'confirmed' }
+  let preference = null
+  const env = {}
   const writes = []
   const route = loadUi('app/api/user/cart-reminder-preference/route.ts', {
     '@/lib/authenticated-user': { getAuthenticatedUser: async () => user },
     '@/lib/supabaseAdmin': { supabaseAdmin: {
       from(name) {
         const query = { eq: () => query, maybeSingle: async () => ({
-          data: name === 'customers' ? { customer_id: id(2), email: 'reader@example.test' } : null,
+          data: name === 'customers' ? { customer_id: id(2), email: 'reader@example.test' } : preference,
         }) }
         return { select: () => query }
       },
@@ -206,13 +223,22 @@ test('member preference ignores foreign identity and cross-origin writes; only c
         return { data: args.p_enabled }
       },
     } },
-  }, { URL })
+  }, { URL, process: { env } })
   const request = (choice, owner = id(1), origin = new URL(url).origin) => new Request(url, {
     method: 'POST', headers: { origin, 'X-YMI-Preference-User': owner, 'X-YMI-Cart-Reminders': choice },
   })
-  const empty = await route.GET(new Request(url, { headers: { 'X-YMI-Preference-User': id(1) } }))
-  assert.deepEqual(await empty.json(), { enabled: false, canEnable: true, paused: false })
+  const get = () => route.GET(new Request(url, { headers: { 'X-YMI-Preference-User': id(1) } }))
+  const empty = await get()
+  assert.deepEqual(await empty.json(), { enabled: false, canEnable: true, paused: false, defaultOn: false })
   assert.equal(empty.headers.get('cache-control'), 'private, no-store')
+  env.CART_REMINDER_DEFAULT_ON = 'true'
+  assert.deepEqual(await (await get()).json(), { enabled: true, canEnable: true, paused: false, defaultOn: true })
+  preference = { email: null, opted_in_at: null, unsubscribed_at: 'recorded' }
+  assert.deepEqual(await (await get()).json(), { enabled: false, canEnable: true, paused: false, defaultOn: true })
+  preference = { email: 'reader@example.test', opted_in_at: null, unsubscribed_at: null }
+  assert.equal((await (await get()).json()).enabled, true)
+  delete env.CART_REMINDER_DEFAULT_ON
+  assert.equal((await (await get()).json()).enabled, false)
   assert.equal((await route.POST(request('on', id(9)))).status, 401)
   assert.equal((await route.POST(request('on', id(1), 'https://different.test'))).status, 403)
   assert.deepEqual(await (await route.POST(request('on'))).json(), { enabled: true })

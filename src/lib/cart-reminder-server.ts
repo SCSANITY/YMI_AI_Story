@@ -5,7 +5,7 @@ import { matchesSecret } from '@/lib/secret-compare'
 import { getSiteUrl } from '@/lib/site-url'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
-import { runCartReminderBatch, type CartReminderRecipient } from './cart-reminders'
+import { cartRemindersDefaultOn, runCartReminderBatch, type CartReminderRecipient } from './cart-reminders'
 
 const MAX_BATCH_MS = 35_000
 const UNSUBSCRIBE_PATH = '/cart-reminders/unsubscribe'
@@ -53,10 +53,13 @@ export async function dispatchCartReminderBatch(week: string) {
   if (site.protocol !== 'https:' || site.username || site.password) throw new Error('Invalid cart reminder site origin')
 
   const expires = Date.now() + MAX_BATCH_MS
+  const defaultOn = cartRemindersDefaultOn()
+  const listCandidates = defaultOn ? 'list_default_cart_reminder_candidates' : 'list_cart_reminder_candidates'
+  const getRecipient = defaultOn ? 'prepare_default_cart_reminder_recipient' : 'get_cart_reminder_recipient'
   return runCartReminderBatch(week, {
     withinBudget: () => Date.now() < expires,
     async page(after, limit) {
-      const { data, error } = await supabaseAdmin.rpc('list_cart_reminder_candidates', { p_after: after, p_limit: limit })
+      const { data, error } = await supabaseAdmin.rpc(listCandidates, { p_after: after, p_limit: limit })
       if (error || !Array.isArray(data)) throw new Error('Unable to read cart reminder candidates')
       return data.map(row => {
         if (!isUuid(row.customer_id)) throw new Error('Invalid cart reminder candidate')
@@ -64,7 +67,7 @@ export async function dispatchCartReminderBatch(week: string) {
       })
     },
     async recipient(id) {
-      const { data, error } = await supabaseAdmin.rpc('get_cart_reminder_recipient', { p_customer_id: id }).maybeSingle()
+      const { data, error } = await supabaseAdmin.rpc(getRecipient, { p_customer_id: id }).maybeSingle()
       if (error) throw new Error('Unable to check cart reminder eligibility')
       if (!data) return null
       const row = data as Partial<CartReminderRecipient>

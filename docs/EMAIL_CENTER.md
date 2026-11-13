@@ -142,6 +142,13 @@ A mismatched address pauses delivery until the member opts in for the
 current address. Turning reminders off is always available to the account
 owner while signed in.
 
+An offline candidate adds an alternative policy controlled by
+`CART_REMINDER_DEFAULT_ON=true`. Under that policy, the batch starts with
+eligible cart owners and confirms the current Auth email before creating
+a default grant. Default grants do not record affirmative consent. An opt-out
+is saved even before the first reminder and survives future cart activity.
+Apply and verify the reviewed database migration before enabling this mode.
+
 The Web job runs on Vercel Cron at nominal Wednesday 11:00 Hong Kong time
 (`0 3 * * 3` UTC). It is separate from QStash. It pages active eligibility
 records first, then checks the current address, provider suppression and

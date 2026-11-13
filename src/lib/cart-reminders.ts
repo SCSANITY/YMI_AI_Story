@@ -3,6 +3,10 @@ const PAGE_SIZE = 25
 const MAX_PAGES = 3
 const MAX_SENDS = 25
 
+export function cartRemindersDefaultOn() {
+  return process.env.CART_REMINDER_DEFAULT_ON === 'true'
+}
+
 export function cartReminderWeek(now: Date): string | null {
   const hongKong = new Date(now.getTime() + HONG_KONG_OFFSET)
   return hongKong.getUTCDay() === 3 ? hongKong.toISOString().slice(0, 10) : null

@@ -1,4 +1,5 @@
 import { getAuthenticatedUser } from '@/lib/authenticated-user'
+import { cartRemindersDefaultOn } from '@/lib/cart-reminders'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 function json(data: object, status = 200) {
@@ -21,12 +22,17 @@ export async function GET(request: Request) {
   const email = user.email?.trim().toLowerCase()
   const canEnable = Boolean(user.email_confirmed_at && email && customer.email?.trim().toLowerCase() === email)
   const { data: entry, error: readError } = await supabaseAdmin.from('cart_reminder_eligibility')
-    .select('email,unsubscribed_at').eq('customer_id', customer.customer_id).maybeSingle()
+    .select('email,opted_in_at,unsubscribed_at').eq('customer_id', customer.customer_id).maybeSingle()
   if (readError) return json({ error: 'Could not load the preference.' }, 503)
+  const defaultOn = cartRemindersDefaultOn()
+  const enabled = entry
+    ? entry.unsubscribed_at === null && (defaultOn || entry.opted_in_at !== null)
+    : defaultOn
   return json({
-    enabled: Boolean(entry && entry.unsubscribed_at === null),
+    enabled,
     canEnable,
-    paused: Boolean(entry && entry.unsubscribed_at === null && (!canEnable || entry.email !== email)),
+    paused: enabled && (!canEnable || Boolean(entry && entry.email !== email)),
+    defaultOn,
   })
 }
 
