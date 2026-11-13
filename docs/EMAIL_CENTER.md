@@ -25,17 +25,17 @@ rollback, test-send, raw HTML, sender, or link-target control.
 ## Template authority
 
 `src/lib/email-template-catalog.tsx` is the single application registry for the
-12 active outbound families:
+13 active outbound families:
 
 - Security: Guest Checkout OTP, Supabase Account Signup OTP, and Supabase
   Password Recovery.
 - Orders: Order Confirmation, Stripe Payment Receipt, and Unpaid Checkout
   Reminder.
 - Delivery: Final PDF Delivery and the four-state Order Logistics Update.
-- Subscriptions: Newsletter Confirmation.
+- Subscriptions: Newsletter Confirmation and Weekly Cart Reminder.
 - Human Communication: Support Reply, Partnership Reply, and General Mail.
 
-Eight fixed YMI template families are locally previewable. Supabase owns two
+Nine fixed YMI template families are locally previewable. Supabase owns two
 Auth templates, Stripe owns its receipt, and General Mail is authored in the
 Admin composer. These four entries expose ownership and trigger facts but no
 local preview.
@@ -87,7 +87,10 @@ Delivery Events excludes historical `external_observed` rows. These capture
 business triggers such as Auth requests or Checkout Session creation.
 The original rows remain in the database.
 
-- YMI mail uses the existing Resend message ID and delivery webhook.
+- YMI mail records provider acceptance separately from delivery. Resend message
+  IDs connect the send record to signed delivered, bounced, or complained events.
+  A delivery event is evidence from the provider, not proof the recipient read
+  the message.
 - Supabase Auth SMTP events can be included through that same signed webhook.
   Set `EMAIL_FROM_SUPABASE_AUTH` to an address reserved for the project's Auth
   SMTP. Verify the address is exclusive and that actual SMTP mail reaches the
@@ -95,9 +98,9 @@ The original rows remain in the database.
   ID and a fixed Auth subject label so OTPs in subjects are excluded.
 - The existing daily email recovery job checks up to 50 recent positive Stripe
   payments from the last seven days. Only a matching successful live charge
-  with a receipt number enters the list. Stripe's receipt number confirms
-  sending, and the UI shows the time the app confirmed it and that delivery is
-  unconfirmed.
+  with a receipt number enters the list. The UI shows when the app verified
+  the Stripe receipt and labels delivery unconfirmed. Checkout creation, unpaid
+  orders and declined payments do not establish receipt evidence.
 
 ## Unpaid order reminders
 
@@ -105,7 +108,10 @@ New orders at or after `UNPAID_REMINDER_START_AT` use the creation timestamp
 for the 30-minute, 24-hour and six-day checkpoints. Each order and checkpoint
 has a distinct event key. The callback checks the order and its payment before
 sending, and moves straight to the latest due checkpoint if an earlier
-checkpoint was missed. Existing orders are not backfilled.
+checkpoint was missed. Existing orders are not backfilled. There are at most
+three scheduled messages per order. All stages currently share the same
+Abandonment Email copy builder; the stage is recorded separately for evidence
+and deduplication.
 
 Order Start persists the first task after saving the order items, before the
 response. It publishes to QStash after the response. Each callback only looks
@@ -123,58 +129,52 @@ The callback requires a signed request from QStash; it has no browser or cron
 secret bypass. The provider payload contains only the order ID and stage.
 The checkout link uses the same site as the configured callback.
 
-Keep these settings absent until the Database migration and callback are
-independently reviewed and authorized. Check the production provider and
-sender metadata without displaying secrets. Verify in a test environment with
-a synthetic order and a test sender before enabling the production cutoff.
-Missing settings disable the new path; they do not restart legacy sending.
+For a new environment, apply the reviewed Database migration before enabling
+the cutoff. Verify the signed callback and payment guard with a synthetic order
+and test sender, and check provider and sender configuration without exposing
+secrets. Missing settings disable this path and leave legacy sending off.
 
 Use `node --test tests/unpaid-reminders-runtime.test.mjs` for the offline
 timing, payment, idempotent task and real SDK verification fixtures.
 
-## Weekly shopping cart reminders (release candidate)
-
-Members open **Email Preferences** from Privacy and explicitly turn on
-cart reminders for their confirmed account email. The server records the
-choice and notice version in Supabase. New and existing members start off;
-there is no backfill and no connection to Cookie Settings or Newsletter.
-A mismatched address pauses delivery until the member opts in for the
-current address. Turning reminders off is always available to the account
-owner while signed in.
-
-An offline candidate adds an alternative policy controlled by
-`CART_REMINDER_DEFAULT_ON=true`. Under that policy, the batch starts with
-eligible cart owners and confirms the current Auth email before creating
-a default grant. Default grants do not record affirmative consent. An opt-out
-is saved even before the first reminder and survives future cart activity.
-Apply and verify the reviewed database migration before enabling this mode.
+## Weekly shopping cart reminders
 
 The Web job runs on Vercel Cron at nominal Wednesday 11:00 Hong Kong time
-(`0 3 * * 3` UTC). It is separate from QStash. It pages active eligibility
-records first, then checks the current address, provider suppression and
-that at least one book is still in the cart, unattached to an order or
-payment. An account email or newsletter subscription alone does not qualify.
-The migration starts with an empty eligibility table; an empty page does
-not query the cart table.
+(`0 3 * * 3` UTC). It is separate from QStash and the unpaid-order flow.
+The default-send mode starts with an indexed page of cart owners and rechecks
+each recipient: a member with a verified Auth email matching the customer
+email, no delivery suppression or cart opt-out, and at least one sellable book
+still in the cart and unattached to an order or payment. An account email or
+Newsletter subscription alone does not qualify.
 
-The job requires Production, `CART_REMINDER_ENABLED=true`, and a server-only
-`CART_REMINDER_UNSUBSCRIBE_SECRET` (at least 32 characters). Keep it disabled
-until the migration, preference workflow, cohort size, unsubscribe and provider
-delivery are verified. The cron reads at most three pages of 25 customers and
-attempts at most 25 sends within a soft 35-second budget. It reports a capped
-run for operator attention; it does not start another job or guarantee that a
-cohort exceeding those bounds is reached. Check that the initial cohort fits
-the limits before enabling, and revisit the batch strategy when volume grows.
+Supabase records a default grant only as needed to prepare a send, without an
+affirmative consent timestamp. There is no backfill. The site footer links to
+**Email Preferences**, where signed-in members can turn the reminder off or
+explicitly opt in. Turning it off saves a durable opt-out even before the
+first send; neither signing in nor adding to the cart resets that choice.
+Cookie Settings and Newsletter do not manage this preference.
 
-The Support sender uses the existing Resend pipeline and a customer/week
-idempotency key. The mail links to Cart and contains no book or child details.
-Its signed footer link opens a read-only confirmation page; a form POST
-opts out without sign-in. The resulting page offers a one-use undo valid for
-10 minutes. The RFC 8058 mail headers point to the same endpoint; the native
-POST accepts both standard encodings, opts out without sign-in or redirect,
-and does not issue an undo link. Old link grants cannot change a re-enabled
-preference. Keep the signing secret available when sends are paused, and
-do not log link tokens. Before enablement, verify the delivered test message
-has both headers covered by DKIM, links reach the canonical origin without
-redirect, and the real mailbox handles the native action. No change to
-unpaid-order copy or scheduling is included.
+The cron requires Production, `CART_REMINDER_ENABLED=true`, and a server-only
+`CART_REMINDER_UNSUBSCRIBE_SECRET` (at least 32 characters).
+`CART_REMINDER_DEFAULT_ON=true` selects the cart-first mode. Setting it to
+`false` or removing it and redeploying restores explicit opt-in eligibility
+without deleting existing choices. To pause all weekly sends, turn off
+`CART_REMINDER_ENABLED` and redeploy; keep the signing secret so existing links
+still work. The deployment and first-run status are in the platform ledger.
+
+The batch examines at most three pages of 25 customers (one extra candidate
+per page is used to detect more results). It attempts at most 25 sends within
+a soft 35-second budget. A capped or failed run is surfaced for operator
+attention; there is no same-week catch-up job. The Support sender uses the
+shared brand layout and Resend pipeline, with a customer/week idempotency key.
+The message links to Cart and contains no book or child details.
+
+The signed footer link opens a read-only confirmation page. Submitting the form
+opts out without sign-in and offers a one-use undo valid for 10 minutes.
+RFC 8058 one-click requests POST to the same endpoint, with no login, redirect,
+or undo receipt. Old grants cannot change a re-enabled preference. Do not log
+link tokens. Delivered test mail and the production POST established DKIM
+coverage for both List-Unsubscribe headers and the opt-out readback. Gmail did
+not show its own button in the test mailbox; the client controls that display.
+For a scheduled run, check sent, skipped, failed and capped counts, then
+reconcile send and delivery evidence in Delivery Events.

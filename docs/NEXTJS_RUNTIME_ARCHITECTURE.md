@@ -41,18 +41,28 @@ governance repository.
 
 ## Automated email runtime
 
-- Web sends first-party messages via Resend. Supabase email events hold
-  idempotency and delivery evidence; the signed Resend webhook reconciles
-  provider outcomes. The Admin template preview is read-only.
-- Unpaid order reminders use QStash US-East-1 for signed delayed callbacks
-  backed by a Supabase task outbox. The daily Vercel cron only recovers a
-  bounded set of incomplete tasks and handles discount cleanup.
-- The weekly cart candidate uses a separate Vercel Cron route, a bounded
-  Supabase cart/eligibility read, and the same Resend send and evidence path.
-  Privacy Email Preferences records explicit member choices in Supabase.
-  Signed mail links scope opt-out and undo to that preference; the image
-  Worker and Cookie Settings do not participate. Sending is disabled by
-  default; see [Email Center](EMAIL_CENTER.md) for gates.
+- **Delivery and evidence.** Next.js composes first-party mail with React
+  Email and sends through Resend. Supabase email events hold idempotency keys
+  and provider evidence. The signed Resend webhook reconciles delivery outcomes;
+  Admin renders the evidence without sending mail. Stripe owns its receipts
+  and Supabase Auth owns its SMTP messages. Checkout or Auth activity alone is
+  not an email delivery event.
+- **Unpaid order reminder.** Order Start writes a task to the Supabase outbox
+  before responding. QStash US-East-1 schedules and signs callbacks for the
+  30-minute, 24-hour and six-day stages. The handler checks the referenced order
+  and payment state before sending, then schedules the next applicable stage.
+  The daily Vercel cron recovers up to 25 incomplete tasks via a partial index
+  and runs discount cleanup. It does not scan orders to find recipients.
+- **Weekly cart reminder.** A separate authenticated Vercel Cron route invokes
+  the server-side dispatcher. Supabase owns indexed cart selection, eligibility
+  and persistent member preferences. The Production policy flag selects
+  cart-first default eligibility or explicit opt-in. In either mode the run is
+  bounded and rechecks eligibility before sending. An opt-out survives later
+  cart activity; a default grant is distinct from affirmative consent.
+- **Public links and boundaries.** The signed unsubscribe and undo links affect
+  only the cart reminder preference. Cookie Settings, Newsletter, and the
+  Render image Worker do not participate. See [Email Center](EMAIL_CENTER.md)
+  for configuration, rollback, batch limits and delivery verification.
 
 ## Current domain owners
 
