@@ -199,6 +199,7 @@ const en: MessageDictionary = {
   'footer.refundPolicy': 'Refund Policy',
   'footer.safetyNotice': 'Safety Notice',
   'footer.cookieSettings': 'Cookie Settings',
+  'footer.emailPreferences': 'Email Preferences',
   'footer.legalTitleFaq': 'FAQs',
   'footer.legalTitlePrivacy': 'Privacy Policy',
   'footer.legalTitleOurStory': 'Our Story',

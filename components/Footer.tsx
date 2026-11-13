@@ -584,6 +584,11 @@ export const Footer: React.FC = () => {
                     {t('footer.cookieSettings')}
                   </button>
                 </li>
+                <li>
+                  <Link href="/privacy/email-preferences" prefetch={false} className="hover:text-amber-600">
+                    {t('footer.emailPreferences')}
+                  </Link>
+                </li>
               </ul>
             </div>
 
