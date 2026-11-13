@@ -134,6 +134,14 @@ timing, payment, idempotent task and real SDK verification fixtures.
 
 ## Weekly shopping cart reminders (release candidate)
 
+Members open **Email Preferences** from Privacy and explicitly turn on
+cart reminders for their confirmed account email. The server records the
+choice and notice version in Supabase. New and existing members start off;
+there is no backfill and no connection to Cookie Settings or Newsletter.
+A mismatched address pauses delivery until the member opts in for the
+current address. Turning reminders off is always available to the account
+owner while signed in.
+
 The Web job runs on Vercel Cron at nominal Wednesday 11:00 Hong Kong time
 (`0 3 * * 3` UTC). It is separate from QStash. It pages active eligibility
 records first, then checks the current address, provider suppression and
@@ -144,7 +152,7 @@ not query the cart table.
 
 The job requires Production, `CART_REMINDER_ENABLED=true`, and a server-only
 `CART_REMINDER_UNSUBSCRIBE_SECRET` (at least 32 characters). Keep it disabled
-until the migration, eligibility source, cohort size, unsubscribe and provider
+until the migration, preference workflow, cohort size, unsubscribe and provider
 delivery are verified. The cron reads at most three pages of 25 customers and
 attempts at most 25 sends within a soft 35-second budget. It reports a capped
 run for operator attention; it does not start another job or guarantee that a
@@ -153,7 +161,13 @@ the limits before enabling, and revisit the batch strategy when volume grows.
 
 The Support sender uses the existing Resend pipeline and a customer/week
 idempotency key. The mail links to Cart and contains no book or child details.
-Its signed unsubscribe link opens a confirmation page; only the form POST
-changes the cart-reminder preference. Keep the signing secret available even
-if sends are paused so already-issued links remain usable. No account
-preferences control or change to unpaid order copy is included.
+Its signed footer link opens a read-only confirmation page; a form POST
+opts out without sign-in. The resulting page offers a one-use undo valid for
+10 minutes. The RFC 8058 mail headers point to the same endpoint; the native
+POST accepts both standard encodings, opts out without sign-in or redirect,
+and does not issue an undo link. Old link grants cannot change a re-enabled
+preference. Keep the signing secret available when sends are paused, and
+do not log link tokens. Before enablement, verify the delivered test message
+has both headers covered by DKIM, links reach the canonical origin without
+redirect, and the real mailbox handles the native action. No change to
+unpaid-order copy or scheduling is included.

@@ -49,7 +49,10 @@ governance repository.
   bounded set of incomplete tasks and handles discount cleanup.
 - The weekly cart candidate uses a separate Vercel Cron route, a bounded
   Supabase cart/eligibility read, and the same Resend send and evidence path.
-  It is disabled by default; see [Email Center](EMAIL_CENTER.md) for gates.
+  Privacy Email Preferences records explicit member choices in Supabase.
+  Signed mail links scope opt-out and undo to that preference; the image
+  Worker and Cookie Settings do not participate. Sending is disabled by
+  default; see [Email Center](EMAIL_CENTER.md) for gates.
 
 ## Current domain owners
 

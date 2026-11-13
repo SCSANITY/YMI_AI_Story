@@ -10,8 +10,10 @@ import { runCartReminderBatch, type CartReminderRecipient } from './cart-reminde
 const MAX_BATCH_MS = 35_000
 const UNSUBSCRIBE_PATH = '/cart-reminders/unsubscribe'
 
-function tokenFor(grantId: string, secret: string): string {
-  return grantId + '.' + createHmac('sha256', secret).update('cart-reminder-unsubscribe:v1:' + grantId).digest('hex')
+type LinkAction = 'unsubscribe' | 'undo'
+
+function tokenFor(id: string, secret: string, action: LinkAction): string {
+  return id + '.' + createHmac('sha256', secret).update(`cart-reminder-${action}:v1:${id}`).digest('hex')
 }
 
 function unsubscribeSecret() {
@@ -19,19 +21,29 @@ function unsubscribeSecret() {
   return secret && secret.length >= 32 ? secret : null
 }
 
-export function validCartUnsubscribeToken(token: string | null) {
+export function verifyCartReminderToken(token: string | null, action: LinkAction) {
   const secret = unsubscribeSecret()
   if (!secret || !token || token.length !== 101) return null
-  const grantId = token.slice(0, 36)
-  if (!isUuid(grantId)) return null
-  return matchesSecret(token, tokenFor(grantId, secret)) ? grantId : null
+  const id = token.slice(0, 36)
+  if (!isUuid(id)) return null
+  return matchesSecret(token, tokenFor(id, secret, action)) ? id : null
 }
 
-export async function unsubscribeCartReminder(grantId: string) {
-  const { error } = await supabaseAdmin.from('cart_reminder_eligibility')
-    .update({ unsubscribed_at: new Date().toISOString() })
-    .eq('grant_id', grantId).is('unsubscribed_at', null)
+export async function unsubscribeCartReminder(grantId: string, browser: boolean) {
+  const { data, error } = await supabaseAdmin.rpc('unsubscribe_cart_reminder', {
+    p_grant_id: grantId, p_browser: browser,
+  }).maybeSingle()
   if (error) throw new Error('Unable to unsubscribe')
+  if (!data) return null
+  const undoId = (data as { undo_id?: unknown }).undo_id
+  const secret = unsubscribeSecret()
+  return { undoToken: secret && isUuid(undoId) ? tokenFor(undoId, secret, 'undo') : null }
+}
+
+export async function undoCartReminderUnsubscribe(undoId: string) {
+  const { data, error } = await supabaseAdmin.rpc('undo_cart_reminder_unsubscribe', { p_undo_id: undoId })
+  if (error) throw new Error('Unable to restore cart reminder')
+  return data === true
 }
 
 export async function dispatchCartReminderBatch(week: string) {
@@ -63,7 +75,7 @@ export async function dispatchCartReminderBatch(week: string) {
     },
     async send(recipient, week) {
       const link = new URL(UNSUBSCRIBE_PATH, site)
-      link.searchParams.set('token', tokenFor(recipient.grant_id, secret))
+      link.searchParams.set('token', tokenFor(recipient.grant_id, secret, 'unsubscribe'))
       const result = await sendCartReminderEmail({
         to: recipient.email, customerId: recipient.customer_id, week,
         cartUrl: new URL('/cart', site).href, unsubscribeUrl: link.href,

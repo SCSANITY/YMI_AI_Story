@@ -466,6 +466,10 @@ export async function sendCartReminderEmail(params: {
     customerId: params.customerId,
     fromEnvName: 'EMAIL_FROM_SUPPORT',
     subject: CART_REMINDER_SUBJECT,
+    headers: {
+      'List-Unsubscribe': `<${params.unsubscribeUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
     react: <CartReminderEmail cartUrl={params.cartUrl} unsubscribeUrl={params.unsubscribeUrl} />,
     text: buildCartReminderText(params.cartUrl, params.unsubscribeUrl),
   })

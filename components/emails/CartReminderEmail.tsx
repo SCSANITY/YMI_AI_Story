@@ -1,4 +1,4 @@
-import { Body, Button, Container, Head, Heading, Html, Link, Preview, Text } from '@react-email/components'
+import { Body, Button, Container, Head, Heading, Html, Preview, Section, Text } from '@react-email/components'
 
 export const CART_REMINDER_SUBJECT = 'Your storybooks are waiting'
 const COPY = 'There’s still a little adventure in your YMI Story shopping cart. Come back and take another look whenever you’re ready.'
@@ -20,9 +20,11 @@ export function CartReminderEmail({ cartUrl, unsubscribeUrl }: { cartUrl: string
           <Button href={cartUrl} style={{ backgroundColor: '#9a4200', borderRadius: 6, color: '#ffffff', fontWeight: 700, padding: '12px 20px' }}>
             See your cart
           </Button>
-          <Text style={{ color: '#4b5563', fontSize: 13, marginTop: 28 }}>
-            <Link href={unsubscribeUrl}>Unsubscribe from cart reminders</Link>
-          </Text>
+          <Section style={{ borderTop: '1px solid #f0dfcb', marginTop: 28, paddingTop: 16 }}>
+            <Button href={unsubscribeUrl} style={{ border: '1px solid #d6bb9d', borderRadius: 6, color: '#4b5563', fontSize: 13, padding: '9px 14px' }}>
+              Unsubscribe from cart reminders
+            </Button>
+          </Section>
         </Container>
       </Body>
     </Html>

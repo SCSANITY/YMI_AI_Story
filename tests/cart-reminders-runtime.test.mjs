@@ -68,6 +68,8 @@ function fixture(overrides = {}) {
     CRON_SECRET: 'synthetic-cron-secret', ...overrides,
   }
   let unsubscribed = false
+  let undoAvailable = false
+  let grantId = id(3)
   const globals = { URL, URLSearchParams, TextDecoder, Buffer, process: { env } }
   const stubs = {
     'server-only': {},
@@ -81,29 +83,28 @@ function fixture(overrides = {}) {
         rpc(name, args) {
           calls.rpc.push([name, args])
           if (name === 'list_cart_reminder_candidates') return { data: [{ customer_id: id(1) }, { customer_id: id(2) }] }
+          if (name === 'unsubscribe_cart_reminder') return { maybeSingle: async () => {
+            if (args.p_grant_id !== grantId) return { data: null }
+            if (unsubscribed) {
+              if (!args.p_browser) undoAvailable = false
+              return { data: { undo_id: null } }
+            }
+            calls.writes.push(grantId)
+            unsubscribed = true
+            undoAvailable = args.p_browser
+            return { data: { undo_id: undoAvailable ? id(4) : null } }
+          } }
+          if (name === 'undo_cart_reminder_unsubscribe') {
+            const restored = undoAvailable && args.p_undo_id === id(4)
+            if (restored) { undoAvailable = false; unsubscribed = false; grantId = id(5) }
+            return { data: restored }
+          }
           assert.equal(name, 'get_cart_reminder_recipient')
           return {
             maybeSingle: async () => ({
-              data: !unsubscribed && args.p_customer_id === id(2) ? { customer_id: id(2), grant_id: id(3), email: 'reader@example.test' } : null,
+              data: !unsubscribed && args.p_customer_id === id(2) ? { customer_id: id(2), grant_id: grantId, email: 'reader@example.test' } : null,
             }),
           }
-        },
-        from(name) {
-          assert.equal(name, 'cart_reminder_eligibility')
-          return { update(values) {
-            assert.deepEqual(Object.keys(values), ['unsubscribed_at'])
-            return { eq(field, grantId) {
-              assert.equal(field, 'grant_id')
-              assert.equal(grantId, id(3))
-              return { is(field, value) {
-                assert.equal(field, 'unsubscribed_at')
-                assert.equal(value, null)
-                if (!unsubscribed) calls.writes.push(grantId)
-                unsubscribed = true
-                return {}
-              } }
-            } }
-          } }
         },
       },
     },
@@ -138,30 +139,95 @@ test('cron rejects unauthenticated requests, dispatches only on Wednesday and se
   assert.equal(calls.sends[0].cartUrl, 'https://example.test/cart')
 })
 
-test('scanner GET does not opt out; signed POST only stops this grant and can be repeated', async () => {
+test('scanner GET is read-only; browser POST opts out without login and returns one scoped undo', async () => {
   const { server, globals, stubs, calls } = fixture()
   const route = loadUi('app/cart-reminders/unsubscribe/route.ts', stubs, globals)
   await server.dispatchCartReminderBatch('2026-11-18')
   assert.equal(calls.sends.length, 1)
   const link = new URL(calls.sends[0].unsubscribeUrl)
   const token = link.searchParams.get('token')
-  assert.equal(server.validCartUnsubscribeToken(token), id(3))
-  const post = (value) => route.POST(new Request(link.origin + link.pathname, {
-    method: 'POST', body: new URLSearchParams({ token: value }),
+  assert.equal(server.verifyCartReminderToken(token, 'unsubscribe'), id(3))
+  const post = (value, action = 'unsubscribe') => route.POST(new Request(link.origin + link.pathname, {
+    method: 'POST', body: new URLSearchParams({ token: value, action }), headers: { origin: 'null' },
   }))
   const badToken = token.replace(/.$/, (char) => char === 'a' ? 'b' : 'a')
   assert.equal((await post(badToken)).status, 400)
-  assert.equal((await post('x'.repeat(300))).status, 400)
+  assert.equal((await post('x'.repeat(1200))).status, 400)
+  assert.equal((await post(token, 'undo')).status, 400)
   const confirm = route.GET(new Request(link))
   assert.equal(confirm.status, 200)
   assert.equal(confirm.headers.get('referrer-policy'), 'no-referrer')
   assert.match(await confirm.text(), /form method="post"/)
   assert.equal(calls.writes.length, 0)
-  assert.equal((await post(token)).status, 200)
-  assert.equal((await post(token)).status, 200)
+  const stopped = await post(token)
+  assert.equal(stopped.status, 200)
+  const html = await stopped.text()
+  assert.match(html, /Restore cart reminders/)
+  const undo = html.match(/name="token" value="([^"]+)"/)[1]
+  assert.doesNotMatch(await (await post(token)).text(), /Restore cart reminders/)
   assert.deepEqual(calls.writes, [id(3)])
   await server.dispatchCartReminderBatch('2026-11-25')
   assert.equal(calls.sends.length, 1)
+  assert.equal((await post(undo, 'undo')).status, 200)
+  assert.equal((await post(undo, 'undo')).status, 410)
+  assert.equal((await post(token)).status, 400)
+})
+
+test('native RFC one-click accepts both encodings, with no login, confirmation or redirect', async () => {
+  for (const multipart of [false, true]) {
+    const { server, globals, stubs, calls } = fixture()
+    const route = loadUi('app/cart-reminders/unsubscribe/route.ts', stubs, globals)
+    await server.dispatchCartReminderBatch('2026-11-18')
+    const link = calls.sends[0].unsubscribeUrl
+    const body = multipart ? new FormData() : new URLSearchParams()
+    body.set('List-Unsubscribe', 'One-Click')
+    const response = await route.POST(new Request(link, { method: 'POST', body }))
+    assert.equal(response.status, 204)
+    assert.equal(response.headers.get('location'), null)
+    assert.deepEqual(calls.writes, [id(3)])
+  }
+})
+
+test('member preference ignores foreign identity and cross-origin writes; only confirmed email can opt in', async () => {
+  const url = 'https://example.test/api/user/cart-reminder-preference'
+  let user = { id: id(1), email: ' Reader@example.test ', email_confirmed_at: 'confirmed' }
+  const writes = []
+  const route = loadUi('app/api/user/cart-reminder-preference/route.ts', {
+    '@/lib/authenticated-user': { getAuthenticatedUser: async () => user },
+    '@/lib/supabaseAdmin': { supabaseAdmin: {
+      from(name) {
+        const query = { eq: () => query, maybeSingle: async () => ({
+          data: name === 'customers' ? { customer_id: id(2), email: 'reader@example.test' } : null,
+        }) }
+        return { select: () => query }
+      },
+      async rpc(name, args) {
+        writes.push([name, args.p_auth_user_id, args.p_email, args.p_enabled])
+        return { data: args.p_enabled }
+      },
+    } },
+  }, { URL })
+  const request = (choice, owner = id(1), origin = new URL(url).origin) => new Request(url, {
+    method: 'POST', headers: { origin, 'X-YMI-Preference-User': owner, 'X-YMI-Cart-Reminders': choice },
+  })
+  const empty = await route.GET(new Request(url, { headers: { 'X-YMI-Preference-User': id(1) } }))
+  assert.deepEqual(await empty.json(), { enabled: false, canEnable: true, paused: false })
+  assert.equal(empty.headers.get('cache-control'), 'private, no-store')
+  assert.equal((await route.POST(request('on', id(9)))).status, 401)
+  assert.equal((await route.POST(request('on', id(1), 'https://different.test'))).status, 403)
+  assert.deepEqual(await (await route.POST(request('on'))).json(), { enabled: true })
+  const proxied = await route.POST(new Request('https://localhost:3000/api/user/cart-reminder-preference', {
+    method: 'POST', headers: { host: 'example.test', origin: 'https://example.test', 'X-YMI-Preference-User': id(1), 'X-YMI-Cart-Reminders': 'on' },
+  }))
+  assert.equal(proxied.status, 200)
+  user = { ...user, email_confirmed_at: undefined }
+  assert.equal((await route.POST(request('on'))).status, 409)
+  assert.deepEqual(await (await route.POST(request('off'))).json(), { enabled: false })
+  assert.deepEqual(writes, [
+    ['set_cart_reminder_preference', id(1), 'reader@example.test', true],
+    ['set_cart_reminder_preference', id(1), 'reader@example.test', true],
+    ['set_cart_reminder_preference', id(1), null, false],
+  ])
 })
 
 test('managed sender reuses the customer/week key on replay and keeps the unsubscribe token out of event metadata', async () => {
@@ -207,6 +273,8 @@ test('managed sender reuses the customer/week key on replay and keeps the unsubs
   await send({ ...input, week: '2026-11-25' })
   assert.equal(deliveries.length, 2)
   assert.equal(deliveries[0][1].idempotencyKey, `cart_reminder:${input.week}:${input.customerId}`)
+  assert.equal(deliveries[0][0].headers['List-Unsubscribe'], `<${input.unsubscribeUrl}>`)
+  assert.equal(deliveries[0][0].headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click')
   assert.match(deliveries[0][0].text, /Unsubscribe from cart reminders/)
   assert.doesNotMatch(JSON.stringify(attempts), /fixture-secret/)
 })

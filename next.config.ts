@@ -65,6 +65,16 @@ const nextConfig: NextConfig = {
         ],
       },
       ...privateApiHeaders,
+      {
+        source: '/cart-reminders/unsubscribe',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store' },
+          { key: 'Content-Security-Policy', value: "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
     ]
   },
   images: {

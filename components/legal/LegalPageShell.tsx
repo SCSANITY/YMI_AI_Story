@@ -74,6 +74,9 @@ export async function LegalPageShell({
                 </Link>
               ))}
               <LegalCookieSettingsButton className={`${linkClassName} text-left`} />
+              <Link href="/privacy/email-preferences" prefetch={false} className={linkClassName}>
+                Email Preferences
+              </Link>
             </nav>
           </aside>
 

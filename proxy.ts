@@ -41,6 +41,9 @@ function isAllowedPath(pathname: string) {
 }
 
 export async function proxy(request: NextRequest) {
+  // A mail-link grant is independent of site maintenance and browser sessions.
+  if (request.nextUrl.pathname === '/cart-reminders/unsubscribe') return NextResponse.next()
+
   if (isMaintenanceEnabled()) {
     const { pathname } = request.nextUrl
 
