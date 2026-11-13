@@ -16,10 +16,6 @@ test('checkout keeps unresolved prices blank while order items are restored', as
 
   assert.match(
     page,
-    /aria-busy=\{!paymentQuote\}[\s\S]{0,240}\{paymentQuote \? formattedTotal : null\}/
-  )
-  assert.match(
-    page,
     /<CheckoutSummaryPanel[\s\S]{0,500}isPriceReady=\{summaryPriceReady\}/
   )
   assert.match(
@@ -30,11 +26,11 @@ test('checkout keeps unresolved prices blank while order items are restored', as
   assert.match(summary, /isPriceReady: boolean/)
   assert.match(
     summary,
-    /aria-busy=\{!isPriceReady\}[\s\S]{0,220}\{isPriceReady \? formattedSubtotal : null\}/
+    /aria-busy=\{!isSubtotalReady\}[\s\S]{0,220}\{isSubtotalReady \? formattedSubtotal : null\}/
   )
   assert.match(
     summary,
-    /aria-busy=\{!isPriceReady\}[\s\S]{0,220}\{isPriceReady \? formattedTotal : null\}/
+    /aria-busy=\{!isPriceReady\}[\s\S]{0,220}\{isPriceReady \? formattedTotal : t\('checkout.totalPending'\)\}/
   )
 
   assert.match(paymentActions, /isPriceReady: boolean/)

@@ -5,12 +5,11 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { CheckoutCurrency } from '@/lib/locale-pricing';
-import { RECIPIENT_ADDRESS_LIMITS, recipientAddressIssue } from '@/lib/shipping-address';
+import { RECIPIENT_ADDRESS_LIMITS } from '@/lib/shipping-address';
 import { ShippingPrice } from './ShippingPrice';
 
 import {
-  EMPTY_SHIPPING_QUOTE, type CheckoutAddressForm, type ShippingQuoteState,
-  type ShippingQuoteOption, type ShippingMethodCode,
+  type CheckoutAddressForm, type ShippingQuoteState, type ShippingMethodCode,
 } from '@/lib/checkout-restoration';
 
 type ShippingDestinationOption = {
@@ -58,36 +57,20 @@ type AddressBookEntry = {
   metadata?: AddressBookMetadata;
 };
 
-type ShippingQuoteApiOption = {
-  methodCode?: string;
-  methodName?: string;
-  methodDescription?: string | null;
-  speedLabel?: string | null;
-  amountUsd?: number | string;
-  displayAmount?: string | null;
-  rateName?: string | null;
-  estimatedDelivery?: string | null;
-  message?: string | null;
-  snapshot?: Record<string, unknown> | null;
-};
-
 type AddressFormSectionProps = {
-  initialForm: CheckoutAddressForm;
-  initialShippingQuote?: ShippingQuoteState;
+  form: CheckoutAddressForm;
+  shippingQuote: ShippingQuoteState;
   selectedCurrency: CheckoutCurrency;
   userCustomerId?: string | null;
-  /**
-   * When false, the "save to address book" POST is skipped (e.g. while a
-   * customer merge is still pending so writes scoped to the pre-merge
-   * identity cannot race the claim RPC).
-   */
-  allowAddressBookWrite?: boolean;
+  saveAddress: boolean;
+  isPlacingOrder: boolean;
+  addressIssue: string | null;
+  showErrors: boolean;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
-  onFormChange: (form: CheckoutAddressForm) => void;
-  onComplete: (payload: {
-    form: CheckoutAddressForm;
-    shippingQuote: ShippingQuoteState;
-  }) => void;
+  onFormChange: (patch: Partial<CheckoutAddressForm>) => void;
+  onSaveAddressChange: (value: boolean) => void;
+  onShippingMethodChange: (method: ShippingMethodCode) => void;
+  onRetryShippingQuote: () => void;
 };
 
 const FALLBACK_SHIPPING_DESTINATIONS: ShippingDestinationOption[] = [
@@ -147,92 +130,28 @@ const FALLBACK_SHIPPING_DESTINATIONS: ShippingDestinationOption[] = [
   },
 ];
 
-const REQUIRED_ADDRESS_FIELDS: (keyof CheckoutAddressForm)[] = [
-  'firstName',
-  'lastName',
-  'email',
-  'country',
-  'region',
-  'city',
-  'addressLine1',
-  'zip',
-  'phone',
-];
-
-const EMAIL_FORMAT_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function isValidCheckoutEmail(email: string) {
-  return EMAIL_FORMAT_PATTERN.test(email.trim());
-}
-
 function getDestinationLabel(destination: ShippingDestinationOption | null | undefined) {
   if (!destination) return '';
   return destination.label.en;
 }
 
-function normalizeAddressForm(form: CheckoutAddressForm, destination: ShippingDestinationOption | null) {
-  return {
-    ...form,
-    firstName: form.firstName.trim(),
-    lastName: form.lastName.trim(),
-    email: form.email.trim(),
-    country: form.country.trim().toUpperCase(),
-    shippingRegionKey: form.shippingRegionKey.trim(),
-    shippingDestinationLabel: getDestinationLabel(destination) || form.shippingDestinationLabel.trim(),
-    region: form.region.trim(),
-    city: form.city.trim(),
-    addressLine1: form.addressLine1.trim(),
-    addressLine2: form.addressLine2.trim(),
-    addressLine3: form.addressLine3.trim(),
-    zip: form.zip.trim(),
-    phone: form.phone.trim(),
-    company: form.company.trim(),
-    recipientEmail: form.recipientEmail.trim(),
-    vatNumber: form.vatNumber.trim(),
-    eoriNumber: form.eoriNumber.trim(),
-    iossNumber: form.iossNumber.trim(),
-  };
-}
-
 function AddressFormSectionComponent({
-  initialForm,
-  initialShippingQuote = EMPTY_SHIPPING_QUOTE,
-  selectedCurrency,
-  userCustomerId,
-  allowAddressBookWrite = true,
-  t,
-  onFormChange,
-  onComplete,
+  form, shippingQuote, selectedCurrency, userCustomerId, saveAddress, isPlacingOrder, addressIssue, showErrors,
+  t, onFormChange, onSaveAddressChange, onShippingMethodChange, onRetryShippingQuote,
 }: AddressFormSectionProps) {
-  const [form, setForm] = useState<CheckoutAddressForm>(initialForm);
-  const [formError, setFormError] = useState('');
-  const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
+  const addressOwnerKey = userCustomerId ?? null;
+  const [loadedAddressBook, setLoadedAddressBook] = useState<{ owner: string | null; entries: AddressBookEntry[] } | null>(null);
+  const isAddressBookLoading = loadedAddressBook === null || loadedAddressBook.owner !== addressOwnerKey;
+  const addressBook = isAddressBookLoading ? [] : loadedAddressBook.entries;
   const [isAddressBookOpen, setIsAddressBookOpen] = useState(false);
-  const [saveAddress, setSaveAddress] = useState(false);
-  const [isAddressBookLoading, setIsAddressBookLoading] = useState(false);
-  const [shippingDestinations, setShippingDestinations] = useState<ShippingDestinationOption[]>([]);
+  const [shippingDestinations, setShippingDestinations] = useState<ShippingDestinationOption[] | null>(null);
+  const isShippingDestinationsLoading = shippingDestinations === null;
   const [isShippingDestinationOpen, setIsShippingDestinationOpen] = useState(false);
-  const [isShippingDestinationsLoading, setIsShippingDestinationsLoading] = useState(false);
-  const [shippingQuote, setShippingQuote] = useState<ShippingQuoteState>(initialShippingQuote);
-  // The address the current quote was fetched for. Once the input changes, the
-  // old quote is stale and must not be submitted during the refetch window.
-  const [quotedAddressKey, setQuotedAddressKey] = useState<string | null>(() =>
-    initialShippingQuote.status === 'available'
-      ? JSON.stringify({
-          country: initialForm.country,
-          shippingRegionKey: initialForm.shippingRegionKey,
-          shippingDestinationLabel: initialForm.shippingDestinationLabel,
-          region: initialForm.region,
-          city: initialForm.city,
-          zip: initialForm.zip,
-        })
-      : null
-  );
+  const [extraAddressOpen, setExtraAddressOpen] = useState(false);
+  const [customsOpen, setCustomsOpen] = useState(false);
   const shippingDestinationRef = useRef<HTMLDivElement | null>(null);
-  const selectedShippingMethodRef = useRef<ShippingMethodCode | null>(initialShippingQuote.selectedMethod);
-  const hasLocalEditsRef = useRef(false);
 
-  const availableShippingDestinations = shippingDestinations.length > 0
+  const availableShippingDestinations = shippingDestinations?.length
     ? shippingDestinations
     : FALLBACK_SHIPPING_DESTINATIONS;
 
@@ -251,47 +170,8 @@ function AddressFormSectionComponent({
     form.shippingDestinationLabel ||
     t('checkout.countryPlaceholder');
 
-  const shippingQuoteInput = useMemo(() => ({
-    country: form.country,
-    shippingRegionKey: form.shippingRegionKey,
-    shippingDestinationLabel: selectedShippingDestinationLabel,
-    region: form.region,
-    city: form.city,
-    zip: form.zip,
-  }), [form.country, form.shippingRegionKey, selectedShippingDestinationLabel, form.region, form.city, form.zip]);
-
-  const isShippingAddressComplete = useMemo(
-    () => REQUIRED_ADDRESS_FIELDS.every((field) => String(form[field] ?? '').trim().length > 0),
-    [form]
-  );
-
-  const selectedShippingOption = useMemo(() => {
-    if (shippingQuote.status !== 'available') return null;
-    return (
-      shippingQuote.options.find((option) => option.methodCode === shippingQuote.selectedMethod) ??
-      shippingQuote.options[0] ??
-      null
-    );
-  }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
-
-  const isQuoteStale =
-    shippingQuote.status === 'available' &&
-    quotedAddressKey !== JSON.stringify(shippingQuoteInput);
-
-  const canUseShippingQuote = shippingQuote.status === 'available' && Boolean(selectedShippingOption) && !isQuoteStale;
-
-  useEffect(() => {
-    if (hasLocalEditsRef.current) return;
-    setForm(initialForm);
-  }, [initialForm]);
-
-  useEffect(() => {
-    selectedShippingMethodRef.current = shippingQuote.selectedMethod;
-  }, [shippingQuote.selectedMethod]);
-
   useEffect(() => {
     let cancelled = false;
-    setIsAddressBookLoading(true);
     const url = userCustomerId
       ? `/api/user/addresses?customerId=${userCustomerId}`
       : '/api/user/addresses';
@@ -299,20 +179,16 @@ function AddressFormSectionComponent({
       .then((res) => (res.ok ? res.json() : { addresses: [] }))
       .then((data) => {
         if (cancelled) return;
-        setAddressBook(Array.isArray(data?.addresses) ? data.addresses : []);
+        setLoadedAddressBook({ owner: addressOwnerKey, entries: Array.isArray(data?.addresses) ? data.addresses : [] });
       })
       .catch(() => {
         if (cancelled) return;
-        setAddressBook([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsAddressBookLoading(false);
+        setLoadedAddressBook({ owner: addressOwnerKey, entries: [] });
       });
     return () => {
       cancelled = true;
     };
-  }, [userCustomerId]);
+  }, [addressOwnerKey, userCustomerId]);
 
   useEffect(() => {
     if (!isShippingDestinationOpen) return;
@@ -328,7 +204,6 @@ function AddressFormSectionComponent({
 
   useEffect(() => {
     let cancelled = false;
-    setIsShippingDestinationsLoading(true);
     fetch('/api/checkout/shipping-destinations', {
       credentials: 'include',
     })
@@ -341,10 +216,6 @@ function AddressFormSectionComponent({
       .catch(() => {
         if (cancelled) return;
         setShippingDestinations([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsShippingDestinationsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -360,186 +231,24 @@ function AddressFormSectionComponent({
     };
   }, [isAddressBookOpen]);
 
-  useEffect(() => {
-    if (!form.country.trim() || !form.city.trim() || !form.zip.trim()) {
-      setShippingQuote(EMPTY_SHIPPING_QUOTE);
-      return;
-    }
-
-    let cancelled = false;
-    const timeout = window.setTimeout(() => {
-      setShippingQuote((prev) => ({ ...prev, status: 'loading', message: null }));
-      fetch('/api/checkout/shipping-quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        cache: 'no-store',
-        body: JSON.stringify({ shippingAddress: shippingQuoteInput }),
-      })
-        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('quote_failed'))))
-        .then((data) => {
-          if (cancelled) return;
-          if (data?.available) {
-            const options = Array.isArray(data.options)
-              ? data.options
-                  .map((option: ShippingQuoteApiOption) => ({
-                    methodCode: option.methodCode === 'speedy' ? 'speedy' : 'standard',
-                    methodName: String(option.methodName || option.rateName || 'Shipping'),
-                    methodDescription: option.methodDescription ?? null,
-                    speedLabel: option.speedLabel ?? null,
-                    amountUsd: Number(option.amountUsd ?? 0),
-                    displayAmount: option.displayAmount ?? null,
-                    rateName: option.rateName ?? null,
-                    estimatedDelivery: option.estimatedDelivery ?? null,
-                    message: option.message ?? null,
-                    snapshot: option.snapshot ?? null,
-                  }))
-                  .filter((option: ShippingQuoteOption) => option.amountUsd >= 0)
-              : [];
-            const fallbackOption: ShippingQuoteOption | null = options[0] ?? (
-              data.shippingAmountUsd !== undefined
-                ? {
-                    methodCode: data.selectedMethod === 'speedy' ? 'speedy' : 'standard',
-                    methodName: data.rateName ?? 'Shipping',
-                    amountUsd: Number(data.shippingAmountUsd ?? 0),
-                    estimatedDelivery: data.estimatedDelivery ?? null,
-                    rateName: data.rateName ?? null,
-                    message: data.message ?? null,
-                    snapshot: data.rateSnapshot ?? null,
-                  }
-                : null
-            );
-            const nextOptions: ShippingQuoteOption[] = options.length > 0 ? options : fallbackOption ? [fallbackOption] : [];
-            const previousMethod = selectedShippingMethodRef.current;
-            const nextSelectedMethod =
-              nextOptions.find((option) => option.methodCode === previousMethod)?.methodCode ??
-              (data.selectedMethod === 'speedy' ? 'speedy' : data.selectedMethod === 'standard' ? 'standard' : null) ??
-              nextOptions.find((option) => option.methodCode === 'standard')?.methodCode ??
-              nextOptions[0]?.methodCode ??
-              null;
-            setShippingQuote({
-              status: 'available',
-              options: nextOptions,
-              selectedMethod: nextSelectedMethod,
-              message: data.message ?? null,
-            });
-            setQuotedAddressKey(JSON.stringify(shippingQuoteInput));
-            return;
-          }
-          setShippingQuote({
-            ...EMPTY_SHIPPING_QUOTE,
-            status: data?.reason === 'missing_address' ? 'missing' : 'unavailable',
-            message: data?.message ?? t('checkout.shippingUnavailable'),
-          });
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setShippingQuote({
-            ...EMPTY_SHIPPING_QUOTE,
-            status: 'error',
-            message: t('checkout.shippingQuoteError'),
-          });
-        });
-    }, 500);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [shippingQuoteInput, t]);
-
-  const applyFormChange = (next: CheckoutAddressForm) => {
-    hasLocalEditsRef.current = true;
-    setFormError('');
-    setForm(next);
-    onFormChange(next);
-  };
-
   const updateField = (key: keyof CheckoutAddressForm) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    // International postcodes contain letters/spaces; phone numbers may start with +.
-    applyFormChange({ ...form, [key]: event.target.value });
+    onFormChange({ [key]: event.target.value });
   };
 
   const handleShippingDestinationSelect = useCallback((destination: ShippingDestinationOption) => {
-    const label = getDestinationLabel(destination);
-    const next = {
-      ...form,
+    onFormChange({
       country: destination.countryCode,
       shippingRegionKey: destination.shippingRegionKey || '',
-      shippingDestinationLabel: label,
-    };
-    hasLocalEditsRef.current = true;
-    setFormError('');
-    setForm(next);
-    onFormChange(next);
-    setIsShippingDestinationOpen(false);
-  }, [form, onFormChange]);
-
-  const handleShippingMethodSelect = useCallback((methodCode: ShippingMethodCode) => {
-    selectedShippingMethodRef.current = methodCode;
-    setShippingQuote((prev) => ({
-      ...prev,
-      selectedMethod: methodCode,
-    }));
-  }, []);
-
-  const handleAddressNext = () => {
-    if (!isShippingAddressComplete) {
-      setFormError(t('checkout.addressRequiredError'));
-      return;
-    }
-    if (!isValidCheckoutEmail(form.email)) {
-      setFormError(t('checkout.emailInvalidError'));
-      return;
-    }
-    const addressIssue = recipientAddressIssue(normalizeAddressForm(form, selectedShippingDestination));
-    if (addressIssue) {
-      setFormError(t('checkout.addressFieldError'));
-      return;
-    }
-    if (!canUseShippingQuote) {
-      setFormError(
-        shippingQuote.status === 'loading' || isQuoteStale
-          ? t('checkout.shippingCalculating')
-          : shippingQuote.message || t('checkout.shippingUnavailable')
-      );
-      return;
-    }
-
-    const normalizedForm = normalizeAddressForm(form, selectedShippingDestination);
-
-    if (saveAddress && allowAddressBookWrite) {
-      fetch('/api/user/addresses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          customerId: userCustomerId ?? null,
-          address: normalizedForm,
-        }),
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (!data?.saved) return null;
-          const url = userCustomerId
-            ? `/api/user/addresses?customerId=${userCustomerId}`
-            : '/api/user/addresses';
-          return fetch(url, { credentials: 'include' });
-        })
-        .then((res) => (res?.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.addresses) {
-            setAddressBook(Array.isArray(data.addresses) ? data.addresses : []);
-          }
-        })
-        .catch(() => {});
-    }
-
-    onComplete({
-      form: normalizedForm,
-      shippingQuote,
+      shippingDestinationLabel: getDestinationLabel(destination),
     });
-  };
+    setIsShippingDestinationOpen(false);
+  }, [onFormChange]);
+
+  const invalid = (field: keyof CheckoutAddressForm) =>
+    Boolean(showErrors && (addressIssue === field || (addressIssue === 'name' && field === 'lastName')));
+  const hasExtraAddress = Boolean(form.addressLine2 || form.addressLine3 || invalid('addressLine2') || invalid('addressLine3'));
+  const hasCustoms = (['company', 'recipientEmail', 'vatNumber', 'eoriNumber', 'iossNumber'] as const)
+    .some(field => form[field] || invalid(field));
 
   const addressBookDialog = isAddressBookOpen && typeof document !== 'undefined'
     ? createPortal(
@@ -575,7 +284,6 @@ function AddressFormSectionComponent({
                         className="w-full rounded-2xl border border-amber-100/80 bg-white/75 p-4 text-left shadow-sm transition hover:border-amber-200 hover:bg-amber-50/65 hover:shadow-[0_12px_28px_rgba(217,119,6,0.10)]"
                         onClick={() => {
                           const next = {
-                            ...form,
                             firstName: metadata.firstName ?? form.firstName,
                             lastName: metadata.lastName ?? form.lastName,
                             country: metadata.country ?? form.country,
@@ -595,8 +303,6 @@ function AddressFormSectionComponent({
                             eoriNumber: metadata.eoriNumber ?? '',
                             iossNumber: metadata.iossNumber ?? '',
                           };
-                          hasLocalEditsRef.current = true;
-                          setForm(next);
                           onFormChange(next);
                           setIsAddressBookOpen(false);
                         }}
@@ -620,9 +326,8 @@ function AddressFormSectionComponent({
   return (
     <>
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-gray-900">{t('checkout.shippingDetails')}</h2>
+        <h2 className="font-title text-2xl font-bold text-slate-900">{t('checkout.shippingDetails')}</h2>
       </div>
-      {formError ? <p className="text-xs text-red-500">{formError}</p> : null}
       {addressBook.length > 0 ? (
         <div className="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
           <div>
@@ -641,21 +346,26 @@ function AddressFormSectionComponent({
         </div>
       ) : null}
 
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <span className="h-3.5 w-1 shrink-0 rounded-full bg-amber-400" />
-          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Address</span>
-          <div className="h-px flex-1 bg-gray-100" />
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div ref={shippingDestinationRef} className="relative space-y-1.5 md:col-span-2">
+      <div>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-3 min-[800px]:gap-3">
+          <label className="space-y-1.5">
+            <span className="block text-xs font-medium text-gray-700">{t('checkout.firstName')} <span className="text-amber-600">*</span></span>
+            <input id="checkout-firstName" aria-invalid={invalid('firstName')} maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="given-name"
+              className="h-10 w-full rounded-xl glass-input px-3 text-base text-slate-900 min-[800px]:text-sm" value={form.firstName} onChange={updateField('firstName')} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="block text-xs font-medium text-gray-700">{t('checkout.lastName')} <span className="text-amber-600">*</span></span>
+            <input id="checkout-lastName" aria-invalid={invalid('lastName')} maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="family-name"
+              className="h-10 w-full rounded-xl glass-input px-3 text-base text-slate-900 min-[800px]:text-sm" value={form.lastName} onChange={updateField('lastName')} />
+          </label>
+          <div ref={shippingDestinationRef} className="relative space-y-1.5 col-span-2">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.country')} <span className="text-amber-500">*</span>
             </span>
-            <button
+            <button id="checkout-country"
               type="button"
               onClick={() => setIsShippingDestinationOpen((prev) => !prev)}
-              className="flex h-11 w-full items-center justify-between gap-3 rounded-xl glass-input px-3.5 text-left text-sm font-medium text-gray-900 transition"
+              className={`flex h-11 w-full items-center justify-between gap-3 rounded-xl glass-input px-3.5 text-left text-sm font-medium text-gray-900 transition ${invalid('country') ? 'ring-1 ring-red-400' : ''}`}
               aria-haspopup="listbox"
               aria-expanded={isShippingDestinationOpen}
             >
@@ -728,68 +438,108 @@ function AddressFormSectionComponent({
               </div>
             ) : null}
           </div>
-          <label className="space-y-1.5 md:col-span-2">
+          <label className="block space-y-1.5 col-span-2">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.addressLine1')} <span className="text-amber-500">*</span>
             </span>
-            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine1} autoComplete="address-line1" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={form.country === 'HK' ? t('checkout.addressLine1PlaceholderHk') : t('checkout.addressLine1Placeholder')} value={form.addressLine1} onChange={updateField('addressLine1')} />
-          </label>
-          <label className="space-y-1.5 md:col-span-2">
-            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine2')}</span>
-            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine2} autoComplete="address-line2" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine2Placeholder')} value={form.addressLine2} onChange={updateField('addressLine2')} />
-          </label>
-          <label className="space-y-1.5 md:col-span-2">
-            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine3')}</span>
-            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine3} autoComplete="address-line3" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.addressLine3Placeholder')} value={form.addressLine3} onChange={updateField('addressLine3')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine1} autoComplete="address-line1" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={form.country === 'HK' ? t('checkout.addressLine1PlaceholderHk') : t('checkout.addressLine1Placeholder')} id="checkout-addressLine1" aria-describedby={form.country === 'HK' ? 'checkout-hk-address-hint' : undefined} aria-invalid={invalid('addressLine1')} value={form.addressLine1} onChange={updateField('addressLine1')} />
+            {form.country === 'HK' ? (
+              <span id="checkout-hk-address-hint" className="block px-1 text-xs leading-5 text-slate-600">
+                {t('checkout.addressLine1PlaceholderHk')}
+              </span>
+            ) : null}
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.city')} <span className="text-amber-500">*</span>
             </span>
-            <input maxLength={RECIPIENT_ADDRESS_LIMITS.city} autoComplete="address-level2" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.city')} value={form.city} onChange={updateField('city')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.city} autoComplete="address-level2" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.city')} id="checkout-city" aria-invalid={invalid('city')} value={form.city} onChange={updateField('city')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">
               {t('checkout.zip')} <span className="text-amber-500">*</span>
             </span>
-            <input maxLength={RECIPIENT_ADDRESS_LIMITS.zip} autoComplete="postal-code" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.zip')} value={form.zip} onChange={updateField('zip')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.zip} autoComplete="postal-code" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.zip')} id="checkout-zip" aria-invalid={invalid('zip')} value={form.zip} onChange={updateField('zip')} />
           </label>
           <label className="space-y-1.5">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.region')} <span className="text-amber-500">*</span></span>
-            <input maxLength={RECIPIENT_ADDRESS_LIMITS.region} autoComplete="address-level1" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.regionPlaceholder')} value={form.region} onChange={updateField('region')} />
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.region} autoComplete="address-level1" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.regionPlaceholder')} id="checkout-region" aria-invalid={invalid('region')} value={form.region} onChange={updateField('region')} />
+          </label>
+          <label className="space-y-1.5 col-span-2">
+            <span className="block text-xs font-medium text-gray-700">{t('checkout.phone')} <span className="text-amber-600">*</span></span>
+            <input id="checkout-phone" aria-invalid={invalid('phone')} type="tel" placeholder={t('checkout.phonePlaceholder')} maxLength={RECIPIENT_ADDRESS_LIMITS.phone} autoComplete="tel"
+              className="h-10 w-full rounded-xl glass-input px-3 text-base text-slate-900 min-[800px]:text-sm" value={form.phone} onChange={updateField('phone')} />
           </label>
         </div>
       </div>
 
-      <details className="rounded-2xl border border-amber-100 bg-white/65 px-4 py-3 text-sm text-slate-700">
-        <summary className="cursor-pointer font-semibold text-slate-800">{t('checkout.moreOptions')}</summary>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <label className="space-y-1.5">
-            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.company')}</span>
-            <input maxLength={RECIPIENT_ADDRESS_LIMITS.company} autoComplete="organization" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.companyPlaceholder')} value={form.company} onChange={updateField('company')} />
+      <div>
+        <button type="button" className="text-sm font-semibold text-amber-800 underline underline-offset-4"
+          aria-expanded={extraAddressOpen || hasExtraAddress} aria-controls="checkout-extra-address"
+          onClick={() => setExtraAddressOpen(value => !value)}>
+          {t('checkout.extraAddress')}
+        </button>
+        <div id="checkout-extra-address" hidden={!extraAddressOpen && !hasExtraAddress} className="mt-3 space-y-2">
+          <label className="block space-y-1.5 col-span-2">
+            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine2')}</span>
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine2} autoComplete="address-line2" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.addressLine2Placeholder')} id="checkout-addressLine2" aria-invalid={invalid('addressLine2')} value={form.addressLine2} onChange={updateField('addressLine2')} />
           </label>
-          <label className="space-y-1.5">
-            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.recipientEmail')}</span>
-            <input type="email" maxLength={RECIPIENT_ADDRESS_LIMITS.recipientEmail} className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.recipientEmailPlaceholder')} value={form.recipientEmail} onChange={updateField('recipientEmail')} />
+          <label className="block space-y-1.5 col-span-2">
+            <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine3')}</span>
+            <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine3} autoComplete="address-line3" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.addressLine3Placeholder')} id="checkout-addressLine3" aria-invalid={invalid('addressLine3')} value={form.addressLine3} onChange={updateField('addressLine3')} />
           </label>
         </div>
-        <p className="mt-3 text-xs leading-5 text-slate-500">{t('checkout.customsDetailsHint')}</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          {([
-            ['vatNumber', 'checkout.vatNumber'],
-            ['eoriNumber', 'checkout.eoriNumber'],
-            ['iossNumber', 'checkout.iossNumber'],
-          ] as const).map(([field, label]) => (
-            <label key={field} className="space-y-1.5">
-              <span className="block pl-3.5 text-xs font-medium text-gray-700">{t(label)}</span>
-              <input maxLength={RECIPIENT_ADDRESS_LIMITS[field]} className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 md:text-sm" value={form[field]} onChange={updateField(field)} />
+      </div>
+
+      <div>
+        <button type="button" className="text-sm font-semibold text-amber-800 underline underline-offset-4"
+          aria-expanded={customsOpen || hasCustoms} aria-controls="checkout-optional-address"
+          onClick={() => setCustomsOpen(value => !value)}>
+          {t('checkout.moreOptions')}
+        </button>
+        <div id="checkout-optional-address" hidden={!customsOpen && !hasCustoms}>
+          <div className="mt-3 grid gap-3 min-[800px]:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.company')}</span>
+              <input maxLength={RECIPIENT_ADDRESS_LIMITS.company} autoComplete="organization" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.companyPlaceholder')} id="checkout-company" aria-invalid={invalid('company')} value={form.company} onChange={updateField('company')} />
             </label>
-          ))}
+            <label className="space-y-1.5">
+              <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.recipientEmail')}</span>
+              <input type="email" maxLength={RECIPIENT_ADDRESS_LIMITS.recipientEmail} className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.recipientEmailPlaceholder')} id="checkout-recipientEmail" aria-invalid={invalid('recipientEmail')} value={form.recipientEmail} onChange={updateField('recipientEmail')} />
+            </label>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-slate-500">{t('checkout.customsDetailsHint')}</p>
+          <div className="mt-3 grid gap-3 min-[800px]:grid-cols-3">
+            {([
+              ['vatNumber', 'checkout.vatNumber'],
+              ['eoriNumber', 'checkout.eoriNumber'],
+              ['iossNumber', 'checkout.iossNumber'],
+            ] as const).map(([field, label]) => (
+              <label key={field} className="space-y-1.5">
+                <span className="block pl-3.5 text-xs font-medium text-gray-700">{t(label)}</span>
+                <input maxLength={RECIPIENT_ADDRESS_LIMITS[field]} className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 min-[800px]:text-sm" id={`checkout-${field}`} aria-invalid={invalid(field)} value={form[field]} onChange={updateField(field)} />
+              </label>
+            ))}
+          </div>
         </div>
-      </details>
+      </div>
+
+      {showErrors && addressIssue ? (
+        <p role="alert" className="text-sm text-rose-800">{t('checkout.addressFieldError')}</p>
+      ) : null}
+      <label className="flex min-h-10 items-center gap-2 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          className="accent-amber-500"
+          checked={saveAddress}
+          disabled={isPlacingOrder}
+          onChange={(event) => onSaveAddressChange(event.target.checked)}
+        />
+        {t('checkout.saveAddress')}
+      </label>
 
       <div className={`rounded-2xl border px-4 py-3 text-sm ${
-        shippingQuote.status === 'available' && !isQuoteStale
+        shippingQuote.status === 'available'
           ? 'border-emerald-100 bg-emerald-50/70 text-emerald-800'
           : shippingQuote.status === 'unavailable' || shippingQuote.status === 'error'
           ? 'border-red-100 bg-red-50/70 text-red-600'
@@ -797,12 +547,11 @@ function AddressFormSectionComponent({
       }`}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="font-semibold">{t('checkout.shippingOptionsTitle')}</div>
-            <div className="mt-0.5 text-xs opacity-80">{t('checkout.shippingOptionsHint')}</div>
+            <div className="font-semibold">{t('checkout.deliveryTitle')}</div>
           </div>
-          {shippingQuote.status !== 'available' || isQuoteStale ? (
+          {shippingQuote.status !== 'available' ? (
             <span className="text-right font-bold">
-              {shippingQuote.status === 'loading' || isQuoteStale
+              {shippingQuote.status === 'loading'
                 ? t('checkout.shippingCalculating')
                 : shippingQuote.status === 'missing'
                 ? t('checkout.shippingPending')
@@ -810,22 +559,23 @@ function AddressFormSectionComponent({
             </span>
           ) : null}
         </div>
-        {shippingQuote.status === 'available' && !isQuoteStale ? (
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {shippingQuote.status === 'available' ? (
+          <div className="mt-3 grid grid-cols-2 gap-2 min-[800px]:grid-cols-1">
             {shippingQuote.options.map((option) => {
-              const isSelected = selectedShippingOption?.methodCode === option.methodCode;
+              const isSelected = shippingQuote.selectedMethod === option.methodCode;
               return (
                 <button
                   key={option.methodCode}
                   type="button"
+                  aria-pressed={isSelected}
                   className={`rounded-2xl border px-3 py-3 text-left transition ${
                     isSelected
                       ? 'border-amber-300 bg-white/95 shadow-[0_10px_24px_rgba(217,119,6,0.12)]'
                       : 'border-white/80 bg-white/65 hover:border-amber-200 hover:bg-white/90'
                   }`}
-                  onClick={() => handleShippingMethodSelect(option.methodCode)}
+                  onClick={() => onShippingMethodChange(option.methodCode)}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-col gap-1 min-[800px]:flex-row min-[800px]:justify-between">
                     <div>
                       <div className="text-sm font-bold text-slate-900">
                         {option.methodCode === 'speedy'
@@ -838,7 +588,7 @@ function AddressFormSectionComponent({
                           : t('checkout.standardShippingDescription')}
                       </div>
                     </div>
-                    <div className="max-w-[55%] text-sm font-bold text-amber-700">
+                    <div className="break-words text-sm font-bold text-amber-800">
                       <ShippingPrice amountUsd={option.amountUsd} snapshot={option.snapshot} currency={selectedCurrency} />
                     </div>
                   </div>
@@ -851,28 +601,13 @@ function AddressFormSectionComponent({
               );
             })}
           </div>
-        ) : !isQuoteStale && shippingQuote.message ? (
-          <p className="mt-2 text-xs">{shippingQuote.message}</p>
+        ) : shippingQuote.message ? (
+          <p className="mt-2 text-xs" role="status">{shippingQuote.message}</p>
+        ) : null}
+        {shippingQuote.status === 'error' ? (
+          <button type="button" className="mt-2 text-sm font-semibold underline" onClick={onRetryShippingQuote}>{t('common.retry')}</button>
         ) : null}
       </div>
-
-      <label className="flex items-center gap-2 text-sm text-gray-600">
-        <input
-          type="checkbox"
-          className="accent-amber-500"
-          checked={saveAddress}
-          onChange={(event) => setSaveAddress(event.target.checked)}
-        />
-        {t('checkout.saveAddress')}
-      </label>
-
-      <Button
-        size="lg"
-        className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-5 text-sm font-semibold md:h-12 md:text-base"
-        onClick={handleAddressNext}
-      >
-        {t('checkout.continue')}
-      </Button>
 
       {addressBookDialog}
     </>

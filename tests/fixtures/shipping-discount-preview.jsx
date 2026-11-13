@@ -2,6 +2,7 @@
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AddressFormSection } from '../../app/checkout/AddressFormSection'
+import { useCheckoutShippingQuote } from '../../app/checkout/useCheckoutShippingQuote'
 import { CheckoutSummaryPanel } from '../../app/checkout/CheckoutSummaryPanel'
 import { ShippingDiscountControl } from '../../components/admin/sections/discounts/ShippingDiscountControl'
 import { DiscountManagementSection } from '../../components/admin/sections/DiscountManagementSection'
@@ -18,7 +19,8 @@ window.fetch = (url, init) => {
 const form = { firstName: 'Test', lastName: 'Reader', email: 'reader@example.test', country: 'HK', region: 'Hong Kong', city: 'Hong Kong', zip: '000000', addressLine1: '1 Example Street', phone: '+85212345678', shippingRegionKey: '', shippingDestinationLabel: 'Hong Kong', addressLine2: '', addressLine3: '', company: '', recipientEmail: '', vatNumber: '', eoriNumber: '', iossNumber: '' }
 
 function Preview() {
-  const [currency, setCurrency] = useState('USD'), [quote, setQuote] = useState(null), [free, setFree] = useState(false), [version, setVersion] = useState(0)
+  const [currency, setCurrency] = useState('USD'), [address, setAddress] = useState(form), [free, setFree] = useState(false), [saveAddress, setSaveAddress] = useState(false)
+  const { shippingQuote: quote, selectShippingMethod, retryShippingQuote } = useCheckoutShippingQuote(address, true, null, t)
   const option = quote?.options.find(option => option.methodCode === quote.selectedMethod)
   const shipping = option?.amountUsd ?? 0
   return (
@@ -28,13 +30,13 @@ function Preview() {
       <div className="my-5 flex flex-wrap items-center gap-4">
         <label>Currency <select aria-label="Currency" value={currency} onChange={event => setCurrency(event.target.value)} className="rounded border bg-white p-2"><option>USD</option><option>JPY</option><option>HKD</option></select></label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={free} onChange={event => setFree(event.target.checked)} />Free shipping voucher</label>
-        <button className="rounded border bg-white px-3 py-2" onClick={() => { setVersion(value => value + 1); setQuote(null) }}>Refresh quote</button>
+        <button className="rounded border bg-white px-3 py-2" onClick={retryShippingQuote}>Refresh quote</button>
       </div>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="space-y-5 rounded-3xl border border-white bg-white/60 p-4 sm:p-6">
-          <AddressFormSection key={version} initialForm={form} selectedCurrency={currency} t={t} onFormChange={() => {}} onComplete={({ shippingQuote }) => setQuote(shippingQuote)} />
+          <AddressFormSection form={address} shippingQuote={quote} selectedCurrency={currency} t={t} saveAddress={saveAddress} onSaveAddressChange={setSaveAddress} onFormChange={patch => setAddress(previous => ({ ...previous, ...patch }))} onShippingMethodChange={selectShippingMethod} onRetryShippingQuote={retryShippingQuote} />
         </section>
-        <CheckoutSummaryPanel hiddenOnPaymentStep={false} isPriceReady={true} showShipping={true} shippingStatus={quote ? 'available' : 'missing'}
+        <CheckoutSummaryPanel isPriceReady={quote.status === 'available'} showShipping={true} shippingStatus={quote.status}
           discountTotalUsd={0} shippingDiscountTotalUsd={free ? shipping : 0} shippingAmountUsd={shipping} shippingRateSnapshot={option?.snapshot} currency={currency}
           formattedSubtotal={formatCurrencyAmount(39, currency)} formattedShipping={formatCurrencyAmount(shipping, currency)} formattedNetShipping={formatCurrencyAmount(free ? 0 : shipping, currency)}
           formattedDiscount={formatCurrencyAmount(0, currency)} formattedShippingDiscount={formatCurrencyAmount(free ? shipping : 0, currency)} formattedTotal={formatCurrencyAmount(39 + (free ? 0 : shipping), currency)} t={t} />

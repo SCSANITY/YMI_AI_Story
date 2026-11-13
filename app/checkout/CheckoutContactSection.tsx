@@ -4,7 +4,6 @@ import React, { memo, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useGlobalContext } from '@/contexts/GlobalContext';
-import { RECIPIENT_ADDRESS_LIMITS } from '@/lib/shipping-address';
 import { CheckoutEmailOwnershipHint } from './CheckoutEmailOwnershipHint';
 import type { CheckoutAddressForm } from '@/lib/checkout-restoration';
 
@@ -18,31 +17,27 @@ function isValidCheckoutEmail(email: string) {
 }
 
 type CheckoutContactSectionProps = {
-  initialForm: CheckoutAddressForm;
-  checkoutEmail: string;
+  form: CheckoutAddressForm;
+  invalidField: string | null;
   userCustomerId?: string | null;
   isAuthResolved: boolean;
   t: (key: string, params?: Record<string, string | number | null | undefined>) => string;
-  onFormChange: (form: CheckoutAddressForm) => void;
-  onComplete: (payload: { form: CheckoutAddressForm }) => void;
+  onFormChange: (patch: Partial<CheckoutAddressForm>) => void;
 };
 
 function CheckoutContactSectionComponent({
-  initialForm,
-  checkoutEmail,
+  form,
+  invalidField,
   userCustomerId,
   isAuthResolved,
   t,
   onFormChange,
-  onComplete,
 }: CheckoutContactSectionProps) {
   const { user, login, verifySignupOtp, openLoginModal } = useGlobalContext();
-  const [form, setForm] = useState<CheckoutAddressForm>(initialForm);
   const [formError, setFormError] = useState('');
   const [emailHistory, setEmailHistory] = useState<string[]>([]);
   const [isEmailDropdownOpen, setIsEmailDropdownOpen] = useState(false);
   const emailDropdownRef = useRef<HTMLDivElement | null>(null);
-  const hasLocalEditsRef = useRef(false);
   const [signupPassword, setSignupPassword] = useState('');
   const [signupStage, setSignupStage] = useState<'password' | 'code'>('password');
   const [signupCode, setSignupCode] = useState('');
@@ -57,20 +52,6 @@ function CheckoutContactSectionComponent({
   // so the signup card never races a stale identity.
   const signedInEmail = user?.email?.trim() ?? '';
   const isSignedIn = isAuthResolved && Boolean(signedInEmail);
-
-  useEffect(() => {
-    if (hasLocalEditsRef.current) return;
-    setForm(initialForm);
-  }, [initialForm]);
-
-  useEffect(() => {
-    if (!form.email && checkoutEmail) {
-      const next = { ...form, email: checkoutEmail };
-      setForm(next);
-      onFormChange(next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkoutEmail, form.email]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -104,62 +85,43 @@ function CheckoutContactSectionComponent({
     return () => window.clearTimeout(timer);
   }, [resendCountdown]);
 
-  const applyFormChange = (next: CheckoutAddressForm) => {
-    hasLocalEditsRef.current = true;
+  const updateContactField = (key: keyof CheckoutAddressForm, value: string) => {
     setFormError('');
-    setForm(next);
-    onFormChange(next);
-  };
-
-  const updateField = (key: keyof CheckoutAddressForm) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    applyFormChange({ ...form, [key]: event.target.value });
+    if (key === 'email') currentSignupEmail.current = value.trim();
+    onFormChange({ [key]: value });
     if (key === 'email' && signupStage === 'code') {
-      // A changed email invalidates the code that was sent to the previous one.
       setSignupStage('password');
       setSignupCode('');
       setSignupError('');
       setSignupInfo('');
+      setSignupEmail('');
+      setResendCountdown(0);
     }
   };
 
-  const validateContact = () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.phone.trim()) {
-      setFormError(t('checkout.contactRequiredError'));
-      return false;
-    }
-    if (!isValidCheckoutEmail(form.email)) {
-      setFormError(t('checkout.emailInvalidError'));
-      return false;
-    }
-    return true;
+  const updateField = (key: keyof CheckoutAddressForm) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    updateContactField(key, event.target.value);
   };
 
-  const complete = () => {
-    if (!validateContact()) return;
-    const normalizedForm = {
-      ...form,
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-    };
-    const normalizedEmail = normalizedForm.email;
-    setEmailHistory((prev) => {
-      const next = [normalizedEmail, ...prev.filter((item) => item !== normalizedEmail)].slice(0, 6);
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem('ymi_checkout_email_history', JSON.stringify(next));
-        } catch {
-          // Email history is a convenience; blocked storage must not stop checkout.
-        }
-      }
-      return next;
-    });
-    onComplete({ form: normalizedForm });
+  const currentSignupEmail = useRef(form.email.trim());
+  useEffect(() => { currentSignupEmail.current = form.email.trim(); }, [form.email]);
+  const resetSignup = () => {
+    setSignupStage('password');
+    setSignupCode('');
+    setSignupPassword('');
+    setSignupEmail('');
+    setSignupError('');
+    setSignupInfo('');
+    setResendCountdown(0);
   };
 
   const requestSignupCode = async () => {
     const email = form.email.trim();
+    if (isSignupPending) return;
+    if (!isValidCheckoutEmail(email)) {
+      setSignupError(t('checkout.emailInvalidError'));
+      return;
+    }
     if (signupPassword.length < SIGNUP_MIN_PASSWORD_LENGTH) {
       setSignupError(t('checkout.passwordTooShort'));
       return;
@@ -169,6 +131,7 @@ function CheckoutContactSectionComponent({
     setSignupInfo('');
     try {
       const result = await Promise.resolve(login(email, signupPassword, 'signup'));
+      if (currentSignupEmail.current !== email) return;
       if (result?.error) {
         setSignupError(result.error);
         return;
@@ -191,7 +154,7 @@ function CheckoutContactSectionComponent({
 
   const verifyAndContinue = async () => {
     const code = signupCode.trim();
-    if (!signupEmail || code.length !== SIGNUP_OTP_LENGTH) return;
+    if (isSignupPending || !signupEmail || signupEmail !== form.email.trim() || code.length !== SIGNUP_OTP_LENGTH) return;
     setIsSignupPending(true);
     setSignupError('');
     try {
@@ -200,7 +163,7 @@ function CheckoutContactSectionComponent({
         setSignupError(result.error);
         return;
       }
-      complete();
+      resetSignup();
     } catch {
       setSignupError(t('checkout.sendCodeError'));
     } finally {
@@ -208,43 +171,30 @@ function CheckoutContactSectionComponent({
     }
   };
 
-  const handleContinue = () => {
-    if (!validateContact()) return;
-    if (isSignedIn || !signupPassword) {
-      complete();
-      return;
-    }
-    void requestSignupCode();
-  };
-
   return (
     <>
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-gray-900">{t('checkout.contactTitle')}</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="font-title text-2xl font-bold text-slate-900">{t('checkout.contactTitle')}</h2>
+        {!isSignedIn ? (
+          <button type="button" className="text-xs font-semibold text-amber-800 underline underline-offset-4"
+            onClick={() => openLoginModal('login', form.email.trim() || undefined)}>
+            {t('checkout.signInInstead')}
+          </button>
+        ) : null}
       </div>
-      {formError ? <p className="text-xs text-red-500">{formError}</p> : null}
+      {formError || invalidField === 'email' ? <p role="alert" className="text-xs text-red-600">{formError || t('checkout.emailInvalidError')}</p> : null}
 
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="space-y-1.5">
-          <span className="block pl-3.5 text-xs font-medium text-gray-700">
-            {t('checkout.firstName')} <span className="text-amber-500">*</span>
-          </span>
-          <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="given-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" value={form.firstName} onChange={updateField('firstName')} />
-        </label>
-        <label className="space-y-1.5">
-          <span className="block pl-3.5 text-xs font-medium text-gray-700">
-            {t('checkout.lastName')} <span className="text-amber-500">*</span>
-          </span>
-          <input maxLength={RECIPIENT_ADDRESS_LIMITS.name} autoComplete="family-name" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" value={form.lastName} onChange={updateField('lastName')} />
-        </label>
         <div className="relative space-y-1.5 md:col-span-2" ref={emailDropdownRef}>
-          <span className="block pl-3.5 text-xs font-medium text-gray-700">
+          <label htmlFor="checkout-email" className="block text-xs font-medium text-gray-700">
             {t('checkout.emailRequired')} <span className="text-amber-500">*</span>
-          </span>
+          </label>
           <input
+            id="checkout-email"
+            aria-invalid={invalidField === 'email'}
             type="email"
             autoComplete="email"
-            className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm"
+            className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm"
             value={form.email}
             onChange={updateField('email')}
             onBlur={() => {
@@ -269,7 +219,7 @@ function CheckoutContactSectionComponent({
                     type="button"
                     className="flex-1 text-left font-medium text-gray-800"
                     onClick={() => {
-                      applyFormChange({ ...form, email });
+                      updateContactField('email', email);
                       setIsEmailDropdownOpen(false);
                     }}
                   >
@@ -307,12 +257,6 @@ function CheckoutContactSectionComponent({
             t={t}
           />
         </div>
-        <label className="space-y-1.5 md:col-span-2">
-          <span className="block pl-3.5 text-xs font-medium text-gray-700">
-            {t('checkout.phone')} <span className="text-amber-500">*</span>
-          </span>
-          <input type="tel" maxLength={RECIPIENT_ADDRESS_LIMITS.phone} autoComplete="tel" className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm" placeholder={t('checkout.phonePlaceholder')} value={form.phone} onChange={updateField('phone')} />
-        </label>
       </div>
 
       {isSignedIn ? (
@@ -322,19 +266,20 @@ function CheckoutContactSectionComponent({
         </div>
       ) : (
         <>
-          <div className="rounded-[18px] bg-[linear-gradient(135deg,rgba(245,158,11,0.75),rgba(251,146,60,0.35)_40%,rgba(245,158,11,0.15)_60%,rgba(217,119,6,0.6))] p-px shadow-[0_14px_34px_rgba(217,119,6,0.14)]">
-            <div className="rounded-[17px] bg-[radial-gradient(320px_120px_at_95%_0%,rgba(253,186,116,0.22),transparent_70%),linear-gradient(150deg,rgba(255,251,240,0.97),rgba(255,247,234,0.9))] px-4 py-4 backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-bold text-gray-900">{t('checkout.createAccountTitle')}</div>
-                <span className="rounded-full border border-amber-200/80 bg-amber-50/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600">{t('checkout.createAccountOptional')}</span>
-              </div>
+          <details className="rounded-xl border border-amber-100 bg-amber-50/40 px-3 py-2">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+              {t('checkout.createAccountTitle')}{' '}
+              <span className="ml-1 text-xs font-normal text-slate-500">{t('checkout.createAccountOptional')}</span>
+            </summary>
+            <div className="pt-2">
               <p className="mt-1 text-xs leading-5 text-slate-500">{t('checkout.createAccountHint')}</p>
               {signupStage === 'password' ? (
-                <div className="relative mt-3">
+                <>
+                <div className="relative mt-2">
                   <input
                     type={showSignupPassword ? 'text' : 'password'}
                     autoComplete="new-password"
-                    className="h-11 w-full rounded-xl glass-input px-3.5 pr-11 text-base font-medium text-gray-900 placeholder:text-slate-300 md:text-sm"
+                    className="h-10 w-full rounded-xl glass-input px-3.5 pr-11 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm"
                     placeholder={t('checkout.createPasswordPlaceholder')}
                     value={signupPassword}
                     onChange={(event) => {
@@ -352,6 +297,11 @@ function CheckoutContactSectionComponent({
                     {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <Button type="button" size="sm" className="mt-2 h-10 text-xs"
+                  disabled={isSignupPending} onClick={() => void requestSignupCode()}>
+                  {isSignupPending ? t('common.loading') : t('checkout.sendVerificationCode')}
+                </Button>
+                </>
               ) : (
               <div className="mt-3 space-y-2.5">
                 {signupInfo ? <p className="text-xs font-medium text-emerald-700">{signupInfo}</p> : null}
@@ -360,7 +310,7 @@ function CheckoutContactSectionComponent({
                   inputMode="numeric"
                   maxLength={SIGNUP_OTP_LENGTH}
                   autoComplete="one-time-code"
-                  className="h-11 w-full rounded-xl glass-input px-3.5 text-base font-medium tracking-[0.3em] text-gray-900 placeholder:tracking-normal placeholder:text-slate-300 md:text-sm"
+                  className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium tracking-[0.3em] text-gray-900 placeholder:tracking-normal placeholder:text-slate-300 min-[800px]:text-sm"
                   placeholder={t('login.enterCode', { length: SIGNUP_OTP_LENGTH })}
                   value={signupCode}
                   onChange={(event) => {
@@ -389,37 +339,17 @@ function CheckoutContactSectionComponent({
                 <button
                   type="button"
                   className="block text-xs font-medium text-slate-500 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-700"
-                  onClick={complete}
+                  onClick={resetSignup}
                 >
                   {t('checkout.skipAsGuest')}
                 </button>
               </div>
             )}
-            {signupError ? <p className="mt-2 text-xs text-red-500">{signupError}</p> : null}
+            {signupError ? <p className="mt-2 text-xs text-red-600" role="alert">{signupError}</p> : null}
             </div>
-          </div>
-          <div className="text-center">
-            <button
-              type="button"
-              className="text-xs font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-orange-600"
-              onClick={() => openLoginModal('login', form.email.trim() || undefined)}
-            >
-              {t('checkout.signInInstead')}
-            </button>
-          </div>
+          </details>
         </>
       )}
-
-      {signupStage === 'password' ? (
-        <Button
-          size="lg"
-          className="glass-action-btn glass-action-btn--brand h-11 w-full rounded-full px-5 text-sm font-semibold md:h-12 md:text-base"
-          onClick={handleContinue}
-          disabled={isSignupPending}
-        >
-          {isSignupPending ? t('common.loading') : t('checkout.continue')}
-        </Button>
-      ) : null}
     </>
   );
 }

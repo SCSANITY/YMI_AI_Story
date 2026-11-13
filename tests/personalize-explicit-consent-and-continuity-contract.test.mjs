@@ -8,12 +8,14 @@ test('generation, voice, purchase confirmation and address saving require explic
     ['components/personalize/GeneratePreviewAction.tsx', 'isDataGenerationConsentChecked'],
     ['components/personalize/SignatureVoiceDialog.tsx', 'authorized'],
     ['components/personalize/PreviewActionBar.tsx', 'isCheckoutAcknowledged'],
-    ['app/checkout/AddressFormSection.tsx', 'saveAddress'],
+    ['app/checkout/page.tsx', 'saveAddress'],
   ]) {
     const source = await read(file)
     assert.match(source, new RegExp(`const \\[${state},[^\\]]+\\] = useState\\(false\\)`))
     assert.doesNotMatch(source, /defaultChecked/)
   }
+  const addressForm = await read('app/checkout/AddressFormSection.tsx')
+  assert.match(addressForm, /type="checkbox"[\s\S]{0,240}checked=\{saveAddress\}[\s\S]{0,140}onSaveAddressChange\(event.target.checked\)/)
   assert.match(await read('components/personalize/GeneratePreviewAction.tsx'), /if \(!isFormValid\) return/)
 })
 

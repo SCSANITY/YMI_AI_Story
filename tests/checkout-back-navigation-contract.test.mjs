@@ -1,26 +1,16 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { loadUi } from './helpers/preview-uiux-harness.mjs'
 
-const checkout = await readFile(new URL('../app/checkout/page.tsx', import.meta.url), 'utf8')
+const { removeCheckoutPaymentResumeStep } = loadUi('src/lib/checkout-step-navigation.ts', {}, { URLSearchParams })
 
-test('Checkout applies a Stripe-cancel payment resume only once', () => {
-  const resumeEffect = checkout.match(
-    /useEffect\(\(\) => \{\s*if \(!checkoutStateReady\) return;\s*if \(queryStep !== 'payment'\)[\s\S]*?\n  \}, \[[\s\S]*?step,\s*\n  \]\);/
-  )?.[0] ?? ''
-
-  assert.match(checkout, /const checkoutPaymentResumeAppliedRef = useRef\(false\)/)
-  assert.match(
-    resumeEffect,
-    /if \(checkoutPaymentResumeAppliedRef\.current\) return;[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?setStep\(canUseShippingQuote \? 'payment' : 'delivery'\)/
-  )
+test('Checkout Back removes the payment marker and preserves the order, source and anchor', () => {
+  assert.equal(removeCheckoutPaymentResumeStep({
+    pathname: '/checkout', search: '?orderId=1&step=payment&source=cart', hash: '#address',
+  }), '/checkout?orderId=1&source=cart#address')
 })
 
-test('Checkout Back consumes the payment resume marker before returning to delivery', () => {
-  const backHandler = checkout.match(/const goBackStep = useCallback\([\s\S]*?\n  \}, \[step\]\);/)?.[0] ?? ''
-
-  assert.match(
-    backHandler,
-    /removeCheckoutPaymentResumeStep[\s\S]*?checkoutPaymentResumeAppliedRef\.current = true;[\s\S]*?window\.history\.replaceState\(window\.history\.state, '', nextHref\)[\s\S]*?setStep\('delivery'\)/
-  )
+test('Checkout Back does not rewrite a URL without a payment marker', () => {
+  assert.equal(removeCheckoutPaymentResumeStep({ pathname: '/checkout', search: '?step=delivery' }), null)
+  assert.equal(removeCheckoutPaymentResumeStep({ pathname: '/checkout', search: '?orderId=1' }), null)
 })

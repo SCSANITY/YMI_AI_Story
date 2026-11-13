@@ -65,6 +65,6 @@ test('mobile Checkout address fields prevent browser auto-zoom without changing 
   assert.ok(addressInputs.length >= 10)
   addressInputs.forEach((input) => {
     assert.match(input, /text-base/)
-    assert.match(input, /md:text-sm/)
+    assert.match(input, /min-\[800px\]:text-sm/)
   })
 })

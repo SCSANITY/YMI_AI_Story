@@ -60,7 +60,7 @@ test('retired edition validation precedes owner/database writes and payment sess
 test('physical-only Checkout preserves address, ownership, shipping, and PDF lifecycle modules', async () => {
   const checkout = await read('app/checkout/page.tsx')
   assert.doesNotMatch(checkout, /checkoutItemRequiresShipping|digital-checkout-email|!requiresShipping/)
-  assert.match(checkout, /const totalSteps = 3/)
+  assert.match(checkout, /<CheckoutContactSection[\s\S]*<AddressFormSection[\s\S]*<CheckoutSummaryPanel[\s\S]*<PaymentActions/)
   assert.match(checkout, /<AddressFormSection/)
   assert.match(checkout, /<CheckoutContactSection/)
   await Promise.all([

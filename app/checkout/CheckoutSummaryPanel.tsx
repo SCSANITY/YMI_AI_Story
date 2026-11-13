@@ -5,8 +5,8 @@ import { ShippingPrice } from './ShippingPrice';
 type ShippingQuoteStatus = 'idle' | 'missing' | 'loading' | 'available' | 'unavailable' | 'error';
 
 type CheckoutSummaryPanelProps = {
-  hiddenOnPaymentStep: boolean;
   isPriceReady: boolean;
+  isSubtotalReady?: boolean;
   showShipping: boolean;
   shippingStatus: ShippingQuoteStatus;
   estimatedDelivery?: string | null;
@@ -28,8 +28,8 @@ type CheckoutSummaryPanelProps = {
 };
 
 export function CheckoutSummaryPanel({
-  hiddenOnPaymentStep,
   isPriceReady,
+  isSubtotalReady = isPriceReady,
   showShipping,
   shippingStatus,
   estimatedDelivery,
@@ -61,16 +61,16 @@ export function CheckoutSummaryPanel({
       : t('checkout.shippingUnavailable');
 
   return (
-    <div className={`glass-panel h-fit overflow-hidden rounded-[28px] border border-white/70 p-4 sm:p-5 md:p-6 lg:sticky lg:top-24 ${hiddenOnPaymentStep ? 'hidden lg:block' : ''}`}>
-      <h3 className="text-lg font-bold text-gray-900 mb-4">{t('checkout.summaryTitle')}</h3>
+    <div>
+      <h2 className="mb-3 font-title text-2xl font-bold text-slate-900">{t('checkout.summaryTitle')}</h2>
       <div className="space-y-2 text-sm text-gray-600">
         <div className="flex items-center justify-between">
           <span>{t('checkout.subtotal')}</span>
           <span
-            aria-busy={!isPriceReady}
+            aria-busy={!isSubtotalReady}
             className="min-h-5 min-w-20 text-right font-semibold text-gray-900"
           >
-            {isPriceReady ? formattedSubtotal : null}
+            {isSubtotalReady ? formattedSubtotal : null}
           </span>
         </div>
         {showShipping ? (
@@ -124,13 +124,10 @@ export function CheckoutSummaryPanel({
             aria-busy={!isPriceReady}
             className="min-h-6 min-w-20 text-right font-bold text-gray-900"
           >
-            {isPriceReady ? formattedTotal : null}
+            {isPriceReady ? formattedTotal : t('checkout.totalPending')}
           </span>
         </div>
       </div>
-      <p className="text-xs text-gray-500 mt-3">
-        {t('checkout.poweredByStripe')}
-      </p>
     </div>
   );
 }

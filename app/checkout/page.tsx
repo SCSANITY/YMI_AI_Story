@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Lock, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price';
 import { AddressFormSection } from './AddressFormSection';
@@ -31,6 +31,8 @@ import {
   resolveTrackingFormat,
 } from '@/lib/tracking-policy';
 import { removeCheckoutPaymentResumeStep } from '@/lib/checkout-step-navigation';
+import { recipientAddressIssue } from '@/lib/shipping-address';
+import { checkoutShippingInput, useCheckoutShippingQuote, type RestoredShippingQuote } from './useCheckoutShippingQuote';
 import {
   resolveCartItemPreviewCover,
   resolveCartItemPreviewCoverStatus,
@@ -47,9 +49,9 @@ import {
   type MultiBookOfferRule,
 } from '@/lib/multi-book-offer-core';
 import {
-  EMPTY_SHIPPING_QUOTE, CheckoutReturnStateError, mergeRestoredFormWithDraft,
+  CheckoutReturnStateError, mergeRestoredFormWithDraft,
   restoreCheckoutOrder,
-  type CheckoutAddressForm, type ShippingQuoteState,
+  type CheckoutAddressForm,
 } from '@/lib/checkout-restoration';
 
 const CheckoutPolicyModal = dynamic(
@@ -57,7 +59,6 @@ const CheckoutPolicyModal = dynamic(
   { ssr: false, loading: () => null }
 );
 
-type CheckoutStep = 'contact' | 'delivery' | 'payment';
 type CheckoutPolicyModal = 'shipping' | 'refund' | 'safety' | 'impact' | null;
 type RewardVoucher = {
   instrumentId: string;
@@ -164,7 +165,7 @@ function CheckoutPageContent() {
   const pendingQuantities = useRef(0);
   const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false);
   const handleQuantityChange = useCallback((itemId: string, quantity: number) => {
-    if (!guardMergeHealthy()) return;
+    if (!guardMergeHealthy() || updatingItemsRef.current || isPlacingOrderRef.current) return;
     pendingQuantities.current += 1;
     setIsUpdatingQuantity(true);
     quantityQueue.current = quantityQueue.current.then(async () => {
@@ -196,7 +197,6 @@ function CheckoutPageContent() {
       window.removeEventListener('focus', onVisible);
     };
   }, [customerMergeFailed, handleMergeRetry]);
-  const [step, setStep] = useState<CheckoutStep>('contact');
   const [orderId, setOrderId] = useState<string | null>(null);
   const selectedCurrency = toChargeCurrency(displayCurrency);
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
@@ -222,7 +222,13 @@ function CheckoutPageContent() {
   const [formError, setFormError] = useState('');
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const checkoutInitRef = useRef(false);
-  const checkoutPaymentResumeAppliedRef = useRef(false);
+  const [paymentResumeDismissed, setPaymentResumeDismissed] = useState(false);
+  const [saveAddress, setSaveAddress] = useState(false);
+  const [reviewAttempted, setReviewAttempted] = useState(false);
+  const [booksExpanded, setBooksExpanded] = useState(true);
+  const emailEditedRef = useRef(false);
+  const [isUpdatingItems, setIsUpdatingItems] = useState(false);
+  const updatingItemsRef = useRef(false);
   const trackedCheckoutOrderIdsRef = useRef<Set<string>>(new Set());
   const isPlacingOrderRef = useRef(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -270,16 +276,8 @@ function CheckoutPageContent() {
     [items]
   );
   const multiBookSubtotalUsd = useMemo(() => computeMultiBookSubtotalUsd(multiBookItems), [multiBookItems]);
-  const [shippingQuote, setShippingQuote] = useState<ShippingQuoteState>(EMPTY_SHIPPING_QUOTE);
-  const selectedShippingOption = useMemo(() => {
-    if (shippingQuote.status !== 'available') return null;
-    return (
-      shippingQuote.options.find((option) => option.methodCode === shippingQuote.selectedMethod) ??
-      shippingQuote.options[0] ??
-      null
-    );
-  }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
-  const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
+  const [restoredShippingQuote, setRestoredShippingQuote] = useState<RestoredShippingQuote | null>(null);
+  const [isCheckoutDraftHydrated, setIsCheckoutDraftHydrated] = useState(false);
   const [form, setForm] = useState<CheckoutAddressForm>({
     firstName: '',
     lastName: '',
@@ -300,10 +298,7 @@ function CheckoutPageContent() {
     eoriNumber: '',
     iossNumber: '',
   });
-  const checkoutContactEmail = useMemo(
-    () => form.email.trim() || checkoutEmail.trim() || user?.email || '',
-    [checkoutEmail, form.email, user?.email]
-  );
+  const checkoutContactEmail = form.email.trim();
   const selectedIdsFromQuery = useMemo(() => {
     const raw = searchParams?.get('ids');
     if (!raw) return [];
@@ -327,6 +322,19 @@ function CheckoutPageContent() {
   const closedOrderState = restoredOrder?.key === restoreKey ? restoredOrder?.closed : null;
   const checkoutStateReady = !isOrderRestoring && !orderRestoreError && !closedOrderState;
 
+  const isPaymentReturn = queryStep === 'payment' && !paymentResumeDismissed;
+  const { shippingQuote, selectShippingMethod, retryShippingQuote } = useCheckoutShippingQuote(
+    form, checkoutStateReady && isCheckoutDraftHydrated && items.length > 0, restoredShippingQuote, t,
+  );
+  const selectedShippingOption = useMemo(() => {
+    if (shippingQuote.status !== 'available') return null;
+    return (
+      shippingQuote.options.find((option) => option.methodCode === shippingQuote.selectedMethod) ??
+      shippingQuote.options[0] ??
+      null
+    );
+  }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
+  const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
   const incomingDiscountCode = useMemo(() => {
     const raw = searchParams?.get('ref');
     return raw && raw.trim().length > 0 ? raw.trim().toUpperCase() : '';
@@ -362,12 +370,14 @@ function CheckoutPageContent() {
     };
   }, [selectedShippingOption, shippingAddressPayload, shippingAmountUsd]);
 
+  const addressIssue = recipientAddressIssue(shippingAddressPayload);
+  const contactIssue = EMAIL_FORMAT_PATTERN.test(checkoutContactEmail) ? null : 'email';
+  const invalidField = contactIssue ?? addressIssue;
   const canUseShippingQuote = shippingQuote.status === 'available' && Boolean(selectedShippingOption);
 
   const quoteRequest = useMemo(() => {
-    if (step !== 'payment' || !checkoutStateReady || !isCheckoutPriceReady || !orderId ||
-      !canUseShippingQuote || isApplyingDiscount || isUpdatingQuantity || customerMergeFailed ||
-      !EMAIL_FORMAT_PATTERN.test(checkoutContactEmail)) return null;
+    if (!checkoutStateReady || !isCheckoutDraftHydrated || !isCheckoutPriceReady || !orderId ||
+      !canUseShippingQuote || isApplyingDiscount || isUpdatingQuantity || isUpdatingItems || customerMergeFailed || invalidField) return null;
     return {
       orderId,
       email: checkoutContactEmail,
@@ -376,11 +386,11 @@ function CheckoutPageContent() {
       shippingAddress: shippingAddressPayload,
       shippingMethod: selectedShippingOption?.methodCode,
     };
-  }, [step, checkoutStateReady, isCheckoutPriceReady, orderId, canUseShippingQuote, isApplyingDiscount, isUpdatingQuantity,
+  }, [checkoutStateReady, isCheckoutDraftHydrated, isCheckoutPriceReady, orderId, canUseShippingQuote, isApplyingDiscount, isUpdatingQuantity, isUpdatingItems, invalidField,
     customerMergeFailed, checkoutContactEmail, sessionUser?.customerId, selectedCurrency,
     shippingAddressPayload, selectedShippingOption?.methodCode]);
   const quoteKey = quoteRequest
-    ? JSON.stringify([quoteRequest, quoteRevision, items.map(item => [item.id, item.quantity, cartItemUnitPrice(item)])])
+    ? JSON.stringify([quoteRequest, quoteRevision, shippingAmountUsd, items.map(item => [item.id, item.quantity, cartItemUnitPrice(item)])])
     : null;
   const [quoteState, setQuoteState] = useState<{
     key: string;
@@ -391,32 +401,35 @@ function CheckoutPageContent() {
   const visibleQuote = quoteState?.key === quoteKey ? quoteState : null;
   const paymentQuote = visibleQuote?.quote;
   const quoteKeyRef = useRef(quoteKey);
-  useEffect(() => { quoteKeyRef.current = quoteKey; }, [quoteKey]);
+  useLayoutEffect(() => { quoteKeyRef.current = quoteKey; }, [quoteKey]);
 
   useEffect(() => {
     if (!quoteKey || !quoteRequest) return;
     const controller = new AbortController();
     let active = true;
-    fetch('/api/checkout/quote', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      cache: 'no-store',
-      body: JSON.stringify(quoteRequest),
-      signal: controller.signal,
-    }).then(async response => {
-      const data = await response.json();
-      if (!active) return;
-      if (response.ok && data?.quote?.currency === quoteRequest.currency && Number.isSafeInteger(data.quote.totalMinor)) {
-        setQuoteState({ key: quoteKey, quote: data.quote });
-      } else {
-        setQuoteState({ key: quoteKey, error: data?.code === 'checkout_offer_unavailable' ? 'offer' : 'unavailable' });
-      }
-    }).catch(() => {
-      if (active) setQuoteState({ key: quoteKey, error: 'unavailable' });
-    });
+    const timeout = window.setTimeout(() => {
+      fetch('/api/checkout/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        cache: 'no-store',
+        body: JSON.stringify(quoteRequest),
+        signal: controller.signal,
+      }).then(async response => {
+        const data = await response.json();
+        if (!active) return;
+        if (response.ok && data?.quote?.currency === quoteRequest.currency && Number.isSafeInteger(data.quote.totalMinor)) {
+          setQuoteState({ key: quoteKey, quote: data.quote });
+        } else {
+          setQuoteState({ key: quoteKey, error: data?.code === 'checkout_offer_unavailable' ? 'offer' : 'unavailable' });
+        }
+      }).catch(() => {
+        if (active) setQuoteState({ key: quoteKey, error: 'unavailable' });
+      });
+    }, 250);
     return () => {
       active = false;
+      window.clearTimeout(timeout);
       controller.abort();
     };
   }, [quoteKey, quoteRequest]);
@@ -505,6 +518,7 @@ function CheckoutPageContent() {
 
   const handleCurrencyChange = useCallback((currency: CheckoutCurrency) => {
     setDisplayCurrency(currency);
+    setQuoteRevision(revision => revision + 1);
   }, [setDisplayCurrency]);
 
   const primaryCheckoutItem = useMemo(() => (items.length === 1 ? items[0] : null), [items]);
@@ -552,9 +566,7 @@ function CheckoutPageContent() {
   }, [queryOrderId, orderId]);
 
   // The page is the single owner of the browser checkout draft: it hydrates
-  // once on a fresh checkout and persists every synced form change, so the
-  // contact and delivery steps never overwrite each other's fields.
-  const [isCheckoutDraftHydrated, setIsCheckoutDraftHydrated] = useState(false);
+  // once on a fresh checkout and persists updates from both visible sections.
   useEffect(() => {
     // A pending order restore owns the form until it resolves; persisting the
     // untouched default form now would destroy the shopper's saved draft.
@@ -589,26 +601,10 @@ function CheckoutPageContent() {
   }, [form, isCheckoutDraftHydrated]);
 
   useEffect(() => {
-    if (!checkoutStateReady) return;
-    if (queryStep !== 'payment') {
-      checkoutPaymentResumeAppliedRef.current = false;
-      return;
-    }
-    if (checkoutPaymentResumeAppliedRef.current) return;
-    if (step !== 'contact') return;
-    if (!queryOrderId && items.length === 0) return;
-
-    checkoutPaymentResumeAppliedRef.current = true;
-
-    setStep(canUseShippingQuote ? 'payment' : 'delivery');
-  }, [
-    checkoutStateReady,
-    canUseShippingQuote,
-    items.length,
-    queryOrderId,
-    queryStep,
-    step,
-  ]);
+    if (!checkoutStateReady || !isCheckoutDraftHydrated || emailEditedRef.current) return;
+    const suggestedEmail = checkoutEmail.trim() || sessionUser?.email?.trim();
+    if (suggestedEmail) setForm(current => current.email ? current : { ...current, email: suggestedEmail });
+  }, [checkoutEmail, sessionUser?.email, checkoutStateReady, isCheckoutDraftHydrated]);
 
   const applyDiscountSummary = useCallback((summary: OrderDiscountSummary) => {
     setQuoteRevision(revision => revision + 1);
@@ -663,16 +659,21 @@ function CheckoutPageContent() {
       .then(({ form: address, quote, discounts, rows }) => {
         if (cancelled) return;
         hydrateCheckoutItems(rows);
-        setForm(mergeRestoredFormWithDraft(address, draftSnapshot));
+        const restoredForm = mergeRestoredFormWithDraft(address, draftSnapshot);
+        setForm(restoredForm);
+        emailEditedRef.current = false;
         // The restored order becomes the draft baseline; only now may the
         // persistence effect resume writing to the browser draft.
         setIsCheckoutDraftHydrated(true);
-        setShippingQuote(quote);
+        // A restored rate belongs to the order address, not a draft-refilled destination.
+        setRestoredShippingQuote(quote.status === 'available'
+          ? { key: JSON.stringify(checkoutShippingInput(address)), quote }
+          : null);
         setCheckoutEmail(address.email);
         applyDiscountSummary(discounts);
         setFormError('');
         setDiscountError('');
-        checkoutPaymentResumeAppliedRef.current = false;
+        setPaymentResumeDismissed(false);
         setRestoredOrder({ key: restoreKey, error: null });
       })
       .catch((error) => {
@@ -691,7 +692,7 @@ function CheckoutPageContent() {
       isPlacingOrderRef.current = false;
       setIsPlacingOrder(false);
       // bfcache restores React too; explicitly reload the saved order once.
-      checkoutPaymentResumeAppliedRef.current = false;
+      setPaymentResumeDismissed(false);
       setRestoreAttempt(attempt => attempt + 1);
     };
     window.addEventListener('pageshow', handlePageShow);
@@ -759,75 +760,40 @@ function CheckoutPageContent() {
       .catch(() => hydrateCheckoutItems(null));
   }, [queryOrderId, checkoutItems.length, cart, prepareCheckout, selectedIdsFromQuery, sessionUser?.customerId, hydrateCheckoutItems]);
 
-  const handleFormChange = useCallback((nextForm: CheckoutAddressForm) => {
-    setForm(nextForm);
+  const handleFormChange = useCallback((patch: Partial<CheckoutAddressForm>) => {
+    if ('email' in patch) emailEditedRef.current = true;
+    if (['country', 'shippingRegionKey', 'shippingDestinationLabel', 'region', 'city', 'zip', 'addressLine1'].some(key => key in patch)) setRestoredShippingQuote(null);
+    setForm(current => ({ ...current, ...patch }));
+    setQuoteRevision(revision => revision + 1);
+    setFormError('');
   }, []);
 
-  const handleContactComplete = useCallback(({ form: nextForm }: {
-    form: CheckoutAddressForm;
-  }) => {
-    setForm(nextForm);
-    setCheckoutEmail(nextForm.email.trim());
-    setFormError('');
-    setStep('delivery');
-  }, [setCheckoutEmail]);
-
-  const handleDeliveryComplete = useCallback(({ form: nextForm, shippingQuote: nextShippingQuote }: {
-    form: CheckoutAddressForm;
-    shippingQuote: ShippingQuoteState;
-  }) => {
-    setForm(nextForm);
-    setShippingQuote(nextShippingQuote);
-    setCheckoutEmail(nextForm.email.trim());
-    setFormError('');
-    setDiscountError('');
+  const handleShippingMethodChange = (method: Parameters<typeof selectShippingMethod>[0]) => {
+    selectShippingMethod(method);
     setQuoteRevision(revision => revision + 1);
-    setStep('payment');
-  }, [setCheckoutEmail]);
-
-  const stepNumber = useMemo(() => {
-    switch (step) {
-      case 'contact':
-        return 1;
-      case 'delivery':
-        return 2;
-      case 'payment':
-        return 3;
-      default:
-        return 1;
-    }
-  }, [step]);
-  const totalSteps = 3;
-
-  const canGoBackStep = step !== 'contact';
-  const canGoBackToSource = step === 'contact';
-
-  const goBackStep = useCallback(() => {
     setFormError('');
-    switch (step) {
-      case 'payment':
-        {
-          if (typeof window !== 'undefined') {
-            const nextHref = removeCheckoutPaymentResumeStep({
-              pathname: window.location.pathname,
-              search: window.location.search,
-              hash: window.location.hash,
-            });
-            if (nextHref) {
-              checkoutPaymentResumeAppliedRef.current = true;
-              window.history.replaceState(window.history.state, '', nextHref);
-            }
-          }
-          setStep('delivery');
-        }
-        break;
-      case 'delivery':
-        setStep('contact');
-        break;
-      default:
-        break;
-    }
-  }, [step]);
+  };
+
+  const goBackToAddress = useCallback(() => {
+    const nextHref = removeCheckoutPaymentResumeStep({
+      pathname: window.location.pathname,
+      search: window.location.search,
+      hash: window.location.hash,
+    });
+    if (nextHref) window.history.replaceState(window.history.state, '', nextHref);
+    setPaymentResumeDismissed(true);
+    setFormError('');
+    focusCheckoutSection('checkout-address');
+  }, []);
+
+  const reviewOrder = () => focusCheckoutSection('checkout-order-summary');
+
+  const focusInvalidField = () => {
+    if (!invalidField) return;
+    setReviewAttempted(true);
+    const field = invalidField === 'name' ? 'lastName' : invalidField;
+    window.requestAnimationFrame(() => document.getElementById(`checkout-${field}`)?.focus());
+  };
 
   const goBackToSource = useCallback(() => {
     if (
@@ -1039,6 +1005,24 @@ function CheckoutPageContent() {
         setIsPlacingOrder(false);
         return;
       }
+      if (saveAddress && !customerMergeFailed) {
+        // The browser can finish this small, optional write while leaving for Stripe.
+        void fetch('/api/user/addresses', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({ customerId: payload.customerId, address: payload.shippingAddress }),
+        }).catch(() => {});
+      }
+      setCheckoutEmail(payload.email);
+      try {
+        const recent = JSON.parse(window.localStorage.getItem('ymi_checkout_email_history') ?? '[]');
+        const emails = Array.isArray(recent) ? recent.filter(email => typeof email === 'string' && email !== payload.email) : [];
+        window.localStorage.setItem('ymi_checkout_email_history', JSON.stringify([payload.email, ...emails].slice(0, 6)));
+      } catch {
+        // History is optional.
+      }
       // A normal browser Back (including a full reload) must know which unpaid
       // order to restore, even when the checkout originally started from ids.
       const returnUrl = new URL(window.location.href);
@@ -1054,7 +1038,7 @@ function CheckoutPageContent() {
   };
 
   const handlePlaceOrder = () => {
-    if (!checkoutStateReady || isApplyingDiscount || pendingQuantities.current || isPlacingOrderRef.current || isPlacingOrder) return;
+    if (!checkoutStateReady || isApplyingDiscount || pendingQuantities.current || updatingItemsRef.current || isPlacingOrderRef.current || isPlacingOrder) return;
 
     if (customerMergeFailed) {
       // Heal the account link before starting payment. On success the effect
@@ -1081,7 +1065,7 @@ function CheckoutPageContent() {
       return;
     }
 
-    if (!paymentQuote) return;
+    if (addressIssue || !paymentQuote) return;
 
     const effectiveIdentityMode: 'guest' | 'auth' = sessionUser?.email ? 'auth' : 'guest';
 
@@ -1143,7 +1127,9 @@ function CheckoutPageContent() {
   const handleRemoveCheckoutItem = useCallback(async (itemId: string) => {
     const removedItem = items.find(item => item.id === itemId);
     if (!removedItem) return false;
-    if (!guardMergeHealthy()) return false;
+    if (!guardMergeHealthy() || updatingItemsRef.current || pendingQuantities.current || isPlacingOrderRef.current) return false;
+    updatingItemsRef.current = true;
+    setIsUpdatingItems(true);
 
     setFormError('');
     removeFromCheckout(itemId);
@@ -1185,6 +1171,10 @@ function CheckoutPageContent() {
       addToCheckout([removedItem]);
       setFormError(t('checkout.removeItemError'));
       return false;
+    } finally {
+      updatingItemsRef.current = false;
+      setQuoteRevision(revision => revision + 1);
+      setIsUpdatingItems(false);
     }
   }, [addToCheckout, items, orderId, removeFromCheckout, t, sessionUser?.customerId, guardMergeHealthy]);
 
@@ -1192,19 +1182,25 @@ function CheckoutPageContent() {
     if (!selected.length) {
       return true;
     }
-    if (!guardMergeHealthy()) return false;
+    if (!guardMergeHealthy() || updatingItemsRef.current || pendingQuantities.current || isPlacingOrderRef.current) return false;
+    updatingItemsRef.current = true;
+    setIsUpdatingItems(true);
     setFormError('');
     addToCheckout(selected);
     try {
-      const ok = await startCheckoutForItems(selected);
-      if (ok) return true;
-    } catch (error) {
-      console.error('Checkout item addition failed:', error);
+      try {
+        if (await startCheckoutForItems(selected)) return true;
+      } catch (error) {
+        console.error('Checkout item addition failed:', error);
+      }
+      selected.forEach(item => removeFromCheckout(item.id));
+      setFormError(t('checkout.addItemsError'));
+      return false;
+    } finally {
+      updatingItemsRef.current = false;
+      setQuoteRevision(revision => revision + 1);
+      setIsUpdatingItems(false);
     }
-
-    selected.forEach(item => removeFromCheckout(item.id));
-    setFormError(t('checkout.addItemsError'));
-    return false;
   }, [addToCheckout, removeFromCheckout, startCheckoutForItems, t, guardMergeHealthy]);
 
   useEffect(() => {
@@ -1252,16 +1248,9 @@ function CheckoutPageContent() {
     emitYmiTrackingEvent('begin_checkout', payload);
   }, [checkoutStarted, items, orderId, selectedCurrency, total]);
 
-  const isPaymentStep = step === 'payment';
-  const shouldShowMobilePaymentBar = isPaymentStep;
   const canPay = Boolean(paymentQuote) || customerMergeFailed;
-  const summaryPriceReady = isCheckoutPriceReady && (!isPaymentStep || Boolean(paymentQuote));
-  const mobilePaymentActionLabel =
-    isPlacingOrder
-      ? t('common.loading')
-      : stripeCheckoutEnabled
-      ? t('checkout.payWithStripe')
-      : t('checkout.placeOrder');
+  const summaryPriceReady = isCheckoutPriceReady && Boolean(paymentQuote);
+  const paymentBusy = isPlacingOrder || isApplyingDiscount || isUpdatingItems || isUpdatingQuantity;
   const policyModalTitle =
     openPolicyModal === 'shipping'
       ? t('footer.legalTitleShipping')
@@ -1339,16 +1328,13 @@ function CheckoutPageContent() {
   if (priceLoadError) return <div role="alert" className="mx-auto my-10 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-rose-700"><p>{priceLoadError}</p><button type="button" className="mt-4 font-semibold underline" onClick={() => router.push('/cart')}>Back to cart</button></div>;
 
   return (
-    <div className={`mx-auto max-w-7xl px-3 pt-6 ${shouldShowMobilePaymentBar ? 'pb-28' : 'pb-6'} sm:px-4 md:px-8 md:py-10`}>
-      <div className="mb-6 flex items-center gap-3 md:mb-8">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-          <Lock className="h-5 w-5 text-amber-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">{t('checkout.title')}</h1>
-          <p className="text-gray-500 text-sm">{t('checkout.step', { step: stepNumber, total: totalSteps })}</p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-6xl px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5 sm:px-5 min-[800px]:px-8 min-[800px]:py-8">
+      <button type="button" onClick={isPaymentReturn ? goBackToAddress : goBackToSource}
+        className="mb-2 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-amber-800 hover:underline">
+        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        {isPaymentReturn ? t('checkout.backToAddress') : checkoutSourceTarget.label}
+      </button>
+      <h1 className="mb-4 font-title text-3xl font-bold text-slate-900 min-[800px]:text-4xl">{t('checkout.title')}</h1>
 
       {customerMergeFailed && (
         <div
@@ -1368,198 +1354,159 @@ function CheckoutPageContent() {
         </div>
       )}
 
-      {canGoBackToSource && (
-        <div className="mb-4">
-          <button
-            type="button"
-            onClick={goBackToSource}
-            className="glass-action-btn glass-action-btn--neutral inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-slate-700"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            {checkoutSourceTarget.label}
-          </button>
-        </div>
-      )}
+      <div className="grid min-w-0 items-start gap-4 min-[800px]:grid-rows-[auto_1fr] min-[800px]:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] min-[800px]:gap-6">
+        <section aria-labelledby="checkout-books-title" className="min-w-0 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4 min-[800px]:col-start-2 min-[800px]:row-start-1">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="checkout-books-title" className="font-title text-2xl font-bold text-slate-900">{t('checkout.booksTitle')}</h2>
+            <button type="button" aria-expanded={booksExpanded} aria-controls="checkout-books"
+              onClick={() => setBooksExpanded(value => !value)}
+              className="min-h-10 shrink-0 px-2 text-sm font-semibold text-amber-800 min-[800px]:hidden">
+              {t(booksExpanded ? 'checkout.hideBooks' : 'checkout.showBooks')}
+            </button>
+          </div>
+          <div id="checkout-books" className={booksExpanded ? '' : 'hidden min-[800px]:block'}>
+            <CheckoutItemsSection
+              items={items}
+              remainingCartItems={remainingCartItems}
+              selectedCurrency={selectedCurrency}
+              t={t}
+              resolveCoverUrl={resolveCheckoutItemCoverUrl}
+              resolveCoverStatus={resolveCheckoutItemCoverStatus}
+              onQuantityChange={handleQuantityChange}
+              onRemoveItem={handleRemoveCheckoutItem}
+              onAddFromCartItems={handleAddFromCartItems}
+            />
+          </div>
+        </section>
 
-      {canGoBackStep && (
-        <div className="mb-6">
-          <button
-            type="button"
-            onClick={goBackStep}
-            className="glass-action-btn glass-action-btn--neutral inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-slate-700"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            {t('checkout.backPrevious')}
-          </button>
-        </div>
-      )}
-
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr] lg:gap-8">
-        <div className="glass-panel !overflow-visible rounded-[28px] border border-white/70 p-4 sm:p-5 md:p-6 space-y-5 md:space-y-6">
-          {step === 'contact' && (
+        <div className="min-w-0 space-y-3 min-[800px]:col-start-1 min-[800px]:row-span-2 min-[800px]:row-start-1">
+          <section className="space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4">
             <CheckoutContactSection
-              initialForm={form}
-              checkoutEmail={checkoutEmail}
+              form={form}
+              invalidField={reviewAttempted ? invalidField : null}
               userCustomerId={sessionUser?.customerId ?? null}
               isAuthResolved={isAuthResolved}
               t={t}
               onFormChange={handleFormChange}
-              onComplete={handleContactComplete}
             />
-          )}
-          {step === 'delivery' && (
+          </section>
+          <section id="checkout-address" tabIndex={-1}
+            className="scroll-mt-24 space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4">
             <AddressFormSection
-              initialForm={form}
-              initialShippingQuote={shippingQuote}
+              form={form}
+              shippingQuote={shippingQuote}
               selectedCurrency={selectedCurrency}
               userCustomerId={sessionUser?.customerId ?? null}
-              allowAddressBookWrite={!customerMergeFailed}
+              saveAddress={saveAddress}
+              isPlacingOrder={isPlacingOrder}
+              addressIssue={addressIssue}
+              showErrors={reviewAttempted}
               t={t}
               onFormChange={handleFormChange}
-              onComplete={handleDeliveryComplete}
+              onSaveAddressChange={setSaveAddress}
+              onShippingMethodChange={handleShippingMethodChange}
+              onRetryShippingQuote={retryShippingQuote}
             />
-          )}
-          {step === 'payment' && (
-            <>
-              <h2 className="text-lg font-bold text-gray-900">{t('checkout.paymentTitle')}</h2>
-              <div className="space-y-4">
-                <div className="relative z-40 rounded-[26px] border border-amber-100/80 bg-[linear-gradient(145deg,rgba(255,253,247,0.96),rgba(255,248,238,0.84))] p-4 shadow-[0_16px_36px_rgba(148,93,34,0.08)] backdrop-blur-xl md:p-5">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-500">
-                        {t('checkout.summaryTitle')}
-                      </div>
-                      <div>
-                        <div className="text-sm text-slate-500">
-                          {stripeCheckoutEnabled ? t('checkout.payWithStripe') : t('checkout.placeOrder')}
-                        </div>
-                        <div
-                          aria-busy={!paymentQuote}
-                          className="mt-1 min-h-10 text-3xl font-bold tracking-tight text-slate-900 md:text-[2rem]"
-                        >
-                          {paymentQuote ? formattedTotal : null}
-                        </div>
-                        {discountTotalUsd > 0 ? (
-                          <div className="mt-2 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            {t('checkout.discountLine')}: -{formattedDiscount}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                    <CurrencyPicker
-                      selectedCurrency={selectedCurrency}
-                      selectedLabel={t('checkout.currencyLabel')}
-                      t={t}
-                      onChange={handleCurrencyChange}
-                    />
-                  </div>
-                </div>
-
-                {visibleQuote?.changed ? (
-                  <p role="status" className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    {t('checkout.quoteChanged')}
-                  </p>
-                ) : null}
-                {visibleQuote?.error ? (
-                  <div role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    <p>{t(visibleQuote.error === 'offer' ? 'checkout.quoteOfferUnavailable' : 'checkout.quoteUnavailable')}</p>
-                    <button type="button" className="mt-2 font-semibold underline" onClick={() => setQuoteRevision(revision => revision + 1)}>
-                      {t('common.retry')}
-                    </button>
-                  </div>
-                ) : null}
-                <DiscountSection
-                  isOpen={isPaymentOffersOpen}
-                  onToggleOpen={() => setIsPaymentOffersOpen((prev) => !prev)}
-                  t={t}
-                  isSignedIn={Boolean(sessionUser?.customerId)}
-                  orderId={orderId}
-                  canApply={checkoutStateReady && canUseShippingQuote}
-                  allowAutoApply={!queryOrderId}
-                  incomingDiscountCode={incomingDiscountCode}
-                  appliedDiscountCode={appliedDiscountCode}
-                  selectedRewardVoucherId={selectedRewardVoucherId}
-                  selectedRewardVoucherName={selectedRewardVoucherName}
-                  appliedProductDiscountInstrumentId={appliedProductDiscountInstrumentId}
-                  appliedShippingDiscountInstrumentId={appliedShippingDiscountInstrumentId}
-                  appliedProductCode={appliedProductCode}
-                  appliedShippingCode={appliedShippingCode}
-                  discountTotalUsd={discountTotalUsd}
-                  shippingDiscountTotalUsd={shippingDiscountTotalUsd}
-                  formattedDiscount={formattedDiscount}
-                  formattedShippingDiscount={formattedShippingDiscount}
-                  discountSummaryLabel={discountSummaryLabel}
-                  isApplyingDiscount={isApplyingDiscount}
-                  discountError={discountError}
-                  setDiscountError={setDiscountError}
-                  rewardVouchers={rewardVouchers}
-                  isRewardVouchersLoading={isRewardVouchersLoading}
-                  onApplyDiscountCode={applyDiscountCode}
-                  onApplyRewardVoucher={applyRewardVoucher}
-                  onClearAppliedDiscount={clearAppliedDiscount}
-                />
-
-                <PaymentActions
-                  contactEmail={checkoutContactEmail}
-                  accountEmail={sessionUser?.email ?? null}
-                  isSignedIn={Boolean(sessionUser?.customerId)}
-                  isPlacingOrder={isPlacingOrder || isApplyingDiscount}
-                  canPay={canPay}
-                  stripeCheckoutEnabled={stripeCheckoutEnabled}
-                  formError={formError}
-                  policyAgreementNotice={policyAgreementNotice}
-                  t={t}
-                  onPlaceOrder={handlePlaceOrder}
-                  onOpenImpactPolicy={() => setOpenPolicyModal('impact')}
-                />
-              </div>
-            </>
-          )}
-          <CheckoutItemsSection
-            items={items}
-            remainingCartItems={remainingCartItems}
-            selectedCurrency={selectedCurrency}
-            t={t}
-            resolveCoverUrl={resolveCheckoutItemCoverUrl}
-            resolveCoverStatus={resolveCheckoutItemCoverStatus}
-            onQuantityChange={handleQuantityChange}
-            onRemoveItem={handleRemoveCheckoutItem}
-            onAddFromCartItems={handleAddFromCartItems}
-          />
+          </section>
         </div>
 
-        <CheckoutSummaryPanel
-          hiddenOnPaymentStep={isPaymentStep}
-          isPriceReady={summaryPriceReady}
-          showShipping
-          shippingStatus={shippingQuote.status}
-          estimatedDelivery={selectedShippingOption?.estimatedDelivery}
-          discountTotalUsd={discountTotalUsd}
-          shippingDiscountTotalUsd={shippingDiscountTotalUsd}
-          shippingAmountUsd={displayedShippingAmountUsd}
-          shippingRateSnapshot={isPaymentStep ? null : selectedShippingOption?.snapshot}
-          currency={selectedCurrency}
-          formattedSubtotal={formattedSubtotal}
-          formattedShipping={formattedShipping}
-          formattedNetShipping={formattedNetShipping}
-          formattedDiscount={formattedDiscount}
-          formattedShippingDiscount={formattedShippingDiscount}
-          multiBookDiscountTotalUsd={multiBookDiscountUsd}
-          formattedMultiBookDiscount={formattedMultiBookDiscount}
-          multiBookBadgeLabel={isPaymentStep ? '' : multiBookBadgeLabel}
-          formattedTotal={formattedTotal}
-          t={t}
-        />
+        <section id="checkout-order-summary" tabIndex={-1}
+          className="min-w-0 scroll-mt-24 space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4 min-[800px]:col-start-2 min-[800px]:row-start-2">
+          <CurrencyPicker
+            selectedCurrency={selectedCurrency}
+            selectedLabel={t('checkout.currencyLabel')}
+            t={t}
+            onChange={handleCurrencyChange}
+          />
+          <DiscountSection
+            isOpen={isPaymentOffersOpen}
+            onToggleOpen={() => setIsPaymentOffersOpen((prev) => !prev)}
+            t={t}
+            isSignedIn={Boolean(sessionUser?.customerId)}
+            orderId={orderId}
+            canApply={checkoutStateReady && canUseShippingQuote && !invalidField && !paymentBusy}
+            allowAutoApply={!queryOrderId}
+            incomingDiscountCode={incomingDiscountCode}
+            appliedDiscountCode={appliedDiscountCode}
+            selectedRewardVoucherId={selectedRewardVoucherId}
+            selectedRewardVoucherName={selectedRewardVoucherName}
+            appliedProductDiscountInstrumentId={appliedProductDiscountInstrumentId}
+            appliedShippingDiscountInstrumentId={appliedShippingDiscountInstrumentId}
+            appliedProductCode={appliedProductCode}
+            appliedShippingCode={appliedShippingCode}
+            discountTotalUsd={discountTotalUsd}
+            shippingDiscountTotalUsd={shippingDiscountTotalUsd}
+            formattedDiscount={formattedDiscount}
+            formattedShippingDiscount={formattedShippingDiscount}
+            discountSummaryLabel={discountSummaryLabel}
+            isApplyingDiscount={isApplyingDiscount}
+            discountError={discountError}
+            setDiscountError={setDiscountError}
+            rewardVouchers={rewardVouchers}
+            isRewardVouchersLoading={isRewardVouchersLoading}
+            onApplyDiscountCode={applyDiscountCode}
+            onApplyRewardVoucher={applyRewardVoucher}
+            onClearAppliedDiscount={clearAppliedDiscount}
+          />
+          <CheckoutSummaryPanel
+            isPriceReady={summaryPriceReady}
+            isSubtotalReady={isCheckoutPriceReady}
+            showShipping
+            shippingStatus={shippingQuote.status}
+            estimatedDelivery={selectedShippingOption?.estimatedDelivery}
+            discountTotalUsd={discountTotalUsd}
+            shippingDiscountTotalUsd={shippingDiscountTotalUsd}
+            shippingAmountUsd={displayedShippingAmountUsd}
+            shippingRateSnapshot={paymentQuote ? null : selectedShippingOption?.snapshot}
+            currency={selectedCurrency}
+            formattedSubtotal={formattedSubtotal}
+            formattedShipping={formattedShipping}
+            formattedNetShipping={formattedNetShipping}
+            formattedDiscount={formattedDiscount}
+            formattedShippingDiscount={formattedShippingDiscount}
+            multiBookDiscountTotalUsd={multiBookDiscountUsd}
+            formattedMultiBookDiscount={formattedMultiBookDiscount}
+            multiBookBadgeLabel={multiBookBadgeLabel}
+            formattedTotal={formattedTotal}
+            t={t}
+          />
+          {visibleQuote?.changed ? (
+            <p role="status" className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">{t('checkout.quoteChanged')}</p>
+          ) : null}
+          {visibleQuote?.error ? (
+            <div role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">
+              <p>{t(visibleQuote.error === 'offer' ? 'checkout.quoteOfferUnavailable' : 'checkout.quoteUnavailable')}</p>
+              <button type="button" className="mt-2 font-semibold underline" onClick={() => setQuoteRevision(revision => revision + 1)}>
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : null}
+          <PaymentActions
+            contactEmail={checkoutContactEmail}
+            accountEmail={sessionUser?.email ?? null}
+            isSignedIn={Boolean(sessionUser?.customerId)}
+            isPlacingOrder={paymentBusy}
+            canPay={canPay}
+            stripeCheckoutEnabled={stripeCheckoutEnabled}
+            formError={formError}
+            policyAgreementNotice={policyAgreementNotice}
+            t={t}
+            onPlaceOrder={handlePlaceOrder}
+            onReviewOrder={focusInvalidField}
+            needsDetails={Boolean(invalidField) && !customerMergeFailed}
+            onOpenImpactPolicy={() => setOpenPolicyModal('impact')}
+          />
+        </section>
       </div>
 
       <MobilePaymentBar
-        visible={shouldShowMobilePaymentBar}
+        visible={items.length > 0 && !openPolicyModal}
         isPriceReady={Boolean(paymentQuote)}
         totalLabel={formattedTotal}
-        actionLabel={mobilePaymentActionLabel}
-        disabled={!canPay || isPlacingOrder || isApplyingDiscount}
+        actionLabel={t('checkout.reviewAndPay')}
+        disabled={isPlacingOrder}
         t={t}
-        onClick={handlePlaceOrder}
+        onClick={reviewOrder}
       />
 
       {openPolicyModal ? (
@@ -1580,6 +1527,12 @@ function CheckoutPageContent() {
 
 function CheckoutPageFallback() {
   return <CheckoutLoadingShell />
+}
+
+function focusCheckoutSection(id: string) {
+  const section = document.getElementById?.(id);
+  section?.scrollIntoView({ block: 'start' });
+  section?.focus({ preventScroll: true });
 }
 
 export default function CheckoutPage() {

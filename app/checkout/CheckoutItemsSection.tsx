@@ -247,8 +247,7 @@ export function CheckoutItemsSection({
 
   return (
     <>
-      <div className="pt-4 border-t border-gray-100">
-        <h2 className="text-lg font-bold text-gray-900 mb-3">{t('checkout.itemsTitle')}</h2>
+      <div className="mt-2">
         {items.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
             {t('checkout.noBookSelected')}
@@ -260,87 +259,81 @@ export function CheckoutItemsSection({
                 const isPendingAddition = pendingAddItemIds.includes(item.id);
                 const displayTitle = resolveCartItemDisplayTitle(item);
                 return (
-                <motion.div
-                  layout
-                  key={item.id}
-                  aria-busy={isPendingAddition}
-                  initial={{ opacity: 0, y: 10, scale: 0.985 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -12, scale: 0.985 }}
-                  transition={{ duration: 0.18, ease: 'easeOut', layout: { duration: 0.2 } }}
-                  className="rounded-[24px] border border-white/80 bg-white/72 px-3 py-3 shadow-[0_8px_24px_rgba(148,93,34,0.06)] backdrop-blur-xl sm:px-4"
-                >
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <OrderCoverImage
-                      cartItemId={item.id}
-                      src={resolveCoverUrl(item)}
-                      status={resolveCoverStatus(item)}
-                      alt={displayTitle}
-                      sizes="(max-width: 639px) 80px, 64px"
-                      className="h-24 w-20 rounded-xl sm:h-20 sm:w-16"
-                      imageClassName="object-cover"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug">{displayTitle}</div>
-                      <div className="mt-1 text-xs text-gray-500">{t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}</div>
-                      {isSignatureVoicePackage(item.personalization?.bookType) ? (
-                        <SignatureVoiceBadge className="mt-2" />
-                      ) : null}
-                      <div className="mt-2 text-sm font-semibold text-gray-900 sm:hidden">
-                        {formatCurrencyAmount(cartItemUnitPrice(item) * (item.quantity ?? 1), selectedCurrency)}
+                  <motion.div
+                    layout
+                    key={item.id}
+                    aria-busy={isPendingAddition || pendingRemovalItemIds.includes(item.id)}
+                    initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -12, scale: 0.985 }}
+                    transition={{ duration: 0.18, ease: 'easeOut', layout: { duration: 0.2 } }}
+                    className="border-b border-amber-100 py-3 last:border-b-0"
+                  >
+                    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-3">
+                      <OrderCoverImage
+                        cartItemId={item.id}
+                        src={resolveCoverUrl(item)}
+                        status={resolveCoverStatus(item)}
+                        alt={displayTitle}
+                        sizes="52px"
+                        className="h-[4.25rem] w-[3.25rem] rounded-md"
+                        imageClassName="object-contain"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                          <h3 className="min-w-0 flex-[1_1_8rem] break-words text-sm font-semibold leading-snug text-slate-900">{displayTitle}</h3>
+                          <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900">
+                            {formatCurrencyAmount(cartItemUnitPrice(item) * (item.quantity ?? 1), selectedCurrency)}
+                          </span>
+                        </div>
+                        <p className="mt-1 break-words text-xs text-slate-600">
+                          {t(isSignatureVoicePackage(item.personalization?.bookType) ? 'product.voiceEdition' : 'product.hardcover')}
+                          {' · '}{item.personalization?.language || t('language.en')}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <div className="inline-flex w-fit items-center rounded-lg border border-amber-100">
+                            <button
+                              type="button"
+                              className="inline-flex h-10 w-9 items-center justify-center text-amber-800 hover:bg-amber-50"
+                              onClick={() => onQuantityChange(item.id, Math.max(1, (item.quantity ?? 1) - 1))}
+                              disabled={isPendingAddition}
+                              aria-label={t('checkout.decreaseQuantity')}
+                            >
+                              <span aria-hidden="true">−</span>
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              aria-label={t('checkout.quantity')}
+                              value={item.quantity ?? 1}
+                              disabled={isPendingAddition}
+                              onChange={(event) => {
+                                const quantity = Number.parseInt(event.target.value, 10);
+                                onQuantityChange(item.id, Number.isNaN(quantity) ? 1 : quantity);
+                              }}
+                              className="h-10 w-8 appearance-none bg-transparent text-center text-base font-semibold text-slate-800"
+                            />
+                            <button
+                              type="button"
+                              className="inline-flex h-10 w-9 items-center justify-center text-amber-800 hover:bg-amber-50"
+                              onClick={() => onQuantityChange(item.id, (item.quantity ?? 1) + 1)}
+                              disabled={isPendingAddition}
+                              aria-label={t('checkout.increaseQuantity')}
+                            >
+                              <span aria-hidden="true">+</span>
+                            </button>
+                          </div>
+                          <button type="button" className="min-h-10 text-xs font-semibold text-rose-700 hover:underline"
+                            onClick={() => void handleRemoveItem(item.id)} disabled={isPendingAddition}>
+                            {t('common.remove')}
+                          </button>
+                          {isPendingAddition ? (
+                            <LoaderCircle className="h-4 w-4 animate-spin text-amber-600" aria-label={t('common.loading')} />
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-900">
-                      {isPendingAddition ? (
-                        <LoaderCircle className="h-4 w-4 animate-spin text-amber-500" aria-label={t('common.loading')} />
-                      ) : null}
-                      <span className="hidden sm:inline">
-                        {formatCurrencyAmount(cartItemUnitPrice(item) * (item.quantity ?? 1), selectedCurrency)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="inline-flex w-fit items-center rounded-full border border-white/80 bg-white/90 px-1 py-0.5 shadow-sm">
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 transition hover:bg-amber-100"
-                        onClick={() => onQuantityChange(item.id, Math.max(1, (item.quantity ?? 1) - 1))}
-                        disabled={isPendingAddition}
-                        aria-label={t('checkout.decreaseQuantity')}
-                      >
-                        <span className="text-base font-semibold leading-none">-</span>
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        value={item.quantity ?? 1}
-                        disabled={isPendingAddition}
-                        onChange={(event) => {
-                          const nextValue = Number.parseInt(event.target.value, 10);
-                          onQuantityChange(item.id, Number.isNaN(nextValue) ? 1 : nextValue);
-                        }}
-                        className="h-8 w-12 appearance-none bg-transparent text-center text-xs font-semibold leading-none text-gray-700 outline-none"
-                      />
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 transition hover:bg-amber-100"
-                        onClick={() => onQuantityChange(item.id, (item.quantity ?? 1) + 1)}
-                        disabled={isPendingAddition}
-                        aria-label={t('checkout.increaseQuantity')}
-                      >
-                        <span className="text-base font-semibold leading-none">+</span>
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      className="w-fit text-xs font-semibold text-red-500 transition hover:text-red-600"
-                      onClick={() => void handleRemoveItem(item.id)}
-                      disabled={isPendingAddition}
-                    >
-                      {t('common.remove')}
-                    </button>
-                  </div>
-                </motion.div>
+                  </motion.div>
                 );
               })}
             </AnimatePresence>
