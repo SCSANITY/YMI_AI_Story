@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { render } from '@react-email/render'
 import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
+import { CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
 import { KolPartnershipEmail } from '@/components/emails/KolPartnershipEmail'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
@@ -115,10 +116,23 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     category: 'orders',
     ownership: 'web',
     triggerMode: 'automatic',
-    trigger: 'The daily secured cron finds an active reminder for an unpaid order.',
+    trigger: 'A delayed callback is due for an eligible unpaid order (30 minutes, 24 hours, or 6 days after order creation).',
     subject: '{Name}’s magical journey is waiting! ✨',
     sender: 'Support mailbox',
     description: 'Returns the customer to checkout and summarizes the books still waiting.',
+    variants: DEFAULT_VARIANT,
+  },
+  {
+    id: 'cart-reminder',
+    emailKey: 'cart_reminder',
+    name: 'Weekly Shopping Cart Reminder',
+    category: 'subscriptions',
+    ownership: 'web',
+    triggerMode: 'automatic',
+    trigger: 'The enabled weekly job finds an eligible customer with books still in the cart.',
+    subject: CART_REMINDER_SUBJECT,
+    sender: 'Support mailbox',
+    description: 'A short invitation back to the cart with a cart-reminder unsubscribe link.',
     variants: DEFAULT_VARIANT,
   },
   {
@@ -286,6 +300,9 @@ export async function renderEmailTemplatePreview(
           ]}
         />
       )
+      break
+    case 'cart-reminder':
+      node = <CartReminderEmail cartUrl="https://www.ymistory.com/cart" unsubscribeUrl="https://example.test/cart-reminders/unsubscribe" />
       break
     case 'final-delivery':
       node = (

@@ -9,6 +9,7 @@ import {
   type ReceiptItem,
 } from '@/components/emails/OrderReceiptEmail'
 import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
+import { buildCartReminderText, CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import {
   AbandonmentEmail,
   buildAbandonmentEmailCopy,
@@ -448,6 +449,25 @@ export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailPar
         items={items}
       />
     ),
+  })
+}
+
+export async function sendCartReminderEmail(params: {
+  to: string
+  customerId: string
+  week: string
+  cartUrl: string
+  unsubscribeUrl: string
+}) {
+  return sendManagedEmail({
+    emailKey: 'cart_reminder',
+    idempotencyKey: `cart_reminder:${params.week}:${params.customerId}`,
+    to: params.to,
+    customerId: params.customerId,
+    fromEnvName: 'EMAIL_FROM_SUPPORT',
+    subject: CART_REMINDER_SUBJECT,
+    react: <CartReminderEmail cartUrl={params.cartUrl} unsubscribeUrl={params.unsubscribeUrl} />,
+    text: buildCartReminderText(params.cartUrl, params.unsubscribeUrl),
   })
 }
 

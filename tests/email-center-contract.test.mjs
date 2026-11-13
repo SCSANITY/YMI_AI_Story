@@ -42,6 +42,7 @@ test('one catalog owns all active email families and excludes the retired Genera
     'order_confirmation',
     'final_delivery',
     'unpaid_reminder',
+    'cart_reminder',
     'logistics_update',
     'support_reply',
     'kol_partnership_reply',

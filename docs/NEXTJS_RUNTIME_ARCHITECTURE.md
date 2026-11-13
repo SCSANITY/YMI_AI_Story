@@ -39,6 +39,18 @@ governance repository.
   server-only, project-scoped credential; YMI does not copy raw IP addresses or
   visitor-level records into Supabase.
 
+## Automated email runtime
+
+- Web sends first-party messages via Resend. Supabase email events hold
+  idempotency and delivery evidence; the signed Resend webhook reconciles
+  provider outcomes. The Admin template preview is read-only.
+- Unpaid order reminders use QStash US-East-1 for signed delayed callbacks
+  backed by a Supabase task outbox. The daily Vercel cron only recovers a
+  bounded set of incomplete tasks and handles discount cleanup.
+- The weekly cart candidate uses a separate Vercel Cron route, a bounded
+  Supabase cart/eligibility read, and the same Resend send and evidence path.
+  It is disabled by default; see [Email Center](EMAIL_CENTER.md) for gates.
+
 ## Current domain owners
 
 - Logistics writes and notifications enter through

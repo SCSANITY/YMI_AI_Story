@@ -10,17 +10,17 @@ test('email catalog has one unique entry for every active outbound family', () =
   const ids = EMAIL_TEMPLATE_CATALOG.map((template) => template.id)
   const emailKeys = EMAIL_TEMPLATE_CATALOG.map((template) => template.emailKey)
 
-  assert.equal(EMAIL_TEMPLATE_CATALOG.length, 12)
+  assert.equal(EMAIL_TEMPLATE_CATALOG.length, 13)
   assert.equal(new Set(ids).size, ids.length)
   assert.equal(new Set(emailKeys).size, emailKeys.length)
   assert.doesNotMatch(emailKeys.join(','), /general_inbox_reply/)
 
   assert.deepEqual(getEmailTemplateCatalogSummary(), {
-    total: 12,
-    automatic: 7,
+    total: 13,
+    automatic: 8,
     workflow: 2,
     human: 3,
-    previewable: 8,
+    previewable: 9,
     providerManaged: 3,
   })
 })

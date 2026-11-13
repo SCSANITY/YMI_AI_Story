@@ -38,6 +38,10 @@
       "schedule": "0 0 * * *"
     },
     {
+      "path": "/api/internal/cron/cart-reminders",
+      "schedule": "0 3 * * 3"
+    },
+    {
       "path": "/api/internal/email/inbound/process",
       "schedule": "30 0 * * *"
     },

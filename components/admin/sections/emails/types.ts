@@ -20,6 +20,7 @@ export const EMAIL_EVENT_KEY_OPTIONS = [
   'final_delivery',
   'logistics_update',
   'unpaid_reminder',
+  'cart_reminder',
   'support_reply',
   'kol_partnership_reply',
   'general_mail_message',

@@ -131,3 +131,29 @@ Missing settings disable the new path; they do not restart legacy sending.
 
 Use `node --test tests/unpaid-reminders-runtime.test.mjs` for the offline
 timing, payment, idempotent task and real SDK verification fixtures.
+
+## Weekly shopping cart reminders (release candidate)
+
+The Web job runs on Vercel Cron at nominal Wednesday 11:00 Hong Kong time
+(`0 3 * * 3` UTC). It is separate from QStash. It pages active eligibility
+records first, then checks the current address, provider suppression and
+that at least one book is still in the cart, unattached to an order or
+payment. An account email or newsletter subscription alone does not qualify.
+The migration starts with an empty eligibility table; an empty page does
+not query the cart table.
+
+The job requires Production, `CART_REMINDER_ENABLED=true`, and a server-only
+`CART_REMINDER_UNSUBSCRIBE_SECRET` (at least 32 characters). Keep it disabled
+until the migration, eligibility source, cohort size, unsubscribe and provider
+delivery are verified. The cron reads at most three pages of 25 customers and
+attempts at most 25 sends within a soft 35-second budget. It reports a capped
+run for operator attention; it does not start another job or guarantee that a
+cohort exceeding those bounds is reached. Check that the initial cohort fits
+the limits before enabling, and revisit the batch strategy when volume grows.
+
+The Support sender uses the existing Resend pipeline and a customer/week
+idempotency key. The mail links to Cart and contains no book or child details.
+Its signed unsubscribe link opens a confirmation page; only the form POST
+changes the cart-reminder preference. Keep the signing secret available even
+if sends are paused so already-issued links remain usable. No account
+preferences control or change to unpaid order copy is included.
