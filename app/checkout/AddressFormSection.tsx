@@ -2,7 +2,7 @@
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, FileText, MapPin } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { CheckoutCurrency } from '@/lib/locale-pricing';
 import { RECIPIENT_ADDRESS_LIMITS } from '@/lib/shipping-address';
@@ -135,6 +135,32 @@ function getDestinationLabel(destination: ShippingDestinationOption | null | und
   return destination.label.en;
 }
 
+function AddressDisclosure({ id, expanded, invalid, label, icon: Icon, onToggle }: {
+  id: string;
+  expanded: boolean;
+  invalid: boolean;
+  label: string;
+  icon: typeof MapPin;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-controls={id}
+      aria-disabled={invalid || undefined}
+      onClick={() => { if (!invalid) onToggle(); }}
+      className={`inline-flex min-h-10 min-w-0 items-center gap-1.5 rounded-xl border px-2.5 text-left text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 ${expanded
+        ? 'border-amber-200 bg-amber-50 text-amber-900'
+        : 'border-slate-200 bg-white/80 text-slate-700 hover:border-amber-200 hover:bg-amber-50/60'}`}
+    >
+      <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-amber-700" />
+      {label}
+      <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+    </button>
+  );
+}
+
 function AddressFormSectionComponent({
   form, shippingQuote, selectedCurrency, userCustomerId, saveAddress, isPlacingOrder, addressIssue, showErrors,
   t, onFormChange, onSaveAddressChange, onShippingMethodChange, onRetryShippingQuote,
@@ -147,8 +173,8 @@ function AddressFormSectionComponent({
   const [shippingDestinations, setShippingDestinations] = useState<ShippingDestinationOption[] | null>(null);
   const isShippingDestinationsLoading = shippingDestinations === null;
   const [isShippingDestinationOpen, setIsShippingDestinationOpen] = useState(false);
-  const [extraAddressOpen, setExtraAddressOpen] = useState(false);
-  const [customsOpen, setCustomsOpen] = useState(false);
+  const [extraAddressOpen, setExtraAddressOpen] = useState<boolean | null>(null);
+  const [customsOpen, setCustomsOpen] = useState<boolean | null>(null);
   const shippingDestinationRef = useRef<HTMLDivElement | null>(null);
 
   const availableShippingDestinations = shippingDestinations?.length
@@ -246,9 +272,11 @@ function AddressFormSectionComponent({
 
   const invalid = (field: keyof CheckoutAddressForm) =>
     Boolean(showErrors && (addressIssue === field || (addressIssue === 'name' && field === 'lastName')));
-  const hasExtraAddress = Boolean(form.addressLine2 || form.addressLine3 || invalid('addressLine2') || invalid('addressLine3'));
-  const hasCustoms = (['company', 'recipientEmail', 'vatNumber', 'eoriNumber', 'iossNumber'] as const)
-    .some(field => form[field] || invalid(field));
+  const optionalFields = ['company', 'recipientEmail', 'vatNumber', 'eoriNumber', 'iossNumber'] as const;
+  const extraAddressInvalid = invalid('addressLine2') || invalid('addressLine3');
+  const customsInvalid = optionalFields.some(invalid);
+  const extraAddressExpanded = extraAddressInvalid || (extraAddressOpen ?? Boolean(form.addressLine2 || form.addressLine3));
+  const customsExpanded = customsInvalid || (customsOpen ?? optionalFields.some(field => Boolean(form[field])));
 
   const addressBookDialog = isAddressBookOpen && typeof document !== 'undefined'
     ? createPortal(
@@ -304,6 +332,8 @@ function AddressFormSectionComponent({
                             iossNumber: metadata.iossNumber ?? '',
                           };
                           onFormChange(next);
+                          setExtraAddressOpen(null);
+                          setCustomsOpen(null);
                           setIsAddressBookOpen(false);
                         }}
                       >
@@ -474,12 +504,15 @@ function AddressFormSectionComponent({
       </div>
 
       <div>
-        <button type="button" className="text-sm font-semibold text-amber-800 underline underline-offset-4"
-          aria-expanded={extraAddressOpen || hasExtraAddress} aria-controls="checkout-extra-address"
-          onClick={() => setExtraAddressOpen(value => !value)}>
-          {t('checkout.extraAddress')}
-        </button>
-        <div id="checkout-extra-address" hidden={!extraAddressOpen && !hasExtraAddress} className="mt-3 space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <AddressDisclosure id="checkout-extra-address" expanded={extraAddressExpanded}
+            invalid={extraAddressInvalid} label={t('checkout.extraAddress')} icon={MapPin}
+            onToggle={() => setExtraAddressOpen(!extraAddressExpanded)} />
+          <AddressDisclosure id="checkout-optional-address" expanded={customsExpanded}
+            invalid={customsInvalid} label={t('checkout.moreOptions')} icon={FileText}
+            onToggle={() => setCustomsOpen(!customsExpanded)} />
+        </div>
+        <div id="checkout-extra-address" hidden={!extraAddressExpanded} className="mt-3 space-y-2">
           <label className="block space-y-1.5 col-span-2">
             <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.addressLine2')}</span>
             <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine2} autoComplete="address-line2" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.addressLine2Placeholder')} id="checkout-addressLine2" aria-invalid={invalid('addressLine2')} value={form.addressLine2} onChange={updateField('addressLine2')} />
@@ -489,15 +522,7 @@ function AddressFormSectionComponent({
             <input maxLength={RECIPIENT_ADDRESS_LIMITS.addressLine3} autoComplete="address-line3" className="h-10 w-full rounded-xl glass-input px-3.5 text-base font-medium text-gray-900 placeholder:text-slate-300 min-[800px]:text-sm" placeholder={t('checkout.addressLine3Placeholder')} id="checkout-addressLine3" aria-invalid={invalid('addressLine3')} value={form.addressLine3} onChange={updateField('addressLine3')} />
           </label>
         </div>
-      </div>
-
-      <div>
-        <button type="button" className="text-sm font-semibold text-amber-800 underline underline-offset-4"
-          aria-expanded={customsOpen || hasCustoms} aria-controls="checkout-optional-address"
-          onClick={() => setCustomsOpen(value => !value)}>
-          {t('checkout.moreOptions')}
-        </button>
-        <div id="checkout-optional-address" hidden={!customsOpen && !hasCustoms}>
+        <div id="checkout-optional-address" hidden={!customsExpanded}>
           <div className="mt-3 grid gap-3 min-[800px]:grid-cols-2">
             <label className="space-y-1.5">
               <span className="block pl-3.5 text-xs font-medium text-gray-700">{t('checkout.company')}</span>
@@ -538,7 +563,7 @@ function AddressFormSectionComponent({
         {t('checkout.saveAddress')}
       </label>
 
-      <div className={`rounded-2xl border px-4 py-3 text-sm ${
+      <div className={`rounded-xl border px-2.5 py-2 text-sm ${
         shippingQuote.status === 'available'
           ? 'border-emerald-100 bg-emerald-50/70 text-emerald-800'
           : shippingQuote.status === 'unavailable' || shippingQuote.status === 'error'
@@ -546,9 +571,7 @@ function AddressFormSectionComponent({
           : 'border-amber-100 bg-amber-50/70 text-amber-700'
       }`}>
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="font-semibold">{t('checkout.deliveryTitle')}</div>
-          </div>
+          <h3 className="px-0.5 font-semibold">{t('checkout.deliveryTitle')}</h3>
           {shippingQuote.status !== 'available' ? (
             <span className="text-right font-bold">
               {shippingQuote.status === 'loading'
@@ -560,7 +583,7 @@ function AddressFormSectionComponent({
           ) : null}
         </div>
         {shippingQuote.status === 'available' ? (
-          <div className="mt-3 grid grid-cols-2 gap-2 min-[800px]:grid-cols-1">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {shippingQuote.options.map((option) => {
               const isSelected = shippingQuote.selectedMethod === option.methodCode;
               return (
@@ -568,34 +591,30 @@ function AddressFormSectionComponent({
                   key={option.methodCode}
                   type="button"
                   aria-pressed={isSelected}
-                  className={`rounded-2xl border px-3 py-3 text-left transition ${
+                  className={`flex min-h-[4rem] min-w-0 flex-col items-start gap-1 rounded-xl border px-2.5 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 ${
+                    shippingQuote.options.length === 1 ? 'col-span-2' : ''
+                  } ${
                     isSelected
-                      ? 'border-amber-300 bg-white/95 shadow-[0_10px_24px_rgba(217,119,6,0.12)]'
-                      : 'border-white/80 bg-white/65 hover:border-amber-200 hover:bg-white/90'
+                      ? 'border-amber-300 bg-white shadow-sm'
+                      : 'border-emerald-100 bg-white/75 hover:border-amber-200 hover:bg-white'
                   }`}
                   onClick={() => onShippingMethodChange(option.methodCode)}
                 >
-                  <div className="flex min-w-0 flex-col gap-1 min-[800px]:flex-row min-[800px]:justify-between">
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">
-                        {option.methodCode === 'speedy'
-                          ? t('checkout.speedyShipping')
-                          : t('checkout.standardShipping')}
-                      </div>
-                      <div className="mt-1 text-xs leading-5 text-slate-500">
-                        {option.methodCode === 'speedy'
-                          ? t('checkout.speedyShippingDescription')
-                          : t('checkout.standardShippingDescription')}
-                      </div>
-                    </div>
-                    <div className="break-words text-sm font-bold text-amber-800">
+                  <div className="flex w-full flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
+                    <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <span aria-hidden="true" className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${isSelected
+                        ? 'border-amber-600 bg-amber-600 text-white'
+                        : 'border-slate-400'}`}>
+                        {isSelected ? <Check className="h-3 w-3" /> : null}
+                      </span>
+                      {t(option.methodCode === 'speedy' ? 'checkout.speedyShipping' : 'checkout.standardShipping')}
+                    </span>
+                    <span className="min-w-0 break-words text-sm text-amber-900">
                       <ShippingPrice amountUsd={option.amountUsd} snapshot={option.snapshot} currency={selectedCurrency} />
-                    </div>
+                    </span>
                   </div>
                   {option.estimatedDelivery ? (
-                    <div className="mt-2 text-xs font-medium text-slate-500">
-                      {t('checkout.estimatedDelivery')}: {option.estimatedDelivery}
-                    </div>
+                    <span className="break-words text-xs leading-4 text-slate-600">{option.estimatedDelivery}</span>
                   ) : null}
                 </button>
               );
