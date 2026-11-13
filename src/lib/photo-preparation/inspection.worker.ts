@@ -25,13 +25,17 @@ let detectorPending: Promise<FaceDetector> | undefined
 let landmarkPending: Promise<FaceLandmarker> | undefined
 const vision = () => visionPending ??= FilesetResolver.forVisionTasks('/mediapipe/tasks-vision/wasm')
   .catch(error => { visionPending = undefined; throw error })
+// MediaPipe's default canvas detection can take the DOM fallback on iOS Chrome.
+// Give each task its own canvas in this Worker, where document is unavailable.
 const detector = () => detectorPending ??= vision().then(files => FaceDetector.createFromOptions(files, {
+  canvas: new OffscreenCanvas(1, 1),
   baseOptions: { modelAssetPath: '/mediapipe/models/blaze_face_short_range.tflite', delegate: 'CPU' },
   runningMode: 'IMAGE',
   minDetectionConfidence: 0.55,
   minSuppressionThreshold: 0.3,
 })).catch(error => { detectorPending = undefined; throw error })
 const landmarks = () => landmarkPending ??= vision().then(files => FaceLandmarker.createFromOptions(files, {
+  canvas: new OffscreenCanvas(1, 1),
   baseOptions: { modelAssetPath: PHOTO_ASSET_BASE + 'face_landmarker.task', delegate: 'CPU' },
   runningMode: 'IMAGE',
   numFaces: 2,
