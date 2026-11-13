@@ -7,6 +7,7 @@ import { getMultiBookOfferRule } from '@/lib/multi-book-offer'
 import { type MultiBookOfferRule } from '@/lib/multi-book-offer-core'
 import { ownerFilter, requireCheckoutOrderAccess, resolveCheckoutOwner } from '@/lib/checkout-owner'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
+import { shippingDiscountPresentation } from '@/lib/shipping-pricing'
 import { calculateShippingQuote } from '@/lib/shipping-quote-server'
 import { createOrderCheckoutFingerprint } from '@/lib/checkout-session-lock'
 import { getSiteUrl } from '@/lib/site-url'
@@ -96,6 +97,12 @@ export async function loadCheckoutPricingItems(orderId: string, filter: ReturnTy
 
 type PricingItems = Awaited<ReturnType<typeof loadCheckoutPricingItems>>
 
+function checkoutOriginalShippingAmount(amountUsd: number, snapshot: unknown) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null
+  const promotion = shippingDiscountPresentation(amountUsd, snapshot as Record<string, unknown>)
+  return promotion.discountPercent > 0 ? promotion.originalAmountUsd : null
+}
+
 function itemSubtotal(items: PricingItems) {
   return items.reduce((sum, item) => sum + Math.round(item.unitPriceUsd * 100) * item.quantity, 0) / 100
 }
@@ -108,7 +115,7 @@ export function priceCheckout({
   multiBookRule: MultiBookOfferRule | null
   productDiscountUsd: number
   shippingDiscountUsd: number
-  shipping: { amountUsd: number; metadata: Record<string, string> }
+  shipping: { amountUsd: number; metadata: Record<string, string>; snapshot: Record<string, unknown> | null }
 }) {
   const pricing = calculateCheckoutPricing({ items, currency, multiBookRule, productDiscountUsd, shippingDiscountUsd, shipping })
   const subtotalUsd = itemSubtotal(items)
@@ -120,6 +127,7 @@ export function priceCheckout({
     shippingDiscountUsd: Math.min(shipping.amountUsd, shippingDiscountUsd),
     multiBookDiscountUsd: pricing.multiBookDiscountUsd,
     shippingAmountUsd: shipping.amountUsd,
+    originalShippingAmountUsd: checkoutOriginalShippingAmount(shipping.amountUsd, shipping.snapshot),
   }
   if (quote.totalMinor <= 0) throw new CheckoutQuoteError('Zero-total checkout is not supported yet', 400)
   return { ...pricing, quote }
@@ -145,7 +153,7 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
 
   const { data: order, error } = await supabaseAdmin
     .from('orders')
-    .select('order_id, order_status, payment_id, checkout_session_id, checkout_currency, shipping_method, shipping_address, shipping_amount_usd, discount_amount_usd, shipping_discount_amount_usd, multi_book_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
+    .select('order_id, order_status, payment_id, checkout_session_id, checkout_currency, shipping_method, shipping_address, shipping_amount_usd, shipping_rate_snapshot, discount_amount_usd, shipping_discount_amount_usd, multi_book_discount_amount_usd, applied_product_discount_instrument_id, applied_shipping_discount_instrument_id')
     .eq('order_id', orderId)
     .maybeSingle()
   if (error || !order?.order_id) throw new CheckoutQuoteError('Order not found', 404)
@@ -189,6 +197,7 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
         shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
         multiBookDiscountUsd: Number(order.multi_book_discount_amount_usd ?? 0),
         shippingAmountUsd: Number(order.shipping_amount_usd ?? 0),
+        originalShippingAmountUsd: checkoutOriginalShippingAmount(Number(order.shipping_amount_usd ?? 0), order.shipping_rate_snapshot),
       }
       return { ...context, quote, reuse: existingSession, fresh: null }
     }
@@ -205,6 +214,7 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
   const shippingZoneCode = String(option.snapshot.zoneCode || '').trim() || null
   const shipping = {
     amountUsd: option.amountUsd,
+    snapshot: option.snapshot,
     metadata: {
       order_id: orderId,
       shipping_rate: String(option.snapshot.rateName || option.snapshot.methodName || ''),

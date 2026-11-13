@@ -8,4 +8,5 @@ export type CheckoutQuote = {
   shippingDiscountUsd: number
   multiBookDiscountUsd: number
   shippingAmountUsd: number
+  originalShippingAmountUsd: number | null
 }

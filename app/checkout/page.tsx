@@ -436,6 +436,17 @@ function CheckoutPageContent() {
 
   const displayedSubtotalUsd = paymentQuote?.subtotalUsd ?? total;
   const displayedShippingAmountUsd = paymentQuote?.shippingAmountUsd ?? shippingAmountUsd;
+  const displayedShippingSnapshot = paymentQuote
+    ? { originalShippingAmountUsd: paymentQuote.originalShippingAmountUsd }
+    : selectedShippingOption?.snapshot;
+  const displayedDeliveryQuote = paymentQuote
+    ? {
+        ...shippingQuote,
+        options: shippingQuote.options.map(option => option.methodCode === shippingQuote.selectedMethod
+          ? { ...option, amountUsd: paymentQuote.shippingAmountUsd, snapshot: displayedShippingSnapshot ?? null }
+          : option),
+      }
+    : shippingQuote;
   const discountTotalUsd = paymentQuote?.productDiscountUsd ?? Math.min(total, Math.max(0, discountAmountUsd));
 
   const multiBookDiscountUsd = useMemo(
@@ -480,10 +491,6 @@ function CheckoutPageContent() {
   const formattedShippingDiscount = useMemo(
     () => formatCurrencyAmount(shippingDiscountTotalUsd, selectedCurrency),
     [selectedCurrency, shippingDiscountTotalUsd]
-  );
-  const formattedNetShipping = useMemo(
-    () => formatCurrencyAmount(netShippingAmountUsd, selectedCurrency),
-    [selectedCurrency, netShippingAmountUsd]
   );
   const formattedTotal = useMemo(
     () => paymentQuote
@@ -1394,7 +1401,7 @@ function CheckoutPageContent() {
             className="scroll-mt-24 space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4">
             <AddressFormSection
               form={form}
-              shippingQuote={shippingQuote}
+              shippingQuote={displayedDeliveryQuote}
               selectedCurrency={selectedCurrency}
               userCustomerId={sessionUser?.customerId ?? null}
               saveAddress={saveAddress}
@@ -1457,11 +1464,10 @@ function CheckoutPageContent() {
             discountTotalUsd={discountTotalUsd}
             shippingDiscountTotalUsd={shippingDiscountTotalUsd}
             shippingAmountUsd={displayedShippingAmountUsd}
-            shippingRateSnapshot={paymentQuote ? null : selectedShippingOption?.snapshot}
+            shippingRateSnapshot={displayedShippingSnapshot}
             currency={selectedCurrency}
             formattedSubtotal={formattedSubtotal}
             formattedShipping={formattedShipping}
-            formattedNetShipping={formattedNetShipping}
             formattedDiscount={formattedDiscount}
             formattedShippingDiscount={formattedShippingDiscount}
             multiBookDiscountTotalUsd={multiBookDiscountUsd}

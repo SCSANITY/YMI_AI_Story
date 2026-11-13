@@ -175,12 +175,12 @@ function DiscountSectionComponent({
                   setDiscountCodeInput(event.target.value.toUpperCase());
                 }}
                 placeholder={t('checkout.discountCodePlaceholder')}
-                className="h-12 flex-1 rounded-2xl border-2 border-gray-200 bg-white px-4 text-base font-semibold tracking-wide text-gray-900 transition placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-400 focus:border-amber-400 focus:outline-none"
+                className="h-12 min-w-0 flex-1 rounded-2xl border-2 border-gray-200 bg-white px-4 text-base font-semibold tracking-wide text-gray-900 transition placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-400 focus:border-amber-400 focus:outline-none"
               />
               <Button
                 type="button"
                 variant="outline"
-                className="glass-action-btn glass-action-btn--amber h-12 shrink-0 rounded-2xl px-6 text-sm font-bold text-amber-700"
+                className="glass-action-btn glass-action-btn--amber h-12 shrink-0 rounded-2xl px-4 text-sm font-bold text-amber-700 sm:px-6"
                 disabled={!canApply || isApplyingDiscount || !orderId || !discountCodeInput.trim()}
                 onClick={() => void handleApplyCode()}
               >

@@ -11,6 +11,7 @@ test('checkout quote uses authoritative shipping for an attached voucher and mak
   assert.equal(quote.totalMinor, 30420)
   assert.ok(Math.abs(quote.shippingAmountUsd - 4) < 0.00001)
   assert.equal(quote.shippingDiscountUsd, quote.shippingAmountUsd)
+  assert.equal(quote.originalShippingAmountUsd, 10)
   assert.deepEqual(structuredClone(h.order), before)
   assert.deepEqual(h.calls, [])
   assert.deepEqual(h.stripeCalls, [])
@@ -21,7 +22,7 @@ test('checkout quote uses authoritative shipping for an attached voucher and mak
 })
 
 test('a changed total requires confirmation before the previous session expires or a new one is created', async () => {
-  const h = shippingHarness()
+  const h = shippingHarness({ percent: 60 })
   const first = await (await h.checkout()).json()
   const { quote } = await (await h.paymentQuote('USD', 'speedy')).json()
   for (const rate of h.tables.shipping_base_rates) rate.base_cost_hkd *= 2
@@ -32,6 +33,7 @@ test('a changed total requires confirmation before the previous session expires 
   const changed = await response.json()
   assert.equal(changed.code, 'checkout_quote_changed')
   assert.ok(changed.quote.totalMinor > quote.totalMinor)
+  assert.equal(changed.quote.originalShippingAmountUsd, 40)
   assert.equal(h.stripeSessions.get(first.sessionId).status, 'open')
   assert.equal(h.stripeCalls.length, 1)
   assert.equal(h.calls.length, writes)
@@ -44,12 +46,13 @@ test('a changed total requires confirmation before the previous session expires 
 })
 
 test('an existing matching Stripe session is quoted and reused at its frozen total', async () => {
-  const h = shippingHarness()
+  const h = shippingHarness({ percent: 60 })
   const created = await (await h.checkout()).json()
   const existing = h.stripeSessions.get(created.sessionId)
   for (const rate of h.tables.shipping_base_rates) rate.base_cost_hkd *= 2
   const { quote } = await (await h.paymentQuote()).json()
   assert.equal(quote.totalMinor, existing.amount_total)
+  assert.equal(quote.originalShippingAmountUsd, 10)
   const mismatch = await h.checkout('USD', 'standard', address, quote.totalMinor + 1)
   assert.equal(mismatch.status, 409)
   assert.equal(existing.status, 'open')

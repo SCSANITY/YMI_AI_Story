@@ -102,7 +102,7 @@ function checkoutRoute({ prepareFails = false, lockFails = false,
   }
   function requireModule(name) {
     if (Object.hasOwn(dependencies, name)) return dependencies[name]
-    if (['@/lib/checkout-pricing', '@/lib/checkout-line-items', '@/lib/checkout-quote-server'].includes(name)) {
+    if (['@/lib/checkout-pricing', '@/lib/checkout-line-items', '@/lib/checkout-quote-server', '@/lib/shipping-pricing'].includes(name)) {
       const source = readFileSync(new URL(`../src/${name.slice(2)}.ts`, import.meta.url), 'utf8')
       const loaded = { exports: {} }
       vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {

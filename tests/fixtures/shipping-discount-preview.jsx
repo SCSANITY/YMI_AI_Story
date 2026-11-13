@@ -38,7 +38,7 @@ function Preview() {
         </section>
         <CheckoutSummaryPanel isPriceReady={quote.status === 'available'} showShipping={true} shippingStatus={quote.status}
           discountTotalUsd={0} shippingDiscountTotalUsd={free ? shipping : 0} shippingAmountUsd={shipping} shippingRateSnapshot={option?.snapshot} currency={currency}
-          formattedSubtotal={formatCurrencyAmount(39, currency)} formattedShipping={formatCurrencyAmount(shipping, currency)} formattedNetShipping={formatCurrencyAmount(free ? 0 : shipping, currency)}
+          formattedSubtotal={formatCurrencyAmount(39, currency)} formattedShipping={formatCurrencyAmount(shipping, currency)}
           formattedDiscount={formatCurrencyAmount(0, currency)} formattedShippingDiscount={formatCurrencyAmount(free ? shipping : 0, currency)} formattedTotal={formatCurrencyAmount(39 + (free ? 0 : shipping), currency)} t={t} />
       </div>
       <p className="mt-8"><a href="/admin/discounts" className="font-semibold text-amber-800 underline">Open Admin Discounts preview</a></p>

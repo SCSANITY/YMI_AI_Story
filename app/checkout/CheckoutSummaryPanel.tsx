@@ -17,7 +17,6 @@ type CheckoutSummaryPanelProps = {
   currency: CheckoutCurrency;
   formattedSubtotal: string;
   formattedShipping: string;
-  formattedNetShipping: string;
   formattedDiscount: string;
   formattedShippingDiscount: string;
   multiBookDiscountTotalUsd?: number;
@@ -40,7 +39,6 @@ export function CheckoutSummaryPanel({
   currency,
   formattedSubtotal,
   formattedShipping,
-  formattedNetShipping,
   formattedDiscount,
   formattedShippingDiscount,
   multiBookDiscountTotalUsd = 0,
@@ -53,9 +51,7 @@ export function CheckoutSummaryPanel({
     shippingStatus === 'loading'
       ? t('checkout.shippingCalculating')
       : shippingStatus === 'available'
-      ? shippingDiscountTotalUsd > 0
-        ? formattedNetShipping
-        : formattedShipping
+      ? formattedShipping
       : shippingStatus === 'missing'
       ? t('checkout.shippingPending')
       : t('checkout.shippingUnavailable');
@@ -96,7 +92,7 @@ export function CheckoutSummaryPanel({
         {discountTotalUsd > 0 ? (
           <div className="flex items-center justify-between">
             <span>{t('checkout.discountLine')}</span>
-            <span className="font-semibold text-emerald-700">-{formattedDiscount}</span>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-xs font-semibold tabular-nums text-emerald-700">-{formattedDiscount}</span>
           </div>
         ) : null}
         {showShipping && shippingDiscountTotalUsd > 0 ? (

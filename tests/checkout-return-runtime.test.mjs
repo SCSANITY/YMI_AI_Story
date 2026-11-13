@@ -64,7 +64,7 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
     if (path === '/api/checkout/quote') {
       const body = JSON.parse(options.body)
       return onQuote?.(body) ?? Response.json({ quote: { currency: body.currency, totalMinor: 3900, subtotalUsd: 39,
-        productDiscountUsd: 5, shippingDiscountUsd: Math.min(3, currentOrder.shipping_amount_usd), multiBookDiscountUsd: 0, shippingAmountUsd: currentOrder.shipping_amount_usd } })
+        productDiscountUsd: 5, shippingDiscountUsd: Math.min(3, currentOrder.shipping_amount_usd), multiBookDiscountUsd: 0, shippingAmountUsd: currentOrder.shipping_amount_usd, originalShippingAmountUsd: 20 } })
     }
     if (path === '/api/checkout/session') return onPayment?.(JSON.parse(options.body)) ?? Response.json({ url: 'https://checkout.example.test/session' })
     if (path.startsWith('/api/checkout/apply-')) return Response.json({ ok: true, code: options.body ? JSON.parse(options.body).code : undefined, ...summary })
@@ -112,6 +112,7 @@ test('Stripe cancel/full reload waits for complete order,items,quote and both di
   assert.equal(discounts.discountTotalUsd, 5); assert.equal(discounts.shippingDiscountTotalUsd, 3)
   assert.equal(discounts.allowAutoApply, false)
   assert.equal(h.node('summary').props.shippingAmountUsd, 8)
+  assert.equal(h.node('summary').props.shippingRateSnapshot.originalShippingAmountUsd, 20)
   assert.equal(h.node('summary').props.formattedTotal, '$39.00') // 39 - 5 + 8 - 3
   const back = uiNodes(h.runtime.tree).find(n => n.type === 'button' && uiText(n) === 'checkout.backToAddress')
   back.props.onClick(); await h.runtime.flush()
@@ -538,7 +539,7 @@ test('quantity changes are gated too: zero requests and zero local mutation whil
 test('payment updates both visible totals after a price change and waits for a second click', async () => {
   const h = checkoutFixture({ onPayment: body => body.expectedTotalMinor === 3900
     ? Response.json({ code: 'checkout_quote_changed', quote: { currency: 'USD', totalMinor: 4100,
-      subtotalUsd: 39, productDiscountUsd: 5, shippingDiscountUsd: 3, multiBookDiscountUsd: 0, shippingAmountUsd: 10 } }, { status: 409 })
+      subtotalUsd: 39, productDiscountUsd: 5, shippingDiscountUsd: 3, multiBookDiscountUsd: 0, shippingAmountUsd: 10, originalShippingAmountUsd: 25 } }, { status: 409 })
     : Response.json({ url: 'https://checkout.example.test/session' }) })
   await settleCheckout(h)
   assert.equal(h.node('summary').props.formattedTotal, '$39.00')
@@ -548,6 +549,10 @@ test('payment updates both visible totals after a price change and waits for a s
   assert.match(uiText(h.runtime.tree), /checkout.quoteChanged/)
   assert.equal(h.node('summary').props.formattedTotal, '$41.00')
   assert.equal(h.node('mobile-payment').props.totalLabel, '$41.00')
+  assert.equal(h.node('summary').props.shippingRateSnapshot.originalShippingAmountUsd, 25)
+  assert.equal(h.node('summary').props.formattedShipping, '$10.00')
+  assert.equal(h.node('address-form').props.shippingQuote.options[0].amountUsd, 10)
+  assert.equal(h.node('address-form').props.shippingQuote.options[0].snapshot.originalShippingAmountUsd, 25)
   assert.equal(h.calls.filter(call => call.path === '/api/checkout/session').length, 1)
 
   h.node('payment').props.onPlaceOrder()

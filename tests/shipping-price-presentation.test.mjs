@@ -56,16 +56,17 @@ test('rounding-equivalent displayed prices do not advertise a saving', () => {
   assert.doesNotMatch(html, /<s\b|% OFF/)
 })
 
-const props = { hiddenOnPaymentStep: false, isPriceReady: true, showShipping: true, shippingStatus: 'available',
+const props = { isPriceReady: true, showShipping: true, shippingStatus: 'available',
   discountTotalUsd: 0, shippingDiscountTotalUsd: 4, shippingAmountUsd: 4, shippingRateSnapshot: { originalShippingAmountUsd: 10 }, currency: 'USD',
-  formattedSubtotal: '$39.00', formattedShipping: '$4.00', formattedNetShipping: '$0.00', formattedDiscount: '$0.00',
+  formattedSubtotal: '$39.00', formattedShipping: '$4.00', formattedDiscount: '$0.00',
   formattedShippingDiscount: '$4.00', formattedTotal: '$39.00', t: key => key }
 
 test('summary uses the same promotional price while keeping the free-shipping deduction and final total', () => {
   const html = render(Summary, props)
   assert.match(html, /<s[^>]*>\$10\.00<\/s>/)
   assert.match(html, /60% OFF/)
-  assert.match(html, />\$0\.00<\/span>/)
+  assert.match(html, />\$4\.00<\/span>/)
+  assert.doesNotMatch(html, />\$0\.00<\/span>/)
   assert.match(html, /-\$4\.00/)
   assert.match(html, /\$39\.00/)
 })
