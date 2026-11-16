@@ -8,15 +8,20 @@ import { getPublishedHomepageBanners } from '@/lib/homepage-banners';
 import { getMultiBookOfferRule } from '@/lib/multi-book-offer';
 import { LaunchOfferBanner } from '@/components/LaunchOfferBanner';
 import { DEFAULT_SITE_TITLE, publicPageMetadata } from '@/lib/seo';
+import { HOME_AND_BOOKS_SEARCH_DESCRIPTION, HOME_SEARCH_TITLE } from '@/lib/search-copy';
 
 export const revalidate = 300;
 
-export const metadata: Metadata = publicPageMetadata({
-  title: 'Personalized Children\'s Storybooks',
-  absoluteTitle: DEFAULT_SITE_TITLE,
-  description: 'Create magical personalized storybooks where your child becomes the hero through AI-powered illustrated previews, keepsake PDFs, and family-ready storytelling.',
-  path: '/',
-});
+export const metadata: Metadata = {
+  ...publicPageMetadata({
+    title: 'Personalized Children\'s Storybooks',
+    absoluteTitle: DEFAULT_SITE_TITLE,
+    description: 'Create magical personalized storybooks where your child becomes the hero through AI-powered illustrated previews, keepsake PDFs, and family-ready storytelling.',
+    path: '/',
+  }),
+  title: { absolute: HOME_SEARCH_TITLE },
+  description: HOME_AND_BOOKS_SEARCH_DESCRIPTION,
+};
 
 export default async function HomePage() {
   const [banners, multiBookRule] = await Promise.all([

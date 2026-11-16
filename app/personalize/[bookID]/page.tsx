@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import PersonalizePage from '@/components/PersonalizePage';
 import { CustomizeAccessGate } from '@/components/CustomizeAccessGate'
 import { publicPageMetadata } from '@/lib/seo'
+import { STORY_SEARCH_DESCRIPTIONS } from '@/lib/search-copy'
 import { loadActiveTemplateCatalog, loadActiveTemplateDetail } from '@/lib/template-catalog-server'
 import { getPublishedHomepageBanners } from '@/lib/homepage-banners'
 
@@ -45,6 +46,7 @@ export async function generateMetadata({
       path: `/personalize/${encodeURIComponent(templateId)}`,
       image: book?.coverUrl || undefined,
     }),
+    description: STORY_SEARCH_DESCRIPTIONS.get(templateId) ?? description,
   }
 }
 
