@@ -264,6 +264,7 @@ test('managed sender reuses the customer/week key on replay and keeps the unsubs
   const templates = [
     'OtpEmail', 'OrderReceiptEmail', 'DeliveryEmail', 'AbandonmentEmail',
     'LogisticsUpdateEmail', 'SupportReplyEmail', 'KolPartnershipEmail', 'NewsletterConfirmationEmail',
+    'GeneralMailLetterEmail',
   ]
   const send = loadUi('src/lib/email.tsx', {
     ...Object.fromEntries(templates.map((name) => ['@/components/emails/' + name, component])),

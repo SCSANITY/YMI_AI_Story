@@ -465,6 +465,7 @@ export async function sendGeneralMailDraft(params: {
       subject: message.subject,
       bodyText: message.body_text || '',
       bodyHtml: message.body_html || '',
+      bodyDocument: message.body_document,
       attachments,
       inReplyTo: message.in_reply_to,
       references: message.references_header,

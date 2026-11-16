@@ -50,6 +50,21 @@ Auth templates, Stripe owns its receipt, and General Mail is authored in the
 Admin composer. These four entries expose ownership and trigger facts but no
 local preview.
 
+### Admin Inbox stationery
+
+General Mail applies the approved compact brand layout at send time for
+new messages, replies, reply-all, and forwards from all shared mailboxes.
+The sender's rich text and signature stay in the body; the banner, logo,
+parchment, and circular seal come from the shared artwork. The seal flows
+after the body. The subject, plain-text part, recipients, attachments, reply
+headers, draft storage and Sent view retain their existing behavior.
+
+Existing send attempts keep their original HTML on retry. The event records
+the layout used by new attempts so a retry keeps the same format and provider
+key. No schema or provider-configuration change is required. To render the
+two offline samples, run `npx tsx scripts/render-admin-outbound-previews.tsx`
+and open `email-previews/admin-outbound/index.html`.
+
 The retired `GeneralInboxReplyEmail` component and
 `sendGeneralInboxReplyEmail` sender do not exist in active code. General Inbox
 uses the canonical rich General Mail workspace.

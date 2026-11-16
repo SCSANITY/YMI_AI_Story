@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type EmailEventStatus = 'pending' | 'sent' | 'failed' | 'external_observed'
 
-type EmailEventRow = {
+export type EmailEventRow = {
   email_event_id: string
   email_key: string
   provider: string
@@ -45,7 +45,12 @@ function normalizeContext(context?: Record<string, unknown>) {
 }
 
 export async function prepareEmailEvent(
-  params: EmailEventBase & { retryFailed?: boolean; retryPendingAfterMs?: number; retryWithinMs?: number }
+  params: EmailEventBase & {
+    retryFailed?: boolean
+    retryPendingAfterMs?: number
+    retryWithinMs?: number
+    retainContextOnRetry?: boolean
+  }
 ): Promise<PreparedEmailEvent> {
   const now = new Date().toISOString()
   const insertPayload = {
@@ -89,6 +94,11 @@ export async function prepareEmailEvent(
   const existingRow = existing as EmailEventRow | null
   if (!existingRow) return { event: null, shouldSend: false }
 
+  // A sender can pin template metadata when provider retries must keep their original format.
+  const retryContext = params.retainContextOnRetry
+    ? existingRow.context ?? {}
+    : normalizeContext(params.context)
+
   // An ambiguous provider attempt must not be replayed past its dedupe window.
   if (params.retryWithinMs && Date.now() - Date.parse(existingRow.created_at) >= params.retryWithinMs) {
     return { event: existingRow, shouldSend: false }
@@ -101,7 +111,7 @@ export async function prepareEmailEvent(
         .from('email_events')
         .update({
           error_message: null,
-          context: normalizeContext(params.context),
+          context: retryContext,
           updated_at: now,
         })
         .eq('email_event_id', existingRow.email_event_id)
@@ -132,7 +142,7 @@ export async function prepareEmailEvent(
       subject: params.subject ?? existingRow.subject,
       error_message: null,
       failed_at: null,
-      context: normalizeContext(params.context),
+      context: retryContext,
       updated_at: now,
     })
     .eq('email_event_id', existingRow.email_event_id)

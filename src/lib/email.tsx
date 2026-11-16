@@ -33,6 +33,7 @@ import {
   type GeneralMailboxKey,
 } from '@/lib/general-inbox-mailboxes'
 import { getGeneralMailPrimaryAddress } from '@/lib/general-mail'
+import { GeneralMailLetterEmail } from '@/components/emails/GeneralMailLetterEmail'
 import { normalizeInternetMessageId } from '@/lib/support-inbound'
 import {
   buildNewsletterConfirmationText,
@@ -42,6 +43,7 @@ import {
   markEmailEventFailed,
   markEmailEventSent,
   prepareEmailEvent,
+  type EmailEventRow,
 } from '@/lib/emailEvents'
 
 const resendApiKey = process.env.RESEND_API_KEY || ''
@@ -70,7 +72,7 @@ type SendEmailParams = {
 }
 
 type ManagedEmailParams = SendEmailParams & {
-  prepareReact?:()=>Promise<React.ReactElement>
+  prepareReact?: (event: EmailEventRow) => React.ReactElement | undefined | Promise<React.ReactElement | undefined>
   emailKey: string
   idempotencyKey: string
   fromEnvName?: string
@@ -82,6 +84,7 @@ type ManagedEmailParams = SendEmailParams & {
   retryFailed?: boolean
   retryPendingAfterMs?: number
   retryWithinMs?: number
+  retainContextOnRetry?: boolean
 }
 
 type SenderResolution = {
@@ -262,6 +265,7 @@ async function sendManagedEmail(params: ManagedEmailParams) {
     retryFailed: params.retryFailed,
     retryPendingAfterMs: params.retryPendingAfterMs,
     retryWithinMs: params.retryWithinMs,
+    retainContextOnRetry: params.retainContextOnRetry,
   })
 
   if (!shouldSend || !event) {
@@ -275,7 +279,7 @@ async function sendManagedEmail(params: ManagedEmailParams) {
   }
 
   try {
-    const react=params.prepareReact ? await params.prepareReact() : params.react
+    const react = params.prepareReact ? await params.prepareReact(event) : params.react
     const response = await sendEmail({ ...params,react, from: resolvedFrom })
     const responseAny = response as
       | { data?: { id?: string | null } | null; id?: string | null }
@@ -734,6 +738,8 @@ async function retrieveResendMessageMetadata(providerMessageId: string) {
   }
 }
 
+const GENERAL_MAIL_STATIONERY = 'stationery-v1'
+
 type SendGeneralMailboxMessageParams = {
   messageId: string
   mailboxKey: GeneralMailboxKey
@@ -743,6 +749,7 @@ type SendGeneralMailboxMessageParams = {
   subject: string
   bodyText: string
   bodyHtml: string
+  bodyDocument?: Record<string, unknown> | null
   attachments: Array<{
     content: Buffer
     filename: string
@@ -772,9 +779,14 @@ export async function sendGeneralMailboxMessage(params: SendGeneralMailboxMessag
     subject: params.subject,
     text: params.bodyText,
     html: params.bodyHtml,
+    // Earlier attempts retain their original HTML under the same provider key.
+    prepareReact: (event) => event.context?.generalMailLayout === GENERAL_MAIL_STATIONERY
+      ? <GeneralMailLetterEmail bodyDocument={params.bodyDocument ?? undefined} bodyText={params.bodyText} />
+      : undefined,
     attachments: params.attachments,
     context: {
       generalMailMessageId: params.messageId,
+      generalMailLayout: GENERAL_MAIL_STATIONERY,
       mailboxKey: params.mailboxKey,
       toCount: params.to.length,
       ccCount: params.cc.length,
@@ -783,6 +795,7 @@ export async function sendGeneralMailboxMessage(params: SendGeneralMailboxMessag
     },
     retryFailed: true,
     retryPendingAfterMs: 2 * 60 * 1000,
+    retainContextOnRetry: true,
   })
 
   if (emailResult.skipped && emailResult.event?.status !== 'sent') {
