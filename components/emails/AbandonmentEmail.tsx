@@ -1,216 +1,174 @@
 import * as React from 'react'
 import { Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, emailAsset, emailTheme, emailButtons } from './EmailLayout'
+import type { ReminderStage } from '@/lib/unpaid-reminders'
 
 type AbandonmentItem = {
   name: string
   quantity: number
   childName?: string
-  /** Personalized cover preview; falls back to the decorative placeholder */
   coverImageUrl?: string
 }
 
 type AbandonmentEmailProps = {
   resumeUrl: string
-  items: AbandonmentItem[]
-  displayId?: string | null
-  orderId?: string
+  items: readonly AbandonmentItem[]
+  stage: ReminderStage
+  firstName?: string | null
 }
 
 const MAX_COVERS = 8
 
-export function buildAbandonmentEmailCopy(items: readonly AbandonmentItem[]) {
-  const childName = items
-    .map((item) => item.childName?.trim().replace(/\s+/g, ' '))
-    .find((name): name is string => Boolean(name))
+function normalizeName(name?: string | null) {
+  return name?.trim().replace(/\s+/g, ' ') || null
+}
 
-  if (!childName) {
-    return {
-      subject: 'Your magical journey is waiting! ✨',
-      title: 'Your magical journey is waiting! ✨',
-      body: 'You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give someone special a gift they’ll treasure forever—your reserved copy is ready for printing!',
-      cta: 'Bring This Story Home',
-    }
-  }
+export function buildAbandonmentEmailCopy(
+  stage: ReminderStage,
+  items: readonly AbandonmentItem[],
+  firstName?: string | null
+) {
+  const candidate = normalizeName(items[0]?.childName)
+  const child = candidate && items.every((item) => normalizeName(item.childName) === candidate)
+    ? candidate
+    : null
+  const multipleBooks = items.length > 1 || (items[0]?.quantity ?? 0) > 1
+  const greeting = `Hi ${normalizeName(firstName) ?? 'there'},`
 
-  return {
-    subject: `${childName}’s magical journey is waiting! ✨`,
-    title: `${childName}’s magical journey is waiting! ✨`,
-    body: `You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give ${childName} a gift they’ll treasure forever—your reserved copy is ready for printing!`,
-    cta: `Bring ${childName}'s Story Home`,
+  switch (stage) {
+    case 1:
+      return {
+        subject: child ? `A little adventure is waiting for ${child}` : 'A little adventure is waiting',
+        title: 'A little adventure is waiting',
+        preheader: 'A personalised hardcover, ready for your first reading together.',
+        greeting,
+        paragraphs: [
+          `A little adventure with ${child ?? 'your child'} at its heart is still in your basket.`,
+          'Imagine opening the book together. They spot their name, recognise themselves in the illustrations, and look up at you with a delighted “That’s me!”',
+          multipleBooks
+            ? 'You’ve chosen the stories. Now let’s turn them into personalised hardcover keepsakes, ready for your first reading together.'
+            : 'You’ve chosen the story. Now let’s turn it into a personalised hardcover keepsake, ready for your first reading together.',
+        ],
+        cta: 'Bring Their Story to Life',
+        help: 'If there’s anything you’d like to know before placing your order, simply reply to this email. We’d be delighted to help you make this gift feel just right.',
+      }
+    case 2:
+      return {
+        subject: child ? `Where will ${child}’s story take you?` : 'Where will the story take you?',
+        title: 'Where will the story take you?',
+        preheader: 'One adventure can start a dozen little conversations.',
+        greeting,
+        paragraphs: [
+          'The first surprise is seeing themselves on the page. The next is imagining what they could do.',
+          `As ${child ?? 'your child'} steps into the adventure, a story can become an invitation to ask questions, explore a brave choice, or notice a small act of kindness.`,
+          'Read together, pause at a favourite illustration, and ask, “What would you do?” Those little conversations are where inner growth can begin.',
+          multipleBooks
+            ? 'The books you chose are still in your basket. Make them theirs, and see where the stories take you together.'
+            : `${child ? `${child}’s book` : 'Your chosen book'} is still in your basket. Make it theirs, and see where the story takes you both.`,
+        ],
+        cta: 'Complete My Order',
+      }
+    case 3:
+      return {
+        subject: child ? `A story ${child} can call their own` : 'A story to call their own',
+        title: 'A story to call their own',
+        preheader: 'A keepsake for this little chapter of childhood.',
+        greeting,
+        paragraphs: [
+          `Of all the books on the shelf, imagine ${child ?? 'your child'} reaching for the one with their name on it.`,
+          'Perhaps it becomes the story you share before lights out, the book packed for a weekend away, or a favourite they proudly show someone they love.',
+          'With each reading, it can gather memories of this chapter of childhood, and the moments you made time to share.',
+          multipleBooks
+            ? 'The books you chose are still in your basket. Complete your order, and give them stories to call their own.'
+            : `Your chosen book is still in your basket. Complete your order, and give ${child ?? 'your child'} a story to call their own.`,
+        ],
+        cta: 'Make Their Story a Reality',
+        help: `If you have any questions before bringing ${child ? `${child}’s story` : 'their story'} to life, we’d be delighted to help. Simply reply to this email.`,
+      }
   }
 }
 
-/**
- * Book cover gallery: 1 book → large centered cover; 2-3 → static centered
- * row (safe in every client); 4+ → horizontal scroll strip (scrolls in
- * Apple Mail/iOS; Gmail strips overflow and shows a clipped row, acceptable).
- */
-function CoverGallery({ items }: { items: AbandonmentItem[] }) {
-  if (items.length === 0) return null
-  const size = items.length === 1 ? 210 : 150
-  const shown = items.slice(0, MAX_COVERS)
-  const scroll = items.length > 3
+function BookCard({ item, compact }: { item: AbandonmentItem; compact: boolean }) {
   return (
-    <Section style={scroll ? styles.galleryScroll : styles.galleryRow}>
-      {shown.map((item, idx) => (
-        <div key={`${item.name}-${idx}`} style={{ ...styles.tile, width: `${size}px` }}>
-          <div style={{ ...styles.tileFrame, width: `${size}px`, height: `${size}px` }}>
-            <Img
-              src={item.coverImageUrl || emailAsset('cover-placeholder.png')}
-              alt={item.name}
-              width={size}
-              height={size}
-              style={item.coverImageUrl ? styles.tileImage : styles.tilePlaceholder}
-            />
-          </div>
-          <Text style={styles.tileName}>{item.name}</Text>
-        </div>
-      ))}
+    <Section style={styles.card}>
+      <Img
+        src={item.coverImageUrl || emailAsset('cover-placeholder.png')}
+        alt=""
+        width={compact ? 96 : 154}
+        style={styles.cover}
+      />
+      <Text style={styles.bookTitle}>{item.name}</Text>
+      <Text style={styles.bookType}>
+        Personalised Hardcover{item.quantity > 1 ? ` · ${item.quantity} copies` : ''}
+      </Text>
     </Section>
   )
 }
 
-export function AbandonmentEmail({ resumeUrl, items, displayId, orderId }: AbandonmentEmailProps) {
-  const label = displayId || orderId
-  const copy = buildAbandonmentEmailCopy(items)
+export function AbandonmentEmail({ resumeUrl, items, stage, firstName }: AbandonmentEmailProps) {
+  const copy = buildAbandonmentEmailCopy(stage, items, firstName)
+  const remainingBooks = items.length - MAX_COVERS
   return (
-    <EmailLayout
-      previewText="Your checkout is still waiting"
-      title={copy.title}
-      subtitle={copy.body}
-    >
-      {label ? (
-        <Text style={styles.orderLine}>
-          Order&nbsp;&nbsp;
-          <Link href={resumeUrl} style={styles.orderLink}>
-            {label}&nbsp;→
-          </Link>
-        </Text>
-      ) : null}
+    <EmailLayout previewText={copy.preheader} title={copy.title}>
+      <Section style={styles.letter}>
+        <Text style={styles.body}>{copy.greeting}</Text>
+        {copy.paragraphs.map((paragraph) => <Text key={paragraph} style={styles.body}>{paragraph}</Text>)}
 
-      <CoverGallery items={items} />
-
-      <Section style={styles.listWrap}>
-        <Text style={styles.listTitle}>Waiting in Your Cart</Text>
-        {items.length === 0 ? (
-          <Text style={styles.itemText}>Your selected items are ready to checkout.</Text>
-        ) : (
-          items.map((item, idx) => (
-            <Text key={`${item.name}-${idx}`} style={styles.itemText}>
-              ✦&nbsp;&nbsp;{item.name}&nbsp;&nbsp;
-              <span style={styles.itemQty}>×{item.quantity}</span>
-            </Text>
-          ))
+        {items.slice(0, MAX_COVERS).map((item, index) => (
+          <BookCard key={`${item.name}-${index}`} item={item} compact={items.length > 1} />
+        ))}
+        {remainingBooks > 0 && (
+          <Text style={styles.remaining}>And {remainingBooks} more {remainingBooks === 1 ? 'title' : 'titles'} in your basket.</Text>
         )}
-      </Section>
 
-      <Section style={styles.ctaWrap}>
-        <Link href={resumeUrl} style={emailButtons.primary}>
-          {copy.cta}
-        </Link>
+        <Section style={styles.cta}>
+          <Link href={resumeUrl} style={{ ...emailButtons.primary, padding: '13px 21px', letterSpacing: '0.025em' }}>
+            {copy.cta}
+          </Link>
+        </Section>
+
+        {copy.help && <Text style={styles.body}>{copy.help}</Text>}
+
+        <table role="presentation" width="100%" cellPadding={0} cellSpacing={0}>
+          <tbody>
+            <tr>
+              <td>
+                <Text style={styles.signoff}>With warmth,<br /><strong>The YMI Story Team</strong></Text>
+              </td>
+              <td align="right">
+                <Img src={emailAsset('seal.png')} alt="" width={100} style={styles.seal} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </Section>
     </EmailLayout>
   )
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  orderLine: {
-    margin: '0 0 16px',
-    color: emailTheme.ink,
-    fontSize: '14px',
-    textAlign: 'center',
-    fontFamily: emailTheme.serif,
-    fontWeight: 600,
-  },
-  orderLink: {
-    color: emailTheme.goldDeep,
-    fontSize: '15px',
-    fontWeight: 700,
-    textDecoration: 'underline',
-    fontFamily: emailTheme.num,
-    letterSpacing: '0.02em',
-  },
-  galleryRow: {
-    margin: '0 0 22px',
-    textAlign: 'center',
-  },
-  galleryScroll: {
-    margin: '0 0 22px',
-    textAlign: 'left',
-    whiteSpace: 'nowrap',
-    overflowX: 'auto',
-    WebkitOverflowScrolling: 'touch',
-    paddingBottom: '6px',
-  },
-  tile: {
-    display: 'inline-block',
-    verticalAlign: 'top',
-    whiteSpace: 'normal',
-    margin: '0 8px 6px',
-  },
-  tileFrame: {
-    border: `1px solid ${emailTheme.frame}`,
-    borderRadius: '12px',
-    backgroundColor: emailTheme.parchmentShade,
-    overflow: 'hidden',
-    boxShadow: '0 8px 20px -10px rgba(154, 110, 44, 0.4)',
-  },
-  tileImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    display: 'block',
-    borderRadius: '11px',
-  },
-  tilePlaceholder: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain',
-    display: 'block',
-    padding: '8px',
-  },
-  tileName: {
-    margin: '8px 0 0',
-    color: emailTheme.ink,
-    fontSize: '12.5px',
-    lineHeight: 1.45,
-    textAlign: 'center',
-    fontFamily: emailTheme.serif,
-    fontWeight: 600,
-  },
-  listWrap: {
-    margin: '0 0 22px',
-    border: `1px solid ${emailTheme.frame}`,
-    borderRadius: '12px',
-    padding: '16px 18px',
-    backgroundColor: emailTheme.parchmentShade,
-  },
-  listTitle: {
-    margin: '0 0 10px',
-    color: emailTheme.inkSoft,
-    fontSize: '12px',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.14em',
-    fontFamily: emailTheme.serif,
-  },
-  itemText: {
-    margin: '0 0 6px',
+  letter: { maxWidth: '560px', margin: '0 auto' },
+  body: {
+    margin: '0 0 14px',
     color: emailTheme.inkDark,
-    fontSize: '14px',
-    lineHeight: 1.55,
-    fontWeight: 600,
     fontFamily: emailTheme.serif,
+    fontSize: '16px',
+    lineHeight: 1.65,
   },
-  itemQty: {
-    color: emailTheme.ink,
-    fontSize: '13px',
-    fontWeight: 600,
-    fontFamily: emailTheme.num,
-  },
-  ctaWrap: {
-    margin: '0 0 8px',
+  card: {
+    maxWidth: '312px',
+    margin: '0 auto 10px',
+    border: `1px solid ${emailTheme.frameSoft}`,
+    borderRadius: '14px',
+    backgroundColor: emailTheme.parchmentShade,
+    padding: '18px 22px',
     textAlign: 'center',
   },
+  cover: { maxWidth: '100%', height: 'auto', margin: '0 auto', borderRadius: '9px', border: `1px solid ${emailTheme.frameSoft}` },
+  bookTitle: { margin: '9px 0 2px', color: emailTheme.inkDark, fontSize: '16px', fontWeight: 700, fontFamily: emailTheme.serif, lineHeight: 1.4 },
+  bookType: { margin: '0', color: emailTheme.ink, fontSize: '11px', fontFamily: emailTheme.sans, lineHeight: 1.4 },
+  remaining: { margin: '0 0 10px', color: emailTheme.ink, textAlign: 'center', fontSize: '13px', fontFamily: emailTheme.serif },
+  cta: { textAlign: 'center', margin: '17px 0 18px' },
+  signoff: { margin: '0', color: emailTheme.inkDark, fontFamily: emailTheme.serif, fontSize: '16px', lineHeight: 1.55 },
+  seal: { maxWidth: '100%', height: 'auto', marginLeft: 'auto' },
 }

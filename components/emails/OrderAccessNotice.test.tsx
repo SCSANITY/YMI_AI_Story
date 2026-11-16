@@ -44,7 +44,7 @@ test('renders the shared secure-access notice in all three order-link emails', a
 test('keeps the unpaid checkout-resume email outside the order-access promise', async () => {
   const html = await render(
     <AbandonmentEmail
-      orderId="order-1"
+      stage={1}
       resumeUrl="https://www.ymistory.com/checkout?orderId=order-1"
       items={[]}
     />
@@ -54,38 +54,33 @@ test('keeps the unpaid checkout-resume email outside the order-access promise', 
   assert.doesNotMatch(html, new RegExp(ORDER_ACCESS_NOTICE_TEXT, 'i'))
 })
 
-test('personalizes the unpaid checkout reminder from the story child name', async () => {
+test('personalizes the subject and salutation without borrowing one child’s name for another book', async () => {
   const items = [{ name: "Mia's Forest Adventure", quantity: 1, childName: '  Mia  ' }]
-  const copy = buildAbandonmentEmailCopy(items)
+  const copy = buildAbandonmentEmailCopy(1, items, ' Sophie ')
+  assert.equal(copy.subject, 'A little adventure is waiting for Mia')
+  assert.equal(copy.greeting, 'Hi Sophie,')
+  assert.equal(buildAbandonmentEmailCopy(2, items).subject, 'Where will Mia’s story take you?')
+  assert.equal(buildAbandonmentEmailCopy(3, items).subject, 'A story Mia can call their own')
 
-  assert.deepEqual(copy, {
-    subject: 'Mia’s magical journey is waiting! ✨',
-    title: 'Mia’s magical journey is waiting! ✨',
-    body: 'You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give Mia a gift they’ll treasure forever—your reserved copy is ready for printing!',
-    cta: "Bring Mia's Story Home",
-  })
-
+  const mixedItems = [...items, { name: "Jack's Ocean Adventure", quantity: 2, childName: 'Jack' }]
+  const mixedCopy = buildAbandonmentEmailCopy(2, mixedItems)
+  assert.equal(mixedCopy.subject, 'Where will the story take you?')
+  assert.equal(mixedCopy.greeting, 'Hi there,')
+  assert.match(mixedCopy.paragraphs.join(' '), /The books you chose are still in your basket/)
+  assert.doesNotMatch(mixedCopy.paragraphs.join(' '), /Mia|Jack/)
   const html = await render(
-    <AbandonmentEmail
-      orderId="order-1"
-      resumeUrl="https://www.ymistory.com/checkout?orderId=order-1"
-      items={items}
-    />
+    <AbandonmentEmail stage={2} resumeUrl="https://www.ymistory.com/checkout?orderId=order-1" items={mixedItems} />
   )
-
-  assert.match(html, /Mia’s magical journey is waiting! ✨/)
-  assert.match(html, /Give Mia a gift they’ll treasure forever—your reserved copy is ready for printing!/)
-  assert.match(html, /Bring Mia(?:'|&#x27;)s Story Home/)
-  assert.doesNotMatch(html, /Still Interested in Your Story|Resume Checkout/)
+  assert.match(html, /Mia(?:'|&#x27;)s Forest Adventure/)
+  assert.match(html, /Jack(?:'|&#x27;)s Ocean Adventure/)
+  assert.match(html, /2 copies/)
 })
 
 test('uses natural unpaid-reminder copy when a legacy item has no child name', () => {
-  assert.deepEqual(buildAbandonmentEmailCopy([]), {
-    subject: 'Your magical journey is waiting! ✨',
-    title: 'Your magical journey is waiting! ✨',
-    body: 'You’re just one step away from bringing this Magical Story to life. We’ve saved your personalized preview so you can pick up right where you left off. Give someone special a gift they’ll treasure forever—your reserved copy is ready for printing!',
-    cta: 'Bring This Story Home',
-  })
+  const copy = buildAbandonmentEmailCopy(3, [{ name: 'Forest Adventure', quantity: 1 }])
+  assert.equal(copy.subject, 'A story to call their own')
+  assert.equal(copy.greeting, 'Hi there,')
+  assert.match(copy.paragraphs.join(' '), /imagine your child reaching/)
 })
 
 test('shipped email links directly to a validated carrier URL and labels tracking-only updates', async () => {

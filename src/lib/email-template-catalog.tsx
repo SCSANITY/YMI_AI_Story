@@ -117,10 +117,14 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     ownership: 'web',
     triggerMode: 'automatic',
     trigger: 'A delayed callback is due for an eligible unpaid order (30 minutes, 24 hours, or 6 days after order creation).',
-    subject: '{Name}’s magical journey is waiting! ✨',
+    subject: 'Varies by reminder stage',
     sender: 'Support mailbox',
     description: 'Returns the customer to checkout and summarizes the books still waiting.',
-    variants: DEFAULT_VARIANT,
+    variants: [
+      { id: 'stage-1', label: '30 minutes' },
+      { id: 'stage-2', label: '24 hours' },
+      { id: 'stage-3', label: '6 days' },
+    ],
   },
   {
     id: 'cart-reminder',
@@ -289,12 +293,13 @@ export async function renderEmailTemplatePreview(
       node = (
         <AbandonmentEmail
           resumeUrl="https://www.ymistory.com/checkout?orderId=sample-order"
-          displayId="YMI-2026-0903"
+          stage={variantId === 'stage-2' ? 2 : variantId === 'stage-3' ? 3 : 1}
+          firstName="Sophie"
           items={[
             {
               name: 'The Secret Journey Through Eight Plants',
               quantity: 1,
-              childName: 'Sophie',
+              childName: 'Mia',
               coverImageUrl,
             },
           ]}

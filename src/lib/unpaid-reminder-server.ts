@@ -49,12 +49,14 @@ async function loadTask(job: Job): Promise<ReminderTask | null> {
   return data as ReminderTask | null
 }
 
-async function loadOrder(orderId: string): Promise<ReminderOrder | null> {
+type ReminderOrderWithName = ReminderOrder & { first_name: string | null }
+
+async function loadOrder(orderId: string): Promise<ReminderOrderWithName | null> {
   const { data, error } = await supabaseAdmin.from('orders')
-    .select('order_id, created_at, order_status, payment_id, customer_id, display_id')
+    .select('order_id, created_at, order_status, payment_id, customer_id, display_id, first_name:shipping_address->>firstName')
     .eq('order_id', orderId).maybeSingle()
   if (error) throw new Error('Unable to load reminder order')
-  return data as ReminderOrder | null
+  return data as ReminderOrderWithName | null
 }
 
 async function dispatch(config: Config, task: ReminderTask, recovery = false) {
@@ -142,7 +144,7 @@ async function send(
   if (currentOrder.customer_id !== order.customer_id) throw new Error('Reminder recipient changed during dispatch')
   const result = await sendUnpaidReminderEmail({
     to: email, orderId: order.order_id, displayId: order.display_id,
-    items, customerId: order.customer_id, stage,
+    items, customerId: order.customer_id, stage, firstName: currentOrder.first_name,
     resumeUrl: new URL(`/checkout?orderId=${order.order_id}`, config.callbackUrl).href,
   })
   if (!result.skipped || result.event?.status === 'sent') return 'sent'

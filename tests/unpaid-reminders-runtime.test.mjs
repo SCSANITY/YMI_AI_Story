@@ -208,3 +208,46 @@ test('a rejected publish leaves the same task recoverable; the next dispatch is 
   assert.equal(providerCalls[1].flowControl.rate, 6)
   assert.deepEqual(JSON.parse(JSON.stringify(providerCalls[1].body)), { orderId, stage: 1 })
 })
+
+test('last order read provides only the first-name field for the selected reminder stage', async () => {
+  const recent = new Date(Date.now() - 6 * 24 * 60 * 60_000 - 1_000).toISOString()
+  const task = { order_id: orderId, stage: 3, due_at: new Date(reminderDueAt(recent, 3)).toISOString(), completed_at: null }
+  const order = { order_id: orderId, created_at: recent, order_status: 'unpaid', payment_id: null, customer_id: 'fixture-customer', display_id: 'FIXTURE' }
+  const items = [{ name: 'Forest Adventure', quantity: 1, childName: 'Mia' }]
+  const sends = []
+  const reads = []
+  const { handleUnpaidReminder } = loadUi('src/lib/unpaid-reminder-server.ts', {
+    'server-only': {},
+    '@upstash/qstash': {},
+    '@/lib/email': {
+      async sendUnpaidReminderEmail(params) { sends.push(params); return { skipped: false } },
+    },
+    '@/lib/orderFulfillment': { async loadOrderItemsWithCovers() { return items } },
+    '@/lib/supabaseAdmin': { supabaseAdmin: { from(table) {
+      return {
+        select(fields) { reads.push([table, fields]); return this },
+        eq() { return this },
+        update() { return this },
+        async maybeSingle() {
+          if (table === 'order_reminder_tasks') return { data: task }
+          if (table === 'customers') return { data: { email: 'customer@example.test' } }
+          assert.equal(table, 'orders')
+          const isFinalRead = reads.filter(([name]) => name === 'orders').length === 2
+          return { data: { ...order, first_name: isFinalRead ? 'Sophie' : 'Old name' } }
+        },
+        async is() { return { error: null } },
+      }
+    } } },
+  }, { URL })
+
+  const result = await handleUnpaidReminder({ startAt: Date.parse(recent), callbackUrl }, { orderId, stage: 3 })
+  assert.equal(result, 'sent')
+  assert.equal(sends.length, 1)
+  assert.equal(sends[0].stage, 3)
+  assert.equal(sends[0].firstName, 'Sophie')
+  assert.equal(sends[0].to, 'customer@example.test')
+  assert.equal(sends[0].resumeUrl, `https://example.test/checkout?orderId=${orderId}`)
+  assert.deepEqual(reads.filter(([table]) => table === 'orders').map(([, fields]) => fields.split(', ').at(-1)), [
+    'first_name:shipping_address->>firstName', 'first_name:shipping_address->>firstName',
+  ])
+})

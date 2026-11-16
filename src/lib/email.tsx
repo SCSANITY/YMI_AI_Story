@@ -14,6 +14,7 @@ import {
   AbandonmentEmail,
   buildAbandonmentEmailCopy,
 } from '@/components/emails/AbandonmentEmail'
+import type { ReminderStage } from '@/lib/unpaid-reminders'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { CheckoutCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import {
@@ -410,12 +411,13 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
 
 type SendUnpaidReminderEmailParams = {
   to: string
+  firstName?: string | null
   orderId: string
   displayId?: string | null
   resumeUrl?: string
   items?: { name: string; quantity: number; childName?: string; coverImageUrl?: string }[]
   customerId?: string | null
-  stage: 1 | 2 | 3
+  stage: ReminderStage
 }
 
 export const UNPAID_REMINDER_RETRY_WINDOW_MS = 20 * 60 * 60 * 1000
@@ -423,7 +425,7 @@ export const UNPAID_REMINDER_RETRY_WINDOW_MS = 20 * 60 * 60 * 1000
 export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailParams) {
   const resumeUrl = params.resumeUrl || buildAbsoluteUrl(`/checkout?orderId=${params.orderId}`) || ''
   const items = params.items || []
-  const reminderCopy = buildAbandonmentEmailCopy(items)
+  const reminderCopy = buildAbandonmentEmailCopy(params.stage, items, params.firstName)
 
   return sendManagedEmail({
     emailKey: 'unpaid_reminder',
@@ -443,8 +445,8 @@ export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailPar
     },
     react: (
       <AbandonmentEmail
-        orderId={params.orderId}
-        displayId={params.displayId}
+        stage={params.stage}
+        firstName={params.firstName}
         resumeUrl={resumeUrl}
         items={items}
       />
