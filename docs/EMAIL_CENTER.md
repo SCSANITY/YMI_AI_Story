@@ -109,9 +109,12 @@ for the 30-minute, 24-hour and six-day checkpoints. Each order and checkpoint
 has a distinct event key. The callback checks the order and its payment before
 sending, and moves straight to the latest due checkpoint if an earlier
 checkpoint was missed. Existing orders are not backfilled. There are at most
-three scheduled messages per order. All stages currently share the same
-Abandonment Email copy builder; the stage is recorded separately for evidence
-and deduplication.
+three scheduled messages per order. The shared Abandonment Email template
+selects a distinct subject, body, and checkout button label for each stage.
+The Email Center previews all three variants. The greeting uses the first
+name saved on the order when available; the letter uses a child's name only
+if every book has the same name. The stage remains part of the delivery
+record and deduplication key.
 
 Order Start persists the first task after saving the order items, before the
 response. It publishes to QStash after the response. Each callback only looks
