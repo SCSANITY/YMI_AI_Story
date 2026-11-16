@@ -242,6 +242,8 @@ type EmailLayoutProps = {
   bannerUrl?: string | null
   /** Authentication emails keep links first-party by omitting the social row. */
   showSocialLinks?: boolean
+  /** Bring the shared stationery closer to the height of a personal letter. */
+  compact?: boolean
   children: React.ReactNode
 }
 
@@ -251,6 +253,7 @@ export function EmailLayout({
   subtitle,
   bannerUrl,
   showSocialLinks = true,
+  compact = false,
   children,
 }: EmailLayoutProps) {
   const banner = bannerUrl === null ? null : bannerUrl || emailAsset('banner.png')
@@ -276,24 +279,38 @@ export function EmailLayout({
             .ym-hide-sm { display: none !important; }
           }
         `}</style>
+        {compact ? <style>{`
+          @media only screen and (max-width: 640px) {
+            .ym-letter-content, .ym-letter-footer { padding-left: 17px !important; padding-right: 17px !important; }
+          }
+        `}</style> : null}
       </Head>
       <Preview>{previewText}</Preview>
       <Body style={styles.body}>
-        <Section style={styles.outerWrap}>
-          <Container style={styles.container}>
+        <Section style={compact ? { ...styles.outerWrap, padding: '16px 0' } : styles.outerWrap}>
+          <Container style={compact ? { ...styles.container, maxWidth: '720px' } : styles.container}>
             {/* Padding wrapper (NOT margin — margin on a 100%-width table pushes the
                 right border outside the clipping container and it disappears) */}
-            <Section style={styles.framePad}>
+            <Section style={compact ? { padding: '7px' } : styles.framePad}>
               <Section style={innerFrameStyle}>
                 {banner ? <Img src={banner} alt="A Memory to Keep — YMI Story" style={styles.banner} /> : null}
 
-                <Section style={styles.content} className="ym-content">
-                  <Img src={emailAsset('logo-full.png')} alt="YMI Story" width="132" className="ym-logo" style={styles.logo} />
+                <Section
+                  style={compact ? { padding: '14px 36px 6px' } : styles.content}
+                  className={compact ? 'ym-content ym-letter-content' : 'ym-content'}
+                >
+                  <Img
+                    src={emailAsset('logo-full.png')}
+                    alt="YMI Story"
+                    width={compact ? '116' : '132'}
+                    className="ym-logo"
+                    style={compact ? { ...styles.logo, margin: '0 auto 10px' } : styles.logo}
+                  />
                   <EmailDivider width="46%" />
 
                   {title ? (
                     <Heading style={styles.title} className="ym-title">{title}</Heading>
-                  ) : (
+                  ) : compact ? null : (
                     <Section style={styles.noTitleSpacer} />
                   )}
                   {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -301,7 +318,10 @@ export function EmailLayout({
                   {children}
                 </Section>
 
-                <Section style={styles.footerContainer} className="ym-footer">
+                <Section
+                  style={compact ? { padding: '0 36px 15px' } : styles.footerContainer}
+                  className={compact ? 'ym-footer ym-letter-footer' : 'ym-footer'}
+                >
                   <EmailDivider width="70%" />
 
                   {/* Symmetric centered stack: social icons → Contact Us → copyright */}
