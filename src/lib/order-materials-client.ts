@@ -21,9 +21,9 @@ export function recordingIntent(item: MaterialItem) {
 
 export function materialWriteError(code: string | undefined) {
   switch (code) {
-    case 'dedication_closed': return 'The message editing window has closed.'
+    case 'dedication_closed': return 'This message can no longer be edited online. Please contact our team if you need help.'
     case 'dedication_revision_conflict': return 'This message changed in another window. Check the latest version before saving again.'
-    case 'voice_window_closed': return 'The recording replacement window has closed. Your current recording is unchanged.'
+    case 'voice_window_closed': return 'This recording can no longer be changed online. Your current recording is unchanged.'
     case 'voice_shipped': return 'Your book has shipped. Please contact our team about recording changes.'
     case 'voice_revision_conflict': return 'This recording changed in another window or with our team. Check the latest recording before starting a new update.'
     case 'voice_update_unknown': return 'We could not confirm this update. Check the current recording below before starting another upload. We have not retried it.'

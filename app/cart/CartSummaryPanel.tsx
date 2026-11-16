@@ -53,7 +53,7 @@ export function CartSummaryPanel({
           <span className="font-bold text-gray-900">{formatDisplayCurrency(hasSelection ? selectedTotal : subtotal, displayCurrency)}</span>
         </div>
       </div>
-      <p className="mt-4 text-xs text-slate-600">Dedication is optional. Add it now or within 48 hours after purchase.</p>
+      <p className="mt-4 text-xs text-slate-600">Dedication is optional. Add a message now or review it from your order page.</p>
       <Button
         size="lg"
         className="mt-6 w-full rounded-full"

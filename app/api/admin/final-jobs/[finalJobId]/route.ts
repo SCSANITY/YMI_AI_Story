@@ -192,6 +192,5 @@ export async function GET(
     pages: signedPages,
     print_artifact: printArtifact,
     dedication_snapshot: dedicationSnapshot,
-    dedication_deadline:dedicationSnapshot?.deadline,
   })
 }

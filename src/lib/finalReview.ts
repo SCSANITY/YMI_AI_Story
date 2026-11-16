@@ -101,7 +101,6 @@ export type FinalJobDetail = {
   pages: FinalJobPageRow[]
   print_artifact: ManualPrintArtifactClient | null
   dedication_snapshot: { decision: 'skipped' | 'confirmed'; body: string | null;revision:number } | null
-  dedication_deadline?:string
 }
 
 async function downloadStorageBuffer(path: string): Promise<Buffer> {

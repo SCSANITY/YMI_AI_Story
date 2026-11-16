@@ -39,9 +39,11 @@ rollback, test-send, raw HTML, sender, or link-target control.
   The private PDF link expires 72 hours after signing. The order page remains
   available for authenticated re-download. The order identifier is plain text.
   The Hardcover + Voice variant links to the existing protected materials page.
-  Customers can submit a first voice sample before shipping; replacing a sample
-  and editing a dedication still use the 48-hour window from payment. The
-  48-hour reply reminder does not reopen editing or change print scheduling.
+  Both editions ask customers to review the PDF and reply within 48 hours of the
+  delivery email. This is a reminder, not a system timer. The order and materials
+  pages show whichever actions are currently allowed. Dedication locks per book at
+  print release; customer recording edits lock at shipment. Confirmation mail
+  links to materials without quoting a deadline.
 - Subscriptions: Newsletter Confirmation and Weekly Cart Reminder.
 - Human Communication: Support Reply, Partnership Reply, and General Mail.
 

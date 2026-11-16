@@ -11,7 +11,6 @@ import { SIGNATURE_VOICE_CONSENT_VERSION } from '@/lib/signature-voice'
 import {MaterialMessageEditor as DedicationEditor} from '@/components/orders/MaterialMessageEditor'
 import {MaterialShippedNotice} from '@/components/orders/MaterialShippedNotice'
 import {MaterialTime} from '@/components/orders/MaterialTime'
-import {MaterialDeadlineNotice} from '@/components/orders/MaterialDeadlineNotice'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import Link from 'next/link'
 
@@ -139,7 +138,6 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
         <button disabled={busy} className={button}>{challenge?'Verify and open materials':'Send verification code'}</button>
         {challenge?<button type="button" className="ml-3 text-sm underline" onClick={()=>setChallenge('')}>Use another email</button>:null}
       </form></section> : materials ? <>
-      <MaterialDeadlineNotice materials={materials}/>
       <button type="button" disabled={busy} className="text-sm underline" onClick={()=>{setError('');void load().catch(()=>setError('Unable to refresh the current status. Please try again.'))}}>Reload current status</button>
       {materials.items.map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
         <div className="flex items-center gap-4">
@@ -155,7 +153,7 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
             {item.can_replace_voice?<button type="button" className={`${button} mt-3`} disabled={busy} onClick={()=>{setVoiceItem({...item});setRecording(null);setError('')}}>Update recording</button>
               :null}
           </>:<>
-            <p className="my-3 text-sm">{item.can_edit_dedication?'Please provide your recording as soon as possible. Without it, completion of your Hardcover + Voice book will be delayed.':'We still need your recording to make this book. Please submit it as soon as possible. Once submitted, it is final.'}</p>
+            <p className="my-3 text-sm">Please submit your recording so we can finish your Hardcover + Voice book.</p>
             {item.can_submit_voice?<button type="button" className={button} disabled={busy} onClick={()=>{setVoiceItem({...item});setRecording(null);setError('')}}>Record or upload now</button>
               :<p className="text-sm">Online submission is unavailable. Please contact our team.</p>}
           </>}

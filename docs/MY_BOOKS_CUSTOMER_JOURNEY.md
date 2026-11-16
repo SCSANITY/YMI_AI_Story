@@ -68,10 +68,10 @@ documentation.
 
 The shared text beside both purchase buttons is:
 
-> We'll use your saved edition and any saved message or recording. After payment, you can add or update your message and Voice Edition recording within 48 hours, before shipment. If your recording is still missing, you can upload it later, before shipment.
+> We'll use your saved edition and any saved message or recording. After payment, visit your order page to review your message and manage your Voice Edition recording.
 
 The optional-message status is **Optional message — add it now or after purchase.**
-These prompts do not change paid-line deadlines, consent, shipment eligibility
+These prompts do not change consent, shipment eligibility
 or the materials page. Purchase errors remain in place for a user-initiated retry;
 there is no automatic checkout replay.
 

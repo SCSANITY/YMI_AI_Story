@@ -56,7 +56,7 @@ export function PrintVersionReview({
     <div className="mt-4 space-y-4">
       <section className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-5" aria-label="Purchased book dedication">
         <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">Insert-page dedication</p>
-        <p className="mt-2 text-xs">Print release opens 48 hours after payment. Prepare the PDF using the current message below.</p>
+        <p className="mt-2 text-xs">Prepare the print PDF using the current message below.</p>
         {artifact && artifact.dedication_revision!==dedicationSnapshot?.revision?<p role="alert" className="mt-2 text-sm text-rose-700">The dedication changed. Prepare and upload a new print PDF before release.</p>:null}
         {dedicationSnapshot?.decision === 'confirmed' && dedicationSnapshot.body ? <>
           <p className="mt-2 text-xs text-[var(--admin-muted)]">Current message for this order line (revision {dedicationSnapshot.revision}). Copy it into the separately prepared insert page.</p>

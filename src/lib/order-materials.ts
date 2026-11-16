@@ -15,10 +15,9 @@ export type MaterialItem = {
   voice_asset_id: string | null
   voice_revision: number | null
   voice_uploaded_at: string | null
-  voice_replace_until: string
   book?: { title: string; cover_url: string | null; cover_status: 'ready' | 'pending' | 'unavailable' }
 }
-export type OrderMaterials = { order_id: string; dedication_deadline: string; items: MaterialItem[] }
+export type OrderMaterials = { order_id: string; items: MaterialItem[] }
 export class MaterialError extends Error {
   constructor(public readonly code: string, public readonly status: number) { super(code) }
 }
@@ -43,8 +42,7 @@ export function parseMaterialDedication(value: unknown): MaterialItem['dedicatio
 // scoped email-link DTO (no receipt/address/owner/asset paths or credentials).
 export function parseOrderMaterials(value: unknown): OrderMaterials {
   const row=materialRecord(value)
-  const deadline=typeof row.dedication_deadline==='string' ? Date.parse(row.dedication_deadline) : NaN
-  if (!Number.isFinite(deadline) || !Array.isArray(row.items) || !row.items.length || row.items.length>100) {
+  if (!Array.isArray(row.items) || !row.items.length || row.items.length>100) {
     throw new MaterialError('materials_unavailable',503)
   }
   const items=row.items.map(value=>{
@@ -54,7 +52,6 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
       || typeof item.can_edit_dedication!=='boolean' || typeof item.voice_ready!=='boolean'
       || typeof item.can_submit_voice!=='boolean'
       || typeof item.can_replace_voice!=='boolean'
-      || !Number.isFinite(Date.parse(String(item.voice_replace_until)))
       || (item.voice_asset_id!==null && (typeof item.voice_asset_id!=='string' || !isUuid(item.voice_asset_id)))
       || (item.voice_uploaded_at!==null && !Number.isFinite(Date.parse(String(item.voice_uploaded_at))))
       || item.voice_ready!==(item.voice_asset_id!==null)
@@ -80,11 +77,11 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
       dedication:parseMaterialDedication(item.dedication),can_edit_dedication:item.can_edit_dedication,
       voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice,can_replace_voice:item.can_replace_voice,
       voice_asset_id:item.voice_asset_id as string|null,voice_revision:item.voice_revision as number|null,
-      voice_uploaded_at:item.voice_uploaded_at as string|null,voice_replace_until:String(item.voice_replace_until),
+      voice_uploaded_at:item.voice_uploaded_at as string|null,
       ...(book?{book}:{}) } satisfies MaterialItem
   })
   if (new Set(items.map(item=>item.cart_item_id)).size!==items.length) throw new MaterialError('materials_unavailable',503)
-  return { order_id:materialUuid(row.order_id),dedication_deadline:new Date(deadline).toISOString(),items }
+  return { order_id:materialUuid(row.order_id),items }
 }
 export function parseDedicationWrite(value: unknown) {
   const row=materialRecord(value)

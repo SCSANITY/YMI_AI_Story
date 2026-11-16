@@ -4,6 +4,12 @@ S1 foundation plus offline S2 server contract. S3 interface/copy follows;
 all three slices release together with the matching Database migration. This
 is component contract documentation, not platform status or a release GO.
 
+Current Web materials and Admin views use server eligibility flags and do not
+display a payment-based deadline. The historical slices below explain the
+original deadline contract. The Web transition accepts both old and new
+database responses without consuming timestamp fields; see [Email Center](EMAIL_CENTER.md)
+for the customer reminder that remains in the PDF delivery email.
+
 ## One authority for each stage
 
 Before purchase: Creation voice fields remain authoritative. PersonalizePage,

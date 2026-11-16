@@ -353,8 +353,7 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
       const materialState=await loadTrustedOrderMaterials(params.orderId)
       const materialPath=await issueOrderMaterialLink(params.orderId,materialState.items.map(item=>item.cart_item_id))
       // Resolve only after send idempotency succeeds. No raw token in event context.
-      const materialNotice={deadline:materialState.dedication_deadline,names:distinctMaterialNames(materialState.items),
-        updateOpen:materialState.items.some(item=>item.can_edit_dedication),hasVoice:materialState.items.some(item=>item.package_type==='supreme'),
+      const materialNotice={names:distinctMaterialNames(materialState.items),
         pendingVoice:materialState.items.filter(item=>item.package_type==='supreme' && !item.voice_ready).length,
         url:buildAbsoluteUrl(materialPath) ?? materialPath}
       return (

@@ -737,7 +737,6 @@ function VoiceItem({
           </div>
           <h3 className="mt-2 text-base font-bold text-[var(--admin-page-ink)]">{item.title}</h3>
           <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Recording uploaded: {item.source.createdAt?<MaterialTime value={item.source.createdAt}/>:null} / Bound to this book: {item.declaration.boundAt?<MaterialTime value={item.declaration.boundAt}/>:null}</p>
-          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Customer replacement deadline: {item.declaration.replaceUntil?<MaterialTime value={item.declaration.replaceUntil}/>:null} (payment + 48h; closes at shipment)</p>
           {item.triage.narrationOutdated?<AdminNotice tone="warning" className="mt-2">Narration outdated: the recording changed. Regenerate and verify narration, then confirm hardware loading for this book again.</AdminNotice>:null}
           {item.retainedSourceCount>0 && <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Previous recording retained after shipment ({item.retainedSourceCount}). It has not been scheduled for 30-day removal.</p>}
           <p className="mt-1 text-xs text-[var(--admin-page-muted)]">

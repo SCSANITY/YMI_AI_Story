@@ -299,12 +299,9 @@ export async function renderEmailTemplatePreview(
           }}
           trackUrl={orderUrl}
           materialNotice={{
-            deadline: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
             url: orderUrl + '/materials',
             names: variant.edition === 'mixed' ? ['Sophie', 'Mia'] : [variant.edition === 'voice' ? 'Mia' : 'Sophie'],
             pendingVoice: variant.pendingVoice,
-            updateOpen: true,
-            hasVoice: variant.edition !== 'hardcover',
           }}
           coverImageUrl={coverImageUrl}
           coverTitle={items[0].name}

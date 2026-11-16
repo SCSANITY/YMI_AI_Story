@@ -67,7 +67,7 @@ export function PreviewMessageEditor({ creationId, childName, bookID, onClose, o
     <div ref={panel} className={styles.messageEditor} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <button type="button" className={styles.dialogClose} aria-label="Close message editor" disabled={saving} onClick={onClose}><X size={19} /></button>
       <h2 id={titleId}>A message for {childName}</h2>
-      <p>We’ll print your words on a special page in the finished book. You can also add or edit them within 48 hours after purchase.</p>
+      <p>We’ll print your words on a special page in the finished book. You can also review your message from your order page.</p>
       <label htmlFor={`${titleId}-body`}>Your message</label>
       <textarea ref={textarea} id={`${titleId}-body`} rows={7} value={draft} disabled={saving} onChange={event => { edited.current = true; setDraft(event.target.value) }} />
       <small>{dedicationBodyMetrics(draft).characters}/{DEDICATION_MAX_CHARACTERS} characters · up to {DEDICATION_MAX_LINE_BREAKS} line breaks</small>

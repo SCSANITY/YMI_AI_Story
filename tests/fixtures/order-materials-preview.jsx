@@ -4,15 +4,15 @@ import {createRoot} from 'react-dom/client'
 import {OrderMaterialsClient} from '../../components/orders/OrderMaterialsClient'
 const order='00000000-0000-4000-8000-000000000010',params=new URLSearchParams(location.search)
 let playbackAttempts=0
-const state=params.get('state')||'submitted',deadline=new Date(Date.now()+(state==='late'||state==='closed'?-3600000:86400000)).toISOString()
+const state=params.get('state')||'submitted'
 const items=[0,1].map(n=>({cart_item_id:`00000000-0000-4000-8000-00000000002${n}`,creation_id:'00000000-0000-4000-8000-000000000030',
  template_id:'Birthdayboy_story',child_name:n?'Sonia':'Alston',package_type:'supreme',book:{title:n?"Sonia's Birthday Adventure":"Alston's Birthday Adventure",cover_url:'/fixture-cover.svg',cover_status:'ready'},
- dedication:{decision:'confirmed',body:'With love, always.',revision:1},can_edit_dedication:state!=='late'&&state!=='closed',
+ dedication:{decision:'confirmed',body:'With love, always.',revision:1},can_edit_dedication:state!=='closed',
  voice_ready:state!=='missing'&&state!=='late',can_submit_voice:state!=='closed',can_replace_voice:state!=='missing'&&state!=='late'&&state!=='closed',
  voice_asset_id:state==='missing'||state==='late'?null:`00000000-0000-4000-8000-00000000004${n}`,voice_revision:1,
- voice_uploaded_at:state==='missing'||state==='late'?null:new Date().toISOString(),voice_replace_until:deadline}))
+ voice_uploaded_at:state==='missing'||state==='late'?null:new Date().toISOString()}))
 if(state!=='customer'&&state!=='shipped')location.hash='token='+('a'.repeat(43))
-const payload=()=>({order_id:order,dedication_deadline:deadline,items})
+const payload=()=>({order_id:order,items})
 function syntheticAudio(){
  const bytes=new Uint8Array(44+12*8000*2),view=new DataView(bytes.buffer)
  const text=(at,value)=>{for(let i=0;i<value.length;i++)bytes[at+i]=value.charCodeAt(i)}

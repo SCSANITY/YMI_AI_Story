@@ -17,10 +17,10 @@ function loadModule(path,injections={},globals={}) {
  return mod.exports
 }
 const helpers=globals=>loadModule('src/lib/order-materials-client.ts',{},globals)
-const dto=()=>({order_id:order,dedication_deadline:deadline,items:[{
+const dto=()=>({order_id:order,items:[{
  cart_item_id:line,creation_id:oldAsset,package_type:'supreme',book:{title:'Synthetic book'},
  dedication:{body:'With love',revision:1},can_edit_dedication:true,voice_ready:true,can_submit_voice:true,
- can_replace_voice:true,voice_asset_id:oldAsset,voice_revision:1,voice_uploaded_at:'2026-10-26T00:00:00Z',voice_replace_until:deadline,
+ can_replace_voice:true,voice_asset_id:oldAsset,voice_revision:1,voice_uploaded_at:'2026-10-26T00:00:00Z',
 }]})
 function harness({response,upload,initial=dto(),component='page'}={}) {
  let cursor=0,tree,dirty=true,server=initial
@@ -49,7 +49,6 @@ function harness({response,upload,initial=dto(),component='page'}={}) {
   '@/components/orders/MaterialTime':{MaterialTime:'local-time'},
   '@/components/orders/MaterialMessageEditor':{MaterialMessageEditor:'message-editor'},
   '@/components/orders/MaterialShippedNotice':{MaterialShippedNotice:'shipped-notice'},
-  '@/components/orders/MaterialDeadlineNotice':{MaterialDeadlineNotice:'deadline-notice'},
   '@/lib/order-materials':{parseOrderMaterialsPage:x=>x},'@/lib/order-materials-client':helpers({fetch:fetchMock}),
   '@/services/assets':{uploadUserAsset:async(...args)=>{uploads.push(args);return upload?upload(...args):{asset_id:newAsset,voice_authorization_id:'synthetic-authorization'}}},
   '@/lib/useI18n':{useI18n:()=>({t:()=> 'Explicit synthetic voice authorization'})},
@@ -135,8 +134,8 @@ test('failed upload leaves the current source and pending dialog,with no binding
 })
 
 test('closed or missing states use server booleans,not an optimistic client deadline gate',async()=>{
- const value=dto();Object.assign(value.items[0],{voice_ready:false,voice_asset_id:null,voice_replace_until:'2020-01-01T00:00:00Z',can_replace_voice:false,can_edit_dedication:false})
- const h=harness({initial:value});await h.settle();h.button('Record or upload now');assert.match(h.text(),/still need your recording/);h.cleanup()
+ const value=dto();Object.assign(value.items[0],{voice_ready:false,voice_asset_id:null,can_replace_voice:false,can_edit_dedication:false})
+ const h=harness({initial:value});await h.settle();h.button('Record or upload now');assert.match(h.text(),/Please submit your recording/);h.cleanup()
  const closed=dto();closed.items[0].can_replace_voice=false;const c=harness({initial:closed});await c.settle()
  assert.ok(!c.nodes().some(n=>n.type==='button'&&String(n.props.children)==='Update recording'));assert.ok(!c.text().includes('before this deadline'));c.cleanup()
 })
@@ -164,8 +163,8 @@ test('page keys and Admin displays remain per paid line,with fresh authorization
  const admin=readFileSync(new URL('../components/admin/sections/orders/SignatureVoiceWorkspace.tsx',import.meta.url),'utf8')
  const dialog=readFileSync(new URL('../components/personalize/SignatureVoiceDialog.tsx',import.meta.url),'utf8')
  assert.match(client,/controller.abort\(\);if\(objectUrl\)\{URL.revokeObjectURL\(objectUrl\)/)
- assert.match(admin,/key=\{item.cartItemId\}/);assert.doesNotMatch(admin,/key=\{item.creationId\}/)
- for(const label of ['Recording uploaded:','Customer replacement deadline:','Narration outdated:','Admin-declared replacement','Previous recording retained after shipment'])assert.ok(admin.includes(label),label)
+ assert.match(admin,/key=\{item.cartItemId\}/);assert.doesNotMatch(admin,/key=\{item.creationId\}|Customer replacement deadline:/)
+ for(const label of ['Recording uploaded:','Narration outdated:','Admin-declared replacement','Previous recording retained after shipment'])assert.ok(admin.includes(label),label)
  assert.match(dialog,/setAuthorized\(false\);setFileError/)
  assert.match(dialog,/!pendingRecording \|\| !authorized \|\| isSaving/)
 })

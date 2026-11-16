@@ -8,10 +8,10 @@ import * as crypto from 'node:crypto'
 const order='00000000-0000-4000-8000-000000000010',item='00000000-0000-4000-8000-000000000020'
 const creation='00000000-0000-4000-8000-000000000030',customer='00000000-0000-4000-8000-000000000001'
 const challenge='00000000-0000-4000-8000-000000000060'
-const dto=()=>({order_id:order,dedication_deadline:'2026-10-23T12:00:00Z',items:[{
+const dto=()=>({order_id:order,items:[{
   cart_item_id:item,creation_id:creation,template_id:'Synthetic_story',package_type:'supreme',
   dedication:{decision:'skipped',body:null,revision:1},can_edit_dedication:true,voice_ready:false,can_submit_voice:true,
-  can_replace_voice:false,voice_asset_id:null,voice_revision:1,voice_uploaded_at:null,voice_replace_until:'2026-10-23T12:00:00Z',
+  can_replace_voice:false,voice_asset_id:null,voice_revision:1,voice_uploaded_at:null,
 }]})
 function harness({owner=null,rpcResult,queryResult,storage,dependencies={}}={}) {
   const calls=[],sent=[],cache=new Map()
@@ -376,7 +376,7 @@ test('Admin workspace separates same-Creation lines and exposes their current so
   assert.deepEqual(Array.from(workspace.items,x=>x.source.assetId),[customer,challenge])
   assert.deepEqual(Array.from(workspace.items,x=>x.triage.sourceRevision),[2,1])
   assert.deepEqual(Array.from(workspace.items,x=>x.triage.narrationOutdated),[true,false])
-  assert.equal(workspace.items[0].declaration.replaceUntil,'2026-10-28T00:00:00.000Z')
+  assert.ok(!('replaceUntil' in workspace.items[0].declaration))
   assert.equal(workspace.items[0].retainedSourceCount,1);assert.equal(workspace.items[1].retainedSourceCount,0)
   for(const read of h.calls.filter(c=>['signature_voice_production_states','signature_voice_narration_tracks','signature_voice_hardware_attestations'].includes(c.table))) {
     assert.ok(read.steps.some(s=>s[0]==='in' && s[1]==='cart_item_id'))

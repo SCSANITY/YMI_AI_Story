@@ -16,7 +16,7 @@ function mailHarness(skip=false,voiceReady=false,names=['Alston']) {
     react:React,'@/lib/order-materials-client':helperModule.exports,
     resend:{Resend:class {emails={send:async value=>{sent.push(value);return {data:{id:'synthetic-message'}}}}}},
     '@/lib/order-materials-server':{
-      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {dedication_deadline:'2026-10-23T12:00:00Z',items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,package_type:'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
+      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,package_type:'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
       issueOrderMaterialLink:async id=>{reads.push(['issue',id]);return `/orders/${id}/materials#token=${model}`},
     },
     '@/lib/locale-pricing':{normalizeCheckoutCurrency:()=> 'USD'},
@@ -59,7 +59,7 @@ test('an actual confirmation resolves fresh materials only after idempotency;raw
   assert.deepEqual(h.reads.map(row=>row[0]),['read','issue'])
   assert.equal(h.sent.length,1)
   const notice=h.sent[0].react.props.materialNotice
-  assert.deepEqual(Array.from(notice.names),['Alston']);assert.equal(notice.updateOpen,true);assert.equal(notice.pendingVoice,1);assert.equal(notice.deadline,'2026-10-23T12:00:00Z')
+  assert.deepEqual(Array.from(notice.names),['Alston']);assert.equal(notice.pendingVoice,1);assert.ok(!('deadline' in notice))
   assert.ok(notice.url.endsWith('#token='+h.model))
   assert.ok(!JSON.stringify(h.events).includes(h.model));assert.ok(!JSON.stringify(h.logs).includes(h.model))
 })
@@ -82,7 +82,7 @@ test('postpayment recording uses the existing explicit synthetic-narration conse
   assert.match(selection,/onRecordingSelected/)
 })
 
-test('materials page reuses the global header,orders entry,cover and explicit email timezone',()=>{
+test('materials page reuses the global header,orders entry,cover without an editing deadline',()=>{
   const client=readFileSync(new URL('../components/orders/OrderMaterialsClient.tsx',import.meta.url),'utf8')
   const shell=readFileSync(new URL('../components/AppShell.tsx',import.meta.url),'utf8')
   const mail=readFileSync(new URL('../components/emails/OrderReceiptEmail.tsx',import.meta.url),'utf8')
@@ -91,8 +91,8 @@ test('materials page reuses the global header,orders entry,cover and explicit em
   assert.match(client,/href="\/orders"/)
   assert.match(client,/OrderCoverImage src=\{item.book\?\.cover_url\}/)
   assert.doesNotMatch(client,/template_id\.replace/)
-  assert.match(client,/MaterialDeadlineNotice materials=\{materials\}/)
-  assert.match(mail,/formatMaterialTime\(materialNotice.deadline,'UTC'\)/)
+  assert.doesNotMatch(client,/MaterialDeadlineNotice|48 hours/)
+  assert.doesNotMatch(mail,/formatMaterialTime|dedication deadline|48 hours/)
 })
 
 test('a received recording eligible for replacement is not counted as missing in confirmation mail',async()=>{

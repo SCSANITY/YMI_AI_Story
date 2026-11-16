@@ -30,7 +30,7 @@ export function PreviewYourBookPanel({ value, pricing, currency, childName, disa
       </div>)}
     </div>
     {value === 'supreme' ? <div className={styles.voiceRow}><Mic size={18} aria-hidden="true" /><span>Your voice · now or after purchase</span><button type="button" disabled={disabled || voiceDisabled} onClick={onVoice}>{voiceReady ? 'Change' : 'Record'}</button></div> : null}
-    <div className={styles.messageRow}><PenLine size={21} aria-hidden="true" /><span><strong>A message for {childName}</strong><small>Optional · up to 48h after purchase</small></span><button type="button" disabled={disabled} onClick={onMessage}>Write</button></div>
+    <div className={styles.messageRow}><PenLine size={21} aria-hidden="true" /><span><strong>A message for {childName}</strong><small>Optional · add a personal touch</small></span><button type="button" disabled={disabled} onClick={onMessage}>Write</button></div>
     <div className={styles.panelNotice}><span role={notice ? 'alert' : undefined}>{notice}</span>{recovery}</div>
     {actions}
   </aside>

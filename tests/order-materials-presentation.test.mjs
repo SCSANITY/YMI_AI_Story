@@ -34,7 +34,7 @@ function loader(intl=Intl) {
  return load
 }
 const deadline='2026-10-28T00:00:00Z'
-const state=(open=true,missing=false)=>({order_id:'synthetic',dedication_deadline:deadline,items:[{
+const state=(open=true,missing=false)=>({order_id:'synthetic',items:[{
  cart_item_id:'one',child_name:'Alston',package_type:'supreme',can_edit_dedication:open,voice_ready:!missing,
 }]})
 
@@ -44,16 +44,7 @@ test('SSR never formats device-local time;client timestamp mounts with a stable 
  assert.match(html,/Loading local time/);assert.doesNotMatch(html,/Hong Kong|Oct|GMT/)
 })
 
-test('one deadline notice is before-update or after-final,never contradictory replacement guidance',()=>{
- const Notice=loader()('components/orders/MaterialDeadlineNotice.tsx').MaterialDeadlineNotice
- const before=renderToStaticMarkup(React.createElement(Notice,{materials:state()}))
- assert.match(before,/You can update your message and recording until/)
- const final=renderToStaticMarkup(React.createElement(Notice,{materials:state(false)}))
- assert.match(final,/has passed:/);assert.match(final,/Your message and recording are final/);assert.doesNotMatch(final,/\(\(|\)\)|\([^)]*\(/)
- assert.doesNotMatch(final,/before this deadline|can update|replacement window/)
-})
-
-test('summary uses own child names and isolates bidi,with correct missing-required copy after deadline',()=>{
+test('summary uses own child names and isolates bidi,with correct missing-recording copy regardless of dedication editability',()=>{
  const Summary=loader()('components/orders/OrderMaterialsSummary.tsx').OrderMaterialsSummary
  const multi=state();multi.items.push({...multi.items[0],cart_item_id:'two',child_name:'Sonia'},{...multi.items[0],cart_item_id:'three'})
  const html=renderToStaticMarkup(React.createElement(Summary,{materials:multi}))
@@ -62,34 +53,29 @@ test('summary uses own child names and isolates bidi,with correct missing-requir
  const missing=state(false,true);missing.items[0].child_name=null
  const late=renderToStaticMarkup(React.createElement(Summary,{materials:missing}))
  assert.doesNotMatch(late,/\(\(|\)\)|\([^)]*\(/)
- assert.match(late,/<bdi>this book<\/bdi>/);assert.match(late,/We still need your recording/);assert.match(late,/Once submitted, it is final/)
- assert.doesNotMatch(late,/replacement window|before this deadline/)
+ assert.match(late,/<bdi>this book<\/bdi>/);assert.match(late,/Please submit your recording/)
+ assert.doesNotMatch(late,/deadline|Once submitted, it is final|48 hours/)
 })
 
-test('receipt keeps named dedications, an explicit timezone and one shared materials link',()=>{
+test('receipt keeps named dedications and one materials link without promising an edit deadline',()=>{
  const Receipt=loader()('components/emails/OrderReceiptEmail.tsx').OrderReceiptEmail
- const render=(names,open=true,missing=0)=>renderToStaticMarkup(React.createElement(Receipt,{
-  orderId:'synthetic',items:[],total:89,materialNotice:{deadline,url:'https://example.test/materials',names,hasVoice:true,updateOpen:open,pendingVoice:missing},
+ const render=(names,missing=0)=>renderToStaticMarkup(React.createElement(Receipt,{
+  orderId:'synthetic',items:[],total:89,materialNotice:{url:'https://example.test/materials',names,pendingVoice:missing},
  }))
  const html=render(['Alston','Sonia'])
- assert.match(html,/optional dedication message for <bdi>Alston<\/bdi> and <bdi>Sonia<\/bdi> until/)
- assert.match(html,/Oct[^<]*\(UTC\)/)
- assert.match(html,/Open your materials page to see this in your local time/)
- assert.doesNotMatch(html,/GMT|Hong Kong|voice recording/)
- assert.match(render([]),/optional dedication message until/)
- const closed=render(['Alston'],false)
- assert.match(closed,/The deadline for editing your dedication has passed\./)
- assert.doesNotMatch(closed,/can add or edit|voice recording|\(UTC\)/)
- const missing=render(['Sonia'],false,1)
+ assert.match(html,/optional dedication message for <bdi>Alston<\/bdi> and <bdi>Sonia<\/bdi> on your materials page/)
+ assert.doesNotMatch(html,/voice recording/)
+ assert.match(render([]),/optional dedication message on your materials page/)
+ const missing=render(['Sonia'],1)
  assert.match(missing,/Please submit your voice recording on the same page so we can finish your Hardcover \+ Voice book\./)
- const missingMultiple=render(['Alston','Sonia'],true,2)
+ const missingMultiple=render(['Alston','Sonia'],2)
  assert.match(missingMultiple,/Please submit your voice recordings on the same page so we can finish your Hardcover \+ Voice books\./)
- for(const markup of [html,closed,missing,missingMultiple]) {
+ for(const markup of [html,missing,missingMultiple]) {
+  assert.doesNotMatch(markup,/deadline|48 hours|local time|\(UTC\)/)
   assert.equal((markup.match(/href="https:\/\/example\.test\/materials"/g)||[]).length,1)
   assert.match(markup,/Review your book materials<\/a>/)
  }
 })
-
 
 test('shipped summary ignores retained materials and renders no data or update control',()=>{
  const Summary=loader()('components/orders/OrderMaterialsSummary.tsx').OrderMaterialsSummary

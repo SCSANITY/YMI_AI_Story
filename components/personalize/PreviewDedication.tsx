@@ -149,7 +149,7 @@ export function PreviewDedication({ creationId, bookID, childName, openOnArrival
           <h2 className="font-serif text-base font-semibold text-slate-900">Your message for <bdi>{recipientName||'this book'}</bdi></h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             {loading ? 'Loading message…' : choice?.decision === 'confirmed' ? <span className="line-clamp-2 whitespace-pre-line">{choice.body}</span> :
-              choice?.decision === 'skipped' ? 'No message selected' : 'Optional ? add a message now or within 48 hours after purchase.'}
+              choice?.decision === 'skipped' ? 'No message selected' : 'Optional ? add a message now or review it from your order page.'}
           </p>
           {error && !open ? <p role="alert" className="mt-2 text-xs text-rose-700">{error}</p> : null}
         </div>

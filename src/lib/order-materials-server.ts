@@ -179,5 +179,5 @@ export async function loadTrustedOrderLineDedications(orderId:string) {
   const rows=await rpc('materials_read_trusted_lines',{p_order:materialUuid(orderId)})
   if (!Array.isArray(rows) || !rows.length) throw new MaterialError('materials_unavailable',503)
   return rows.map(row=>({cartItemId:materialUuid(row.cart_item_id),creationId:materialUuid(row.creation_id),
-    ...parseMaterialDedication(row),deadline:String(row.dedication_deadline)}))
+    ...parseMaterialDedication(row)}))
 }

@@ -5,6 +5,12 @@ purchase entries,confirmation mail,Admin and print readers are connected here.
 Independent review and a separately authorized combined release remain required.
 Automatic Final and the Worker are outside this change.
 
+Current Web materials and Admin views use server eligibility flags and do not
+display a payment-based deadline. The historical slices below explain the
+original deadline contract. The Web transition accepts both old and new
+database responses without consuming timestamp fields; see [Email Center](EMAIL_CENTER.md)
+for the customer reminder that remains in the PDF delivery email.
+
 ## Authority and API
 
 - `order-materials-server.ts` is the server facade:authorized `loadOrderMaterials`

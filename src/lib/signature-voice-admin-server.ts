@@ -251,7 +251,6 @@ export async function loadAdminSignatureVoiceWorkspace(
         consentVersion: String(creation.voice_consent_version ?? ''),
         consentAcceptedAt: isAdminDeclaration?null:String(creation.voice_consent_accepted_at ?? ''),
         boundAt: String(creation.voice_bound_at ?? ''),
-        replaceUntil: new Date(Date.parse(String(order.paid_at)) + 48 * 60 * 60 * 1000).toISOString(),
       },
       triage: {
         sourceRevision: positiveInteger(creation.revision),

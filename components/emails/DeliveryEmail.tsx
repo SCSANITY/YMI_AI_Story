@@ -67,10 +67,10 @@ export function DeliveryEmail({
         </Text>
         <Text style={styles.sectionParagraph}>
           <Link href={orderUrl} style={styles.orderLink}>Open Your Order Page</Link>{' '}
-          to see whether you can still edit the special message to be printed in your child&apos;s book.
+          to review the special message to be printed in your child&apos;s book and update it if available.
         </Text>
         <Text style={styles.boxText}>
-          We&apos;ll then proceed to printing. <strong>Once printing begins, no further changes can be made.</strong>
+          We&apos;ll then proceed to printing. <strong>Once printing begins, no further changes can be made to the printed book.</strong>
         </Text>
       </Section>
 
@@ -80,7 +80,7 @@ export function DeliveryEmail({
           <ul style={styles.features}>
             <li style={styles.feature}>Upload your <strong>voice sample</strong> if you haven&apos;t sent one yet.</li>
             <li style={styles.feature}>
-              If the editing window is still open, replace your recording or update your <strong>special message for your child</strong>.
+              You can also replace your recording or update your <strong>special message for your child</strong> if updates are available.
             </li>
           </ul>
           <Section style={styles.ctaWrap}>

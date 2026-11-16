@@ -1,4 +1,3 @@
-import {formatMaterialTime} from '@/lib/order-materials-client'
 import * as React from 'react'
 import { Hr, Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, EmailDivider, SignoffStamp, emailAsset, emailTheme, emailButtons } from './EmailLayout'
@@ -21,7 +20,7 @@ export type ReceiptAddress = {
 }
 
 type OrderReceiptEmailProps = {
-  materialNotice?:{deadline:string;pendingVoice:number;url:string;names:string[];updateOpen:boolean;hasVoice:boolean}
+  materialNotice?:{pendingVoice:number;url:string;names:string[]}
   orderId: string
   displayId?: string | null
   items: ReceiptItem[]
@@ -120,22 +119,15 @@ export function OrderReceiptEmail({
       {materialNotice && (
         <Section style={styles.summaryWrap}>
           <Text style={styles.paragraph}>
-            {materialNotice.updateOpen ? (
-              <>
-                You can add or edit an optional dedication message
-                {materialNotice.names.map((name, index, names) => (
-                  <React.Fragment key={name}>
-                    {index === 0 ? ' for ' : index === names.length - 1 ? ' and ' : ', '}
-                    <bdi>{name}</bdi>
-                  </React.Fragment>
-                ))}
-                {' until '}{formatMaterialTime(materialNotice.deadline,'UTC')}.
-              </>
-            ) : 'The deadline for editing your dedication has passed.'}
+            You can review your optional dedication message
+            {materialNotice.names.map((name, index, names) => (
+              <React.Fragment key={name}>
+                {index === 0 ? ' for ' : index === names.length - 1 ? ' and ' : ', '}
+                <bdi>{name}</bdi>
+              </React.Fragment>
+            ))}
+            {' on your materials page.'}
           </Text>
-          {materialNotice.updateOpen && (
-            <Text style={styles.paragraph}>Open your materials page to see this in your local time.</Text>
-          )}
           {materialNotice.pendingVoice > 0 && (
             <Text style={styles.paragraph}>
               {materialNotice.pendingVoice === 1
