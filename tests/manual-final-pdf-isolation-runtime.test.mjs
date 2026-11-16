@@ -215,7 +215,7 @@ test('interleaved Admin approvals of two books release independent, readable PDF
   assert.equal((await h.route('release', 'book-a')).status, 200)
   assert.equal((await h.route('approve-all-release', 'book-a')).status, 409)
   assert.equal(h.writes.filter((entry) => entry.upload || entry.copy).length, writesBeforeRetry)
-  assert.deepEqual(h.mail.map(({ finalJobId, hardcover }) => [finalJobId, hardcover]), [['book-a', true], ['book-b', false]])
+  assert.deepEqual(h.mail.map(({ finalJobId, physicalPackageType }) => [finalJobId, physicalPackageType]), [['book-a', 'basic'], ['book-b', 'supreme']])
 
   for (const message of h.mail) {
     const sign = h.signing.find(({ signedUrl }) => signedUrl === message.downloadUrl)

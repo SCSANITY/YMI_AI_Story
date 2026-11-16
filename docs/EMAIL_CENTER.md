@@ -37,8 +37,11 @@ rollback, test-send, raw HTML, sender, or link-target control.
   Hardcover item, never for another line in the order or an unknown edition.
   The Admin preview button is inert; live email uses the approved Payment Link.
   The private PDF link expires 72 hours after signing. The order page remains
-  available for authenticated re-download. The corrections message does not
-  change print-release scheduling.
+  available for authenticated re-download. The order identifier is plain text.
+  The Hardcover + Voice variant links to the existing protected materials page.
+  Customers can submit a first voice sample before shipping; replacing a sample
+  and editing a dedication still use the 48-hour window from payment. The
+  48-hour reply reminder does not reopen editing or change print scheduling.
 - Subscriptions: Newsletter Confirmation and Weekly Cart Reminder.
 - Human Communication: Support Reply, Partnership Reply, and General Mail.
 

@@ -8,13 +8,15 @@ import {
   type ReceiptAddress,
   type ReceiptItem,
 } from '@/components/emails/OrderReceiptEmail'
-import { DeliveryEmail, HARDCOVER_DELIVERY_SUBJECT } from '@/components/emails/DeliveryEmail'
+import { DeliveryEmail, PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
 import { buildCartReminderText, CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import {
   AbandonmentEmail,
   buildAbandonmentEmailCopy,
 } from '@/components/emails/AbandonmentEmail'
 import type { ReminderStage } from '@/lib/unpaid-reminders'
+import { normalizeBookPackageType } from '@/lib/package-pricing'
+import { SITE_URL } from '@/lib/seo'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { CheckoutCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import {
@@ -374,7 +376,7 @@ export const FINAL_PDF_DELIVERY_LINK_TTL_SECONDS = 72 * 60 * 60
 type SendOrderDeliveryEmailParams = {
   to: string
   firstName?: string | null
-  hardcover?: boolean
+  physicalPackageType?: string | null
   orderId: string
   displayId?: string | null
   finalJobId?: string | null
@@ -385,15 +387,19 @@ type SendOrderDeliveryEmailParams = {
 }
 
 export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParams) {
-  const orderUrl = params.orderUrl || buildAbsoluteUrl(`/orders/${params.orderId}`) || params.downloadUrl
+  const orderPath = `/orders/${params.orderId}`
+  const orderUrl = params.orderUrl || buildAbsoluteUrl(orderPath) || SITE_URL + orderPath
+  const edition = normalizeBookPackageType(params.physicalPackageType)
+  const materialsPath = orderPath + '/materials'
+  const voiceMaterialsUrl = edition === 'supreme' ? buildAbsoluteUrl(materialsPath) || SITE_URL + materialsPath : undefined
 
   return sendManagedEmail({
     emailKey: 'final_delivery',
     idempotencyKey: `final_delivery:${params.finalJobId || params.orderId}`,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_DELIVERY',
-    subject: params.hardcover
-      ? HARDCOVER_DELIVERY_SUBJECT
+    subject: edition
+      ? PDF_DELIVERY_PREVIEW_SUBJECT
       : `Your book is ready - ${params.displayId || params.orderId}`,
     orderId: params.orderId,
     finalJobId: params.finalJobId ?? null,
@@ -411,7 +417,9 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
         downloadUrl={params.downloadUrl}
         coverImageUrl={params.previewImageUrl}
         firstName={params.firstName}
-        voiceUpgradeUrl={params.hardcover ? 'https://buy.stripe.com/3cI00b0Pw3RCcOm55u0co02' : undefined}
+        voiceMaterialsUrl={voiceMaterialsUrl}
+        privacyUrl={voiceMaterialsUrl ? buildAbsoluteUrl('/privacy') || SITE_URL + '/privacy' : undefined}
+        voiceUpgradeUrl={edition === 'basic' ? 'https://buy.stripe.com/3cI00b0Pw3RCcOm55u0co02' : undefined}
       />
     ),
   })

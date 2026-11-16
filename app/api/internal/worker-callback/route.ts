@@ -152,7 +152,7 @@ export async function POST(request: Request) {
   await sendOrderDeliveryEmail({
     to: order.email,
     firstName: order.first_name,
-    hardcover: cartItem.product_type === 'physical' && cartItem.package_type === 'basic',
+    physicalPackageType: cartItem.product_type === 'physical' ? cartItem.package_type : null,
     orderId: order.order_id,
     displayId: order.display_id ?? null,
     downloadUrl: signedPdf.signedUrl,

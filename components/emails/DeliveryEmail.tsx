@@ -3,7 +3,7 @@ import { Heading, Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, SignoffStamp, emailAsset, emailTheme, emailButtons } from './EmailLayout'
 import { OrderAccessNotice } from './OrderAccessNotice'
 
-export const HARDCOVER_DELIVERY_SUBJECT = 'Important Order Update: Your YMI Story Preview Is Ready'
+export const PDF_DELIVERY_PREVIEW_SUBJECT = 'Important Order Update: Your YMI Story Preview Is Ready'
 
 type DeliveryEmailProps = {
   orderUrl: string
@@ -13,28 +13,36 @@ type DeliveryEmailProps = {
   coverImageUrl?: string
   firstName?: string | null
   voiceUpgradeUrl?: string
+  voiceMaterialsUrl?: string
+  privacyUrl?: string
 }
 
 export function DeliveryEmail({
-  orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl,
+  orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl, voiceMaterialsUrl, privacyUrl,
 }: DeliveryEmailProps) {
   const label = displayId || orderId
   const name = firstName?.trim()
   return (
     <EmailLayout
       previewText="Your personalised PDF is ready. Please check the details before printing."
-      title={voiceUpgradeUrl ? 'Your YMI Story Preview Is Ready' : 'Your Book Is Ready'}
+      title={voiceUpgradeUrl || voiceMaterialsUrl ? 'Your YMI Story Preview Is Ready' : 'Your Book Is Ready'}
       subtitle="Your personalised storybook is ready for a final look before printing."
     >
       {label ? (
         <Text style={styles.orderLine}>
-          Order&nbsp;<Link href={orderUrl} style={styles.orderLink}>{label}</Link>
+          Order&nbsp;{label}
         </Text>
       ) : null}
       <Text style={styles.paragraph}>{name ? `Dear ${name},` : 'Hello,'}</Text>
-      <Text style={styles.paragraph}>
-        Thank you for choosing YMI Story. The digital preview of your personalised storybook is ready!
-      </Text>
+      {voiceMaterialsUrl ? (
+        <Text style={styles.paragraph}>
+          Thank you for choosing our <strong>Signature Voice Version</strong>. The digital preview of your order is ready!
+        </Text>
+      ) : (
+        <Text style={styles.paragraph}>
+          Thank you for choosing YMI Story. The digital preview of your personalised storybook is ready!
+        </Text>
+      )}
 
       <Section style={styles.cover}>
         <Img
@@ -51,17 +59,46 @@ export function DeliveryEmail({
           <Link href={downloadUrl} style={emailButtons.primary}>View Your Preview (PDF)</Link>
         </Section>
       ) : null}
-      <Section style={styles.orderCtaWrap}>
-        <Link href={orderUrl} style={styles.orderLink}>Open your order page</Link>
-      </Section>
-
       <Section style={styles.reviewBox}>
         <Text style={styles.eyebrow}>BEFORE WE PRINT</Text>
+        <Text style={styles.sectionParagraph}>
+          Please take a moment to review your book preview. If anything needs correcting,{' '}
+          <strong>reply to this email within 48 hours of receiving it.</strong>
+        </Text>
+        <Text style={styles.sectionParagraph}>
+          <Link href={orderUrl} style={styles.orderLink}>Open Your Order Page</Link>{' '}
+          to see whether you can still edit the special message to be printed in your child&apos;s book.
+        </Text>
         <Text style={styles.boxText}>
-          Please check all personalised details. <strong>If anything needs correcting, reply to this email within 48 hours.</strong>{' '}
-          If we don’t hear from you, we’ll proceed to printing after the review period. Once printing begins, no further changes can be made.
+          We&apos;ll then proceed to printing. <strong>Once printing begins, no further changes can be made.</strong>
         </Text>
       </Section>
+
+      {voiceMaterialsUrl ? (
+        <Section style={styles.voiceBox}>
+          <Heading as="h2" style={styles.offerHeading}>Your Voice Recording &amp; Special Message</Heading>
+          <ul style={styles.features}>
+            <li style={styles.feature}>Upload your <strong>voice sample</strong> if you haven&apos;t sent one yet.</li>
+            <li style={styles.feature}>
+              If the editing window is still open, replace your recording or update your <strong>special message for your child</strong>.
+            </li>
+          </ul>
+          <Section style={styles.ctaWrap}>
+            <Link href={voiceMaterialsUrl} style={emailButtons.secondary}>Update Your Voice Recording &amp; Special Message</Link>
+          </Section>
+          <Text style={styles.sectionParagraph}>
+            If you&apos;ve already submitted both and are happy with them, no action is needed.
+          </Text>
+          <Text style={styles.sectionParagraph}>
+            With your permission, we&apos;ll use your voice sample to create full-story narration. If you haven&apos;t sent a sample,
+            please upload one so we can finish your Signature Voice book. You can also record directly in the book when it arrives.
+          </Text>
+          <Text style={styles.voicePrivacy}>
+            Your uploaded recording will be used only for the books covered by your consent.
+            {privacyUrl ? <> See our <Link href={privacyUrl} style={styles.orderLink}>Privacy Policy</Link> for retention details.</> : null}
+          </Text>
+        </Section>
+      ) : null}
 
       {voiceUpgradeUrl ? (
         <Section style={styles.offerBox}>
@@ -80,12 +117,15 @@ export function DeliveryEmail({
             As a thank-you for choosing YMI Story, enjoy a special launch price during your 48-hour preview period.
           </Text>
           <Section style={styles.offerCtaWrap}>
-            <Link href={voiceUpgradeUrl} style={styles.offerButton}>Upgrade to Signature Voice · Special Offer</Link>
+            <Link href={voiceUpgradeUrl} style={emailButtons.primary}>Upgrade to Signature Voice · Special Offer</Link>
           </Section>
         </Section>
       ) : null}
 
       <OrderAccessNotice />
+      {voiceMaterialsUrl ? (
+        <Text style={styles.paragraph}>We look forward to creating stories your family can listen to, share and treasure.</Text>
+      ) : null}
       <SignoffStamp />
 
       <Text style={styles.note}>
@@ -120,9 +160,11 @@ const styles: Record<string, React.CSSProperties> = {
   coverImage: { margin: '0 auto 8px', maxWidth: '100%', height: 'auto', borderRadius: '6px' },
   coverCaption: { ...bodyText, fontSize: '14px', fontStyle: 'italic' },
   ctaWrap: { margin: '0 0 10px', textAlign: 'center' },
-  orderCtaWrap: { ...bodyText, margin: '0 0 18px', textAlign: 'center', fontSize: '14px' },
   reviewBox: insetBox,
   boxText: bodyText,
+  sectionParagraph: { ...bodyText, margin: '0 0 8px' },
+  voiceBox: { ...insetBox, margin: '16px 0', padding: '19px 17px' },
+  voicePrivacy: { ...bodyText, fontSize: '13px', color: emailTheme.inkSoft },
   eyebrow: { color: '#8b4508', fontFamily: emailTheme.sans, fontSize: '10px', letterSpacing: '0.13em', margin: '0 0 7px', fontWeight: 700 },
   offerBox: { ...insetBox, backgroundColor: '#fff6e8', borderColor: '#e4ad60', margin: '16px 0', padding: '19px 17px' },
   offerHeading: { color: '#7b450e', fontFamily: emailTheme.serif, fontSize: '23px', lineHeight: 1.22, margin: '0 0 10px' },
@@ -130,6 +172,5 @@ const styles: Record<string, React.CSSProperties> = {
   feature: { ...bodyText, fontSize: '14px', margin: '0 0 7px' },
   offerTerm: { ...bodyText, fontSize: '14px', margin: '0 0 12px' },
   offerCtaWrap: { textAlign: 'center' },
-  offerButton: { ...emailButtons.secondary, padding: '11px 14px', letterSpacing: '0.01em', color: '#934906', whiteSpace: 'normal' },
   note: { ...bodyText, color: emailTheme.inkSoft, fontSize: '12.5px', textAlign: 'center', fontStyle: 'italic' },
 }

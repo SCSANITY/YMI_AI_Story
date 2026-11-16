@@ -396,7 +396,7 @@ export async function releaseFinalJob(params: {
   let emailSentAt = finalJob.email_sent_at || null
 
   try {
-    // The promotion belongs to the delivered book, not any other item in the order.
+    // Edition-specific copy belongs to the delivered book, not any other item in the order.
     const { data: deliveryItem, error: deliveryItemError } = await supabaseAdmin
       .from('cart_items')
       .select('product_type, package_type')
@@ -405,8 +405,9 @@ export async function releaseFinalJob(params: {
       .maybeSingle()
     const emailResult = await sendOrderDeliveryEmail({
       firstName: order.first_name,
-      hardcover: !deliveryItemError &&
-        deliveryItem?.product_type === 'physical' && deliveryItem.package_type === 'basic',
+      physicalPackageType: !deliveryItemError && deliveryItem?.product_type === 'physical'
+        ? deliveryItem.package_type
+        : null,
       to: orderEmail,
       orderId: finalJob.order_id,
       displayId: order.display_id ?? null,

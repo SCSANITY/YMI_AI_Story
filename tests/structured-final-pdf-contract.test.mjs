@@ -95,7 +95,7 @@ test('only emailed Final PDF links use the 72-hour signing lifetime', async () =
   assert.match(callback, /\.createSignedUrl\(path, 60 \* 60 \* 24,/)
 })
 
-test('PDF Delivery offers the upgrade only for the same delivered physical Hardcover item', async () => {
+test('PDF Delivery chooses email content from the same delivered physical book', async () => {
   const [release, callback, sender] = await Promise.all([
     read('src/lib/finalReview.ts'),
     read('app/api/internal/worker-callback/route.ts'),
@@ -103,8 +103,9 @@ test('PDF Delivery offers the upgrade only for the same delivered physical Hardc
   ])
 
   assert.match(release, /\.from\('cart_items'\)\s*\.select\('product_type, package_type'\)\s*\.eq\('cart_item_id', finalJob\.cart_item_id\)\s*\.eq\('order_id', finalJob\.order_id\)/)
-  assert.match(release, /hardcover:\s*!deliveryItemError &&\s*deliveryItem\?\.product_type === 'physical' && deliveryItem\.package_type === 'basic'/)
+  assert.match(release, /physicalPackageType:\s*!deliveryItemError && deliveryItem\?\.product_type === 'physical'\s*\? deliveryItem\.package_type\s*:\s*null/)
   assert.match(callback, /\.select\('cart_item_id, order_id, product_type, package_type'\)\s*\.eq\('cart_item_id', job\.cart_item_id\)/)
-  assert.match(callback, /hardcover: cartItem\.product_type === 'physical' && cartItem\.package_type === 'basic'/)
-  assert.match(sender, /voiceUpgradeUrl=\{params\.hardcover \? 'https:\/\/buy\.stripe\.com\/3cI00b0Pw3RCcOm55u0co02' : undefined\}/)
+  assert.match(callback, /physicalPackageType: cartItem\.product_type === 'physical' \? cartItem\.package_type : null/)
+  assert.match(sender, /voiceUpgradeUrl=\{edition === 'basic' \? 'https:\/\/buy\.stripe\.com\/3cI00b0Pw3RCcOm55u0co02' : undefined\}/)
+  assert.match(sender, /voiceMaterialsUrl = edition === 'supreme' \?/)
 })

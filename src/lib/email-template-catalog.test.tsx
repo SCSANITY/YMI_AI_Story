@@ -76,27 +76,36 @@ test('order confirmation variants show a dedication deadline and only prompt for
   }
 })
 
-test('Final PDF Delivery previews keep checkout secondary and exclusive to Hardcover', async () => {
+test('Final PDF Delivery previews show the right actions for each delivered edition', async () => {
   const delivery = EMAIL_TEMPLATE_CATALOG.find(({ id }) => id === 'final-delivery')
   assert.deepEqual(delivery?.variants.map(({ id }) => id), ['default', 'voice'])
+  assert.equal(delivery?.subject, 'Important Order Update: Your YMI Story Preview Is Ready')
 
   for (const [id, showsOffer] of [['default', true], ['voice', false]] as const) {
-    const html = await renderEmailTemplatePreview('final-delivery', id) ?? ''
-    const pdf = html.indexOf('View Your Preview (PDF)')
-    const reminder = html.indexOf('reply to this email within 48 hours')
-    const offer = html.indexOf('Upgrade to Signature Voice')
-    assert.ok(pdf >= 0 && pdf < reminder, id)
-    assert.match(html, /href="https:\/\/www\.ymistory\.com\/api\/orders\/sample-order\/download"[^>]*>View Your Preview \(PDF\)<\/a>/)
-    assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order"[^>]*>Open your order page<\/a>/)
+    const html = (await renderEmailTemplatePreview('final-delivery', id) ?? '').replaceAll('<!-- -->', '')
+    const pdfLink = html.match(/<a[^>]+href="https:\/\/www\.ymistory\.com\/api\/orders\/sample-order\/download"[^>]*>View Your Preview \(PDF\)<\/a>/)?.[0]
+    const offerLink = html.match(/<a[^>]+href="#signature-voice-upgrade"[^>]*>Upgrade to Signature Voice[^<]*<\/a>/)?.[0]
+    const reminder = html.indexOf('BEFORE WE PRINT')
+    assert.ok(pdfLink && html.indexOf(pdfLink) < reminder, id)
+    assert.match(html, /reply to this email within 48 hours of receiving it/)
+    assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order"[^>]*>Open Your Order Page<\/a>/)
+    assert.match(html, /Once printing begins, no further changes can be made\./)
+    assert.match(html, /<p[^>]*>Order(?:&nbsp;|\u00a0)YMI-2026-0903<\/p>/)
+    assert.doesNotMatch(html, /<a[^>]*>YMI-2026-0903<\/a>|buy\.stripe\.com/)
     if (showsOffer) {
-      assert.ok(offer > reminder, id)
-      assert.match(html, /href="#signature-voice-upgrade"[^>]*>Upgrade to Signature Voice/)
-      assert.match(html, /EXCLUSIVE LAUNCH OFFER/)
+      assert.ok(offerLink && html.indexOf(offerLink) > reminder)
+      const pdfStyle = pdfLink.match(/style="([^"]+)"/)?.[1]
+      assert.ok(pdfStyle?.includes('background-color:#f59e0b'))
+      assert.equal(offerLink.match(/style="([^"]+)"/)?.[1], pdfStyle)
+      assert.doesNotMatch(html, /Your Voice Recording|\/sample-order\/materials/)
     } else {
-      assert.equal(offer, -1)
-      assert.doesNotMatch(html, /EXCLUSIVE LAUNCH OFFER|special launch price/)
+      assert.equal(offerLink, undefined)
+      assert.match(html, /Thank you for choosing our <strong>Signature Voice Version<\/strong>/)
+      assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order\/materials"[^>]*>Update Your Voice Recording &amp; Special Message<\/a>/)
+      assert.match(html, /If the editing window is still open/)
+      assert.match(html, /href="https:\/\/www\.ymistory\.com\/privacy"[^>]*>Privacy Policy<\/a>/)
+      assert.doesNotMatch(html, /EXCLUSIVE LAUNCH OFFER|default voice|within 30 days of collection/i)
     }
-    assert.doesNotMatch(html, /buy\.stripe\.com/)
   }
 })
 

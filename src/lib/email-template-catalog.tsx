@@ -2,7 +2,7 @@ import * as React from 'react'
 import { render } from '@react-email/render'
 import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
 import { CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
-import { DeliveryEmail, HARDCOVER_DELIVERY_SUBJECT } from '@/components/emails/DeliveryEmail'
+import { DeliveryEmail, PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
 import { KolPartnershipEmail } from '@/components/emails/KolPartnershipEmail'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { NewsletterConfirmationEmail } from '@/components/emails/NewsletterConfirmationEmail'
@@ -154,12 +154,12 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     ownership: 'web',
     triggerMode: 'workflow',
     trigger: 'An admin releases an approved customer PDF.',
-    subject: 'Hardcover: ' + HARDCOVER_DELIVERY_SUBJECT + '; Voice: Your book is ready - {order}',
+    subject: PDF_DELIVERY_PREVIEW_SUBJECT,
     sender: 'Delivery mailbox',
-    description: 'Provides PDF and order links and a 48-hour review reminder. Only the delivered Hardcover book receives the optional Signature Voice offer.',
+    description: 'Provides PDF and order links and a 48-hour reply reminder. Hardcover shows the optional Signature Voice offer. Hardcover + Voice links to book materials.',
     variants: [
       { id: 'default', label: 'Hardcover: upgrade offer' },
-      { id: 'voice', label: 'Hardcover + Voice: delivery only' },
+      { id: 'voice', label: 'Hardcover + Voice: recording and message' },
     ],
   },
   {
@@ -341,6 +341,8 @@ export async function renderEmailTemplatePreview(
           coverImageUrl={coverImageUrl}
           firstName="Sophie"
           voiceUpgradeUrl={variantId === 'default' ? '#signature-voice-upgrade' : undefined}
+          voiceMaterialsUrl={variantId === 'voice' ? orderUrl + '/materials' : undefined}
+          privacyUrl="https://www.ymistory.com/privacy"
         />
       )
       break
