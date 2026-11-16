@@ -1,9 +1,6 @@
 import { FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, sendOrderDeliveryEmail } from '@/lib/email'
 import {
   assertFinalOutputAssetsReleasable,
-  isStructuredFinalOutputAssets,
-  isStructuredFinalPdfReleaseProofValid,
-  mergeApprovedFinalOutputPages,
   readStructuredFinalPdfReleaseProof,
 } from '@/lib/finalReleaseContract'
 import {
@@ -11,6 +8,14 @@ import {
   getFinalPdfPreviewImagePath,
   type ApprovedFinalPdfPage,
 } from '@/lib/finalPdfRelease'
+import {
+  FinalArtifactConflict,
+  getNewFinalPdfReleasePath,
+  isLegacyFinalManualPage,
+  isScopedFinalApprovedPage,
+  isScopedFinalPdf,
+} from '@/lib/final-review-artifact-paths'
+import { hasSingleFinalOrderLine } from '@/lib/final-review-batch-approval'
 import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production-transition-store'
 import {
   buildPersonalizedBookPdfFileName,
@@ -99,14 +104,6 @@ export type FinalJobDetail = {
   dedication_deadline?:string
 }
 
-export function getFinalPagePath(orderId: string, pageNumber: number) {
-  return `orders/${orderId}/final/pages/approved/page_${String(pageNumber).padStart(2, '0')}.png`
-}
-
-function getFinalPdfPath(orderId: string) {
-  return `orders/${orderId}/final/pdf/final.pdf`
-}
-
 async function downloadStorageBuffer(path: string): Promise<Buffer> {
   const { data, error } = await supabaseAdmin.storage.from(STORAGE_BUCKET).download(path)
   if (error || !data) {
@@ -150,6 +147,8 @@ export async function refreshFinalJobApprovalState(finalJobId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('final_job_id', finalJobId)
+    .is('released_at', null)
+    .neq('review_status', 'released')
 
   if (error) {
     throw new Error(error.message || 'Failed to refresh final job approval state')
@@ -213,9 +212,7 @@ export async function releaseFinalJob(params: {
       : {}
   const alreadyPdfReleased = isFinalJobReleased(finalJob)
   if (alreadyPdfReleased && finalJob.email_sent_at) {
-    const structuredProof = isStructuredFinalOutputAssets(linkedOutputAssets)
-      ? readStructuredFinalPdfReleaseProof(linkedOutputAssets)
-      : null
+    const structuredProof = readStructuredFinalPdfReleaseProof(linkedOutputAssets)
     assertFinalOutputAssetsReleasable(linkedOutputAssets, structuredProof)
     await advanceOrdersToProductionAfterPdfRelease({
       jobId: finalJob.job_id,
@@ -243,86 +240,94 @@ export async function releaseFinalJob(params: {
     throw new Error(orderError?.message || 'Order not found for final release')
   }
 
-  const { data: pages, error: pagesError } = await supabaseAdmin
-    .from('final_job_pages')
-    .select(
-      'final_job_page_id, page_index, status, ai_output_path, manual_output_path, approved_output_path, approved_source'
-    )
-    .eq('final_job_id', finalJobId)
-    .order('page_index', { ascending: true })
-
-  if (pagesError || !pages?.length) {
-    throw new Error(pagesError?.message || 'Final job pages not found')
-  }
-  const expectedTotalPages = Number(finalJob.total_pages || 0)
-  if (expectedTotalPages <= 0 || pages.length !== expectedTotalPages) {
-    throw new Error(
-      `Final page count mismatch (expected=${expectedTotalPages}; review_rows=${pages.length})`
-    )
+  const orderEmail = order.email || null
+  if (!orderEmail) {
+    throw new Error('Missing order email for final release')
   }
 
-  const approvedPages: ApprovedFinalPdfPage[] = []
-  for (const page of pages) {
-    if (!page.approved_output_path) {
-      throw new Error(`Missing approved output for final page ${page.page_index}`)
-    }
-    if (page.status !== 'approved' && page.status !== 'replaced') {
-      throw new Error(`Page ${page.page_index} is not approved`)
-    }
-    approvedPages.push({
-      page_index: page.page_index,
-      approved_output_path: page.approved_output_path,
-    })
-  }
-
-  const pdfPath = finalJob.pdf_path || getFinalPdfPath(finalJob.order_id)
+  const scope = { orderId: finalJob.order_id, finalJobId }
   const now = new Date().toISOString()
-  const reviewedOutputAssets: Record<string, unknown> = {
-    ...linkedOutputAssets,
-    pages: mergeApprovedFinalOutputPages(linkedOutputAssets, approvedPages),
-  }
-  const isStructuredOutput = isStructuredFinalOutputAssets(reviewedOutputAssets)
-  const persistedStructuredProof = isStructuredOutput
-    ? readStructuredFinalPdfReleaseProof(linkedOutputAssets)
-    : null
-  const canReuseExistingPdf = Boolean(
-    alreadyPdfReleased &&
-      finalJob.pdf_path &&
-      isStructuredOutput &&
-      isStructuredFinalPdfReleaseProofValid(reviewedOutputAssets, persistedStructuredProof)
-  )
-  let releaseOutputAssets: Record<string, unknown> = reviewedOutputAssets
-  let previewPath = getFinalPdfPreviewImagePath(reviewedOutputAssets, approvedPages)
+  let pdfPath: string
+  let previewPath: string | null
+  let approvedPageCount: number
 
-  if (!canReuseExistingPdf) {
+  if (alreadyPdfReleased) {
+    // An email retry can sign the published object, but it can never rebuild it.
+    const savedPath = finalJob.pdf_path
+    const trustedLegacy = savedPath === 'orders/' + scope.orderId + '/final/pdf/final.pdf' &&
+      await hasSingleFinalOrderLine(scope.orderId, finalJob.cart_item_id)
+    if (!savedPath || (!isScopedFinalPdf(scope, savedPath) && !trustedLegacy) ||
+        linkedOutputAssets.pdf_path !== savedPath || linkedOutputAssets.bucket !== STORAGE_BUCKET) {
+      throw new FinalArtifactConflict('Published PDF ownership cannot be verified. Verify the saved PDF before retrying email.')
+    }
+    try {
+      assertFinalOutputAssetsReleasable(linkedOutputAssets, readStructuredFinalPdfReleaseProof(linkedOutputAssets))
+    } catch {
+      throw new FinalArtifactConflict('Published PDF composition cannot be verified. Do not regenerate or resend it until it has been checked.')
+    }
+    pdfPath = savedPath
+    previewPath = getFinalPdfPreviewImagePath(linkedOutputAssets, [])
+    approvedPageCount = Number(finalJob.approved_pages || 0)
+  } else {
+    const { data: pages, error: pagesError } = await supabaseAdmin
+      .from('final_job_pages')
+      .select('page_index, status, manual_output_path, approved_output_path, approved_source')
+      .eq('final_job_id', finalJobId)
+      .order('page_index', { ascending: true })
+
+    if (pagesError || !pages?.length) {
+      throw new Error(pagesError?.message || 'Final job pages not found')
+    }
+    const expectedTotalPages = Number(finalJob.total_pages || 0)
+    if (expectedTotalPages <= 0 || pages.length !== expectedTotalPages) {
+      throw new Error('Final page count mismatch (expected=' + expectedTotalPages + '; review_rows=' + pages.length + ')')
+    }
+
+    const approvedPages: ApprovedFinalPdfPage[] = []
+    for (const page of pages) {
+      if (!page.approved_output_path) {
+        throw new Error('Missing approved output for final page ' + page.page_index)
+      }
+      if (page.status !== 'approved' && page.status !== 'replaced') {
+        throw new Error('Page ' + page.page_index + ' is not approved')
+      }
+      const legacyManual = page.approved_source === 'manual' &&
+        page.approved_output_path === page.manual_output_path &&
+        isLegacyFinalManualPage(scope.orderId, page.approved_output_path)
+      if (!isScopedFinalApprovedPage(scope, page.approved_output_path) && !legacyManual) {
+        throw new FinalArtifactConflict('Approved image for page ' + page.page_index +
+          ' may be shared. Re-approve from a verified source or upload the correct replacement before release.')
+      }
+      approvedPages.push({
+        page_index: page.page_index,
+        approved_output_path: page.approved_output_path,
+      })
+    }
+
     const artifact = await buildFinalPdfReleaseArtifact({
       outputAssets: linkedOutputAssets,
       totalPages: expectedTotalPages,
       approvedPages,
       loadApprovedPage: (path) => downloadStorageBuffer(path),
     })
-    releaseOutputAssets = artifact.outputAssets
+    pdfPath = getNewFinalPdfReleasePath(scope)
     previewPath = artifact.previewImagePath
+    approvedPageCount = approvedPages.length
     const { error: uploadError } = await supabaseAdmin.storage.from(STORAGE_BUCKET).upload(pdfPath, artifact.buffer, {
       contentType: 'application/pdf',
-      upsert: true,
+      upsert: false,
     })
-
     if (uploadError) {
       throw new Error(uploadError.message || 'Failed to upload final PDF')
     }
-  } else {
-    assertFinalOutputAssetsReleasable(reviewedOutputAssets, persistedStructuredProof)
-  }
 
-  if (!alreadyPdfReleased) {
-    const { error: finalJobUpdateError } = await supabaseAdmin
+    const { data: releasedFinal, error: finalJobUpdateError } = await supabaseAdmin
       .from('final_jobs')
       .update({
         status: 'completed',
         review_status: 'released',
         release_mode: releaseMode,
-        approved_pages: pages.length,
+        approved_pages: approvedPageCount,
         pdf_path: pdfPath,
         released_at: now,
         print_status: 'pending',
@@ -330,46 +335,49 @@ export async function releaseFinalJob(params: {
         updated_at: now,
       })
       .eq('final_job_id', finalJobId)
+      .is('released_at', null)
+      .neq('review_status', 'released')
+      .select('final_job_id')
+      .maybeSingle()
 
     if (finalJobUpdateError) {
       throw new Error(finalJobUpdateError.message || 'Failed to update final job release state')
     }
-  }
+    if (!releasedFinal?.final_job_id) {
+      throw new FinalArtifactConflict('This book was released by another request. Refresh before retrying delivery.')
+    }
 
-  const { error: jobsUpdateError } = await supabaseAdmin
-    .from('jobs')
-    .update({
-      status: 'done',
-      progress: 100,
-      output_assets: {
-        ...releaseOutputAssets,
-        bucket: STORAGE_BUCKET,
-        pdf_path: pdfPath,
-      },
-      updated_at: now,
-    })
-    .eq('job_id', finalJob.job_id)
+    const releaseOutputAssets = artifact.outputAssets
+    const { error: jobsUpdateError } = await supabaseAdmin
+      .from('jobs')
+      .update({
+        status: 'done',
+        progress: 100,
+        output_assets: {
+          ...releaseOutputAssets,
+          bucket: STORAGE_BUCKET,
+          pdf_path: pdfPath,
+        },
+        updated_at: now,
+      })
+      .eq('job_id', finalJob.job_id)
 
-  if (jobsUpdateError) {
-    throw new Error(jobsUpdateError.message || 'Failed to update worker job output')
-  }
+    if (jobsUpdateError) {
+      throw new Error(jobsUpdateError.message || 'Failed to update worker job output')
+    }
 
-  const { error: approvedPagesError } = await supabaseAdmin
-    .from('final_job_pages')
-    .update({
-      reviewed_by: approvedByCustomerId,
-      reviewed_at: now,
-      updated_at: now,
-    })
-    .eq('final_job_id', finalJobId)
+    const { error: approvedPagesError } = await supabaseAdmin
+      .from('final_job_pages')
+      .update({
+        reviewed_by: approvedByCustomerId,
+        reviewed_at: now,
+        updated_at: now,
+      })
+      .eq('final_job_id', finalJobId)
 
-  if (approvedPagesError) {
-    throw new Error(approvedPagesError.message || 'Failed to stamp release review metadata')
-  }
-
-  const orderEmail = order.email || null
-  if (!orderEmail) {
-    throw new Error('Missing order email for final release')
+    if (approvedPagesError) {
+      throw new Error(approvedPagesError.message || 'Failed to stamp release review metadata')
+    }
   }
 
   const displayTitle = resolveFinalJobDisplayTitle(finalJob)
@@ -439,7 +447,7 @@ export async function releaseFinalJob(params: {
     releaseMode: alreadyPdfReleased ? finalJob.release_mode : releaseMode,
     releasedAt: finalJob.released_at || now,
     emailSentAt,
-    approvedPages: pages.length,
+    approvedPages: approvedPageCount,
     alreadyReleased: alreadyPdfReleased,
   }
 }

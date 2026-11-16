@@ -6,11 +6,13 @@ import {
   resolveFinalReviewMutationPage,
 } from '@/lib/final-review-mutation-contract'
 import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
+import { FinalArtifactConflict, getFinalPageRevisionPath } from '@/lib/final-review-artifact-paths'
 import {
   approveFinalReviewTasks,
+  assertFinalApprovalSources,
   type FinalReviewApprovalTask,
 } from '@/lib/final-review-batch-approval'
-import { getFinalPagePath, refreshFinalJobApprovalState } from '@/lib/finalReview'
+import { refreshFinalJobApprovalState } from '@/lib/finalReview'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 type PageIntentMap = Record<string, string>
@@ -34,7 +36,7 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, review_status, released_at, total_pages')
+    .select('final_job_id, job_id, order_id, cart_item_id, review_status, released_at, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob?.order_id) {
@@ -77,6 +79,7 @@ export async function POST(
     skipped?: boolean
     error?: string
   }> = []
+  const scope = { orderId: finalJob.order_id, finalJobId, jobId: finalJob.job_id, cartItemId: finalJob.cart_item_id }
   const tasks: FinalReviewApprovalTask[] = []
 
   for (const page of pages) {
@@ -97,7 +100,7 @@ export async function POST(
       mutationPlan,
       Number(page.page_index)
     ).storage_page_number
-    const approvedPath = getFinalPagePath(finalJob.order_id, storagePageNumber)
+    const approvedPath = getFinalPageRevisionPath(scope, storagePageNumber, 'approved')
     tasks.push({
       finalJobPageId: page.final_job_page_id,
       pageIndex: page.page_index,
@@ -106,6 +109,13 @@ export async function POST(
       approvedSource,
       reviewIntentId,
     })
+  }
+
+  try {
+    await assertFinalApprovalSources(scope, tasks)
+  } catch (error) {
+    if (!(error instanceof FinalArtifactConflict)) throw error
+    return NextResponse.json({ error: error.message }, { status: 409 })
   }
 
   results.push(...await approveFinalReviewTasks({

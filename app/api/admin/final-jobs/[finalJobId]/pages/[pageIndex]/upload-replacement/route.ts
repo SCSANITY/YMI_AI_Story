@@ -146,7 +146,7 @@ export async function POST(
 
   let manualPath: string
   try {
-    manualPath = getFinalPageManualRevisionPath(finalJob.order_id, storagePageNumber, reviewIntentId)
+    manualPath = getFinalPageManualRevisionPath({ orderId: finalJob.order_id, finalJobId }, storagePageNumber, reviewIntentId)
   } catch (error) {
     await discardFinalReplacementStaging({
       reviewIntentId,
@@ -266,7 +266,6 @@ export async function POST(
     .maybeSingle()
 
   if (updateError) {
-    await supabaseAdmin.storage.from('raw-private').remove([manualPath])
     return jsonNoStore({ error: updateError.message || 'Failed to update replacement page' }, { status: 500 })
   }
   if (!updatedPage?.final_job_page_id) {
@@ -278,11 +277,7 @@ export async function POST(
   await refreshFinalJobApprovalState(finalJobId)
   await discardFinalReplacementStaging({ reviewIntentId, storagePath })
 
-  const previousPaths = [page.manual_output_path, page.approved_output_path]
-    .filter((path): path is string => Boolean(path && path !== manualPath))
-  if (previousPaths.length) {
-    await supabaseAdmin.storage.from('raw-private').remove([...new Set(previousPaths)])
-  }
+  // Keep previous artifacts: a legacy key can still be referenced by another book.
 
   const { data: signedManual } = await supabaseAdmin.storage
     .from('raw-private')

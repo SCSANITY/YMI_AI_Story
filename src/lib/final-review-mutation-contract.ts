@@ -1,3 +1,4 @@
+import { getFinalPageRevisionPath, type FinalArtifactScope } from '@/lib/final-review-artifact-paths'
 import {
   parseFinalPageMetadataContract,
   type FinalPageRole,
@@ -95,7 +96,7 @@ export function resolveFinalReviewMutationPage(
 }
 
 export function getFinalPageManualRevisionPath(
-  orderId: string,
+  scope: FinalArtifactScope,
   storagePageNumber: number,
   reviewIntentId: string
 ) {
@@ -103,5 +104,5 @@ export function getFinalPageManualRevisionPath(
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(safeIntentId)) {
     throw new FinalReviewMutationContractError('Invalid replacement review intent')
   }
-  return `orders/${orderId}/final/pages/manual/page_${String(storagePageNumber).padStart(2, '0')}_${safeIntentId}.png`
+  return getFinalPageRevisionPath(scope, storagePageNumber, 'manual', safeIntentId)
 }

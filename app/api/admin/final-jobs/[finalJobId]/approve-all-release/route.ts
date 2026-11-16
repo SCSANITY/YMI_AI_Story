@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { isFinalJobReleased } from '@/lib/final-job-release'
+import { FinalArtifactConflict, getFinalPageRevisionPath } from '@/lib/final-review-artifact-paths'
 import {
   FinalReviewMutationContractError,
   resolveFinalReviewMutationPage,
@@ -7,10 +9,10 @@ import {
 import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
 import {
   approveFinalReviewTasks,
+  assertFinalApprovalSources,
   type FinalReviewApprovalTask,
 } from '@/lib/final-review-batch-approval'
 import {
-  getFinalPagePath,
   refreshFinalJobApprovalState,
   releaseFinalJob,
   type FinalReleaseMode,
@@ -36,11 +38,15 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, status, review_status, total_pages')
+    .select('final_job_id, job_id, order_id, cart_item_id, status, review_status, released_at, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob?.final_job_id) {
     return NextResponse.json({ error: finalJobError?.message || 'Final job not found' }, { status: 404 })
+  }
+
+  if (isFinalJobReleased(finalJob)) {
+    return NextResponse.json({ error: 'Final PDF is already released. Use PDF Release to retry delivery.' }, { status: 409 })
   }
 
   const { data: pages, error: pagesError } = await supabaseAdmin
@@ -71,6 +77,7 @@ export async function POST(
   }
 
   const now = new Date().toISOString()
+  const scope = { orderId: finalJob.order_id, finalJobId, jobId: finalJob.job_id, cartItemId: finalJob.cart_item_id }
   const tasks: FinalReviewApprovalTask[] = []
   for (const page of pages) {
     if (page.status === 'processing' || page.status === 'rerunning' || page.status === 'failed') {
@@ -86,7 +93,7 @@ export async function POST(
       Number(page.page_index)
     ).storage_page_number
     const reviewIntentId = crypto.randomUUID()
-    const approvedPath = getFinalPagePath(finalJob.order_id, storagePageNumber)
+    const approvedPath = getFinalPageRevisionPath(scope, storagePageNumber, 'approved')
     tasks.push({
       finalJobPageId: page.final_job_page_id,
       pageIndex: Number(page.page_index),
@@ -95,6 +102,13 @@ export async function POST(
       approvedSource: page.manual_output_path ? 'manual' : 'ai',
       reviewIntentId,
     })
+  }
+
+  try {
+    await assertFinalApprovalSources(scope, tasks)
+  } catch (error) {
+    if (!(error instanceof FinalArtifactConflict)) throw error
+    return NextResponse.json({ error: error.message }, { status: 409 })
   }
 
   const approvalResults = await approveFinalReviewTasks({
@@ -125,7 +139,7 @@ export async function POST(
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to release final job' },
-      { status: 500 }
+      { status: error instanceof FinalArtifactConflict ? 409 : 500 }
     )
   }
 }

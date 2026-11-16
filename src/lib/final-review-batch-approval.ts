@@ -1,4 +1,43 @@
+import {
+  FinalArtifactConflict,
+  isLegacyFinalManualPage,
+  isScopedFinalApprovedPage,
+  type FinalArtifactScope,
+} from '@/lib/final-review-artifact-paths'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+
+export async function hasSingleFinalOrderLine(orderId: string, cartItemId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('cart_items')
+    .select('cart_item_id')
+    .eq('order_id', orderId)
+    .limit(2)
+  return !error && data?.length === 1 && data[0].cart_item_id === cartItemId
+}
+
+export async function assertFinalApprovalSources(
+  scope: FinalArtifactScope & { jobId: string; cartItemId: string },
+  tasks: ReadonlyArray<{ sourcePath: string; approvedSource: 'ai' | 'manual' }>
+) {
+  const errorMessage = 'Source page may be shared with another book. Upload the correct replacement page before approving.'
+  let needsSingleLineProof = false
+  for (const { sourcePath, approvedSource } of tasks) {
+    if (isScopedFinalApprovedPage(scope, sourcePath)) continue
+    if (approvedSource === 'manual' && isLegacyFinalManualPage(scope.orderId, sourcePath)) continue
+    const parts = sourcePath.split('/')
+    if (approvedSource === 'ai' && parts[0] === 'jobs' && parts[2] === scope.jobId && parts[4] === 'output' &&
+        !parts.some((part) => part === '.' || part === '..')) continue
+    const legacyAiPrefix = 'orders/' + scope.orderId + '/final/pages/ai/'
+    if (approvedSource !== 'ai' || !sourcePath.startsWith(legacyAiPrefix) ||
+        !/^attempt_[0-9]+\/page_[0-9]+(?:_full)?\.[a-z0-9]+$/.test(sourcePath.slice(legacyAiPrefix.length))) {
+      throw new FinalArtifactConflict(errorMessage)
+    }
+    needsSingleLineProof = true
+  }
+  if (needsSingleLineProof && !(await hasSingleFinalOrderLine(scope.orderId, scope.cartItemId))) {
+    throw new FinalArtifactConflict(errorMessage)
+  }
+}
 
 export type FinalReviewApprovalTask = {
   finalJobPageId: string
@@ -68,7 +107,6 @@ export async function approveFinalReviewTasks(args: {
   const readyTasks = intentResults.filter((entry) => entry.result === null).map((entry) => entry.task)
   const approvalResults = await mapWithConcurrency(readyTasks, 6, async (task) => {
     if (task.sourcePath !== task.approvedPath) {
-      await supabaseAdmin.storage.from('raw-private').remove([task.approvedPath])
       const { error: copyError } = await supabaseAdmin.storage
         .from('raw-private')
         .copy(task.sourcePath, task.approvedPath)

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
+import { FinalArtifactConflict } from '@/lib/final-review-artifact-paths'
 import { releaseFinalJob, type FinalReleaseMode } from '@/lib/finalReview'
 
 export const maxDuration = 300
@@ -31,7 +32,7 @@ export async function POST(
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to release final job' },
-      { status: 500 }
+      { status: error instanceof FinalArtifactConflict ? 409 : 500 }
     )
   }
 }

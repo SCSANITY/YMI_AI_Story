@@ -54,8 +54,9 @@ test('My Books Reader composes structured leaves without filename or URL inferen
 
 test('Final release preserves page identity when reviewed paths replace Worker paths', async () => {
   const source = await readFile(releasePath, 'utf8')
+  const composer = await readFile(new URL('../src/lib/finalPdfRelease.ts', import.meta.url), 'utf8')
 
-  assert.match(source, /buildFinalPdfReleaseArtifact\(\{/)
-  assert.match(source, /pages: mergeApprovedFinalOutputPages\(linkedOutputAssets, approvedPages\)/)
-  assert.match(source, /\.\.\.releaseOutputAssets/)
+  assert.match(source, /buildFinalPdfReleaseArtifact\(\{[\s\S]*approvedPages,[\s\S]*loadApprovedPage:/)
+  assert.match(composer, /mergeApprovedFinalOutputPages\(linkedOutputAssets, args\.approvedPages\)/)
+  assert.match(source, /releaseOutputAssets = artifact\.outputAssets[\s\S]*\.\.\.releaseOutputAssets/)
 })

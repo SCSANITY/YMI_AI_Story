@@ -46,8 +46,8 @@ describe('Final Review mutation contract', () => {
 
   it('creates an intent-scoped manual replacement path', () => {
     assert.equal(
-      getFinalPageManualRevisionPath('order-1', 4, 'A0000000-0000-4000-8000-000000000001'),
-      'orders/order-1/final/pages/manual/page_04_a0000000-0000-4000-8000-000000000001.png'
+      getFinalPageManualRevisionPath({ orderId: 'order-1', finalJobId: 'final-1' }, 4, 'A0000000-0000-4000-8000-000000000001'),
+      'orders/order-1/final/books/final-1/pages/manual/page_04_a0000000-0000-4000-8000-000000000001.png'
     )
   })
 

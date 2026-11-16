@@ -6,7 +6,9 @@ import {
   resolveFinalReviewMutationPage,
 } from '@/lib/final-review-mutation-contract'
 import { loadFinalReviewMutationPlan } from '@/lib/final-review-mutation-store'
-import { getFinalPagePath, refreshFinalJobApprovalState } from '@/lib/finalReview'
+import { FinalArtifactConflict, getFinalPageRevisionPath } from '@/lib/final-review-artifact-paths'
+import { assertFinalApprovalSources } from '@/lib/final-review-batch-approval'
+import { refreshFinalJobApprovalState } from '@/lib/finalReview'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function POST(
@@ -26,7 +28,7 @@ export async function POST(
 
   const { data: finalJob } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, review_status, released_at, total_pages')
+    .select('final_job_id, job_id, order_id, cart_item_id, review_status, released_at, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (!finalJob?.order_id) {
@@ -70,6 +72,14 @@ export async function POST(
     return NextResponse.json({ error: 'Page has no output image to approve' }, { status: 409 })
   }
 
+  const scope = { orderId: finalJob.order_id, finalJobId, jobId: finalJob.job_id, cartItemId: finalJob.cart_item_id }
+  try {
+    await assertFinalApprovalSources(scope, [{ sourcePath, approvedSource }])
+  } catch (error) {
+    if (!(error instanceof FinalArtifactConflict)) throw error
+    return NextResponse.json({ error: error.message }, { status: 409 })
+  }
+
   const body = await request.json().catch(() => ({}))
   const reviewIntentId =
     typeof body?.reviewIntentId === 'string' && body.reviewIntentId.trim()
@@ -96,9 +106,8 @@ export async function POST(
     return NextResponse.json({ ok: true, superseded: true })
   }
 
-  const approvedPath = getFinalPagePath(finalJob.order_id, storagePageNumber)
+  const approvedPath = getFinalPageRevisionPath(scope, storagePageNumber, 'approved')
   if (sourcePath !== approvedPath) {
-    await supabaseAdmin.storage.from('raw-private').remove([approvedPath])
     const { error: copyError } = await supabaseAdmin.storage
       .from('raw-private')
       .copy(sourcePath, approvedPath)
