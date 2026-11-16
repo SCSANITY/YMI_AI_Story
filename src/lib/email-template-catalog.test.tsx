@@ -76,6 +76,30 @@ test('order confirmation variants show a dedication deadline and only prompt for
   }
 })
 
+test('Final PDF Delivery previews keep checkout secondary and exclusive to Hardcover', async () => {
+  const delivery = EMAIL_TEMPLATE_CATALOG.find(({ id }) => id === 'final-delivery')
+  assert.deepEqual(delivery?.variants.map(({ id }) => id), ['default', 'voice'])
+
+  for (const [id, showsOffer] of [['default', true], ['voice', false]] as const) {
+    const html = await renderEmailTemplatePreview('final-delivery', id) ?? ''
+    const pdf = html.indexOf('View Your Preview (PDF)')
+    const reminder = html.indexOf('reply to this email within 48 hours')
+    const offer = html.indexOf('Upgrade to Signature Voice')
+    assert.ok(pdf >= 0 && pdf < reminder, id)
+    assert.match(html, /href="https:\/\/www\.ymistory\.com\/api\/orders\/sample-order\/download"[^>]*>View Your Preview \(PDF\)<\/a>/)
+    assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order"[^>]*>Open your order page<\/a>/)
+    if (showsOffer) {
+      assert.ok(offer > reminder, id)
+      assert.match(html, /href="#signature-voice-upgrade"[^>]*>Upgrade to Signature Voice/)
+      assert.match(html, /EXCLUSIVE LAUNCH OFFER/)
+    } else {
+      assert.equal(offer, -1)
+      assert.doesNotMatch(html, /EXCLUSIVE LAUNCH OFFER|special launch price/)
+    }
+    assert.doesNotMatch(html, /buy\.stripe\.com/)
+  }
+})
+
 test('unpaid reminder previews show the three approved messages at their existing stage offsets', async () => {
   const template = EMAIL_TEMPLATE_CATALOG.find((entry) => entry.id === 'unpaid-reminder')
   assert.deepEqual(template?.variants.map((variant) => variant.label), ['30 minutes', '24 hours', '6 days'])

@@ -8,7 +8,7 @@ import {
   type ReceiptAddress,
   type ReceiptItem,
 } from '@/components/emails/OrderReceiptEmail'
-import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
+import { DeliveryEmail, HARDCOVER_DELIVERY_SUBJECT } from '@/components/emails/DeliveryEmail'
 import { buildCartReminderText, CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import {
   AbandonmentEmail,
@@ -371,6 +371,8 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
 
 type SendOrderDeliveryEmailParams = {
   to: string
+  firstName?: string | null
+  hardcover?: boolean
   orderId: string
   displayId?: string | null
   finalJobId?: string | null
@@ -388,7 +390,9 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
     idempotencyKey: `final_delivery:${params.finalJobId || params.orderId}`,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_DELIVERY',
-    subject: `Your book is ready - ${params.displayId || params.orderId}`,
+    subject: params.hardcover
+      ? HARDCOVER_DELIVERY_SUBJECT
+      : `Your book is ready - ${params.displayId || params.orderId}`,
     orderId: params.orderId,
     finalJobId: params.finalJobId ?? null,
     retryFailed: params.retryFailed,
@@ -404,6 +408,8 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
         orderUrl={orderUrl}
         downloadUrl={params.downloadUrl}
         coverImageUrl={params.previewImageUrl}
+        firstName={params.firstName}
+        voiceUpgradeUrl={params.hardcover ? 'https://buy.stripe.com/3cI00b0Pw3RCcOm55u0co02' : undefined}
       />
     ),
   })

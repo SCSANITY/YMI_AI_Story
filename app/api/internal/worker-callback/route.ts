@@ -123,7 +123,7 @@ export async function POST(request: Request) {
 
   const { data: cartItem } = await supabaseAdmin
     .from('cart_items')
-    .select('cart_item_id, order_id')
+    .select('cart_item_id, order_id, product_type, package_type')
     .eq('cart_item_id', job.cart_item_id)
     .maybeSingle()
 
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
 
   const { data: order } = await supabaseAdmin
     .from('orders')
-    .select('order_id, display_id, email')
+    .select('order_id, display_id, email, first_name:shipping_address->>firstName')
     .eq('order_id', cartItem.order_id)
     .maybeSingle()
 
@@ -152,6 +152,8 @@ export async function POST(request: Request) {
 
   await sendOrderDeliveryEmail({
     to: order.email,
+    firstName: order.first_name,
+    hardcover: cartItem.product_type === 'physical' && cartItem.package_type === 'basic',
     orderId: order.order_id,
     displayId: order.display_id ?? null,
     downloadUrl: signedPdf.signedUrl,

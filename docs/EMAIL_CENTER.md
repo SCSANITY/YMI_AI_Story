@@ -32,6 +32,11 @@ rollback, test-send, raw HTML, sender, or link-target control.
 - Orders: Order Confirmation, Stripe Payment Receipt, and Unpaid Checkout
   Reminder.
 - Delivery: Final PDF Delivery and the four-state Order Logistics Update.
+  PDF Delivery has Hardcover and Hardcover + Voice previews. Both display the
+  48-hour corrections message. The offer appears only for an identified physical
+  Hardcover item, never for another line in the order or an unknown edition.
+  The Admin preview button is inert; live email uses the approved Payment Link.
+  The corrections message does not change print-release scheduling.
 - Subscriptions: Newsletter Confirmation and Weekly Cart Reminder.
 - Human Communication: Support Reply, Partnership Reply, and General Mail.
 

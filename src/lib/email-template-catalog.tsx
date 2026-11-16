@@ -2,7 +2,7 @@ import * as React from 'react'
 import { render } from '@react-email/render'
 import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
 import { CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
-import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
+import { DeliveryEmail, HARDCOVER_DELIVERY_SUBJECT } from '@/components/emails/DeliveryEmail'
 import { KolPartnershipEmail } from '@/components/emails/KolPartnershipEmail'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { NewsletterConfirmationEmail } from '@/components/emails/NewsletterConfirmationEmail'
@@ -154,10 +154,13 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     ownership: 'web',
     triggerMode: 'workflow',
     trigger: 'An admin releases an approved customer PDF.',
-    subject: 'Your book is ready - {order}',
+    subject: 'Hardcover: ' + HARDCOVER_DELIVERY_SUBJECT + '; Voice: Your book is ready - {order}',
     sender: 'Delivery mailbox',
-    description: 'Announces that the personalized book is ready and provides the order and PDF links.',
-    variants: DEFAULT_VARIANT,
+    description: 'Provides PDF and order links and a 48-hour review reminder. Only the delivered Hardcover book receives the optional Signature Voice offer.',
+    variants: [
+      { id: 'default', label: 'Hardcover: upgrade offer' },
+      { id: 'voice', label: 'Hardcover + Voice: delivery only' },
+    ],
   },
   {
     id: 'logistics-update',
@@ -336,6 +339,8 @@ export async function renderEmailTemplatePreview(
           displayId="YMI-2026-0903"
           downloadUrl="https://www.ymistory.com/api/orders/sample-order/download"
           coverImageUrl={coverImageUrl}
+          firstName="Sophie"
+          voiceUpgradeUrl={variantId === 'default' ? '#signature-voice-upgrade' : undefined}
         />
       )
       break
