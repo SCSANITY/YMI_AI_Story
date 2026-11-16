@@ -369,6 +369,8 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
   })
 }
 
+export const FINAL_PDF_DELIVERY_LINK_TTL_SECONDS = 72 * 60 * 60
+
 type SendOrderDeliveryEmailParams = {
   to: string
   firstName?: string | null

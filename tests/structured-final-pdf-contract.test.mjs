@@ -79,6 +79,22 @@ test('Final release validates, composes, uploads, persists, and emails in that o
   assert.match(email, /idempotencyKey:\s*`final_delivery:\$\{params\.finalJobId \|\| params\.orderId\}`/)
 })
 
+test('only emailed Final PDF links use the 72-hour signing lifetime', async () => {
+  const [release, callback, email] = await Promise.all([
+    read('src/lib/finalReview.ts'),
+    read('app/api/internal/worker-callback/route.ts'),
+    read('src/lib/email.tsx'),
+  ])
+
+  assert.match(email, /const FINAL_PDF_DELIVERY_LINK_TTL_SECONDS = 72 \* 60 \* 60/)
+  for (const source of [release, callback]) {
+    assert.match(source, /\.createSignedUrl\(pdfPath, FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, \{ download: downloadFileName \}\)/)
+  }
+  assert.match(release, /const FINAL_REVIEW_ASSET_TTL_SECONDS = 60 \* 60 \* 24/)
+  assert.match(release, /ttlSeconds = FINAL_REVIEW_ASSET_TTL_SECONDS/)
+  assert.match(callback, /\.createSignedUrl\(path, 60 \* 60 \* 24,/)
+})
+
 test('PDF Delivery offers the upgrade only for the same delivered physical Hardcover item', async () => {
   const [release, callback, sender] = await Promise.all([
     read('src/lib/finalReview.ts'),

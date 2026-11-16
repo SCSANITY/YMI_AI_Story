@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { sendOrderDeliveryEmail } from '@/lib/email'
+import { FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, sendOrderDeliveryEmail } from '@/lib/email'
 import { matchesSecret } from '@/lib/secret-compare'
 import {
   assertSignableStorageBucket,
@@ -11,7 +11,6 @@ import {
 // Current production delivery goes through Admin final review release in src/lib/finalReview.ts.
 // Keep this route only for old direct-final jobs where the worker already generated a PDF.
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
-const DELIVERY_URL_TTL_SECONDS = Number.parseInt(process.env.DELIVERY_URL_TTL_SECONDS || '86400', 10)
 const DELIVERY_PREVIEW_WIDTH = Number.parseInt(process.env.DELIVERY_PREVIEW_WIDTH || '720', 10)
 const DELIVERY_PREVIEW_QUALITY = Number.parseInt(process.env.DELIVERY_PREVIEW_QUALITY || '72', 10)
 
@@ -144,7 +143,7 @@ export async function POST(request: Request) {
   const downloadFileName = `${order.display_id || order.order_id}.pdf`
   const { data: signedPdf, error: signedPdfError } = await supabaseAdmin.storage
     .from(bucket)
-    .createSignedUrl(pdfPath, DELIVERY_URL_TTL_SECONDS, { download: downloadFileName })
+    .createSignedUrl(pdfPath, FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, { download: downloadFileName })
 
   if (signedPdfError || !signedPdf?.signedUrl) {
     return NextResponse.json({ error: 'Failed to sign PDF url' }, { status: 500 })

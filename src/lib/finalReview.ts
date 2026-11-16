@@ -1,4 +1,4 @@
-import { sendOrderDeliveryEmail } from '@/lib/email'
+import { FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, sendOrderDeliveryEmail } from '@/lib/email'
 import {
   assertFinalOutputAssetsReleasable,
   isStructuredFinalOutputAssets,
@@ -22,7 +22,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { FinalProductionMode } from '@/lib/final-production'
 
 const STORAGE_BUCKET = 'raw-private'
-const FINAL_PDF_TTL_SECONDS = 60 * 60 * 24
+const FINAL_REVIEW_ASSET_TTL_SECONDS = 60 * 60 * 24
 
 export type FinalReleaseMode = 'manual' | 'job_auto' | 'story_auto' | 'global_auto'
 
@@ -115,7 +115,7 @@ async function downloadStorageBuffer(path: string): Promise<Buffer> {
   return Buffer.from(await data.arrayBuffer())
 }
 
-async function signStorageUrl(path: string | null, ttlSeconds = FINAL_PDF_TTL_SECONDS) {
+async function signStorageUrl(path: string | null, ttlSeconds = FINAL_REVIEW_ASSET_TTL_SECONDS) {
   if (!path) return null
   const { data } = await supabaseAdmin.storage.from(STORAGE_BUCKET).createSignedUrl(path, ttlSeconds)
   return data?.signedUrl ?? null
@@ -376,13 +376,13 @@ export async function releaseFinalJob(params: {
   const downloadFileName = buildPersonalizedBookPdfFileName(displayTitle)
   const { data: signedPdf, error: signedPdfError } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
-    .createSignedUrl(pdfPath, FINAL_PDF_TTL_SECONDS, { download: downloadFileName })
+    .createSignedUrl(pdfPath, FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, { download: downloadFileName })
 
   if (signedPdfError || !signedPdf?.signedUrl) {
     throw new Error(signedPdfError?.message || 'Failed to create signed PDF url')
   }
 
-  // Cover thumbnail must outlive the 24h PDF link — the email may be opened weeks
+  // Cover thumbnail must outlive the 72h PDF link — the email may be opened weeks
   // later, and a broken cover looks worse than a missing one. 1-year signed URL.
   const previewImageUrl = previewPath ? await signStorageUrl(previewPath, 60 * 60 * 24 * 365) : null
   let emailSentAt = finalJob.email_sent_at || null

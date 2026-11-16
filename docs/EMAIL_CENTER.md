@@ -36,7 +36,9 @@ rollback, test-send, raw HTML, sender, or link-target control.
   48-hour corrections message. The offer appears only for an identified physical
   Hardcover item, never for another line in the order or an unknown edition.
   The Admin preview button is inert; live email uses the approved Payment Link.
-  The corrections message does not change print-release scheduling.
+  The private PDF link expires 72 hours after signing. The order page remains
+  available for authenticated re-download. The corrections message does not
+  change print-release scheduling.
 - Subscriptions: Newsletter Confirmation and Weekly Cart Reminder.
 - Human Communication: Support Reply, Partnership Reply, and General Mail.
 
