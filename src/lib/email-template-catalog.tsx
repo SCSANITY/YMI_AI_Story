@@ -43,6 +43,16 @@ export type EmailTemplateDefinition = {
 
 const DEFAULT_VARIANT = [{ id: 'default', label: 'Default' }] as const
 
+const ORDER_CONFIRMATION_VARIANTS = [
+  { id: 'default', label: 'Hardcover', edition: 'hardcover', updateOpen: true, pendingVoice: 0 },
+  { id: 'voice-pending', label: 'Voice: recording needed', edition: 'voice', updateOpen: true, pendingVoice: 1 },
+  { id: 'voice-ready', label: 'Voice: recording received', edition: 'voice', updateOpen: true, pendingVoice: 0 },
+  { id: 'mixed-voice-pending', label: 'Mixed: recording needed', edition: 'mixed', updateOpen: true, pendingVoice: 1 },
+  { id: 'hardcover-closed', label: 'Hardcover: dedication closed', edition: 'hardcover', updateOpen: false, pendingVoice: 0 },
+  { id: 'voice-pending-closed', label: 'Voice: dedication closed, recording needed', edition: 'voice', updateOpen: false, pendingVoice: 1 },
+  { id: 'voice-ready-closed', label: 'Voice: dedication closed, recording received', edition: 'voice', updateOpen: false, pendingVoice: 0 },
+] as const
+
 export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
   {
     id: 'guest-otp',
@@ -94,7 +104,7 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     subject: 'Order Confirmed: A Starlight Journey is Being Crafted with Love!',
     sender: 'Orders mailbox',
     description: 'Confirms the purchase, order contents, total, delivery address, and next steps.',
-    variants: DEFAULT_VARIANT,
+    variants: ORDER_CONFIRMATION_VARIANTS,
   },
   {
     id: 'stripe-receipt',
@@ -265,15 +275,20 @@ export async function renderEmailTemplatePreview(
     case 'guest-otp':
       node = <OtpEmail code="482916" expiresInMinutes={10} />
       break
-    case 'order-confirmation':
+    case 'order-confirmation': {
+      const variant = ORDER_CONFIRMATION_VARIANTS.find(({ id }) => id === variantId)
+        ?? ORDER_CONFIRMATION_VARIANTS[0]
+      const hardcoverBook = { name: "Sophie's Secret Journey Through Eight Plants", quantity: 1, unitPrice: 36 }
+      const voiceBook = { name: "Mia's Space Mission", quantity: 1, unitPrice: 59 }
+      const items = variant.edition === 'mixed'
+        ? [hardcoverBook, voiceBook]
+        : [variant.edition === 'voice' ? voiceBook : hardcoverBook]
       node = (
         <OrderReceiptEmail
           orderId="sample-order"
           displayId="YMI-2026-0903"
-          items={[
-            { name: "Sophie's Secret Journey Through Eight Plants", quantity: 1, unitPrice: 36 },
-          ]}
-          total={36}
+          items={items}
+          total={items.reduce((total, item) => total + item.quantity * item.unitPrice, 0)}
           currency="USD"
           address={{
             firstName: 'Sophie',
@@ -283,12 +298,20 @@ export async function renderEmailTemplatePreview(
             zip: 'N1 9GU',
           }}
           trackUrl={orderUrl}
-          materialNotice={{deadline:'2026-10-23T12:00:00Z',pendingVoice:1,url:orderUrl+'/materials',names:['Alston','Sonia'],updateOpen:true,hasVoice:true}}
+          materialNotice={{
+            deadline: '2026-10-23T12:00:00Z',
+            url: orderUrl + '/materials',
+            names: variant.edition === 'mixed' ? ['Sophie', 'Mia'] : [variant.edition === 'voice' ? 'Mia' : 'Sophie'],
+            pendingVoice: variant.pendingVoice,
+            updateOpen: variant.updateOpen,
+            hasVoice: variant.edition !== 'hardcover',
+          }}
           coverImageUrl={coverImageUrl}
-          coverTitle="Sophie's Secret Journey Through Eight Plants"
+          coverTitle={items[0].name}
         />
       )
       break
+    }
     case 'unpaid-reminder':
       node = (
         <AbandonmentEmail

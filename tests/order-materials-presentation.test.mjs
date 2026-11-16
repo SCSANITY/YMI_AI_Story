@@ -66,19 +66,28 @@ test('summary uses own child names and isolates bidi,with correct missing-requir
  assert.doesNotMatch(late,/replacement window|before this deadline/)
 })
 
-test('receipt shows English UTC,local-page instruction and individualized message names',()=>{
+test('receipt keeps named dedications, an explicit timezone and one shared materials link',()=>{
  const Receipt=loader()('components/emails/OrderReceiptEmail.tsx').OrderReceiptEmail
  const render=(names,open=true,missing=0)=>renderToStaticMarkup(React.createElement(Receipt,{
   orderId:'synthetic',items:[],total:89,materialNotice:{deadline,url:'https://example.test/materials',names,hasVoice:true,updateOpen:open,pendingVoice:missing},
  }))
  const html=render(['Alston','Sonia'])
- assert.match(html,/A message for <bdi>Alston<\/bdi> and <bdi>Sonia<\/bdi>/)
- assert.match(html,/Oct.*\(UTC\)/);assert.match(html,/Open your materials page to see this in your local time/)
- assert.doesNotMatch(html,/GMT|Hong Kong|dedication/)
- assert.match(render([]),/A message for <bdi>this book<\/bdi>/)
- const final=render(['Alston'],false);assert.match(final,/has passed:/);assert.match(final,/Your message and recording are final/);assert.doesNotMatch(final,/\(\(|\)\)|\([^)]*\(/)
- assert.doesNotMatch(final,/before this deadline|can be updated/)
- const missing=render(['Sonia'],false,1);assert.match(missing,/We still need your recording/);assert.match(missing,/Once submitted, it is final/)
+ assert.match(html,/optional dedication message for <bdi>Alston<\/bdi> and <bdi>Sonia<\/bdi> until/)
+ assert.match(html,/Oct[^<]*\(UTC\)/)
+ assert.match(html,/Open your materials page to see this in your local time/)
+ assert.doesNotMatch(html,/GMT|Hong Kong|voice recording/)
+ assert.match(render([]),/optional dedication message until/)
+ const closed=render(['Alston'],false)
+ assert.match(closed,/The deadline for editing your dedication has passed\./)
+ assert.doesNotMatch(closed,/can add or edit|voice recording|\(UTC\)/)
+ const missing=render(['Sonia'],false,1)
+ assert.match(missing,/Please submit your voice recording on the same page so we can finish your Hardcover \+ Voice book\./)
+ const missingMultiple=render(['Alston','Sonia'],true,2)
+ assert.match(missingMultiple,/Please submit your voice recordings on the same page so we can finish your Hardcover \+ Voice books\./)
+ for(const markup of [html,closed,missing,missingMultiple]) {
+  assert.equal((markup.match(/href="https:\/\/example\.test\/materials"/g)||[]).length,1)
+  assert.match(markup,/Review your book materials<\/a>/)
+ }
 })
 
 

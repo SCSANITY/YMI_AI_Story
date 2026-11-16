@@ -117,14 +117,35 @@ export function OrderReceiptEmail({
         </tbody>
       </table>
 
-      {materialNotice?<Section style={styles.summaryWrap}>
-        <Text style={styles.paragraph}>A message for {materialNotice.names.length?materialNotice.names.map((name,index)=><React.Fragment key={name}>{index>0?(index===materialNotice.names.length-1?' and ':', '):''}<bdi>{name}</bdi></React.Fragment>):<bdi>this book</bdi>} is optional.</Text>
-        <Text style={styles.paragraph}>{materialNotice.updateOpen?<>You can update your message{materialNotice.hasVoice?' and recording':''} until {formatMaterialTime(materialNotice.deadline,'UTC')}.</>
-          :<>The update deadline has passed: {formatMaterialTime(materialNotice.deadline,'UTC')}. Your message{materialNotice.hasVoice&&!materialNotice.pendingVoice?' and recording are':' is'} final.</>}</Text>
-        <Text style={styles.paragraph}>Open your materials page to see this in your local time.</Text>
-        {materialNotice.pendingVoice?<Text style={styles.paragraph}><strong>{materialNotice.updateOpen?'Please provide your recording as soon as possible. Missing recordings delay completion of your Hardcover + Voice book.':'We still need your recording to make this book. Please submit it as soon as possible. Once submitted, it is final.'}</strong></Text>:null}
-        <Link href={materialNotice.url} style={styles.summaryOrderLink}>Review or update your book materials</Link>
-      </Section>:null}
+      {materialNotice && (
+        <Section style={styles.summaryWrap}>
+          <Text style={styles.paragraph}>
+            {materialNotice.updateOpen ? (
+              <>
+                You can add or edit an optional dedication message
+                {materialNotice.names.map((name, index, names) => (
+                  <React.Fragment key={name}>
+                    {index === 0 ? ' for ' : index === names.length - 1 ? ' and ' : ', '}
+                    <bdi>{name}</bdi>
+                  </React.Fragment>
+                ))}
+                {' until '}{formatMaterialTime(materialNotice.deadline,'UTC')}.
+              </>
+            ) : 'The deadline for editing your dedication has passed.'}
+          </Text>
+          {materialNotice.updateOpen && (
+            <Text style={styles.paragraph}>Open your materials page to see this in your local time.</Text>
+          )}
+          {materialNotice.pendingVoice > 0 && (
+            <Text style={styles.paragraph}>
+              {materialNotice.pendingVoice === 1
+                ? 'Please submit your voice recording on the same page so we can finish your Hardcover + Voice book.'
+                : 'Please submit your voice recordings on the same page so we can finish your Hardcover + Voice books.'}
+            </Text>
+          )}
+          <Link href={materialNotice.url} style={styles.summaryOrderLink}>Review your book materials</Link>
+        </Section>
+      )}
       {/* Order summary */}
       <Section style={styles.summaryWrap}>
         <Text style={styles.summaryEyebrow}>Your Order</Text>
