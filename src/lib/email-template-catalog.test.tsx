@@ -54,20 +54,17 @@ test('order confirmation preview demonstrates the personalized title below the c
 test('order confirmation variants show a dedication deadline and only prompt for a missing Voice recording', async () => {
   const orderConfirmation = EMAIL_TEMPLATE_CATALOG.find((entry) => entry.id === 'order-confirmation')
   const cases = [
-    ['default', true, false],
-    ['voice-pending', true, true],
-    ['voice-ready', true, false],
-    ['mixed-voice-pending', true, true],
-    ['hardcover-closed', false, false],
-    ['voice-pending-closed', false, true],
-    ['voice-ready-closed', false, false],
+    ['default', false],
+    ['voice-pending', true],
+    ['voice-ready', false],
+    ['mixed-voice-pending', true],
   ] as const
   assert.deepEqual(orderConfirmation?.variants.map(({ id }) => id), cases.map(([id]) => id))
-  for (const [id, updateOpen, pendingVoice] of cases) {
+  for (const [id, pendingVoice] of cases) {
     const html = await renderEmailTemplatePreview('order-confirmation', id) ?? ''
     const textHtml = html.replaceAll('<!-- -->', '')
-    assert.equal(/You can add or edit an optional dedication message[\s\S]*? until [^<]*\(UTC\)\./.test(textHtml), updateOpen, id)
-    assert.equal(/The deadline for editing your dedication has passed\./.test(html), !updateOpen, id)
+    assert.match(textHtml, /You can add or edit an optional dedication message[\s\S]*? until [^<]*\(UTC\)\./, id)
+    assert.doesNotMatch(html, /The deadline for editing your dedication has passed\./, id)
     assert.equal(/Please submit your voice recording on the same page so we can finish your Hardcover \+ Voice book\./.test(html), pendingVoice, id)
     assert.equal((html.match(/Review your book materials/g) ?? []).length, 1, id)
     assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order\/materials"[^>]*>Review your book materials<\/a>/)

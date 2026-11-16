@@ -44,13 +44,10 @@ export type EmailTemplateDefinition = {
 const DEFAULT_VARIANT = [{ id: 'default', label: 'Default' }] as const
 
 const ORDER_CONFIRMATION_VARIANTS = [
-  { id: 'default', label: 'Hardcover', edition: 'hardcover', updateOpen: true, pendingVoice: 0 },
-  { id: 'voice-pending', label: 'Voice: recording needed', edition: 'voice', updateOpen: true, pendingVoice: 1 },
-  { id: 'voice-ready', label: 'Voice: recording received', edition: 'voice', updateOpen: true, pendingVoice: 0 },
-  { id: 'mixed-voice-pending', label: 'Mixed: recording needed', edition: 'mixed', updateOpen: true, pendingVoice: 1 },
-  { id: 'hardcover-closed', label: 'Hardcover: dedication closed', edition: 'hardcover', updateOpen: false, pendingVoice: 0 },
-  { id: 'voice-pending-closed', label: 'Voice: dedication closed, recording needed', edition: 'voice', updateOpen: false, pendingVoice: 1 },
-  { id: 'voice-ready-closed', label: 'Voice: dedication closed, recording received', edition: 'voice', updateOpen: false, pendingVoice: 0 },
+  { id: 'default', label: 'Hardcover', edition: 'hardcover', pendingVoice: 0 },
+  { id: 'voice-pending', label: 'Voice: recording needed', edition: 'voice', pendingVoice: 1 },
+  { id: 'voice-ready', label: 'Voice: recording received', edition: 'voice', pendingVoice: 0 },
+  { id: 'mixed-voice-pending', label: 'Mixed: recording needed', edition: 'mixed', pendingVoice: 1 },
 ] as const
 
 export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
@@ -299,11 +296,11 @@ export async function renderEmailTemplatePreview(
           }}
           trackUrl={orderUrl}
           materialNotice={{
-            deadline: '2026-10-23T12:00:00Z',
+            deadline: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
             url: orderUrl + '/materials',
             names: variant.edition === 'mixed' ? ['Sophie', 'Mia'] : [variant.edition === 'voice' ? 'Mia' : 'Sophie'],
             pendingVoice: variant.pendingVoice,
-            updateOpen: variant.updateOpen,
+            updateOpen: true,
             hasVoice: variant.edition !== 'hardcover',
           }}
           coverImageUrl={coverImageUrl}
