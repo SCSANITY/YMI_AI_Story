@@ -505,12 +505,15 @@ test('Final Review derives personalized job titles and keeps queue status rows s
     assert.match(source, /display_title:/)
     assert.match(
       source,
-      /const \{ creations, \.\.\.summary \}/,
+      name === 'detail API' ? /const \{ creations, purchased_line, \.\.\.summary \}/ : /const \{ creations, \.\.\.summary \}/,
       `${name} must not expose the full customization snapshot to the client`
     )
   }
 
   assert.match(finalReviewTypes, /display_title:\s*string/)
+  assert.match(detailApi, /purchased_line:cart_items!final_jobs_cart_item_id_fkey/)
+  assert.match(detailApi, /normalizeBookPackageType\(line\.package_type\)/)
+  assert.match(panel, /materialLine\.item === activeDetail\.finalJob\.cart_item_id/)
   assert.match(jobQueue, /\{job\.display_title\}/)
   assert.doesNotMatch(jobQueue, /\{job\.template_id\}/)
   assert.match(jobQueue, /grid grid-cols-2 gap-2/)

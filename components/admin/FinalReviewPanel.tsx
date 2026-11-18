@@ -1118,6 +1118,10 @@ export function FinalReviewPanel({
 
   const activeDetail =
     detail?.finalJob.final_job_id === selectedJobId ? detail : null
+  const materialLine = initialFinalJobId === selectedJobId ? initialMaterialLine : undefined
+  const edition = activeDetail && (!materialLine || (
+    materialLine.order === activeDetail.finalJob.order_id && materialLine.item === activeDetail.finalJob.cart_item_id
+  )) ? activeDetail.purchased_edition : null
   const isDetailLoading =
     loadingDetail || Boolean(selectedJobId && !activeDetail)
   const pages = useMemo(() => activeDetail?.pages ?? [], [activeDetail])
@@ -1462,9 +1466,16 @@ export function FinalReviewPanel({
                   {selectedJob?.orders?.display_id || selectedJob?.order_id || 'Select a final job'}
                   </h3>
                 {selectedJob ? (
-                  <span className="mt-1 inline-flex rounded-full border border-[var(--admin-line)] px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-muted)]">
-                    {selectedJob.production_mode === 'manual' ? 'Handmade' : 'Auto'}
-                  </span>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold">
+                    <span className="rounded-full border border-[var(--admin-line)] px-2 py-0.5 text-[var(--admin-muted)]">
+                      {selectedJob.production_mode === 'manual' ? 'Handmade' : 'Auto'}
+                    </span>
+                    {activeDetail && (
+                      <span className="rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-2 py-0.5 text-[var(--admin-ink)]">
+                        {edition === 'supreme' ? 'Hardcover + Voice' : edition === 'basic' ? 'Hardcover' : 'Edition unverified'}
+                      </span>
+                    )}
+                  </div>
                 ) : null}
                 {selectedJob ? (
                   <p className="mt-0.5 truncate text-xs text-[var(--admin-muted)]">
@@ -1526,13 +1537,13 @@ export function FinalReviewPanel({
               <ProductionMaterialsPanel
                 key={selectedJobId}
                 job={selectedJobId}
-                line={initialFinalJobId === selectedJobId ? initialMaterialLine : undefined}
+                line={materialLine}
               />
             )}
             {activeVersion === 'pdf' ? (
               <PdfVersionReview
                 key={selectedJobId ?? 'no-final-job'}
-                materialLine={initialFinalJobId === selectedJobId ? initialMaterialLine : undefined}
+                materialLine={materialLine}
                 pages={pages}
                 pageContract={pageContract}
                 loadingDetail={isDetailLoading}

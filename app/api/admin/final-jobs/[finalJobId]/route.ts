@@ -14,6 +14,7 @@ import {
 } from '@/lib/manual-print-artifact-server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getFrozenFinalProductionMode } from '@/lib/final-production'
+import { normalizeBookPackageType } from '@/lib/package-pricing'
 
 const SIGN_TTL_SECONDS = 60 * 20
 
@@ -66,6 +67,7 @@ export async function GET(
         created_at,
         updated_at,
         orders:orders(display_id, email, order_status),
+        purchased_line:cart_items!final_jobs_cart_item_id_fkey(order_id,creation_id,final_job_id,status,product_type,package_type),
         creations:creations(
           customize_snapshot,
           templates:templates(name)
@@ -148,7 +150,13 @@ export async function GET(
     }
   })
 
-  const { creations, ...summary } = finalJob
+  const { creations, purchased_line, ...summary } = finalJob
+  const line = Array.isArray(purchased_line) ? purchased_line[0] : purchased_line
+  const purchasedEdition = line?.product_type === 'physical' && line.status === 'ordered' &&
+    line.order_id === finalJob.order_id && line.final_job_id === finalJob.job_id &&
+    line.creation_id && line.creation_id === finalJob.creation_id
+    ? normalizeBookPackageType(line.package_type)
+    : null
   const finalJobSummary = {
     ...summary,
     production_mode: getFrozenFinalProductionMode(linkedJob.input_snapshot),
@@ -188,6 +196,7 @@ export async function GET(
 
   return jsonNoStore({
     finalJob: finalJobSummary,
+    purchased_edition: purchasedEdition,
     page_contract: readModel.page_contract,
     pages: signedPages,
     print_artifact: printArtifact,

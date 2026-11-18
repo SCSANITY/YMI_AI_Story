@@ -97,6 +97,7 @@ export type FinalPageContractSummary = {
 
 export type FinalJobDetail = {
   finalJob: FinalJobSummary
+  purchased_edition: import('@/types').BookPackageType | null
   page_contract: FinalPageContractSummary
   pages: FinalJobPageRow[]
   print_artifact: ManualPrintArtifactClient | null
