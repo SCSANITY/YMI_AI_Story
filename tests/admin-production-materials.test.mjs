@@ -193,6 +193,7 @@ function harness() {
     a,
     b,
     rows,
+    dedications,
     objects,
     get,
     deny() {
@@ -226,6 +227,42 @@ test('Each purchased line receives its own facts, source, preview bytes and dedi
   }
   assert.equal((await h.get(h.a, 'order=' + order + '&item=' + h.b.item)).status, 409)
   assert.equal((await h.get(h.a, 'kind=png&preview=' + h.b.preview + '&page=0')).status, 409)
+})
+
+test('A guest-origin source is available only after its stored ownership matches the purchaser', async () => {
+  const h = harness()
+  const asset = h.rows.user_assets[0]
+  const summary = async () => (await h.get(h.a)).json()
+  Object.assign(asset, { owner_type: 'anon', customer_id: null, anon_session_id: id(90) })
+  assert.equal((await summary()).sourceAvailable, false)
+  assert.equal((await h.get(h.a, 'kind=source-download')).status, 409)
+
+  // The checkout claim updates ownership in place and leaves the original object key intact.
+  Object.assign(asset, { owner_type: 'customer', customer_id: owner, anon_session_id: null })
+  assert.equal(asset.storage_path, h.a.source)
+  assert.equal((await summary()).sourceAvailable, true)
+  for (const kind of ['source', 'source-download']) {
+    const file = await h.get(h.a, 'kind=' + kind)
+    assert.equal(file.status, 200)
+    assert.deepEqual(new Uint8Array(await file.arrayBuffer()), Uint8Array.of(10))
+  }
+  asset.customer_id = id(91)
+  assert.equal((await summary()).sourceAvailable, false)
+  assert.equal((await h.get(h.a, 'kind=source')).status, 409)
+})
+
+test('Clearing a dedication returns the new empty revision only for the selected book', async () => {
+  const h = harness()
+  const clearedAt = '2026-11-19T08:00:00Z'
+  Object.assign(h.dedications[0], { body: null, revision: 4 })
+  h.rows.order_dedication_revisions.push({ cart_item_id: h.a.item, revision: 4, created_at: clearedAt })
+  for (const query of ['', 'kind=dedication']) {
+    const { dedication } = await (await h.get(h.a, query)).json()
+    assert.deepEqual(dedication, { body: null, revision: 4, updatedAt: clearedAt })
+  }
+  const sibling = await (await h.get(h.b)).json()
+  assert.equal(sibling.dedication.body, 'For 30\nLove')
+  assert.equal(sibling.dedication.revision, 3)
 })
 
 test('A newer variant cannot replace the corroborated Preview or its source', async () => {
