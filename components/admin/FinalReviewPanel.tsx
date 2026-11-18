@@ -1535,7 +1535,7 @@ export function FinalReviewPanel({
           >
             {activeVersion === 'print' && selectedJobId && (
               <ProductionMaterialsPanel
-                key={selectedJobId}
+                key={`print-materials-${selectedJobId}`}
                 job={selectedJobId}
                 line={materialLine}
               />

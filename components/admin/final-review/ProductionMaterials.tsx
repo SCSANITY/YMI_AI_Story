@@ -275,8 +275,8 @@ function Contents({ url }: { url: string }) {
           [
             ['Purchaser', data.purchaser],
             ['Child’s name', data.child],
-            ['Age', data.age ? `${data.age} ${data.age === '1' ? 'year' : 'years'}` : null],
-            ['Language', data.language],
+            ['Age at order', data.age ? `${data.age} ${data.age === '1' ? 'year' : 'years'}` : null],
+            ['Book language', data.language],
           ] as const
         ).map(([label, value], i) => (
           <div key={label}>

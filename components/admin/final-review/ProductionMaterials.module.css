@@ -221,7 +221,27 @@
 }
 @container (min-width: 45rem) {
   .contents {
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.6fr) minmax(0, 0.85fr);
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 2fr) minmax(0, 0.75fr);
+    row-gap: 0.55rem;
+    padding-block: 0.75rem;
+  }
+  .gallery {
+    padding: 0.55rem 0.75rem;
+  }
+  .gallery .photo,
+  .stack {
+    width: min(calc(100% - 12px), 7.25rem);
+    margin-top: 0.25rem;
+  }
+  .nav {
+    margin-top: 0.25rem;
+  }
+  .source .photo {
+    width: min(100%, 5.625rem);
+    margin-top: 0.35rem;
+  }
+  .message {
+    max-height: 6rem;
   }
   .fields {
     grid-column: 2/4;
