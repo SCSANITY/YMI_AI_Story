@@ -18,7 +18,14 @@ export default async function FinalsPage({
     <AdminPage className="xl:flex xl:h-full xl:min-h-0 xl:flex-col">
       <AdminPageHeader eyebrow="Review" title="Final Review" />
       <div className="h-4 shrink-0" />
-      <FinalReviewPanel initialFinalJobId={initialFinalJobId} initialVersion={initialVersion} />
+      <FinalReviewPanel
+        initialFinalJobId={initialFinalJobId}
+        initialVersion={initialVersion}
+        initialMaterialLine={params.order !== undefined || params.item !== undefined ? {
+          order: typeof params.order === 'string' ? params.order : '',
+          item: typeof params.item === 'string' ? params.item : '',
+        } : undefined}
+      />
     </AdminPage>
   )
 }

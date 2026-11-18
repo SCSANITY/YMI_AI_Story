@@ -11,12 +11,12 @@ const { build } = require('esbuild')
 
 async function component(entry, name) {
   const result = await build({ entryPoints: [fileURLToPath(new URL(`../${entry}`, import.meta.url))],
-    bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
+    bundle: true, write: false, outfile: 'render.cjs', platform: 'node', format: 'cjs', jsx: 'automatic',
     tsconfig: fileURLToPath(new URL('../tsconfig.json', import.meta.url)),
     external: ['react', 'react/jsx-runtime', 'lucide-react'] })
   const loaded = { exports: {} }
   runInNewContext(result.outputFiles[0].text, { module: loaded, exports: loaded.exports, require,
-    console, URL, fetch: () => assert.fail('UI proof fetched data'), setTimeout, clearTimeout })
+    console, URL, URLSearchParams, fetch: () => assert.fail('UI proof fetched data'), setTimeout, clearTimeout })
   return loaded.exports[name]
 }
 

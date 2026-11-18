@@ -1,0 +1,239 @@
+.panel {
+  container-type: inline-size;
+  margin-bottom: 1rem;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-card-line);
+  border-radius: 0.85rem;
+  color: var(--admin-ink);
+}
+.toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.93rem;
+  font-weight: 700;
+}
+.contents {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+  border-top: 1px solid var(--admin-card-line);
+  padding: 1rem;
+  font-size: 0.8rem;
+}
+.contents h4 {
+  font-weight: 700;
+  font-size: 0.86rem;
+  margin: 0;
+}
+.contents small,
+.status {
+  color: var(--admin-muted);
+}
+.contents img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.contents button:disabled {
+  opacity: 0.45;
+}
+.contents a,
+.contents footer button {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.contents a {
+  color: var(--admin-good);
+  margin-top: 0.5rem;
+}
+.gallery {
+  background: var(--admin-panel-2);
+  padding: 0.75rem;
+  border-radius: 0.65rem;
+  min-width: 0;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  order: -1;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--admin-card-line);
+}
+.fields small {
+  display: block;
+}
+.fields > div > div,
+.dedication header,
+.zoom header,
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.fields strong {
+  overflow-wrap: anywhere;
+}
+.icon,
+.nav button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.65rem;
+  min-height: 1.65rem;
+  flex-shrink: 0;
+  border-radius: 0.35rem;
+}
+.icon:hover,
+.nav button:not(:disabled):hover {
+  background: var(--admin-panel-2);
+}
+.nav {
+  margin-top: 0.7rem;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+.nav button {
+  border: 1px solid var(--admin-card-line);
+}
+.photo,
+.stack {
+  display: block;
+  aspect-ratio: 1;
+  width: min(100%, 9rem);
+  border-radius: 0.45rem;
+  margin-top: 0.65rem;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--admin-panel-2);
+}
+.stack {
+  width: min(calc(100% - 12px), 9rem);
+  box-shadow:
+    5px 0 0 -1px #566d65,
+    10px 0 0 -2px #7a8d9d;
+}
+.dedication {
+  min-width: 0;
+}
+.dedication header,
+.zoom header {
+  justify-content: space-between;
+}
+.dedication small {
+  color: var(--admin-good);
+  font-weight: 650;
+}
+.message {
+  margin-top: 0.6rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #a9987d var(--admin-panel-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+.changed {
+  margin: 0.45rem 0;
+  color: var(--admin-ink);
+  background: var(--admin-panel-2);
+  border-inline-start: 3px solid var(--admin-accent-dp);
+  padding: 0.4rem;
+}
+.contents footer strong {
+  align-self: center;
+  margin-inline-end: .25rem;
+}
+.contents footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  grid-column: 1/-1;
+  border-top: 1px solid var(--admin-card-line);
+  padding-top: 0.65rem;
+}
+.contents footer button {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--admin-card-line);
+  border-radius: 0.4rem;
+}
+.status,
+.feedback {
+  padding: 0.65rem 1rem;
+  font-size: 0.8rem;
+}
+.feedback {
+  grid-column: 1/-1;
+  padding: 0;
+}
+.zoom {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(90vw, 35rem);
+  max-height: 90dvh;
+  overflow: auto;
+  border-radius: 0.8rem;
+  padding: 0.8rem;
+  background: #faf7f0;
+  color: #2e2921;
+}
+.zoom header {
+  margin-bottom: 0.6rem;
+}
+.zoom img {
+  max-height: 72dvh;
+  aspect-ratio: 1;
+}
+.zoom::backdrop {
+  background: #17140e82;
+}
+@container (min-width: 33rem) {
+  .contents {
+    grid-template-columns: minmax(8rem, 0.85fr) minmax(0, 1.8fr);
+  }
+  .fields {
+    order: 0;
+    grid-column: 2;
+  }
+  .gallery {
+    grid-column: 1;
+    grid-row: 1/3;
+  }
+  .source {
+    grid-column: 1;
+  }
+  .dedication {
+    grid-column: 2;
+    grid-row: 2/4;
+  }
+}
+@container (min-width: 45rem) {
+  .contents {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.6fr) minmax(0, 0.85fr);
+  }
+  .fields {
+    grid-column: 2/4;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .dedication {
+    grid-row: 2;
+  }
+  .source {
+    grid-column: 3;
+    grid-row: 2;
+    border-left: 1px solid var(--admin-card-line);
+    padding-left: 0.8rem;
+  }
+}

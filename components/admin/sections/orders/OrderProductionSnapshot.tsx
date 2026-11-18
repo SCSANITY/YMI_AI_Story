@@ -145,7 +145,7 @@ export function OrderProductionSnapshot({
 
                   {job.finalJobId ? (
                     <a
-                      href={`/admin/finals?job=${encodeURIComponent(job.finalJobId)}&version=${mode}`}
+href={`/admin/finals?job=${encodeURIComponent(job.finalJobId)}&version=${mode}&order=${encodeURIComponent(orderId)}&item=${encodeURIComponent(job.cartItemId ?? '')}`}
                       className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--admin-accent)] px-4 text-sm font-bold text-[var(--admin-accent-ink)] transition hover:brightness-95"
                     >
                       {isPdf ? 'Open PDF Review' : 'Open Print Review'}

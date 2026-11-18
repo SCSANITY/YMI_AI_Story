@@ -5,6 +5,7 @@ import { Maximize2, Minimize2, Minus, RefreshCw, X } from 'lucide-react'
 import { FinalReviewStage } from '@/components/admin/final-review/FinalReviewStage'
 import { JobQueue } from '@/components/admin/final-review/JobQueue'
 import { PdfVersionReview } from '@/components/admin/final-review/PdfVersionReview'
+import { ProductionMaterialsPanel } from '@/components/admin/final-review/ProductionMaterials'
 import { PrintVersionReview } from '@/components/admin/final-review/PrintVersionReview'
 import { pagePreviewUrl } from '@/components/admin/final-review/reviewUi'
 import { StatCard } from '@/components/admin/final-review/StatCard'
@@ -142,9 +143,11 @@ function GlassEdgeButton({
 
 export function FinalReviewPanel({
   initialFinalJobId = null,
+  initialMaterialLine,
   initialVersion = 'pdf',
 }: {
   initialFinalJobId?: string | null
+  initialMaterialLine?: import('@/lib/admin-production-materials').LineSelector
   initialVersion?: ReviewVersion
 }) {
   const [jobs, setJobs] = useState<FinalJobSummary[]>([])
@@ -1519,9 +1522,17 @@ export function FinalReviewPanel({
             aria-labelledby={activeVersion === 'pdf' ? 'final-pdf-tab' : 'final-print-tab'}
             className="p-4"
           >
+            {activeVersion === 'print' && selectedJobId && (
+              <ProductionMaterialsPanel
+                key={selectedJobId}
+                job={selectedJobId}
+                line={initialFinalJobId === selectedJobId ? initialMaterialLine : undefined}
+              />
+            )}
             {activeVersion === 'pdf' ? (
               <PdfVersionReview
                 key={selectedJobId ?? 'no-final-job'}
+                materialLine={initialFinalJobId === selectedJobId ? initialMaterialLine : undefined}
                 pages={pages}
                 pageContract={pageContract}
                 loadingDetail={isDetailLoading}

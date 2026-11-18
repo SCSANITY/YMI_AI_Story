@@ -200,6 +200,7 @@ export async function GET(
     if (seenFinalJobs.has(resolvedFinalJobId)) {
       const existing = jobs.find((job) => job.finalJobId === resolvedFinalJobId)
       if (existing) {
+        existing.cartItemId = null
         existing.quantity += quantity
         existing.requiresPrint = existing.requiresPrint || cartItemRequiresPrint(item)
       }
@@ -228,6 +229,7 @@ export async function GET(
     jobs.push({
       key: `job:${resolvedFinalJobId}`,
       finalJobId: resolvedFinalJobId,
+      cartItemId: item.cart_item_id,
       displayTitle: resolveFinalJobDisplayTitle(finalJob),
       productType: item.product_type,
       packageType: item.package_type,

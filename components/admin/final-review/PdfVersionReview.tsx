@@ -29,7 +29,11 @@ import {
 import { isEmptyFinalPageSlot, PageFileLinks, pagePreviewUrl, statusClass } from './reviewUi'
 import type { ReviewPendingState, UploadErrorState, UploadPendingState } from './types'
 
+import { ProductionMaterialsPanel } from './ProductionMaterials'
+import type { LineSelector } from '@/lib/admin-production-materials'
+
 type Props = {
+  materialLine?: LineSelector
   pages: FinalJobPageRow[]
   pageContract: FinalPageContractSummary
   loadingDetail: boolean
@@ -145,6 +149,8 @@ export function PdfVersionReview(props: Props) {
           </button>
         </div>
       </div>
+
+      {selectedJob && <ProductionMaterialsPanel job={selectedJob.final_job_id} line={props.materialLine}/>}
 
       {emptySlotCount > 0 ? (
         <section

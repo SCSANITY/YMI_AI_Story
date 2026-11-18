@@ -1,6 +1,7 @@
 export type AdminOrderProductionSnapshotJob = {
   key: string
   finalJobId: string | null
+  cartItemId?: string | null
   displayTitle: string
   productType: string | null
   packageType: string | null
