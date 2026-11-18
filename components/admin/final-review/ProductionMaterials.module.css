@@ -43,8 +43,7 @@
 .contents button:disabled {
   opacity: 0.45;
 }
-.contents a,
-.contents footer button {
+.contents a {
   display: inline-flex;
   gap: 0.3rem;
   align-items: center;
@@ -163,7 +162,8 @@
   border-top: 1px solid var(--admin-card-line);
   padding-top: 0.65rem;
 }
-.contents footer button {
+.contents footer a {
+  margin-top: 0;
   padding: 0.35rem 0.6rem;
   border: 1px solid var(--admin-card-line);
   border-radius: 0.4rem;

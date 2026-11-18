@@ -20,6 +20,23 @@ async function component(entry, name) {
   return loaded.exports[name]
 }
 
+test('Final Review hides the empty tools row and links each ready app independently', async () => {
+  const Tools = await component('components/admin/final-review/ProductionMaterials.tsx', 'ProductionTools')
+  const render = props => renderToStaticMarkup(React.createElement(Tools, props))
+  const face = { label: 'Face swap', href: 'https://face.example.test/' }
+  const subtitle = { label: 'Subtitle editor', href: 'https://subtitle.example.test/' }
+  assert.equal(render({ tools: [] }), '')
+  for (const tools of [[face], [subtitle], [face, subtitle]]) {
+    const html = render({ tools })
+    assert.match(html, /Production tools/)
+    assert.equal((html.match(/target="_blank" rel="noopener noreferrer"/g) ?? []).length, tools.length)
+    for (const tool of [face, subtitle]) {
+      assert.equal(html.includes(tool.label), tools.includes(tool))
+      assert.equal(html.includes(`href="${tool.href}"`), tools.includes(tool))
+    }
+  }
+})
+
 test('actual Admin queue renders production mode separately from review progress', async () => {
   const Queue = await component('components/admin/final-review/JobQueue.tsx', 'JobQueue')
   const html = renderToStaticMarkup(React.createElement(Queue, {

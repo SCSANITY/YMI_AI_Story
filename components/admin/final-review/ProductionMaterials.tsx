@@ -12,6 +12,24 @@ import styles from './ProductionMaterials.module.css'
 
 type Dedication = Materials['dedication']
 type Zoom = { src: string; label: string }
+type ProductionTool = { label: 'Face swap' | 'Subtitle editor'; href: `https://${string}` }
+// Add each destination here once its URL and team access have been confirmed.
+const readyTools: readonly ProductionTool[] = []
+
+export function ProductionTools({ tools = readyTools }: { tools?: readonly ProductionTool[] }) {
+  if (!tools.length) return null
+  return (
+    <footer>
+      <strong>Production tools</strong>
+      {tools.map(({ label, href }) => (
+        <a key={label} href={href} target="_blank" rel="noopener noreferrer">
+          <ExternalLink size={14} aria-hidden="true" /> {label}
+        </a>
+      ))}
+    </footer>
+  )
+}
+
 function CopyButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
@@ -308,15 +326,7 @@ function Contents({ url }: { url: string }) {
           <p>Photo unavailable.</p>
         )}
       </section>
-      <footer>
-        <strong>Production tools</strong>
-        <button type="button" disabled title="Tool link pending">
-          <ExternalLink size={14} /> Face swap
-        </button>
-        <button type="button" disabled title="Tool link pending">
-          <ExternalLink size={14} /> Subtitle editor
-        </button>
-      </footer>
+      <ProductionTools />
       {notice && (
         <p className={styles.feedback} role="status">
           {notice}
