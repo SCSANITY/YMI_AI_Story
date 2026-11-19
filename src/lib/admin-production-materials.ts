@@ -7,6 +7,7 @@ export type ProductionMaterials = {
   age: string | null
   language: string | null
   dedication: { body: string | null; revision: number; updatedAt: string | null } | null
+  subtitleAvailable: boolean | null
   sourceAvailable: boolean
   previewId: string | null
   pages: { index: number; label: string; pngAvailable: boolean }[]
@@ -17,6 +18,7 @@ export type MaterialPart =
   | MaterialHeader
   | Pick<ProductionMaterials, 'purchaser'>
   | Pick<ProductionMaterials, 'dedication'>
+  | Pick<ProductionMaterials, 'subtitleAvailable'>
   | Pick<ProductionMaterials, 'sourceAvailable'>
   | Pick<ProductionMaterials, 'previewId' | 'pages'>
 

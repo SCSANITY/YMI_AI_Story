@@ -1,5 +1,6 @@
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { noStoreJson } from '@/lib/http-response'
+import { hasStorySubtitle, planStoryArtwork, readStorySubtitle } from '@/lib/admin-story-files-server'
 import { isUuid } from '@/lib/validators'
 import { frozenText, type MaterialPart } from '@/lib/admin-production-materials'
 import {
@@ -22,7 +23,7 @@ export async function GET(request: Request, context: { params: Promise<{ finalJo
   if (
     !isUuid(finalJobId) ||
     (scoped && (!isUuid(order) || !isUuid(item))) ||
-    !['summary', 'dedication', 'source', 'source-download', 'webp', 'png'].includes(kind)
+    !['summary', 'dedication', 'source', 'source-download', 'webp', 'png', 'artwork', 'subtitle'].includes(kind)
   ) {
     return noStoreJson({ error: 'Invalid selection' }, { status: 400 })
   }
@@ -31,6 +32,13 @@ export async function GET(request: Request, context: { params: Promise<{ finalJo
   try {
     const bound = await resolveMaterialLine(finalJobId, order && item ? { order, item } : undefined)
     if (!bound) return unavailable()
+    if (kind === 'artwork') {
+      const plan = await planStoryArtwork(bound.book.template_id, request.signal)
+      return plan.files.length ? noStoreJson(plan) : noStoreJson({ error: 'No story artwork found.' }, 404)
+    }
+    if (kind === 'subtitle') {
+      return await readStorySubtitle(bound.book.template_id) ?? noStoreJson({ error: 'No subtitle template found.' }, 404)
+    }
     if (kind === 'dedication') return noStoreJson({ dedication: await readLineDedication(bound) })
     if (kind === 'source' || kind === 'source-download') {
       const path = await resolveSource(bound, false)
@@ -69,6 +77,7 @@ export async function GET(request: Request, context: { params: Promise<{ finalJo
     async function loadSections(emit: (part: MaterialPart) => void) {
       emit({ purchaser: line.purchaser })
       await Promise.all([
+        hasStorySubtitle(line.book.template_id).catch(() => null).then(subtitleAvailable => emit({ subtitleAvailable })),
         readLineDedication(line).catch(() => null).then(dedication => emit({ dedication })),
         resolveSource(line).catch(() => null).then(source => emit({ sourceAvailable: Boolean(source) })),
         resolvePreviews(line, true, progressive ? preview => emit(previewPart(preview)) : undefined)

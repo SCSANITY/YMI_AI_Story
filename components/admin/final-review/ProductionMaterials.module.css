@@ -150,24 +150,173 @@
   border-inline-start: 3px solid var(--admin-accent-dp);
   padding: 0.4rem;
 }
-.contents footer strong {
-  align-self: center;
-  margin-inline-end: .25rem;
-}
-.contents footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.deskWrap {
   grid-column: 1/-1;
-  border-top: 1px solid var(--admin-card-line);
-  padding-top: 0.65rem;
+  min-width: 0;
+  container-type: inline-size;
+  padding-top: 3px;
 }
-.contents footer a {
+.desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  padding: 14px 18px;
+  background: var(--admin-panel-2);
+  border-radius: 12px;
   color: var(--admin-ink);
-  margin-top: 0;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--admin-card-line);
-  border-radius: 0.4rem;
+  gap: 0;
+}
+.desk h4 {
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: -0.015em;
+}
+.files {
+  padding-right: 22px;
+  min-width: 0;
+}
+.tools {
+  padding-left: 22px;
+  border-left: 1px solid var(--admin-card-line);
+  min-width: 0;
+}
+.fileRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px;
+  background: transparent;
+  min-height: 44px;
+  color: inherit;
+  cursor: pointer;
+}
+.desk .fileRow:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.artSymbol,
+.jsonSymbol {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  flex: none;
+  border-radius: 6px;
+  background: #f6dfae;
+  color: #805519;
+}
+.jsonSymbol {
+  background: #e3e7db;
+  color: #515e43;
+}
+.fileDetail {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.fileDetail b,
+.desk .toolTrack b {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.fileDetail small {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--admin-muted);
+}
+.fileDetail small[data-error="true"] {
+  color: var(--admin-crit);
+}
+.fileRow > svg {
+  color: var(--admin-muted);
+  margin-right: 5px;
+}
+.toolTrack {
+  position: relative;
+}
+.toolTrack:before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: #d4c6ad;
+}
+.desk .toolTrack a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 3px 4px;
+  color: var(--admin-ink);
+  border-radius: 6px;
+  text-decoration: none;
+  min-height: 29px;
+}
+.toolTrack a > span {
+  position: relative;
+  background: var(--admin-panel-2);
+  color: var(--admin-muted);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  flex: none;
+}
+.toolTrack a > svg:last-child {
+  color: var(--admin-muted);
+  margin-left: auto;
+  margin-right: 4px;
+}
+.fileRow:hover:not(:disabled),
+.desk .toolTrack a:hover {
+  background: var(--admin-panel);
+}
+.fileRow:focus-visible,
+.toolTrack a:focus-visible {
+  outline: 2px solid #ad7b24;
+  outline-offset: 1px;
+}
+.spin {
+  animation: desk-spin 1s linear infinite;
+}
+@keyframes desk-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+@container (max-width:520px) {
+  .desk {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 13px;
+  }
+  .files {
+    padding-right: 0;
+  }
+  .tools {
+    border-left: 0;
+    border-top: 1px solid var(--admin-card-line);
+    padding: 11px 0 0;
+    margin-top: 9px;
+  }
+  .fileRow,
+  .desk .toolTrack a {
+    min-height: 43px;
+  }
 }
 .status,
 .feedback {

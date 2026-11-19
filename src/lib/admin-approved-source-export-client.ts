@@ -34,7 +34,7 @@ function imageExtension(contentType: string | null) {
   throw new Error(`Approved source has unsupported content type: ${normalized || 'unknown'}`)
 }
 
-function clickBlobDownload(blob: Blob, fileName: string) {
+export function clickBlobDownload(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

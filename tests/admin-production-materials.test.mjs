@@ -150,6 +150,24 @@ function harness(beforeRange) {
     },
     storage: {
       from(bucket) {
+        if (bucket === 'app-templates') return {
+          async list(folder, options) {
+            const prefix = folder + '/'
+            const entries = [...objects.entries()]
+              .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes('/'))
+              .map(([path, file]) => ({ name: path.slice(prefix.length), id: file.mime ? path : null, metadata: { mimetype: file.mime } }))
+              .filter(row => !options.search || row.name.includes(options.search))
+              .sort((a, b) => a.name.localeCompare(b.name))
+            const offset = options.offset ?? 0
+            return { data: entries.slice(offset, offset + options.limit), error: null }
+          },
+          async createSignedUrls(paths) {
+            return { data: paths.map(path => ({ path, signedUrl: 'https://storage.invalid/' + path })), error: null }
+          },
+          async download(path) {
+            return objects.has(path) ? { data: objects.get(path).bytes } : { error: { statusCode: '404' } }
+          },
+        }
         assert.equal(bucket, 'raw-private')
         return {
           info: async (path) => ({
@@ -212,6 +230,35 @@ function harness(beforeRange) {
     reads: () => reads,
   }
 }
+test('Story files are scoped to the verified template across listing pages; an absent subtitle leaves the artwork available', async () => {
+  const h = harness()
+  const subtitle = 'story/Manual-subtitle-template.json'
+  const raw = '{ "pages": [] }'
+  h.objects.set(subtitle, { mime: 'application/json', bytes: raw })
+  for (let i = 0; i < 101; i++) h.objects.set('story/final/image ' + i + '.png', { mime: 'image/png' })
+  h.objects.set('story/final/section', {})
+  h.objects.set('story/final/section/alternate.webp', { mime: 'image/webp' })
+  h.objects.set('story/final/notes.json', { mime: 'application/json' })
+  h.objects.set('other/final/unrelated.png', { mime: 'image/png' })
+  const { files, archiveName } = await (await h.get(h.a, 'kind=artwork&template=other')).json()
+  assert.equal(archiveName, 'story-artwork.zip')
+  assert.equal(files.length, 102)
+  assert.ok(files.some(file => file.name === 'section/alternate.webp'))
+  for (const file of files) assert.equal(file.url, 'https://storage.invalid/story/final/' + file.name)
+  assert.equal((await (await h.get(h.a)).json()).subtitleAvailable, true)
+  const res = await h.get(h.a, 'kind=subtitle')
+  assert.equal(await res.text(), raw)
+  assert.match(res.headers.get('content-disposition'), /attachment/)
+  h.objects.delete(subtitle)
+  assert.equal((await (await h.get(h.a)).json()).subtitleAvailable, false)
+  assert.equal((await h.get(h.a, 'kind=subtitle')).status, 404)
+  assert.equal((await h.get(h.a, 'kind=artwork')).status, 200)
+  for (const kind of ['artwork', 'subtitle'])
+    assert.equal((await h.get(h.a, 'order=' + order + '&item=' + h.b.item + '&kind=' + kind)).status, 409)
+  h.deny()
+  assert.equal((await h.get(h.a, 'kind=artwork')).status, 403)
+  assert.equal((await h.get(h.a, 'kind=subtitle')).status, 403)
+})
 
 test('Each purchased line receives its own facts, source, preview bytes and dedication revision', async () => {
   const h = harness()

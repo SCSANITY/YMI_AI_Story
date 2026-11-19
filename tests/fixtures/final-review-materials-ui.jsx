@@ -45,7 +45,7 @@ function fixtureResponse(url, method) {
       if (url.searchParams.get('kind') === 'dedication') return { dedication }
       return {
         lineId: book.cart_item_id, viewerId: 'operator', child: book.child,
-        dedication, sourceAvailable: false, previewId: 'preview-' + index,
+        dedication, subtitleAvailable: index === 0, sourceAvailable: false, previewId: 'preview-' + index,
         pages: ['Cover', 'Inside 1', 'Inside 2'].map((label, i) => ({ index: i, label, pngAvailable: true })),
       }
     }
@@ -77,9 +77,24 @@ async function waitFor(predicate) {
 
 async function run() {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  let failArtwork = true
+  const blobs = []
+  const createObjectURL = URL.createObjectURL.bind(URL)
+  URL.createObjectURL = blob => { blobs.push(blob); return createObjectURL(blob) }
+  const clickAnchor = HTMLAnchorElement.prototype.click
+  HTMLAnchorElement.prototype.click = function () {
+    if (!this.href.startsWith('blob:')) clickAnchor.call(this)
+  }
   window.fetch = async (input, options) => {
     try {
-      const payload = fixtureResponse(new URL(input, 'https://fixture.invalid'), options?.method ?? 'GET')
+      const url = new URL(input, 'https://fixture.invalid')
+      if (url.href === 'https://fixture.invalid/example-image') return new Response('sample image bytes')
+      const payload = fixtureResponse(url, options?.method ?? 'GET')
+      if (url.searchParams.get('kind') === 'artwork') {
+        if (failArtwork) { failArtwork = false; return new Response(null, { status: 503 }) }
+        return Response.json({ archiveName: 'example.zip', files: [{ name: 'Interior 01.png', url: 'https://fixture.invalid/example-image' }] })
+      }
+      if (url.searchParams.get('kind') === 'subtitle') return Response.json({ pages: [] })
       if (options?.headers?.Accept === 'application/x-ndjson') {
         const { pages, previewId, dedication, sourceAvailable, ...header } = payload
         const parts = [header, { dedication }, { sourceAvailable }, { previewId, pages }]
@@ -136,7 +151,23 @@ async function run() {
         }
         for (const img of images) check(performance.getEntriesByName(img.src).length === 1, 'Repeated WebP read')
       }
-      const links = [...body.querySelectorAll('footer a')]
+      const artwork = body.querySelector('button[aria-label="Download Story artwork ZIP"]')
+      const subtitle = body.querySelector('button[aria-label="Download Subtitle template JSON"]')
+      check(artwork && !artwork.disabled, 'Artwork should remain available for both books')
+      check(subtitle && subtitle.disabled === (index !== 0), 'Wrong subtitle availability for this book')
+      if (index === 0 && step === 0) {
+        await click(artwork)
+        await waitFor(() => artwork.textContent.includes('Retry'))
+        check(!subtitle.disabled && blobs.length === 0, 'Failed ZIP must not save a partial file or disable JSON')
+        await click(artwork)
+        await waitFor(() => artwork.textContent.includes('Download started'))
+        const zip = await blobs[0].text()
+        check(zip.startsWith('PK') && zip.includes('Interior 01.png') && zip.includes('sample image bytes'), 'Missing ZIP entry or bytes')
+        await click(subtitle)
+        await waitFor(() => subtitle.textContent.includes('Download started'))
+        check((await blobs[1].text()) === '{"pages":[]}', 'Wrong subtitle download contents')
+      }
+      const links = [...body.querySelectorAll('section[aria-label="Production tools"] a')]
       check(links.length === 3, 'Expected all three production tools')
       for (const [position, [name, url]] of [
         ['Face swap · Prompt Lab', 'https://scsanity.github.io/image-prompt-lab/'],

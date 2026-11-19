@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, Download, ArrowUpRight, Captions, ScanFace, Scaling, X } from 'lucide-react'
 import {
   copyRevisionKey,
   materialsEndpoint,
@@ -10,24 +10,28 @@ import {
   type MaterialPart,
   type ProductionMaterials as Materials,
 } from '@/lib/admin-production-materials'
+import { StoryFileDownload } from './StoryFileDownload'
 import styles from './ProductionMaterials.module.css'
 
 type Dedication = Materials['dedication']
 type Zoom = { src: string; label: string }
-type ProductionTool = { label: string; href: `https://${string}`; description: string }
+type ProductionTool = { label: string; href: `https://${string}`; description: string; icon?: typeof ScanFace }
 const readyTools: readonly ProductionTool[] = [
   {
     label: 'Face swap · Prompt Lab',
+    icon: ScanFace,
     href: 'https://scsanity.github.io/image-prompt-lab/',
     description: 'Upload the story artwork and face reference, enter a prompt, then generate and download the edited image.',
   },
   {
     label: 'Subtitle Editor',
+    icon: Captions,
     href: 'https://scsanity.github.io/story-json-creator/',
-    description: 'Import the story images and subtitle-template.json from Google Drive, enter the name, check the layout, and export a page PNG or the full ZIP.',
+    description: 'Import the story images and the subtitle template, enter the name, check the layout, and export a page PNG or the full ZIP.',
   },
   {
     label: 'Image Resizer',
+    icon: Scaling,
     href: 'https://scsanity.github.io/YMI-image-toolkit/',
     description: 'Resize the final pages after adding subtitles. The default longest edge is 2048 px. Download and extract the ZIP for Final Review.',
   },
@@ -36,14 +40,16 @@ const readyTools: readonly ProductionTool[] = [
 export function ProductionTools({ tools = readyTools }: { tools?: readonly ProductionTool[] }) {
   if (!tools.length) return null
   return (
-    <footer>
-      <strong>Production tools</strong>
-      {tools.map(({ label, href, description }) => (
-        <a key={label} href={href} title={description} target="_blank" rel="noopener noreferrer">
-          <ExternalLink size={14} aria-hidden="true" /> {label}
-        </a>
-      ))}
-    </footer>
+    <section className={styles.tools} aria-label="Production tools">
+      <h4>Production tools</h4>
+      <div className={styles.toolTrack}>
+        {tools.map(({ label, href, description, icon: Icon = ArrowUpRight }) => (
+          <a key={label} href={href} title={description} target="_blank" rel="noopener noreferrer">
+            <span><Icon size={15} aria-hidden="true" /></span><b>{label}</b><ArrowUpRight size={14} aria-hidden="true" />
+          </a>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -379,7 +385,16 @@ function Contents({ url }: { url: string }) {
           <p>{data.sourceAvailable === undefined ? 'Loading photo…' : 'Photo unavailable.'}</p>
         )}
       </section>
-      <ProductionTools />
+      <div className={styles.deskWrap}>
+        <div className={styles.desk}>
+          <section className={styles.files}>
+            <h4>Story files</h4>
+            <StoryFileDownload kind="artwork" url={endpoint('artwork')} available />
+            <StoryFileDownload kind="subtitle" url={endpoint('subtitle')} available={data.subtitleAvailable} />
+          </section>
+          <ProductionTools />
+        </div>
+      </div>
       {notice && (
         <p className={styles.feedback} role="status">
           {notice}
