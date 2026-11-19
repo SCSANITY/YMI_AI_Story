@@ -27,7 +27,7 @@ const readyTools: readonly ProductionTool[] = [
     description: 'Import the story images and subtitle-template.json from Google Drive, enter the name, check the layout, and export a page PNG or the full ZIP.',
   },
   {
-    label: '统一图片尺寸',
+    label: 'Image Resizer',
     href: 'https://scsanity.github.io/YMI-image-toolkit/',
     description: 'Resize the final pages after adding subtitles. The default longest edge is 2048 px. Download and extract the ZIP for Final Review.',
   },

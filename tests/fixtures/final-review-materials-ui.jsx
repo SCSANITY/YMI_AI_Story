@@ -141,7 +141,7 @@ async function run() {
       for (const [position, [name, url]] of [
         ['Face swap · Prompt Lab', 'https://scsanity.github.io/image-prompt-lab/'],
         ['Subtitle Editor', 'https://scsanity.github.io/story-json-creator/'],
-        ['统一图片尺寸', 'https://scsanity.github.io/YMI-image-toolkit/'],
+        ['Image Resizer', 'https://scsanity.github.io/YMI-image-toolkit/'],
       ].entries()) {
         const link = links[position]
         check(link.textContent.trim() === name && link.href === url, 'Wrong tool name or destination')
