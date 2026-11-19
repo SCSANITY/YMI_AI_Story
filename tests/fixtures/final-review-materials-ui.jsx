@@ -92,7 +92,7 @@ async function run() {
       const payload = fixtureResponse(url, options?.method ?? 'GET')
       if (url.searchParams.get('kind') === 'artwork') {
         if (failArtwork) { failArtwork = false; return new Response(null, { status: 503 }) }
-        return Response.json({ archiveName: 'example.zip', files: [{ name: 'Interior 01.png', url: 'https://fixture.invalid/example-image' }] })
+        return Response.json({ archiveName: 'example.zip', files: [{ name: '内页/頁面 01.png', url: 'https://fixture.invalid/example-image' }] })
       }
       if (url.searchParams.get('kind') === 'subtitle') return Response.json({ pages: [] })
       if (options?.headers?.Accept === 'application/x-ndjson') {
@@ -162,7 +162,12 @@ async function run() {
         await click(artwork)
         await waitFor(() => artwork.textContent.includes('Download started'))
         const zip = await blobs[0].text()
-        check(zip.startsWith('PK') && zip.includes('Interior 01.png') && zip.includes('sample image bytes'), 'Missing ZIP entry or bytes')
+        check(zip.startsWith('PK') && zip.includes('内页/頁面 01.png') && zip.includes('sample image bytes'), 'Missing ZIP entry or bytes')
+        const bytes = new DataView(await blobs[0].arrayBuffer())
+        const directory = bytes.getUint32(bytes.byteLength - 6, true)
+        check(bytes.getUint32(directory, true) === 0x02014b50, 'Invalid ZIP central directory')
+        check((bytes.getUint16(6, true) & 0x800) && (bytes.getUint16(directory + 8, true) & 0x800),
+          'Both ZIP headers must declare UTF-8 filenames')
         await click(subtitle)
         await waitFor(() => subtitle.textContent.includes('Download started'))
         check((await blobs[1].text()) === '{"pages":[]}', 'Wrong subtitle download contents')
