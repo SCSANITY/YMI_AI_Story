@@ -140,8 +140,8 @@ async function run() {
       check(links.length === 3, 'Expected all three production tools')
       for (const [position, [name, url]] of [
         ['Face swap · Prompt Lab', 'https://scsanity.github.io/image-prompt-lab/'],
-        ['统一图片尺寸', 'https://scsanity.github.io/YMI-image-toolkit/'],
         ['Subtitle Editor', 'https://scsanity.github.io/story-json-creator/'],
+        ['统一图片尺寸', 'https://scsanity.github.io/YMI-image-toolkit/'],
       ].entries()) {
         const link = links[position]
         check(link.textContent.trim() === name && link.href === url, 'Wrong tool name or destination')

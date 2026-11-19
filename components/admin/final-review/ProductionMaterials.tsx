@@ -22,14 +22,14 @@ const readyTools: readonly ProductionTool[] = [
     description: 'Upload the story artwork and face reference, enter a prompt, then generate and download the edited image.',
   },
   {
-    label: '统一图片尺寸',
-    href: 'https://scsanity.github.io/YMI-image-toolkit/',
-    description: 'Resize the edited pages and original artwork together. The default longest edge is 2048 px. Download and extract the ZIP before adding subtitles.',
-  },
-  {
     label: 'Subtitle Editor',
     href: 'https://scsanity.github.io/story-json-creator/',
     description: 'Import the story images and subtitle-template.json from Google Drive, enter the name, check the layout, and export a page PNG or the full ZIP.',
+  },
+  {
+    label: '统一图片尺寸',
+    href: 'https://scsanity.github.io/YMI-image-toolkit/',
+    description: 'Resize the final pages after adding subtitles. The default longest edge is 2048 px. Download and extract the ZIP for Final Review.',
   },
 ]
 
