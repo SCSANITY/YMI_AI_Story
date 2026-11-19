@@ -163,6 +163,7 @@
   padding-top: 0.65rem;
 }
 .contents footer a {
+  color: var(--admin-ink);
   margin-top: 0;
   padding: 0.35rem 0.6rem;
   border: 1px solid var(--admin-card-line);
