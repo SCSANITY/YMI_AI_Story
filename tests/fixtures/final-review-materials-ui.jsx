@@ -137,9 +137,10 @@ async function run() {
         for (const img of images) check(performance.getEntriesByName(img.src).length === 1, 'Repeated WebP read')
       }
       const links = [...body.querySelectorAll('footer a')]
-      check(links.length === 2, 'Expected both production tools')
+      check(links.length === 3, 'Expected all three production tools')
       for (const [position, [name, url]] of [
         ['Face swap · Prompt Lab', 'https://scsanity.github.io/image-prompt-lab/'],
+        ['统一图片尺寸', 'https://scsanity.github.io/YMI-image-toolkit/'],
         ['Subtitle Editor', 'https://scsanity.github.io/story-json-creator/'],
       ].entries()) {
         const link = links[position]
