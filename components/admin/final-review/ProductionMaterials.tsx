@@ -6,6 +6,8 @@ import {
   copyRevisionKey,
   materialsEndpoint,
   type LineSelector,
+  type MaterialHeader,
+  type MaterialPart,
   type ProductionMaterials as Materials,
 } from '@/lib/admin-production-materials'
 import styles from './ProductionMaterials.module.css'
@@ -69,8 +71,30 @@ function EnlargedImage({ image, close }: { image: Zoom; close: () => void }) {
   )
 }
 
+async function readPanel(response: Response, receive: (part: MaterialPart) => void) {
+  if (!response.headers.get('content-type')?.startsWith('application/x-ndjson')) {
+    receive(await response.json())
+    return
+  }
+  if (!response.body) throw new Error('Materials are temporarily unavailable.')
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let pending = ''
+  try {
+    while (true) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      const lines = (pending + chunk.value).split('\n')
+      pending = lines.pop() ?? ''
+      for (const line of lines) receive(JSON.parse(line) as MaterialPart)
+    }
+    if (pending) throw new Error('Materials could not finish loading.')
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 function Contents({ url }: { url: string }) {
-  const [data, setData] = useState<Materials | null>(null)
+  const [data, setData] = useState<(MaterialHeader & Partial<Materials>) | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [copied, setCopied] = useState<number | null>(null)
@@ -89,7 +113,7 @@ function Contents({ url }: { url: string }) {
   useEffect(() => {
     const controller = new AbortController()
     life.current = controller
-    fetch(url, { cache: 'no-store', signal: controller.signal })
+    fetch(url, { headers: { Accept: 'application/x-ndjson' }, cache: 'no-store', signal: controller.signal })
       .then(async (res) => {
         if (!res.ok)
           throw new Error(
@@ -97,17 +121,20 @@ function Contents({ url }: { url: string }) {
               ? 'Materials could not be verified for this book.'
               : 'Materials are temporarily unavailable.'
           )
-        return (await res.json()) as Materials
-      })
-      .then((value) => {
-        if (controller.signal.aborted) return
-        setData(value)
-        try {
-          const prior = Number(localStorage.getItem(copyRevisionKey(value.viewerId, value.lineId)))
-          setCopied(Number.isSafeInteger(prior) && prior > 0 ? prior : null)
-        } catch {
-          /* Restrictive storage settings still allow copying. */
-        }
+        await readPanel(res, (part) => {
+          if (controller.signal.aborted) return
+          if ('lineId' in part) {
+            setData(part)
+            try {
+              const prior = Number(localStorage.getItem(copyRevisionKey(part.viewerId, part.lineId)))
+              setCopied(Number.isSafeInteger(prior) && prior > 0 ? prior : null)
+            } catch {
+              /* Restrictive storage settings still allow copying. */
+            }
+          } else {
+            setData(prev => prev && { ...prev, ...part })
+          }
+        })
       })
       .catch((e) => {
         if (!controller.signal.aborted) setError(e.message)
@@ -130,8 +157,9 @@ function Contents({ url }: { url: string }) {
     return dedication
   }, [endpoint])
 
+  const dedicationLoaded = data?.dedication !== undefined
   useEffect(() => {
-    if (!data?.lineId) return
+    if (!data?.lineId || !dedicationLoaded) return
     const focused = () => {
       if (document.visibilityState !== 'visible') return
       void refresh()
@@ -151,7 +179,7 @@ function Contents({ url }: { url: string }) {
       window.removeEventListener('focus', focused)
       document.removeEventListener('visibilitychange', focused)
     }
-  }, [data?.lineId, data?.dedication?.revision, refresh])
+  }, [data?.lineId, data?.dedication?.revision, dedicationLoaded, refresh])
 
   useEffect(() => {
     if (image) dialog.current?.showModal()
@@ -215,7 +243,8 @@ function Contents({ url }: { url: string }) {
     }
   }
 
-  const page = data.pages[slide]
+  const pages = data.pages ?? []
+  const page = pages[slide]
   const pageArgs = page && data.previewId ? { page: String(page.index), preview: data.previewId } : undefined
   const dedication = data.dedication
   const stamp = dedication?.updatedAt && new Date(dedication.updatedAt)
@@ -231,7 +260,7 @@ function Contents({ url }: { url: string }) {
         }).format(stamp) + ' HKT'
       : null
   const changed = copied !== null && dedication && copied < dedication.revision
-  const photo = (label: string, src: string, stack: boolean) => (
+  const photo = (label: string, src: string, stack: boolean, priority: 'high' | 'low' | 'auto' = 'auto') => (
     <button
       type="button"
       aria-label={'Enlarge ' + label}
@@ -239,7 +268,7 @@ function Contents({ url }: { url: string }) {
       onClick={() => setImage({ label, src })}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img alt={label} src={src} />
+      <img alt={label} src={src} fetchPriority={priority} />
     </button>
   )
   return (
@@ -248,7 +277,16 @@ function Contents({ url }: { url: string }) {
         <h4>Preview images</h4>
         {page && pageArgs ? (
           <>
-            {photo(page.label, endpoint('webp', pageArgs), data.pages.length > 1)}
+            {pages.map((entry, i) => (
+              <div key={data.previewId + ':' + entry.index} hidden={slide !== i}>
+                {photo(
+                  entry.label,
+                  endpoint('webp', { page: String(entry.index), preview: pageArgs.preview }),
+                  pages.length > 1,
+                  slide === i ? 'high' : 'low',
+                )}
+              </div>
+            ))}
             <div className={styles.nav}>
               <button
                 type="button"
@@ -259,12 +297,12 @@ function Contents({ url }: { url: string }) {
                 <ChevronLeft size={16} />
               </button>
               <span>
-                {page.label} · {slide + 1}/{data.pages.length}
+                {page.label} · {slide + 1}/{pages.length}
               </span>
               <button
                 type="button"
                 aria-label="Next preview"
-                disabled={slide + 1 === data.pages.length}
+                disabled={slide + 1 === pages.length}
                 onClick={() => setSlide(slide + 1)}
               >
                 <ChevronRight size={16} />
@@ -277,7 +315,7 @@ function Contents({ url }: { url: string }) {
             )}
           </>
         ) : (
-          <p>Preview unavailable for this book.</p>
+          <p>{data.pages ? 'Preview unavailable for this book.' : 'Loading previews…'}</p>
         )}
       </section>
       <div className={styles.fields}>
@@ -292,7 +330,7 @@ function Contents({ url }: { url: string }) {
           <div key={label}>
             <small>{label}</small>
             <div>
-              <strong>{value ?? 'Unavailable'}</strong>
+              <strong>{value === undefined ? 'Loading…' : value ?? 'Unavailable'}</strong>
               {i < 2 && value && <CopyButton label={label} onClick={() => void copyText(value, label)} />}
             </div>
           </div>
@@ -320,7 +358,7 @@ function Contents({ url }: { url: string }) {
           tabIndex={dedication?.body ? 0 : undefined}
           aria-label="Dedication text"
         >
-          {dedication ? (dedication.body ?? 'No dedication submitted.') : 'Dedication unavailable.'}
+          {dedication ? (dedication.body ?? 'No dedication submitted.') : dedication === undefined ? 'Loading dedication…' : 'Dedication unavailable.'}
         </div>
       </section>
       <section className={styles.source}>
@@ -333,7 +371,7 @@ function Contents({ url }: { url: string }) {
             </a>
           </>
         ) : (
-          <p>Photo unavailable.</p>
+          <p>{data.sourceAvailable === undefined ? 'Loading photo…' : 'Photo unavailable.'}</p>
         )}
       </section>
       <ProductionTools />

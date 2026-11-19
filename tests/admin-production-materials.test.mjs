@@ -22,7 +22,7 @@ const owner = id(1),
   order = id(2)
 const stamp = '2026-11-18T06:30:00Z'
 const png = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 81])
-function harness() {
+function harness(beforeRange) {
   const rows = {
     orders: [{ order_id: order, customer_id: owner }],
     customers: [{ customer_id: owner, display_name: 'Purchaser', is_guest: false }],
@@ -174,19 +174,21 @@ function harness() {
     Response,
     Headers,
     Uint8Array,
+    TextEncoder,
     ReadableStream,
     fetch: async (url, init) => {
       const object = objects.get(new URL(url).pathname.slice(1))
       assert.ok(object)
       const range = Boolean(init.headers?.Range)
+      if (range && beforeRange) await beforeRange
       return new Response(range ? object.bytes.slice(0, 8) : object.bytes, {
         status: range ? 206 : 200,
         headers: { 'content-type': object.mime, 'content-range': 'bytes 0-7/' + object.bytes.length },
       })
     },
   })
-  const get = (book, query = '') =>
-    routeModule.exports.GET(new Request('http://localhost/materials?' + query), {
+  const get = (book, query = '', headers) =>
+    routeModule.exports.GET(new Request('http://localhost/materials?' + query, { headers }), {
       params: Promise.resolve({ finalJobId: book.review }),
     })
   return {
@@ -334,4 +336,34 @@ test('Missing, mislabeled, wrong-page and cross-attempt originals retain the ver
   assert.equal((await h.get(h.a, 'kind=png&preview=' + h.a.preview + '&page=0')).status, 409)
   h.objects.delete(original)
   assert.equal((await (await h.get(h.a)).json()).pages[0].pngAvailable, false)
+})
+
+test('The authorized panel delivers text and gallery before delayed PNG signature probes finish', async () => {
+  const gate = Promise.withResolvers()
+  const h = harness(gate.promise)
+  const headers = { accept: 'application/x-ndjson' }
+  const res = await h.get(h.a, '', headers)
+  assert.match(res.headers.get('cache-control'), /private, no-store/)
+  assert.match(res.headers.get('content-type'), /ndjson/)
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+  const facts = {}
+  try {
+    // The simulated PNG read stays blocked until every other section has arrived.
+    while (!facts.pages || !facts.dedication || !facts.purchaser || facts.sourceAvailable === undefined) {
+      const { value, done } = await reader.read()
+      assert.equal(done, false)
+      Object.assign(facts, JSON.parse(value))
+    }
+    assert.equal(facts.lineId, h.a.item)
+    assert.equal(facts.dedication.body, 'For 10\nLove')
+    assert.deepEqual(facts.pages, [{ index: 0, label: 'Cover', pngAvailable: false }])
+  } finally {
+    gate.resolve()
+  }
+  const last = JSON.parse((await reader.read()).value)
+  assert.deepEqual(last.pages, [{ index: 0, label: 'Cover', pngAvailable: true }])
+  assert.equal((await reader.read()).done, true)
+  assert.equal((await h.get(h.a, 'order=' + order + '&item=' + h.b.item, headers)).status, 409)
+  h.deny()
+  assert.equal((await h.get(h.a, '', headers)).status, 403)
 })

@@ -32,6 +32,7 @@ const FINAL_REVIEW_ASSET_TTL_SECONDS = 60 * 60 * 24
 export type FinalReleaseMode = 'manual' | 'job_auto' | 'story_auto' | 'global_auto'
 
 export type FinalJobSummary = {
+  purchased_edition?: import('@/types').BookPackageType | null
   production_mode?: FinalProductionMode
   final_job_id: string
   job_id: string

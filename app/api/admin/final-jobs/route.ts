@@ -1,3 +1,4 @@
+import { finalPurchasedEdition } from '@/lib/final-purchased-edition'
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
@@ -26,6 +27,7 @@ const FINAL_JOB_SELECT = `
   created_at,
   updated_at,
   orders:orders(display_id, email, order_status),
+  purchased_line:cart_items!final_jobs_cart_item_id_fkey(order_id,creation_id,final_job_id,status,product_type,package_type),
   creations:creations(
     customize_snapshot,
     templates:templates(name)
@@ -72,9 +74,10 @@ export async function GET(request: Request) {
   if (linkedJobsError) return jsonNoStore({ error: 'Failed to load Final production mode' }, { status: 500 })
   const modeByJobId = new Map((linkedJobs ?? []).map((job) => [job.job_id, getFrozenFinalProductionMode(job.input_snapshot)]))
   const finalJobs = rows.map((row) => {
-    const { creations, ...summary } = row
+    const { creations, purchased_line, ...summary } = row
     return {
       ...summary,
+      purchased_edition: finalPurchasedEdition(row, purchased_line),
       production_mode: modeByJobId.get(row.job_id) ?? 'auto',
       display_title: resolveFinalJobDisplayTitle({ ...summary, creations }),
     }

@@ -40,15 +40,31 @@ test('Final Review hides the empty tools row and links each ready app independen
 test('actual Admin queue renders production mode separately from review progress', async () => {
   const Queue = await component('components/admin/final-review/JobQueue.tsx', 'JobQueue')
   const html = renderToStaticMarkup(React.createElement(Queue, {
-    jobs: [{ final_job_id: 'review', order_id: 'order', display_title: 'Synthetic book', production_mode: 'manual',
+    jobs: [{ final_job_id: 'review', order_id: 'order', display_title: 'Synthetic book', production_mode: 'manual', purchased_edition: 'basic',
       review_status: 'pending', print_status: 'locked', total_pages: 31, approved_pages: 0 }],
     totalJobs: 1, selectedJobId: 'review', loadingJobs: false, emptyLabel: 'None', onSelectJob: () => {},
   }))
-  assert.match(html, /Handmade/)
+  assert.match(html, /Handmade<\/span><span[^>]*>Hardcover<\/span>/)
   assert.doesNotMatch(html, /Production: Manual/)
   assert.match(html, /PDF pending/)
   const modal = await readFile(new URL('../components/admin/FinalReviewPanel.tsx', import.meta.url), 'utf8')
-  assert.match(modal, /selectedJob\.production_mode === 'manual' \? 'Handmade' : 'Auto'/)
+  assert.match(modal, /<FinalBookBadges mode=\{selectedJob\.production_mode\} edition=/)
+})
+
+test('Queue editions follow the purchased physical line and use distinct borderless colors', async () => {
+  const edition = await component('src/lib/final-purchased-edition.ts', 'finalPurchasedEdition')
+  const badges = await component('components/admin/final-review/FinalBookBadges.tsx', 'FinalBookBadges')
+  const job = { order_id: 'order', job_id: 'job', creation_id: 'creation' }
+  const line = { ...job, final_job_id: 'job', product_type: 'physical', status: 'ordered', package_type: 'supreme' }
+  const render = (value) => renderToStaticMarkup(React.createElement(badges, { mode: 'manual', edition: value }))
+  assert.match(render(edition(job, line)), /bg-violet-100[^>]*>Hardcover \+ Voice/)
+  assert.match(render(edition(job, [{ ...line, package_type: 'basic' }])), /bg-amber-100[^>]*>Hardcover</)
+  for (const delta of [{ final_job_id: 'sibling' }, { order_id: 'other' }, { creation_id: null },
+    { product_type: 'digital' }, { package_type: 'unknown' }, { status: 'in_cart' }]) {
+    assert.match(render(edition(job, { ...line, ...delta })), /Edition unverified/)
+  }
+  assert.equal(edition(job, [line, line]), null)
+  assert.doesNotMatch(render('supreme'), /border-/)
 })
 
 test('actual PDF workspace keeps Rerun visible but disabled only for manual production', async () => {

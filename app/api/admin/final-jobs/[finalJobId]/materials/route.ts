@@ -1,7 +1,7 @@
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { noStoreJson } from '@/lib/http-response'
 import { isUuid } from '@/lib/validators'
-import { frozenText } from '@/lib/admin-production-materials'
+import { frozenText, type MaterialPart } from '@/lib/admin-production-materials'
 import {
   readLineDedication,
   readMaterialFile,
@@ -34,7 +34,7 @@ export async function GET(request: Request, context: { params: Promise<{ finalJo
     if (!bound) return unavailable()
     if (kind === 'dedication') return noStoreJson({ dedication: await readLineDedication(bound) })
     if (kind === 'source' || kind === 'source-download') {
-      const path = await resolveSource(bound)
+      const path = await resolveSource(bound, false)
       return (
         (path && (await readMaterialFile(path, kind === 'source-download', 'source-photo'))) || unavailable()
       )
@@ -50,26 +50,54 @@ export async function GET(request: Request, context: { params: Promise<{ finalJo
         unavailable()
       )
     }
-    const [purchaser, dedication, source, preview] = await Promise.all([
-      readPurchaser(bound.owner).catch(() => null),
-      readLineDedication(bound).catch(() => null),
-      resolveSource(bound).catch(() => null),
-      resolvePreviews(bound).catch(() => null),
-    ])
-    return noStoreJson({
+    const header = {
       viewerId: admin.customer_id,
       lineId: bound.line.cart_item_id,
-      purchaser,
       ...frozenText(bound.execution.input_snapshot),
       language: bound.execution.story_language,
-      dedication,
-      sourceAvailable: Boolean(source),
-      previewId: preview?.id ?? null,
-      pages: (preview?.pages ?? []).map((page) => ({
-        index: page.index,
-        label: page.label,
-        pngAvailable: Boolean(page.png),
-      })),
+    }
+    const progressive = request.headers.get('accept') === 'application/x-ndjson'
+    function previewPart(preview: Awaited<ReturnType<typeof resolvePreviews>>) {
+      return {
+        previewId: preview?.id ?? null,
+        pages: (preview?.pages ?? []).map(page => ({
+          index: page.index, label: page.label, pngAvailable: Boolean(page.png),
+        })),
+      }
+    }
+    // One ownership check serves the whole panel. Independent sections can paint as they finish.
+    const line = bound
+    async function loadSections(emit: (part: MaterialPart) => void) {
+      await Promise.all([
+        readPurchaser(line.owner).catch(() => null).then(purchaser => emit({ purchaser })),
+        readLineDedication(line).catch(() => null).then(dedication => emit({ dedication })),
+        resolveSource(line).catch(() => null).then(source => emit({ sourceAvailable: Boolean(source) })),
+        resolvePreviews(line, true, progressive ? preview => emit(previewPart(preview)) : undefined)
+          .catch(() => null).then(preview => emit(previewPart(preview))),
+      ])
+    }
+    if (!progressive) {
+      const summary = { ...header }
+      await loadSections(part => Object.assign(summary, part))
+      return noStoreJson(summary)
+    }
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder()
+        const emit = (part: MaterialPart) => {
+          if (!cancelled) controller.enqueue(encoder.encode(JSON.stringify(part) + '\n'))
+        }
+        emit(header)
+        void loadSections(emit).then(
+          () => { if (!cancelled) controller.close() },
+          error => { if (!cancelled) controller.error(error) },
+        )
+      },
+      cancel() { cancelled = true },
+    })
+    return new Response(body, {
+      headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'private, no-store, no-transform' },
     })
   } catch {
     return noStoreJson({ error: 'Could not load production materials.' }, { status: 503 })

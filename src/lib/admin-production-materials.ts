@@ -12,6 +12,14 @@ export type ProductionMaterials = {
   pages: { index: number; label: string; pngAvailable: boolean }[]
 }
 
+export type MaterialHeader = Pick<ProductionMaterials, 'lineId' | 'viewerId' | 'child' | 'age' | 'language'>
+export type MaterialPart =
+  | MaterialHeader
+  | Pick<ProductionMaterials, 'purchaser'>
+  | Pick<ProductionMaterials, 'dedication'>
+  | Pick<ProductionMaterials, 'sourceAvailable'>
+  | Pick<ProductionMaterials, 'previewId' | 'pages'>
+
 export type LineSelector = { order: string; item: string }
 export function materialsEndpoint(job: string, line?: LineSelector) {
   const query = new URLSearchParams()

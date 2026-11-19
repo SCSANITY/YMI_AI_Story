@@ -85,7 +85,7 @@ export async function readLineDedication({ line }: BoundLine) {
   return { body: row.body, revision: row.revision, updatedAt: stamp.data?.created_at ?? null }
 }
 
-export async function resolveSource({ execution, owner }: BoundLine) {
+export async function resolveSource({ execution, owner }: BoundLine, inspectFile = true) {
   const frozen = execution.input_snapshot?.face_source_path
   if (typeof frozen !== 'string' || !frozen.startsWith('raw-private/')) return null
   const path = frozen.slice('raw-private/'.length)
@@ -99,7 +99,7 @@ export async function resolveSource({ execution, owner }: BoundLine) {
     .eq('owner_type', 'customer')
     .eq('customer_id', owner)
     .maybeSingle()
-  return !error && data && (await imageType(path)) ? path : null
+  return !error && data && (!inspectFile || (await imageType(path))) ? path : null
 }
 
 async function imageType(path: string) {
@@ -108,7 +108,13 @@ async function imageType(path: string) {
   return !error && typeof mime === 'string' && imageTypes.includes(mime) ? mime : null
 }
 
-export async function resolvePreviews({ book, execution, owner }: BoundLine, inspectFiles = true) {
+type PreviewFiles = { id: string; pages: ReturnType<typeof previewFiles> }
+
+export async function resolvePreviews(
+  { book, execution, owner }: BoundLine,
+  inspectFiles = true,
+  onDisplayReady?: (preview: PreviewFiles) => void,
+) {
   const frozen = execution.input_snapshot
   const identity = frozenText(frozen)
   if (!book.preview_job_id || !frozen?.face_source_path || !identity.child || !execution.story_language)
@@ -159,16 +165,20 @@ export async function resolvePreviews({ book, execution, owner }: BoundLine, ins
     return null
   const candidates = previewFiles(preview.data)
   if (!inspectFiles) return { id: preview.data.job_id, pages: candidates }
-  const files = await Promise.all(
-    candidates.map(async (page) => {
-      const [display, original] = await Promise.all([
-        imageType(page.webp).catch(() => null),
-        page.png ? hasOriginalPng(page.png).catch(() => false) : false,
-      ])
-      return display === 'image/webp' ? { ...page, png: original ? page.png : null } : null
-    })
-  )
-  return { id: preview.data.job_id, pages: files.filter((p) => p !== null) }
+  const originals = Promise.all(candidates.map(page =>
+    page.png ? hasOriginalPng(page.png).catch(() => false) : false
+  ))
+  const displayTypes = await Promise.all(candidates.map(page => imageType(page.webp).catch(() => null)))
+  const verified = candidates.filter((_, i) => displayTypes[i] === 'image/webp')
+  const id = preview.data.job_id
+  onDisplayReady?.({ id, pages: verified.map(page => ({ ...page, png: null })) })
+  const available = await originals
+  return {
+    id,
+    pages: candidates.flatMap((page, i) => displayTypes[i] === 'image/webp'
+      ? [{ ...page, png: available[i] ? page.png : null }]
+      : []),
+  }
 }
 
 const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10]

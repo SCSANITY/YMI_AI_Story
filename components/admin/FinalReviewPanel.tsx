@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Maximize2, Minimize2, Minus, RefreshCw, X } from 'lucide-react'
 import { FinalReviewStage } from '@/components/admin/final-review/FinalReviewStage'
+import { FinalBookBadges } from '@/components/admin/final-review/FinalBookBadges'
 import { JobQueue } from '@/components/admin/final-review/JobQueue'
 import { PdfVersionReview } from '@/components/admin/final-review/PdfVersionReview'
 import { ProductionMaterialsPanel } from '@/components/admin/final-review/ProductionMaterials'
@@ -1466,16 +1467,7 @@ export function FinalReviewPanel({
                   {selectedJob?.orders?.display_id || selectedJob?.order_id || 'Select a final job'}
                   </h3>
                 {selectedJob ? (
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold">
-                    <span className="rounded-full border border-[var(--admin-line)] px-2 py-0.5 text-[var(--admin-muted)]">
-                      {selectedJob.production_mode === 'manual' ? 'Handmade' : 'Auto'}
-                    </span>
-                    {activeDetail && (
-                      <span className="rounded-full border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] px-2 py-0.5 text-[var(--admin-ink)]">
-                        {edition === 'supreme' ? 'Hardcover + Voice' : edition === 'basic' ? 'Hardcover' : 'Edition unverified'}
-                      </span>
-                    )}
-                  </div>
+                  <FinalBookBadges mode={selectedJob.production_mode} edition={activeDetail ? edition : undefined} />
                 ) : null}
                 {selectedJob ? (
                   <p className="mt-0.5 truncate text-xs text-[var(--admin-muted)]">

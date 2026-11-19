@@ -8,7 +8,7 @@ const books = ['Mira', 'Alex'].map((child, index) => ({
   cart_item_id: 'line-' + index,
   order_id: 'order-1',
   display_title: child + ' Adventure',
-  production_mode: 'manual',
+  production_mode: 'manual', purchased_edition: index ? 'supreme' : 'basic',
   status: 'done',
   review_status: 'released',
   released_at: '2026-11-18T06:30:00Z',
@@ -33,7 +33,7 @@ function fixtureResponse(url, method) {
     const detail = api + '/' + book.final_job_id
     if (url.pathname === detail) {
       return {
-        finalJob: book, purchased_edition: 'basic',
+        finalJob: book, purchased_edition: book.purchased_edition,
         page_contract: { schema_version: 3, asset_layout: 'single-page' },
         pages: [{ page_index: 0, output_order: 0, role: 'final_front_cover', status: 'approved' }],
       }
@@ -45,7 +45,8 @@ function fixtureResponse(url, method) {
       if (url.searchParams.get('kind') === 'dedication') return { dedication }
       return {
         lineId: book.cart_item_id, viewerId: 'operator', child: book.child,
-        dedication, sourceAvailable: false, pages: [],
+        dedication, sourceAvailable: false, previewId: 'preview-' + index,
+        pages: ['Cover', 'Inside 1', 'Inside 2'].map((label, i) => ({ index: i, label, pngAvailable: true })),
       }
     }
   }
@@ -67,11 +68,31 @@ async function click(element) {
   await act(async () => element.click())
 }
 
+async function waitFor(predicate) {
+  for (let tick = 0; tick < 1000 && !predicate(); tick++) {
+    await act(async () => new Promise(resolve => setTimeout(resolve, 5)))
+  }
+  check(predicate(), 'Timed out waiting for fixture')
+}
+
 async function run() {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   window.fetch = async (input, options) => {
     try {
       const payload = fixtureResponse(new URL(input, 'https://fixture.invalid'), options?.method ?? 'GET')
+      if (options?.headers?.Accept === 'application/x-ndjson') {
+        const { pages, previewId, dedication, sourceAvailable, ...header } = payload
+        const parts = [header, { dedication }, { sourceAvailable }, { previewId, pages }]
+        const wire = parts.map(part => JSON.stringify(part) + '\n').join('')
+        // Fragment the first JSON record across transport chunks.
+        const stream = new ReadableStream({ start(c) {
+          const encode = new TextEncoder()
+          c.enqueue(encode.encode(wire.slice(0, 6)))
+          c.enqueue(encode.encode(wire.slice(6)))
+          c.close()
+        } })
+        return new Response(stream, { headers: { 'content-type': 'application/x-ndjson' } })
+      }
       return { ok: true, status: 200, json: async () => structuredClone(payload) }
     } catch (error) {
       unexpectedRequests.push(error.message)
@@ -86,6 +107,7 @@ async function run() {
         initialMaterialLine={{ order: book.order_id, item: book.cart_item_id }} />
     ))
     for (const [step, tab] of ['pdf', 'print', 'pdf', 'print', 'pdf'].entries()) {
+      await waitFor(() => document.getElementById('final-' + tab + '-tab'))
       const tabButton = document.getElementById('final-' + tab + '-tab')
       check(tabButton, 'Missing ' + tab + ' tab: ' + document.getElementById('root').innerText.slice(-800) + ' ' + unexpectedRequests.join(', '))
       await click(tabButton)
@@ -95,6 +117,25 @@ async function run() {
       await click(toggle)
       const body = document.getElementById(toggle.getAttribute('aria-controls'))
       check(singleToggle().getAttribute('aria-expanded') === 'true' && body, 'Toggle did not expand')
+      await waitFor(() => body.querySelectorAll('section img').length === 3)
+      if (step === 0) {
+        const gallery = body.querySelector('section')
+        const images = [...gallery.querySelectorAll('img')]
+        check(images.length === 3, 'Expected exactly three mounted WebPs')
+        await Promise.all(images.map(img => img.decode()))
+        for (const img of images) {
+          check(img.src.includes('preview=preview-' + index), 'Prefetched another book')
+          check(performance.getEntriesByName(img.src).length === 1, 'Expected one initial request per WebP')
+        }
+        for (const [label, position] of [['Next', 1], ['Next', 2], ['Previous', 1], ['Previous', 0]]) {
+          await click(gallery.querySelector('button[aria-label="' + label + ' preview"]'))
+          const visible = [...gallery.querySelectorAll('img')].filter(img => !img.closest('[hidden]'))
+          check(visible.length === 1 && visible[0] === images[position] && visible[0].naturalWidth > 0,
+            'Switch must show the same decoded image immediately')
+          check(gallery.querySelector('a[download]').href.includes('page=' + position), 'Wrong PNG link')
+        }
+        for (const img of images) check(performance.getEntriesByName(img.src).length === 1, 'Repeated WebP read')
+      }
       const links = [...body.querySelectorAll('footer a')]
       check(links.length === 2, 'Expected both production tools')
       for (const [position, [name, url]] of [
@@ -134,7 +175,8 @@ async function run() {
   await act(async () => root.unmount())
 }
 
+const notifyServer = window.fetch.bind(window)
 run().then(
   () => { document.getElementById('result').textContent = 'passed' },
   error => { document.getElementById('result').textContent = encodeURIComponent(error.stack || error.message) }
-)
+).finally(() => notifyServer('/test-finished'))
