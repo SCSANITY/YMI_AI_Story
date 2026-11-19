@@ -95,6 +95,17 @@ async function run() {
       await click(toggle)
       const body = document.getElementById(toggle.getAttribute('aria-controls'))
       check(singleToggle().getAttribute('aria-expanded') === 'true' && body, 'Toggle did not expand')
+      const links = [...body.querySelectorAll('footer a')]
+      check(links.length === 2, 'Expected both production tools')
+      for (const [position, [name, url]] of [
+        ['Face swap · Prompt Lab', 'https://scsanity.github.io/image-prompt-lab/'],
+        ['Subtitle Editor', 'https://scsanity.github.io/story-json-creator/'],
+      ].entries()) {
+        const link = links[position]
+        check(link.textContent.trim() === name && link.href === url, 'Wrong tool name or destination')
+        check(link.target === '_blank' && link.relList.contains('noopener') && link.relList.contains('noreferrer'),
+          'External tool must open independently without a referrer')
+      }
       check([...body.querySelectorAll('strong')].some(node => node.textContent === book.child), 'Wrong child')
       const text = body.querySelector('[aria-label="Dedication text"]')?.textContent
       const copyButton = body.querySelector('button[aria-label="Copy dedication"]')

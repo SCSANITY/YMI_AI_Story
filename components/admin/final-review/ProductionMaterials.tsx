@@ -12,17 +12,27 @@ import styles from './ProductionMaterials.module.css'
 
 type Dedication = Materials['dedication']
 type Zoom = { src: string; label: string }
-type ProductionTool = { label: 'Face swap' | 'Subtitle editor'; href: `https://${string}` }
-// Add each destination here once its URL and team access have been confirmed.
-const readyTools: readonly ProductionTool[] = []
+type ProductionTool = { label: string; href: `https://${string}`; description: string }
+const readyTools: readonly ProductionTool[] = [
+  {
+    label: 'Face swap · Prompt Lab',
+    href: 'https://scsanity.github.io/image-prompt-lab/',
+    description: 'Upload the story artwork and face reference, enter a prompt, then generate and download the edited image.',
+  },
+  {
+    label: 'Subtitle Editor',
+    href: 'https://scsanity.github.io/story-json-creator/',
+    description: 'Import the story images and subtitle-template.json from Google Drive, enter the name, check the layout, and export a page PNG or the full ZIP.',
+  },
+]
 
 export function ProductionTools({ tools = readyTools }: { tools?: readonly ProductionTool[] }) {
   if (!tools.length) return null
   return (
     <footer>
       <strong>Production tools</strong>
-      {tools.map(({ label, href }) => (
-        <a key={label} href={href} target="_blank" rel="noopener noreferrer">
+      {tools.map(({ label, href, description }) => (
+        <a key={label} href={href} title={description} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={14} aria-hidden="true" /> {label}
         </a>
       ))}
