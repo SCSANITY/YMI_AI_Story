@@ -24,8 +24,8 @@ const stamp = '2026-11-18T06:30:00Z'
 const png = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 81])
 function harness(beforeRange) {
   const rows = {
-    orders: [{ order_id: order, customer_id: owner }],
-    customers: [{ customer_id: owner, display_name: 'Purchaser', is_guest: false }],
+    orders: [{ order_id: order, customer_id: owner, shipping_address: { firstName: ' Mei ', lastName: ' Chan ' } }],
+    customers: [{ customer_id: owner, display_name: 'account_alias', is_guest: false }],
     final_jobs: [],
     jobs: [],
     cart_items: [],
@@ -119,7 +119,15 @@ function harness(beforeRange) {
       reads++
       let result = rows[table].slice()
       return {
-        select() {
+        select(fields) {
+          if (table === 'orders') {
+            assert.equal(fields, 'customer_id,first_name:shipping_address->>firstName,last_name:shipping_address->>lastName')
+            result = result.map(row => ({
+              ...row,
+              first_name: row.shipping_address?.firstName,
+              last_name: row.shipping_address?.lastName,
+            }))
+          }
           return this
         },
         eq(key, value) {
@@ -216,7 +224,7 @@ test('Each purchased line receives its own facts, source, preview bytes and dedi
     assert.equal(summary.dedication.updatedAt, stamp)
     assert.equal(summary.child, 'Child ' + i)
     assert.equal(summary.age, '6')
-    assert.equal(summary.purchaser, 'Purchaser')
+    assert.equal(summary.purchaser, 'Mei Chan')
     assert.deepEqual(summary.pages, [{ index: 0, label: 'Cover', pngAvailable: true }])
     assert.doesNotMatch(JSON.stringify(summary), /user-assets|raw-private|attempt_001/)
     const file = await h.get(book, 'kind=png&preview=' + book.preview + '&page=0')
@@ -229,6 +237,22 @@ test('Each purchased line receives its own facts, source, preview bytes and dedi
   }
   assert.equal((await h.get(h.a, 'order=' + order + '&item=' + h.b.item)).status, 409)
   assert.equal((await h.get(h.a, 'kind=png&preview=' + h.b.preview + '&page=0')).status, 409)
+})
+
+test('Purchaser follows each order’s checkout name, including guest orders and incomplete names', async () => {
+  const h = harness()
+  const second = { order_id: id(90), customer_id: owner, shipping_address: { firstName: 'Ana', lastName: 'de Souza' } }
+  h.rows.orders.push(second)
+  h.rows.final_jobs.find(row => row.final_job_id === h.b.review).order_id = second.order_id
+  h.rows.cart_items.find(row => row.cart_item_id === h.b.item).order_id = second.order_id
+  h.rows.customers[0].is_guest = true
+  const name = async book => (await (await h.get(book)).json()).purchaser
+  assert.equal(await name(h.a), 'Mei Chan')
+  assert.equal(await name(h.b), 'Ana de Souza')
+  second.shipping_address = { lastName: '林' }
+  assert.equal(await name(h.b), '林')
+  second.shipping_address = null
+  assert.equal(await name(h.b), null)
 })
 
 test('A guest-origin source is available only after its stored ownership matches the purchaser', async () => {

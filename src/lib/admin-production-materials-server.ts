@@ -33,7 +33,10 @@ export async function resolveMaterialLine(finalId: string, selector?: LineSelect
   const [lines, job, order, creation] = await Promise.all([
     linked.limit(2),
     db.from('jobs').select(jobFields).eq('job_id', final.job_id).maybeSingle(),
-    db.from('orders').select('customer_id').eq('order_id', final.order_id).maybeSingle(),
+    db.from('orders')
+      .select('customer_id,first_name:shipping_address->>firstName,last_name:shipping_address->>lastName')
+      .eq('order_id', final.order_id)
+      .maybeSingle(),
     db
       .from('creations')
       .select('creation_id,preview_job_id,template_id,owner_type,customer_id')
@@ -67,7 +70,11 @@ export async function resolveMaterialLine(finalId: string, selector?: LineSelect
     execution.template_id !== book.template_id
   )
     return null
-  return { line, execution, owner, book }
+  const purchaser = [order.data?.first_name, order.data?.last_name]
+    .map(part => part?.trim())
+    .filter(Boolean)
+    .join(' ') || null
+  return { line, execution, owner, book, purchaser }
 }
 
 type BoundLine = NonNullable<Awaited<ReturnType<typeof resolveMaterialLine>>>
@@ -197,17 +204,6 @@ async function hasOriginalPng(path: string) {
   }
   const head = new Uint8Array(await res.arrayBuffer())
   return head.length === 8 && pngSignature.every((byte, i) => head[i] === byte)
-}
-
-export async function readPurchaser(owner: string) {
-  const { data } = await db
-    .from('customers')
-    .select('display_name,is_guest')
-    .eq('customer_id', owner)
-    .maybeSingle()
-  return data && !data.is_guest && typeof data.display_name === 'string'
-    ? data.display_name.trim() || null
-    : null
 }
 
 // Stream authenticated bytes. The private signed URL is never sent to the browser.

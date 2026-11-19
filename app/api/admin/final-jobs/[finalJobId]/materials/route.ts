@@ -5,7 +5,6 @@ import { frozenText, type MaterialPart } from '@/lib/admin-production-materials'
 import {
   readLineDedication,
   readMaterialFile,
-  readPurchaser,
   resolveMaterialLine,
   resolvePreviews,
   resolveSource,
@@ -68,8 +67,8 @@ export async function GET(request: Request, context: { params: Promise<{ finalJo
     // One ownership check serves the whole panel. Independent sections can paint as they finish.
     const line = bound
     async function loadSections(emit: (part: MaterialPart) => void) {
+      emit({ purchaser: line.purchaser })
       await Promise.all([
-        readPurchaser(line.owner).catch(() => null).then(purchaser => emit({ purchaser })),
         readLineDedication(line).catch(() => null).then(dedication => emit({ dedication })),
         resolveSource(line).catch(() => null).then(source => emit({ sourceAvailable: Boolean(source) })),
         resolvePreviews(line, true, progressive ? preview => emit(previewPart(preview)) : undefined)
