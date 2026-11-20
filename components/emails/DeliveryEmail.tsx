@@ -57,6 +57,7 @@ export function DeliveryEmail({
       {downloadUrl ? (
         <Section style={styles.ctaWrap}>
           <Link href={downloadUrl} style={emailButtons.primary}>View Your Preview (PDF)</Link>
+          <Text style={{ ...styles.coverCaption, margin: '10px 0 0' }}>This download link is valid for 72 hours.</Text>
         </Section>
       ) : null}
       <Section style={styles.reviewBox}>

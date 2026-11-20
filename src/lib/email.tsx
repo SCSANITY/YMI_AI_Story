@@ -9,6 +9,7 @@ import {
   type ReceiptItem,
 } from '@/components/emails/OrderReceiptEmail'
 import { DeliveryEmail, PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
+import { buildPdfDeliveryLink } from '@/lib/pdf-delivery-link'
 import { buildCartReminderText, CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import {
   AbandonmentEmail,
@@ -417,7 +418,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
         orderId={params.orderId}
         displayId={params.displayId}
         orderUrl={orderUrl}
-        downloadUrl={params.downloadUrl}
+        downloadUrl={buildPdfDeliveryLink(orderUrl, params.orderId, params.downloadUrl, params.to)}
         coverImageUrl={params.previewImageUrl}
         firstName={params.firstName}
         voiceMaterialsUrl={voiceMaterialsUrl}
