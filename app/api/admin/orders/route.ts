@@ -68,7 +68,7 @@ export async function GET(request: Request) {
   const fields = [
     ORDER_SELECT,
     edition && 'edition_line:cart_items!orders_checkout_id_fkey!inner()',
-    search && !focusedOrderId && 'search_customer:customers!orders_customer_id_fkey()',
+    search && !focusedOrderId && 'search_customer:customers!customer_id()',
   ].filter(Boolean).join(',')
   let query = supabaseAdmin.from('orders').select(fields, { count: 'exact' })
     .order('created_at', { ascending: false })
