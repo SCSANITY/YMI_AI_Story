@@ -3,6 +3,7 @@ import { render } from '@react-email/render'
 import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
 import { CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import { DeliveryEmail, PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
+import { PrintReleasedEmail, PRINT_RELEASED_SUBJECT } from '@/components/emails/PrintReleasedEmail'
 import { KolPartnershipEmail } from '@/components/emails/KolPartnershipEmail'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { NewsletterConfirmationEmail } from '@/components/emails/NewsletterConfirmationEmail'
@@ -163,18 +164,30 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     ],
   },
   {
+    id: 'print-released',
+    emailKey: 'print_released',
+    name: 'Book Print Approval',
+    category: 'delivery',
+    ownership: 'web',
+    triggerMode: 'workflow',
+    trigger: 'An admin releases the verified print PDF for this book.',
+    subject: PRINT_RELEASED_SUBJECT,
+    sender: 'Delivery mailbox',
+    description: 'Names the book entering print and links to the customer’s order and digital PDF.',
+    variants: DEFAULT_VARIANT,
+  },
+  {
     id: 'logistics-update',
     emailKey: 'logistics_update',
     name: 'Order Logistics Update',
     category: 'delivery',
     ownership: 'web',
     triggerMode: 'workflow',
-    trigger: 'An admin saves an eligible production, shipping, delivery, or tracking change.',
+    trigger: 'An admin saves an eligible shipping, delivery, or tracking change.',
     subject: 'Changes with the saved order status',
     sender: 'Delivery mailbox',
-    description: 'One adaptive template communicates printing, shipment, delivery, and tracking changes.',
+    description: 'Communicates shipment, delivery, and tracking changes for the order.',
     variants: [
-      { id: 'production', label: 'Printing' },
       { id: 'shipped', label: 'Shipped' },
       { id: 'delivered', label: 'Delivered' },
       { id: 'tracking-update', label: 'Tracking Updated' },
@@ -342,6 +355,9 @@ export async function renderEmailTemplatePreview(
           privacyUrl="https://www.ymistory.com/privacy"
         />
       )
+      break
+    case 'print-released':
+      node = <PrintReleasedEmail firstName="Sophie" bookTitle="Mia’s Space Mission" orderId="sample-order" />
       break
     case 'logistics-update': {
       const isTrackingUpdate = variantId === 'tracking-update'

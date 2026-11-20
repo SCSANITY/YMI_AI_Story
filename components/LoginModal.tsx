@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { Eye, EyeOff, X, Mail, Lock } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/Button';
 import { useGlobalContext } from '@/contexts/GlobalContext';
 import { useI18n } from '@/lib/useI18n';
@@ -48,6 +49,7 @@ const SOCIAL_LOGIN_OPTIONS: Array<{
 ];
 
 export function LoginModal() {
+  const onOrderPage = /^\/orders\/[^/]+\/?$/.test(usePathname() ?? '');
   const { t } = useI18n();
   const {
     isLoginModalOpen,
@@ -210,6 +212,9 @@ export function LoginModal() {
         </div>
 
         {mode !== 'recovery' ? <div className="px-6 pt-5">
+          {onOrderPage && (
+            <p className="mb-3 text-sm leading-relaxed text-gray-600">{t('orderDetail.secureAccessDescription')}</p>
+          )}
           <div className="flex rounded-full bg-gray-100 p-1 text-xs font-semibold text-gray-500">
             <button
               type="button"

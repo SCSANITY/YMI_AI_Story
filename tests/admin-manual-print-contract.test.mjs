@@ -89,7 +89,7 @@ test('Print Release locks only the verified manual artifact', async () => {
     read('components/admin/final-review/PrintVersionReview.tsx'),
   ])
 
-  assert.match(releaseRoute, /materials_release_print_artifact/)
+  assert.match(releaseRoute, /materials_release_print_with_notice/)
   assert.match(releaseRoute, /p_expected_artifact_id:\s*body\.expectedArtifactId/)
   assert.match(panel, /body:\s*JSON\.stringify\(\{ expectedArtifactId \}\)/)
   assert.doesNotMatch(releaseRoute, /\.from\(['"]orders['"]\)|sendOrder|sendEmail|jobs|Worker/)

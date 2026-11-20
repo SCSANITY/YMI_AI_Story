@@ -16,10 +16,8 @@ import {
   resolveFinalJobDisplayTitle,
   resolvePersonalizedBookTitle,
 } from '@/lib/personalized-book-title'
-import {
-  loadReleasedFinalPdfAssetsByJobId,
-  resolveLatestReleasedFinalPdfAsset,
-} from '@/lib/purchase-state'
+import { loadReleasedFinalPdfAssetsByJobId } from '@/lib/purchase-state'
+import { isPaidLikeOrderStatus } from '@/lib/order-status'
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
@@ -165,11 +163,14 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       )
     )
   )
-  const finalJobIds = uniqueStrings(
-    orderRows.flatMap((order) =>
-      (order.cart_items ?? []).map((item) => item.final_job_id)
-    )
-  )
+  const downloadLines = options.reference
+    ? orderRows.filter(order => isPaidLikeOrderStatus(order.order_status)).flatMap(order =>
+        (order.cart_items ?? [])
+          .filter(item => item.status === 'ordered' && item.final_job_id)
+          .map(item => ({ orderId: order.order_id, item }))
+      )
+    : []
+  const finalJobIds = uniqueStrings(downloadLines.map(({ item }) => item.final_job_id))
 
   const [previewCoverMap, finalPdfAssetsByJobId] = await Promise.all([
     createGeneratedPreviewCoverMap(jobIds),
@@ -184,26 +185,21 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
     options: { download: string }
   }> = []
 
-  for (const order of orderRows) {
-    const orderId = String(order.order_id ?? '')
-    const pdfAsset = resolveLatestReleasedFinalPdfAsset(
-      (order.cart_items ?? []).map((item) => item.final_job_id),
-      finalPdfAssetsByJobId
-    )
-    if (!orderId || !pdfAsset) continue
-
-    const pdfItem = (order.cart_items ?? []).find(
-      (item) => item.final_job_id === pdfAsset.jobId
-    )
-    const pdfTitle = resolveFinalJobDisplayTitle({
-      creations: firstRelation(pdfItem?.creations),
-    })
+  for (const { orderId, item } of downloadLines) {
+    const asset = item.final_job_id && finalPdfAssetsByJobId.get(item.final_job_id)
+    if (!asset) continue
+    // A repeat purchase can point to a prior Final of the same creation.
+    const matchesBook = asset.creationId
+      ? asset.creationId === item.creation_id
+      : asset.orderId === orderId && asset.cartItemId === item.cart_item_id
+    if (!matchesBook) continue
+    const title = resolveFinalJobDisplayTitle({ creations: firstRelation(item.creations) })
     finalPdfRequests.push({
-      key: orderId,
+      key: item.cart_item_id,
       bucket: STORAGE_BUCKET,
-      path: pdfAsset.pdfPath,
+      path: asset.pdfPath,
       expiresIn: FINAL_PDF_SIGN_TTL_SECONDS,
-      options: { download: buildPersonalizedBookPdfFileName(pdfTitle) },
+      options: { download: buildPersonalizedBookPdfFileName(title) },
     })
   }
 
@@ -258,6 +254,7 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
         display_line_total: displayUnitPrice * quantity,
         display_currency: displayCurrency,
         template_name: itemName,
+        final_pdf_url: finalPdfUrlMap.get(item.cart_item_id) ?? null,
         cover_url: itemCover.url,
         preview_cover_url: itemCover.url,
         cover_status: itemCover.status,
@@ -295,7 +292,7 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       shipping_details: shippingByOrderId.get(order.order_id) ?? null,
       display_currency: displayCurrency,
       display_total: displayTotal,
-      final_pdf_url: finalPdfUrlMap.get(order.order_id) ?? null,
+      final_pdf_url: detailedItems.length === 1 ? detailedItems[0].final_pdf_url : null,
       item_count: items.length,
       cover_url: cover.url,
       cover_status: cover.status,

@@ -1,7 +1,7 @@
 'use client'
 
 import type React from 'react'
-import { BookOpen, CircleCheck, Download, Package, Truck } from 'lucide-react'
+import { BookOpen, CircleCheck, Package, Truck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { normalizeOrderStatus } from '@/lib/order-status'
 import { ShippingDetailsPanel } from './ShippingDetailsPanel'
@@ -34,7 +34,6 @@ const LOGISTICS_LABELS: Record<string, string> = {
 
 type LogisticsTrackerProps = {
   status: string
-  pdfUrl?: string | null
   trackingCarrier?: string | null
   trackingNumber?: string | null
   trackingUrl?: string | null
@@ -45,7 +44,6 @@ type LogisticsTrackerProps = {
 
 export function LogisticsTracker({
   status,
-  pdfUrl,
   trackingCarrier,
   trackingNumber,
   trackingUrl,
@@ -63,17 +61,6 @@ export function LogisticsTracker({
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-600/80">Logistics</p>
           <h3 className="text-base font-bold text-gray-900 mt-0.5">Order Progress</h3>
           <p className="mt-1 text-xs text-slate-400">Current order status: {statusLabel}</p>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          {pdfUrl && (
-            <a
-              href={pdfUrl}
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-emerald-200/60 transition hover:-translate-y-px hover:shadow-emerald-300/60"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download PDF
-            </a>
-          )}
         </div>
       </div>
 

@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 67, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 68, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -361,7 +361,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(releaseApi, /await\s+requireAdminCustomer\s*\(\s*\)/)
   assert.match(releaseApi, /releaseFinalJob/)
   assert.match(printReleaseApi, /printReleasedAt/)
-  assert.match(printReleaseApi, /materials_release_print_artifact/)
+  assert.match(printReleaseApi, /materials_release_print_with_notice/)
   assert.match(replacementApi, /manualUrl:\s*signedManual\?\.signedUrl/)
   assert.match(replacementApi, /approvedUrl:\s*signedManual\?\.signedUrl/)
   assert.match(replacementApi, /hasManualOutput:\s*true/)

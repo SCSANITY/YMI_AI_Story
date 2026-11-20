@@ -65,6 +65,13 @@ test('order detail waits for resolved auth and refetches against the merged cust
   assert.doesNotMatch(page, /checkoutEmail|localStorage/)
 })
 
+test('the checkout email reminder follows visitors into the order login and signup dialog', async () => {
+  const [modal,messages] = await Promise.all([read('components/LoginModal.tsx'),read('src/lib/i18n-messages.ts')])
+  assert.ok(modal.includes("const onOrderPage = /^\\/orders\\/[^/]+\\/?$/.test(usePathname() ?? '');"))
+  assert.match(modal, /mode !== 'recovery'[\s\S]*?onOrderPage &&[\s\S]*?t\('orderDetail.secureAccessDescription'\)/)
+  assert.match(messages, /'orderDetail.secureAccessDescription': '[^']*sign in or create an account with the same email address you used at checkout/)
+})
+
 test('customer merge derives claim authority from the authenticated email only', async () => {
   const route = await read('app/api/customer/merge/route.ts')
   const context = await read('contexts/GlobalContext.tsx')

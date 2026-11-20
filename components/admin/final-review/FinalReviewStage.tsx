@@ -2,6 +2,7 @@ import { CheckCircle2, FileText, Loader2, Lock, PackageCheck, Send } from 'lucid
 import type { FinalJobDetail } from '@/lib/finalReview'
 import { AdminButton, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminUi'
 import { LinkedOrdersButton } from '@/components/admin/final-review/LinkedOrdersButton'
+import { PrintNotificationStatus } from './PrintNotificationStatus'
 import { formatDate } from './reviewUi'
 
 export function FinalReviewStage({
@@ -129,6 +130,7 @@ export function FinalReviewStage({
             )}
             {printReleased ? 'Print Released' : 'Release print version'}
           </AdminButton>
+          {printReleased && detail && <PrintNotificationStatus key={detail.finalJob.final_job_id} jobId={detail.finalJob.final_job_id} />}
         </StageCard>
       </aside>
     </div>

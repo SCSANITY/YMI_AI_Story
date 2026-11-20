@@ -281,7 +281,6 @@ export default function OrderDetailPage() {
         {showTrackingPanel && (
           <LogisticsTracker
             status={orderStatus}
-            pdfUrl={order.final_pdf_url}
             trackingCarrier={order.tracking_carrier}
             trackingNumber={order.tracking_number}
             trackingUrl={order.tracking_url}

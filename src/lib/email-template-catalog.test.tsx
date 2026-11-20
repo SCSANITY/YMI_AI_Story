@@ -10,19 +10,27 @@ test('email catalog has one unique entry for every active outbound family', () =
   const ids = EMAIL_TEMPLATE_CATALOG.map((template) => template.id)
   const emailKeys = EMAIL_TEMPLATE_CATALOG.map((template) => template.emailKey)
 
-  assert.equal(EMAIL_TEMPLATE_CATALOG.length, 13)
+  assert.equal(EMAIL_TEMPLATE_CATALOG.length, 14)
   assert.equal(new Set(ids).size, ids.length)
   assert.equal(new Set(emailKeys).size, emailKeys.length)
   assert.doesNotMatch(emailKeys.join(','), /general_inbox_reply/)
 
   assert.deepEqual(getEmailTemplateCatalogSummary(), {
-    total: 13,
+    total: 14,
     automatic: 8,
-    workflow: 2,
+    workflow: 3,
     human: 3,
-    previewable: 9,
+    previewable: 10,
     providerManaged: 3,
   })
+})
+
+test('print approval names the released book and opens its order page', async () => {
+  const html = (await renderEmailTemplatePreview('print-released') ?? '').replaceAll('<!-- -->', '')
+  assert.match(html, /Your YMI Story Book Is Approved!/)
+  assert.match(html, /Hi Sophie,/)
+  assert.match(html, /<strong>Mia’s Space Mission<\/strong>/)
+  assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order"[^>]*>View Your Order &amp; Download PDF<\/a>/)
 })
 
 test('every YMI-owned fixed template and variant renders meaningful email HTML', async () => {

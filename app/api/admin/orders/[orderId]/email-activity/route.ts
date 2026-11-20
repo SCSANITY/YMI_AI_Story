@@ -11,7 +11,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ orde
   if (!Number.isSafeInteger(page) || page < 1 || page > 100000) return noStoreJson({ error: 'Invalid page' }, { status: 400 })
   const offset = (page - 1) * 25
   const { data, count, error } = await supabaseAdmin.from('email_events')
-    .select('email_event_id,email_key,final_job_id,status,provider,provider_delivery_status,observed_at,sent_at,created_at', { count: 'exact' })
+    .select('email_event_id,email_key,final_job_id,status,provider,provider_delivery_status,observed_at,sent_at,created_at,book_title:context->>bookTitle', { count: 'exact' })
     .eq('order_id', orderId).neq('status', 'external_observed')
     .order('created_at', { ascending: false }).order('email_event_id', { ascending: false })
     .range(offset, offset + 24)

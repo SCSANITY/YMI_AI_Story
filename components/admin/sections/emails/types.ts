@@ -18,6 +18,7 @@ export const EMAIL_EVENT_KEY_OPTIONS = [
   'newsletter_confirmation',
   'order_confirmation',
   'final_delivery',
+  'print_released',
   'logistics_update',
   'unpaid_reminder',
   'cart_reminder',

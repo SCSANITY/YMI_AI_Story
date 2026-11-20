@@ -14,7 +14,8 @@ function mailHarness(skip=false,voiceReady=false,names=['Alston']) {
   const model='a'.repeat(43)
   const injections={
     react:React,'@/lib/order-materials-client':helperModule.exports,
-    resend:{Resend:class {emails={send:async value=>{sent.push(value);return {data:{id:'synthetic-message'}}}}}},
+    resend:{Resend:class {emails={send:async (value,options)=>{sent.push({...value,options});return {data:{id:'synthetic-message'}}}}}},
+    '@/components/emails/PrintReleasedEmail':{PRINT_RELEASED_SUBJECT:'Your YMI Story Book Is Approved!',PrintReleasedEmail:()=>null},
     '@/lib/order-materials-server':{
       loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,package_type:'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
       issueOrderMaterialLink:async id=>{reads.push(['issue',id]);return `/orders/${id}/materials#token=${model}`},
@@ -41,6 +42,17 @@ function mailHarness(skip=false,voiceReady=false,names=['Alston']) {
   return {api:fixtureModule.exports,events,sent,reads,logs,model}
 }
 const input={to:'synthetic@example.test',orderId:'synthetic-order',total:89,items:[]}
+test('claimed print notice reaches the mail provider with its order, recipient and per-book key',async()=>{
+  const h=mailHarness()
+  const id=await h.api.sendClaimedPrintNotice({...input,firstName:'Alex',bookTitle:'The Lantern Trail',idempotencyKey:'print_released:book-a'})
+  assert.equal(id,'synthetic-message')
+  const [message]=h.sent
+  assert.equal(message.to,input.to)
+  assert.equal(message.subject,'Your YMI Story Book Is Approved!')
+  assert.equal(message.options.idempotencyKey,'print_released:book-a')
+  assert.equal(message.react.props.orderId,input.orderId)
+  assert.equal(message.react.props.bookTitle,'The Lantern Trail')
+})
 test('a skipped confirmation replay does not read materials,issue a grant or send mail',async()=>{
   const h=mailHarness(true);await h.api.sendOrderConfirmationEmail(input)
   assert.equal(h.reads.length,0);assert.equal(h.sent.length,0);assert.equal(h.events.length,1)

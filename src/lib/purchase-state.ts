@@ -1,4 +1,6 @@
 import { isFinalJobReleased } from '@/lib/final-job-release'
+import { isScopedFinalPdf } from '@/lib/final-review-artifact-paths'
+import { hasSingleFinalOrderLine } from '@/lib/final-review-batch-approval'
 import { isPaidLikeOrderStatus, normalizeOrderStatus } from '@/lib/order-status'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -9,9 +11,10 @@ export { isFinalJobReleased }
 type PurchaseState = 'purchased' | 'refunded' | 'unpurchased'
 
 type ReleasedFinalPdfAsset = {
-  jobId: string
+  creationId: string | null
+  orderId: string
+  cartItemId: string
   pdfPath: string
-  createdAt: string | null
 }
 
 export type PurchaseSummary = {
@@ -137,7 +140,7 @@ export async function loadReleasedFinalPdfAssetsByJobId(
 
   const { data: finalJobs, error: finalJobsError } = await supabaseAdmin
     .from('final_jobs')
-    .select('job_id, pdf_path, review_status, released_at, created_at')
+    .select('job_id, final_job_id, order_id, cart_item_id, creation_id, pdf_path, review_status, released_at')
     .in('job_id', uniqueJobIds)
 
   if (finalJobsError) {
@@ -148,30 +151,16 @@ export async function loadReleasedFinalPdfAssetsByJobId(
     const jobId = String(finalJob.job_id || '')
     const pdfPath = String(finalJob.pdf_path || '')
     if (!jobId || !pdfPath || !isFinalJobReleased(finalJob)) continue
-    assetsByJobId.set(jobId, {
-      jobId,
-      pdfPath,
-      createdAt: finalJob.created_at ?? null,
-    })
+    const { order_id: orderId, final_job_id: finalJobId, cart_item_id: cartItemId } = finalJob
+    const workerPath = /^jobs\/\d{4}\/\d{2}\/\d{2}\/([^/]+)\/(?:attempt_\d+\/)?output\/final_book\.pdf$/.exec(pdfPath)
+    const scoped = isScopedFinalPdf({ orderId, finalJobId }, pdfPath) || workerPath?.[1] === jobId
+    // The former order-wide key is unambiguous only for its original single-line order.
+    if (!scoped && !(pdfPath === `orders/${orderId}/final/pdf/final.pdf` &&
+        await hasSingleFinalOrderLine(orderId, cartItemId))) continue
+    assetsByJobId.set(jobId, { orderId, cartItemId, creationId: finalJob.creation_id, pdfPath })
   }
 
   return assetsByJobId
-}
-
-export function resolveLatestReleasedFinalPdfAsset(
-  jobIds: Array<string | null | undefined>,
-  assetsByJobId: Map<string, ReleasedFinalPdfAsset>
-) {
-  const assets = jobIds
-    .map((jobId) => (jobId ? assetsByJobId.get(jobId) : null))
-    .filter((asset): asset is ReleasedFinalPdfAsset => Boolean(asset))
-    .sort((a, b) => {
-      const aTime = Date.parse(String(a.createdAt || '')) || 0
-      const bTime = Date.parse(String(b.createdAt || '')) || 0
-      return bTime - aTime
-    })
-
-  return assets[0] ?? null
 }
 
 export async function loadPurchaseSummaryByCreation(creationIds: string[]): Promise<Map<string, PurchaseSummary>> {

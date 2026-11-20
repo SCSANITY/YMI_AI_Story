@@ -15,10 +15,10 @@ function load(path,injections={},globals={}) {
  return mod.exports
 }
 
-function reader({fail=false}={}) {
+function reader({fail=false, releases=[], orderStatus='paid', lineStatuses=['ordered','ordered']}={}) {
  const queries=[]
- const order={order_id:'order-a',customer_id:'owner-a',order_status:'paid',payment_id:'payment-a',checkout_currency:'USD',
-  cart_items:['one','two'].map(id=>({cart_item_id:id,creation_id:'creation-'+id,package_type:'supreme',quantity:1,price_at_purchase:89,
+ const order={order_id:'order-a',customer_id:'owner-a',order_status:orderStatus,payment_id:'payment-a',checkout_currency:'USD',
+  cart_items:['one','two'].map((id,index)=>({cart_item_id:id,creation_id:'creation-'+id,final_job_id:'final-'+id,status:lineStatuses[index],package_type:'supreme',quantity:1,price_at_purchase:89,
    creations:{creation_id:'creation-'+id,template_id:'story-'+id,preview_job_id:'job-'+id,templates:{name:'Book '+id}}}))}
  const supabaseAdmin={from(table){
   const q={table,filters:[]};queries.push(q)
@@ -38,16 +38,21 @@ function reader({fail=false}={}) {
    }}
   return chain
  }}
+ const signed=[]
  const api=load('src/lib/customer-orders-server.ts',{
   'server-only':{},'@/lib/supabaseAdmin':{supabaseAdmin},
   '@/lib/order-shipping-server':{readOrderShippingDetails:()=>{throw Error('Unexpected shipping read')}},
-  '@/lib/storage-signing':{createSignedStorageUrlMap:async()=>new Map()},
+  '@/lib/storage-signing':{createSignedStorageUrlMap:async requests=>{
+   signed.push(...requests)
+   return new Map(requests.map(r=>[r.key,'signed/'+r.path]))
+  }},
   '@/lib/order-covers':{createGeneratedPreviewCoverMap:async()=>new Map(),getGeneratedPreviewCover:(_,id)=>({url:id?'https://example.test/'+id:null,status:'ready'})},
-  '@/lib/purchase-state':{loadReleasedFinalPdfAssetsByJobId:async()=>new Map(),resolveLatestReleasedFinalPdfAsset:()=>null},
+  '@/lib/purchase-state':{loadReleasedFinalPdfAssetsByJobId:async ids=>new Map(releases.filter(([id])=>ids.includes(id)))},
+  '@/lib/order-status':load('src/lib/order-status.ts'),
   '@/lib/personalized-book-title':{buildPersonalizedBookPdfFileName:()=> 'synthetic.pdf',resolveFinalJobDisplayTitle:()=> 'Synthetic',resolvePersonalizedBookTitle:x=>x.templateName},
   '@/lib/order-display':{getOrderCheckoutCurrency:()=> 'USD',getOrderDisplayCurrency:()=> 'USD',getOrderDisplayTotal:()=>178,getDisplayUnitPrice:x=>x},
  })
- return {...api,queries}
+ return {...api,queries,signed}
 }
 
 test('shared customer order reader disambiguates direct lines and keeps both books for list and detail',async()=>{
@@ -66,6 +71,41 @@ test('shared customer order reader disambiguates direct lines and keeps both boo
 test('customer order reader preserves a failed database read as an error instead of an empty result',async()=>{
  const r=reader({fail:true})
  await assert.rejects(r.loadCustomerOrders({customerId:'owner-a'}),e=>e instanceof r.CustomerOrderReadError&&e.status===500)
+})
+
+test('a later book release adds its own download without replacing the first; list views do not sign PDFs', async()=>{
+ const reference={column:'order_id',value:'order-a'}
+ const releases=[]
+ const r=reader({releases})
+ const readLinks=async()=>Array.from((await r.loadCustomerOrders({reference})).orders[0].items,i=>i.final_pdf_url)
+ const publish=id=>releases.push(['final-'+id,{creationId:'creation-'+id,orderId:'order-a',cartItemId:id,pdfPath:id+'.pdf'}])
+ publish('one')
+ assert.deepEqual(await readLinks(),['signed/one.pdf',null])
+ publish('two')
+ assert.deepEqual(await readLinks(),['signed/one.pdf','signed/two.pdf'])
+ assert.ok(r.signed.every(s=>s.path===s.key+'.pdf' && s.bucket==='raw-private'))
+ releases[1][1].creationId='another-book'
+ assert.deepEqual(await readLinks(),['signed/one.pdf',null])
+ r.signed.length=0
+ await r.loadCustomerOrders({customerId:'owner-a'})
+ assert.equal(r.signed.length,0)
+})
+
+test('only purchased lines receive downloads even when a Final PDF already exists', async () => {
+ const releases = ['one','two'].map(id => ['final-'+id, {
+  creationId:'creation-'+id, orderId:'order-a', cartItemId:id, pdfPath:id+'.pdf',
+ }])
+ const reference = { column:'order_id', value:'order-a' }
+ for (const [orderStatus, expected] of [
+  ['paid', ['signed/one.pdf', null]],
+  ['unpaid', [null, null]],
+  ['refunded', [null, null]],
+ ]) {
+  const r = reader({ releases, orderStatus, lineStatuses:['ordered','in_cart'] })
+  const { orders } = await r.loadCustomerOrders({ reference })
+  assert.deepEqual(Array.from(orders[0].items, item => item.final_pdf_url), expected)
+  assert.equal(r.signed.length, expected.filter(Boolean).length)
+ }
 })
 
 function voiceReader({missing=false,unpaid=false,fail=false}={}) {

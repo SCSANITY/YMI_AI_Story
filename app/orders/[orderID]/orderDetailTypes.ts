@@ -4,6 +4,7 @@ import type { ShippingDetails } from '@/lib/order-shipping'
 
 export type OrderItem = {
   cart_item_id: string
+  final_pdf_url?: string | null
   creation_id: string
   package_type?: string | null
   quantity: number

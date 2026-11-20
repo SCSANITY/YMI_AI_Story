@@ -1,7 +1,7 @@
 'use client'
 
 import { OrderMaterialsSummary } from '@/components/orders/OrderMaterialsSummary'
-import { MapPin } from 'lucide-react'
+import { Download, MapPin } from 'lucide-react'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import { formatMajorCurrencyValue } from '@/lib/locale-pricing'
 import type { OrderDetail, OrderItem } from './orderDetailTypes'
@@ -45,6 +45,15 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">{t('orderDetail.qty')} {item.quantity}</div>
                 {isSignatureVoicePackage(item.package_type) ? <SignatureVoiceBadge className="mt-2" /> : null}
+                {item.final_pdf_url && (
+                  <div className="mt-2">
+                    <a href={item.final_pdf_url}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-emerald-700">
+                      <Download aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                      {t('orderDetail.downloadPdf')}<span className="sr-only"> — {item.template_name || t('common.personalizedStorybook')}</span>
+                    </a>
+                  </div>
+                )}
               </div>
               <div className="text-sm font-bold text-gray-900 shrink-0">
                 {formatMajorCurrencyValue(

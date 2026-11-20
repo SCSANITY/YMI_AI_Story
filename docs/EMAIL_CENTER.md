@@ -25,19 +25,26 @@ rollback, test-send, raw HTML, sender, or link-target control.
 ## Template authority
 
 `src/lib/email-template-catalog.tsx` is the single application registry for the
-13 active outbound families:
+14 outbound families:
 
 - Security: Guest Checkout OTP, Supabase Account Signup OTP, and Supabase
   Password Recovery.
 - Orders: Order Confirmation, Stripe Payment Receipt, and Unpaid Checkout
   Reminder.
-- Delivery: Final PDF Delivery and the four-state Order Logistics Update.
+- Delivery: Final PDF Delivery, Book Print Approval, and Order Logistics Update
+  for shipping, delivery, and tracking changes. A successful first print release
+  queues one `print_released:<finalJobId>` event in the same transaction.
+  The order activity view groups it with the exact book. A rejected email can
+  be retried from Final Review. A send with an unknown provider outcome needs
+  receipt reconciliation before any resend. The order status is independent.
   PDF Delivery has Hardcover and Hardcover + Voice previews. Both display the
   48-hour corrections message. The offer appears only for an identified physical
   Hardcover item, never for another line in the order or an unknown edition.
   The Admin preview button is inert; live email uses the approved Payment Link.
   The private PDF link expires 72 hours after signing. The order page remains
-  available for authenticated re-download. The order identifier is plain text.
+  available for authorized re-download. In the order's Items section, each
+  released book has its own PDF link alongside its title. Releasing another
+  book adds a link and preserves the earlier book's download. The order identifier is plain text.
   The Hardcover + Voice variant links to the existing protected materials page.
   Both editions ask customers to review the PDF and reply within 48 hours of the
   delivery email. This is a reminder, not a system timer. The order and materials
@@ -47,7 +54,7 @@ rollback, test-send, raw HTML, sender, or link-target control.
 - Subscriptions: Newsletter Confirmation and Weekly Cart Reminder.
 - Human Communication: Support Reply, Partnership Reply, and General Mail.
 
-Nine fixed YMI template families are locally previewable. Supabase owns two
+Ten fixed YMI template families are locally previewable. Supabase owns two
 Auth templates, Stripe owns its receipt, and General Mail is authored in the
 Admin composer. These four entries expose ownership and trigger facts but no
 local preview.

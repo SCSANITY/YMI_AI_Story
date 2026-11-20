@@ -113,7 +113,7 @@ export function shouldSendLogisticsUpdateEmail({
   statusChanged: boolean
   trackingDetailsChanged: boolean
 }) {
-  if (!hasRecipient || nextStatus === 'paid') return false
+  if (!hasRecipient || (nextStatus !== 'shipped' && nextStatus !== 'delivered')) return false
   if (statusChanged) return true
   return nextStatus === 'shipped' && trackingDetailsChanged
 }

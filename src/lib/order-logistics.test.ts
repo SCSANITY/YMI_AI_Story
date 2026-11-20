@@ -59,7 +59,10 @@ test('shipped orders notify again when tracking details change', () => {
 })
 
 test('status transitions still notify while paid and recipient-less updates do not', () => {
-  for (const nextStatus of ['production', 'shipped', 'delivered']) {
+  assert.equal(shouldSendLogisticsUpdateEmail({
+    hasRecipient: true, nextStatus: 'production', statusChanged: true, trackingDetailsChanged: false,
+  }), false)
+  for (const nextStatus of ['shipped', 'delivered']) {
     assert.equal(shouldSendLogisticsUpdateEmail({
       hasRecipient: true,
       nextStatus,

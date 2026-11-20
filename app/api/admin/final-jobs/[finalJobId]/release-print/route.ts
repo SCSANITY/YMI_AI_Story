@@ -2,6 +2,7 @@ import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { isUuid } from '@/lib/manual-print-artifact'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { dispatchPrintNotice } from '@/lib/print-release-notice-server'
 
 export async function POST(
   request: Request,
@@ -17,7 +18,7 @@ export async function POST(
   if (!isUuid(body?.expectedArtifactId)) {
     return jsonNoStore({ error: 'Select a verified print PDF before release' }, { status: 400 })
   }
-  const { data, error } = await supabaseAdmin.rpc('materials_release_print_artifact', {
+  const { data, error } = await supabaseAdmin.rpc('materials_release_print_with_notice', {
     p_final_job_id: finalJobId,
     p_expected_artifact_id: body.expectedArtifactId,
     p_admin_customer_id: admin.customer_id,
@@ -36,8 +37,12 @@ export async function POST(
     return jsonNoStore({ error: 'Print release did not return a release timestamp' }, { status: 500 })
   }
 
+  const noticeStatus = result.release_result === 'released'
+    ? await dispatchPrintNotice(finalJobId).catch(() => 'check_status')
+    : undefined
   return jsonNoStore({
     ok: true,
+    noticeStatus,
     finalJobId,
     artifactId: result.artifact_id ?? null,
     printReleasedAt: result.released_at,

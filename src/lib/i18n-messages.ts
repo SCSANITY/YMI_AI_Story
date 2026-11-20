@@ -599,7 +599,7 @@ const en: MessageDictionary = {
 
   'orderDetail.loading': 'Loading order...',
   'orderDetail.secureAccessTitle': 'Secure order access',
-  'orderDetail.secureAccessDescription': 'Sign in or create an account with the email used at checkout to view this order on this device.',
+  'orderDetail.secureAccessDescription': 'To see your full order details and download your PDF, sign in or create an account with the same email address you used at checkout.',
   'orderDetail.accountMismatchTitle': 'This order belongs to another account',
   'orderDetail.accountMismatchDescription': 'Sign in with the same email used at checkout to access this order.',
   'orderDetail.notFoundTitle': 'Order not found',
@@ -613,6 +613,7 @@ const en: MessageDictionary = {
   'orderDetail.logisticsReserved': 'Tracking timeline UI is reserved here. Current status: {{status}}.',
   'orderDetail.items': 'Items',
   'orderDetail.qty': 'Qty',
+  'orderDetail.downloadPdf': 'Download PDF',
   'orderDetail.shipping': 'Shipping',
 
 

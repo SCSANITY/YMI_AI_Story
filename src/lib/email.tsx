@@ -19,6 +19,7 @@ import type { ReminderStage } from '@/lib/unpaid-reminders'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
 import { SITE_URL } from '@/lib/seo'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
+import { PrintReleasedEmail, PRINT_RELEASED_SUBJECT } from '@/components/emails/PrintReleasedEmail'
 import { CheckoutCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import {
   buildSupportReplyEmailText,
@@ -163,6 +164,8 @@ export function getKolPartnershipSenderAddress(): string {
   return normalizedValue
 }
 
+export class EmailNotAcceptedError extends Error {}
+
 async function sendEmail({
   to,
   cc,
@@ -180,7 +183,7 @@ async function sendEmail({
   const resolvedFrom = from || getSender('EMAIL_FROM')
 
   if (!resend) {
-    throw new Error('[email] RESEND_API_KEY is missing')
+    throw new EmailNotAcceptedError('[email] RESEND_API_KEY is missing')
   }
 
   if (process.env.NODE_ENV === 'development') {
@@ -210,7 +213,7 @@ async function sendEmail({
   )
 
   const responseAny = response as
-    | { data?: { id?: string | null } | null; error?: { message?: string } | null; id?: string | null }
+    | { data?: { id?: string | null } | null; error?: { message?: string; statusCode?: number | null } | null; id?: string | null }
     | null
     | undefined
 
@@ -220,6 +223,9 @@ async function sendEmail({
 
   const resendError = responseAny.error
   if (resendError) {
+    if ([400, 401, 403, 404, 422, 429].includes(resendError.statusCode ?? 0)) {
+      throw new EmailNotAcceptedError(`[email] Resend rejected: ${resendError.message || 'unknown error'}`)
+    }
     throw new Error(`[email] Resend rejected: ${resendError.message || 'unknown error'}`)
   }
 
@@ -233,6 +239,22 @@ async function sendEmail({
   }
 
   return response
+}
+
+// This event was reserved by the release transaction and claimed by the dispatcher.
+export async function sendClaimedPrintNotice(params: {
+  to: string; firstName: string | null; bookTitle: string; orderId: string; idempotencyKey: string
+}) {
+  const sender = resolveSender('EMAIL_FROM_DELIVERY')
+  if (!sender.isValid) throw new EmailNotAcceptedError('Delivery mailbox is not configured')
+  const response = await sendEmail({
+    to: params.to, from: sender.normalizedValue, idempotencyKey: params.idempotencyKey,
+    subject: PRINT_RELEASED_SUBJECT,
+    react: <PrintReleasedEmail firstName={params.firstName} bookTitle={params.bookTitle} orderId={params.orderId} />,
+  })
+  const id = response.data?.id || (response as { id?: string }).id
+  if (!id) throw new Error('Unable to confirm print email receipt')
+  return id
 }
 
 async function sendManagedEmail(params: ManagedEmailParams) {
