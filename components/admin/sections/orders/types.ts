@@ -24,6 +24,7 @@ export type OrderBook = {
   edition: 'basic' | 'supreme' | null
   quantity: number
   cover: string | null
+  needsLineCheck: boolean
   finalJobId: string | null
   physical: boolean
 }

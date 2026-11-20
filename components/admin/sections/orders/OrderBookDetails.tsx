@@ -28,7 +28,7 @@ function BookLine({ book, orderId }: { book: OrderBook; orderId?: string }) {
     {orderId && (book.finalJobId ? <div className="flex gap-1.5 text-xs font-bold [&_a]:rounded-md [&_a]:border [&_a]:border-[var(--admin-card-line)] [&_a]:px-2 [&_a]:py-1 [&_a:hover]:bg-[var(--admin-panel-2)]">
       <a href={href('pdf')} aria-label={`Open PDF for ${book.title}`}>PDF ↗</a>
       {book.physical && <a href={href('print')} aria-label={`Open Print for ${book.title}`}>Print ↗</a>}
-    </div> : <span className="text-xs">Final pending</span>)}
+    </div> : <span className="text-xs">{book.needsLineCheck ? 'Verify order line' : 'Final pending'}</span>)}
   </li>
 }
 

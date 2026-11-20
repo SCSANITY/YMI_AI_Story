@@ -139,7 +139,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const bookByItem = new Map<string, Omit<OrderBook, 'finalJobId'>>()
+  const bookByItem = new Map<string, Omit<OrderBook, 'finalJobId' | 'needsLineCheck'>>()
   const cartItemsByOrderId = new Map<string, AdminOrderCartItem[]>()
   // Despite its legacy column name, cart_items.final_job_id stores jobs.job_id.
   const linkedGenerationJobIds = new Set<string>()
@@ -184,19 +184,19 @@ export async function GET(request: Request) {
     }
   }
 
-  const reviewByGeneration = new Map<string, { id: string; creation: string | null }>()
+  const reviewByGeneration = new Map<string, { id: string; creation: string | null; order: string; line: string | null }>()
   const finalJobs: AdminOrderFinalJob[] = []
   if (linkedGenerationJobIds.size > 0) {
     const { data: jobRows, error: finalJobsError } = await supabaseAdmin
       .from('final_jobs')
-      .select('final_job_id, job_id, creation_id, review_status, released_at, print_status, print_released_at')
+      .select('final_job_id, job_id, order_id, cart_item_id, creation_id, review_status, released_at, print_status, print_released_at')
       .in('job_id', Array.from(linkedGenerationJobIds))
 
     if (finalJobsError) {
       return jsonNoStore({ error: finalJobsError.message }, { status: 500 })
     }
     for (const job of jobRows ?? []) {
-      reviewByGeneration.set(job.job_id, { id: job.final_job_id, creation: job.creation_id })
+      reviewByGeneration.set(job.job_id, { id: job.final_job_id, creation: job.creation_id, order: job.order_id, line: job.cart_item_id })
       finalJobs.push({
         final_job_id: String(job.final_job_id),
         job_id: String(job.job_id),
@@ -229,9 +229,12 @@ export async function GET(request: Request) {
       shipping_address: normalizeShippingAddress(order.shipping_address),
       books: cartItems.map(item => {
         const review = item.generation_job_id ? reviewByGeneration.get(item.generation_job_id) : null
+        const matchesLine = Boolean(review && item.creation_id && review.creation === item.creation_id &&
+          review.order === orderId && review.line === item.cart_item_id)
         return {
           ...bookByItem.get(item.cart_item_id)!,
-          finalJobId: review && item.creation_id && review.creation === item.creation_id ? review.id : null,
+          finalJobId: matchesLine && review ? review.id : null,
+          needsLineCheck: Boolean(review) && !matchesLine,
         }
       }),
     }
