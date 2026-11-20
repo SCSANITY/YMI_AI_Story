@@ -1,3 +1,4 @@
+import { normalizeAdminOrderPage, normalizeAdminOrderSearch } from '@/lib/admin-orders'
 import { finalPurchasedEdition } from '@/lib/final-purchased-edition'
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
@@ -40,26 +41,49 @@ export async function GET(request: Request) {
     return jsonNoStore({ error: 'Admin access required' }, { status: 403 })
   }
 
-  const requestedJobId = new URL(request.url).searchParams.get('jobId')
+  const params = new URL(request.url).searchParams
+  const requestedJobId = params.get('jobId')
   if (requestedJobId && !isUuid(requestedJobId)) {
     return jsonNoStore({ error: 'Invalid final job id' }, { status: 400 })
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('final_jobs')
-    .select(FINAL_JOB_SELECT)
-    .order('updated_at', { ascending: false })
-    .limit(100)
+  const stage = params.get('stage')
+  const edition = params.get('edition')
+  const search = normalizeAdminOrderSearch(params.get('search'))
+  const page = normalizeAdminOrderPage(params.get('page'))
+  const pageSize = 40
+  const searchEmbed = search ? ',search_order:orders(),search_creation:creations(search_template:templates())' : ''
+  const editionEmbed = edition ? ',edition_line:cart_items!final_jobs_cart_item_id_fkey!inner()' : ''
+  let query = supabaseAdmin.from('final_jobs').select(FINAL_JOB_SELECT + searchEmbed + editionEmbed, { count: 'exact' })
+  if (edition) {
+    if (!['basic', 'supreme'].includes(edition)) return jsonNoStore({ error: 'Invalid book type' }, { status: 400 })
+    query = query.eq('edition_line.product_type', 'physical').eq('edition_line.package_type', edition).eq('edition_line.status', 'ordered')
+  }
+  if (stage === 'pdf_review') query = query.or('review_status.is.null,review_status.neq.released')
+  if (stage === 'print_pending') query = query.eq('review_status','released').or('print_status.is.null,print_status.neq.released')
+  if (stage === 'completed') query = query.eq('review_status','released').eq('print_status','released')
+  if (search) {
+    const pattern = `*${search}*`
+    const childFields = ['childName', 'child_name', 'name'].flatMap(key => [
+      `customize_snapshot->>${key}`, `customize_snapshot->textOverrides->>${key}`, `customize_snapshot->text_overrides->>${key}`,
+    ])
+    query = query.ilike('search_order.display_id', pattern)
+      .ilike('search_creation.search_template.name', pattern)
+      .or([...childFields.map(field => `${field}.ilike.${pattern}`), 'search_template.not.is.null'].join(','), { referencedTable: 'search_creation' })
+      .or(`search_order.not.is.null,search_creation.not.is.null,template_id.ilike.${pattern}`)
+  }
+  const offset = (page - 1) * pageSize
+  const { data, error, count } = await query.order('updated_at', { ascending: false })
+    .order('final_job_id', { ascending: false }).range(offset, offset + pageSize - 1)
 
   if (error) {
     return jsonNoStore({ error: error.message || 'Failed to load final jobs' }, { status: 500 })
   }
 
-  const rows = [...(data ?? [])]
+  const focusedQuery = supabaseAdmin.from('final_jobs').select(FINAL_JOB_SELECT)
+  const rows = (data ?? []) as unknown as NonNullable<Awaited<typeof focusedQuery>['data']>
   if (requestedJobId && !rows.some((row) => row.final_job_id === requestedJobId)) {
-    const { data: focusedJob, error: focusedJobError } = await supabaseAdmin
-      .from('final_jobs')
-      .select(FINAL_JOB_SELECT)
+    const { data: focusedJob, error: focusedJobError } = await focusedQuery
       .eq('final_job_id', requestedJobId)
       .maybeSingle()
     if (focusedJobError) {
@@ -68,7 +92,7 @@ export async function GET(request: Request) {
     if (focusedJob) rows.unshift(focusedJob)
   }
 
-  if (!rows.length) return jsonNoStore({ finalJobs: [] })
+  if (!rows.length) return jsonNoStore({ finalJobs: [], total: count ?? 0, pageSize })
   const { data: linkedJobs, error: linkedJobsError } = await supabaseAdmin
     .from('jobs').select('job_id,input_snapshot').in('job_id', rows.map((row) => row.job_id))
   if (linkedJobsError) return jsonNoStore({ error: 'Failed to load Final production mode' }, { status: 500 })
@@ -83,5 +107,5 @@ export async function GET(request: Request) {
     }
   })
 
-  return jsonNoStore({ finalJobs })
+  return jsonNoStore({ finalJobs, total: count ?? 0, pageSize })
 }

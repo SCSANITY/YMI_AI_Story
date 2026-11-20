@@ -66,7 +66,7 @@ export async function POST(
   }
 
   try {
-    const workspace = await loadAdminSignatureVoiceWorkspace(orderId)
+    const workspace = await loadAdminSignatureVoiceWorkspace(orderId, input.cartItemId)
     return jsonNoStore({ workspace })
   } catch (loadError) {
     return jsonNoStore(

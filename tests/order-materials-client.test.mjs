@@ -6,7 +6,7 @@ import ts from 'typescript'
 import {readFileSync} from 'node:fs'
 const order='00000000-0000-4000-8000-000000000010',line='00000000-0000-4000-8000-000000000020'
 const oldAsset='00000000-0000-4000-8000-000000000030',newAsset='00000000-0000-4000-8000-000000000040'
-const grant='a'.repeat(43),deadline='2026-10-28T00:00:00Z'
+const grant='a'.repeat(43)
 function loadModule(path,injections={},globals={}) {
  const mod={exports:{}}
  vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../'+path,import.meta.url),'utf8'),{
@@ -163,7 +163,7 @@ test('page keys and Admin displays remain per paid line,with fresh authorization
  const admin=readFileSync(new URL('../components/admin/sections/orders/SignatureVoiceWorkspace.tsx',import.meta.url),'utf8')
  const dialog=readFileSync(new URL('../components/personalize/SignatureVoiceDialog.tsx',import.meta.url),'utf8')
  assert.match(client,/controller.abort\(\);if\(objectUrl\)\{URL.revokeObjectURL\(objectUrl\)/)
- assert.match(admin,/key=\{item.cartItemId\}/);assert.doesNotMatch(admin,/key=\{item.creationId\}|Customer replacement deadline:/)
+ assert.match(admin,/key=\{selected.cartItemId\}/);assert.doesNotMatch(admin,/key=\{item.creationId\}|Customer replacement deadline:/)
  for(const label of ['Recording uploaded:','Narration outdated:','Admin-declared replacement','Previous recording retained after shipment'])assert.ok(admin.includes(label),label)
  assert.match(dialog,/setAuthorized\(false\);setFileError/)
  assert.match(dialog,/!pendingRecording \|\| !authorized \|\| isSaving/)

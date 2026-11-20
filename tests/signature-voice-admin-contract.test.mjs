@@ -92,17 +92,17 @@ test('S3 abandoned replacement uploads enter the durable cleanup outbox before s
   assert.match(cleanupServer, /claim_user_asset_cleanup/)
 })
 
-test('S3 Admin UI is order-scoped and exposes dedicated audio controls without mail inference', async () => {
-  const [ordersRoute, card, workspace, server] = await Promise.all([
-    read('app/api/admin/orders/route.ts'),
+test('Print voice workspace is scoped to the selected purchased book and exposes dedicated audio controls without mail inference', async () => {
+  const [panel, card, workspace, server] = await Promise.all([
+    read('components/admin/FinalReviewPanel.tsx'),
     read('components/admin/sections/orders/OrderManagementCard.tsx'),
     read('components/admin/sections/orders/SignatureVoiceWorkspace.tsx'),
     read('src/lib/signature-voice-admin-server.ts'),
   ])
 
-  assert.match(ordersRoute, /signature_voice_item_count:\s*order\.payment_id[\s\S]*item\.package_type === 'supreme'/)
-  assert.match(card, /savedOrder\.signature_voice_item_count > 0/)
-  assert.match(card, /<SignatureVoiceWorkspace[\s\S]*orderId=\{savedOrder\.order_id\}/)
+  assert.doesNotMatch(card, /SignatureVoiceWorkspace/)
+  assert.match(panel, /activeVersion === 'print' && edition === 'supreme'[\s\S]*?<SignatureVoiceWorkspace/)
+  assert.match(workspace, /item\.cartItemId === cartItemId && item\.creationId === creationId/)
   assert.match(workspace, /Technical usability/)
   assert.match(workspace, /Authorization review/)
   assert.match(workspace, /Authorization \{item\.triage\.adultDeclarationStatus\}/)

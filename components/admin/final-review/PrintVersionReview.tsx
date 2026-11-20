@@ -5,9 +5,7 @@ import {
   FileUp,
   Loader2,
   Lock,
-  Copy,
 } from 'lucide-react'
-import { useState } from 'react'
 import type { ManualPrintArtifactClient } from '@/lib/manual-print-artifact'
 import { formatDate } from './reviewUi'
 
@@ -43,7 +41,6 @@ export function PrintVersionReview({
   uploadError: string | null
   onUploadPrintPdf: () => void
 }) {
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   if (loadingDetail) {
     return (
       <div className="mt-4 rounded-lg bg-[var(--admin-panel-2)] p-4 text-sm text-[var(--admin-muted)]">
@@ -54,29 +51,8 @@ export function PrintVersionReview({
 
   return (
     <div className="mt-4 space-y-4">
-      <section className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-5" aria-label="Purchased book dedication">
-        <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-muted)]">Insert-page dedication</p>
-        <p className="mt-2 text-xs">Prepare the print PDF using the current message below.</p>
         {artifact && artifact.dedication_revision!==dedicationSnapshot?.revision?<p role="alert" className="mt-2 text-sm text-rose-700">The dedication changed. Prepare and upload a new print PDF before release.</p>:null}
-        {dedicationSnapshot?.decision === 'confirmed' && dedicationSnapshot.body ? <>
-          <p className="mt-2 text-xs text-[var(--admin-muted)]">Current message for this order line (revision {dedicationSnapshot.revision}). Copy it into the separately prepared insert page.</p>
-          <pre className="mt-4 whitespace-pre-wrap break-words rounded-lg border border-[var(--admin-card-line)] bg-white p-4 font-sans text-sm leading-7 text-slate-900 select-text">{dedicationSnapshot.body}</pre>
-          <button type="button" onClick={() => {
-            void (async () => {
-              try { await navigator.clipboard.writeText(dedicationSnapshot.body || ''); setCopyStatus('copied') }
-              catch { setCopyStatus('failed') }
-            })()
-          }} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--admin-accent)] px-4 text-sm font-bold text-[var(--admin-ink)] focus-visible:ring-2 focus-visible:ring-amber-500">
-            <Copy className="h-4 w-4" aria-hidden="true" />Copy message
-          </button>
-          {copyStatus === 'copied' ? <p role="status" className="mt-2 text-xs text-emerald-700">Copied with line breaks.</p> : null}
-          {copyStatus === 'failed' ? <p role="alert" className="mt-2 text-xs text-rose-700">Clipboard unavailable. Select the text above and copy it manually.</p> : null}
-        </> : dedicationSnapshot?.decision === 'skipped' ? (
-          <p className="mt-2 text-sm text-[var(--admin-muted)]">No message selected for this order line.</p>
-        ) : (
-          <p role="alert" className="mt-2 text-sm text-rose-700">Dedication material missing. Verify this order line before preparing its print insert.</p>
-        )}
-      </section>
+      {!dedicationSnapshot && <p role="alert" className="text-sm text-rose-700">Dedication material missing. Verify this order line before preparing its print insert.</p>}
       <section className="overflow-hidden rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)]">
         <div className="border-b border-[var(--admin-card-line)] px-5 py-4">
           <div className="flex items-start gap-3">

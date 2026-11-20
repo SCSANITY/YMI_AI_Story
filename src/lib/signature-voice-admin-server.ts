@@ -51,7 +51,8 @@ function metadataNumber(metadata: UnknownRecord, key: string) {
 }
 
 export async function loadAdminSignatureVoiceWorkspace(
-  orderId: string
+  orderId: string,
+  cartItemId?: string
 ): Promise<AdminSignatureVoiceWorkspace | null> {
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
@@ -62,7 +63,7 @@ export async function loadAdminSignatureVoiceWorkspace(
   if (!order) return null
   if (!order.payment_id) throw new Error('Signature Voice production requires a paid order')
 
-  const { data: cartItems, error: cartItemsError } = await supabaseAdmin
+  let itemQuery = supabaseAdmin
     .from('cart_items')
     .select(`
       cart_item_id,
@@ -78,6 +79,8 @@ export async function loadAdminSignatureVoiceWorkspace(
     .eq('order_id', orderId)
     .eq('status', 'ordered')
     .eq('package_type', 'supreme')
+  if (cartItemId) itemQuery = itemQuery.eq('cart_item_id', cartItemId)
+  const { data: cartItems, error: cartItemsError } = await itemQuery
   if (cartItemsError) throw new Error(cartItemsError.message)
 
   const signatureItems = cartItems ?? []

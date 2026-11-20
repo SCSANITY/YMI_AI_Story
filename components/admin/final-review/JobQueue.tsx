@@ -24,7 +24,7 @@ export function JobQueue({
   // full-width main view. Mobile stays a horizontal carousel in both cases.
   const listLayout =
     variant === 'board'
-      ? 'xl:grid xl:grid-cols-2 2xl:grid-cols-3 xl:gap-4 xl:space-y-0 xl:overflow-visible xl:pb-0'
+      ? 'min-[960px]:grid min-[960px]:grid-cols-2 2xl:grid-cols-3 min-[960px]:gap-4 min-[960px]:space-y-0 min-[960px]:overflow-visible min-[960px]:pb-0'
       : 'xl:block xl:space-y-3 xl:overflow-visible xl:pb-0'
 
   return (
@@ -52,7 +52,7 @@ export function JobQueue({
                 key={job.final_job_id}
                 type="button"
                 onClick={() => onSelectJob(job.final_job_id)}
-                className={`admin-v2-job-bubble admin-v2-job-bubble--interactive group min-h-44 w-[min(18rem,84vw)] shrink-0 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] focus-visible:ring-offset-2 xl:w-full ${
+                className={`admin-v2-job-bubble admin-v2-job-bubble--interactive group min-h-44 w-[min(18rem,84vw)] shrink-0 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent-dp)] focus-visible:ring-offset-2 ${variant === 'board' ? 'min-[960px]:w-full' : 'xl:w-full'} ${
                   isActive
                     ? 'admin-v2-job-bubble--selected'
                     : ''

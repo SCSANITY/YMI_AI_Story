@@ -18,6 +18,16 @@ export type OrderGroup = AdminOrderView
 
 export const READONLY_GROUPS = READONLY_ADMIN_ORDER_VIEWS
 
+export type OrderBook = {
+  itemId: string
+  title: string
+  edition: 'basic' | 'supreme' | null
+  quantity: number
+  cover: string | null
+  finalJobId: string | null
+  physical: boolean
+}
+
 export type OrderRow = {
   order_id: string
   display_id: string | null
@@ -39,7 +49,8 @@ export type OrderRow = {
   delivered_at: string | null
   logistics_updated_at: string | null
   production_progress: AdminOrderProductionProgress
-  signature_voice_item_count: number
+  books?: OrderBook[]
+  shipping_address?: import('@/lib/shipping-address').ShippingAddress
 }
 
 export type OrderDraft = {

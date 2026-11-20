@@ -9,7 +9,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ orderId: string }> }
 ) {
   const admin = await requireAdminCustomer()
@@ -17,8 +17,10 @@ export async function GET(
   const { orderId } = await Promise.resolve(context.params)
   if (!isUuid(orderId)) return jsonNoStore({ error: 'Invalid order id' }, { status: 400 })
 
+  const cartItemId = new URL(request.url).searchParams.get('item')
+  if (cartItemId !== null && !isUuid(cartItemId)) return jsonNoStore({ error: 'Invalid order item' }, { status: 400 })
   try {
-    const workspace = await loadAdminSignatureVoiceWorkspace(orderId)
+    const workspace = await loadAdminSignatureVoiceWorkspace(orderId, cartItemId ?? undefined)
     if (!workspace) return jsonNoStore({ error: 'Order not found' }, { status: 404 })
     return jsonNoStore({ workspace })
   } catch (error) {
@@ -68,7 +70,7 @@ export async function PATCH(
   }
 
   try {
-    const workspace = await loadAdminSignatureVoiceWorkspace(orderId)
+    const workspace = await loadAdminSignatureVoiceWorkspace(orderId, input.cartItemId)
     return jsonNoStore({ workspace })
   } catch (loadError) {
     return jsonNoStore(

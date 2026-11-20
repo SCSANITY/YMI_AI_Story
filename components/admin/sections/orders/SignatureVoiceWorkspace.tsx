@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Download,
-  Headphones,
+  Mic,
   Loader2,
   Music2,
   PackageCheck,
@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   UploadCloud,
 } from 'lucide-react'
-import { AdminFloatingDialog } from '@/components/admin/AdminFloatingDialog'
 import {
   AdminButton,
   AdminEmptyState,
@@ -24,6 +23,7 @@ import {
   adminLabelClass,
   type AdminStatusTone,
 } from '@/components/admin/AdminUi'
+import { VoiceSourcePlayer } from './VoiceSourcePlayer'
 import {MaterialTime} from '@/components/orders/MaterialTime'
 import { supabase } from '@/lib/supabase'
 import {
@@ -723,23 +723,25 @@ function VoiceItem({
   onWorkspace: (workspace: Workspace) => void
 }) {
   return (
-    <article className="admin-v2-order-bubble p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <AdminStatusBadge tone="inverse">Signature Voice</AdminStatusBadge>
-            <AdminStatusBadge tone={triageTone(item.triage.technicalStatus)}>
+    <article className="space-y-3">
+      <p className="text-xs text-[var(--admin-page-muted)]">
+        {item.source.createdAt && <>Recording uploaded: <MaterialTime value={item.source.createdAt} /> · </>}{formatBytes(item.source.sizeBytes)}
+      </p>
+      <VoiceSourcePlayer key={item.source.assetId} playbackUrl={item.source.playbackUrl}
+        downloadUrl={item.source.downloadUrl} durationSeconds={item.source.durationSeconds} />
+      {item.triage.narrationOutdated?<AdminNotice tone="warning" className="mt-2">Narration outdated: the recording changed. Regenerate and verify narration, then confirm hardware loading for this book again.</AdminNotice>:null}
+          {item.retainedSourceCount>0 && <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Previous recording retained after shipment ({item.retainedSourceCount}). It has not been scheduled for 30-day removal.</p>}
+      <div className="flex flex-wrap items-start gap-2">
+        <details className="contents"><summary className="admin-v2-button admin-v2-button--primary cursor-pointer list-none">Review source</summary>
+          <div className="order-last mt-2 w-full rounded-xl border border-[var(--admin-card-line)] p-3">
+            <div className="flex flex-wrap gap-2"><AdminStatusBadge tone={triageTone(item.triage.technicalStatus)}>
               Technical {item.triage.technicalStatus}
             </AdminStatusBadge>
             <AdminStatusBadge tone={triageTone(item.triage.adultDeclarationStatus)}>
               Authorization {item.triage.adultDeclarationStatus}
-            </AdminStatusBadge>
-          </div>
-          <h3 className="mt-2 text-base font-bold text-[var(--admin-page-ink)]">{item.title}</h3>
-          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Recording uploaded: {item.source.createdAt?<MaterialTime value={item.source.createdAt}/>:null} / Bound to this book: {item.declaration.boundAt?<MaterialTime value={item.declaration.boundAt}/>:null}</p>
-          {item.triage.narrationOutdated?<AdminNotice tone="warning" className="mt-2">Narration outdated: the recording changed. Regenerate and verify narration, then confirm hardware loading for this book again.</AdminNotice>:null}
-          {item.retainedSourceCount>0 && <p className="mt-1 text-xs text-[var(--admin-page-muted)]">Previous recording retained after shipment ({item.retainedSourceCount}). It has not been scheduled for 30-day removal.</p>}
-          <p className="mt-1 text-xs text-[var(--admin-page-muted)]">
+            </AdminStatusBadge></div>
+            <p className="my-1 text-xs">Bound to this book: {item.declaration.boundAt && <MaterialTime value={item.declaration.boundAt} />}</p>
+            <p className="mt-1 text-xs text-[var(--admin-page-muted)]">
             {item.declaration.subjectName} / {RELATIONSHIP_LABELS[item.declaration.subjectRelationship]} / Revision {item.triage.sourceRevision}
           </p>
           {item.declaration.kind === 'admin_declared' && item.declaration.adminDeclaration && (
@@ -748,51 +750,15 @@ function VoiceItem({
               <br />Evidence: {item.declaration.adminDeclaration.evidenceReference}
             </p>
           )}
-        </div>
-        <span className="text-xs font-semibold text-[var(--admin-page-muted)]">Qty {item.quantity}</span>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-[color-mix(in_srgb,var(--admin-card-line)_72%,transparent)] bg-[color-mix(in_srgb,var(--admin-card)_48%,transparent)] p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <Headphones className="h-4 w-4 shrink-0 text-[var(--admin-accent-dp)]" />
-            <p className="truncate text-sm font-bold text-[var(--admin-page-ink)]">
-              {item.source.durationSeconds.toFixed(1)} sec / {formatBytes(item.source.sizeBytes)}
-            </p>
+            <TriageEditor orderId={orderId} item={item} onWorkspace={onWorkspace} />
           </div>
-          <a
-            href={item.source.downloadUrl}
-            className="admin-v2-button admin-v2-button--secondary shrink-0"
-            download
-          >
-            <Download className="h-4 w-4" />
-            Download
-          </a>
-        </div>
-        <audio
-          key={item.source.assetId}
-          controls
-          preload="metadata"
-          src={item.source.playbackUrl}
-          className="mt-3 w-full"
-        />
+        </details>
+        <details className="contents"><summary className="admin-v2-button admin-v2-button--secondary cursor-pointer list-none">Replace recording</summary>
+          <div className="order-last mt-2 w-full"><ReplacementUploader orderId={orderId} item={item} onWorkspace={onWorkspace} /></div>
+        </details>
       </div>
-
-      <div className="mt-3 grid gap-3">
-        <TriageEditor orderId={orderId} item={item} onWorkspace={onWorkspace} />
-        <ReplacementUploader orderId={orderId} item={item} onWorkspace={onWorkspace} />
-      </div>
-
-      <section className="mt-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h4 className="text-sm font-bold text-[var(--admin-page-ink)]">Narration archive</h4>
-            <p className="mt-0.5 text-xs text-[var(--admin-page-muted)]">15 logical spreads</p>
-          </div>
-          <AdminStatusBadge tone={item.narration.every((slot) => slot.track) ? 'success' : 'warning'}>
-            {item.narration.filter((slot) => slot.track).length}/15 verified
-          </AdminStatusBadge>
-        </div>
+      <details className="rounded-xl border border-[var(--admin-card-line)] p-3">
+        <summary className="cursor-pointer text-sm font-bold">Narration tracks · {item.narration.filter(slot => slot.track).length}/15 verified</summary>
         <div className="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {item.narration.map((slot) => (
             <NarrationSlotEditor
@@ -804,20 +770,23 @@ function VoiceItem({
             />
           ))}
         </div>
-      </section>
-      <HardwareAttestation orderId={orderId} item={item} onWorkspace={onWorkspace} />
+      </details>
+      <details className="rounded-xl border border-[var(--admin-card-line)] p-3">
+        <summary className="cursor-pointer text-sm font-bold">Physical audio hardware · {item.hardware.status === 'attested' ? 'Loaded' : 'Awaiting confirmation'}</summary>
+        <HardwareAttestation orderId={orderId} item={item} onWorkspace={onWorkspace} />
+      </details>
     </article>
   )
 }
 
 export function SignatureVoiceWorkspace({
   orderId,
-  orderLabel,
-  onClose,
+  cartItemId,
+  creationId,
 }: {
   orderId: string
-  orderLabel: string
-  onClose: () => void
+  cartItemId: string
+  creationId: string
 }) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [loading, setLoading] = useState(true)
@@ -829,7 +798,7 @@ export function SignatureVoiceWorkspace({
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}/signature-voice`, {
+      const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}/signature-voice?item=${encodeURIComponent(cartItemId)}`, {
         credentials: 'include',
         cache: 'no-store',
       })
@@ -845,24 +814,26 @@ export function SignatureVoiceWorkspace({
     } finally {
       if (requestIntentRef.current === intent) setLoading(false)
     }
-  }, [orderId])
+  }, [orderId, cartItemId])
 
   useEffect(() => {
     void load()
     return () => { requestIntentRef.current += 1 }
   }, [load])
 
+  const matchesBook = (item: { cartItemId: string; creationId: string }) =>
+    item.cartItemId === cartItemId && item.creationId === creationId
+  const selected = workspace?.order.orderId === orderId ? workspace.items.find(matchesBook) : undefined
+  const pending = workspace?.order.orderId === orderId ? workspace.pendingItems?.find(matchesBook) : undefined
+
   return (
-    <AdminFloatingDialog
-      onClose={onClose}
-      eyebrow={orderLabel}
-      title="Signature Voice"
-      subtitle={workspace ? `${workspace.order.customerName}${workspace.order.email ? ` / ${workspace.order.email}` : ''}` : undefined}
-      maxWidthClassName="max-w-5xl"
-      placement="center"
-      backdrop="blur"
-      bodyClassName="p-3 sm:p-5"
-    >
+    <section aria-label="Signature Voice production" className="mt-4 space-y-3 rounded-xl border border-[var(--admin-card-line)] bg-[var(--admin-card)] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 font-bold"><Mic aria-hidden size={18} className="text-[var(--admin-good)]" />Voice recording</h3>
+        {selected && <AdminStatusBadge tone={triageTone(selected.triage.technicalStatus)}>
+          {selected.triage.technicalStatus === 'accepted' ? 'Reviewed' : selected.triage.technicalStatus === 'rejected' ? 'Rerecord required' : 'Needs review'}
+        </AdminStatusBadge>}
+      </div>
       {loading ? (
         <div className="grid min-h-48 place-items-center" role="status">
           <Loader2 className="h-6 w-6 animate-spin text-[var(--admin-accent-dp)]" />
@@ -874,23 +845,15 @@ export function SignatureVoiceWorkspace({
             <RefreshCw className="h-4 w-4" />
           </AdminIconButton>
         </AdminNotice>
-      ) : !workspace || workspace.items.length === 0 && !workspace.pendingItems?.length ? (
-        <AdminEmptyState>No bound Signature Voice source was found.</AdminEmptyState>
+      ) : selected ? (
+        <VoiceItem key={selected.cartItemId} orderId={orderId} item={selected} onWorkspace={setWorkspace} />
+      ) : pending ? (
+        <AdminNotice tone="warning">Waiting for recording ({pending.daysWaiting} days).
+          {pending.snapshotRejectedReason && <span className="block">Preview recording was not inherited ({pending.snapshotRejectedReason}). A new recording is needed.</span>}
+        </AdminNotice>
       ) : (
-        <div className="grid gap-4">
-          {(workspace.pendingItems ?? []).map(item=><AdminNotice key={item.cartItemId} tone="warning"><strong>{item.title}</strong> ? Waiting for recording ({item.daysWaiting} days). Image preparation may continue; Voice delivery is pending.
-            {item.snapshotRejectedReason && <span className="mt-1 block">Preview recording was not inherited ({item.snapshotRejectedReason}). A new recording is needed.</span>}
-          </AdminNotice>)}
-          {workspace.items.map((item) => (
-            <VoiceItem
-              key={item.cartItemId}
-              orderId={orderId}
-              item={item}
-              onWorkspace={setWorkspace}
-            />
-          ))}
-        </div>
+        <AdminEmptyState>No bound Signature Voice source was found for this book.</AdminEmptyState>
       )}
-    </AdminFloatingDialog>
+    </section>
   )
 }

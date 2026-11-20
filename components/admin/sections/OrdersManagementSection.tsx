@@ -26,6 +26,9 @@ function getOrderGroupLabel(group: OrderGroup) {
 export function OrdersManagementSection({ initialOrderId = null }: { initialOrderId?: string | null }) {
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [orderGroup, setOrderGroup] = useState<OrderGroup>('active')
+  const [edition, setEdition] = useState('')
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
+  const [date, setDate] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [committedSearch, setCommittedSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -73,6 +76,8 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
         page: String(targetPage),
         pageSize: String(PAGE_SIZE),
       })
+      if (edition) params.set('edition', edition)
+      if (date) params.set('date', date)
       if (focusOrderId) params.set('orderId', focusOrderId)
       const response = await fetch(`/api/admin/orders?${params.toString()}`, {
         credentials: 'include',
@@ -112,7 +117,7 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
         setLoadingMore(false)
       }
     }
-  }, [])
+  }, [edition, date])
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -177,8 +182,8 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
 
   return (
     <section className="space-y-4">
-      <div className="admin-v2-glass-card relative z-20 p-3 sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="relative z-20">
+        <div className="flex flex-col gap-3 min-[900px]:flex-row min-[900px]:items-center">
           <label className="relative min-w-0 flex-1">
             <span className="sr-only">Search orders</span>
             <Search
@@ -207,7 +212,7 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
             ) : null}
           </label>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div ref={filterMenuRef} className="relative min-w-0 flex-1 lg:flex-none">
               <AdminButton
                 type="button"
@@ -256,6 +261,18 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
               ) : null}
             </div>
 
+            <AdminButton type="button" tone="secondary" aria-expanded={showMobileFilters} aria-controls="order-extra-filters"
+              className="sm:!hidden" onClick={() => setShowMobileFilters(open => !open)}>
+              Filters{date || edition ? ' · ' + (Number(Boolean(date)) + Number(Boolean(edition))) : ''}
+            </AdminButton>
+            <div id="order-extra-filters" className={`order-last w-full flex-wrap gap-2 sm:order-none sm:flex sm:w-auto ${showMobileFilters ? 'flex' : 'hidden'}`}>
+            <input aria-label="Placed date (Hong Kong)" title="Placed date (Hong Kong)" type="date" value={date}
+              className="admin-v2-field min-w-0 rounded-xl px-2 py-2 text-sm" onChange={event => { setFocusedOrderId(null); setDate(event.target.value) }} />
+            <select aria-label="Book type" value={edition} className="admin-v2-field rounded-xl px-2 py-2 text-sm"
+              onChange={event => { setFocusedOrderId(null); setEdition(event.target.value) }}>
+              <option value="">Book type</option><option value="basic">Hardcover</option><option value="supreme">Hardcover + Voice</option>
+            </select>
+            </div>
             <AdminIconButton
               type="button"
               onClick={() => void refresh()}
@@ -290,7 +307,7 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
       </div>
 
       {!hasLoaded && loading ? (
-        <div className="grid gap-3 xl:grid-cols-2" role="status" aria-label="Loading orders">
+        <div className="grid gap-3 min-[900px]:grid-cols-2" role="status" aria-label="Loading orders">
           {Array.from({ length: 4 }, (_, index) => (
             <div key={index} className="admin-v2-order-bubble h-36 animate-pulse" />
           ))}
@@ -304,7 +321,7 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
               : 'No orders found.'}
         </AdminEmptyState>
       ) : (
-        <div className="grid items-start gap-3 xl:grid-cols-2">
+        <div className="grid items-start gap-3 min-[900px]:grid-cols-2">
           {orders.map((order) => (
             <OrderManagementCard
               key={order.order_id}

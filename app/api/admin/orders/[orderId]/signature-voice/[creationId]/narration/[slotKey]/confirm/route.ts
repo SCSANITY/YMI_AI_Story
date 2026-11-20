@@ -66,7 +66,7 @@ async function reconcileNarrationResult(input: {
   newAssetId: string
 }) {
   try {
-    const workspace = await loadAdminSignatureVoiceWorkspace(input.orderId)
+    const workspace = await loadAdminSignatureVoiceWorkspace(input.orderId, input.cartItemId)
     const item = workspace?.items.find((candidate) => candidate.cartItemId === input.cartItemId && candidate.creationId === input.creationId)
     const slot = item?.narration.find((candidate) => candidate.slotKey === input.slotKey)
     if (!workspace || !item || !slot) return { status: 'unknown' as const }
@@ -223,7 +223,7 @@ export async function POST(
   }
 
   try {
-    const workspace = await loadAdminSignatureVoiceWorkspace(orderId)
+    const workspace = await loadAdminSignatureVoiceWorkspace(orderId, input.cartItemId)
     return jsonNoStore({ workspace })
   } catch (loadError) {
     return jsonNoStore(

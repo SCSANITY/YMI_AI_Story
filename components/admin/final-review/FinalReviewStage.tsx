@@ -38,7 +38,7 @@ export function FinalReviewStage({
   onReleasePrint: () => void
 }) {
   return (
-    <div className="min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain">
+    <div className="min-h-0 space-y-4 min-[960px]:h-full min-[960px]:w-64 xl:w-80 min-[960px]:shrink-0 min-[960px]:overflow-y-auto min-[960px]:overscroll-contain">
       <aside className="space-y-4">
         {detail?.finalJob.final_job_id ? (
           <LinkedOrdersButton finalJobId={detail.finalJob.final_job_id} />

@@ -1,3 +1,8 @@
+import { normalizeBookPackageType } from '@/lib/package-pricing'
+import { templateStorageUrl } from '@/lib/book-catalog'
+import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
+import { normalizeShippingAddress } from '@/lib/shipping-address'
+import type { OrderBook } from '@/components/admin/sections/orders/types'
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import {
@@ -23,6 +28,7 @@ const ORDER_SELECT = `
   email,
   created_at,
   checkout_currency,
+  shipping_address,
   shipping_method,
   shipping_zone_code,
   tracking_number,
@@ -52,29 +58,28 @@ export async function GET(request: Request) {
   const rangeStart = (page - 1) * pageSize
   const rangeEnd = rangeStart + pageSize - 1
 
-  let matchingCustomerIds: string[] = []
-  if (search && !focusedOrderId) {
-    const pattern = `%${search}%`
-    const { data: matchingCustomers, error: customerSearchError } = await supabaseAdmin
-      .from('customers')
-      .select('customer_id')
-      .or(`display_name.ilike.${pattern},email.ilike.${pattern}`)
-      .limit(250)
-
-    if (customerSearchError) {
-      return jsonNoStore({ error: customerSearchError.message }, { status: 500 })
-    }
-    matchingCustomerIds = (matchingCustomers ?? [])
-      .map((customer) => String(customer.customer_id || ''))
-      .filter(Boolean)
+  const edition = focusedOrderId ? null : normalizeBookPackageType(url.searchParams.get('edition'))
+  const date = focusedOrderId ? null : url.searchParams.get('date')
+  const dayStart = date ? Date.parse(`${date}T00:00:00+08:00`) : null
+  if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(dayStart))) {
+    return jsonNoStore({ error: 'Invalid placed date' }, { status: 400 })
   }
 
-  let query = supabaseAdmin
-    .from('orders')
-    .select(ORDER_SELECT, { count: 'exact' })
+  const fields = [
+    ORDER_SELECT,
+    edition && 'edition_line:cart_items!orders_checkout_id_fkey!inner()',
+    search && !focusedOrderId && 'search_customer:customers!orders_customer_id_fkey()',
+  ].filter(Boolean).join(',')
+  let query = supabaseAdmin.from('orders').select(fields, { count: 'exact' })
     .order('created_at', { ascending: false })
     .order('order_id', { ascending: false })
 
+  if (edition) {
+    query = query.eq('edition_line.status', 'ordered').eq('edition_line.product_type', 'physical').eq('edition_line.package_type', edition)
+  }
+  if (dayStart !== null) {
+    query = query.gte('created_at', new Date(dayStart).toISOString()).lt('created_at', new Date(dayStart + 86400000).toISOString())
+  }
   if (focusedOrderId) {
     query = query.eq('order_id', focusedOrderId).limit(1)
   } else {
@@ -86,11 +91,17 @@ export async function GET(request: Request) {
     const filters = [
       `display_id.ilike.${pattern}`,
       `email.ilike.${pattern}`,
+      `shipping_address->>firstName.ilike.${pattern}`,
+      `shipping_address->>lastName.ilike.${pattern}`,
     ]
-    if (matchingCustomerIds.length > 0) {
-      filters.push(`customer_id.in.(${matchingCustomerIds.join(',')})`)
+    const tokens = search.split(' ')
+    if (tokens.length >= 2) {
+      const last = tokens.pop()
+      filters.push(`and(shipping_address->>firstName.ilike.%${tokens.join(' ')}%,shipping_address->>lastName.ilike.%${last}%)`)
     }
-    query = query.or(filters.join(','))
+    filters.push('search_customer.not.is.null')
+    query = query.or(`display_name.ilike.${pattern},email.ilike.${pattern}`, { referencedTable: 'search_customer' })
+      .or(filters.join(','))
   }
 
   const { data, error, count } = await query
@@ -99,7 +110,8 @@ export async function GET(request: Request) {
     return jsonNoStore({ error: error.message }, { status: 500 })
   }
 
-  const orders = data ?? []
+  type OrderResult = { order_id: string; customer_id: string | null; order_status: string; shipping_address: unknown }
+  const orders = (data ?? []) as unknown as OrderResult[]
   const orderIds = orders.map((order) => String(order.order_id))
   const customerIds = Array.from(
     new Set(
@@ -127,13 +139,14 @@ export async function GET(request: Request) {
     }
   }
 
+  const bookByItem = new Map<string, Omit<OrderBook, 'finalJobId'>>()
   const cartItemsByOrderId = new Map<string, AdminOrderCartItem[]>()
   // Despite its legacy column name, cart_items.final_job_id stores jobs.job_id.
   const linkedGenerationJobIds = new Set<string>()
   if (orderIds.length > 0) {
     const { data: cartItems, error: cartItemsError } = await supabaseAdmin
       .from('cart_items')
-      .select('cart_item_id, order_id, creation_id, final_job_id, product_type, package_type, quantity')
+      .select('cart_item_id, order_id, creation_id, final_job_id, product_type, package_type, quantity, creations:creations(template_id, customize_snapshot, templates:templates(name,cover_image_path))')
       .in('order_id', orderIds)
       .eq('status', 'ordered')
 
@@ -151,6 +164,16 @@ export async function GET(request: Request) {
         package_type: item.package_type ? String(item.package_type) : null,
         quantity: item.quantity === null ? null : Number(item.quantity),
       }
+      const creation = Array.isArray(item.creations) ? item.creations[0] : item.creations
+      const template = Array.isArray(creation?.templates) ? creation.templates[0] : creation?.templates
+      bookByItem.set(normalizedItem.cart_item_id, {
+        itemId: normalizedItem.cart_item_id,
+        title: resolveFinalJobDisplayTitle({ creations: creation }),
+        edition: item.product_type === 'physical' ? normalizeBookPackageType(item.package_type) : null,
+        physical: item.product_type === 'physical',
+        quantity: Number.isSafeInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
+        cover: templateStorageUrl(template?.cover_image_path) || null,
+      })
       cartItemsByOrderId.set(orderId, [
         ...(cartItemsByOrderId.get(orderId) ?? []),
         normalizedItem,
@@ -161,17 +184,19 @@ export async function GET(request: Request) {
     }
   }
 
+  const reviewByGeneration = new Map<string, { id: string; creation: string | null }>()
   const finalJobs: AdminOrderFinalJob[] = []
   if (linkedGenerationJobIds.size > 0) {
     const { data: jobRows, error: finalJobsError } = await supabaseAdmin
       .from('final_jobs')
-      .select('final_job_id, job_id, review_status, released_at, print_status, print_released_at')
+      .select('final_job_id, job_id, creation_id, review_status, released_at, print_status, print_released_at')
       .in('job_id', Array.from(linkedGenerationJobIds))
 
     if (finalJobsError) {
       return jsonNoStore({ error: finalJobsError.message }, { status: 500 })
     }
     for (const job of jobRows ?? []) {
+      reviewByGeneration.set(job.job_id, { id: job.final_job_id, creation: job.creation_id })
       finalJobs.push({
         final_job_id: String(job.final_job_id),
         job_id: String(job.job_id),
@@ -201,9 +226,14 @@ export async function GET(request: Request) {
         cartItems,
         finalJobs.filter((job) => linkedJobIds.has(job.job_id))
       ),
-      signature_voice_item_count: order.payment_id
-        ? cartItems.filter((item) => item.package_type === 'supreme').length
-        : 0,
+      shipping_address: normalizeShippingAddress(order.shipping_address),
+      books: cartItems.map(item => {
+        const review = item.generation_job_id ? reviewByGeneration.get(item.generation_job_id) : null
+        return {
+          ...bookByItem.get(item.cart_item_id)!,
+          finalJobId: review && item.creation_id && review.creation === item.creation_id ? review.id : null,
+        }
+      }),
     }
   })
 

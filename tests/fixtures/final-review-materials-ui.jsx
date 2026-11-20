@@ -1,3 +1,4 @@
+import { verifyOrderDetails } from './admin-order-details-ui'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { FinalReviewPanel } from '../../components/admin/FinalReviewPanel'
@@ -6,6 +7,7 @@ const books = ['Mira', 'Alex'].map((child, index) => ({
   child,
   final_job_id: 'final-' + index,
   cart_item_id: 'line-' + index,
+  creation_id: 'creation-' + index,
   order_id: 'order-1',
   display_title: child + ' Adventure',
   production_mode: 'manual', purchased_edition: index ? 'supreme' : 'basic',
@@ -28,6 +30,13 @@ function check(condition, message) {
 
 function fixtureResponse(url, method) {
   check(method === 'GET', 'Unexpected method ' + method)
+  if (url.pathname === '/api/admin/orders/order-1/signature-voice') {
+    check(url.searchParams.get('item') === 'line-1', 'Voice read for incorrect edition or line')
+    return { workspace: { order: { orderId: 'order-1' }, items: [], pendingItems: [
+      { cartItemId: 'line-0', creationId: 'creation-0', daysWaiting: 99 },
+      { cartItemId: 'line-1', creationId: 'creation-1', daysWaiting: 2 },
+    ] } }
+  }
   if (url.pathname === api) return { finalJobs: books }
   for (const [index, book] of books.entries()) {
     const detail = api + '/' + book.final_job_id
@@ -127,6 +136,13 @@ async function run() {
       check(tabButton, 'Missing ' + tab + ' tab: ' + document.getElementById('root').innerText.slice(-800) + ' ' + unexpectedRequests.join(', '))
       await click(tabButton)
       check(tabButton.getAttribute('aria-selected') === 'true', 'Wrong selected tab ' + tab)
+      if (tab === 'print' && index === 1) await waitFor(() => document.querySelector('section[aria-label="Signature Voice production"]') || unexpectedRequests.length)
+      const voice = document.querySelector('section[aria-label="Signature Voice production"]')
+      check(Boolean(voice) === (tab === 'print' && index === 1), `Voice panel on ${book.child}/${tab}/${step}: ${Boolean(voice)}. ${unexpectedRequests.join(', ')} ${document.body.innerText.slice(-300)}`)
+      if (voice) {
+        await waitFor(() => voice.textContent.includes('2 days'))
+        check(!voice.textContent.includes('99 days'), 'Sibling recording exposed')
+      }
       const toggle = singleToggle()
       check(toggle.getAttribute('aria-expanded') === 'false', 'New tab should start collapsed')
       await click(toggle)
@@ -209,6 +225,7 @@ async function run() {
     }
   }
   check(!unexpectedRequests.length, unexpectedRequests.join(', '))
+  await verifyOrderDetails(root, check, click, waitFor)
   await act(async () => root.unmount())
 }
 

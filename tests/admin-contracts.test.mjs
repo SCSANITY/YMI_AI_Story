@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 66, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 67, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -298,7 +298,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   )
   assert.match(
     panel,
-    /min-w-0 overflow-x-clip[^"]*xl:h-full xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain/
+    /min-w-0 overflow-x-clip[^"]*min-\[960px\]:h-full min-\[960px\]:min-h-0 min-\[960px\]:flex-1 min-\[960px\]:overflow-y-auto min-\[960px\]:overscroll-contain/
   )
   assert.doesNotMatch(
     panel,
@@ -342,7 +342,7 @@ test('Final Review preserves server authority and stale-response intent guards',
 
   assert.match(
     stage,
-    /min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
+    /min-h-0 space-y-4 min-\[960px\]:h-full min-\[960px\]:w-64 xl:w-80 min-\[960px\]:shrink-0 min-\[960px\]:overflow-y-auto min-\[960px\]:overscroll-contain/
   )
   assert.doesNotMatch(stage, /useFinalReviewStageDock|fixed z-30|stageDockMetrics/)
   assert.match(finalsPage, /xl:h-full[^"]*xl:min-h-0 xl:flex-col/)
@@ -385,7 +385,6 @@ test('Final Review preserves server authority and stale-response intent guards',
 test('Final Review responsive scroll behavior stays breakpoint-scoped', async () => {
   const panel = await read('components/admin/FinalReviewPanel.tsx')
   const jobQueue = await read('components/admin/final-review/JobQueue.tsx')
-  const statCard = await read('components/admin/final-review/StatCard.tsx')
   const stage = await read('components/admin/final-review/FinalReviewStage.tsx')
   const pdfReview = await read('components/admin/final-review/PdfVersionReview.tsx')
   const generalInbox = await read('components/admin/sections/inbox/GeneralInbox.tsx')
@@ -395,22 +394,22 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   const globals = await read('app/globals.css')
 
   // Mobile/tablet owns one vertical review scroll so every page and release action
-  // remains reachable. XL restores the bounded, independently scrolling columns.
+  // remains reachable. The desktop dialog restores the bounded, independently scrolling columns.
   assert.match(panel, /min-h-0 xl:flex-1 xl:overflow-hidden/)
   assert.match(panel, /min-h-0 flex-1 overflow-y-auto overscroll-contain/)
-  assert.match(panel, /xl:flex-row xl:items-stretch/)
+  assert.match(panel, /min-\[960px\]:flex-row min-\[960px\]:items-stretch/)
   assert.match(
     panel,
     /min-h-0 xl:h-full xl:overflow-y-auto xl:overscroll-contain/
   )
   assert.match(
     stage,
-    /min-h-0 space-y-4 xl:h-full xl:w-80 xl:shrink-0 xl:overflow-y-auto xl:overscroll-contain/
+    /min-h-0 space-y-4 min-\[960px\]:h-full min-\[960px\]:w-64 xl:w-80 min-\[960px\]:shrink-0 min-\[960px\]:overflow-y-auto min-\[960px\]:overscroll-contain/
   )
   assert.match(finalsPage, /xl:h-full/)
   assert.match(panel, /lg:sticky lg:top-0 lg:z-10/)
   assert.doesNotMatch(panel, /className="sticky top-0 z-10/)
-  assert.match(panel, /2xl:flex-row 2xl:items-center 2xl:justify-between/)
+  assert.match(panel, /min-\[960px\]:flex-row min-\[960px\]:items-center min-\[960px\]:justify-between/)
   assert.match(panel, /2xl:w-\[16rem\]/)
   assert.doesNotMatch(panel, /gap-3 lg:flex-row/)
   assert.doesNotMatch(panel, /p-0\.5 lg:w-\[16rem\]/)
@@ -421,9 +420,9 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   assert.match(panel, /useState<FinalReviewQueueFilter>\(['"]all['"]\)/)
   assert.match(panel, /filterFinalJobs\(jobs, queueFilter\)/)
   assert.match(panel, /jobs=\{visibleJobs\}/)
-  assert.match(panel, /handleQueueFilterChange\(['"]pdf_review['"]\)/)
-  assert.match(panel, /handleQueueFilterChange\(['"]print_pending['"]\)/)
-  assert.match(panel, /handleQueueFilterChange\(['"]completed['"]\)/)
+  assert.match(panel, /<option value="pdf_review">/)
+  assert.match(panel, /<option value="print_pending">/)
+  assert.match(panel, /<option value="completed">/)
   assert.doesNotMatch(panel, /onClick=\{\(\) => void releaseJob\(true\)\}/)
   // Admin V3: the queue is the calm main view; selecting a job opens the review as a
   // single-active modal that can be suspended (max 3 parked cards) or closed. Only the
@@ -454,11 +453,11 @@ test('Final Review responsive scroll behavior stays breakpoint-scoped', async ()
   // responsive board grid (full-width main view) selected by the variant prop.
   assert.match(jobQueue, /overflow-x-auto/)
   assert.match(jobQueue, /xl:block xl:space-y-3 xl:overflow-visible/)
-  assert.match(jobQueue, /xl:grid xl:grid-cols-2 2xl:grid-cols-3/)
+  assert.match(jobQueue, /min-\[960px\]:grid min-\[960px\]:grid-cols-2 2xl:grid-cols-3/)
   assert.match(jobQueue, /variant\?: 'rail' \| 'board'/)
-  assert.match(jobQueue, /w-\[min\(18rem,84vw\)\] shrink-0[^"]*xl:w-full/)
-  assert.match(statCard, /<button/)
-  assert.match(statCard, /aria-pressed=\{active\}/)
+  assert.match(jobQueue, /w-\[min\(18rem,84vw\)\] shrink-0[^"]*min-\[960px\]:w-full[^"]*xl:w-full/)
+  assert.match(panel, /aria-label="Production stage" value=\{queueFilter\}/)
+  assert.match(panel, /handleQueueFilterChange\(e.target.value/)
   assert.match(finalsPage, /<AdminPageHeader eyebrow="Review" title="Final Review" \/>/)
   assert.match(sidebar, /sticky top-0 z-40[^"]*lg:hidden/)
   assert.match(sidebar, /fixed inset-0 z-\[180\] lg:hidden/)
@@ -644,9 +643,9 @@ test('Orders keeps production linkage read-only while supporting exact Final Rev
   assert.match(floatingDialog, /aria-modal=\{backdrop === ['"]blur['"]/)
   assert.match(finalsPage, /requestedVersion === ['"]print['"] \? ['"]print['"] : ['"]pdf['"]/)
   assert.match(finalReviewPanel, /useState<ReviewVersion>\(initialVersion\)/)
-  assert.match(ordersApi, /select\(ORDER_SELECT, \{ count: ['"]exact['"] \}\)/)
+  assert.match(ordersApi, /edition_line:cart_items!orders_checkout_id_fkey!inner\(\)[\s\S]*select\(fields, \{ count: 'exact' \}/)
   assert.match(ordersApi, /\.range\(rangeStart, rangeEnd\)/)
-  assert.match(ordersApi, /\.select\(['"]cart_item_id, order_id, creation_id, final_job_id, product_type, package_type, quantity['"]\)/)
+  assert.match(ordersApi, /\.select\(['"]cart_item_id, order_id, creation_id, final_job_id, product_type, package_type, quantity, creations:creations\([\s\S]*?\)['"]\)/)
   assert.match(ordersApi, /aggregateAdminOrderProgress/)
   assert.match(ordersApi, /\.in\(['"]job_id['"],\s*Array\.from\(linkedGenerationJobIds\)\)/)
   assert.match(snapshotApi, /\.in\(['"]job_id['"],\s*linkedGenerationJobIds\)/)

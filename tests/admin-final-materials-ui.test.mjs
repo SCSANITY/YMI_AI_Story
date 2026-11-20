@@ -19,7 +19,7 @@ const browser = process.env.CHROME_BIN || [
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
 ].find(candidate => candidate && existsSync(candidate))
 
-test('Final Review tab switches keep one materials panel per book and show cleared copied dedications', {
+test('Orders and Final Review keep book links, delivery events, recordings and dedication scoped during navigation', {
   skip: browser ? false : 'Set CHROME_BIN to run the browser regression',
 }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'ymi-final-materials-'))
@@ -45,7 +45,7 @@ test('Final Review tab switches keep one materials panel per book and show clear
       res.setHeader('cache-control', 'private, no-store')
       if (url.pathname === '/') {
         res.setHeader('content-type', 'text/html')
-        res.end('<!doctype html><meta charset="utf-8"><div id="root"></div><pre id="result">pending</pre><script src="/fixture.js"></script><img hidden src="/wait-for-test">')
+        res.end('<!doctype html><meta charset="utf-8"><div id="root"></div><pre id="result">pending</pre><script>const reportError=fetch.bind(window);onerror=(msg)=>{document.getElementById("result").textContent=encodeURIComponent(msg);reportError("/test-finished")}</script><script src="/fixture.js"></script><img hidden src="/wait-for-test">')
       } else if (url.pathname === '/wait-for-test') {
         // Let --dump-dom wait for real HTTP image loads and the completed React assertions.
         void completion.promise.then(() => res.writeHead(204).end())

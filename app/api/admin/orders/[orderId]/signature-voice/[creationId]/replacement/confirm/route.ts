@@ -64,7 +64,7 @@ async function reconcileReplacementResult(input: {
   newAssetId: string
 }) {
   try {
-    const workspace = await loadAdminSignatureVoiceWorkspace(input.orderId)
+    const workspace = await loadAdminSignatureVoiceWorkspace(input.orderId, input.cartItemId)
     const item = workspace?.items.find((candidate) => candidate.cartItemId === input.cartItemId && candidate.creationId === input.creationId)
     if (!workspace || !item) return { status: 'unknown' as const }
     if (item.source.assetId === input.newAssetId) {
@@ -212,7 +212,7 @@ export async function POST(
   }
 
   try {
-    const workspace = await loadAdminSignatureVoiceWorkspace(orderId)
+    const workspace = await loadAdminSignatureVoiceWorkspace(orderId, input.cartItemId)
     return jsonNoStore({ workspace })
   } catch (loadError) {
     return jsonNoStore(

@@ -7,9 +7,9 @@ import { FinalBookBadges } from '@/components/admin/final-review/FinalBookBadges
 import { JobQueue } from '@/components/admin/final-review/JobQueue'
 import { PdfVersionReview } from '@/components/admin/final-review/PdfVersionReview'
 import { ProductionMaterialsPanel } from '@/components/admin/final-review/ProductionMaterials'
+import { SignatureVoiceWorkspace } from '@/components/admin/sections/orders/SignatureVoiceWorkspace'
 import { PrintVersionReview } from '@/components/admin/final-review/PrintVersionReview'
 import { pagePreviewUrl } from '@/components/admin/final-review/reviewUi'
-import { StatCard } from '@/components/admin/final-review/StatCard'
 import type {
   FinalReviewQueueFilter,
   ReviewPendingAction,
@@ -167,12 +167,23 @@ export function FinalReviewPanel({
   const [printUploadProgressByJob, setPrintUploadProgressByJob] = useState<PrintUploadProgressState>({})
   const [printUploadErrorByJob, setPrintUploadErrorByJob] = useState<PrintUploadErrorState>({})
   const [activeVersion, setActiveVersion] = useState<ReviewVersion>(initialVersion)
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [editionFilter, setEditionFilter] = useState('')
+  const [queuePage, setQueuePage] = useState(1)
+  const [queuePages, setQueuePages] = useState(1)
+  const [queueTotal, setQueueTotal] = useState(0)
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setSearch(searchInput.trim()); setQueuePage(1) }, 300)
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
   const [queueFilter, setQueueFilter] = useState<FinalReviewQueueFilter>('all')
   const [reviewFocus, setReviewFocus] = useState(false)
   const [isReviewOpen, setIsReviewOpen] = useState(false)
   const [suspended, setSuspended] = useState<
-    Array<{ finalJobId: string; displayId: string; title: string }>
+    Array<{ finalJobId: string; displayId: string; title: string; job: FinalJobSummary }>
   >([])
+  const [resumedJob, setResumedJob] = useState<FinalJobSummary | null>(null)
   const [suspendNotice, setSuspendNotice] = useState<string | null>(null)
   const SUSPEND_LIMIT = 3
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -192,9 +203,12 @@ export function FinalReviewPanel({
   selectedJobIdRef.current = selectedJobId
   const queueFilterRef = useRef(queueFilter)
   queueFilterRef.current = queueFilter
+  const openJobIdRef = useRef<string | null>(null)
+  openJobIdRef.current = isReviewOpen ? selectedJobId : null
   const selectedJob = useMemo(
-    () => jobs.find((job) => job.final_job_id === selectedJobId) ?? null,
-    [jobs, selectedJobId]
+    () => jobs.find((job) => job.final_job_id === selectedJobId) ??
+      (resumedJob?.final_job_id === selectedJobId ? resumedJob : null),
+    [jobs, selectedJobId, resumedJob]
   )
   const busyAction = selectedJobId ? busyActionByJob[selectedJobId] ?? null : null
   const showOverview = !reviewFocus
@@ -348,6 +362,10 @@ export function FinalReviewPanel({
     try {
       const focusedJobId = initialFinalJobIdRef.current
       const params = new URLSearchParams()
+      if (queuePage > 1) params.set('page', String(queuePage))
+      if (queueFilter !== 'all') params.set('stage', queueFilter)
+      if (editionFilter) params.set('edition', editionFilter)
+      if (search) params.set('search', search)
       if (focusedJobId) params.set('jobId', focusedJobId)
       const response = await fetch(`/api/admin/final-jobs${params.size ? `?${params.toString()}` : ''}`, {
         credentials: 'include',
@@ -355,7 +373,7 @@ export function FinalReviewPanel({
         signal: controller.signal,
       })
       const data = (await response.json().catch(() => ({}))) as ApiResponse<{
-        finalJobs?: FinalJobSummary[]
+        finalJobs?: FinalJobSummary[]; total?: number; pageSize?: number
       }>
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load final jobs')
@@ -367,6 +385,11 @@ export function FinalReviewPanel({
         ? nextJobs.find((job) => job.final_job_id === focusedJobId)
         : null
       const visibleJobs = filterFinalJobs(nextJobs, queueFilterRef.current)
+      const total = data.total ?? nextJobs.length
+      const pages = Math.max(1, Math.ceil(total / (data.pageSize || 40)))
+      setQueueTotal(total)
+      setQueuePages(pages)
+      if (queuePage > pages) setQueuePage(pages)
       setJobs(nextJobs)
       setError('')
 
@@ -379,6 +402,7 @@ export function FinalReviewPanel({
       }
 
       setSelectedJobId((current) => {
+        if (current && openJobIdRef.current === current) return current
         if (
           preserveSelection &&
           current &&
@@ -396,7 +420,7 @@ export function FinalReviewPanel({
         setLoadingJobs(false)
       }
     }
-  }, [])
+  }, [queuePage, queueFilter, editionFilter, search])
 
   const loadDetail = useCallback(async (finalJobId: string, showLoading = true) => {
     detailAbortControllerRef.current?.abort()
@@ -540,16 +564,21 @@ export function FinalReviewPanel({
     void loadJobs(false)
     return () => {
       jobsRequestIntentRef.current += 1
+      jobsAbortControllerRef.current?.abort()
+    }
+  }, [loadJobs])
+
+  useEffect(() => {
+    return () => {
       detailRequestIntentRef.current += 1
       signedUrlRequestIntentRef.current += 1
-      jobsAbortControllerRef.current?.abort()
       detailAbortControllerRef.current?.abort()
       signedUrlAbortControllerRef.current?.abort()
       if (signedUrlRefreshTimerRef.current) {
         clearTimeout(signedUrlRefreshTimerRef.current)
       }
     }
-  }, [loadJobs])
+  }, [])
 
   useEffect(() => {
     if (!selectedJobId) {
@@ -579,6 +608,7 @@ export function FinalReviewPanel({
     (nextFilter: FinalReviewQueueFilter) => {
       const visibleJobs = filterFinalJobs(jobs, nextFilter)
       queueFilterRef.current = nextFilter
+      setQueuePage(1)
       setQueueFilter(nextFilter)
       uploadTargetRef.current = null
       setSelectedJobId((current) => {
@@ -1208,25 +1238,17 @@ export function FinalReviewPanel({
         ? 'The current printer PDF is not in a verified state.'
         : 'Release and lock this verified printer PDF.'
 
-  const queueCounts = useMemo(
-    () => ({
-      pdf_review: jobs.filter((job) => jobMatchesQueueFilter(job, 'pdf_review')).length,
-      print_pending: jobs.filter((job) => jobMatchesQueueFilter(job, 'print_pending')).length,
-      completed: jobs.filter((job) => jobMatchesQueueFilter(job, 'completed')).length,
-    }),
-    [jobs]
-  )
   const visibleJobs = useMemo(() => filterFinalJobs(jobs, queueFilter), [jobs, queueFilter])
 
   useEffect(() => {
     const selectionIsVisible =
       selectedJobId !== null &&
       visibleJobs.some((job) => job.final_job_id === selectedJobId)
-    if (selectionIsVisible || (selectedJobId === null && visibleJobs.length === 0)) return
+    if (isReviewOpen || selectionIsVisible || (selectedJobId === null && visibleJobs.length === 0)) return
 
     uploadTargetRef.current = null
     setSelectedJobId(pickDefaultJob(visibleJobs))
-  }, [selectedJobId, visibleJobs])
+  }, [isReviewOpen, selectedJobId, visibleJobs])
 
   // Queue-first workspace: selecting a job opens the review as a modal; it can be
   // suspended to a parked card (max 3) or closed. Single active detail only — the
@@ -1234,12 +1256,13 @@ export function FinalReviewPanel({
   // lightweight references that re-open (and re-load) their job on click.
   const openReview = useCallback(
     (finalJobId: string) => {
+      setResumedJob(suspended.find(card => card.finalJobId === finalJobId)?.job ?? jobs.find(job => job.final_job_id === finalJobId) ?? null)
       handleSelectJob(finalJobId)
       setIsReviewOpen(true)
       setSuspendNotice(null)
       setSuspended((current) => current.filter((card) => card.finalJobId !== finalJobId))
     },
-    [handleSelectJob]
+    [handleSelectJob, jobs, suspended]
   )
   const closeReview = useCallback(() => {
     setIsReviewOpen(false)
@@ -1249,6 +1272,7 @@ export function FinalReviewPanel({
   const suspendReview = useCallback(() => {
     if (!selectedJob) return
     const card = {
+      job: selectedJob,
       finalJobId: selectedJob.final_job_id,
       displayId: selectedJob.orders?.display_id || selectedJob.order_id,
       title: selectedJob.display_title,
@@ -1279,50 +1303,22 @@ export function FinalReviewPanel({
       {showOverview ? (
       <section className="admin-v2-panel relative p-2.5">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <div className="flex shrink-0 items-baseline gap-2 pr-12 lg:block lg:w-32 lg:pr-0">
-            <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--admin-page-ink)]">
-              Queue Overview
-            </h2>
-            <span className="text-[10px] text-[var(--admin-page-muted)]">
-              {visibleJobs.length}/{jobs.length} shown
-            </span>
+          <input type="search" aria-label="Search final jobs" placeholder="Search order, book or child" value={searchInput}
+            onChange={e => setSearchInput(e.target.value)} className="admin-v2-field min-w-0 flex-1 rounded-xl px-3 py-2 text-sm" />
+          <div className="flex flex-wrap items-center gap-2 pr-10 lg:pr-0">
+            <select aria-label="Production stage" value={queueFilter} onChange={e => handleQueueFilterChange(e.target.value as FinalReviewQueueFilter)} className="admin-v2-field rounded-xl px-2 py-2 text-sm">
+              <option value="all">All jobs</option><option value="pdf_review">Needs PDF review</option><option value="print_pending">Print pending</option><option value="completed">Completed</option>
+            </select>
+            <select aria-label="Book type" value={editionFilter} onChange={e => { setQueuePage(1); setEditionFilter(e.target.value) }} className="admin-v2-field rounded-xl px-2 py-2 text-sm">
+              <option value="">Book type</option><option value="basic">Hardcover</option><option value="supreme">Hardcover + Voice</option>
+            </select>
+            <small>{queueTotal} jobs</small>
+            {queuePages > 1 && <nav aria-label="Job queue pages" className="flex items-center gap-2 text-sm">
+              <button aria-label="Previous page" disabled={queuePage === 1} onClick={() => setQueuePage(queuePage - 1)}>←</button>
+              {queuePage} / {queuePages}
+              <button aria-label="Next page" disabled={queuePage >= queuePages} onClick={() => setQueuePage(queuePage + 1)}>→</button>
+            </nav>}
           </div>
-
-          <div
-            role="group"
-            className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 lg:pb-0"
-            aria-label="Filter final review jobs by status"
-          >
-            <StatCard
-              label="All Jobs"
-              value={jobs.length}
-              tone="neutral"
-              active={queueFilter === 'all'}
-              onSelect={() => handleQueueFilterChange('all')}
-            />
-            <StatCard
-              label="Needs PDF Review"
-              value={queueCounts.pdf_review}
-              tone="sky"
-              active={queueFilter === 'pdf_review'}
-              onSelect={() => handleQueueFilterChange('pdf_review')}
-            />
-            <StatCard
-              label="Print Pending"
-              value={queueCounts.print_pending}
-              tone="amber"
-              active={queueFilter === 'print_pending'}
-              onSelect={() => handleQueueFilterChange('print_pending')}
-            />
-            <StatCard
-              label="Fully Completed"
-              value={queueCounts.completed}
-              tone="emerald"
-              active={queueFilter === 'completed'}
-              onSelect={() => handleQueueFilterChange('completed')}
-            />
-          </div>
-
           <div className="absolute right-2.5 top-2.5 flex shrink-0 items-center justify-end lg:static">
             <AdminIconButton
               type="button"
@@ -1448,13 +1444,13 @@ export function FinalReviewPanel({
                 </button>
               </div>
             ) : null}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-3 xl:flex xl:flex-row xl:items-stretch xl:gap-3 xl:overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-3 min-[960px]:flex min-[960px]:flex-row min-[960px]:items-stretch min-[960px]:gap-3 min-[960px]:overflow-hidden">
 
         {/* ── Center panel: version review ── */}
-        <section className="admin-v2-review-canvas admin-review-scrollbar min-w-0 overflow-x-clip rounded-lg xl:h-full xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
+        <section className="admin-v2-review-canvas admin-review-scrollbar min-w-0 overflow-x-clip rounded-lg min-[960px]:h-full min-[960px]:min-h-0 min-[960px]:flex-1 min-[960px]:overflow-y-auto min-[960px]:overscroll-contain">
           {/* Sticky version header */}
           <div className="border-b border-[var(--admin-line)] bg-[var(--admin-panel)]/92 px-3.5 py-3 backdrop-blur-xl lg:sticky lg:top-0 lg:z-10">
-            <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">
+            <div className="flex flex-col gap-2 min-[960px]:flex-row min-[960px]:items-center min-[960px]:justify-between">
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)]">
                   {reviewFocus
@@ -1475,8 +1471,8 @@ export function FinalReviewPanel({
                   </p>
                 ) : null}
               </div>
-              <div className="flex w-full shrink-0 items-center gap-2 2xl:w-auto">
-                <div className="flex min-w-0 flex-1 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-0.5 2xl:w-[16rem] 2xl:flex-none" role="tablist" aria-label="Final review version">
+              <div className="flex w-full shrink-0 items-center gap-2 min-[960px]:w-auto">
+                <div className="flex min-w-0 flex-1 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-0.5 min-[960px]:w-40 2xl:w-[16rem] min-[960px]:flex-none" role="tablist" aria-label="Final review version">
                   <button
                     id="final-pdf-tab"
                     type="button"
@@ -1532,6 +1528,11 @@ export function FinalReviewPanel({
                 line={materialLine}
               />
             )}
+            {activeVersion === 'print' && edition === 'supreme' && activeDetail?.finalJob.creation_id && activeDetail.finalJob.cart_item_id && (
+              <SignatureVoiceWorkspace key={`voice-${activeDetail.finalJob.final_job_id}`}
+                orderId={activeDetail.finalJob.order_id} cartItemId={activeDetail.finalJob.cart_item_id}
+                creationId={activeDetail.finalJob.creation_id} />
+            )}
             {activeVersion === 'pdf' ? (
               <PdfVersionReview
                 key={selectedJobId ?? 'no-final-job'}
@@ -1577,8 +1578,8 @@ export function FinalReviewPanel({
 
         {!reviewFocus ? (
           <div
-            className={`relative min-h-0 xl:h-full xl:shrink-0 ${
-              showStage ? 'pt-3 xl:w-80 xl:pt-0' : 'h-8 xl:w-8'
+            className={`relative min-h-0 min-[960px]:h-full min-[960px]:shrink-0 ${
+              showStage ? 'pt-3 min-[960px]:w-64 xl:w-80 min-[960px]:pt-0' : 'h-8 min-[960px]:w-8'
             }`}
           >
           {showStage ? (
