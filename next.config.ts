@@ -10,6 +10,16 @@ const supabaseImageHost = (() => {
   }
 })();
 
+// A second exact Storage hostname keeps previously issued image URLs usable
+// when the public Supabase endpoint changes or the previous build is restored.
+const storageAlias = process.env.SUPABASE_STORAGE_IMAGE_ALIAS_HOST;
+if (storageAlias && !/^[a-z0-9]+(?:-[a-z0-9]+)*\.supabase\.co$/.test(storageAlias)) {
+  throw new Error("SUPABASE_STORAGE_IMAGE_ALIAS_HOST must be an exact Supabase hostname");
+}
+const storageImageHosts = supabaseImageHost
+  ? [...new Set([supabaseImageHost, ...(storageAlias ? [storageAlias] : [])])]
+  : [];
+
 const nextConfig: NextConfig = {
   async headers() {
     const privateApiHeaders = [
@@ -78,20 +88,10 @@ const nextConfig: NextConfig = {
     ]
   },
   images: {
-    remotePatterns: supabaseImageHost
-      ? [
-          {
-            protocol: 'https',
-            hostname: supabaseImageHost,
-            pathname: '/storage/v1/object/public/**',
-          },
-          {
-            protocol: 'https',
-            hostname: supabaseImageHost,
-            pathname: '/storage/v1/object/sign/**',
-          },
-        ]
-      : [],
+    remotePatterns: storageImageHosts.flatMap((hostname) => [
+      { protocol: 'https' as const, hostname, pathname: '/storage/v1/object/public/**' },
+      { protocol: 'https' as const, hostname, pathname: '/storage/v1/object/sign/**' },
+    ]),
   },
 };
 
