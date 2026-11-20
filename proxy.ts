@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { CURRENCY_GEO_COOKIE } from '@/lib/currency-geo'
 import { configuredSupabasePublicKey } from '@/lib/supabase-public-key'
+import { sessionCookieOptions } from '@/lib/supabase-session-cookie'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const BYPASS_COOKIE = 'ymi_maintenance_bypass'
@@ -85,6 +86,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const supabase = createServerClient(supabaseUrl, supabasePublicKey.value, {
+    cookieOptions: sessionCookieOptions,
     cookies: {
       getAll() {
         return request.cookies.getAll()

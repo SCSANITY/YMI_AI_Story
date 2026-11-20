@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { configuredSupabasePublicKey } from '@/lib/supabase-public-key'
+import { sessionCookieOptions } from '@/lib/supabase-session-cookie'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 
@@ -9,6 +10,7 @@ export const createServerSupabase = async () => {
   const supabasePublicKey = configuredSupabasePublicKey()
 
   return createServerClient(supabaseUrl, supabasePublicKey.value, {
+    cookieOptions: sessionCookieOptions,
     cookies: {
       getAll() {
         return cookieStore.getAll()

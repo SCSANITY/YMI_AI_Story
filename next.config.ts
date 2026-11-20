@@ -10,17 +10,27 @@ const supabaseImageHost = (() => {
   }
 })();
 
-// A second exact Storage hostname keeps previously issued image URLs usable
-// when the public Supabase endpoint changes or the previous build is restored.
-const storageAlias = process.env.SUPABASE_STORAGE_IMAGE_ALIAS_HOST;
-if (storageAlias && !/^[a-z0-9]+(?:-[a-z0-9]+)*\.supabase\.co$/.test(storageAlias)) {
-  throw new Error("SUPABASE_STORAGE_IMAGE_ALIAS_HOST must be an exact Supabase hostname");
+const vanityHost = process.env.SUPABASE_AUTH_VANITY_HOST;
+let storageImageHosts = supabaseImageHost ? [supabaseImageHost] : [];
+let sessionCookieName = '';
+if (vanityHost) {
+  const hostPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*\.supabase\.co$/;
+  const original = /^https:\/\/([a-z0-9]{20})\.supabase\.co\/?$/.exec(process.env.SUPABASE_URL ?? '');
+  if (!original || !hostPattern.test(vanityHost)) {
+    throw new Error('Vanity builds require the original Supabase project URL and an exact vanity hostname');
+  }
+  const originalHost = `${original[1]}.supabase.co`;
+  storageImageHosts = [originalHost, vanityHost];
+  const publicOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
+  if (publicOrigin !== `https://${originalHost}` && publicOrigin !== `https://${vanityHost}`) {
+    throw new Error('Public Supabase URL must match the original or vanity HTTPS origin');
+  }
+  // Using the same cookie slot prevents rollback from reviving an earlier account on a shared browser.
+  sessionCookieName = `sb-${original[1]}-auth-token`;
 }
-const storageImageHosts = supabaseImageHost
-  ? [...new Set([supabaseImageHost, ...(storageAlias ? [storageAlias] : [])])]
-  : [];
 
 const nextConfig: NextConfig = {
+  env: { NEXT_PUBLIC_SUPABASE_SESSION_COOKIE_NAME: sessionCookieName },
   async headers() {
     const privateApiHeaders = [
       '/api/account/:path*',
