@@ -45,6 +45,7 @@ function setup({ status, context, failsAfterAccept = false } = {}) {
   ]
   const stub = new Proxy({}, { get: () => () => null })
   const send = loadUi('src/lib/email.tsx', {
+    '@/lib/release-template-snapshot': { releaseRenderNote:()=>assert.fail('Unrelated email invoked proof composer') },
     ...Object.fromEntries(templates.map(name => ['@/components/emails/' + name, stub])),
     '@react-email/components': reactEmail,
     'react/jsx-runtime': reactJsx,

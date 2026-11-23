@@ -267,6 +267,7 @@ test('managed sender reuses the customer/week key on replay and keeps the unsubs
     'GeneralMailLetterEmail',
   ]
   const send = loadUi('src/lib/email.tsx', {
+    '@/lib/release-template-snapshot': { releaseRenderNote:()=>assert.fail('Unrelated email invoked proof composer') },
     ...Object.fromEntries(templates.map((name) => ['@/components/emails/' + name, component])),
     '@react-email/components': component,
     '@/lib/order-materials-client': {},

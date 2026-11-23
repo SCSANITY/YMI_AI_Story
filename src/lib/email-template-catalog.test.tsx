@@ -1,3 +1,4 @@
+import { releaseRenderNote,releaseTemplateSnapshot } from '@/lib/release-template-snapshot'
 import * as React from 'react'
 import { render } from '@react-email/render'
 import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
@@ -167,4 +168,14 @@ test('confirmed proof body renders changed paragraphs and resolves only the real
   assert.match(print,/Corrected second paragraph/)
   assert.throws(()=>validatedReleaseNote(body('pdf','https://untrusted.example'),'pdf'),/only this book/)
   assert.throws(()=>validatedReleaseNote(body('print'),'pdf'),/Keep the order/)
+})
+
+test('unmodified proof keeps branded sections; a changed template uses the frozen customer copy',async()=>{
+  const ctx={kind:'pdf' as const,firstName:'Mira',edition:'basic',orderId:'controlled-a'}
+  const first=await releaseTemplateSnapshot(ctx)
+  const note=encodeReleaseBody({version:1,blocks:[{type:'paragraph',content:[{text:'Saved copy'}]}]},first.fingerprint)
+  assert.equal(await releaseRenderNote(note,ctx),undefined)
+  assert.equal(await releaseRenderNote(note,{...ctx,edition:'supreme'}),note)
+  assert.equal(await releaseRenderNote(note,{...ctx,firstName:'Alex'}),note)
+  assert.match(first.html,/BEFORE WE PRINT/)
 })

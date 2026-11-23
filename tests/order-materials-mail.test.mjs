@@ -13,6 +13,7 @@ function mailHarness(skip=false,voiceReady=false,names=['Alston']) {
   const events=[],sent=[],reads=[],logs=[],fixtureModule={exports:{}}
   const model='a'.repeat(43)
   const injections={
+    '@/lib/release-template-snapshot':{releaseRenderNote:async note=>note},
     react:React,'@/lib/order-materials-client':helperModule.exports,
     resend:{Resend:class {emails={send:async (value,options)=>{sent.push({...value,options});return {data:{id:'synthetic-message'}}}}}},
     '@/components/emails/PrintReleasedEmail':{PRINT_RELEASED_SUBJECT:'Your YMI Story Book Is Approved!',PrintReleasedEmail:()=>null},
