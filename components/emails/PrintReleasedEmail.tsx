@@ -1,3 +1,5 @@
+import { readReleaseBody } from '@/lib/release-mail-body'
+import { EditedReleaseBody } from './EditedReleaseBody'
 import * as React from 'react'
 import { Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, emailAsset, emailButtons, emailTheme } from './EmailLayout'
@@ -6,6 +8,7 @@ import { absoluteUrl } from '@/lib/seo'
 export const PRINT_RELEASED_SUBJECT = 'Your YMI Story Book Is Approved!'
 
 type PrintReleasedEmailProps = {
+  editorSource?: boolean
   personalNote?: string
   firstName?: string | null
   bookTitle: string
@@ -20,10 +23,13 @@ const paragraph: React.CSSProperties = {
   lineHeight: 1.6,
 }
 
-export function PrintReleasedEmail({ personalNote, firstName, bookTitle, orderId }: PrintReleasedEmailProps) {
-  const orderUrl = absoluteUrl(`/orders/${encodeURIComponent(orderId)}`)
+export function PrintReleasedEmail({ editorSource, personalNote, firstName, bookTitle, orderId }: PrintReleasedEmailProps) {
+  const orderUrl = editorSource ? "#order" : absoluteUrl(`/orders/${encodeURIComponent(orderId)}`)
+  const editedBody = readReleaseBody(personalNote,'print')
   return (
     <EmailLayout title={PRINT_RELEASED_SUBJECT} previewText={`${bookTitle} is now going into production.`}>
+      <div data-release-body={editorSource ? "source" : undefined}>
+      {editedBody ? <EditedReleaseBody document={editedBody} links={{order:orderUrl}} /> : <>
       <Section style={{ maxWidth: '560px', margin: '0 auto' }}>
         <Text style={paragraph}>Hi {firstName?.trim() || 'there'},</Text>
         <Text style={{ ...paragraph, whiteSpace: 'pre-line' }}>
@@ -49,6 +55,8 @@ export function PrintReleasedEmail({ personalNote, firstName, bookTitle, orderId
           </tr></tbody>
         </table>
       </Section>
+      </>}
+      </div>
     </EmailLayout>
   )
 }

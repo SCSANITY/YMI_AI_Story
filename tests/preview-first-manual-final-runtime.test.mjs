@@ -33,7 +33,10 @@ function loadRerun(productionMode, authorized = true) {
     }
     return query
   } }
+  const revision = { exports:{} }
+  vm.runInNewContext(compile('../src/lib/proof-edit-revision.ts'),{module:revision,exports:revision.exports})
   const dependencies = {
+    '@/lib/proof-edit-revision':revision.exports,
     'next/server': { NextResponse: { json: Response.json } },
     '@/lib/adminAuth': { requireAdminCustomer: async () => authorized ? { customer_id: 'admin' } : null },
     '@/lib/supabaseAdmin': { supabaseAdmin },

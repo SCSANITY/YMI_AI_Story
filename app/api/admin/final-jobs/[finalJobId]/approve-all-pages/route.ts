@@ -1,3 +1,4 @@
+import { proofEditRevision } from '@/lib/proof-edit-revision'
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { isFinalJobReleased } from '@/lib/final-job-release'
@@ -36,14 +37,14 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, cart_item_id, review_status, proof_revision, proof_draft_open, released_at, total_pages')
+    .select('final_job_id, job_id, order_id, cart_item_id, review_status, proof_draft_sequence, proof_revision, proof_draft_open, released_at, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob?.order_id) {
     return NextResponse.json({ error: finalJobError?.message || 'Final job not found' }, { status: 404 })
   }
   const editRevision = Number(request.headers?.get('x-proof-revision') ?? 1)
-  if (editRevision !== (finalJob.proof_revision ?? 1) + (finalJob.proof_draft_open ? 1 : 0)) {
+  if (editRevision !== proofEditRevision(finalJob)) {
     return Response.json({ error: 'Proof revision changed. Refresh this book.' }, { status: 409 })
   }
   if ((isFinalJobReleased(finalJob) && !finalJob.proof_draft_open)) {

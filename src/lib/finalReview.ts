@@ -1,3 +1,4 @@
+import { proofEditRevision } from '@/lib/proof-edit-revision'
 import { FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, sendOrderDeliveryEmail } from '@/lib/email'
 import {
   assertFinalOutputAssetsReleasable,
@@ -32,6 +33,7 @@ const FINAL_REVIEW_ASSET_TTL_SECONDS = 60 * 60 * 24
 export type FinalReleaseMode = 'manual' | 'job_auto' | 'story_auto' | 'global_auto'
 
 export type FinalJobSummary = {
+  proof_draft_sequence?: number
   proof_revision?: number
   proof_draft_open?: boolean
   purchased_edition?: import('@/types').BookPackageType | null
@@ -182,6 +184,7 @@ export async function releaseFinalJob(params: {
         total_pages,
         approved_pages,
         release_mode,
+        proof_draft_sequence,
         proof_revision,
         proof_draft_open,
         pdf_path,
@@ -218,7 +221,7 @@ export async function releaseFinalJob(params: {
       ? (linkedJob.output_assets as Record<string, unknown>)
       : {}
   const alreadyPdfReleased = isFinalJobReleased(finalJob) && !finalJob.proof_draft_open
-  const revision = (finalJob.proof_revision ?? 1) + (finalJob.proof_draft_open ? 1 : 0)
+  const revision = proofEditRevision(finalJob)
   if ((params.expectedRevision ?? 1) !== revision) {
     throw new FinalArtifactConflict('This proof revision has changed. Refresh before release.')
   }

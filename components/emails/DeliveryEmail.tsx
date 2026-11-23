@@ -1,3 +1,5 @@
+import { readReleaseBody } from '@/lib/release-mail-body'
+import { EditedReleaseBody } from './EditedReleaseBody'
 import * as React from 'react'
 import { Heading, Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, SignoffStamp, emailAsset, emailTheme, emailButtons } from './EmailLayout'
@@ -6,6 +8,7 @@ import { OrderAccessNotice } from './OrderAccessNotice'
 export const PDF_DELIVERY_PREVIEW_SUBJECT = 'Important Order Update: Your YMI Story Preview Is Ready'
 
 type DeliveryEmailProps = {
+  editorSource?: boolean
   personalNote?: string
   orderUrl: string
   displayId?: string | null
@@ -19,16 +22,19 @@ type DeliveryEmailProps = {
 }
 
 export function DeliveryEmail({
-  personalNote, orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl, voiceMaterialsUrl, privacyUrl,
+  editorSource, personalNote, orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl, voiceMaterialsUrl, privacyUrl,
 }: DeliveryEmailProps) {
   const label = displayId || orderId
   const name = firstName?.trim()
+  const editedBody = readReleaseBody(personalNote,'pdf')
   return (
     <EmailLayout
       previewText="Your personalised PDF is ready. Please check the details before printing."
       title={voiceUpgradeUrl || voiceMaterialsUrl ? 'Your YMI Story Preview Is Ready' : 'Your Book Is Ready'}
       subtitle="Your personalised storybook is ready for a final look before printing."
     >
+      <div data-release-body={editorSource ? "source" : undefined}>
+      {editedBody ? <EditedReleaseBody document={editedBody} pdf cover={coverImageUrl} links={{pdf:downloadUrl,order:orderUrl,materials:voiceMaterialsUrl,privacy:privacyUrl,upgrade:voiceUpgradeUrl}} /> : <>
       {label ? (
         <Text style={styles.orderLine}>
           Order&nbsp;{label}
@@ -136,6 +142,8 @@ export function DeliveryEmail({
         You can always re-download your book from your order page.
         {downloadUrl ? ' This download link is unique to your order — please keep it private.' : ''}
       </Text>
+      </>}
+      </div>
     </EmailLayout>
   )
 }

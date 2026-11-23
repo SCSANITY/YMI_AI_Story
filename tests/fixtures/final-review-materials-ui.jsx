@@ -234,22 +234,28 @@ async function run() {
     check(url.endsWith('/mail-preview'), 'Opening the dialog must not release a book')
     const body = JSON.parse(options.body)
     previews.push(body)
-    return Response.json({ html:'<p>Fixture</p>', defaultIntro:'Sample intro', recipient:'test@example.invalid' })
+    return Response.json({ html:'<div data-release-body="source"><p>Sample intro</p><p>Editable second paragraph</p><p><a href="#order">View order</a></p>'+(body.kind==='pdf'?'<p><a href="#pdf">Download</a></p>':'')+'</div>', cover:'/cover.png',seal:'/seal.png',subject:'Preview',title:'Fixture book', recipient:'test@example.invalid' })
   }
   for (const kind of ['pdf','print']) {
     await act(async () => root.render(<ReleaseMailConfirmation key={kind} job="book-a" kind={kind} revision={2}
       onCancel={() => { cancels++ }} onConfirm={note => confirmations.push(note)} />))
     const dialog = document.querySelector('dialog[open]')
     await waitFor(() => dialog?.querySelector('iframe'))
-    const buttons = dialog.querySelectorAll('button')
+    const buttons = dialog.querySelectorAll('footer button')
     if (kind === 'pdf') {
       await click(buttons[0])
       check(cancels === 1 && !confirmations.length, 'Cancelling must not confirm release')
     } else {
       check(buttons[1].disabled, 'Print requires checking replies')
       await click(dialog.querySelector('input[type=checkbox]'))
+      const editor=dialog.querySelector('[contenteditable=true]')
+      editor.focus()
+      const range=document.createRange()
+      range.selectNodeContents(editor.querySelectorAll('p')[1]);const selection=getSelection();selection.removeAllRanges();selection.addRange(range)
+      await act(async()=>{document.execCommand('insertText',false,'Changed middle paragraph')})
+      await waitFor(()=>dialog.querySelector('iframe').contentDocument.body.textContent.includes('Changed middle paragraph'))
       await click(buttons[1])
-      check(confirmations[0] === 'Sample intro', 'Send the opening shown to staff')
+      check(confirmations[0]?.includes('Changed middle paragraph') && !confirmations[0].includes('Editable second paragraph') && confirmations[0].includes('release-action.invalid/order'), 'Freeze the edited body and its order action')
     }
   }
   check(previews.every(p => p.revision === 2), 'Email preview revision changed')

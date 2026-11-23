@@ -51,7 +51,7 @@ test('replacement upload is intent-scoped, idempotent, and committed with a stal
   assert.match(route, /remove\(\[manualPath\]\)/)
   assert.doesNotMatch(route, /getFinalPageManualPath/)
   assert.match(route, /getFinalReplacementClaimablePageStatuses/)
-  assert.match(route, /\.select\(['"]final_job_id, job_id, order_id, status, review_status, proof_revision, proof_draft_open, released_at, total_pages['"]\)/)
+  assert.match(route, /\.select\(['"]final_job_id, job_id, order_id, status, review_status, proof_draft_sequence, proof_revision, proof_draft_open, released_at, total_pages['"]\)/)
   assert.match(route, /isFinalJobReleased\(finalJob\)/)
   assert.match(route, /\.in\(['"]status['"],\s*getFinalReplacementClaimablePageStatuses\(String\(finalJob\.status\)\)\)/)
   assert.match(route, /prepareFinalReplacementImage/)

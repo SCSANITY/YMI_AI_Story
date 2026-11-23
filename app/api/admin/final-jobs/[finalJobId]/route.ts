@@ -56,7 +56,7 @@ export async function GET(
         review_status,
         total_pages,
         approved_pages,
-        proof_revision, proof_draft_open, release_mode,
+        proof_draft_sequence, proof_revision, proof_draft_open, release_mode,
         released_at,
         email_sent_at,
         print_status,

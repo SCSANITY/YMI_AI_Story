@@ -238,7 +238,9 @@ export function GeneralMailRichEditor({
   value,
   onChange,
   disabled = false,
+  lockedLinks = false,
 }: {
+  lockedLinks?: boolean
   value: GeneralMailDocument
   onChange: (document: GeneralMailDocument) => void
   disabled?: boolean
@@ -330,7 +332,7 @@ export function GeneralMailRichEditor({
         <ToolbarButton label="Quote" disabled={unavailable} pressed={toolbar?.quote} onClick={() => editor?.chain().focus().toggleBlockquote().run()}><Quote className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton label="Bulleted list" disabled={unavailable} pressed={toolbar?.bulletList} onClick={() => editor?.chain().focus().toggleBulletList().run()}><List className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton label="Numbered list" disabled={unavailable} pressed={toolbar?.orderedList} onClick={() => editor?.chain().focus().toggleOrderedList().run()}><ListOrdered className="h-4 w-4" /></ToolbarButton>
-        <ToolbarButton label="Insert link" disabled={unavailable} pressed={toolbar?.link} onClick={openLinkEditor}><LinkIcon className="h-4 w-4" /></ToolbarButton>
+        {!lockedLinks && <ToolbarButton label="Insert link" disabled={unavailable} pressed={toolbar?.link} onClick={openLinkEditor}><LinkIcon className="h-4 w-4" /></ToolbarButton>}
         <ToolbarButton label="Clear formatting" disabled={unavailable} onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}><RemoveFormatting className="h-4 w-4" /></ToolbarButton>
       </div>
       {linkOpen ? (

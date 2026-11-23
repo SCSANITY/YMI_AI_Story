@@ -1,5 +1,6 @@
 'use client'
 
+import { proofEditRevision } from '@/lib/proof-edit-revision'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Maximize2, Minimize2, Minus, RefreshCw, X } from 'lucide-react'
 import { FinalReviewStage } from '@/components/admin/final-review/FinalReviewStage'
@@ -796,7 +797,7 @@ export function FinalReviewPanel({
     }
   }
 
-  const editRevision = (detail?.finalJob.proof_revision ?? 1) + (detail?.finalJob.proof_draft_open ? 1 : 0)
+  const editRevision = proofEditRevision(detail?.finalJob)
 
   const releaseJob = async (deliveryNote = '') => {
     if (!selectedJobId) return
@@ -1612,6 +1613,7 @@ export function FinalReviewPanel({
               busyAction={busyAction}
               releaseDisabledReason={releaseDisabledReason}
               printDisabledReason={printDisabledReason}
+              onRestore={async () => { await refresh() }}
               onReopen={async () => {
                 if (!activeDetail) return
                 const book = activeDetail.finalJob

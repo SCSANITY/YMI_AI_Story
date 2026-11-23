@@ -1,8 +1,18 @@
 'use client'
 
+import { releaseBodyPrefix,readReleaseBody } from '@/lib/release-mail-body'
+
 import { useEffect, useState } from 'react'
 import { orderTime } from './OrderBookDetails'
 import type { OrderRow } from './types'
+
+function mailText(value:string, kind:string){
+  if (!value.startsWith(releaseBodyPrefix)) return value
+  try {
+    const document=readReleaseBody(value,kind==='print_released'?'print':'pdf')
+    return document?.blocks.flatMap(block=>('items' in block?block.items:[block.content]).map(row=>row.map(part=>part.text).join(''))).join('\n\n')
+  } catch { return 'Saved email body unavailable' }
+}
 
 type Event = {
   proof_revision?: string | null
@@ -52,7 +62,7 @@ export function OrderEmailActivity({ order }: { order: OrderRow }) {
         const scope = event.final_job_id ? event.book_title || (books.length === 1 ? books[0].title : 'Book notification') : 'Entire order'
         return <div key={event.email_event_id} className="border-t border-[var(--admin-card-line)] py-2 text-sm">
           <strong className="capitalize">{title(event)}{event.proof_revision && ` · Rev ${event.proof_revision}`}</strong><p>{scope} · {orderTime(event.sent_at ?? event.observed_at ?? event.created_at)}</p>
-          {event.delivery_note && <details><summary>Opening message</summary><p className="whitespace-pre-line">{event.delivery_note}</p></details>}
+          {event.delivery_note && <details><summary>{event.delivery_note.startsWith(releaseBodyPrefix) ? 'Email body' : 'Opening message'}</summary><p className="whitespace-pre-line">{mailText(event.delivery_note,event.email_key)}</p></details>}
           <small className="capitalize">{evidence(event)}</small>
         </div>
       })}

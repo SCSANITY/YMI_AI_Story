@@ -1,7 +1,9 @@
+import { emailAsset } from '@/components/emails/EmailLayout'
+import { proofEditRevision } from '@/lib/proof-edit-revision'
 import { createElement } from 'react'
 import { render } from '@react-email/render'
-import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
-import { PrintReleasedEmail } from '@/components/emails/PrintReleasedEmail'
+import { PDF_DELIVERY_PREVIEW_SUBJECT, DeliveryEmail } from '@/components/emails/DeliveryEmail'
+import { PRINT_RELEASED_SUBJECT, PrintReleasedEmail } from '@/components/emails/PrintReleasedEmail'
 import { noStoreJson } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
@@ -17,10 +19,10 @@ export async function POST(request: Request, context: { params: Promise<{ finalJ
     return noStoreJson({ error: 'Invalid mail preview' }, { status: 400 })
   }
   const { data: book, error } = await supabaseAdmin.from('final_jobs')
-    .select('job_id,cart_item_id,order_id,creation_id,template_id,proof_revision,proof_draft_open,creations:creations(customize_snapshot,templates:templates(name)),purchased_line:cart_items!final_jobs_cart_item_id_fkey(cart_item_id,order_id,creation_id,final_job_id,status,product_type,package_type)')
+    .select('job_id,cart_item_id,order_id,creation_id,template_id,proof_draft_sequence,proof_revision,proof_draft_open,creations:creations(customize_snapshot,templates:templates(name)),purchased_line:cart_items!final_jobs_cart_item_id_fkey(cart_item_id,order_id,creation_id,final_job_id,status,product_type,package_type)')
     .eq('final_job_id',finalJobId).maybeSingle()
   if (error || !book) return noStoreJson({ error: 'Cannot load book' }, { status: 404 })
-  if (body.revision !== book.proof_revision + (book.proof_draft_open ? 1 : 0)) {
+  if (body.revision !== proofEditRevision(book)) {
     return noStoreJson({ error: 'Proof changed. Refresh this book.' }, { status: 409 })
   }
   const { data: order } = await supabaseAdmin.from('orders').select('display_id,email,first_name:shipping_address->>firstName')
@@ -41,17 +43,13 @@ export async function POST(request: Request, context: { params: Promise<{ finalJ
       coverImageUrl = image?.signedUrl
     }
   }
-  const defaultIntro = body.kind === 'print'
-    ? 'Thank you once again for choosing YMI Story to create a one-of-a-kind book as a special gift for your little one.'
-    : edition === 'supreme' ? 'Thank you for choosing our Signature Voice Version. The digital preview of your order is ready!'
-      : 'Thank you for choosing YMI Story. The digital preview of your personalised storybook is ready!'
-  const personalNote = body.note.trim() || undefined
   const html = await render(body.kind === 'pdf' ? createElement(DeliveryEmail, {
-    personalNote, coverImageUrl, orderUrl: '#order', orderId: book.order_id, displayId: order.display_id, downloadUrl: '#pdf', firstName: order.first_name,
+    editorSource:true, coverImageUrl, orderUrl: '#order', orderId: book.order_id, displayId: order.display_id, downloadUrl: '#pdf', firstName: order.first_name,
     voiceUpgradeUrl: edition === 'basic' ? '#upgrade' : undefined,
     voiceMaterialsUrl: edition === 'supreme' ? '#materials' : undefined,
     privacyUrl: edition === 'supreme' ? '#privacy' : undefined,
   }) : createElement(PrintReleasedEmail, { firstName: order.first_name, orderId: book.order_id,
-    bookTitle: resolveFinalJobDisplayTitle(book), personalNote }))
-  return noStoreJson({ html, defaultIntro, recipient: order.email })
+    bookTitle: resolveFinalJobDisplayTitle(book), editorSource:true }))
+  return noStoreJson({ html, cover:coverImageUrl || emailAsset('cover-placeholder.png'),seal:emailAsset('seal.png'), title:resolveFinalJobDisplayTitle(book), recipient:order.email,
+    subject:body.kind === 'print' ? PRINT_RELEASED_SUBJECT : edition ? PDF_DELIVERY_PREVIEW_SUBJECT : 'Your book is ready - '+(order.display_id || book.order_id) })
 }

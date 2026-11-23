@@ -1,6 +1,8 @@
+import { CorrectionConfirmation } from './CorrectionConfirmation'
+import { proofEditRevision } from '@/lib/proof-edit-revision'
 import { useState } from 'react'
 import { ReleaseMailConfirmation } from './ReleaseMailConfirmation'
-import { CheckCircle2, FileText, Loader2, Lock, PackageCheck, Send } from 'lucide-react'
+import { CheckCircle2, Download, RotateCcw, FileText, Loader2, Lock, PackageCheck, Send } from 'lucide-react'
 import type { FinalJobDetail } from '@/lib/finalReview'
 import { AdminButton, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminUi'
 import { LinkedOrdersButton } from '@/components/admin/final-review/LinkedOrdersButton'
@@ -21,6 +23,7 @@ export function FinalReviewStage({
   busyAction,
   releaseDisabledReason,
   printDisabledReason,
+  onRestore,
   onReopen,
   onReleasePdf,
   onReleasePrint,
@@ -38,13 +41,15 @@ export function FinalReviewStage({
   busyAction: string | null
   releaseDisabledReason: string
   printDisabledReason: string
+  onRestore: () => Promise<void>
   onReopen: () => Promise<void>
   onReleasePdf: (note?: string) => void
   onReleasePrint: (note?: string) => void
 }) {
   const [compose, setCompose] = useState<{ job: string; kind: 'pdf' | 'print'; revision: number } | null>(null)
+  const [correction,setCorrection] = useState<{job:string;opening:boolean;draft:number}|null>(null)
   const book = detail?.finalJob
-  const revision = (book?.proof_revision ?? 1) + (book?.proof_draft_open ? 1 : 0)
+  const revision = proofEditRevision(book)
   return (
     <div className="min-h-0 space-y-4 min-[960px]:h-full min-[960px]:w-64 xl:w-80 min-[960px]:shrink-0 min-[960px]:overflow-y-auto min-[960px]:overscroll-contain">
       <aside className="space-y-4">
@@ -76,7 +81,7 @@ export function FinalReviewStage({
         </AdminPanel>
         <StageCard
           label="Stage 1"
-          title="PDF version"
+          title="Customer PDF"
           icon={<FileText className="h-4 w-4" />}
           tone="emerald"
           status={book?.proof_draft_open ? 'Corrections in progress' : detail?.finalJob.review_status ?? 'Not set'}
@@ -85,6 +90,7 @@ export function FinalReviewStage({
           <AdminButton
             type="button"
             onClick={() => book && setCompose({ job: book.final_job_id, revision, kind: 'pdf' })}
+            hidden={pdfReleased}
             disabled={
               pdfReleased ||
               !readyToRelease ||
@@ -104,18 +110,20 @@ export function FinalReviewStage({
             ) : (
               <Send className="h-4 w-4" />
             )}
-            {pdfReleased ? 'PDF Released' : 'Release PDF version'}
+            {pdfReleased ? 'PDF Released' : 'Review email & release'}
           </AdminButton>
           {detail?.finalJob.released_at && (
             <div className="grid gap-2 text-sm">
-              <a className="font-semibold underline" href={'/api/admin/final-jobs/' + detail.finalJob.final_job_id + '/released-pdf?revision=' + (detail.finalJob.proof_revision ?? 1)}>
-                Download released PDF · Rev {detail.finalJob.proof_revision ?? 1}
+              <a className="flex items-center gap-3 rounded-xl border border-[var(--admin-card-line)] bg-[var(--admin-surface)] px-3 py-3 text-[var(--admin-page-ink)] hover:bg-amber-50" href={'/api/admin/final-jobs/' + detail.finalJob.final_job_id + '/released-pdf?revision=' + (detail.finalJob.proof_revision ?? 1)}>
+                <FileText size={20}/><span className="grow"><strong>Published PDF · Rev {detail.finalJob.proof_revision ?? 1}</strong><small className="block text-[var(--admin-page-muted)]">Customer copy · {totalPageCount} pages</small></span><Download aria-label="Download released PDF" size={18}/>
               </a>
-              {detail.finalJob.proof_draft_open && <span>Editing Rev {(detail.finalJob.proof_revision ?? 1) + 1}</span>}
+              {detail.finalJob.proof_draft_open && <strong>Working draft · Rev {revision}</strong>}
+              {!book?.proof_draft_open && book?.email_sent_at && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900"><b>PDF email sent</b><br/>{formatDate(book.email_sent_at)}<br/>Check replies {formatDate(new Date(Date.parse(book.email_sent_at)+54*3600000).toISOString())}</div>}
               {!printReleased && detail.shared_final && <span>Shared Final · verify the order line manually.</span>}
               {pdfReleased && !printReleased && !detail.shared_final && (
-                <AdminButton type="button" tone="secondary" onClick={() => void onReopen()}>Return for corrections</AdminButton>
+                <AdminButton type="button" tone="secondary" disabled={busyAction !== null} onClick={() => setCorrection({job:detail.finalJob.final_job_id,draft:revision,opening:true})}><RotateCcw size={16}/>Return for corrections</AdminButton>
               )}
+              {detail.finalJob.proof_draft_open && !detail.shared_final && <AdminButton tone="secondary" disabled={busyAction!==null || hasReviewPending || hasUploadPending} onClick={()=>setCorrection({job:detail.finalJob.final_job_id,draft:revision,opening:false})}><RotateCcw size={16}/>Cancel corrections</AdminButton>}
               {pdfReleased && !detail.finalJob.email_sent_at && (
                 <AdminButton type="button" tone="secondary" disabled={busyAction !== null} onClick={() => onReleasePdf()}>Check / retry delivery</AdminButton>
               )}
@@ -156,6 +164,9 @@ export function FinalReviewStage({
           {printReleased && detail && <PrintNotificationStatus key={detail.finalJob.final_job_id} jobId={detail.finalJob.final_job_id} />}
         </StageCard>
       </aside>
+      {correction && correction.job===book?.final_job_id && correction.draft===revision &&
+        <CorrectionConfirmation job={correction.job} draft={revision} published={book.proof_revision ?? 1} opening={correction.opening}
+          close={()=>setCorrection(null)} reopen={onReopen} refresh={onRestore}/>}
       {compose && compose.job === book?.final_job_id && compose.revision === revision && (
         <ReleaseMailConfirmation job={compose.job} kind={compose.kind} revision={revision}
           onCancel={() => setCompose(null)} onConfirm={(note) => {

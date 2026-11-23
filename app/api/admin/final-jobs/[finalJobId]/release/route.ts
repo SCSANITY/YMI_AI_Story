@@ -1,3 +1,4 @@
+import { validatedReleaseNote } from '@/lib/release-mail-body'
 import { NextResponse } from 'next/server'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { FinalArtifactConflict } from '@/lib/final-review-artifact-paths'
@@ -16,6 +17,9 @@ export async function POST(
 
   const { finalJobId } = await Promise.resolve(context.params)
   const body = await request.json().catch(() => ({}))
+  let note: string
+  try { note = validatedReleaseNote(body?.deliveryNote,'pdf') }
+  catch (error) { return NextResponse.json({ error:error instanceof Error ? error.message : 'Invalid email body' }, { status:400 }) }
   const releaseMode = String(body?.releaseMode ?? 'manual') as FinalReleaseMode
   const allowedModes: FinalReleaseMode[] = ['manual', 'job_auto', 'story_auto', 'global_auto']
   if (!allowedModes.includes(releaseMode)) {
@@ -27,7 +31,7 @@ export async function POST(
       finalJobId,
       releaseMode,
       expectedRevision: body.expectedRevision,
-      deliveryNote: typeof body.deliveryNote === 'string' ? body.deliveryNote.trim().slice(0, 4000) : '',
+      deliveryNote: note,
       approvedByCustomerId: admin.customer_id,
     })
     return NextResponse.json({ ok: true, ...result })

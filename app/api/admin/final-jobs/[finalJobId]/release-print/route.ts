@@ -1,3 +1,4 @@
+import { validatedReleaseNote } from '@/lib/release-mail-body'
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { isUuid } from '@/lib/manual-print-artifact'
@@ -15,13 +16,16 @@ export async function POST(
 
   const { finalJobId } = await Promise.resolve(context.params)
   const body = await request.json().catch(() => ({}))
+  let note: string
+  try { note = validatedReleaseNote(body?.deliveryNote,'print') }
+  catch (error) { return jsonNoStore({ error:error instanceof Error ? error.message : 'Invalid email body' }, { status:400 }) }
   if (!isUuid(body?.expectedArtifactId)) {
     return jsonNoStore({ error: 'Select a verified print PDF before release' }, { status: 400 })
   }
   const { data, error } = await supabaseAdmin.rpc('materials_release_print_with_notice', {
     p_final_job_id: finalJobId,
     p_revision: body.expectedRevision ?? 1,
-    p_note: typeof body.deliveryNote === 'string' ? body.deliveryNote.trim().slice(0, 4000) : '',
+    p_note: note,
     p_expected_artifact_id: body.expectedArtifactId,
     p_admin_customer_id: admin.customer_id,
   })
