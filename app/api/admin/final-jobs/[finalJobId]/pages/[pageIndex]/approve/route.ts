@@ -146,6 +146,6 @@ export async function POST(
     return NextResponse.json({ ok: true, superseded: true, approvedPath })
   }
 
-  await refreshFinalJobApprovalState(finalJobId)
+  await refreshFinalJobApprovalState(finalJobId,finalJob.proof_draft_sequence ?? 0)
   return NextResponse.json({ ok: true, superseded: false, approvedPath, reviewIntentId })
 }

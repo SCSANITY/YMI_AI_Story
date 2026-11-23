@@ -6,10 +6,14 @@ export type ReleaseAction = 'pdf' | 'order' | 'upgrade' | 'materials' | 'privacy
 export type ReleaseLinks = Partial<Record<ReleaseAction,string | undefined>>
 const actions: ReleaseAction[] = ['pdf','order','upgrade','materials','privacy']
 
+export function originalBodyFingerprint(note:string|undefined) {
+  return note?.startsWith(releaseBodyPrefix) ? /^default:([a-f0-9]{64})\n/.exec(note.slice(releaseBodyPrefix.length))?.[1] : undefined
+}
+
 export function readReleaseBody(note: string | undefined, kind: 'pdf' | 'print') {
   if (!note?.startsWith(releaseBodyPrefix)) return null
   if (note.length > 64000) throw new Error('Email body is too long')
-  const document = normalizeGeneralMailDocument(JSON.parse(note.slice(releaseBodyPrefix.length)))
+  const document = normalizeGeneralMailDocument(JSON.parse(note.slice(releaseBodyPrefix.length).replace(/^default:[0-9a-f]{64}\n/,'')))
   const present = new Set<string>()
   for (const block of document.blocks) {
     const inlines = 'items' in block ? block.items.flat() : block.content
@@ -31,6 +35,6 @@ export function validatedReleaseNote(value: unknown, kind: 'pdf' | 'print') {
   return value
 }
 
-export function encodeReleaseBody(document: GeneralMailDocument) {
-  return releaseBodyPrefix + JSON.stringify(document)
+export function encodeReleaseBody(document: GeneralMailDocument, fingerprint?:string) {
+  return releaseBodyPrefix + (fingerprint ? 'default:'+fingerprint+'\n' : '') + JSON.stringify(document)
 }

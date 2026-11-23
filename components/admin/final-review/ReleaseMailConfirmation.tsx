@@ -9,12 +9,13 @@ import type { GeneralMailDocument } from '@/lib/general-mail-content'
 import { encodeReleaseBody, readReleaseBody } from '@/lib/release-mail-body'
 import { releaseEditorSource } from './release-editor-source'
 
-type Preview = { html:string; title:string; subject:string; recipient:string; cover:string; seal:string }
+type Preview = { fingerprint:string; html:string; title:string; subject:string; recipient:string; cover:string; seal:string }
 export function ReleaseMailConfirmation({ job,kind,revision,onCancel,onConfirm }: {
   job:string; kind:'pdf'|'print'; revision:number; onCancel:()=>void; onConfirm:(note:string)=>void
 }) {
   const dialog=useRef<HTMLDialogElement>(null)
   const [preview,setPreview]=useState<Preview>()
+  const [initial,setInitial]=useState('')
   const [body,setBody]=useState<GeneralMailDocument>()
   const [target,setTarget]=useState<Element | null>(null)
   const [previewTab,setPreviewTab]=useState(false)
@@ -34,12 +35,13 @@ export function ReleaseMailConfirmation({ job,kind,revision,onCancel,onConfirm }
       const data=await res.json()
       if(!res.ok) throw new Error(data.error || 'Preview unavailable')
       const source=releaseEditorSource(data.html)
-      if(!controller.signal.aborted){setBody(source);setPreview(data);setError('')}
+      if(!controller.signal.aborted){setInitial(JSON.stringify(source));setBody(source);setPreview(data);setError('')}
     }
     load().catch(e=>{if(!controller.signal.aborted)setError(e.message)})
     return ()=>controller.abort()
   },[job,kind,revision,attempt])
-  const encoded=body && encodeReleaseBody(body)
+  const pristine=!!body && JSON.stringify(body)===initial
+  const encoded=body && encodeReleaseBody(body,pristine?preview?.fingerprint:undefined)
   let validation=''
   try { if(encoded)readReleaseBody(encoded,kind) } catch(e){validation=e instanceof Error ? e.message : 'Invalid message'}
   return <dialog ref={dialog} onCancel={e=>{e.preventDefault();onCancel()}} aria-labelledby="release-compose-title"
@@ -62,11 +64,11 @@ export function ReleaseMailConfirmation({ job,kind,revision,onCancel,onConfirm }
         </section>
         <section className={(previewTab?'':'hidden ')+'min-w-0 border-[var(--admin-line)] bg-[var(--admin-surface)] p-4 md:block md:border-l'}>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide">Customer preview</h3>
-          <iframe sandbox="allow-same-origin" title="Customer email preview" srcDoc={preview.html}
-            onLoad={e=>{const doc=e.currentTarget.contentDocument;const slot=doc?.querySelector('[data-release-body]');if(slot){slot.replaceChildren();setTarget(slot)}
+          <iframe key={pristine?'default':'edited'} sandbox="allow-same-origin" title="Customer email preview" srcDoc={preview.html}
+            onLoad={e=>{const doc=e.currentTarget.contentDocument;const slot=doc?.querySelector('[data-release-body]');if(slot){if(!pristine)slot.replaceChildren();setTarget(slot)}
               doc?.addEventListener('click',event=>event.preventDefault())}}
             className="h-[57dvh] w-full rounded-lg border bg-white"/>
-          {target && createPortal(<EditedReleaseBody document={body} pdf={kind==='pdf'} cover={preview.cover} seal={preview.seal}
+          {target && !pristine && createPortal(<EditedReleaseBody document={body} pdf={kind==='pdf'} cover={preview.cover} seal={preview.seal}
             links={{pdf:'#pdf',order:'#order',materials:'#materials',privacy:'#privacy',upgrade:'#upgrade'}}/>,target)}
         </section>
       </div>

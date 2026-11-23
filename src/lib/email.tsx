@@ -1,3 +1,4 @@
+import { releaseRenderNote } from '@/lib/release-template-snapshot'
 import {distinctMaterialNames} from '@/lib/order-materials-client'
 import { loadTrustedOrderMaterials,issueOrderMaterialLink } from '@/lib/order-materials-server'
 import React from 'react'
@@ -250,7 +251,7 @@ export async function sendClaimedPrintNotice(params: {
   const response = await sendEmail({
     to: params.to, from: sender.normalizedValue, idempotencyKey: params.idempotencyKey,
     subject: PRINT_RELEASED_SUBJECT,
-    react: <PrintReleasedEmail personalNote={params.personalNote} firstName={params.firstName} bookTitle={params.bookTitle} orderId={params.orderId} />,
+    react: <PrintReleasedEmail personalNote={await releaseRenderNote(params.personalNote,{...params,kind:'print'})} firstName={params.firstName} bookTitle={params.bookTitle} orderId={params.orderId} />,
   })
   const id = response.data?.id || (response as { id?: string }).id
   if (!id) throw new Error('Unable to confirm print email receipt')
@@ -446,7 +447,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
         orderId={params.orderId}
         displayId={params.displayId}
         orderUrl={orderUrl}
-        personalNote={params.deliveryNote}
+        personalNote={await releaseRenderNote(params.deliveryNote,{...params,edition,kind:'pdf'})}
         downloadUrl={buildPdfDeliveryLink(orderUrl, params.orderId, params.downloadUrl, params.to)}
         coverImageUrl={params.previewImageUrl}
         firstName={params.firstName}

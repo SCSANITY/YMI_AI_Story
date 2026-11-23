@@ -130,7 +130,7 @@ export async function POST(
     reviewedAt: now,
   }))
 
-  await refreshFinalJobApprovalState(finalJobId)
+  await refreshFinalJobApprovalState(finalJobId,finalJob.proof_draft_sequence ?? 0)
 
   return NextResponse.json({
     ok: true,

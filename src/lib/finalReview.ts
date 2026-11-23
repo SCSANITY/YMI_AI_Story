@@ -124,7 +124,7 @@ async function signStorageUrl(path: string | null, ttlSeconds = FINAL_REVIEW_ASS
   return data?.signedUrl ?? null
 }
 
-export async function refreshFinalJobApprovalState(finalJobId: string) {
+export async function refreshFinalJobApprovalState(finalJobId: string, draftSequence = 0) {
   const { data: finalJob } = await supabaseAdmin
     .from('final_jobs')
     .select('total_pages')
@@ -153,6 +153,7 @@ export async function refreshFinalJobApprovalState(finalJobId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('final_job_id', finalJobId)
+    .eq('proof_draft_sequence',draftSequence)
     .or('released_at.is.null,proof_draft_open.eq.true')
 
   if (error) {

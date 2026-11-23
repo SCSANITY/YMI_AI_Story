@@ -281,7 +281,7 @@ export async function POST(
     return jsonNoStore({ ok: true, superseded: true })
   }
 
-  await refreshFinalJobApprovalState(finalJobId)
+  await refreshFinalJobApprovalState(finalJobId,finalJob.proof_draft_sequence ?? 0)
   await discardFinalReplacementStaging({ reviewIntentId, storagePath })
 
   // Keep previous artifacts: a legacy key can still be referenced by another book.

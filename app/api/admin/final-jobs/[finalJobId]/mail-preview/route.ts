@@ -1,9 +1,8 @@
 import { emailAsset } from '@/components/emails/EmailLayout'
 import { proofEditRevision } from '@/lib/proof-edit-revision'
-import { createElement } from 'react'
-import { render } from '@react-email/render'
-import { PDF_DELIVERY_PREVIEW_SUBJECT, DeliveryEmail } from '@/components/emails/DeliveryEmail'
-import { PRINT_RELEASED_SUBJECT, PrintReleasedEmail } from '@/components/emails/PrintReleasedEmail'
+import { releaseTemplateSnapshot } from '@/lib/release-template-snapshot'
+import { PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
+import { PRINT_RELEASED_SUBJECT } from '@/components/emails/PrintReleasedEmail'
 import { noStoreJson } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { normalizeBookPackageType } from '@/lib/package-pricing'
@@ -43,13 +42,9 @@ export async function POST(request: Request, context: { params: Promise<{ finalJ
       coverImageUrl = image?.signedUrl
     }
   }
-  const html = await render(body.kind === 'pdf' ? createElement(DeliveryEmail, {
-    editorSource:true, coverImageUrl, orderUrl: '#order', orderId: book.order_id, displayId: order.display_id, downloadUrl: '#pdf', firstName: order.first_name,
-    voiceUpgradeUrl: edition === 'basic' ? '#upgrade' : undefined,
-    voiceMaterialsUrl: edition === 'supreme' ? '#materials' : undefined,
-    privacyUrl: edition === 'supreme' ? '#privacy' : undefined,
-  }) : createElement(PrintReleasedEmail, { firstName: order.first_name, orderId: book.order_id,
-    bookTitle: resolveFinalJobDisplayTitle(book), editorSource:true }))
-  return noStoreJson({ html, cover:coverImageUrl || emailAsset('cover-placeholder.png'),seal:emailAsset('seal.png'), title:resolveFinalJobDisplayTitle(book), recipient:order.email,
+  const title=resolveFinalJobDisplayTitle(book)
+  const {html,fingerprint}=await releaseTemplateSnapshot({kind:body.kind,orderId:book.order_id,displayId:order.display_id,
+    bookTitle:title,firstName:order.first_name,edition,coverImageUrl})
+  return noStoreJson({ html, fingerprint, cover:coverImageUrl || emailAsset('cover-placeholder.png'),seal:emailAsset('seal.png'), title, recipient:order.email,
     subject:body.kind === 'print' ? PRINT_RELEASED_SUBJECT : edition ? PDF_DELIVERY_PREVIEW_SUBJECT : 'Your book is ready - '+(order.display_id || book.order_id) })
 }
