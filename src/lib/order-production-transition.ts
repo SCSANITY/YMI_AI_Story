@@ -37,13 +37,11 @@ export function areAllOrderPdfsReleased(
   if (items.length === 0 || items.some((item) => !item.final_job_id)) return false
 
   const requiredJobIds = new Set(items.map((item) => String(item.final_job_id)))
-  const releasedJobIds = new Set(
-    finalJobs
-      .filter((finalJob) => finalJob.job_id && !finalJob.pdf_only && isFinalJobReleased(finalJob))
-      .map((finalJob) => String(finalJob.job_id))
-  )
+  const relevant = finalJobs.filter(job => job.job_id && requiredJobIds.has(job.job_id))
+  if (!relevant.some(job => !job.pdf_only)) return false
 
-  return Array.from(requiredJobIds).every((jobId) => releasedJobIds.has(jobId))
+  const releasedJobIds = new Set(relevant.filter(isFinalJobReleased).map(job => job.job_id))
+  return Array.from(requiredJobIds).every(jobId => releasedJobIds.has(jobId))
 }
 
 export async function advanceOrdersToProductionAfterPdfRelease(

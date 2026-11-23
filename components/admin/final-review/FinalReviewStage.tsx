@@ -120,7 +120,7 @@ export function FinalReviewStage({
               {detail.finalJob.proof_draft_open && <strong>Working draft · Rev {revision}</strong>}
               {!book?.pdf_only && !book?.proof_draft_open && book?.email_sent_at && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900"><b>PDF email sent</b><br/>{formatDate(book.email_sent_at)}<br/>Check replies {formatDate(new Date(Date.parse(book.email_sent_at)+54*3600000).toISOString())}</div>}
               {!printReleased && detail.shared_final && <span>Shared Final · verify the order line manually.</span>}
-              {pdfReleased && !book?.pdf_only && !printReleased && !detail.shared_final && (
+              {pdfReleased && !(book?.pdf_only && detail.original_artwork) && !printReleased && !detail.shared_final && (
                 <AdminButton type="button" tone="secondary" disabled={busyAction !== null} onClick={() => setCorrection({job:detail.finalJob.final_job_id,draft:revision,opening:true})}><RotateCcw size={16}/>Return for corrections</AdminButton>
               )}
               {detail.finalJob.proof_draft_open && !detail.shared_final && <AdminButton tone="secondary" disabled={busyAction!==null || hasReviewPending || hasUploadPending} onClick={()=>setCorrection({job:detail.finalJob.final_job_id,draft:revision,opening:false})}><RotateCcw size={16}/>Cancel corrections</AdminButton>}

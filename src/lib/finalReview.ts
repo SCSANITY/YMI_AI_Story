@@ -108,6 +108,7 @@ export type StandardNarrationChoice = {
 }
 
 export type FinalJobDetail = {
+  original_artwork?: boolean
   standard_narration?: StandardNarrationChoice | null
   shared_final?: boolean
   finalJob: FinalJobSummary

@@ -51,7 +51,7 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
     const original=item.edition==='original'
     if ((item.edition!==undefined && !original && item.edition!=='personalised')
       || (original && item.can_edit_dedication!==false)
-      || (item.package_type!=='basic' && item.package_type!=='supreme' && !(original && item.package_type==='digital'))
+      || (item.package_type!=='basic' && item.package_type!=='supreme' && !(item.edition && item.package_type==='digital'))
       || typeof item.template_id!=='string' || !item.template_id || item.template_id.length>200
       || typeof item.can_edit_dedication!=='boolean' || typeof item.voice_ready!=='boolean'
       || typeof item.can_submit_voice!=='boolean'

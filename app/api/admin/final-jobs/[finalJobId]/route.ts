@@ -206,6 +206,7 @@ export async function GET(
 
   return jsonNoStore({
     finalJob: finalJobSummary,
+    original_artwork: Boolean(linkedJob.input_snapshot?.original_source_version),
     shared_final: sharedFinal,
     purchased_edition: purchasedEdition,
     standard_narration: standardNarration,

@@ -93,6 +93,8 @@ type FinalizeOrderResult = {
 }
 
 type CartItemForFinal = {
+  product_type: string | null
+  package_type: string | null
   cart_item_id: string
   creation_id: string | null
   final_job_id: string | null
@@ -191,7 +193,12 @@ async function loadFinalJobIdsByCartItem(cartItemIds: string[]) {
   return result
 }
 
+function isPersonalisedPdfLine(item: CartItemForFinal) {
+  return item.product_type === 'ebook' && item.package_type === 'digital'
+}
+
 type ReusableFinalJobRow = {
+  pdf_only?: boolean
   job_id: string | null
   creation_id: string | null
   review_status?: string | null
@@ -207,14 +214,19 @@ async function loadReusableFinalJobIdsByCreation(creationIds: string[]) {
 
   const { data: finalJobs, error: finalJobsError } = await supabaseAdmin
     .from('final_jobs')
-    .select('job_id, creation_id, review_status, released_at, created_at')
+    .select('job_id, creation_id, review_status, released_at, created_at, pdf_only')
     .in('creation_id', uniqueCreationIds)
 
   if (finalJobsError) {
     throw new Error(`Failed to check reusable final jobs: ${finalJobsError.message}`)
   }
 
+  const digitalJobIds = new Set<string>()
   for (const row of (finalJobs ?? []) as ReusableFinalJobRow[]) {
+    if (row.pdf_only && row.job_id) {
+      digitalJobIds.add(row.job_id)
+      continue
+    }
     const creationId = String(row.creation_id || '')
     const jobId = String(row.job_id || '')
     if (!creationId || !jobId) continue
@@ -237,7 +249,7 @@ async function loadReusableFinalJobIdsByCreation(creationIds: string[]) {
   // Reuse that in-flight job as well so recovery never queues a second render.
   const { data: jobs, error: jobsError } = await supabaseAdmin
     .from('jobs')
-    .select('job_id, creation_id, created_at')
+    .select('job_id, creation_id, created_at, selected_book_type')
     .eq('job_type', 'final')
     .in('creation_id', unresolvedCreationIds)
     .order('created_at', { ascending: false })
@@ -249,6 +261,7 @@ async function loadReusableFinalJobIdsByCreation(creationIds: string[]) {
   for (const row of jobs ?? []) {
     const creationId = String(row.creation_id || '')
     const jobId = String(row.job_id || '')
+    if (row.selected_book_type === 'Cloud Explorer' || digitalJobIds.has(jobId)) continue
     if (creationId && jobId && !result.has(creationId)) {
       result.set(creationId, jobId)
     }
@@ -286,6 +299,8 @@ async function loadOrderItemsForFinal(orderId: string, cartItemIds?: string[]): 
         cart_item_id,
         creation_id,
         final_job_id,
+        product_type,
+        package_type,
         price_at_purchase,
         quantity,
         creations:creations (
@@ -705,12 +720,12 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   }
 
   const unresolvedCreationIds = cartItems
-    .filter((item) => !jobIdByCartItem.has(item.cart_item_id))
+    .filter((item) => !isPersonalisedPdfLine(item) && !jobIdByCartItem.has(item.cart_item_id))
     .map((item) => item.creation_id)
     .filter((creationId): creationId is string => Boolean(creationId))
   const reusableJobIdByCreation = await loadReusableFinalJobIdsByCreation(unresolvedCreationIds)
   for (const item of cartItems) {
-    if (jobIdByCartItem.has(item.cart_item_id) || !item.creation_id) continue
+    if (jobIdByCartItem.has(item.cart_item_id) || !item.creation_id || isPersonalisedPdfLine(item)) continue
     const reusableJobId = reusableJobIdByCreation.get(item.creation_id)
     if (reusableJobId) {
       jobIdByCartItem.set(item.cart_item_id, reusableJobId)
@@ -799,7 +814,9 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
           creation?.customize_snapshot?.textOverrides ??
           creation?.customize_snapshot?.text_overrides ??
           null
-        const finalTextOverrides = forceEnglishTextOverrides(rawTextOverrides)
+        const finalTextOverrides = forceEnglishTextOverrides(
+          item.package_type ? { ...rawTextOverrides, book_type: item.package_type } : rawTextOverrides
+        )
 
         jobsToInsert.push({
           owner_type: 'customer',
@@ -809,7 +826,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
           template_id: creation.template_id,
           job_type: 'final',
           story_language: normalizeStoryLanguage(finalTextOverrides?.language),
-          selected_book_type: mapBookTypeToDisplay(
+          selected_book_type: mapBookTypeToDisplay(item.package_type ??
             creation?.customize_snapshot?.textOverrides?.book_type ??
               creation?.customize_snapshot?.text_overrides?.book_type ??
               creation?.customize_snapshot?.bookType
@@ -903,6 +920,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
             template_id: creation.template_id,
             status: initialFinalProductionStatus(productionMode),
             review_status: 'pending',
+            pdf_only: isPersonalisedPdfLine(item),
             total_pages: pageIndices.length,
             approved_pages: 0,
             updated_at: new Date().toISOString(),

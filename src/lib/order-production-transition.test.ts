@@ -146,3 +146,11 @@ test('a lost compare-and-set race does not create a duplicate status event', asy
   assert.deepEqual(result.promotedOrderIds, [])
   assert.equal(eventCount, 0)
 })
+
+test('mixed personalised orders advance after both physical and digital proofs are released', () => {
+  const items = ['hardcover','ebook'].map(id => ({cart_item_id:id,final_job_id:id}))
+  const digital = {...released('ebook'),pdf_only:true}
+  assert.equal(areAllOrderPdfsReleased(items,[released('hardcover')]),false)
+  assert.equal(areAllOrderPdfsReleased(items,[released('hardcover'),{...digital,review_status:'pending',released_at:null}]),false)
+  assert.equal(areAllOrderPdfsReleased(items,[digital,released('hardcover')]),true)
+})

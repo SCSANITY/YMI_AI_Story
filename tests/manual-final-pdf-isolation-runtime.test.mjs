@@ -49,11 +49,12 @@ function makeHarness() {
       assert.ok(rows[table], table)
       const filters = []
       let patch
+      let inserted
       let limit = Infinity
       let sortKey
       let countRequested = false
       function execute(single) {
-        const selected = rows[table].filter((row) => filters.every((filter) => filter(row)))
+        const selected = (inserted ?? rows[table]).filter((row) => filters.every((filter) => filter(row)))
         if (sortKey) selected.sort((a, b) => a[sortKey] - b[sortKey])
         const matching = selected.slice(0, limit)
         if (patch) {
@@ -72,6 +73,21 @@ function makeHarness() {
         is(key, value) { filters.push((row) => row[key] === value); return query },
         not(key, operator, value) { assert.equal(operator, 'is'); filters.push((row) => row[key] != value); return query },
         in(key, values) { filters.push((row) => values.includes(row[key])); return query },
+        insert(value) {
+          const idKey = table === 'jobs' ? 'job_id' : 'final_job_id'
+          inserted = [value].flat().map(row => ({[idKey]: randomUUID(), ...(table==='final_jobs' ? {released_at:null,proof_revision:1,proof_draft_open:false} : {}), ...row}))
+          rows[table].push(...inserted)
+          return query
+        },
+        async single() { return execute(true) },
+        async upsert(value, options) {
+          assert.equal(table,'final_job_pages')
+          assert.equal(options.ignoreDuplicates,true)
+          for (const row of value) if (!rows[table].some(p=>p.final_job_id===row.final_job_id && p.page_index===row.page_index)) {
+            rows[table].push({ ...row, final_job_page_id:randomUUID() })
+          }
+          return ok(null)
+        },
         update(value) { patch = value; return query },
         limit(value) { limit = value; return query },
         order(key) { sortKey = key; return query },
@@ -119,7 +135,10 @@ function makeHarness() {
     '@/lib/supabaseAdmin': { supabaseAdmin },
     '@/lib/adminAuth': { requireAdminCustomer: async () => ({ customer_id: 'synthetic-admin' }) },
     '@/lib/order-production-transition-store': { advanceOrdersToProductionAfterPdfRelease: async () => ({promotedOrderIds: []}) },
-    '@/lib/story-config-server': {},
+    '@/lib/story-config-server': { loadStoryConfigForFinal: async () => ({
+      configUrl:'synthetic-config', finalPageIndices:pages.map(p=>p.page_index),
+      finalOutputAssets:{schema_version:3,asset_layout:'single-page',pages},
+    }) },
     '@/lib/locale-pricing': { normalizeCheckoutCurrency: v => v, convertUsdToCurrency: v => v },
     '@/lib/email': {
       FINAL_PDF_DELIVERY_LINK_TTL_SECONDS: 259200,
@@ -434,3 +453,55 @@ for (const format of ['digital', 'basic', 'supreme']) {
     assert.equal(h.mail.length, 1)
   })
 }
+
+test('paid personalised PDF and physical lines sharing a Creation get format-correct Finals on payment and replay', async () => {
+  const h=makeHarness()
+  const creation=randomUUID()
+  const oldJob=randomUUID()
+  h.rows.templates=[{template_id:'story',default_config_path:'synthetic'}]
+  // A previously purchased digital Final must not be used for a new physical copy.
+  h.rows.final_jobs.push({final_job_id:randomUUID(),creation_id:creation,job_id:oldJob,pdf_only:true,review_status:'released'})
+  h.rows.jobs.push({job_id:oldJob,creation_id:creation,job_type:'final',selected_book_type:'Cloud Explorer'})
+  Object.assign(h.rows.orders[0],{order_status:'unpaid',payment_id:randomUUID()})
+  for(const format of ['digital','basic']) h.rows.cart_items.push({
+    cart_item_id:randomUUID(),order_id:h.orderId,creation_id:creation,final_job_id:null,
+    product_type:format==='digital'?'ebook':'physical',package_type:format,status:'ordered',quantity:1,price_at_purchase:10,
+    creations:{template_id:'story',customize_snapshot:{bookType:'basic',storagePath:'synthetic/face.png'}},
+  })
+  const pay=()=>h.load('src/lib/orderFulfillment.ts').finalizeOrderPayment({
+    orderId:h.orderId,customerId:'customer',email:'buyer@example.test',provider:'stripe',amount:20,
+  })
+  await pay()
+  await pay()
+  assert.equal(h.rows.jobs.length,3)
+  assert.equal(h.rows.final_jobs.length,3)
+  for(const [index,item] of h.rows.cart_items.entries()) {
+    const job=h.rows.jobs.find(j=>j.job_id===item.final_job_id)
+    assert.equal(job.cart_item_id,item.cart_item_id)
+    assert.equal(job.selected_book_type,index===0?'Cloud Explorer':'Classic')
+    assert.equal(job.input_snapshot.face_source_path,'raw-private/synthetic/face.png')
+    assert.equal(job.input_snapshot.text_overrides.book_type,item.package_type)
+    const review=h.rows.final_jobs.find(f=>f.job_id===job.job_id)
+    assert.equal(review.pdf_only,index===0)
+    const pages=h.rows.final_job_pages.filter(p=>p.final_job_id===review.final_job_id)
+    assert.equal(pages.length,31)
+    assert.ok(pages.every(p=>p.status==='manual_pending' && !p.approved_output_path))
+  }
+  assert.equal(h.mail.length,0)
+  const digital=h.rows.final_jobs.find(f=>f.order_id===h.orderId && f.pdf_only)
+  const id=digital.final_job_id
+  assert.notEqual((await h.route('release',id)).status,200)
+  const png=await makePng('#0000ff')
+  for (const page of h.rows.final_job_pages.filter(p=>p.final_job_id===id)) {
+    const key='orders/'+h.orderId+'/final/books/'+id+'/pages/manual/page_'+String(page.page_index).padStart(2,'0')+'_'+randomUUID()+'.png'
+    h.objects.set(key,png)
+    page.manual_output_path=key
+    page.status='pending_review'
+  }
+  assert.equal((await h.route('approve-all-pages',id)).status,200)
+  const result=await h.route('release',id,undefined,{releaseMode:'manual'})
+  assert.equal(result.status,200,JSON.stringify(result.body))
+  assert.equal((await PDFDocument.load(h.objects.get(result.body.pdfPath))).getPageCount(),16)
+  assert.equal((await h.route('release',id)).body.alreadyReleased,true)
+  assert.deepEqual(h.mail.map(m=>[m.finalJobId,m.physicalPackageType]),[[id,null]])
+})
