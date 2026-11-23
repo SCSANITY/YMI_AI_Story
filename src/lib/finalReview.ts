@@ -101,7 +101,14 @@ export type FinalPageContractSummary = {
   asset_layout: 'single-page' | null
 }
 
+export type StandardNarrationChoice = {
+  proofRevision: number
+  voiceRevision: number
+  confirmedAt: string | null
+}
+
 export type FinalJobDetail = {
+  standard_narration?: StandardNarrationChoice | null
   shared_final?: boolean
   finalJob: FinalJobSummary
   purchased_edition: import('@/types').BookPackageType | null

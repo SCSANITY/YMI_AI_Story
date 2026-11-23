@@ -193,6 +193,14 @@ export async function GET(
     if (links.error) return jsonNoStore({ error: 'Could not verify order lines' }, { status: 503 })
     sharedFinal = links.data?.length !== 1 || links.data[0].cart_item_id !== finalJob.cart_item_id
   }
+  const creation = Array.isArray(creations) ? creations[0] : creations
+  let standardNarration = null
+  if (creation?.customize_snapshot?.edition === 'original' && purchasedEdition === 'supreme'
+    && !sharedFinal && finalJob.released_at && !finalJob.proof_draft_open && !finalJob.print_released_at) {
+    const result = await supabaseAdmin.rpc('read_original_standard_narration', { p_job: finalJobId })
+    if (result.error) return jsonNoStore({ error: 'Could not check narration for this book' }, { status: 503 })
+    standardNarration = result.data
+  }
   const materials=await loadTrustedOrderLineDedications(finalJob.order_id)
   const dedicationSnapshot=materials.find(item=>item.cartItemId===finalJob.cart_item_id) ?? null
 
@@ -200,6 +208,7 @@ export async function GET(
     finalJob: finalJobSummary,
     shared_final: sharedFinal,
     purchased_edition: purchasedEdition,
+    standard_narration: standardNarration,
     page_contract: readModel.page_contract,
     pages: signedPages,
     print_artifact: printArtifact,

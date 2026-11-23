@@ -8,6 +8,7 @@ import { FinalBookBadges } from '@/components/admin/final-review/FinalBookBadges
 import { JobQueue } from '@/components/admin/final-review/JobQueue'
 import { PdfVersionReview } from '@/components/admin/final-review/PdfVersionReview'
 import { ProductionMaterialsPanel } from '@/components/admin/final-review/ProductionMaterials'
+import { StandardNarrationControl } from '@/components/admin/final-review/StandardNarrationControl'
 import { SignatureVoiceWorkspace } from '@/components/admin/sections/orders/SignatureVoiceWorkspace'
 import { PrintVersionReview } from '@/components/admin/final-review/PrintVersionReview'
 import { pagePreviewUrl } from '@/components/admin/final-review/reviewUi'
@@ -1543,6 +1544,17 @@ export function FinalReviewPanel({
                 key={`print-materials-${selectedJobId}`}
                 job={selectedJobId}
                 line={materialLine}
+              />
+            )}
+            {activeVersion === 'print' && edition === 'supreme' && activeDetail?.standard_narration && (
+              <StandardNarrationControl
+                key={[activeDetail.finalJob.final_job_id, activeDetail.standard_narration.proofRevision, activeDetail.standard_narration.voiceRevision].join('-')}
+                job={activeDetail.finalJob.final_job_id}
+                choice={activeDetail.standard_narration}
+                onConfirmed={(job, choice) => setDetail(current =>
+                  current?.finalJob.final_job_id === job && current.standard_narration?.proofRevision === choice.proofRevision
+                    && current.standard_narration.voiceRevision === choice.voiceRevision ? { ...current, standard_narration: choice } : current
+                )}
               />
             )}
             {activeVersion === 'print' && edition === 'supreme' && activeDetail?.finalJob.creation_id && activeDetail.finalJob.cart_item_id && (
