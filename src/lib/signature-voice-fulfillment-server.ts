@@ -45,7 +45,7 @@ function canonicalManifestLine(track: {
   return [track.slotKey, track.assetId, track.revision, track.sizeBytes, track.sha256].join(':')
 }
 
-async function loadPaidSignatureVoiceItems(orderId: string) {
+async function loadPaidSignatureVoiceItems(orderId: string, forShipment = false) {
   const { data, error } = await supabaseAdmin
     .from('cart_items')
     .select(`
@@ -54,15 +54,22 @@ async function loadPaidSignatureVoiceItems(orderId: string) {
       package_type,
       status,
       orders!orders_checkout_id_fkey!inner(order_id, payment_id),
-      creations!inner(creation_id)
+      creations!inner(creation_id, customize_snapshot->>edition)
     `)
     .eq('order_id', orderId)
     .eq('status', 'ordered')
     .eq('package_type', 'supreme')
 
   if (error) throw new SignatureVoiceFulfillmentError(error.message)
-  const bindingById=new Map((await loadOrderLineVoiceBindings(orderId,(data ?? []).map(row=>String(row.cart_item_id)))).map(binding=>[binding.cart_item_id,binding]))
-  return (data ?? []).map((row) => {
+  let items = data ?? []
+  if (forShipment && items.some(row => firstRelation(row.creations).edition === 'original')) {
+    const released = await supabaseAdmin.rpc('original_standard_print_lines', { p_order: orderId })
+    if (released.error) throw new SignatureVoiceFulfillmentError('Could not verify the standard narration print decision')
+    const standard = new Set((released.data ?? []).map((line: {cart_item_id: string}) => line.cart_item_id))
+    items = items.filter(row => !standard.has(row.cart_item_id))
+  }
+  const bindingById=new Map((await loadOrderLineVoiceBindings(orderId,items.map(row=>String(row.cart_item_id)))).map(binding=>[binding.cart_item_id,binding]))
+  return items.map((row) => {
     const order = firstRelation(row.orders)
     const cartItemId = String(row.cart_item_id ?? '')
     const creationId = String(row.creation_id ?? '')
@@ -167,7 +174,7 @@ async function verifyNarrationItem(input: {
 }
 
 export async function verifySignatureVoiceOrderNarrationIntegrity(orderId: string) {
-  const items = await loadPaidSignatureVoiceItems(orderId)
+  const items = await loadPaidSignatureVoiceItems(orderId, true)
   return Promise.all(items.map(verifyNarrationItem))
 }
 

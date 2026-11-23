@@ -108,15 +108,18 @@ test('only purchased lines receive downloads even when a Final PDF already exist
  }
 })
 
-function voiceReader({missing=false,unpaid=false,fail=false}={}) {
+function voiceReader({missing=false,unpaid=false,fail=false,original=false,printed=[]}={}) {
  const queries=[],bindings=[]
- const supabaseAdmin={from(table){
+ const supabaseAdmin={async rpc(name,args){
+  assert.equal(name,'original_standard_print_lines');assert.equal(args.p_order,'order-a')
+  return {data:printed.map(cart_item_id=>({cart_item_id}))}
+ },from(table){
   const q={table,filters:[]};queries.push(q)
   const chain={select(select){q.select=select;return chain},eq(k,v){q.filters.push([k,v]);return chain},order(){return chain},maybeSingle(){q.single=true;return chain},
    then(resolve){
     if(table==='cart_items'){
      if(fail||!q.select.includes('orders!orders_checkout_id_fkey!inner('))return Promise.resolve({data:null,error:{message:'PGRST201'}}).then(resolve)
-     const row={cart_item_id:'line-a',creation_id:'creation-a',package_type:'supreme',status:'ordered',orders:{order_id:'order-a',payment_id:unpaid?null:'paid-a'},creations:{creation_id:'creation-a'}}
+     const row={cart_item_id:'line-a',creation_id:'creation-a',package_type:'supreme',status:'ordered',orders:{order_id:'order-a',payment_id:unpaid?null:'paid-a'},creations:{creation_id:'creation-a',edition:original?'original':null}}
      return Promise.resolve({data:q.single?(missing?null:row):(missing?[]:[row]),error:null}).then(resolve)
     }
     assert.equal(table,'signature_voice_narration_tracks')
@@ -208,4 +211,12 @@ test('account change cancels the old response and never displays another account
  finish(Response.json({orders:[{order_id:'old-owner-order',order_status:'paid'}]}));await h.settle()
  assert.match(h.text(),/Sign in to view your orders/);assert.doesNotMatch(h.text(),/No orders yet|couldn't load/)
  assert.ok(!h.nodes().some(n=>n.type==='orders-list'));assert.equal(h.calls.length,1)
+})
+
+test('shipment precheck omits only the original line actually printed with standard narration', async()=>{
+ const ready=voiceReader({original:true,printed:['line-a']})
+ await ready.fulfillment.stampSignatureVoiceShipmentIntegrity({orderId:'order-a',adminCustomerId:'admin'})
+ assert.equal(ready.queries.some(q=>q.table==='signature_voice_narration_tracks'),false)
+ const sibling=voiceReader({original:true,printed:['other-line']})
+ await assert.rejects(sibling.fulfillment.stampSignatureVoiceShipmentIntegrity({orderId:'order-a',adminCustomerId:'admin'}),/incomplete/)
 })
