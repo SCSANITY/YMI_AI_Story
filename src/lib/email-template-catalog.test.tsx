@@ -149,7 +149,7 @@ test('unpaid reminder previews show the three approved messages at their existin
 
 test('confirmed proof body renders changed paragraphs and resolves only the real book actions', async () => {
   const body=(kind:'print'|'pdf', extra?:string)=>encodeReleaseBody({version:1,blocks:[
-    {type:'paragraph',content:[{text:'Corrected second paragraph',marks:['bold']}]},
+    {type:'paragraph',content:[{text:'Corrected   second paragraph',marks:['bold']}]},
     {type:'paragraph',content:[{text:'Book order',href:actionBase+'order'}]},
     ...(kind==='pdf'?[{type:'paragraph' as const,content:[{text:'Customer PDF',href:actionBase+'pdf'}]}]:[]),
     ...(extra?[{type:'paragraph' as const,content:[{text:'Edition action',href:extra}]}]:[]),
@@ -159,13 +159,15 @@ test('confirmed proof body renders changed paragraphs and resolves only the real
     const urls={orderUrl:'https://example.test/orders/a',downloadUrl:'https://example.test/proof/a',
       ...(edition==='basic'?{voiceUpgradeUrl:'https://example.test/upgrade'}:{voiceMaterialsUrl:'https://example.test/materials'})}
     const html=await render(<DeliveryEmail {...urls} personalNote={validatedReleaseNote(body('pdf',actionBase+action),'pdf')}/>)
-    assert.match(html,/<strong>Corrected second paragraph<\/strong>/)
+    assert.match(html,/<strong>Corrected   second paragraph<\/strong>/)
+    assert.match(html,/white-space:\s*pre-wrap/)
     for(const url of Object.values(urls))assert.ok(html.includes('href="'+url+'"'))
     assert.doesNotMatch(html,/release-action\.invalid|Thank you for choosing/)
   }
   const print=await render(<PrintReleasedEmail bookTitle="Fixture" orderId="order-a" personalNote={body('print')}/>)
   assert.match(print,/href="[^"]*\/orders\/order-a"/)
-  assert.match(print,/Corrected second paragraph/)
+  assert.match(print,/Corrected   second paragraph/)
+  assert.match(print,/white-space:\s*pre-wrap/)
   assert.throws(()=>validatedReleaseNote(body('pdf','https://untrusted.example'),'pdf'),/only this book/)
   assert.throws(()=>validatedReleaseNote(body('print'),'pdf'),/Keep the order/)
 })

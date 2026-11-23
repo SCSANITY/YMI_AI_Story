@@ -18,7 +18,7 @@ export function EditedReleaseBody({ document, links, cover, seal, pdf }: {
         : <React.Fragment key={i}>{node}</React.Fragment>
     })
   }
-  return <div style={{color:emailTheme.inkDark,fontFamily:emailTheme.serif,fontSize:16,lineHeight:1.55,whiteSpace:'pre-line'}}>
+  return <div style={{color:emailTheme.inkDark,fontFamily:emailTheme.serif,fontSize:16,lineHeight:1.55,whiteSpace:'pre-wrap'}}>
     {document.blocks.map((b,i) => {
       if ('items' in b) {
         const List = b.type === 'orderedList' ? 'ol' : 'ul'
