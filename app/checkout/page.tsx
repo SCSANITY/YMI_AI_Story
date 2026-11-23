@@ -119,7 +119,7 @@ function CheckoutPageContent() {
   );
   const isCheckoutPriceReady = items.length > 0 && !priceLoadError;
 
-  const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null; closed?: 'paid' | 'closed' } | null>(null);
+  const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null; originalPdf?: boolean; closed?: 'paid' | 'closed' } | null>(null);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
 
   // WEB-UIUX-001/34: while the customer merge is incomplete (failed or
@@ -322,9 +322,10 @@ function CheckoutPageContent() {
   const closedOrderState = restoredOrder?.key === restoreKey ? restoredOrder?.closed : null;
   const checkoutStateReady = !isOrderRestoring && !orderRestoreError && !closedOrderState;
 
+  const originalPdf = Boolean(restoreKey && restoredOrder?.key === restoreKey && restoredOrder.originalPdf);
   const isPaymentReturn = queryStep === 'payment' && !paymentResumeDismissed;
   const { shippingQuote, selectShippingMethod, retryShippingQuote } = useCheckoutShippingQuote(
-    form, checkoutStateReady && isCheckoutDraftHydrated && items.length > 0, restoredShippingQuote, t,
+    form, !originalPdf && checkoutStateReady && isCheckoutDraftHydrated && items.length > 0, restoredShippingQuote, t,
   );
   const selectedShippingOption = useMemo(() => {
     if (shippingQuote.status !== 'available') return null;
@@ -362,18 +363,18 @@ function CheckoutPageContent() {
 
   const checkoutShippingContext = useMemo(() => {
     return {
-      shippingAddress: shippingAddressPayload,
+      shippingAddress: originalPdf ? undefined : shippingAddressPayload,
       shippingAmountUsd,
       shippingMethod: selectedShippingOption?.methodCode ?? null,
       shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
       shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
     };
-  }, [selectedShippingOption, shippingAddressPayload, shippingAmountUsd]);
+  }, [originalPdf, selectedShippingOption, shippingAddressPayload, shippingAmountUsd]);
 
-  const addressIssue = recipientAddressIssue(shippingAddressPayload);
+  const addressIssue = originalPdf ? null : recipientAddressIssue(shippingAddressPayload);
   const contactIssue = EMAIL_FORMAT_PATTERN.test(checkoutContactEmail) ? null : 'email';
   const invalidField = contactIssue ?? addressIssue;
-  const canUseShippingQuote = shippingQuote.status === 'available' && Boolean(selectedShippingOption);
+  const canUseShippingQuote = originalPdf || (shippingQuote.status === 'available' && Boolean(selectedShippingOption));
 
   const quoteRequest = useMemo(() => {
     if (!checkoutStateReady || !isCheckoutDraftHydrated || !isCheckoutPriceReady || !orderId ||
@@ -383,12 +384,12 @@ function CheckoutPageContent() {
       email: checkoutContactEmail,
       customerId: sessionUser?.customerId ?? null,
       currency: selectedCurrency,
-      shippingAddress: shippingAddressPayload,
+      shippingAddress: originalPdf ? undefined : shippingAddressPayload,
       shippingMethod: selectedShippingOption?.methodCode,
     };
   }, [checkoutStateReady, isCheckoutDraftHydrated, isCheckoutPriceReady, orderId, canUseShippingQuote, isApplyingDiscount, isUpdatingQuantity, isUpdatingItems, invalidField,
     customerMergeFailed, checkoutContactEmail, sessionUser?.customerId, selectedCurrency,
-    shippingAddressPayload, selectedShippingOption?.methodCode]);
+    originalPdf, shippingAddressPayload, selectedShippingOption?.methodCode]);
   const quoteKey = quoteRequest
     ? JSON.stringify([quoteRequest, quoteRevision, shippingAmountUsd, items.map(item => [item.id, item.quantity, cartItemUnitPrice(item)])])
     : null;
@@ -540,6 +541,14 @@ function CheckoutPageContent() {
       };
     }
 
+    if (originalPdf) {
+      return {
+        href: `/personalize/${encodeURIComponent(primaryCheckoutItem.bookID)}`,
+        label: t('checkout.backToStory'),
+        creationId: null, previewJobId: null, coverUrl: null,
+      };
+    }
+
     const creationId = primaryCheckoutItem.creationId ?? primaryCheckoutItem.personalization?.creationId ?? null;
     const previewJobId = primaryCheckoutItem.personalization?.previewJobId ?? null;
 
@@ -564,7 +573,7 @@ function CheckoutPageContent() {
       previewJobId,
       coverUrl: resolveCheckoutItemCoverUrl(primaryCheckoutItem),
     };
-  }, [isMultiOrderCheckout, primaryCheckoutItem, resolveCheckoutItemCoverUrl, t]);
+  }, [originalPdf, isMultiOrderCheckout, primaryCheckoutItem, resolveCheckoutItemCoverUrl, t]);
 
   useEffect(() => {
     if (queryOrderId && queryOrderId !== orderId) {
@@ -661,9 +670,9 @@ function CheckoutPageContent() {
         if (!itemsResponse?.ok) throw new Error('Unable to restore checkout. Please try again.');
         const cartData = await itemsResponse.json();
         if (!Array.isArray(cartData?.items) || !cartData.items.length) throw new Error('Unable to restore checkout. Please try again.');
-        return { ...restored, rows: cartData.items };
+        return { ...restored, rows: cartData.items, originalPdf: cartData.originalPdf === true };
       })
-      .then(({ form: address, quote, discounts, rows }) => {
+      .then(({ form: address, quote, discounts, rows, originalPdf }) => {
         if (cancelled) return;
         hydrateCheckoutItems(rows);
         const restoredForm = mergeRestoredFormWithDraft(address, draftSnapshot);
@@ -681,7 +690,7 @@ function CheckoutPageContent() {
         setFormError('');
         setDiscountError('');
         setPaymentResumeDismissed(false);
-        setRestoredOrder({ key: restoreKey, error: null });
+        setRestoredOrder({ key: restoreKey, error: null, originalPdf });
       })
       .catch((error) => {
         if (cancelled) return;
@@ -790,8 +799,8 @@ function CheckoutPageContent() {
     if (nextHref) window.history.replaceState(window.history.state, '', nextHref);
     setPaymentResumeDismissed(true);
     setFormError('');
-    focusCheckoutSection('checkout-address');
-  }, []);
+    focusCheckoutSection(originalPdf ? 'checkout-contact' : 'checkout-address');
+  }, [originalPdf]);
 
   const reviewOrder = () => focusCheckoutSection('checkout-order-summary');
 
@@ -848,10 +857,12 @@ function CheckoutPageContent() {
           code,
           customerId: sessionUser?.customerId ?? null,
           email: checkoutContactEmail.trim().toLowerCase() || null,
-          shippingAmountUsd,
-          shippingMethod: checkoutShippingContext.shippingMethod,
-          shippingZoneCode: checkoutShippingContext.shippingZoneCode,
-          shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
+          ...(!originalPdf && {
+            shippingAmountUsd,
+            shippingMethod: checkoutShippingContext.shippingMethod,
+            shippingZoneCode: checkoutShippingContext.shippingZoneCode,
+            shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
+          }),
         }),
       });
 
@@ -872,7 +883,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, originalPdf, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
     if (!guardMergeHealthy()) return false;
@@ -896,10 +907,12 @@ function CheckoutPageContent() {
         body: JSON.stringify({
           orderId,
           instrumentId: instrumentId ?? '',
-          shippingAmountUsd,
-          shippingMethod: checkoutShippingContext.shippingMethod,
-          shippingZoneCode: checkoutShippingContext.shippingZoneCode,
-          shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
+          ...(!originalPdf && {
+            shippingAmountUsd,
+            shippingMethod: checkoutShippingContext.shippingMethod,
+            shippingZoneCode: checkoutShippingContext.shippingZoneCode,
+            shippingRateSnapshot: checkoutShippingContext.shippingRateSnapshot,
+          }),
         }),
       });
 
@@ -920,7 +933,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, originalPdf, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
     if (!guardMergeHealthy()) return false;
@@ -1012,7 +1025,7 @@ function CheckoutPageContent() {
         setIsPlacingOrder(false);
         return;
       }
-      if (saveAddress && !customerMergeFailed) {
+      if (saveAddress && !customerMergeFailed && !originalPdf) {
         // The browser can finish this small, optional write while leaving for Stripe.
         void fetch('/api/user/addresses', {
           method: 'POST',
@@ -1339,7 +1352,7 @@ function CheckoutPageContent() {
       <button type="button" onClick={isPaymentReturn ? goBackToAddress : goBackToSource}
         className="mb-2 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-amber-800 hover:underline">
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        {isPaymentReturn ? t('checkout.backToAddress') : checkoutSourceTarget.label}
+        {isPaymentReturn ? t(originalPdf ? 'checkout.backToContact' : 'checkout.backToAddress') : checkoutSourceTarget.label}
       </button>
       <h1 className="mb-4 font-title text-3xl font-bold text-slate-900 min-[800px]:text-4xl">{t('checkout.title')}</h1>
 
@@ -1373,6 +1386,7 @@ function CheckoutPageContent() {
           </div>
           <div id="checkout-books" className={booksExpanded ? '' : 'hidden min-[800px]:block'}>
             <CheckoutItemsSection
+              originalPdf={originalPdf}
               items={items}
               remainingCartItems={remainingCartItems}
               selectedCurrency={selectedCurrency}
@@ -1387,7 +1401,7 @@ function CheckoutPageContent() {
         </section>
 
         <div className="min-w-0 space-y-3 min-[800px]:col-start-1 min-[800px]:row-span-2 min-[800px]:row-start-1">
-          <section className="space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4">
+          <section id="checkout-contact" tabIndex={-1} className="space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4">
             <CheckoutContactSection
               form={form}
               invalidField={reviewAttempted ? invalidField : null}
@@ -1397,7 +1411,7 @@ function CheckoutPageContent() {
               onFormChange={handleFormChange}
             />
           </section>
-          <section id="checkout-address" tabIndex={-1}
+          {!originalPdf && <section id="checkout-address" tabIndex={-1}
             className="scroll-mt-24 space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4">
             <AddressFormSection
               form={form}
@@ -1414,7 +1428,7 @@ function CheckoutPageContent() {
               onShippingMethodChange={handleShippingMethodChange}
               onRetryShippingQuote={retryShippingQuote}
             />
-          </section>
+          </section>}
         </div>
 
         <section id="checkout-order-summary" tabIndex={-1}
@@ -1458,7 +1472,7 @@ function CheckoutPageContent() {
           <CheckoutSummaryPanel
             isPriceReady={summaryPriceReady}
             isSubtotalReady={isCheckoutPriceReady}
-            showShipping
+            showShipping={!originalPdf}
             shippingStatus={shippingQuote.status}
             estimatedDelivery={selectedShippingOption?.estimatedDelivery}
             discountTotalUsd={discountTotalUsd}

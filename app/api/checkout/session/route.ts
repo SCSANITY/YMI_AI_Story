@@ -35,8 +35,8 @@ export async function POST(request: Request) {
 
     const { option, shippingZoneCode, shipping, multiBookRule } = fresh
     const shippingAmountUsd = shipping.amountUsd
-    const shippingRateSnapshot = option.snapshot
-    const shippingMethod = option.methodCode
+    const shippingRateSnapshot = shipping.snapshot
+    const shippingMethod = option?.methodCode ?? null
     const billingAddress = body?.billingAddress ?? null
     const isGuest = Boolean(body?.isGuest)
     const stripe = getStripeServer()
@@ -108,6 +108,9 @@ export async function POST(request: Request) {
       loadCheckoutPricingItems(orderId, filter),
       getOrderDiscountSummary(orderId),
     ])
+    if (items.some(item => item.originalPdf) !== (option === null)) {
+      return NextResponse.json({ error: 'Checkout edition changed. Please review your order.' }, { status: 409 })
+    }
     const { lineItems, multiBookDiscountUsd, quote: payableQuote } = priceCheckout({
       items, currency, multiBookRule, shipping,
       productDiscountUsd: discountSummary.productDiscountAmountUsd,
@@ -154,7 +157,7 @@ export async function POST(request: Request) {
       },
     })
 
-    const { data: lockedOrder, error: lockError } = await supabaseAdmin
+    const lock = supabaseAdmin
       .from('orders')
       .update({
         checkout_session_id: session.id,
@@ -163,10 +166,9 @@ export async function POST(request: Request) {
       .eq('order_id', orderId)
       .eq('order_status', 'unpaid')
       .eq('checkout_currency', currency)
-      .eq('shipping_method', shippingMethod)
       .is('checkout_session_id', null)
-      .select('order_id')
-      .maybeSingle()
+    const matchingDelivery = shippingMethod ? lock.eq('shipping_method', shippingMethod) : lock.is('shipping_method', null)
+    const { data: lockedOrder, error: lockError } = await matchingDelivery.select('order_id').maybeSingle()
 
     if (lockError || !lockedOrder?.order_id) {
       await stripe.checkout.sessions.expire(session.id).catch(() => undefined)

@@ -21,7 +21,7 @@ const component = type => props => ({ type, props })
 const isReadOnlyRequest = call => call.method === 'GET' ||
   (call.method === 'POST' && ['/api/checkout/quote', '/api/checkout/shipping-quote'].includes(call.path))
 
-function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment&source=cart#resume', draft, mergeFailed = false, healOnRetry = true, onPayment, onQuote, onQuantity, onShipping, onAddressSave } = {}) {
+function checkoutFixture({ originalPdf = false, delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment&source=cart#resume', draft, mergeFailed = false, healOnRetry = true, onPayment, onQuote, onQuantity, onShipping, onAddressSave } = {}) {
   const runtime = customerRuntime(), calls = [], pending = deferred(), retryCalls = [], quantityCalls = []
   let currentOrder = order(), responseStatus = status
   runtime.react.Suspense = ({ children }) => children
@@ -53,7 +53,7 @@ function checkoutFixture({ delayed = false, status = 200, itemsStatus = 200, rej
     if (path.startsWith('/api/cart?orderId=')) {
       if (rejectItems) throw Error('Cart transport unavailable')
       if (deferItems) await new Promise(() => {})
-      return Response.json({ items: itemsStatus === 200 ? [item] : [] }, { status: itemsStatus })
+      return Response.json({ originalPdf, items: itemsStatus === 200 ? [item] : [] }, { status: itemsStatus })
     }
     if (path.startsWith('/api/cart?ids=')) return Response.json({ items: [item] })
     if (path === '/api/checkout/vouchers') return Response.json({ active: [] })
@@ -631,4 +631,24 @@ test('an opted-in address save runs only after a successful session and cannot p
   assert.deepEqual(save.body.address, h.calls.find(call => call.path === '/api/checkout/session').body.shippingAddress)
   assert.deepEqual(h.runtime.navigations, ['https://checkout.example.test/session'])
   h.runtime.unmount()
+})
+
+test('guest and member restore a direct PDF order with email only, even with a cached physical address', async () => {
+  for (const signedIn of [true, false]) {
+    const h = checkoutFixture({ originalPdf: true, signedIn, draft: address })
+    h.order = { ...order(), shipping_address: {}, shipping_method: null, shipping_rate_snapshot: null, shipping_amount_usd: 0 }
+    await settleCheckout(h)
+    assert.equal(h.node('address-form'), undefined)
+    assert.equal(h.node('summary').props.showShipping, false)
+    assert.equal(h.node('items').props.originalPdf, true)
+    assert.equal(h.node('payment').props.canPay, true)
+    h.node('payment').props.onPlaceOrder()
+    await h.runtime.flush()
+    const submitted = h.calls.find(call => call.path === '/api/checkout/session')?.body
+    assert.equal(submitted?.orderId, 'order-1')
+    assert.equal(submitted.email, address.email)
+    assert.equal(submitted.shippingAddress, undefined)
+    assert.equal(h.calls.some(call => call.path === '/api/checkout/shipping-quote' || call.path === '/api/user/addresses'), false)
+    h.runtime.unmount()
+  }
 })

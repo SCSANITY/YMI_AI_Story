@@ -28,6 +28,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     shipping_country_method_support: ['standard', 'speedy'].map(method => ({ method_code: method, country_code: 'HK', enabled: true })),
     shipping_base_rates: ['standard', 'speedy'].map((method, i) => ({ method_code: method, zone_code: 'HK', weight_kg: 1, base_cost_hkd: 78 * (i + 1), enabled: true })),
     orders: [order], cart_items: items,
+    originalPdfPurchases: [],
     multi_book_offer_rule: [],
     discount_instruments: freeShipping ? [{ instrument_id: 'free-shipping', instrument_type: 'voucher', code: null, discount_offers: { name: 'Free shipping' } }] : [],
   }
@@ -60,6 +61,10 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
       return query
     },
     async rpc(name, params) {
+      if (name === 'is_original_pdf_checkout') {
+        return { data: tables.originalPdfPurchases.some(purchase =>
+          purchase.orderId === params.p_order && purchase.lineId === params.p_line), error: null }
+      }
       if (name === 'quote_checkout_discounts') {
         rpcCalls.push({ name, params })
         return { data: [{ product_discount_amount_usd: order.discount_amount_usd,

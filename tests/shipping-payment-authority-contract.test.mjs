@@ -16,8 +16,9 @@ test('shipping display and Stripe payment use one server-authoritative calculato
   assert.match(quoteStore, /export async function calculateShippingQuote/)
   assert.match(checkoutQuote, /calculateShippingQuote\(shippingAddress\)/)
   assert.match(checkoutQuote, /amountUsd: option\.amountUsd/)
-  assert.match(checkoutSession, /shippingRateSnapshot = option\.snapshot/)
-  assert.match(checkoutSession, /shippingMethod = option\.methodCode/)
+  assert.match(checkoutQuote, /snapshot: option\.snapshot/)
+  assert.match(checkoutSession, /shippingRateSnapshot = shipping\.snapshot/)
+  assert.match(checkoutSession, /shippingMethod = option\?\.methodCode \?\? null/)
 
   assert.doesNotMatch(checkoutSession, /Number\(body\?\.shippingAmountUsd/)
   assert.doesNotMatch(checkoutSession, /shippingRateSnapshot = body\?\.shippingRateSnapshot/)

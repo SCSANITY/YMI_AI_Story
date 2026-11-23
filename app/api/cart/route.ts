@@ -167,6 +167,14 @@ async function getCart(request: Request) {
     }
   })
 
+  const line = cartItems[0]
+  if (orderIdParam && cartItems.length === 1 && line.package_type === 'digital' && line.cart_item_id &&
+      line.status === 'ordered' && line.order_id === orderIdParam && line.quantity === 1) {
+    const { isOriginalPdfCheckout } = await import('@/lib/original-pdf-checkout')
+    if (await isOriginalPdfCheckout(orderIdParam, line.cart_item_id)) {
+      return cartJson({ items: enriched, originalPdf: true })
+    }
+  }
   return cartJson({ items: enriched })
 }
 

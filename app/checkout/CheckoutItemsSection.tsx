@@ -16,6 +16,7 @@ import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/li
 type CoverStatus = 'ready' | 'pending' | 'unavailable';
 
 type CheckoutItemsSectionProps = {
+  originalPdf?: boolean;
   items: CartItem[];
   remainingCartItems: CartItem[];
   selectedCurrency: CheckoutCurrency;
@@ -28,6 +29,7 @@ type CheckoutItemsSectionProps = {
 };
 
 export function CheckoutItemsSection({
+  originalPdf = false,
   items,
   remainingCartItems,
   selectedCurrency,
@@ -287,10 +289,10 @@ export function CheckoutItemsSection({
                           </span>
                         </div>
                         <p className="mt-1 break-words text-xs text-slate-600">
-                          {t(isSignatureVoicePackage(item.personalization?.bookType) ? 'product.voiceEdition' : 'product.hardcover')}
+                          {t(originalPdf ? 'checkout.originalPdf' : isSignatureVoicePackage(item.personalization?.bookType) ? 'product.voiceEdition' : 'product.hardcover')}
                           {' · '}{item.personalization?.language || t('language.en')}
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {!originalPdf && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                           <div className="inline-flex w-fit items-center rounded-lg border border-amber-100">
                             <button
                               type="button"
@@ -330,7 +332,7 @@ export function CheckoutItemsSection({
                           {isPendingAddition ? (
                             <LoaderCircle className="h-4 w-4 animate-spin text-amber-600" aria-label={t('common.loading')} />
                           ) : null}
-                        </div>
+                        </div>}
                       </div>
                     </div>
                   </motion.div>
@@ -342,7 +344,7 @@ export function CheckoutItemsSection({
             ) : null}
           </div>
         )}
-        <div className="pt-4">
+        {!originalPdf && <div className="pt-4">
           <Button
             ref={addFromCartTriggerRef}
             variant="outline"
@@ -352,7 +354,7 @@ export function CheckoutItemsSection({
           >
             {t('checkout.addFromCart')}
           </Button>
-        </div>
+        </div>}
       </div>
       {addFromCartDialog}
     </>

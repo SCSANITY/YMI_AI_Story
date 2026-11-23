@@ -57,9 +57,10 @@ test('retired edition validation precedes owner/database writes and payment sess
   assert.doesNotMatch(merge, /mapProductType|price_at_purchase: item\./)
 })
 
-test('physical-only Checkout preserves address, ownership, shipping, and PDF lifecycle modules', async () => {
+test('physical Checkout retains its address flow alongside the verified digital return', async () => {
   const checkout = await read('app/checkout/page.tsx')
-  assert.doesNotMatch(checkout, /checkoutItemRequiresShipping|digital-checkout-email|!requiresShipping/)
+  assert.match(checkout, /!originalPdf && <section id="checkout-address"/)
+  assert.match(checkout, /originalPdf: cartData.originalPdf === true/)
   assert.match(checkout, /<CheckoutContactSection[\s\S]*<AddressFormSection[\s\S]*<CheckoutSummaryPanel[\s\S]*<PaymentActions/)
   assert.match(checkout, /<AddressFormSection/)
   assert.match(checkout, /<CheckoutContactSection/)

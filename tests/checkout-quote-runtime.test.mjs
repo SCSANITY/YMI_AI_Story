@@ -61,3 +61,38 @@ test('an existing matching Stripe session is quoted and reused at its frozen tot
   assert.equal(reused.sessionId, created.sessionId)
   assert.equal(h.stripeCalls.length, 1)
 })
+
+test('one verified original PDF quotes, pays and resumes without a delivery rate or address', async () => {
+  const h = shippingHarness({ noRules: true })
+  const line = h.tables.cart_items[0]
+  Object.assign(line, { product_type: 'ebook', package_type: 'digital', price_at_purchase: 12.34 })
+  h.tables.originalPdfPurchases.push({ orderId: h.order.order_id, lineId: line.cart_item_id })
+  const quote = await h.paymentQuote('USD', null, null)
+  assert.equal(quote.status, 200)
+  const { quote: price } = await quote.json()
+  assert.equal(price.totalMinor, 1234)
+  assert.equal(price.shippingAmountUsd, 0)
+  assert.equal((await h.checkout('USD', null, null, 1235)).status, 409)
+  assert.equal(h.stripeCalls.length, 0)
+  const started = await (await h.checkout('USD', null, null, 1234)).json()
+  assert.ok(started.sessionId)
+  assert.equal(h.order.shipping_method, null)
+  assert.equal(h.order.shipping_rate_snapshot, null)
+  assert.deepEqual(Object.keys(h.order.shipping_address), [])
+  assert.equal(h.stripeCalls[0].line_items.length, 1)
+  const resumed = await (await h.checkout('USD', null, null)).json()
+  assert.equal(resumed.reused, true)
+  assert.equal(resumed.sessionId, started.sessionId)
+  assert.equal(h.stripeCalls.length, 1)
+})
+
+test('a digital label or customization snapshot cannot authorize an original purchase', async () => {
+  const h = shippingHarness()
+  Object.assign(h.tables.cart_items[0], { product_type: 'ebook', package_type: 'digital' })
+  h.tables.cart_items[0].creations.customize_snapshot = { edition: 'original', bookType: 'digital' }
+  assert.equal((await h.checkout('USD', null, null)).status, 409)
+  h.tables.originalPdfPurchases.push({ orderId: h.order.order_id, lineId: 'item-1' })
+  h.tables.cart_items.push({ ...h.tables.cart_items[0], cart_item_id: 'item-2' })
+  assert.equal((await h.checkout('USD', null, null)).status, 409)
+  assert.equal(h.stripeCalls.length, 0)
+})

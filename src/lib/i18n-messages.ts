@@ -334,6 +334,9 @@ const en: MessageDictionary = {
 
   'checkout.title': 'Secure Checkout',
   'checkout.step': 'Step {{step}} of {{total}}',
+  'checkout.originalPdf': 'Original story (PDF only)',
+  'checkout.backToStory': 'Back to story',
+  'checkout.backToContact': 'Back to contact details',
   'checkout.backToAddress': 'Back to shipping address',
   'checkout.booksTitle': 'Your books',
   'checkout.quantity': 'Quantity',
