@@ -51,7 +51,7 @@ export async function dispatchPrintNotice(jobId: string) {
   try {
     if (!row.to_email) throw new EmailNotAcceptedError('No recipient email recorded on the order')
     messageId = await sendClaimedPrintNotice({ to: row.to_email, firstName: row.context?.firstName,
-      orderId: row.order_id, bookTitle, idempotencyKey: row.idempotency_key })
+      orderId: row.order_id, bookTitle, personalNote: row.context?.deliveryNote, idempotencyKey: row.idempotency_key })
   } catch (error) {
     if (!(error instanceof EmailNotAcceptedError)) return 'awaiting_confirmation'
     await markEmailEventFailed(row.email_event_id, error.message)

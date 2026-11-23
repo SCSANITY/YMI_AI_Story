@@ -56,7 +56,7 @@ export async function GET(
         review_status,
         total_pages,
         approved_pages,
-        release_mode,
+        proof_revision, proof_draft_open, release_mode,
         released_at,
         email_sent_at,
         print_status,
@@ -186,11 +186,19 @@ export async function GET(
     }
   }
 
+  let sharedFinal = false
+  if (finalJob.released_at && !finalJob.print_released_at) {
+    const links = await supabaseAdmin.from('cart_items').select('cart_item_id').eq('final_job_id',finalJob.job_id)
+      .eq('status','ordered').limit(2)
+    if (links.error) return jsonNoStore({ error: 'Could not verify order lines' }, { status: 503 })
+    sharedFinal = links.data?.length !== 1 || links.data[0].cart_item_id !== finalJob.cart_item_id
+  }
   const materials=await loadTrustedOrderLineDedications(finalJob.order_id)
   const dedicationSnapshot=materials.find(item=>item.cartItemId===finalJob.cart_item_id) ?? null
 
   return jsonNoStore({
     finalJob: finalJobSummary,
+    shared_final: sharedFinal,
     purchased_edition: purchasedEdition,
     page_contract: readModel.page_contract,
     pages: signedPages,

@@ -1,4 +1,5 @@
 import { verifyOrderDetails } from './admin-order-details-ui'
+import { ReleaseMailConfirmation } from '../../components/admin/final-review/ReleaseMailConfirmation'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { FinalReviewPanel } from '../../components/admin/FinalReviewPanel'
@@ -226,6 +227,32 @@ async function run() {
   }
   check(!unexpectedRequests.length, unexpectedRequests.join(', '))
   await verifyOrderDetails(root, check, click, waitFor)
+  const previews = []
+  const confirmations = []
+  let cancels = 0
+  window.fetch = async (url, options) => {
+    check(url.endsWith('/mail-preview'), 'Opening the dialog must not release a book')
+    const body = JSON.parse(options.body)
+    previews.push(body)
+    return Response.json({ html:'<p>Fixture</p>', defaultIntro:'Sample intro', recipient:'test@example.invalid' })
+  }
+  for (const kind of ['pdf','print']) {
+    await act(async () => root.render(<ReleaseMailConfirmation key={kind} job="book-a" kind={kind} revision={2}
+      onCancel={() => { cancels++ }} onConfirm={note => confirmations.push(note)} />))
+    const dialog = document.querySelector('dialog[open]')
+    await waitFor(() => dialog?.querySelector('iframe'))
+    const buttons = dialog.querySelectorAll('button')
+    if (kind === 'pdf') {
+      await click(buttons[0])
+      check(cancels === 1 && !confirmations.length, 'Cancelling must not confirm release')
+    } else {
+      check(buttons[1].disabled, 'Print requires checking replies')
+      await click(dialog.querySelector('input[type=checkbox]'))
+      await click(buttons[1])
+      check(confirmations[0] === 'Sample intro', 'Send the opening shown to staff')
+    }
+  }
+  check(previews.every(p => p.revision === 2), 'Email preview revision changed')
   await act(async () => root.unmount())
 }
 

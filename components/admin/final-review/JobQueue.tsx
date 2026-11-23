@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { proofReviewLabel } from '@/lib/proof-review-clock'
 import { FinalBookBadges } from './FinalBookBadges'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import type { FinalJobSummary } from '@/lib/finalReview'
@@ -22,6 +24,11 @@ export function JobQueue({
 }) {
   // rail = narrow vertical stack (legacy sidebar); board = responsive grid for the
   // full-width main view. Mobile stays a horizontal carousel in both cases.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
   const listLayout =
     variant === 'board'
       ? 'min-[960px]:grid min-[960px]:grid-cols-2 2xl:grid-cols-3 min-[960px]:gap-4 min-[960px]:space-y-0 min-[960px]:overflow-visible min-[960px]:pb-0'
@@ -46,6 +53,7 @@ export function JobQueue({
           <div className="admin-v2-job-bubble w-full shrink-0 p-5 text-sm text-[var(--admin-muted)]">{emptyLabel}</div>
         ) : (
           jobs.map((job) => {
+            const reviewLabel = proofReviewLabel(job, now)
             const isActive = job.final_job_id === selectedJobId
             return (
               <button
@@ -66,6 +74,7 @@ export function JobQueue({
                     <p className="mt-1 line-clamp-2 break-words text-[15px] font-bold leading-5 text-[var(--admin-page-ink)]">
                       {job.display_title}
                     </p>
+                    {reviewLabel && <p className="mt-1 text-xs font-medium text-[var(--admin-page-muted)]">{reviewLabel}</p>}
                     <FinalBookBadges mode={job.production_mode} edition={job.purchased_edition} />
                   </div>
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${

@@ -99,13 +99,17 @@ export async function POST(
 
   const { data: finalJob } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, job_id, order_id, status, review_status, released_at, total_pages')
+    .select('final_job_id, job_id, order_id, status, review_status, proof_revision, proof_draft_open, released_at, total_pages')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (!finalJob?.order_id) {
     return jsonNoStore({ error: 'Final job not found' }, { status: 404 })
   }
-  if (isFinalJobReleased(finalJob)) {
+  const editRevision = Number(request.headers?.get('x-proof-revision') ?? 1)
+  if (editRevision !== (finalJob.proof_revision ?? 1) + (finalJob.proof_draft_open ? 1 : 0)) {
+    return Response.json({ error: 'Proof revision changed. Refresh this book.' }, { status: 409 })
+  }
+  if ((isFinalJobReleased(finalJob) && !finalJob.proof_draft_open)) {
     await discardFinalReplacementStaging({ reviewIntentId, storagePath })
     return jsonNoStore({ error: 'Released Final jobs cannot be modified' }, { status: 409 })
   }
@@ -160,10 +164,10 @@ export async function POST(
   }
 
   if (
-    page.status === 'approved' &&
+    (page.status === 'approved' || (finalJob.proof_draft_open && page.status === 'pending_review')) &&
     page.review_intent_id === reviewIntentId &&
     page.manual_output_path === manualPath &&
-    page.approved_output_path === manualPath
+    (page.approved_output_path === manualPath || (finalJob.proof_draft_open && !page.approved_output_path))
   ) {
     const { data: signedManual } = await supabaseAdmin.storage
       .from('raw-private')
@@ -173,9 +177,9 @@ export async function POST(
       ok: true,
       superseded: false,
       hasManualOutput: true,
-      hasApprovedOutput: true,
+      hasApprovedOutput: Boolean(page.approved_output_path),
       manualUrl: signedManual?.signedUrl ?? null,
-      approvedUrl: signedManual?.signedUrl ?? null,
+      approvedUrl: page.approved_output_path ? signedManual?.signedUrl ?? null : null,
       reviewIntentId,
     })
   }
@@ -227,6 +231,7 @@ export async function POST(
       review_intent_at: now,
       updated_at: now,
     })
+    .setHeader('x-proof-revision', String(editRevision))
     .eq('final_job_page_id', page.final_job_page_id)
     .in('status', getFinalReplacementClaimablePageStatuses(String(finalJob.status)))
     .select('final_job_page_id')
@@ -251,15 +256,16 @@ export async function POST(
   const { data: updatedPage, error: updateError } = await supabaseAdmin
     .from('final_job_pages')
     .update({
-      status: 'approved',
+      status: finalJob.proof_draft_open ? 'pending_review' : 'approved',
       manual_output_path: manualPath,
-      approved_output_path: manualPath,
-      approved_source: 'manual',
-      reviewed_by: admin.customer_id,
-      reviewed_at: now,
+      approved_output_path: finalJob.proof_draft_open ? null : manualPath,
+      approved_source: finalJob.proof_draft_open ? null : 'manual',
+      reviewed_by: finalJob.proof_draft_open ? null : admin.customer_id,
+      reviewed_at: finalJob.proof_draft_open ? null : now,
       error_message: null,
       updated_at: now,
     })
+    .setHeader('x-proof-revision', String(editRevision))
     .eq('final_job_page_id', page.final_job_page_id)
     .eq('review_intent_id', reviewIntentId)
     .select('final_job_page_id')
@@ -287,9 +293,9 @@ export async function POST(
     ok: true,
     superseded: false,
     hasManualOutput: true,
-    hasApprovedOutput: true,
+    hasApprovedOutput: !finalJob.proof_draft_open,
     manualUrl: signedManual?.signedUrl ?? null,
-    approvedUrl: signedManual?.signedUrl ?? null,
+    approvedUrl: finalJob.proof_draft_open ? null : signedManual?.signedUrl ?? null,
     reviewIntentId,
   })
 }

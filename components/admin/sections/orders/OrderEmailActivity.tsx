@@ -5,6 +5,8 @@ import { orderTime } from './OrderBookDetails'
 import type { OrderRow } from './types'
 
 type Event = {
+  proof_revision?: string | null
+  delivery_note?: string | null
   book_title?: string | null
   email_event_id: string; email_key: string; final_job_id: string | null; status: string
   provider: string; provider_delivery_status: string | null; created_at: string; observed_at: string | null; sent_at: string | null
@@ -49,7 +51,8 @@ export function OrderEmailActivity({ order }: { order: OrderRow }) {
         const books = order.books?.filter(book => book.finalJobId === event.final_job_id) ?? []
         const scope = event.final_job_id ? event.book_title || (books.length === 1 ? books[0].title : 'Book notification') : 'Entire order'
         return <div key={event.email_event_id} className="border-t border-[var(--admin-card-line)] py-2 text-sm">
-          <strong className="capitalize">{title(event)}</strong><p>{scope} · {orderTime(event.sent_at ?? event.observed_at ?? event.created_at)}</p>
+          <strong className="capitalize">{title(event)}{event.proof_revision && ` · Rev ${event.proof_revision}`}</strong><p>{scope} · {orderTime(event.sent_at ?? event.observed_at ?? event.created_at)}</p>
+          {event.delivery_note && <details><summary>Opening message</summary><p className="whitespace-pre-line">{event.delivery_note}</p></details>}
           <small className="capitalize">{evidence(event)}</small>
         </div>
       })}

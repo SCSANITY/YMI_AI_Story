@@ -26,7 +26,7 @@ function loadRerun(productionMode, authorized = true) {
   }
   const supabaseAdmin = { from(table) {
     const query = {
-      select() { return query }, eq() { return query }, in() { return query },
+      setHeader() { return query }, or() { return query }, select() { return query }, eq() { return query }, in() { return query },
       update(patch) { calls.push({ table, patch }); return query },
       maybeSingle: async () => ({ data: rows[table], error: null }),
       then(resolve) { return Promise.resolve({ data: rows[table], error: null }).then(resolve) },

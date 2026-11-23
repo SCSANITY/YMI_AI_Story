@@ -17,8 +17,8 @@ test('released Reader keeps ownership, purchase, and release gates before signin
   assert.ok(purchaseGate < releaseGate)
   assert.ok(releaseGate < signing)
   assert.match(source, /noStoreJson as privateJson/)
-  assert.match(source, /buildReleasedReaderContract\(\{[\s\S]*outputAssets: linkedJob\?\.output_assets/)
-  assert.match(source, /\.eq\(['"]job_id['"], finalJob\.job_id\)[\s\S]*\.eq\(['"]job_type['"], ['"]final['"]\)/)
+  assert.match(source, /buildReleasedReaderContract\(\{[\s\S]*outputAssets: published\?\.assets/)
+  assert.match(source, /rpc\('read_published_proof_pages',[\s\S]*p_job: finalJob\.final_job_id/)
 })
 
 test('released Reader has no development or request-controlled purchase bypass', async () => {
@@ -58,5 +58,5 @@ test('Final release preserves page identity when reviewed paths replace Worker p
 
   assert.match(source, /buildFinalPdfReleaseArtifact\(\{[\s\S]*approvedPages,[\s\S]*loadApprovedPage:/)
   assert.match(composer, /mergeApprovedFinalOutputPages\(linkedOutputAssets, args\.approvedPages\)/)
-  assert.match(source, /releaseOutputAssets = artifact\.outputAssets[\s\S]*\.\.\.releaseOutputAssets/)
+  assert.match(source, /rpc\('publish_final_proof'[\s\S]*p_assets: artifact\.outputAssets/)
 })

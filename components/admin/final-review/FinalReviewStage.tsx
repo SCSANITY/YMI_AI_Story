@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { ReleaseMailConfirmation } from './ReleaseMailConfirmation'
 import { CheckCircle2, FileText, Loader2, Lock, PackageCheck, Send } from 'lucide-react'
 import type { FinalJobDetail } from '@/lib/finalReview'
 import { AdminButton, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminUi'
@@ -19,6 +21,7 @@ export function FinalReviewStage({
   busyAction,
   releaseDisabledReason,
   printDisabledReason,
+  onReopen,
   onReleasePdf,
   onReleasePrint,
 }: {
@@ -35,9 +38,13 @@ export function FinalReviewStage({
   busyAction: string | null
   releaseDisabledReason: string
   printDisabledReason: string
-  onReleasePdf: () => void
-  onReleasePrint: () => void
+  onReopen: () => Promise<void>
+  onReleasePdf: (note?: string) => void
+  onReleasePrint: (note?: string) => void
 }) {
+  const [compose, setCompose] = useState<{ job: string; kind: 'pdf' | 'print'; revision: number } | null>(null)
+  const book = detail?.finalJob
+  const revision = (book?.proof_revision ?? 1) + (book?.proof_draft_open ? 1 : 0)
   return (
     <div className="min-h-0 space-y-4 min-[960px]:h-full min-[960px]:w-64 xl:w-80 min-[960px]:shrink-0 min-[960px]:overflow-y-auto min-[960px]:overscroll-contain">
       <aside className="space-y-4">
@@ -72,15 +79,16 @@ export function FinalReviewStage({
           title="PDF version"
           icon={<FileText className="h-4 w-4" />}
           tone="emerald"
-          status={detail?.finalJob.review_status ?? 'Not set'}
+          status={book?.proof_draft_open ? 'Corrections in progress' : detail?.finalJob.review_status ?? 'Not set'}
           progress={`${approvedPageCount} / ${totalPageCount} pages`}
         >
           <AdminButton
             type="button"
-            onClick={onReleasePdf}
+            onClick={() => book && setCompose({ job: book.final_job_id, revision, kind: 'pdf' })}
             disabled={
               pdfReleased ||
               !readyToRelease ||
+              Boolean(detail?.shared_final && book?.proof_draft_open) ||
               busyAction !== null ||
               hasReviewPending ||
               hasUploadPending
@@ -98,6 +106,21 @@ export function FinalReviewStage({
             )}
             {pdfReleased ? 'PDF Released' : 'Release PDF version'}
           </AdminButton>
+          {detail?.finalJob.released_at && (
+            <div className="grid gap-2 text-sm">
+              <a className="font-semibold underline" href={'/api/admin/final-jobs/' + detail.finalJob.final_job_id + '/released-pdf?revision=' + (detail.finalJob.proof_revision ?? 1)}>
+                Download released PDF · Rev {detail.finalJob.proof_revision ?? 1}
+              </a>
+              {detail.finalJob.proof_draft_open && <span>Editing Rev {(detail.finalJob.proof_revision ?? 1) + 1}</span>}
+              {!printReleased && detail.shared_final && <span>Shared Final · verify the order line manually.</span>}
+              {pdfReleased && !printReleased && !detail.shared_final && (
+                <AdminButton type="button" tone="secondary" onClick={() => void onReopen()}>Return for corrections</AdminButton>
+              )}
+              {pdfReleased && !detail.finalJob.email_sent_at && (
+                <AdminButton type="button" tone="secondary" disabled={busyAction !== null} onClick={() => onReleasePdf()}>Check / retry delivery</AdminButton>
+              )}
+            </div>
+          )}
           <p className="text-xs leading-6 text-[var(--admin-page-muted)]">
             Updated: <span className="text-[var(--admin-page-ink)]">{formatDate(detail?.finalJob.updated_at)}</span>
           </p>
@@ -113,7 +136,7 @@ export function FinalReviewStage({
         >
           <AdminButton
             type="button"
-            onClick={onReleasePrint}
+            onClick={() => book && setCompose({ job: book.final_job_id, revision, kind: 'print' })}
             disabled={!printReadyToRelease || busyAction !== null || hasUploadPending}
             title={printDisabledReason}
             tone="secondary"
@@ -133,6 +156,14 @@ export function FinalReviewStage({
           {printReleased && detail && <PrintNotificationStatus key={detail.finalJob.final_job_id} jobId={detail.finalJob.final_job_id} />}
         </StageCard>
       </aside>
+      {compose && compose.job === book?.final_job_id && compose.revision === revision && (
+        <ReleaseMailConfirmation job={compose.job} kind={compose.kind} revision={revision}
+          onCancel={() => setCompose(null)} onConfirm={(note) => {
+            setCompose(null)
+            if (compose.kind === 'pdf') onReleasePdf(note)
+            else onReleasePrint(note)
+          }} />
+      )}
     </div>
   )
 }

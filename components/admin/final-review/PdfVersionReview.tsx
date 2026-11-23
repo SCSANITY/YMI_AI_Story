@@ -33,6 +33,7 @@ import { ProductionMaterialsPanel } from './ProductionMaterials'
 import type { LineSelector } from '@/lib/admin-production-materials'
 
 type Props = {
+  frozen: boolean
   materialLine?: LineSelector
   pages: FinalJobPageRow[]
   pageContract: FinalPageContractSummary
@@ -126,7 +127,7 @@ export function PdfVersionReview(props: Props) {
 
   return (
     <>
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+      {!props.frozen && <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           value={reviewNote}
           onChange={(event) => setReviewNote(event.target.value)}
@@ -148,7 +149,7 @@ export function PdfVersionReview(props: Props) {
             Approve all
           </button>
         </div>
-      </div>
+      </div>}
 
       {selectedJob && <ProductionMaterialsPanel job={selectedJob.final_job_id} line={props.materialLine}/>}
 
@@ -209,6 +210,7 @@ export function PdfVersionReview(props: Props) {
           approvePage={approvePage}
           markNeedsFix={markNeedsFix}
           rerunPage={rerunPage}
+          frozen={props.frozen}
           rerunDisabled={rerunDisabled}
           openReplacementPicker={openReplacementPicker}
           emptySlotUploadAllowed={emptySlotUploadAllowed}
@@ -239,6 +241,7 @@ function StructuredPdfWorkspace({
   rerunPage,
   openReplacementPicker,
   emptySlotUploadAllowed,
+  frozen,
   rerunDisabled,
   onImageLoadError,
 }: {
@@ -257,6 +260,7 @@ function StructuredPdfWorkspace({
   rerunPage: (page: FinalJobPageRow) => Promise<void>
   openReplacementPicker: (page: FinalJobPageRow) => void
   emptySlotUploadAllowed: boolean
+  frozen: boolean
   rerunDisabled: boolean
   onImageLoadError: () => void
 }) {
@@ -320,7 +324,7 @@ function StructuredPdfWorkspace({
 
           <div className="mt-4 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
             <PageFileLinks url={previewUrl} pageNumber={selectedItem.downloadNumber} compact />
-            <div className="grid grid-cols-2 gap-2">
+            {!frozen && <div className="grid grid-cols-2 gap-2">
               <ReviewActionButton
                 label="Approve"
                 icon={reviewPending?.action === 'approve' || reviewPending?.action === 'approve_all' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -349,7 +353,7 @@ function StructuredPdfWorkspace({
                 disabled={busyAction !== null || Boolean(uploadPending) || (emptySlot && !emptySlotUploadAllowed)}
                 onClick={() => openReplacementPicker(page)}
               />
-            </div>
+            </div>}
           </div>
         </div>
       </section>
@@ -381,6 +385,7 @@ function StructuredPdfWorkspace({
                   approvePage={approvePage}
                   markNeedsFix={markNeedsFix}
                   rerunPage={rerunPage}
+                  frozen={frozen}
                   rerunDisabled={rerunDisabled}
                   openReplacementPicker={openReplacementPicker}
                   emptySlotUploadAllowed={emptySlotUploadAllowed}
@@ -411,6 +416,7 @@ function StructuredPageNavigatorButton({
   rerunPage,
   openReplacementPicker,
   emptySlotUploadAllowed,
+  frozen,
   rerunDisabled,
   onImageLoadError,
 }: {
@@ -429,6 +435,7 @@ function StructuredPageNavigatorButton({
   rerunPage: (page: FinalJobPageRow) => Promise<void>
   openReplacementPicker: (page: FinalJobPageRow) => void
   emptySlotUploadAllowed: boolean
+  frozen: boolean
   rerunDisabled: boolean
   onImageLoadError: () => void
 }) {
@@ -484,7 +491,7 @@ function StructuredPageNavigatorButton({
       </button>
       <div className="mt-2 space-y-2 border-t border-[var(--admin-card-line)] pt-2">
         <PageFileLinks url={previewUrl} pageNumber={item.downloadNumber} compact />
-        <div className="grid grid-cols-2 gap-1.5">
+        {!frozen && <div className="grid grid-cols-2 gap-1.5">
           <ReviewActionButton
             label="Approve"
             icon={reviewPending?.action === 'approve' || reviewPending?.action === 'approve_all' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -513,7 +520,7 @@ function StructuredPageNavigatorButton({
             disabled={busyAction !== null || Boolean(uploadPending) || (emptySlot && !emptySlotUploadAllowed)}
             onClick={() => selectAndRun(() => openReplacementPicker(item.page))}
           />
-        </div>
+        </div>}
       </div>
       <label
         title={exportDisabled ? 'Approve this page before export' : 'Select approved source for ZIP export'}

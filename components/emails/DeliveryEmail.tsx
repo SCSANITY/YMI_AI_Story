@@ -6,6 +6,7 @@ import { OrderAccessNotice } from './OrderAccessNotice'
 export const PDF_DELIVERY_PREVIEW_SUBJECT = 'Important Order Update: Your YMI Story Preview Is Ready'
 
 type DeliveryEmailProps = {
+  personalNote?: string
   orderUrl: string
   displayId?: string | null
   orderId?: string
@@ -18,7 +19,7 @@ type DeliveryEmailProps = {
 }
 
 export function DeliveryEmail({
-  orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl, voiceMaterialsUrl, privacyUrl,
+  personalNote, orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl, voiceMaterialsUrl, privacyUrl,
 }: DeliveryEmailProps) {
   const label = displayId || orderId
   const name = firstName?.trim()
@@ -34,7 +35,9 @@ export function DeliveryEmail({
         </Text>
       ) : null}
       <Text style={styles.paragraph}>{name ? `Dear ${name},` : 'Hello,'}</Text>
-      {voiceMaterialsUrl ? (
+      {personalNote && !(voiceMaterialsUrl && personalNote === 'Thank you for choosing our Signature Voice Version. The digital preview of your order is ready!') ? (
+        <Text style={{ ...styles.paragraph, whiteSpace: 'pre-line' }}>{personalNote}</Text>
+      ) : voiceMaterialsUrl ? (
         <Text style={styles.paragraph}>
           Thank you for choosing our <strong>Signature Voice Version</strong>. The digital preview of your order is ready!
         </Text>

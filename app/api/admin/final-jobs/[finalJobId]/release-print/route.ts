@@ -20,6 +20,8 @@ export async function POST(
   }
   const { data, error } = await supabaseAdmin.rpc('materials_release_print_with_notice', {
     p_final_job_id: finalJobId,
+    p_revision: body.expectedRevision ?? 1,
+    p_note: typeof body.deliveryNote === 'string' ? body.deliveryNote.trim().slice(0, 4000) : '',
     p_expected_artifact_id: body.expectedArtifactId,
     p_admin_customer_id: admin.customer_id,
   })
@@ -28,7 +30,7 @@ export async function POST(
     const conflict = /must be released|already been released|upload and verify|not verified|changed before release|signature voice|triage|materials_print_/i.test(error.message)
     return jsonNoStore(
       { error: error.message || 'Failed to release print version' },
-      { status: conflict ? 409 : 500 }
+      { status: conflict || error.code === 'PT409' ? 409 : 500 }
     )
   }
 

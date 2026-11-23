@@ -17,7 +17,7 @@ const adminRoute = 'app/api/admin/final-jobs/[finalJobId]/'
 function makeHarness() {
   const orderId = 'synthetic-order'
   const objects = new Map()
-  const rows = {
+  const rows = { final_proof_releases: [],
     final_jobs: [],
     jobs: [],
     final_job_pages: [],
@@ -31,6 +31,19 @@ function makeHarness() {
   const error = (message) => ({ data: null, error: { message } })
   const ok = (data) => ({ data, error: null })
   const supabaseAdmin = {
+    async rpc(name, args) {
+      assert.equal(name, 'publish_final_proof')
+      const book = rows.final_jobs.find(row => row.final_job_id === args.p_job)
+      if (book.released_at && !book.proof_draft_open) return { error: { code: 'PT409', message: 'already published' } }
+      const job = rows.jobs.find(row => row.job_id === book.job_id)
+      assert.deepEqual(args.p_pages.map(p => p.approved_output_path), rows.final_job_pages
+        .filter(p => p.final_job_id === book.final_job_id).map(p => p.approved_output_path))
+      Object.assign(book, { pdf_path: args.p_path, released_at: new Date().toISOString(), email_sent_at: null,
+        review_status: 'released', approved_pages: args.p_pages.length, proof_revision: args.p_revision, proof_draft_open: false })
+      rows.final_proof_releases.push({ final_job_id: book.final_job_id, revision: args.p_revision, release_note: args.p_note })
+      job.output_assets = { ...args.p_assets, bucket: 'raw-private', pdf_path: args.p_path }
+      return ok(book.released_at)
+    },
     from(table) {
       assert.ok(rows[table], table)
       const filters = []
@@ -51,6 +64,9 @@ function makeHarness() {
       const query = {
         select(_fields, options) { countRequested = options?.count === 'exact'; return query },
         eq(key, value) { filters.push((row) => row[key] === value); return query },
+        setHeader(name, value) { assert.equal(name,'x-proof-revision'); assert.ok(Number(value) >= 1); return query },
+        or(predicate) { assert.equal(predicate,'released_at.is.null,proof_draft_open.eq.true')
+          filters.push(row => row.released_at == null || row.proof_draft_open); return query },
         neq(key, value) { filters.push((row) => row[key] !== value); return query },
         is(key, value) { filters.push((row) => row[key] === value); return query },
         not(key, operator, value) { assert.equal(operator, 'is'); filters.push((row) => row[key] != value); return query },
@@ -107,7 +123,7 @@ function makeHarness() {
       async sendOrderDeliveryEmail(params) {
         if (failMail.delete(params.finalJobId)) throw new Error('synthetic delivery failure')
         mail.push(params)
-        return { skipped: false, event: { status: 'sent' } }
+        return { skipped: false, event: { status: 'sent', sent_at: new Date().toISOString() } }
       },
     },
     'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } },
@@ -291,4 +307,51 @@ test('already approved manual uploads can release once under concurrent requests
   assert.equal(retry.body.pdfPath, legacyPdf)
   assert.ok(h.objects.get(legacyPdf).equals(bytes))
   assert.equal(h.writes.filter((entry) => entry.upload || entry.copy || entry.remove).length, storageWrites)
+})
+
+test('new proof publishes separately and retries the confirmed note without rebuilding or changing the first PDF', async () => {
+  const h = makeHarness()
+  h.addBook('revision-book', 'basic', await makePng('#ff0000'))
+  const id = 'revision-book'
+  await h.route('approve-all-pages', id)
+  const first = await h.route('release', id, undefined, { expectedRevision: 1, deliveryNote: 'First note' })
+  assert.equal(first.status, 200)
+  const bytes = Buffer.from(h.objects.get(first.body.pdfPath))
+  const job = h.rows.final_jobs[0]
+  job.proof_draft_open = true // SQL fixture separately exercises transactional reopen and the page guard.
+  const page = h.rows.final_job_pages[0]
+  const corrected = page.approved_output_path.replace(/[0-9a-f-]{36}\.png$/, crypto.randomUUID() + '.png')
+  assert.notEqual(corrected, page.approved_output_path)
+  h.objects.set(corrected, await makePng('#0000ff'))
+  page.approved_output_path = corrected
+  assert.equal((await h.route('release', id, undefined, { expectedRevision: 1 })).status, 409)
+  h.failMail.add(id)
+  const second = await h.route('release', id, undefined, { expectedRevision: 2, deliveryNote: 'We corrected the cover.' })
+  assert.equal(second.status, 200, JSON.stringify(second.body))
+  assert.equal(second.body.emailSentAt, null)
+  assert.notEqual(second.body.pdfPath, first.body.pdfPath)
+  const retry = await h.route('release', id, undefined, { expectedRevision: 2, deliveryNote: 'Wrong retry note' })
+  assert.equal(retry.status, 200)
+  assert.equal(retry.body.pdfPath, second.body.pdfPath)
+  assert.ok(retry.body.emailSentAt)
+  assert.deepEqual(h.mail.map(x => [x.proofRevision,x.deliveryNote]), [[1,'First note'],[2,'We corrected the cover.']])
+  assert.ok(h.objects.get(first.body.pdfPath).equals(bytes))
+  assert.equal((await dominantPdfColors(h.objects.get(second.body.pdfPath)))[0], 'blue')
+})
+
+test('54 hours starts at confirmed delivery of the current proof and stops for corrections or print', () => {
+  const js = ts.transpileModule(readFileSync(path.join(projectRoot,'src/lib/proof-review-clock.ts'),'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS }
+  }).outputText
+  const output = {}
+  vm.runInNewContext(js, { exports: output })
+  const start = Date.UTC(2026,10,1)
+  const h = 3_600_000
+  const job = { released_at: new Date(start - h).toISOString(), email_sent_at: new Date(start).toISOString(), print_status:'pending' }
+  assert.match(output.proofReviewLabel(job,start + 48*h), /6h left/)
+  assert.match(output.proofReviewLabel(job,start + 54*h), /due now/)
+  assert.match(output.proofReviewLabel(job,start + 56*h), /2h overdue/)
+  assert.match(output.proofReviewLabel({...job,email_sent_at:null},start + 57*h), /delivery/)
+  assert.match(output.proofReviewLabel({...job,proof_draft_open:true},start + 57*h), /Corrections/)
+  assert.equal(output.proofReviewLabel({...job,print_status:'released'},start + 57*h),null)
 })

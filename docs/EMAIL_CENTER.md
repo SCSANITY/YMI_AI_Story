@@ -215,3 +215,9 @@ coverage for both List-Unsubscribe headers and the opt-out readback. Gmail did
 not show its own button in the test mailbox; the client controls that display.
 For a scheduled run, check sent, skipped, failed and capped counts, then
 reconcile send and delivery evidence in Delivery Events.
+
+## Per-book proof revisions
+
+Final Review previews the branded PDF delivery or print approval message before confirmation. The opening paragraph can be edited for that send. Order Email Activity shows the revision, the saved paragraph, and provider evidence. New PDF proofs use independent delivery keys; retrying a confirmed failure reuses the same proof and opening paragraph. An uncertain provider result requires checking delivery evidence before another send.
+
+The Final Review queue prompts staff to check replies 54 hours after the current proof's confirmed send. The customer email asks for corrections within 48 hours. Corrections suspend the queue reminder, preserve the previous customer PDF and reader, and require another release for the revised copy. The Book Approved email remains tied to actual print release, once for the book.

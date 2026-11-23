@@ -91,7 +91,7 @@ test('Print Release locks only the verified manual artifact', async () => {
 
   assert.match(releaseRoute, /materials_release_print_with_notice/)
   assert.match(releaseRoute, /p_expected_artifact_id:\s*body\.expectedArtifactId/)
-  assert.match(panel, /body:\s*JSON\.stringify\(\{ expectedArtifactId \}\)/)
+  assert.match(panel, /body:\s*JSON\.stringify\(\{ expectedArtifactId, expectedRevision: detail.finalJob.proof_revision \?\? 1, deliveryNote \}\)/)
   assert.doesNotMatch(releaseRoute, /\.from\(['"]orders['"]\)|sendOrder|sendEmail|jobs|Worker/)
   assert.doesNotMatch(panel, /upload-print-page|print_completed_pages\s*>?=/)
   assert.doesNotMatch(printReview, /final_job_pages|buildFinalReviewWorkspace|fetch\s*\(/)

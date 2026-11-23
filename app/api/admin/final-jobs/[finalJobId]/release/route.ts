@@ -26,6 +26,8 @@ export async function POST(
     const result = await releaseFinalJob({
       finalJobId,
       releaseMode,
+      expectedRevision: body.expectedRevision,
+      deliveryNote: typeof body.deliveryNote === 'string' ? body.deliveryNote.trim().slice(0, 4000) : '',
       approvedByCustomerId: admin.customer_id,
     })
     return NextResponse.json({ ok: true, ...result })

@@ -36,7 +36,7 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, order_id, released_at, print_status, print_released_at')
+    .select('final_job_id, order_id, released_at, proof_draft_open, proof_revision, print_status, print_released_at')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob) {
@@ -55,6 +55,10 @@ export async function POST(
     return jsonNoStore({ error: 'Print version has already been released.' }, { status: 409 })
   }
 
+  const expectedRevision = body.expectedRevision ?? 1
+  if (finalJob.proof_draft_open || expectedRevision !== (finalJob.proof_revision ?? 1)) {
+    return jsonNoStore({ error: 'Refresh the current customer proof before uploading a print PDF.' }, { status: 409 })
+  }
   const artifactId = randomUUID()
   let storagePath
   try {
@@ -80,9 +84,9 @@ export async function POST(
     p_content_type: upload.contentType,
     p_admin_customer_id: admin.customer_id,
     p_expected_dedication_revision:body.expectedDedicationRevision,
-  })
+  }).setHeader('x-proof-revision', String(expectedRevision))
   if (createError) {
-    const conflict = /released|must be released|no longer|materials_print_/i.test(createError.message)
+    const conflict = createError.code === 'PT409' || /released|must be released|no longer|materials_print_/i.test(createError.message)
     return jsonNoStore(
       { error: createError.message || 'Failed to register print PDF revision' },
       { status: conflict ? 409 : 500 }

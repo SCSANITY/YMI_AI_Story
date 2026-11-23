@@ -46,13 +46,17 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, status, review_status, released_at')
+    .select('final_job_id, status, review_status, proof_revision, proof_draft_open, released_at')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob) {
     return jsonNoStore({ error: finalJobError?.message || 'Final job not found' }, { status: 404 })
   }
-  if (isFinalJobReleased(finalJob)) {
+  const editRevision = Number(request.headers?.get('x-proof-revision') ?? 1)
+  if (editRevision !== (finalJob.proof_revision ?? 1) + (finalJob.proof_draft_open ? 1 : 0)) {
+    return Response.json({ error: 'Proof revision changed. Refresh this book.' }, { status: 409 })
+  }
+  if ((isFinalJobReleased(finalJob) && !finalJob.proof_draft_open)) {
     return jsonNoStore({ error: 'Released Final jobs cannot be modified' }, { status: 409 })
   }
 

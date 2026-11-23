@@ -20,13 +20,17 @@ export async function POST(
 
   const { data: finalJob } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, review_status, released_at')
+    .select('final_job_id, review_status, proof_revision, proof_draft_open, released_at')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (!finalJob?.final_job_id) {
     return NextResponse.json({ error: 'Final job not found' }, { status: 404 })
   }
-  if (isFinalJobReleased(finalJob)) {
+  const editRevision = Number(request.headers?.get('x-proof-revision') ?? 1)
+  if (editRevision !== (finalJob.proof_revision ?? 1) + (finalJob.proof_draft_open ? 1 : 0)) {
+    return Response.json({ error: 'Proof revision changed. Refresh this book.' }, { status: 409 })
+  }
+  if ((isFinalJobReleased(finalJob) && !finalJob.proof_draft_open)) {
     return NextResponse.json({ error: 'Released Final jobs cannot be modified' }, { status: 409 })
   }
 
@@ -46,6 +50,7 @@ export async function POST(
       review_intent_at: now,
       updated_at: now,
     })
+    .setHeader('x-proof-revision', String(editRevision))
     .eq('final_job_id', finalJobId)
     .eq('page_index', pageIndex)
     .in('status', ['pending_review', 'approved', 'replaced', 'needs_fix'])
@@ -63,6 +68,7 @@ export async function POST(
       reviewed_at: now,
       updated_at: now,
     })
+    .setHeader('x-proof-revision', String(editRevision))
     .eq('final_job_id', finalJobId)
     .eq('page_index', pageIndex)
     .eq('review_intent_id', reviewIntentId)
@@ -91,6 +97,7 @@ export async function POST(
       updated_at: now,
     })
     .eq('final_job_id', finalJobId)
+    .or('released_at.is.null,proof_draft_open.eq.true')
 
   return NextResponse.json({ ok: true, superseded: false, reviewIntentId })
 }

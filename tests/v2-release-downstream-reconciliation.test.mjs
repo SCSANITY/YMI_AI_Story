@@ -18,7 +18,7 @@ test('one released customer PDF fact drives delivery, download, and Printing sta
   const orderDetail = await read('app/api/orders/[orderId]/route.ts')
   const customerOrderReadModel = await read('src/lib/customer-orders-server.ts')
 
-  const releaseWrite = finalReview.indexOf("review_status: 'released'")
+  const releaseWrite = finalReview.indexOf("rpc('publish_final_proof'")
   const signedDownload = finalReview.indexOf('.createSignedUrl(pdfPath')
   const delivery = finalReview.indexOf('sendOrderDeliveryEmail({')
   const productionTransition = finalReview.indexOf(

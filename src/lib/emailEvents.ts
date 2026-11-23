@@ -174,6 +174,7 @@ export async function markEmailEventSent(emailEventId: string, resendMessageId: 
   if (error) {
     throw new Error(`Failed to mark email event sent: ${error.message}`)
   }
+  return now
 }
 
 export async function markEmailEventFailed(emailEventId: string, errorMessage: string) {

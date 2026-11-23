@@ -78,6 +78,7 @@ async function mapWithConcurrency<T, R>(
 
 export async function approveFinalReviewTasks(args: {
   tasks: FinalReviewApprovalTask[]
+  editRevision?: number
   reviewedBy: string
   reviewedAt: string
 }): Promise<FinalReviewApprovalResult[]> {
@@ -90,6 +91,7 @@ export async function approveFinalReviewTasks(args: {
         review_intent_at: args.reviewedAt,
         updated_at: args.reviewedAt,
       })
+      .setHeader('x-proof-revision', String(args.editRevision ?? 1))
       .eq('final_job_page_id', task.finalJobPageId)
       .in('status', ['pending_review', 'approved', 'replaced', 'needs_fix'])
       .select('final_job_page_id')
@@ -126,6 +128,7 @@ export async function approveFinalReviewTasks(args: {
         error_message: null,
         updated_at: args.reviewedAt,
       })
+      .setHeader('x-proof-revision', String(args.editRevision ?? 1))
       .eq('final_job_page_id', task.finalJobPageId)
       .eq('review_intent_id', task.reviewIntentId)
       .select('final_job_page_id')

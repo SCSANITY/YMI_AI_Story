@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 68, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 71, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -328,7 +328,9 @@ test('Final Review preserves server authority and stale-response intent guards',
   )
   assert.match(releaseSection, /patchFinalJob/)
   assert.match(printReleaseSection, /patchFinalJob/)
-  assert.doesNotMatch(releaseSection, /loadJobs|loadDetail|await refresh/)
+  const [releaseSuccess, releaseFailure] = releaseSection.split('} catch (actionError)')
+  assert.doesNotMatch(releaseSuccess, /loadJobs|loadDetail|await refresh/)
+  assert.match(releaseFailure, /selectedJobIdRef.current === finalJobId[\s\S]*loadDetail\(finalJobId, false\)/)
   assert.doesNotMatch(printReleaseSection, /loadJobs|loadDetail|await refresh/)
 
   for (const [name, source] of [
@@ -363,9 +365,9 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(printReleaseApi, /printReleasedAt/)
   assert.match(printReleaseApi, /materials_release_print_with_notice/)
   assert.match(replacementApi, /manualUrl:\s*signedManual\?\.signedUrl/)
-  assert.match(replacementApi, /approvedUrl:\s*signedManual\?\.signedUrl/)
+  assert.match(replacementApi, /approvedUrl:\s*finalJob\.proof_draft_open \? null : signedManual\?\.signedUrl/)
   assert.match(replacementApi, /hasManualOutput:\s*true/)
-  assert.match(replacementApi, /hasApprovedOutput:\s*true/)
+  assert.match(replacementApi, /hasApprovedOutput:\s*!finalJob\.proof_draft_open/)
   assert.match(replacementUploadUrlApi, /await\s+requireAdminCustomer\s*\(\s*\)/)
   assert.match(replacementUploadUrlApi, /createSignedUploadUrl/)
   assert.match(replacementUploadUrlApi, /user_asset_cleanup_outbox/)
@@ -375,7 +377,7 @@ test('Final Review preserves server authority and stale-response intent guards',
   assert.match(printConfirmApi, /verifyRemotePdfHeader/)
   assert.match(manualPrintPolicy, /Range:\s*['"]bytes=0-4['"]/)
   assert.match(finalReview, /\.from\(['"]final_jobs['"]\)/)
-  assert.match(finalReview, /review_status:\s*['"]released['"]/)
+  assert.match(finalReview, /rpc\('publish_final_proof'/)
   assert.match(finalReview, /sendOrderDeliveryEmail/)
   assert.match(finalReview, /releasedAt:/)
   assert.match(finalReview, /emailSentAt/)
@@ -815,8 +817,8 @@ test('Admin Final Review keeps the T3-026 workspace while preserving the release
   assert.match(panel, /reviewIntentRef/)
   assert.match(panel, /uploadToSignedUrl/)
   assert.match(panel, /expectedArtifactId/)
-  assert.match(panel, /onReleasePdf=\{\(\) => void releaseJob\(\)\}/)
-  assert.match(panel, /onReleasePrint=\{\(\) => void releasePrintVersion\(\)\}/)
+  assert.match(panel, /onReleasePdf=\{\(note\) => void releaseJob\(note\)\}/)
+  assert.match(panel, /onReleasePrint=\{\(note\) => void releasePrintVersion\(note\)\}/)
   assert.doesNotMatch(panel, /approve-all-release|approveAll\s*\?|releaseJob\(true\)/)
 })
 

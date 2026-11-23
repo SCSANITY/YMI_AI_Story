@@ -106,7 +106,7 @@ export async function POST(
   if (commitError) {
     return jsonNoStore(
       { error: commitError.message || 'Failed to commit print PDF revision' },
-      { status: /released|no longer|does not match/i.test(commitError.message) ? 409 : 500 }
+      { status: commitError.code === 'PT409' || /released|no longer|does not match/i.test(commitError.message) ? 409 : 500 }
     )
   }
 

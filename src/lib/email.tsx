@@ -243,14 +243,14 @@ async function sendEmail({
 
 // This event was reserved by the release transaction and claimed by the dispatcher.
 export async function sendClaimedPrintNotice(params: {
-  to: string; firstName: string | null; bookTitle: string; orderId: string; idempotencyKey: string
+  to: string; firstName: string | null; bookTitle: string; orderId: string; personalNote?: string; idempotencyKey: string
 }) {
   const sender = resolveSender('EMAIL_FROM_DELIVERY')
   if (!sender.isValid) throw new EmailNotAcceptedError('Delivery mailbox is not configured')
   const response = await sendEmail({
     to: params.to, from: sender.normalizedValue, idempotencyKey: params.idempotencyKey,
     subject: PRINT_RELEASED_SUBJECT,
-    react: <PrintReleasedEmail firstName={params.firstName} bookTitle={params.bookTitle} orderId={params.orderId} />,
+    react: <PrintReleasedEmail personalNote={params.personalNote} firstName={params.firstName} bookTitle={params.bookTitle} orderId={params.orderId} />,
   })
   const id = response.data?.id || (response as { id?: string }).id
   if (!id) throw new Error('Unable to confirm print email receipt')
@@ -309,11 +309,13 @@ async function sendManagedEmail(params: ManagedEmailParams) {
       | null
       | undefined
     const messageId = responseAny?.data?.id || responseAny?.id || null
-    await markEmailEventSent(event.email_event_id, messageId)
-    return { skipped: false, event, response }
+    const sentAt = await markEmailEventSent(event.email_event_id, messageId)
+    return { skipped: false, event: { ...event, sent_at: sentAt }, response }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    await markEmailEventFailed(event.email_event_id, message)
+    if (params.emailKey !== 'final_delivery' || error instanceof EmailNotAcceptedError) {
+      await markEmailEventFailed(event.email_event_id, message)
+    }
     throw error
   }
 }
@@ -407,6 +409,8 @@ type SendOrderDeliveryEmailParams = {
   displayId?: string | null
   finalJobId?: string | null
   downloadUrl: string
+  proofRevision?: number
+  deliveryNote?: string
   previewImageUrl?: string
   orderUrl?: string
   retryFailed?: boolean
@@ -421,7 +425,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
 
   return sendManagedEmail({
     emailKey: 'final_delivery',
-    idempotencyKey: `final_delivery:${params.finalJobId || params.orderId}`,
+    idempotencyKey: `final_delivery:${params.finalJobId || params.orderId}` + ((params.proofRevision ?? 1) > 1 ? `:rev:${params.proofRevision}` : ''),
     to: params.to,
     fromEnvName: 'EMAIL_FROM_DELIVERY',
     subject: edition
@@ -433,6 +437,8 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
     context: {
       displayId: params.displayId ?? null,
       orderUrl,
+      proofRevision: params.proofRevision ?? 1,
+      deliveryNote: params.deliveryNote ?? '',
       hasPreviewImage: Boolean(params.previewImageUrl),
     },
     react: (
@@ -440,6 +446,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
         orderId={params.orderId}
         displayId={params.displayId}
         orderUrl={orderUrl}
+        personalNote={params.deliveryNote}
         downloadUrl={buildPdfDeliveryLink(orderUrl, params.orderId, params.downloadUrl, params.to)}
         coverImageUrl={params.previewImageUrl}
         firstName={params.firstName}

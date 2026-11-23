@@ -32,6 +32,8 @@ const FINAL_REVIEW_ASSET_TTL_SECONDS = 60 * 60 * 24
 export type FinalReleaseMode = 'manual' | 'job_auto' | 'story_auto' | 'global_auto'
 
 export type FinalJobSummary = {
+  proof_revision?: number
+  proof_draft_open?: boolean
   purchased_edition?: import('@/types').BookPackageType | null
   production_mode?: FinalProductionMode
   final_job_id: string
@@ -97,6 +99,7 @@ export type FinalPageContractSummary = {
 }
 
 export type FinalJobDetail = {
+  shared_final?: boolean
   finalJob: FinalJobSummary
   purchased_edition: import('@/types').BookPackageType | null
   page_contract: FinalPageContractSummary
@@ -148,8 +151,7 @@ export async function refreshFinalJobApprovalState(finalJobId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('final_job_id', finalJobId)
-    .is('released_at', null)
-    .neq('review_status', 'released')
+    .or('released_at.is.null,proof_draft_open.eq.true')
 
   if (error) {
     throw new Error(error.message || 'Failed to refresh final job approval state')
@@ -159,6 +161,8 @@ export async function refreshFinalJobApprovalState(finalJobId: string) {
 export async function releaseFinalJob(params: {
   finalJobId: string
   releaseMode: FinalReleaseMode
+  expectedRevision?: number
+  deliveryNote?: string
   approvedByCustomerId?: string | null
 }) {
   const { finalJobId, releaseMode, approvedByCustomerId = null } = params
@@ -178,6 +182,8 @@ export async function releaseFinalJob(params: {
         total_pages,
         approved_pages,
         release_mode,
+        proof_revision,
+        proof_draft_open,
         pdf_path,
         released_at,
         email_sent_at,
@@ -211,7 +217,18 @@ export async function releaseFinalJob(params: {
     linkedJob?.output_assets && typeof linkedJob.output_assets === 'object'
       ? (linkedJob.output_assets as Record<string, unknown>)
       : {}
-  const alreadyPdfReleased = isFinalJobReleased(finalJob)
+  const alreadyPdfReleased = isFinalJobReleased(finalJob) && !finalJob.proof_draft_open
+  const revision = (finalJob.proof_revision ?? 1) + (finalJob.proof_draft_open ? 1 : 0)
+  if ((params.expectedRevision ?? 1) !== revision) {
+    throw new FinalArtifactConflict('This proof revision has changed. Refresh before release.')
+  }
+  let deliveryNote = params.deliveryNote ?? ''
+  if (alreadyPdfReleased && !finalJob.email_sent_at && finalJob.proof_revision) {
+    const history = await supabaseAdmin.from('final_proof_releases').select('release_note')
+      .eq('final_job_id', finalJobId).eq('revision', revision).maybeSingle()
+    if (history.error) throw new Error('Could not read the confirmed delivery message')
+    deliveryNote = history.data?.release_note ?? ''
+  }
   if (alreadyPdfReleased && finalJob.email_sent_at) {
     const structuredProof = readStructuredFinalPdfReleaseProof(linkedOutputAssets)
     assertFinalOutputAssetsReleasable(linkedOutputAssets, structuredProof)
@@ -247,7 +264,7 @@ export async function releaseFinalJob(params: {
   }
 
   const scope = { orderId: finalJob.order_id, finalJobId }
-  const now = new Date().toISOString()
+  let publishedAt = finalJob.released_at
   let pdfPath: string
   let previewPath: string | null
   let approvedPageCount: number
@@ -322,63 +339,15 @@ export async function releaseFinalJob(params: {
       throw new Error(uploadError.message || 'Failed to upload final PDF')
     }
 
-    const { data: releasedFinal, error: finalJobUpdateError } = await supabaseAdmin
-      .from('final_jobs')
-      .update({
-        status: 'completed',
-        review_status: 'released',
-        release_mode: releaseMode,
-        approved_pages: approvedPageCount,
-        pdf_path: pdfPath,
-        released_at: now,
-        print_status: 'pending',
-        error_message: null,
-        updated_at: now,
-      })
-      .eq('final_job_id', finalJobId)
-      .is('released_at', null)
-      .neq('review_status', 'released')
-      .select('final_job_id')
-      .maybeSingle()
-
-    if (finalJobUpdateError) {
-      throw new Error(finalJobUpdateError.message || 'Failed to update final job release state')
+    const { data: releaseTime, error: publishError } = await supabaseAdmin.rpc('publish_final_proof', {
+      p_job: finalJobId, p_revision: revision, p_path: pdfPath, p_pages: approvedPages,
+      p_assets: artifact.outputAssets, p_mode: releaseMode, p_note: deliveryNote, p_reviewer: approvedByCustomerId,
+    })
+    if (publishError) {
+      if (publishError.code === 'PT409') throw new FinalArtifactConflict(publishError.message)
+      throw new Error(publishError.message || 'Could not publish the reviewed PDF')
     }
-    if (!releasedFinal?.final_job_id) {
-      throw new FinalArtifactConflict('This book was released by another request. Refresh before retrying delivery.')
-    }
-
-    const releaseOutputAssets = artifact.outputAssets
-    const { error: jobsUpdateError } = await supabaseAdmin
-      .from('jobs')
-      .update({
-        status: 'done',
-        progress: 100,
-        output_assets: {
-          ...releaseOutputAssets,
-          bucket: STORAGE_BUCKET,
-          pdf_path: pdfPath,
-        },
-        updated_at: now,
-      })
-      .eq('job_id', finalJob.job_id)
-
-    if (jobsUpdateError) {
-      throw new Error(jobsUpdateError.message || 'Failed to update worker job output')
-    }
-
-    const { error: approvedPagesError } = await supabaseAdmin
-      .from('final_job_pages')
-      .update({
-        reviewed_by: approvedByCustomerId,
-        reviewed_at: now,
-        updated_at: now,
-      })
-      .eq('final_job_id', finalJobId)
-
-    if (approvedPagesError) {
-      throw new Error(approvedPagesError.message || 'Failed to stamp release review metadata')
-    }
+    publishedAt = releaseTime
   }
 
   const displayTitle = resolveFinalJobDisplayTitle(finalJob)
@@ -394,7 +363,7 @@ export async function releaseFinalJob(params: {
   // Cover thumbnail must outlive the 72h PDF link — the email may be opened weeks
   // later, and a broken cover looks worse than a missing one. 1-year signed URL.
   const previewImageUrl = previewPath ? await signStorageUrl(previewPath, 60 * 60 * 24 * 365) : null
-  let emailSentAt = finalJob.email_sent_at || null
+  let emailSentAt = alreadyPdfReleased ? finalJob.email_sent_at : null
 
   try {
     // Edition-specific copy belongs to the delivered book, not any other item in the order.
@@ -415,12 +384,15 @@ export async function releaseFinalJob(params: {
       finalJobId,
       downloadUrl: signedPdf.signedUrl,
       previewImageUrl: previewImageUrl ?? undefined,
+      proofRevision: revision,
+      deliveryNote,
       retryFailed: true,
     })
 
     const eventStatus = emailResult.event?.status ?? null
     if (!emailResult.skipped || eventStatus === 'sent') {
-      emailSentAt = new Date().toISOString()
+      if (!emailResult.event?.sent_at) throw new Error('Delivery confirmation has no timestamp')
+      emailSentAt = emailResult.event.sent_at
       const { error: emailUpdateError } = await supabaseAdmin
         .from('final_jobs')
         .update({
@@ -428,8 +400,11 @@ export async function releaseFinalJob(params: {
           updated_at: emailSentAt,
         })
         .eq('final_job_id', finalJobId)
+        .eq('proof_revision', revision)
+        .is('email_sent_at', null)
 
       if (emailUpdateError) {
+        emailSentAt = null
         throw new Error(emailUpdateError.message || 'Failed to update final job email state')
       }
     }
@@ -447,7 +422,7 @@ export async function releaseFinalJob(params: {
     finalJobId,
     pdfPath,
     releaseMode: alreadyPdfReleased ? finalJob.release_mode : releaseMode,
-    releasedAt: finalJob.released_at || now,
+    releasedAt: publishedAt,
     emailSentAt,
     approvedPages: approvedPageCount,
     alreadyReleased: alreadyPdfReleased,

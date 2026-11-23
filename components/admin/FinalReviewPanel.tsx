@@ -97,9 +97,9 @@ function pickDefaultJob(jobs: FinalJobSummary[]) {
 
 function jobMatchesQueueFilter(job: FinalJobSummary, filter: FinalReviewQueueFilter) {
   if (filter === 'all') return true
-  if (filter === 'pdf_review') return job.review_status !== 'released'
+  if (filter === 'pdf_review') return !!job.proof_draft_open || job.review_status !== 'released'
   if (filter === 'print_pending') {
-    return job.review_status === 'released' && job.print_status !== 'released'
+    return !job.proof_draft_open && job.review_status === 'released' && job.print_status !== 'released'
   }
   return job.review_status === 'released' && job.print_status === 'released'
 }
@@ -651,7 +651,7 @@ export function FinalReviewPanel({
       const response = await fetch(`/api/admin/final-jobs/${finalJobId}/pages/${page.page_index}/approve`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Proof-Revision': String(editRevision) },
         body: JSON.stringify({ reviewIntentId }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<{
@@ -695,7 +695,7 @@ export function FinalReviewPanel({
       const response = await fetch(`/api/admin/final-jobs/${finalJobId}/pages/${page.page_index}/${action === 'rerun' ? 'rerun' : 'needs-fix'}`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Proof-Revision': String(editRevision) },
         body: JSON.stringify({ reviewNote: reviewNote.trim(), reviewIntentId }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<{ superseded?: boolean }>
@@ -754,7 +754,7 @@ export function FinalReviewPanel({
       const response = await fetch(`/api/admin/final-jobs/${finalJobId}/approve-all-pages`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Proof-Revision': String(editRevision) },
         body: JSON.stringify({ pageIntents }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<{
@@ -796,7 +796,9 @@ export function FinalReviewPanel({
     }
   }
 
-  const releaseJob = async () => {
+  const editRevision = (detail?.finalJob.proof_revision ?? 1) + (detail?.finalJob.proof_draft_open ? 1 : 0)
+
+  const releaseJob = async (deliveryNote = '') => {
     if (!selectedJobId) return
     const finalJobId = selectedJobId
     const action = 'release'
@@ -808,8 +810,8 @@ export function FinalReviewPanel({
       const response = await fetch(`/api/admin/final-jobs/${finalJobId}/release`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ releaseMode: 'manual' }),
+        headers: { 'Content-Type': 'application/json', 'X-Proof-Revision': String(editRevision) },
+        body: JSON.stringify({ releaseMode: 'manual', expectedRevision: editRevision, deliveryNote }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<ReleaseResponse>
       if (!response.ok) {
@@ -822,14 +824,20 @@ export function FinalReviewPanel({
         review_status: 'released',
         approved_pages: payload.approvedPages ?? current.approved_pages,
         release_mode: payload.releaseMode ?? current.release_mode,
+        proof_revision: editRevision,
+        proof_draft_open: false,
         released_at: payload.releasedAt ?? current.released_at ?? updatedAt,
-        email_sent_at: payload.emailSentAt ?? current.email_sent_at,
+        email_sent_at: payload.emailSentAt ?? null,
         print_status: current.print_status === 'locked' ? 'pending' : current.print_status,
         updated_at: updatedAt,
       }))
-      setMessage(payload.alreadyReleased ? 'PDF already released.' : 'PDF released successfully.')
+      setMessage(payload.emailSentAt ? 'PDF delivery confirmed.' : 'PDF published. Check the delivery status before retrying.')
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Failed to release final job')
+      if (selectedJobIdRef.current === finalJobId) {
+        // Publication can commit before signing or dispatch reports an error.
+        await loadDetail(finalJobId, false)
+        setError(actionError instanceof Error ? actionError.message : 'Failed to release final job')
+      }
     } finally {
       clearJobBusyAction(finalJobId, action)
     }
@@ -870,7 +878,7 @@ export function FinalReviewPanel({
           method: 'POST',
           credentials: 'include',
           cache: 'no-store',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Proof-Revision': String(editRevision) },
           body: JSON.stringify({
             reviewIntentId,
             fileName: validated.fileName,
@@ -902,7 +910,7 @@ export function FinalReviewPanel({
           method: 'POST',
           credentials: 'include',
           cache: 'no-store',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Proof-Revision': String(editRevision) },
           body: JSON.stringify({
             reviewIntentId,
             storagePath: uploadSpec.storagePath,
@@ -924,6 +932,11 @@ export function FinalReviewPanel({
       if (payload.superseded) {
         patchPage(finalJobId, targetPage.final_job_page_id, previous)
         URL.revokeObjectURL(localUrl)
+        return
+      }
+      if (detail?.finalJob.proof_draft_open) {
+        await loadDetail(finalJobId, false)
+        setMessage('Replacement uploaded. Approve this page before releasing the revised PDF.')
         return
       }
       const manualUrl = payload.manualUrl || localUrl
@@ -983,6 +996,7 @@ export function FinalReviewPanel({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             expectedDedicationRevision: detail?.dedication_snapshot?.revision,
+            expectedRevision: detail?.finalJob.proof_revision ?? 1,
             fileName: validated.fileName,
             sizeBytes: validated.sizeBytes,
             contentType: validated.contentType,
@@ -1059,7 +1073,7 @@ export function FinalReviewPanel({
     }
   }
 
-  const releasePrintVersion = async () => {
+  const releasePrintVersion = async (deliveryNote = '') => {
     if (!selectedJobId || !detail?.print_artifact) return
     const finalJobId = selectedJobId
     const expectedArtifactId = detail.print_artifact.artifact_id
@@ -1073,7 +1087,7 @@ export function FinalReviewPanel({
         credentials: 'include',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expectedArtifactId }),
+        body: JSON.stringify({ expectedArtifactId, expectedRevision: detail.finalJob.proof_revision ?? 1, deliveryNote }),
       })
       const payload = (await response.json().catch(() => ({}))) as ApiResponse<PrintReleaseResponse>
       if (!response.ok) {
@@ -1198,7 +1212,7 @@ export function FinalReviewPanel({
   const totalPageCount = activeDetail?.finalJob.total_pages ?? pages.length
   const hasReviewPending = Object.keys(currentReviewPendingByPage).length > 0
   const hasUploadPending = Object.keys(currentUploadPendingByPage).length > 0
-  const pdfReleased = Boolean(
+  const pdfReleased = !activeDetail?.finalJob.proof_draft_open && Boolean(
     activeDetail?.finalJob.released_at ||
       activeDetail?.finalJob.review_status === 'released'
   )
@@ -1535,6 +1549,7 @@ export function FinalReviewPanel({
             )}
             {activeVersion === 'pdf' ? (
               <PdfVersionReview
+                frozen={pdfReleased || !activeDetail || Boolean(activeDetail.shared_final && activeDetail.finalJob.proof_draft_open)}
                 key={selectedJobId ?? 'no-final-job'}
                 materialLine={materialLine}
                 pages={pages}
@@ -1597,8 +1612,23 @@ export function FinalReviewPanel({
               busyAction={busyAction}
               releaseDisabledReason={releaseDisabledReason}
               printDisabledReason={printDisabledReason}
-              onReleasePdf={() => void releaseJob()}
-              onReleasePrint={() => void releasePrintVersion()}
+              onReopen={async () => {
+                if (!activeDetail) return
+                const book = activeDetail.finalJob
+                try {
+                  const response = await fetch('/api/admin/final-jobs/' + book.final_job_id + '/reopen', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ revision: book.proof_revision }),
+                  })
+                  const result = await response.json()
+                  if (!response.ok) throw new Error(result.error || 'Unable to reopen proof')
+                  await refresh()
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Could not reopen this proof.')
+                }
+              }}
+              onReleasePdf={(note) => void releaseJob(note)}
+              onReleasePrint={(note) => void releasePrintVersion(note)}
             />
           ) : null}
           </div>

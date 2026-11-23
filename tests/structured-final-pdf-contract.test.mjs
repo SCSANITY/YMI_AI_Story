@@ -27,7 +27,7 @@ test('T4-019 releases only the V3 contract through a positive composition proof'
 
   assert.match(finalReview, /buildFinalPdfReleaseArtifact\(\{/)
   assert.match(finalReview, /if \(alreadyPdfReleased\)[\s\S]*savedPath = finalJob\.pdf_path[\s\S]*readStructuredFinalPdfReleaseProof\(linkedOutputAssets\)/)
-  assert.match(finalReview, /output_assets:\s*\{[\s\S]*\.\.\.releaseOutputAssets/)
+  assert.match(finalReview, /rpc\('publish_final_proof'[\s\S]*p_assets: artifact\.outputAssets/)
   assert.match(finalReview, /getFinalPdfPreviewImagePath/)
   assert.doesNotMatch(releaseArtifact, /buildLegacyPdf|legacy/i)
   assert.match(releaseArtifact, /pdf_composition:\s*structuredProof/)
@@ -65,8 +65,8 @@ test('Final release validates, composes, uploads, persists, and emails in that o
   const approvalGate = finalReview.indexOf("page.status !== 'approved' && page.status !== 'replaced'")
   const compose = finalReview.indexOf('buildFinalPdfReleaseArtifact({')
   const upload = finalReview.indexOf('.upload(pdfPath, artifact.buffer')
-  const releaseState = finalReview.indexOf("review_status: 'released'")
-  const outputWrite = finalReview.indexOf('...releaseOutputAssets')
+  const releaseState = finalReview.indexOf("rpc('publish_final_proof'")
+  const outputWrite = finalReview.indexOf('p_assets: artifact.outputAssets')
   const delivery = finalReview.indexOf('sendOrderDeliveryEmail({')
 
   assert.ok(coverageGate >= 0 && coverageGate < approvalGate)

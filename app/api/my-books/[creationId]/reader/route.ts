@@ -235,17 +235,11 @@ async function getReader(
     })
   }
 
-  const { data: pages, error: pagesError } = await supabaseAdmin
-    .from('final_job_pages')
-    .select('page_index, status, approved_output_path')
-    .eq('final_job_id', finalJob.final_job_id)
-    .order('page_index', { ascending: true })
-
-  if (pagesError) {
-    return privateJson({ error: 'Failed to load final pages' }, { status: 500 })
-  }
-
-  const readyPages = ((pages ?? []) as FinalPageRow[]).filter(
+  const { data: published, error: proofError } = await supabaseAdmin.rpc('read_published_proof_pages', {
+    p_job: finalJob.final_job_id,
+  })
+  if (proofError) return privateJson({ error: 'Failed to load published pages' }, { status: 500 })
+  const readyPages = ((published?.pages ?? []) as FinalPageRow[]).filter(
     (page): page is FinalPageRow & { approved_output_path: string } => Boolean(page.approved_output_path)
   )
   if (!readyPages.length || readyPages.length < Number(finalJob.total_pages ?? 0)) {
@@ -277,24 +271,13 @@ async function getReader(
     })
   }
 
-  const { data: linkedJob, error: linkedJobError } = await supabaseAdmin
-    .from('jobs')
-    .select('output_assets')
-    .eq('job_id', finalJob.job_id)
-    .eq('job_type', 'final')
-    .maybeSingle()
-
-  if (linkedJobError) {
-    return privateJson({ error: 'Failed to load final page metadata' }, { status: 500 })
-  }
-
   let releasedContract: ReleasedReaderContract
   try {
     releasedContract = buildReleasedReaderContract({
-      outputAssets: linkedJob?.output_assets ?? null,
+      outputAssets: published?.assets ?? null,
       approvedPages: readyPages.map((page) => ({
         pageIndex: page.page_index,
-        status: page.status,
+        status: page.status ?? 'approved',
         approvedPath: page.approved_output_path,
       })),
       totalPages: Number(finalJob.total_pages ?? 0),
