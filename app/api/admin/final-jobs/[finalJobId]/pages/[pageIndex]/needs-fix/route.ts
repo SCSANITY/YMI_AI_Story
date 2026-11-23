@@ -98,6 +98,7 @@ export async function POST(
       updated_at: now,
     })
     .eq('final_job_id', finalJobId)
+    .eq('proof_draft_sequence',finalJob.proof_draft_sequence ?? 0)
     .or('released_at.is.null,proof_draft_open.eq.true')
 
   return NextResponse.json({ ok: true, superseded: false, reviewIntentId })
