@@ -207,7 +207,7 @@ export function templateRowToBook(row: TemplateCatalogRow): CatalogBook | null {
   const isForBoys = homePlacementPositions.for_boys !== undefined
   const isForGirls = homePlacementPositions.for_girls !== undefined
   const isComingSoon = Boolean(row.is_coming_soon)
-  const packagePricing = packagePriceRowsToPricing(row.package_prices)
+  const packagePricing = packagePriceRowsToPricing(row.package_prices, templateId)
   const catalogDisplayPackageType = normalizeBookPackageType(row.catalog_display_package_type) ?? 'basic'
   const displayPrice = getCatalogDisplayPrice(packagePricing, catalogDisplayPackageType)
   const price = displayPrice.effectivePriceUsd

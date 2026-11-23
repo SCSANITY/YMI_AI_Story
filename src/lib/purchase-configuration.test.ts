@@ -7,8 +7,8 @@ import {
   resolvePurchasePackageFromSnapshot,
 } from './purchase-configuration'
 
-test('normalizes only physical editions and rejects retired products and aliases', () => {
-  assert.equal(normalizePurchasePackageType('digital'), null)
+test('recognizes PDF and physical formats and rejects retired aliases', () => {
+  assert.equal(normalizePurchasePackageType('digital'), 'digital')
   assert.equal(normalizePurchasePackageType('ebook'), null)
   assert.equal(normalizePurchasePackageType('Cloud Explorer'), null)
   assert.equal(normalizePurchasePackageType('classic'), 'basic')

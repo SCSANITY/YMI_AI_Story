@@ -47,7 +47,8 @@ test('retired edition validation precedes owner/database writes and payment sess
     read('src/lib/checkout-quote-server.ts'),
   ])
   assert.ok(configuration.indexOf('if (!packageType ||') < configuration.indexOf('owner = await resolveCheckoutOwner'))
-  assert.match(quote, /!normalizeBookPackageType\(item\.package_type\)/)
+  assert.match(quote, /normalizeBookPackageType\(item\.package_type\)/)
+  assert.match(quote, /personalizedPdfOfferEnabled\(creation.template_id, item.package_price_version\)/)
   assert.match(quote, /edition_no_longer_available/)
   assert.ok(quote.indexOf('await loadCheckoutPricingItems(orderId, filter)') < quote.indexOf('.checkout.sessions.retrieve'))
   assert.ok(session.indexOf('await prepareCheckoutQuote(request, body)') < session.indexOf('.update({'))
@@ -59,7 +60,7 @@ test('retired edition validation precedes owner/database writes and payment sess
 
 test('physical Checkout retains its address flow alongside the verified digital return', async () => {
   const checkout = await read('app/checkout/page.tsx')
-  assert.match(checkout, /!originalPdf && <section id="checkout-address"/)
+  assert.match(checkout, /!digitalOnly && <section id="checkout-address"/)
   assert.match(checkout, /originalPdf: cartData.originalPdf === true/)
   assert.match(checkout, /<CheckoutContactSection[\s\S]*<AddressFormSection[\s\S]*<CheckoutSummaryPanel[\s\S]*<PaymentActions/)
   assert.match(checkout, /<AddressFormSection/)

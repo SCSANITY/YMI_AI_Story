@@ -35,7 +35,7 @@ const resolveCover = (row: CreationItem) => {
 const resolveTemplatePackagePrice = (item: CreationItem): BookPackagePrice | null => {
   try {
     const packageType = resolveBookPackageTypeFromSnapshot(item.customize_snapshot) ?? 'basic'
-    return packagePriceRowsToPricing(item.templates?.package_prices)[packageType]
+    return packagePriceRowsToPricing(item.templates?.package_prices, item.template_id)[packageType] ?? null
   } catch {
     return null
   }

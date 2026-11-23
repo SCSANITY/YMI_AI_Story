@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Mic, PenLine } from 'lucide-react'
+import { FileText, Mic, PenLine } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { BookPackagePricing, DisplayCurrency } from '@/types'
 import { EDITION_DEFINITIONS, type EditionType } from './product/edition-definitions'
@@ -10,14 +10,22 @@ import { getUiMessage as t } from '@/lib/i18n-messages'
 import styles from './PreviewExperience.module.css'
 
 export function PreviewYourBookPanel({ value, pricing, currency, childName, disabled = false, voiceDisabled = false, voiceReady, notice, recovery, onChange, onDetails, onVoice, onMessage, actions }: {
-  value: EditionType; pricing: BookPackagePricing; currency: DisplayCurrency; childName: string
+  value: EditionType | 'digital'; pricing: BookPackagePricing; currency: DisplayCurrency; childName: string
   disabled?: boolean; voiceDisabled?: boolean; voiceReady: boolean; notice?: string | null; recovery?: ReactNode
-  onChange: (value: EditionType) => void; onDetails: (value: EditionType) => void
+  onChange: (value: EditionType | 'digital') => void; onDetails: (value: EditionType) => void
   onVoice: () => void; onMessage: () => void; actions: ReactNode
 }) {
   return <aside className={styles.panel} aria-label="Your book">
     <h2>Your book</h2>
     <div role="radiogroup" aria-label="Book Type" className={styles.editionOptions}>
+      {pricing.digital && <label className={styles.editionOption} data-selected={value === 'digital' || undefined}>
+        <span className={styles.editionRadio}>
+          <input type="radio" name="preview-edition" value="digital" checked={value === 'digital'} disabled={disabled} onChange={() => onChange('digital')} />
+          <FileText size={32} aria-hidden="true" />
+          <span className={styles.editionText}><strong>PDF only</strong><EditionPrice as="span" price={pricing.digital} currency={currency} className={styles.compactPrice} /></span>
+          <span className={styles.radioDot} aria-hidden="true" />
+        </span>
+      </label>}
       {EDITION_DEFINITIONS.map(edition => <div className={styles.editionOption} key={edition.type} data-selected={value === edition.type || undefined}>
         {edition.type === 'supreme' ? <span className={styles.popular}>✦ MOST POPULAR</span> : null}
         <label className={styles.editionRadio}>

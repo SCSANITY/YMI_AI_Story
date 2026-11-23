@@ -323,19 +323,20 @@ function CheckoutPageContent() {
   const checkoutStateReady = !isOrderRestoring && !orderRestoreError && !closedOrderState;
 
   const originalPdf = Boolean(restoreKey && restoredOrder?.key === restoreKey && restoredOrder.originalPdf);
+  const digitalOnly = originalPdf || (items.length > 0 && items.every(item => item.personalization?.bookType === 'digital'));
   const originalEdition = Boolean(restoreKey && restoredOrder?.key === restoreKey && restoredOrder.originalEdition);
   const isPaymentReturn = queryStep === 'payment' && !paymentResumeDismissed;
   const { shippingQuote, selectShippingMethod, retryShippingQuote } = useCheckoutShippingQuote(
-    form, !originalPdf && checkoutStateReady && isCheckoutDraftHydrated && items.length > 0, restoredShippingQuote, t,
+    form, !digitalOnly && checkoutStateReady && isCheckoutDraftHydrated && items.length > 0, restoredShippingQuote, t,
   );
   const selectedShippingOption = useMemo(() => {
-    if (shippingQuote.status !== 'available') return null;
+    if (digitalOnly || shippingQuote.status !== 'available') return null;
     return (
       shippingQuote.options.find((option) => option.methodCode === shippingQuote.selectedMethod) ??
       shippingQuote.options[0] ??
       null
     );
-  }, [shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
+  }, [digitalOnly, shippingQuote.options, shippingQuote.selectedMethod, shippingQuote.status]);
   const shippingAmountUsd = selectedShippingOption ? selectedShippingOption.amountUsd : 0;
   const incomingDiscountCode = useMemo(() => {
     const raw = searchParams?.get('ref');
@@ -364,18 +365,18 @@ function CheckoutPageContent() {
 
   const checkoutShippingContext = useMemo(() => {
     return {
-      shippingAddress: originalPdf ? undefined : shippingAddressPayload,
+      shippingAddress: digitalOnly ? undefined : shippingAddressPayload,
       shippingAmountUsd,
       shippingMethod: selectedShippingOption?.methodCode ?? null,
       shippingZoneCode: String(selectedShippingOption?.snapshot?.zoneCode ?? ''),
       shippingRateSnapshot: selectedShippingOption?.snapshot ?? null,
     };
-  }, [originalPdf, selectedShippingOption, shippingAddressPayload, shippingAmountUsd]);
+  }, [digitalOnly, selectedShippingOption, shippingAddressPayload, shippingAmountUsd]);
 
-  const addressIssue = originalPdf ? null : recipientAddressIssue(shippingAddressPayload);
+  const addressIssue = digitalOnly ? null : recipientAddressIssue(shippingAddressPayload);
   const contactIssue = EMAIL_FORMAT_PATTERN.test(checkoutContactEmail) ? null : 'email';
   const invalidField = contactIssue ?? addressIssue;
-  const canUseShippingQuote = originalPdf || (shippingQuote.status === 'available' && Boolean(selectedShippingOption));
+  const canUseShippingQuote = digitalOnly || (shippingQuote.status === 'available' && Boolean(selectedShippingOption));
 
   const quoteRequest = useMemo(() => {
     if (!checkoutStateReady || !isCheckoutDraftHydrated || !isCheckoutPriceReady || !orderId ||
@@ -385,12 +386,12 @@ function CheckoutPageContent() {
       email: checkoutContactEmail,
       customerId: sessionUser?.customerId ?? null,
       currency: selectedCurrency,
-      shippingAddress: originalPdf ? undefined : shippingAddressPayload,
+      shippingAddress: digitalOnly ? undefined : shippingAddressPayload,
       shippingMethod: selectedShippingOption?.methodCode,
     };
   }, [checkoutStateReady, isCheckoutDraftHydrated, isCheckoutPriceReady, orderId, canUseShippingQuote, isApplyingDiscount, isUpdatingQuantity, isUpdatingItems, invalidField,
     customerMergeFailed, checkoutContactEmail, sessionUser?.customerId, selectedCurrency,
-    originalPdf, shippingAddressPayload, selectedShippingOption?.methodCode]);
+    digitalOnly, shippingAddressPayload, selectedShippingOption?.methodCode]);
   const quoteKey = quoteRequest
     ? JSON.stringify([quoteRequest, quoteRevision, shippingAmountUsd, items.map(item => [item.id, item.quantity, cartItemUnitPrice(item)])])
     : null;
@@ -800,8 +801,8 @@ function CheckoutPageContent() {
     if (nextHref) window.history.replaceState(window.history.state, '', nextHref);
     setPaymentResumeDismissed(true);
     setFormError('');
-    focusCheckoutSection(originalPdf ? 'checkout-contact' : 'checkout-address');
-  }, [originalPdf]);
+    focusCheckoutSection(digitalOnly ? 'checkout-contact' : 'checkout-address');
+  }, [digitalOnly]);
 
   const reviewOrder = () => focusCheckoutSection('checkout-order-summary');
 
@@ -858,7 +859,7 @@ function CheckoutPageContent() {
           code,
           customerId: sessionUser?.customerId ?? null,
           email: checkoutContactEmail.trim().toLowerCase() || null,
-          ...(!originalPdf && {
+          ...(!digitalOnly && {
             shippingAmountUsd,
             shippingMethod: checkoutShippingContext.shippingMethod,
             shippingZoneCode: checkoutShippingContext.shippingZoneCode,
@@ -884,7 +885,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, originalPdf, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, digitalOnly, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
     if (!guardMergeHealthy()) return false;
@@ -908,7 +909,7 @@ function CheckoutPageContent() {
         body: JSON.stringify({
           orderId,
           instrumentId: instrumentId ?? '',
-          ...(!originalPdf && {
+          ...(!digitalOnly && {
             shippingAmountUsd,
             shippingMethod: checkoutShippingContext.shippingMethod,
             shippingZoneCode: checkoutShippingContext.shippingZoneCode,
@@ -934,7 +935,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, originalPdf, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, digitalOnly, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
     if (!guardMergeHealthy()) return false;
@@ -1026,7 +1027,7 @@ function CheckoutPageContent() {
         setIsPlacingOrder(false);
         return;
       }
-      if (saveAddress && !customerMergeFailed && !originalPdf) {
+      if (saveAddress && !customerMergeFailed && !digitalOnly) {
         // The browser can finish this small, optional write while leaving for Stripe.
         void fetch('/api/user/addresses', {
           method: 'POST',
@@ -1353,7 +1354,7 @@ function CheckoutPageContent() {
       <button type="button" onClick={isPaymentReturn ? goBackToAddress : goBackToSource}
         className="mb-2 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-amber-800 hover:underline">
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        {isPaymentReturn ? t(originalPdf ? 'checkout.backToContact' : 'checkout.backToAddress') : checkoutSourceTarget.label}
+        {isPaymentReturn ? t(digitalOnly ? 'checkout.backToContact' : 'checkout.backToAddress') : checkoutSourceTarget.label}
       </button>
       <h1 className="mb-4 font-title text-3xl font-bold text-slate-900 min-[800px]:text-4xl">{t('checkout.title')}</h1>
 
@@ -1413,7 +1414,7 @@ function CheckoutPageContent() {
               onFormChange={handleFormChange}
             />
           </section>
-          {!originalPdf && <section id="checkout-address" tabIndex={-1}
+          {!digitalOnly && <section id="checkout-address" tabIndex={-1}
             className="scroll-mt-24 space-y-3 rounded-2xl border border-amber-100 bg-white/90 p-3 sm:p-4">
             <AddressFormSection
               form={form}
@@ -1474,7 +1475,7 @@ function CheckoutPageContent() {
           <CheckoutSummaryPanel
             isPriceReady={summaryPriceReady}
             isSubtotalReady={isCheckoutPriceReady}
-            showShipping={!originalPdf}
+            showShipping={!digitalOnly}
             shippingStatus={shippingQuote.status}
             estimatedDelivery={selectedShippingOption?.estimatedDelivery}
             discountTotalUsd={discountTotalUsd}

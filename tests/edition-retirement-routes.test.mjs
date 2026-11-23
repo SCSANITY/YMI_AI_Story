@@ -13,7 +13,7 @@ function load(path, dependencies = {}) {
   } }).outputText
   const loadedModule = { exports: {} }
   vm.runInNewContext(js, {
-    module: loadedModule, exports: loadedModule.exports, Response, console, URL,
+    module: loadedModule, exports: loadedModule.exports, Response, console, URL, process: { env: {} },
     require(name) {
       if (Object.hasOwn(dependencies, name)) return dependencies[name]
       if (name === 'server-only') return {}

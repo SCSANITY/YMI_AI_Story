@@ -9,6 +9,7 @@ import test from 'node:test'
 
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib'
 import sharp from 'sharp'
+import { address, shippingHarness } from './helpers/shipping-discount-harness.mjs'
 import ts from 'typescript'
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url))
@@ -468,8 +469,21 @@ test('paid personalised PDF and physical lines sharing a Creation get format-cor
     product_type:format==='digital'?'ebook':'physical',package_type:format,status:'ordered',quantity:1,price_at_purchase:10,
     creations:{template_id:'story',customize_snapshot:{bookType:'basic',storagePath:'synthetic/face.png'}},
   })
+  // Carry the exact checkout line identities and charged total into fulfillment.
+  const checkout = shippingHarness({ pdfOffers: 'story@17' })
+  checkout.order.order_id = h.orderId
+  checkout.tables.cart_items.splice(0, checkout.tables.cart_items.length, ...h.rows.cart_items.map(line => ({
+    ...line, creations: { ...line.creations, preview_job_id: 'purchased-preview' },
+    owner_type: 'customer', customer_id: 'test-customer', package_price_version: line.package_type === 'digital' ? 17 : 1,
+  })))
+  const { quote } = await (await checkout.paymentQuote()).json()
+  assert.equal(quote.totalMinor, 3000)
+  const session = await checkout.checkout('USD', 'standard', address, quote.totalMinor)
+  assert.equal(session.status, 200)
+  const charged = checkout.stripeSessions.get((await session.json()).sessionId)
+  assert.equal(charged.amount_total, quote.totalMinor)
   const pay=()=>h.load('src/lib/orderFulfillment.ts').finalizeOrderPayment({
-    orderId:h.orderId,customerId:'customer',email:'buyer@example.test',provider:'stripe',amount:20,
+    orderId:h.orderId,customerId:'customer',email:'buyer@example.test',provider:'stripe',amount:charged.amount_total / 100,
   })
   await pay()
   await pay()

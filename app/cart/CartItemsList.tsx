@@ -126,7 +126,7 @@ const CartItemCard = memo(function CartItemCard({
             >
               <h2 className="font-display text-base sm:text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors line-clamp-2">{displayTitle}</h2>
             </button>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">{item.book.author}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{item.book.author}{item.personalization?.bookType === 'digital' && ' \u00b7 PDF only'}</p>
           </div>
 
           <div className="mt-2 sm:mt-0 sm:text-right shrink-0 space-y-2">

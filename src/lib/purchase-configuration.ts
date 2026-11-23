@@ -1,4 +1,4 @@
-const PURCHASE_PACKAGE_TYPES = ['basic', 'supreme'] as const
+const PURCHASE_PACKAGE_TYPES = ['basic', 'supreme', 'digital'] as const
 
 export type PurchasePackageType = (typeof PURCHASE_PACKAGE_TYPES)[number]
 

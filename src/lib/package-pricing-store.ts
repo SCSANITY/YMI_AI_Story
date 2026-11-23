@@ -41,6 +41,7 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
     .select(`
       creation_id,
       template_id,
+      preview_job_id,
       customize_snapshot,
       owner_type,
       customer_id,
@@ -70,6 +71,10 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
   const packageType = resolveBookPackageTypeFromSnapshot(creation.customize_snapshot)
   if (!packageType) {
     throw new PackagePricingStoreError('Creation uses an unsupported book package', 409)
+  }
+
+  if (packageType === 'digital' && !creation.preview_job_id) {
+    throw new PackagePricingStoreError('A personalized Preview is required for this PDF', 409)
   }
 
   if (packageType === 'supreme' && creation.voice_asset_id) {
@@ -119,7 +124,7 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
 
   let price
   try {
-    price = packagePriceRowToModel(priceRow as TemplatePackagePriceRow)
+    price = packagePriceRowToModel(priceRow as TemplatePackagePriceRow, creation.template_id)
   } catch {
     throw new PackagePricingStoreError('Package price is invalid', 409)
   }

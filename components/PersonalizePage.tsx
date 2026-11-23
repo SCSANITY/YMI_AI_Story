@@ -352,7 +352,7 @@ export default function PersonalizePage({
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isSavingEdition, setIsSavingEdition] = useState(false);
   const [editionError, setEditionError] = useState<string | null>(null);
-  const [editionDetails, setEditionDetails] = useState<PurchasePackageType | null>(null);
+  const [editionDetails, setEditionDetails] = useState<'basic' | 'supreme' | null>(null);
   const [checkoutAcknowledged, setCheckoutAcknowledged] = useState(false);
   const [acknowledgementError, setAcknowledgementError] = useState<string | null>(null);
   const checkoutAcknowledgementRef = useRef<HTMLInputElement>(null);
@@ -362,7 +362,7 @@ export default function PersonalizePage({
   const versionSelectionAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => versionSelectionAbortRef.current?.abort(), []);
   const purchaseBookTypeRef = useRef<PurchasePackageType>(
-    bookType === 'supreme' ? bookType : 'basic'
+    normalizePurchasePackageType(bookType) ?? 'basic'
   );
   const confirmedPurchaseBookTypeRef = useRef<PurchasePackageType>(purchaseBookTypeRef.current);
   const queuedPurchaseBookTypeRef = useRef<PurchasePackageType | null>(null);
@@ -582,11 +582,9 @@ export default function PersonalizePage({
   }, [setAge, setName]);
 
   // --- Calculations ---
-  const purchaseBookType: PurchasePackageType = bookType === 'supreme'
-    ? bookType
-    : 'basic';
+  const purchaseBookType: PurchasePackageType = normalizePurchasePackageType(bookType) ?? 'basic';
   const previewPricing = useMemo(() => book ? {
-    basic: getBookPackagePrice(book, 'basic'), supreme: getBookPackagePrice(book, 'supreme'),
+    digital: book.packagePricing?.digital, basic: getBookPackagePrice(book, 'basic'), supreme: getBookPackagePrice(book, 'supreme'),
   } : null, [book]);
   const currentPackagePrice = previewPricing?.[purchaseBookType] ?? null;
   const currentPrice = currentPackagePrice?.effectivePriceUsd ?? 0;
@@ -739,8 +737,8 @@ export default function PersonalizePage({
   const canConfigurePurchase = hasPurchaseIdentity
     && previewAccessState !== 'unavailable'
     && !hasTerminalPreviewFailure;
-  const canAddToCart = stageCanAddToCart && canConfigurePurchase;
-  const canCheckout = stageCanCheckout && canConfigurePurchase;
+  const canAddToCart = stageCanAddToCart && canConfigurePurchase && Boolean(currentPackagePrice);
+  const canCheckout = stageCanCheckout && canConfigurePurchase && Boolean(currentPackagePrice);
 
   useEffect(() => {
     if (!hasReadyPreviewCover || !displayedPreviewJobId) return;
@@ -2696,7 +2694,8 @@ export default function PersonalizePage({
   const hasUsablePhoto = Boolean(formReceipt);
   const isFormReady = areChildDetailsReady && hasUsablePhoto;
   const fromPackagePrice = book
-    ? [getBookPackagePrice(book, 'basic'), getBookPackagePrice(book, 'supreme')]
+    ? [getBookPackagePrice(book, 'basic'), getBookPackagePrice(book, 'supreme'),
+       ...(book.packagePricing?.digital ? [book.packagePricing.digital] : [])]
         .reduce((lowest, price) => price.effectivePriceUsd < lowest.effectivePriceUsd ? price : lowest)
     : null;
   useEffect(() => {
@@ -2760,14 +2759,14 @@ export default function PersonalizePage({
     : previewCoverState === 'restoring' ? 'restoring' : 'generating';
   const waitingNotice = previewError || (isGeneratingPreviewCapacityWaiting
     ? t('personalize.capacityLoadingBody') : null);
-  const panelNotice = previewError || editionError || previewVariantError || restoredPreviewGroup.error || shareError
+  const panelNotice = previewError || editionError || (!currentPackagePrice && 'Choose an available book type to continue.') || previewVariantError || restoredPreviewGroup.error || shareError
     || (isRetryingPreview ? t('personalize.previewRetrying') : null)
     || (isPreviewPartialFailure ? t('personalize.previewPartialFailure') : null)
     || (isPreviewVariantCapacityWaiting ? t('personalize.capacityPhotoBody') : null)
     || (isGeneratingPreviewCapacityWaiting ? t('personalize.capacityLoadingBody') : null);
   const purchaseReady = hasReadyPreviewCover && canAddToCart && canCheckout;
   const purchaseBusy = isSavingEdition || isSavingVoice || isSwitchingPreviewVersion || previewActionPending === 'CHECKOUT';
-  const purchasePrice = formatDisplayCurrency(currentPackagePrice!.effectivePriceUsd, displayCurrency);
+  const purchasePrice = currentPackagePrice ? formatDisplayCurrency(currentPackagePrice.effectivePriceUsd, displayCurrency) : 'Unavailable';
   const acknowledgeAction = (action: () => void) => {
     if (!purchaseReady || purchaseBusy) return;
     if (!checkoutAcknowledged) {
@@ -3034,7 +3033,7 @@ export default function PersonalizePage({
                   intro={<h1><span aria-hidden={hasReadyPreviewCover || Boolean(previewError) || isPreviewUnavailable}>{name}’s book is being <em>illustrated</em></span><span aria-hidden={!hasReadyPreviewCover}>Meet {name}’s <em>book</em></span><span aria-hidden={hasReadyPreviewCover || !previewError && !isPreviewUnavailable}>{t('personalize.previewUnavailableTitle')}</span></h1>}
                   status={<PreviewWaitingStatus name={name} photo={selectedPreviewPhoto} progress={waitingProgress}
                     ready={hasReadyPreviewCover} mode={waitingMode} notice={waitingNotice} compact />}
-                  mobilePurchase={<PreviewMobilePurchase edition={purchaseBookType === 'supreme' ? 'Hardcover + Voice' : 'Hardcover'}
+                  mobilePurchase={<PreviewMobilePurchase edition={purchaseBookType === 'digital' ? 'PDF only' : purchaseBookType === 'supreme' ? 'Hardcover + Voice' : 'Hardcover'}
                     waitingLabel={waitingMode === 'generating' ? waitingProgress.countdownSeconds ? `Ready in ~${waitingProgress.countdownSeconds}s` : 'Just a little longer…' : waitingMode === 'queue' ? 'Waiting in queue' : waitingMode === 'error' || waitingMode === 'unavailable' ? 'Preview unavailable' : 'Restoring preview…'}
                     price={purchasePrice} ready={purchaseReady} busy={purchaseBusy} onPurchase={() => acknowledgeAction(handleCheckoutClick)} />}
                   book={<PreviewBookShell coverUrl={decodedPreviewCover.url} ready={hasReadyPreviewCover}

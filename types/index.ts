@@ -18,7 +18,7 @@ export type BookPackageType = 'basic' | 'supreme';
 export type HomeBookSectionKey = 'brand_new' | 'for_boys' | 'for_girls' | 'in_discount';
 
 export type BookPackagePrice = {
-  packageType: BookPackageType;
+  packageType: BookPackageType | 'digital';
   listPriceUsd: number;
   salePriceUsd: number | null;
   effectivePriceUsd: number;
@@ -28,7 +28,7 @@ export type BookPackagePrice = {
   version: number;
 };
 
-export type BookPackagePricing = Record<BookPackageType, BookPackagePrice>;
+export type BookPackagePricing = Record<BookPackageType, BookPackagePrice> & { digital?: BookPackagePrice };
 
 export type TemplateFinalPreviewPage = {
   pageIndex: number;

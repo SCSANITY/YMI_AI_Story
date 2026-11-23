@@ -12,7 +12,7 @@ import styles from './PreviewExperience.module.css'
 
 // Mounted only while open: no gallery image is requested by the initial Preview.
 export function EditionDetailsDialog({ edition, selected, price, currency, disabled = false, onChoose, onClose }: {
-  edition: EditionType; selected: EditionType; price: BookPackagePrice; currency: DisplayCurrency
+  edition: EditionType; selected: EditionType | 'digital'; price: BookPackagePrice; currency: DisplayCurrency
   onChoose: (edition: EditionType) => void; onClose: () => void
   disabled?: boolean
 }) {

@@ -69,7 +69,7 @@ export async function PATCH(
   const expectedPreviewJobId = String(
     body.expected_preview_job_id ?? body.expectedPreviewJobId ?? ''
   ).trim()
-  if (!packageType || !isUuid(expectedPreviewJobId)) {
+  if (!packageType || !isUuid(expectedPreviewJobId) || (packageType === 'digital' && !process.env.NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS?.trim())) {
     return NextResponse.json(
       { error: 'A valid edition and Preview are required', code: 'invalid_purchase_configuration' },
       { status: 400, headers: NO_STORE_HEADERS }
@@ -132,6 +132,9 @@ export async function PATCH(
       { error: 'Creation not found', code: 'creation_not_found' },
       { status: 404, headers: NO_STORE_HEADERS }
     )
+  }
+  if (creation.customize_snapshot?.edition === 'original') {
+    return NextResponse.json({ error: 'Select original editions on the story page' }, { status: 409, headers: NO_STORE_HEADERS })
   }
   if (String(creation.preview_job_id ?? '') !== expectedPreviewJobId) {
     return NextResponse.json(
@@ -274,7 +277,7 @@ export async function PATCH(
 
   let price
   try {
-    price = packagePriceRowToModel(priceRow as TemplatePackagePriceRow)
+    price = packagePriceRowToModel(priceRow as TemplatePackagePriceRow, creation.template_id)
   } catch {
     return NextResponse.json(
       { error: 'The selected edition price is invalid', code: 'package_price_invalid' },

@@ -108,7 +108,7 @@ export async function POST(request: Request) {
       loadCheckoutPricingItems(orderId, filter),
       getOrderDiscountSummary(orderId),
     ])
-    if (items.some(item => item.originalPdf) !== (option === null)) {
+    if (items.every(item => item.digital) !== (option === null)) {
       return NextResponse.json({ error: 'Checkout edition changed. Please review your order.' }, { status: 409 })
     }
     const { lineItems, multiBookDiscountUsd, quote: payableQuote } = priceCheckout({

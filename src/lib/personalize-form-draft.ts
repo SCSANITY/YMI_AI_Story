@@ -46,7 +46,8 @@ export function readPersonalizeFormDraft(
       return null
     }
 
-    const bookType = normalizePurchasePackageType(parsed.bookType) ?? 'basic'
+    // The pre-Preview form uses a physical default. PDF selection belongs to the saved Preview.
+    const bookType = parsed.bookType === 'digital' ? 'basic' : normalizePurchasePackageType(parsed.bookType) ?? 'basic'
     return {
       version: 1,
       ownerKey,

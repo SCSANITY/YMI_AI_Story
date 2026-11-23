@@ -49,3 +49,23 @@ test('edition selection still calls the existing purchase callback with its type
   assert.equal(nodes(updated.labels[1]).find(n => n.type === 'input').props.checked, true)
   assert.ok(text(updated.labels[1]).includes('$89.00'))
 })
+
+test('only the approved story and version expose a selectable PDF and its actual sale price', () => {
+  const globals = { process: { env: { NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS: 'sample@7' } } }
+  const { packagePriceRowsToPricing } = loadUi('src/lib/package-pricing.ts', {}, globals)
+  const { activeCartUnitPrice } = loadUi('src/lib/cart-price.ts', {}, globals)
+  const rows = [
+    { package_type: 'basic', list_price_usd: 39, row_version: 1 },
+    { package_type: 'supreme', list_price_usd: 89, row_version: 1 },
+    { package_type: 'digital', list_price_usd: 18, sale_price_usd: 12.34, row_version: 7 },
+  ]
+  assert.equal(packagePriceRowsToPricing(rows, 'another').digital, undefined)
+  assert.equal(packagePriceRowsToPricing([...rows.slice(0,2), { ...rows[2], row_version: 6 }], 'sample').digital, undefined)
+  const model = { packagePricing: packagePriceRowsToPricing(rows, 'sample') }
+  const h = harness()
+  const label = h.render(model).labels.find(label => text(label).includes('PDF only'))
+  assert.ok(text(label).includes('$12.34'))
+  nodes(label).find(n => n.type === 'input').props.onChange()
+  assert.deepEqual(h.changes, ['digital'])
+  assert.equal(activeCartUnitPrice({ package_type: 'digital', creations: { template_id: 'sample', templates: { package_prices: rows } } }), 12.34)
+})

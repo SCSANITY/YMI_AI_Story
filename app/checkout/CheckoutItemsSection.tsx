@@ -291,7 +291,7 @@ export function CheckoutItemsSection({
                           </span>
                         </div>
                         <p className="mt-1 break-words text-xs text-slate-600">
-                          {t(originalPdf ? 'checkout.originalPdf' : isSignatureVoicePackage(item.personalization?.bookType) ? 'product.voiceEdition' : 'product.hardcover')}
+                          {t(originalPdf ? 'checkout.originalPdf' : item.personalization?.bookType === 'digital' ? 'checkout.personalizedPdf' : isSignatureVoicePackage(item.personalization?.bookType) ? 'product.voiceEdition' : 'product.hardcover')}
                           {' · '}{item.personalization?.language || t('language.en')}
                         </p>
                         {!originalEdition && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">

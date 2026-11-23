@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const address = { firstName: 'Test', lastName: 'Reader', email: 'reader@example.test', country: 'HK', region: 'Hong Kong', city: 'Hong Kong', zip: '000000', addressLine1: '1 Example Street', phone: '+85212345678' }
-export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRules = false, failWrite = false, freeShipping = false, paid = false } = {}) {
+export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRules = false, failWrite = false, freeShipping = false, paid = false, pdfOffers = '' } = {}) {
   const rules = noRules ? [] : ['standard', 'speedy'].map((method, index) => ({
     rule_id: `rule-${index}`, rule_name: `${method} global`, method_code: method, zone_code: null,
     fuel_surcharge_percent: 0, handling_fee_hkd: 0, margin_percent: 0, discount_percent: percent,
@@ -27,7 +27,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     shipping_methods: ['standard', 'speedy'].map((method, i) => ({ method_code: method, display_name: method, enabled: true, sort_order: i })),
     shipping_country_method_support: ['standard', 'speedy'].map(method => ({ method_code: method, country_code: 'HK', enabled: true })),
     shipping_base_rates: ['standard', 'speedy'].map((method, i) => ({ method_code: method, zone_code: 'HK', weight_kg: 1, base_cost_hkd: 78 * (i + 1), enabled: true })),
-    orders: [order], cart_items: items,
+    orders: [order], cart_items: items, creations: [], template_package_prices: [], jobs: [],
     originalPdfPurchases: [],
     multi_book_offer_rule: [],
     discount_instruments: freeShipping ? [{ instrument_id: 'free-shipping', instrument_type: 'voucher', code: null, discount_offers: { name: 'Free shipping' } }] : [],
@@ -45,6 +45,15 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
         is(key, value) { predicates.push(row => (row[key] ?? null) === value); return query },
         not(key, op, value) { assertOperation(op, 'is'); predicates.push(row => (row[key] ?? null) !== value); return query },
         update(value) { patch = value; return query },
+        insert(value) {
+          if (table !== 'cart_items') throw new Error('Unexpected insert into ' + table)
+          const row = { ...value, cart_item_id: 'cart-' + (tables.cart_items.length + 1),
+            creations: tables.creations.find(c => c.creation_id === value.creation_id) }
+          tables.cart_items.push(row)
+          predicates.push(candidate => candidate === row)
+          return query
+        },
+        single() { single = true; return query },
         maybeSingle() { single = true; return query },
         then(resolve, reject) {
           try {
@@ -106,12 +115,15 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
   const mocks = {
     'server-only': {}, 'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
     '@/lib/supabaseAdmin': { supabaseAdmin },
+    '@/lib/storage-signing': {}, '@/lib/a9-diagnostics': {},
+    '@/lib/unpaid-reminder-server': { registerUnpaidReminder: async () => null },
+    '@/lib/purchase-state': { loadCreationPhotoLockState: async () => ({ purchaseState: 'unpurchased', hasCartAttachment: false }) },
     '@/lib/adminAuth': { requireAdminCustomer: async () => admin ? { customer_id: 'test-admin' } : null },
     '@/lib/stripe': { isStripeEnabled: () => true, getStripeServer: () => stripe },
     '@/lib/checkout-owner': {
       resolveCheckoutOwner: async () => ({ ownerType: 'customer', customerId: 'test-customer', email: 'reader@example.test' }),
       ownerFilter: () => ({ owner_type: 'customer', column: 'customer_id', value: 'test-customer' }),
-      requireCheckoutOrderAccess: async () => {}, checkoutOwnerErrorResponse: () => null,
+      requireCheckoutOrderAccess: async orderId => ({ order_id: orderId }), checkoutOwnerErrorResponse: () => null,
     },
     '@/lib/emailEvents': { recordExternalEmailObserved: async () => {} },
     '@/lib/site-url': { getSiteUrl: () => 'https://example.test' },
@@ -122,7 +134,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     const fixtureModule = { exports: {} }
     cache.set(file, fixtureModule.exports)
     const context = {
-      module: fixtureModule, exports: fixtureModule.exports, Response, Request, URL, Date, console,
+      module: fixtureModule, exports: fixtureModule.exports, Response, Request, URL, Date, console, process: { env: { NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS: pdfOffers } },
       require(name) {
         if (Object.hasOwn(mocks, name)) return mocks[name]
         if (name.startsWith('node:')) {

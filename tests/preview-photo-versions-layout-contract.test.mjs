@@ -26,7 +26,7 @@ test('the one shell scales against its column and clips its 820 coordinate box',
 })
 test('phone sticky Purchase replaces the old scroll cue with the same selected edition/price',()=>{
   const page=read('components/PersonalizePage.tsx'),layout=read('components/personalize/PreviewStepLayout.tsx'),css=read('components/personalize/PreviewExperience.module.css')
-  assert.match(page,/<PreviewMobilePurchase edition=\{purchaseBookType === 'supreme'/)
+  assert.match(page,/<PreviewMobilePurchase edition=\{purchaseBookType === 'digital' \? 'PDF only' : purchaseBookType === 'supreme'/)
   assert.match(page,/price=\{purchasePrice\} ready=\{purchaseReady\}/)
   assert.match(layout,/\{mobilePurchase\}/)
   assert.match(css,/\.mobilePurchase\{display:flex;position:fixed/)

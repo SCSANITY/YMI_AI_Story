@@ -12,7 +12,7 @@ import { calculateShippingQuote } from '@/lib/shipping-quote-server'
 import { createOrderCheckoutFingerprint } from '@/lib/checkout-session-lock'
 import { getSiteUrl } from '@/lib/site-url'
 import { calculateCheckoutPricing } from '@/lib/checkout-pricing'
-import { normalizeBookPackageType } from '@/lib/package-pricing'
+import { normalizeBookPackageType, personalizedPdfOfferEnabled } from '@/lib/package-pricing'
 import { normalizeShippingAddress, recipientAddressIssue, type ShippingAddress } from '@/lib/shipping-address'
 import type { CheckoutQuote } from '@/lib/checkout-quote'
 
@@ -56,8 +56,8 @@ export async function loadCheckoutPricingItems(orderId: string, filter: ReturnTy
   const { data: cartItems, error } = await supabaseAdmin
     .from('cart_items')
     .select(`
-      cart_item_id, quantity, price_at_purchase, product_type, package_type,
-      creations:creations(template_id, customize_snapshot, templates:templates(name))
+      cart_item_id, quantity, price_at_purchase, product_type, package_type, package_price_version,
+      creations:creations(template_id, preview_job_id, customize_snapshot, templates:templates(name))
     `)
     .eq('order_id', orderId)
     .eq('status', 'ordered')
@@ -72,15 +72,24 @@ export async function loadCheckoutPricingItems(orderId: string, filter: ReturnTy
     const creation = Array.isArray(item.creations) ? item.creations[0] : item.creations
     return creation?.customize_snapshot?.edition === 'original'
   })
-  const requiresPurchase = hasOriginalMarker || first.package_type === 'digital'
-  const purchase = requiresPurchase && cartItems.length === 1 && first.quantity === 1
+  const isPersonalizedPdf = (item: typeof first) => {
+    const creation = Array.isArray(item.creations) ? item.creations[0] : item.creations
+    return item.product_type === 'ebook' && item.package_type === 'digital' &&
+      Boolean(creation?.preview_job_id) && creation?.customize_snapshot?.edition !== 'original' &&
+      personalizedPdfOfferEnabled(creation.template_id, item.package_price_version) &&
+      Number(item.price_at_purchase) > 0
+  }
+  const needsOriginalReceipt = hasOriginalMarker || (first.package_type === 'digital' && !isPersonalizedPdf(first))
+  const purchase = needsOriginalReceipt && cartItems.length === 1 && first.quantity === 1
     ? await (await import('@/lib/original-book-purchase')).readOriginalBookPurchase(orderId, first.cart_item_id)
     : null
-  const originalPdf = purchase?.format === 'digital' && first.product_type === 'ebook'
-  if ((requiresPurchase && (!purchase || purchase.format !== first.package_type)) ||
-      (!originalPdf && cartItems.some(item => item.product_type !== 'physical' || !normalizeBookPackageType(item.package_type)))) {
+  const validOriginal = purchase && purchase.format === first.package_type &&
+    first.product_type === (purchase.format === 'digital' ? 'ebook' : 'physical')
+  const validPersonalized = !needsOriginalReceipt && cartItems.every(item =>
+    isPersonalizedPdf(item) || (item.product_type === 'physical' && normalizeBookPackageType(item.package_type)))
+  if (!validOriginal && !validPersonalized) {
     throw new CheckoutQuoteError(
-      'An edition in this order is no longer available. Remove it and select a hardcover edition in Preview.',
+      'An edition in this order is no longer available. Remove it and select an available edition in Preview.',
       409,
       { code: 'edition_no_longer_available' },
     )
@@ -97,7 +106,7 @@ export async function loadCheckoutPricingItems(orderId: string, filter: ReturnTy
       customizeSnapshot: creation?.customize_snapshot,
     })
     return {
-      originalPdf,
+      digital: item.product_type === 'ebook',
       id: item.cart_item_id,
       name: quantity > 1 ? `${title} x${quantity}` : title,
       quantity,
@@ -182,10 +191,10 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
     throw new CheckoutQuoteError('Order payment is already being processed', 409)
   }
 
-  const originalPdf = items.length === 1 && items[0].originalPdf
-  const shippingAddress = originalPdf ? {} : normalizeShippingAddress(body?.shippingAddress)
-  if (originalPdf && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new CheckoutQuoteError('Invalid delivery email', 400)
-  const addressIssue = originalPdf ? null : recipientAddressIssue(shippingAddress)
+  const digitalOnly = items.every(item => item.digital)
+  const shippingAddress = digitalOnly ? {} : normalizeShippingAddress(body?.shippingAddress)
+  if (digitalOnly && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new CheckoutQuoteError('Invalid delivery email', 400)
+  const addressIssue = digitalOnly ? null : recipientAddressIssue(shippingAddress)
   if (addressIssue) throw new CheckoutQuoteError('Invalid recipient address', 400, { field: addressIssue })
 
   const context = { order, orderId, email, discountEmail, customerId, shippingAddress, currency, filter, baseUrl, existingSession }
@@ -194,7 +203,7 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
     existingSession?.status === 'open' && existingSession.url &&
     typeof frozenTotal === 'number' && Number.isSafeInteger(frozenTotal) && frozenTotal > 0 &&
     existingSession.currency === currency.toLowerCase() && order.checkout_currency === currency &&
-    (originalPdf
+    (digitalOnly
       ? order.shipping_method === null && Number(order.shipping_amount_usd) === 0 && existingSession.customer_email === email
       : requestedShippingMethod !== null && order.shipping_method === requestedShippingMethod &&
         matchesSavedShippingAddress(shippingAddress, order.shipping_address)) &&
@@ -219,7 +228,7 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
     }
   }
 
-  const { option, shippingZoneCode, shipping } = originalPdf
+  const { option, shippingZoneCode, shipping } = digitalOnly
     ? { option: null, shippingZoneCode: null, shipping: { amountUsd: 0, snapshot: null, metadata: { order_id: orderId } } }
     : await resolvePhysicalShipping(orderId, shippingAddress, requestedShippingMethod)
   const [multiBookRule, discount] = await Promise.all([

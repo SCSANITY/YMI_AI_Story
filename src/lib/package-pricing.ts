@@ -7,6 +7,14 @@ import type {
 
 const SELLABLE_BOOK_PACKAGE_TYPES = ['basic', 'supreme'] as const
 
+// Each entry identifies an explicitly approved Catalog price revision (story@version).
+// A price row left by the retired edition grants no purchase capability on its own.
+export function personalizedPdfOfferEnabled(templateId: unknown, version: unknown) {
+  if (typeof templateId !== 'string' || !templateId || !Number.isSafeInteger(version) || Number(version) < 1) return false
+  const offers = process.env.NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS ?? ''
+  return offers.split(',').some(entry => entry.trim() === `${templateId}@${version}`)
+}
+
 export type TemplatePackagePriceRow = {
   package_type?: unknown
   list_price_usd?: unknown
@@ -47,7 +55,7 @@ export function normalizeBookPackageType(value: unknown): BookPackageType | null
     : null
 }
 
-export function resolveBookPackageTypeFromSnapshot(snapshotValue: unknown): BookPackageType | null {
+export function resolveBookPackageTypeFromSnapshot(snapshotValue: unknown): BookPackageType | 'digital' | null {
   if (!snapshotValue || typeof snapshotValue !== 'object' || Array.isArray(snapshotValue)) return null
 
   const snapshot = snapshotValue as Record<string, unknown>
@@ -57,21 +65,21 @@ export function resolveBookPackageTypeFromSnapshot(snapshotValue: unknown): Book
       ? (textOverridesValue as Record<string, unknown>)
       : null
 
-  return normalizeBookPackageType(
-    textOverrides?.book_type ?? textOverrides?.bookType ?? snapshot.bookType ?? snapshot.book_type
-  )
+  const value = textOverrides?.book_type ?? textOverrides?.bookType ?? snapshot.bookType ?? snapshot.book_type
+  return value === 'digital' ? value : normalizeBookPackageType(value)
 }
 
-export function packageTypeToProductType(packageType: BookPackageType) {
-  // Both current editions are physical books. PDFs are release artifacts, not products.
+export function packageTypeToProductType(packageType: BookPackageType | 'digital') {
+  if (packageType === 'digital') return 'ebook' as const
   if (!normalizeBookPackageType(packageType)) {
     throw new PackagePricingContractError('Unsupported package type')
   }
   return 'physical' as const
 }
 
-export function packagePriceRowToModel(row: TemplatePackagePriceRow): BookPackagePrice {
-  const packageType = normalizeBookPackageType(row.package_type)
+export function packagePriceRowToModel(row: TemplatePackagePriceRow, templateId?: string): BookPackagePrice {
+  const packageType = row.package_type === 'digital' && personalizedPdfOfferEnabled(templateId, Number(row.row_version))
+    ? 'digital' : normalizeBookPackageType(row.package_type)
   if (!packageType) {
     throw new PackagePricingContractError('Unsupported package type')
   }
@@ -116,16 +124,16 @@ export function packagePriceRowToModel(row: TemplatePackagePriceRow): BookPackag
   }
 }
 
-export function packagePriceRowsToPricing(rowsValue: unknown): BookPackagePricing {
+export function packagePriceRowsToPricing(rowsValue: unknown, templateId?: string): BookPackagePricing {
   if (!Array.isArray(rowsValue)) {
     throw new PackagePricingContractError('Package pricing relation is missing')
   }
 
-  // Retired rows may remain in the immutable database/history. They must never
-  // enter the public pricing model or prevent valid physical editions loading.
+  // Hide legacy digital rows until the exact story and price revision are offered.
   const entries = rowsValue
-    .filter((row) => String(row?.package_type ?? '').trim().toLowerCase() !== 'digital')
-    .map((row) => packagePriceRowToModel(row as TemplatePackagePriceRow))
+    .filter((row) => String(row?.package_type ?? '').trim().toLowerCase() !== 'digital' ||
+      personalizedPdfOfferEnabled(templateId, Number(row.row_version)))
+    .map((row) => packagePriceRowToModel(row as TemplatePackagePriceRow, templateId))
   const byType = new Map(entries.map((entry) => [entry.packageType, entry]))
 
   for (const packageType of SELLABLE_BOOK_PACKAGE_TYPES) {
@@ -134,13 +142,14 @@ export function packagePriceRowsToPricing(rowsValue: unknown): BookPackagePricin
     }
   }
 
-  if (entries.length !== SELLABLE_BOOK_PACKAGE_TYPES.length || byType.size !== SELLABLE_BOOK_PACKAGE_TYPES.length) {
+  if (entries.length !== byType.size) {
     throw new PackagePricingContractError('Package pricing contains duplicate or unsupported rows')
   }
 
   return {
     basic: byType.get('basic')!,
     supreme: byType.get('supreme')!,
+    ...(byType.has('digital') ? { digital: byType.get('digital')! } : {}),
   }
 }
 

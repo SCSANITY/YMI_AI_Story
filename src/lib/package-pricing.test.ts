@@ -101,7 +101,7 @@ test('projects the selected public package and explicit Home placement positions
 
 test('reads the package from the creation snapshot and excludes legacy premium', () => {
   assert.equal(resolveBookPackageTypeFromSnapshot({ textOverrides: { book_type: 'supreme' } }), 'supreme')
-  assert.equal(resolveBookPackageTypeFromSnapshot({ bookType: 'digital' }), null)
+  assert.equal(resolveBookPackageTypeFromSnapshot({ bookType: 'digital' }), 'digital')
   assert.equal(resolveBookPackageTypeFromSnapshot({ text_overrides: { bookType: 'premium' } }), null)
   assert.equal(packageTypeToProductType('basic'), 'physical')
   assert.equal(packageTypeToProductType('supreme'), 'physical')

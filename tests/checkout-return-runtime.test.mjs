@@ -21,7 +21,7 @@ const component = type => props => ({ type, props })
 const isReadOnlyRequest = call => call.method === 'GET' ||
   (call.method === 'POST' && ['/api/checkout/quote', '/api/checkout/shipping-quote'].includes(call.path))
 
-function checkoutFixture({ originalPdf = false, originalEdition = originalPdf, delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment&source=cart#resume', draft, mergeFailed = false, healOnRetry = true, onPayment, onQuote, onQuantity, onShipping, onAddressSave } = {}) {
+function checkoutFixture({ originalPdf = false, originalEdition = originalPdf, rows = [item], delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment&source=cart#resume', draft, mergeFailed = false, healOnRetry = true, onPayment, onQuote, onQuantity, onShipping, onAddressSave } = {}) {
   const runtime = customerRuntime(), calls = [], pending = deferred(), retryCalls = [], quantityCalls = []
   let currentOrder = order(), responseStatus = status
   runtime.react.Suspense = ({ children }) => children
@@ -35,7 +35,7 @@ function checkoutFixture({ originalPdf = false, originalEdition = originalPdf, d
   runtime.localStorage.setItem('ymi_discount_code', 'LAST_CACHED_CODE')
   const context = {
     user: signedIn ? { customerId: 'customer-1', email: address.email } : null,
-    cart: [], checkoutItems: withItem ? [item] : [], checkoutLoadError: null, checkoutEmail: '', isAuthResolved: authResolved, displayCurrency: 'USD',
+    cart: [], checkoutItems: withItem ? rows : [], checkoutLoadError: null, checkoutEmail: '', isAuthResolved: authResolved, displayCurrency: 'USD',
     setCheckoutEmail(value) { context.checkoutEmail = value },
     hydrateCheckoutItems(rows) { context.checkoutItems = rows; context.checkoutLoadError = null },
     reconcileCartItemPrices() {}, prepareCheckout() {}, addToCheckout() {}, removeFromCheckout() {},
@@ -53,7 +53,7 @@ function checkoutFixture({ originalPdf = false, originalEdition = originalPdf, d
     if (path.startsWith('/api/cart?orderId=')) {
       if (rejectItems) throw Error('Cart transport unavailable')
       if (deferItems) await new Promise(() => {})
-      return Response.json({ originalEdition, originalPdf, items: itemsStatus === 200 ? [item] : [] }, { status: itemsStatus })
+      return Response.json({ originalEdition, originalPdf, items: itemsStatus === 200 ? rows : [] }, { status: itemsStatus })
     }
     if (path.startsWith('/api/cart?ids=')) return Response.json({ items: [item] })
     if (path === '/api/checkout/vouchers') return Response.json({ active: [] })
@@ -661,4 +661,23 @@ test('an original hardcover restores the single-book controls and keeps its ship
   assert.ok(h.node('address-form'))
   assert.equal(h.node('summary').props.showShipping, true)
   h.runtime.unmount()
+})
+
+test('restored personal PDF keeps cart controls and submits email only, mixed checkout restores shipping', async () => {
+  const pdf = { ...item, personalization: { bookType: 'digital' } }
+  for (const mixed of [false, true]) {
+    const rows = mixed ? [pdf, { ...item, id: 'physical' }] : [pdf]
+    const h = checkoutFixture({ rows })
+    await settleCheckout(h)
+    assert.equal(h.node('items').props.originalEdition, false)
+    assert.equal(Boolean(h.node('address-form')), mixed)
+    assert.equal(h.node('summary').props.showShipping, mixed)
+    h.node('payment').props.onPlaceOrder()
+    await h.runtime.flush()
+    const submitted = h.calls.find(call => call.path === '/api/checkout/session')?.body
+    assert.equal(submitted?.email, address.email)
+    assert.equal(Boolean(submitted.shippingAddress), mixed)
+    if (!mixed) assert.equal(h.calls.some(call => call.path === '/api/checkout/shipping-quote'), false)
+    h.runtime.unmount()
+  }
 })

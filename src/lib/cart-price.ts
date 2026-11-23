@@ -18,8 +18,8 @@ export function cartItemUnitPrice(item: { priceAtPurchase?: unknown }) {
 }
 
 export function activeCartUnitPrice(row: { package_type?: unknown; creations?: unknown }) {
-  const creation = row.creations as { templates?: { package_prices?: unknown } } | null
-  const type = normalizeBookPackageType(row.package_type)
+  const creation = row.creations as { template_id?: string; templates?: { package_prices?: unknown } } | null
+  const type = row.package_type === 'digital' ? 'digital' : normalizeBookPackageType(row.package_type)
   if (!type) throw new PackagePricingContractError(CART_PRICE_LOAD_ERROR)
-  return packagePriceRowsToPricing(creation?.templates?.package_prices)[type].effectivePriceUsd
+  return requireCartUnitPrice(packagePriceRowsToPricing(creation?.templates?.package_prices, creation?.template_id)[type]?.effectivePriceUsd)
 }
