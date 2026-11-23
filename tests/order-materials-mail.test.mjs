@@ -9,7 +9,7 @@ const helperModule={exports:{}}
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/lib/order-materials-client.ts',import.meta.url),'utf8'),{
  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
 }).outputText,{module:helperModule,exports:helperModule.exports})
-function mailHarness(skip=false,voiceReady=false,names=['Alston']) {
+function mailHarness(skip=false,voiceReady=false,names=['Alston'],originalFormat=null) {
   const events=[],sent=[],reads=[],logs=[],fixtureModule={exports:{}}
   const model='a'.repeat(43)
   const injections={
@@ -18,7 +18,7 @@ function mailHarness(skip=false,voiceReady=false,names=['Alston']) {
     resend:{Resend:class {emails={send:async (value,options)=>{sent.push({...value,options});return {data:{id:'synthetic-message'}}}}}},
     '@/components/emails/PrintReleasedEmail':{PRINT_RELEASED_SUBJECT:'Your YMI Story Book Is Approved!',PrintReleasedEmail:()=>null},
     '@/lib/order-materials-server':{
-      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,package_type:'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
+      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,...(originalFormat && {edition:'original'}),package_type:originalFormat ?? 'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
       issueOrderMaterialLink:async id=>{reads.push(['issue',id]);return `/orders/${id}/materials#token=${model}`},
     },
     '@/lib/locale-pricing':{normalizeCheckoutCurrency:()=> 'USD'},
@@ -117,4 +117,15 @@ test('a received recording eligible for replacement is not counted as missing in
 test('confirmation joins distinct child names without repeating a child in its message notice',async()=>{
  const h=mailHarness(false,true,['Alston','Sonia','Alston']);await h.api.sendOrderConfirmationEmail(input)
  assert.deepEqual(Array.from(h.sent[0].react.props.materialNotice.names),['Alston','Sonia'])
+})
+
+test('only an original Voice confirmation gets a scoped optional recording link',async()=>{
+  for(const format of ['digital','basic','supreme']) {
+    const h=mailHarness(false,false,[''],format)
+    await h.api.sendOrderConfirmationEmail(input)
+    const notice=h.sent[0].react.props.materialNotice
+    assert.equal(h.reads.filter(([action])=>action==='issue').length,format==='supreme'?1:0)
+    if(format==='supreme') assert.equal(notice.voiceOnly,true)
+    else assert.equal(notice,undefined)
+  }
 })

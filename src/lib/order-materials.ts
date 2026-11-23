@@ -6,7 +6,8 @@ export type MaterialItem = {
   creation_id: string
   template_id: string
   child_name?:string|null
-  package_type: 'basic' | 'supreme'
+  edition?: 'original'
+  package_type: 'basic' | 'supreme' | 'digital'
   dedication: { decision: 'skipped' | 'confirmed'; body: string | null; revision: number }
   can_edit_dedication: boolean
   voice_ready: boolean
@@ -47,7 +48,10 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
   }
   const items=row.items.map(value=>{
     const item=materialRecord(value)
-    if ((item.package_type!=='basic' && item.package_type!=='supreme')
+    const original=item.edition==='original'
+    if ((item.edition!==undefined && !original && item.edition!=='personalised')
+      || (original && item.can_edit_dedication!==false)
+      || (item.package_type!=='basic' && item.package_type!=='supreme' && !(original && item.package_type==='digital'))
       || typeof item.template_id!=='string' || !item.template_id || item.template_id.length>200
       || typeof item.can_edit_dedication!=='boolean' || typeof item.voice_ready!=='boolean'
       || typeof item.can_submit_voice!=='boolean'
@@ -56,7 +60,7 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
       || (item.voice_uploaded_at!==null && !Number.isFinite(Date.parse(String(item.voice_uploaded_at))))
       || item.voice_ready!==(item.voice_asset_id!==null)
       || (item.package_type==='supreme' && (!Number.isSafeInteger(item.voice_revision) || Number(item.voice_revision)<1))
-      || (item.package_type==='basic' && (item.voice_revision!==null || item.voice_ready || item.can_submit_voice || item.can_replace_voice))
+      || (item.package_type!=='supreme' && (item.voice_revision!==null || item.voice_ready || item.can_submit_voice || item.can_replace_voice))
       || (item.can_replace_voice && (!item.voice_ready || !item.can_submit_voice))
       || (item.voice_ready && item.can_submit_voice!==item.can_replace_voice)) {
       throw new MaterialError('materials_unavailable',503)
@@ -74,6 +78,7 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
     }
     return { cart_item_id:materialUuid(item.cart_item_id),creation_id:materialUuid(item.creation_id),
       template_id:item.template_id,child_name:typeof item.child_name==='string'?item.child_name.trim()||null:null,package_type:item.package_type,
+      ...(original?{edition:'original' as const}:{}),
       dedication:parseMaterialDedication(item.dedication),can_edit_dedication:item.can_edit_dedication,
       voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice,can_replace_voice:item.can_replace_voice,
       voice_asset_id:item.voice_asset_id as string|null,voice_revision:item.voice_revision as number|null,

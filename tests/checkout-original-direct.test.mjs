@@ -115,3 +115,21 @@ test('the basket excludes the unpaid original and an authorized order restore us
   assert.equal(restored.originalEdition,true)
   assert.equal(restored.items[0].preview_cover_url,'/catalog/story/v1/cover.webp')
 })
+
+test('paid original Voice opens its own recording panel on both fast confirmation and restored Checkout success',()=>{
+  const fixture=hookHarness('app/checkout/success/CheckoutSuccessCard.tsx','CheckoutSuccessCard',{
+    stubs:{
+      'next/dynamic':{default:()=>props=>({type:'voice-panel',props})},
+      '@/lib/useI18n':{useI18n:()=>({t:key=>key})},
+      '@/components/orders/OrderMaterialsSummary':{OrderMaterialsSummary:()=>null},
+      '@/components/SignatureVoiceEditionNotice':{SignatureVoiceEditionNotice:()=>null},
+      '@/components/Button':{Button:()=>null},
+      'lucide-react':{CheckCircle2:()=>null,Loader2:()=>null,MailCheck:()=>null},
+    },
+  })
+  for(const evidence of [{originalVoiceLineId:'line'},{materials:{items:[{cart_item_id:'line',edition:'original',package_type:'supreme'}]}}]){
+    const render=status=>fixture.render({loading:false,orderId:'order',order:{order_id:'order',order_status:status,...evidence}})
+    assert.equal(uiNodes(render('paid')).find(n=>n.type==='voice-panel')?.props.voiceLineId,'line')
+    assert.equal(uiNodes(render('unpaid')).some(n=>n.type==='voice-panel'),false)
+  }
+})

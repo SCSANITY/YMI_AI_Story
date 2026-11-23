@@ -20,7 +20,7 @@ export type ReceiptAddress = {
 }
 
 type OrderReceiptEmailProps = {
-  materialNotice?:{pendingVoice:number;url:string;names:string[]}
+  materialNotice?:{voiceOnly?:boolean;pendingVoice:number;url:string;names:string[]}
   orderId: string
   displayId?: string | null
   items: ReceiptItem[]
@@ -118,7 +118,7 @@ export function OrderReceiptEmail({
 
       {materialNotice && (
         <Section style={styles.summaryWrap}>
-          <Text style={styles.paragraph}>
+          {materialNotice.voiceOnly?<Text style={styles.paragraph}>You can add or review your optional voice recording for this book.</Text>:<Text style={styles.paragraph}>
             You can review your optional dedication message
             {materialNotice.names.map((name, index, names) => (
               <React.Fragment key={name}>
@@ -127,8 +127,8 @@ export function OrderReceiptEmail({
               </React.Fragment>
             ))}
             {' on your materials page.'}
-          </Text>
-          {materialNotice.pendingVoice > 0 && (
+          </Text>}
+          {!materialNotice.voiceOnly && materialNotice.pendingVoice > 0 && (
             <Text style={styles.paragraph}>
               {materialNotice.pendingVoice === 1
                 ? 'Please submit your voice recording on the same page so we can finish your Hardcover + Voice book.'

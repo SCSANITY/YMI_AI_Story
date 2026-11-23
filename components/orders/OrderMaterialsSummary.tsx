@@ -5,6 +5,10 @@ import {MaterialShippedNotice} from '@/components/orders/MaterialShippedNotice'
 export function OrderMaterialsSummary({materials,shipment}:{materials?:OrderMaterials|null;shipment?:MaterialShipment}) {
   if(isMaterialOrderShipped(shipment))return <MaterialShippedNotice/>
   if(!materials)return null
+  if(materials.items.every(item=>item.edition==='original')) {
+    if(!materials.items.some(item=>item.package_type==='supreme')) return null
+    return <Link className="text-sm font-semibold underline" href={`/orders/${materials.order_id}/materials`}>Manage your optional recording</Link>
+  }
   const names=distinctMaterialNames(materials.items)
   return <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-left" aria-label="Book materials">
     <h2 className="font-serif text-lg font-bold">Your book&apos;s personal touches</h2>

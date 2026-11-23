@@ -377,11 +377,13 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
     },
     prepareReact:async()=>{
       const materialState=await loadTrustedOrderMaterials(params.orderId)
-      const materialPath=await issueOrderMaterialLink(params.orderId,materialState.items.map(item=>item.cart_item_id))
+      const actionableItems=materialState.items.filter(item=>item.edition!=='original' || item.package_type==='supreme')
+      const materialPath=actionableItems.length?await issueOrderMaterialLink(params.orderId,actionableItems.map(item=>item.cart_item_id)):null
       // Resolve only after send idempotency succeeds. No raw token in event context.
-      const materialNotice={names:distinctMaterialNames(materialState.items),
+      const materialNotice=materialPath?{names:distinctMaterialNames(actionableItems),
+        voiceOnly:actionableItems.every(item=>item.edition==='original'),
         pendingVoice:materialState.items.filter(item=>item.package_type==='supreme' && !item.voice_ready).length,
-        url:buildAbsoluteUrl(materialPath) ?? materialPath}
+        url:buildAbsoluteUrl(materialPath) ?? materialPath}:undefined
       return (
       <OrderReceiptEmail
         orderId={params.orderId}

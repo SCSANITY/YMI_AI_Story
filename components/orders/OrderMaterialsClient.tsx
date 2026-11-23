@@ -49,7 +49,7 @@ export function RecordingPlayback({orderId,itemId,assetId,token,onRecovery,onLat
   </div>
 }
 
-export function OrderMaterialsClient({orderId}:{orderId:string}) {
+export function OrderMaterialsClient({orderId,voiceLineId}:{orderId:string;voiceLineId?:string}) {
   const {t}=useI18n()
   const [token,setToken]=useState<string|null|undefined>(undefined)
   const [materials,setMaterials]=useState<OrderMaterials|null>(null)
@@ -60,11 +60,12 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
   const writeInFlight=useRef(false)
   const base=`/api/orders/${orderId}/materials`
   useEffect(()=>{
+    if (voiceLineId) {setToken(null);return}
     const fragment=new URLSearchParams(window.location.hash.slice(1)).get('token')
     // Remove the bearer from navigation/history while retaining it only in memory.
     if (window.location.hash) window.history.replaceState(null,'',window.location.pathname)
     if (fragment && !/^[A-Za-z0-9_-]{43}$/.test(fragment)) {setRecovery(true);setToken(null)} else setToken(fragment)
-  },[])
+  },[voiceLineId])
   const headers=useCallback(()=>({'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}),[token])
   const load=useCallback(async(signal?:AbortSignal)=>{
     const response=await fetch(base,{headers:headers(),credentials:'include',cache:'no-store',signal})
@@ -124,10 +125,11 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
       else {setChallenge(data.challengeId);setMessage('If this email matches the order, a verification code is on its way.')}
     }catch(e){setError(e instanceof Error?e.message:'Unable to recover access.')}finally{setBusy(false)}
   }
-  return <main className="mx-auto max-w-3xl space-y-6 px-5 py-12 text-slate-900">
+  const Container=voiceLineId?'section':'main'
+  return <Container className="mx-auto max-w-3xl space-y-6 px-5 py-12 text-slate-900">
     {/* AppShell supplies the existing site Navbar/logo/back control on this route. */}
-    <Link href="/orders" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 underline">← Back to orders</Link>
-    <h1 className="font-serif text-3xl font-bold">Your book&apos;s personal touches</h1>
+    {!voiceLineId && <Link href="/orders" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 underline">← Back to orders</Link>}
+    {voiceLineId?<h2 className="font-serif text-xl font-bold">Your optional voice recording</h2>:<h1 className="font-serif text-3xl font-bold">Your book materials</h1>}
     {error?<p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{error}</p>:null}
     {message?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-900">{message}</p>:null}
     {shipped?<MaterialShippedNotice/>:recovery ? <section className="rounded-2xl border border-amber-200 bg-white p-6">
@@ -139,13 +141,13 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
         {challenge?<button type="button" className="ml-3 text-sm underline" onClick={()=>setChallenge('')}>Use another email</button>:null}
       </form></section> : materials ? <>
       <button type="button" disabled={busy} className="text-sm underline" onClick={()=>{setError('');void load().catch(()=>setError('Unable to refresh the current status. Please try again.'))}}>Reload current status</button>
-      {materials.items.map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
+      {materials.items.filter(item=>!voiceLineId || (item.cart_item_id===voiceLineId && item.edition==='original' && item.package_type==='supreme')).map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
         <div className="flex items-center gap-4">
           <OrderCoverImage src={item.book?.cover_url} status={item.book?.cover_status} alt={item.book?.title || 'Your personalized book'}
             sizes="80px" className="h-20 w-20 shrink-0 rounded-xl" imageClassName="object-contain" placeholderLabel="Book cover"/>
           <h2 className="min-w-0 break-words font-serif text-xl">{item.book?.title || 'Your personalized book'}</h2>
         </div>
-        <DedicationEditor key={`${item.cart_item_id}:${item.dedication.revision}`} item={item} save={save} busy={busy}/>
+        {item.edition!=='original' && <DedicationEditor key={`${item.cart_item_id}:${item.dedication.revision}`} item={item} save={save} busy={busy}/>}
         {item.package_type==='supreme'?<div className="mt-5 border-t pt-4"><h3 className="font-semibold">Your Signature Voice recording</h3>
           {item.voice_ready?<>
             <p className="mt-2 text-sm font-semibold">Recording submitted.{item.voice_uploaded_at?<> Uploaded <MaterialTime value={item.voice_uploaded_at}/>.</>:null}</p>
@@ -153,7 +155,7 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
             {item.can_replace_voice?<button type="button" className={`${button} mt-3`} disabled={busy} onClick={()=>{setVoiceItem({...item});setRecording(null);setError('')}}>Update recording</button>
               :null}
           </>:<>
-            <p className="my-3 text-sm">Please submit your recording so we can finish your Hardcover + Voice book.</p>
+            <p className="my-3 text-sm">{item.edition==='original'?'You can add a recording for the narration in your book.':'Please submit your recording so we can finish your Hardcover + Voice book.'}</p>
             {item.can_submit_voice?<button type="button" className={button} disabled={busy} onClick={()=>{setVoiceItem({...item});setRecording(null);setError('')}}>Record or upload now</button>
               :<p className="text-sm">Online submission is unavailable. Please contact our team.</p>}
           </>}
@@ -167,7 +169,7 @@ export function OrderMaterialsClient({orderId}:{orderId:string}) {
       }}>Done for now</button>:null}
     </> : <p role="status">Loading your materials?</p>}
     {voiceItem?<SignatureVoiceDialog open allowFileUpload existingAssetId={null} existingSignedUrl={null} existingDurationSeconds={null} pendingRecording={recording} validationError={error||null} isSaving={busy}
-      labels={{title:'Your Signature Voice',description:voiceItem.voice_ready?'Upload a new recording to replace the current one. Your current recording stays in use until the new upload is saved.':'Record or upload your voice to complete your book.',authorization:t('personalize.signatureVoiceAuthorization'),required:'Consent required',save:'Upload recording',saving:'Uploading...',remove:'Remove',close:'Close'}}
+      labels={{title:'Your Signature Voice',description:voiceItem.voice_ready?'Upload a new recording to replace the current one. Your current recording stays in use until the new upload is saved.':voiceItem.edition==='original'?'Record or upload your voice for this story.':'Record or upload your voice to complete your book.',authorization:t('personalize.signatureVoiceAuthorization'),required:'Consent required',save:'Upload recording',saving:'Uploading...',remove:'Remove',close:'Close'}}
       onClose={()=>{if(!busy)setVoiceItem(null)}} onRecordingSelected={setRecording} onClearValidation={()=>setError('')} onSave={value=>{void saveVoice(value)}} onRemove={()=>setRecording(null)} />:null}
-  </main>
+  </Container>
 }
