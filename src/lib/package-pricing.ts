@@ -12,7 +12,13 @@ const SELLABLE_BOOK_PACKAGE_TYPES = ['basic', 'supreme'] as const
 export function personalizedPdfOfferEnabled(templateId: unknown, version: unknown) {
   if (typeof templateId !== 'string' || !templateId || !Number.isSafeInteger(version) || Number(version) < 1) return false
   const offers = process.env.NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS ?? ''
-  return offers.split(',').some(entry => entry.trim() === `${templateId}@${version}`)
+  return offers.split(',').some(entry => {
+    const [story, revision, extra] = entry.trim().split('@')
+    if (extra !== undefined || story !== templateId) return false
+    if (revision === String(version)) return true
+    // A launched story may opt into subsequent Admin price revisions.
+    return /^[1-9]\d*\+$/.test(revision ?? '') && Number(version) >= Number(revision.slice(0, -1))
+  })
 }
 
 export type TemplatePackagePriceRow = {
@@ -55,6 +61,11 @@ export function normalizeBookPackageType(value: unknown): BookPackageType | null
     : null
 }
 
+export function purchasedLineEdition(productType: unknown, packageType: unknown) {
+  if (productType === 'ebook' && packageType === 'digital') return 'digital'
+  return productType === 'physical' ? normalizeBookPackageType(packageType) : null
+}
+
 export function resolveBookPackageTypeFromSnapshot(snapshotValue: unknown): BookPackageType | 'digital' | null {
   if (!snapshotValue || typeof snapshotValue !== 'object' || Array.isArray(snapshotValue)) return null
 
@@ -80,10 +91,11 @@ export function packageTypeToProductType(packageType: BookPackageType | 'digital
 export function packagePriceRowToModel(row: TemplatePackagePriceRow, templateId?: string): BookPackagePrice {
   const packageType = row.package_type === 'digital' && personalizedPdfOfferEnabled(templateId, Number(row.row_version))
     ? 'digital' : normalizeBookPackageType(row.package_type)
-  if (!packageType) {
-    throw new PackagePricingContractError('Unsupported package type')
-  }
+  if (!packageType) throw new PackagePricingContractError('Unsupported package type')
+  return catalogPriceModel(row, packageType)
+}
 
+export function catalogPriceModel(row: TemplatePackagePriceRow, packageType: BookPackageType | 'digital'): BookPackagePrice {
   const listPriceUsd = requiredMoney(row.list_price_usd, `${packageType}.list_price_usd`)
   const salePriceUsd = optionalMoney(row.sale_price_usd, `${packageType}.sale_price_usd`)
   if (salePriceUsd !== null && salePriceUsd >= listPriceUsd) {

@@ -5,7 +5,7 @@ import { AdminAnchoredPopover } from '@/components/admin/AdminAnchoredPopover'
 import { BookOpen, ChevronDown } from 'lucide-react'
 import type { OrderBook, OrderRow } from './types'
 
-export const editionName = { basic: 'Hardcover', supreme: 'Hardcover + Voice' } as const
+export const editionName = { digital: 'PDF only', basic: 'Hardcover', supreme: 'Hardcover + Voice' } as const
 
 export function orderTime(value: string) {
   const date = new Date(value)
@@ -36,11 +36,11 @@ export function EditionChips({ books, onShowBooks }: { books: OrderBook[]; onSho
   const [open, setOpen] = useState<OrderBook['edition']>(null)
   const anchor = useRef<HTMLButtonElement>(null)
   return <div className="flex flex-wrap gap-1.5">
-    {(['basic','supreme'] as const).map(type => {
+    {(['digital','basic','supreme'] as const).map(type => {
       const rows = books.filter(book => book.edition === type)
       if (!rows.length) return null
       return <button type="button" key={type} aria-expanded={open === type} onClick={event => { anchor.current = event.currentTarget; onShowBooks(); setOpen(open === type ? null : type) }}
-        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${type === 'basic' ? 'bg-[#F5E7D7] text-[#78512C]' : 'bg-[#EEE8F5] text-[#614877]'}`}>
+        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${type === 'digital' ? 'bg-sky-100 text-sky-900' : type === 'basic' ? 'bg-[#F5E7D7] text-[#78512C]' : 'bg-[#EEE8F5] text-[#614877]'}`}>
         {editionName[type]} × {rows.reduce((n,b) => n+b.quantity,0)} <ChevronDown size={12} />
       </button>
     })}

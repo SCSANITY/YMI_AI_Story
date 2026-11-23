@@ -89,9 +89,9 @@ export function JobQueue({
                   <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold leading-4 ${statusClass(job.review_status)}`}>
                     PDF {job.review_status}
                   </span>
-                  <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold leading-4 ${statusClass(job.print_status)}`}>
+                  {!job.pdf_only && job.purchased_edition !== 'digital' && <span className={`inline-flex min-w-0 items-center justify-center rounded-full border px-2 py-1.5 text-center text-[10px] font-bold leading-4 ${statusClass(job.print_status)}`}>
                     Print {job.print_status}
-                  </span>
+                  </span>}
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-[color-mix(in_srgb,var(--admin-card-line)_58%,transparent)] pt-3 text-[11px] font-medium text-[var(--admin-page-muted)]">
                   <span>Pages {job.approved_pages}/{job.total_pages}</span>

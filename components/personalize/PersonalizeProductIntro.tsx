@@ -176,8 +176,8 @@ function PersonalizeProductIntroComponent({
       </div>
       {needsScrollGuide ? createPortal(
         <div ref={floatingRef} data-customize-floating-cta data-theme={night ? 'night' : 'day'}
-          className={`fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-5 rounded-2xl border px-4 py-2.5 shadow-lg backdrop-blur-xl transition-colors motion-reduce:transition-none md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:rounded-full md:px-5 ${night ? 'border-white/20 bg-[rgba(26,22,48,.86)] text-[#fff4e0]' : 'border-white/80 bg-white/85 text-stone-800'}`}>
-          <span className="whitespace-nowrap text-[13px] md:text-sm">{fromLabel} <strong>{priceLabel}</strong></span>
+          className={`fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-2 rounded-2xl md:gap-5 border px-4 py-2.5 shadow-lg backdrop-blur-xl transition-colors motion-reduce:transition-none md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:rounded-full md:px-5 ${night ? 'border-white/20 bg-[rgba(26,22,48,.86)] text-[#fff4e0]' : 'border-white/80 bg-white/85 text-stone-800'}`}>
+          <span className={originalHref ? "hidden whitespace-nowrap md:inline" : "whitespace-nowrap text-[13px] md:text-sm"}>{fromLabel} <strong>{priceLabel}</strong></span>
           <Button
             type="button"
             size="lg"
@@ -188,6 +188,9 @@ function PersonalizeProductIntroComponent({
           >
             {floatingCtaLabel}
           </Button>
+          {originalHref && <a href={originalHref} className="glass-action-btn glass-action-btn--neutral inline-flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-full px-3 text-sm font-semibold md:flex-none">
+            Buy original
+          </a>}
         </div>,
         document.body,
       ) : null}

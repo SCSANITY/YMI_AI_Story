@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { StoryLanguage } from '@/types';
-import type { PurchasePackageType } from '@/lib/purchase-configuration';
+import { DEFAULT_PERSONALIZED_EDITION, type PurchasePackageType } from '@/lib/purchase-configuration';
 
 export function usePersonalizeState() {
   // --- Form States ---
@@ -16,7 +16,7 @@ export function usePersonalizeState() {
   const [faceImageUrl, setFaceImageUrl] = useState<string | null>(null);
 
   // --- Book Type ---
-  const [bookType, setBookType] = useState<PurchasePackageType>('basic');
+  const [bookType, setBookType] = useState<PurchasePackageType>(DEFAULT_PERSONALIZED_EDITION);
 
   return {
     name,

@@ -57,8 +57,8 @@ export async function GET(request: Request) {
   const editionEmbed = edition ? ',edition_line:cart_items!final_jobs_cart_item_id_fkey!inner()' : ''
   let query = supabaseAdmin.from('final_jobs').select(FINAL_JOB_SELECT + searchEmbed + editionEmbed, { count: 'exact' })
   if (edition) {
-    if (!['basic', 'supreme'].includes(edition)) return jsonNoStore({ error: 'Invalid book type' }, { status: 400 })
-    query = query.eq('edition_line.product_type', 'physical').eq('edition_line.package_type', edition).eq('edition_line.status', 'ordered')
+    if (!['digital', 'basic', 'supreme'].includes(edition)) return jsonNoStore({ error: 'Invalid book type' }, { status: 400 })
+    query = query.eq('edition_line.product_type', edition === 'digital' ? 'ebook' : 'physical').eq('edition_line.package_type', edition).eq('edition_line.status', 'ordered')
   }
   if (stage === 'pdf_review') query = query.or('proof_draft_open.eq.true,review_status.is.null,review_status.neq.released')
   if (stage === 'print_pending') query = query.eq('pdf_only',false).eq('proof_draft_open',false).eq('review_status','released').or('print_status.is.null,print_status.neq.released')

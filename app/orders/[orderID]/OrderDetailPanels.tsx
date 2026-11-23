@@ -5,7 +5,7 @@ import { Download, MapPin } from 'lucide-react'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import { formatMajorCurrencyValue } from '@/lib/locale-pricing'
 import type { OrderDetail, OrderItem } from './orderDetailTypes'
-import { SignatureVoiceBadge, SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
+import { PdfOnlyBadge, SignatureVoiceBadge, SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
 
 type OrderDetailPanelsProps = {
@@ -44,6 +44,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
                   {item.template_name || t('common.personalizedStorybook')}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">{t('orderDetail.qty')} {item.quantity}</div>
+                {item.package_type === 'digital' && <PdfOnlyBadge />}
                 {isSignatureVoicePackage(item.package_type) ? <SignatureVoiceBadge className="mt-2" /> : null}
                 {item.final_pdf_url && (
                   <div className="mt-2">

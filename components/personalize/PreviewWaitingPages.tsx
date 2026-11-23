@@ -93,10 +93,32 @@ function DemoVoice({interact,holdPlaying}:{interact:()=>void;holdPlaying?:(on:bo
   </>
 }
 
-export function PreviewWaitingPages({name,value,pricing,currency,progress,generating=true,disabled=false,onChange,onMessage}:{name:string;value:EditionType|'digital';pricing:BookPackagePricing;currency:DisplayCurrency;progress:PreviewWaitingProgress;generating?:boolean;disabled?:boolean;onChange:(value:EditionType)=>void;onMessage:()=>void}) {
+const galleryEditions = [
+  { type: 'digital' as const, name: 'PDF only', image: '/customize-product/v3/personalized-pdf.webp' },
+  ...EDITION_DEFINITIONS.map(edition => ({
+    type: edition.type,
+    name: t(edition.nameKey),
+    image: edition.previewOptionImage,
+  })),
+]
+
+export function PreviewWaitingPages({name,value,pricing,currency,progress,generating=true,disabled=false,onChange,onMessage}:{name:string;value:EditionType|'digital';pricing:BookPackagePricing;currency:DisplayCurrency;progress:PreviewWaitingProgress;generating?:boolean;disabled?:boolean;onChange:(value:EditionType|'digital')=>void;onMessage:()=>void}) {
   return <div className={styles.waitingRight} data-hidden={progress.hidden||undefined}>
     <div className={styles.waitingHeader}><span className={styles.eyebrow}>{generating?'WHILE YOU WAIT':'YOUR BOOK'} · {progress.step+1}/3</span><span className={styles.dots}>{[0,1,2].map(index=><button key={index} type="button" aria-label={`Show waiting step ${index+1}`} aria-pressed={progress.step===index} onClick={()=>progress.interact(index)}><i/></button>)}</span></div>
-    <div key={progress.step}> {progress.step===0?<><h3>How will {name}’s story be kept?</h3><div className={styles.editionTiles}>{EDITION_DEFINITIONS.map(edition=><button key={edition.type} type="button" disabled={disabled} aria-pressed={value===edition.type} onClick={()=>{progress.interact();onChange(edition.type)}}><Image src={edition.previewOptionImage} alt={edition.type==='basic'?'Hardcover':'Hardcover + Voice'} width={150} height={150} sizes="150px"/><span><strong>{edition.type==='basic'?'Hardcover':'Hardcover + Voice'}</strong><small>{pricing[edition.type].salePriceUsd!==null?<s>{formatDisplayCurrency(pricing[edition.type].listPriceUsd,currency)}</s>:null} <b>{formatDisplayCurrency(pricing[edition.type].effectivePriceUsd,currency)}</b></small></span></button>)}</div></>:progress.step===1?<DemoVoice interact={progress.interact} holdPlaying={progress.holdPlaying}/>:<><h3>A message for <em>{name}</em></h3><div className={styles.messageSample}><p><TypedMessage key={name} text={`For ${name} — the bravest explorer we know. Love always, Mom & Dad`} reduced={progress.reduced}/></p></div><button className={styles.writeMessage} type="button" disabled={disabled} onClick={()=>{progress.interact();onMessage()}}>Write my message</button></>}
+    <div key={progress.step}> {progress.step===0?<><h3>How will {name}’s story be kept?</h3><div className={styles.gallerySpread} data-edition-gallery role="group" aria-label="Book formats">
+      {galleryEditions.map(({ type, name: editionName, image }) => {
+        const price = pricing[type]
+        if (!price) return null
+        const selected = type === value
+        return <button key={type} type="button" className={selected ? styles.featured : styles.miniature}
+          aria-pressed={selected} disabled={disabled} onClick={() => { progress.interact(); onChange(type) }}>
+          <span className={styles.photoMount}><Image src={image} alt="" width={156} height={156} sizes={selected ? '156px' : '64px'} /></span>
+          <span className={styles.plateCaption}><strong>{editionName}</strong>
+            <small>{formatDisplayCurrency(price.effectivePriceUsd, currency)}</small>
+          </span>
+        </button>
+      })}
+    </div></>:progress.step===1?<DemoVoice interact={progress.interact} holdPlaying={progress.holdPlaying}/>:<><h3>A message for <em>{name}</em></h3><div className={styles.messageSample}><p><TypedMessage key={name} text={`For ${name} — the bravest explorer we know. Love always, Mom & Dad`} reduced={progress.reduced}/></p></div><button className={styles.writeMessage} type="button" disabled={disabled} onClick={()=>{progress.interact();onMessage()}}>Write my message</button></>}
     </div>
   </div>
 }

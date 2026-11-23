@@ -14,6 +14,7 @@ is split into:
   left page rather than flashing the first spread. The handoff adds no timer.
 - `PreviewWaitingPages` + `usePreviewWaitingState`: the existing 40-second estimate,
   three eight-second steps, 15-second interaction hold and hidden-tab pause.
+  On a fresh personalized purchase, Hardcover + Voice is featured. Choosing any offered format updates both the waiting-book gallery and the outer selector. Existing Preview selections hydrate from the saved purchase configuration.
   Demo assets come from `product/voice-demo-data`; there is no new audio service.
 - `PreviewYourBookPanel` + `PreviewPurchaseActions`: controlled edition selection,
   fixed message row, reserved feedback and one shared acknowledgement authority

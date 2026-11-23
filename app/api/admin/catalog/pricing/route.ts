@@ -4,7 +4,7 @@ import { invalidatePublicCatalogCache } from '@/lib/catalog-cache'
 import {
   normalizeBookPackageType,
   packagePriceRowsToPricing,
-  packagePriceRowToModel,
+  catalogPriceModel,
 } from '@/lib/package-pricing'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { templateStorageUrl } from '@/lib/book-catalog'
@@ -49,6 +49,7 @@ export async function GET() {
         catalog_display_package_type,
         normalized_cover_image_path,
         cover_image_path,
+        original_prices:original_book_offers(format, language, list_price_usd, price_usd, sale_price_usd, display_discount_percent, price_version, is_placeholder),
         package_prices:template_package_prices(
           package_type,
           list_price_usd,
@@ -81,7 +82,15 @@ export async function GET() {
       isActive: Boolean(row.is_active),
       coverUrl: templateStorageUrl(row.normalized_cover_image_path || row.cover_image_path),
       catalogDisplayPackageType: normalizeBookPackageType(row.catalog_display_package_type) ?? 'basic',
-      packagePricing: packagePriceRowsToPricing(row.package_prices),
+      packagePricing: {
+        ...packagePriceRowsToPricing(row.package_prices),
+        ...Object.fromEntries(row.package_prices.filter(price => price.package_type === 'digital')
+          .map(price => ['digital', catalogPriceModel(price, 'digital')])),
+      },
+      originalPricing: Object.fromEntries(row.original_prices.filter(price => price.language === 'en').map(price => [
+        price.format,
+        { ...catalogPriceModel({ ...price, list_price_usd: price.list_price_usd ?? price.price_usd, row_version: price.price_version }, price.format), placeholder: price.is_placeholder },
+      ])),
     }))
     const homeSections = (sectionStateResult.data ?? []).map((section) => ({
       sectionKey: String(section.section_key),
@@ -103,7 +112,9 @@ export async function PATCH(request: Request) {
 
   const body = await request.json().catch(() => ({}))
   const templateId = String(body?.templateId ?? '').trim()
-  const packageType = normalizeBookPackageType(body?.packageType)
+  const editionGroup = body?.editionGroup ?? 'personalized'
+  if (editionGroup !== 'original' && editionGroup !== 'personalized') return json({ error: 'Invalid edition' }, 400)
+  const packageType = body?.packageType === 'digital' ? 'digital' : normalizeBookPackageType(body?.packageType)
   const expectedVersion = Number(body?.expectedVersion)
 
   if (!templateId || templateId.length > 160 || !packageType) {
@@ -132,7 +143,14 @@ export async function PATCH(request: Request) {
   }
 
   const now = new Date().toISOString()
-  const { data: updated, error } = await supabaseAdmin
+  const prices = { list_price_usd: listPriceUsd, sale_price_usd: salePriceUsd, display_discount_percent: displayDiscountPercent }
+  const { data: updated, error } = editionGroup === 'original'
+    ? await supabaseAdmin.from('original_book_offers')
+      .update({ ...prices, price_usd: salePriceUsd ?? listPriceUsd, price_version: expectedVersion + 1 })
+      .eq('template_id', templateId).eq('language', 'en').eq('format', packageType).eq('price_version', expectedVersion)
+      .select('list_price_usd, sale_price_usd, display_discount_percent, row_version:price_version')
+      .maybeSingle()
+    : await supabaseAdmin
     .from('template_package_prices')
     .update({
       list_price_usd: listPriceUsd,
@@ -162,7 +180,7 @@ export async function PATCH(request: Request) {
 
   return json({
     templateId,
-    packagePrice: packagePriceRowToModel(updated),
-    updatedAt: updated.updated_at,
+    packagePrice: catalogPriceModel(updated, packageType),
+    updatedAt: now,
   })
 }

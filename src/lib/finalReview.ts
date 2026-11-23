@@ -37,7 +37,7 @@ export type FinalJobSummary = {
   proof_revision?: number
   pdf_only?: boolean
   proof_draft_open?: boolean
-  purchased_edition?: import('@/types').BookPackageType | null
+  purchased_edition?: import('@/types').BookPackageType | 'digital' | null
   production_mode?: FinalProductionMode
   final_job_id: string
   job_id: string
@@ -112,7 +112,7 @@ export type FinalJobDetail = {
   standard_narration?: StandardNarrationChoice | null
   shared_final?: boolean
   finalJob: FinalJobSummary
-  purchased_edition: import('@/types').BookPackageType | null
+  purchased_edition: import('@/types').BookPackageType | 'digital' | null
   page_contract: FinalPageContractSummary
   pages: FinalJobPageRow[]
   print_artifact: ManualPrintArtifactClient | null

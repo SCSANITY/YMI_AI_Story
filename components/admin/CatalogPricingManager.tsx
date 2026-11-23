@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Check, Layers3, LoaderCircle, RefreshCw, Search, Tag } from 'lucide-react'
+import { BookOpen, Check, ChevronRight, FileText, Volume2, Layers3, LoaderCircle, RefreshCw, Search, Tag } from 'lucide-react'
 import Image from 'next/image'
 import {
   AdminButton,
@@ -26,7 +26,12 @@ type CatalogTemplate = {
   coverUrl: string
   catalogDisplayPackageType: BookPackageType
   packagePricing: BookPackagePricing
+  originalPricing: Partial<Record<Format, CatalogPrice>>
 }
+
+type Format = BookPackageType | 'digital'
+type CatalogPrice = BookPackagePrice & { placeholder?: boolean }
+type EditionGroup = 'personalized' | 'original'
 
 type PriceDraft = {
   listPriceUsd: string
@@ -50,11 +55,11 @@ function draftFromPrice(price: BookPackagePrice): PriceDraft {
   }
 }
 
-function pricingDrafts(template: CatalogTemplate) {
-  return Object.fromEntries(
-    PACKAGE_META.map(({ type }) => [type, draftFromPrice(template.packagePricing[type])])
-  ) as Record<BookPackageType, PriceDraft>
-}
+const formats = [
+  { type: 'digital', name: 'PDF only', Icon: FileText },
+  { type: 'basic', name: 'Hardcover', Icon: BookOpen },
+  { type: 'supreme', name: 'Hardcover + Voice', Icon: Volume2 },
+] as const
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
@@ -67,13 +72,17 @@ function packageName(packageType: BookPackageType) {
 export function CatalogPricingManager() {
   const [templates, setTemplates] = useState<CatalogTemplate[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<Record<BookPackageType, PriceDraft> | null>(null)
+  const [drafts, setDrafts] = useState<Record<string, PriceDraft>>({})
+  const [editionGroup, setEditionGroup] = useState<EditionGroup>('personalized')
+  const [format, setFormat] = useState<Format>('digital')
+  const priceKey = (type: Format) => JSON.stringify([selectedTemplateId, editionGroup, type])
+  const pricingField = editionGroup === 'personalized' ? 'packagePricing' : 'originalPricing'
   const [displayPackageDraft, setDisplayPackageDraft] = useState<BookPackageType>('basic')
   const [homeSections, setHomeSections] = useState<CatalogHomeSection[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
-  const [pendingPackages, setPendingPackages] = useState<Record<BookPackageType, boolean>>({
-    basic: false,
+  const [pendingPackages, setPendingPackages] = useState<Record<Format, boolean>>({
+    digital: false, basic: false,
     supreme: false,
   })
   const [displayPackagePending, setDisplayPackagePending] = useState(false)
@@ -81,7 +90,7 @@ export function CatalogPricingManager() {
   const [success, setSuccess] = useState<string | null>(null)
   const loadIntentRef = useRef(0)
   const selectedTemplateIdRef = useRef<string | null>(null)
-  const saveIntentRef = useRef<Record<BookPackageType, number>>({ basic: 0, supreme: 0 })
+  const saveIntentRef = useRef<Record<Format, number>>({ digital: 0, basic: 0, supreme: 0 })
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.templateId === selectedTemplateId) ?? null,
@@ -150,7 +159,7 @@ export function CatalogPricingManager() {
       const nextSelectedId = nextSelected?.templateId ?? null
       selectedTemplateIdRef.current = nextSelectedId
       setSelectedTemplateId(nextSelectedId)
-      setDrafts(nextSelected ? pricingDrafts(nextSelected) : null)
+      setDrafts({})
       setDisplayPackageDraft(nextSelected?.catalogDisplayPackageType ?? 'basic')
     } catch (loadError) {
       if (loadIntentRef.current !== intent) return
@@ -164,20 +173,20 @@ export function CatalogPricingManager() {
     void load()
   }, [load])
 
-  const updateDraft = (packageType: BookPackageType, field: keyof PriceDraft, value: string) => {
-    setDrafts((current) => current ? {
-      ...current,
-      [packageType]: {
-        ...current[packageType],
-        [field]: value,
-        ...(field === 'salePriceUsd' && !value ? { displayDiscountPercent: '' } : {}),
-      },
-    } : current)
+  const updateDraft = (packageType: Format, field: keyof PriceDraft, value: string) => {
+    const source = selectedTemplate?.[pricingField][packageType]
+    if (!source) return
+    const key = priceKey(packageType)
+    setDrafts(current => ({ ...current, [key]: {
+      ...(current[key] ?? draftFromPrice(source)),
+      [field]: value,
+      ...(field === 'salePriceUsd' && !value ? { displayDiscountPercent: '' } : {}),
+    } }))
     setError(null)
     setSuccess(null)
   }
 
-  const savePackage = async (packageType: BookPackageType) => {
+  const savePackage = async (packageType: Format) => {
     if (!selectedTemplate || !drafts || pendingPackages[packageType]) return
     const intent = ++saveIntentRef.current[packageType]
     setPendingPackages((current) => ({ ...current, [packageType]: true }))
@@ -185,17 +194,19 @@ export function CatalogPricingManager() {
     setSuccess(null)
 
     try {
-      const source = selectedTemplate.packagePricing[packageType]
+      const source = selectedTemplate[pricingField][packageType]
+      const draft = drafts[priceKey(packageType)]
+      if (!source || !draft) return
       const response = await fetch('/api/admin/catalog/pricing', {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateId: selectedTemplate.templateId,
-          packageType,
-          listPriceUsd: drafts[packageType].listPriceUsd,
-          salePriceUsd: drafts[packageType].salePriceUsd || null,
-          displayDiscountPercent: drafts[packageType].displayDiscountPercent || null,
+          editionGroup, packageType,
+          listPriceUsd: draft.listPriceUsd,
+          salePriceUsd: draft.salePriceUsd || null,
+          displayDiscountPercent: draft.displayDiscountPercent || null,
           expectedVersion: source.version,
         }),
       })
@@ -210,13 +221,13 @@ export function CatalogPricingManager() {
         template.templateId === selectedTemplate.templateId
           ? {
               ...template,
-              packagePricing: { ...template.packagePricing, [packageType]: nextPrice },
+              [pricingField]: { ...template[pricingField], [packageType]: { ...source, ...nextPrice } },
             }
           : template
       ))
       if (selectedTemplateIdRef.current === selectedTemplate.templateId) {
-        setDrafts((current) => current ? { ...current, [packageType]: draftFromPrice(nextPrice) } : current)
-        setSuccess(`${PACKAGE_META.find((item) => item.type === packageType)?.name} price updated.`)
+        setDrafts(current => ({ ...current, [priceKey(packageType)]: draftFromPrice(nextPrice) }))
+        setSuccess(`${formats.find((item) => item.type === packageType)?.name} price updated.`)
       }
       invalidateBookCatalogClientCache()
     } catch (saveError) {
@@ -304,7 +315,6 @@ export function CatalogPricingManager() {
                 onClick={() => {
                   selectedTemplateIdRef.current = template.templateId
                   setSelectedTemplateId(template.templateId)
-                  setDrafts(pricingDrafts(template))
                   setDisplayPackageDraft(template.catalogDisplayPackageType)
                   setError(null)
                   setSuccess(null)
@@ -358,6 +368,126 @@ export function CatalogPricingManager() {
                 </AdminButton>
               </div>
 
+              <div className="mt-5 inline-flex rounded-xl bg-[var(--admin-panel-2)] p-1" role="group" aria-label="Story edition">
+                {(['personalized', 'original'] as const).map(group => <button key={group} type="button" aria-pressed={editionGroup === group}
+                  disabled={hasPendingWrite} className="rounded-lg px-4 py-2 text-sm font-semibold aria-pressed:bg-[var(--admin-card)] aria-pressed:shadow-sm"
+                  onClick={() => { setEditionGroup(group); setSuccess(null); setError(null) }}>
+                  {group === 'personalized' ? 'Personalized' : 'Original artwork'}
+                </button>)}
+              </div>
+              <div className="mt-4 grid gap-2" role="group" aria-label="Book format">
+                {formats.map(meta => {
+                  const price: CatalogPrice | undefined = selectedTemplate[pricingField][meta.type]
+                  return <button type="button" key={meta.type} aria-pressed={format === meta.type} disabled={hasPendingWrite}
+                    className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left aria-pressed:border-amber-400/60 aria-pressed:bg-amber-400/10"
+                    onClick={() => { setFormat(meta.type); setSuccess(null); setError(null) }}>
+                    <meta.Icon size={19} aria-hidden="true" /><strong>{meta.name}</strong>{price?.placeholder && <small className="rounded-full bg-[var(--admin-panel-2)] px-2 text-[10px]">Placeholder</small>}
+                    <span className="ml-auto">{price?.salePriceUsd != null && <s className="mr-2 opacity-60">{formatUsd(price.listPriceUsd)}</s>}
+                      {price ? formatUsd(price.effectivePriceUsd) : 'Not configured'}</span><ChevronRight size={15} aria-hidden="true" />
+                  </button>
+                })}
+              </div>
+              <div className="mt-4">
+                {formats.filter(meta => meta.type === format).map((meta) => {
+                  const source = selectedTemplate[pricingField][meta.type]
+                  if (!source) return null
+                  const draft = drafts[priceKey(meta.type)] ?? draftFromPrice(source)
+                  const listPrice = Number(draft.listPriceUsd)
+                  const salePrice = draft.salePriceUsd ? Number(draft.salePriceUsd) : null
+                  const valid = Number.isFinite(listPrice) && listPrice > 0 && (salePrice === null || (Number.isFinite(salePrice) && salePrice > 0 && salePrice < listPrice))
+                  const marketingDiscount = draft.displayDiscountPercent ? Number(draft.displayDiscountPercent) : null
+                  const dirty = draft.listPriceUsd !== source.listPriceUsd.toFixed(2)
+                    || draft.salePriceUsd !== (source.salePriceUsd?.toFixed(2) ?? '')
+                    || draft.displayDiscountPercent !== (source.displayDiscountPercent?.toString() ?? '')
+                  const effective = salePrice ?? listPrice
+                  const computedDiscountPercent = salePrice && listPrice ? Math.round((1 - salePrice / listPrice) * 100) : null
+                  const discountPercent = marketingDiscount ?? computedDiscountPercent
+                  const validMarketingDiscount = marketingDiscount === null || (Number.isSafeInteger(marketingDiscount) && marketingDiscount >= 1 && marketingDiscount <= 99 && salePrice !== null)
+                  const isPending = pendingPackages[meta.type]
+                  const protectsHomeDiscount = editionGroup === 'personalized' && selectedIsInDiscount && selectedTemplate.catalogDisplayPackageType === meta.type
+                  const keepsHomeDiscountValid = !protectsHomeDiscount || salePrice !== null
+
+                  return (
+                    <section key={meta.type} className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)]">{editionGroup === 'original' ? 'Original artwork' : 'Personalized'}</p>
+                          <h3 className="mt-1 font-bold text-[var(--admin-page-ink)]">{meta.name}</h3>
+                        </div>
+                        <Tag className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" />
+                      </div>
+
+                      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                        <label className={adminLabelClass}>
+                          List price (USD)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min="0.01"
+                            max="10000"
+                            step="0.01"
+                            value={draft.listPriceUsd}
+                            onChange={(event) => updateDraft(meta.type, 'listPriceUsd', event.target.value)}
+                            className={adminFieldClass}
+                            disabled={isPending}
+                          />
+                        </label>
+                        <label className={adminLabelClass}>
+                          Sale price (optional)
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min="0.01"
+                            max="10000"
+                            step="0.01"
+                            value={draft.salePriceUsd}
+                            onChange={(event) => updateDraft(meta.type, 'salePriceUsd', event.target.value)}
+                            className={adminFieldClass}
+                            placeholder="No sale"
+                            disabled={isPending}
+                          />
+                        </label>
+                        <label className={adminLabelClass}>
+                          Marketing discount %
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="1"
+                            max="99"
+                            step="1"
+                            value={draft.displayDiscountPercent}
+                            onChange={(event) => updateDraft(meta.type, 'displayDiscountPercent', event.target.value)}
+                            className={adminFieldClass}
+                            placeholder={computedDiscountPercent ? `Auto: ${computedDiscountPercent}%` : 'Auto'}
+                            disabled={isPending || salePrice === null}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="mt-4 flex items-end justify-between gap-3 border-t border-[var(--admin-line)] pt-4">
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Customer price</p>
+                          <p className="mt-1 text-xl font-bold text-[var(--admin-page-ink)]">{valid ? formatUsd(effective) : '--'}</p>
+                          {discountPercent ? <p className="mt-0.5 text-xs font-semibold text-emerald-600">{discountPercent}% catalog discount</p> : null}
+                        </div>
+                        <AdminButton
+                          type="button"
+                          tone="primary"
+                          onClick={() => void savePackage(meta.type)}
+                          disabled={!dirty || !valid || !validMarketingDiscount || !keepsHomeDiscountValid || isPending}
+                        >
+                          {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                          Save
+                        </AdminButton>
+                      </div>
+                      {protectsHomeDiscount ? (
+                        <p className="mt-3 text-xs text-amber-700">This package powers the story&apos;s Home In Discount card, so its sale price cannot be cleared.</p>
+                      ) : null}
+                    </section>
+                  )
+                })}
+              </div>
+              <details className="mt-5"><summary className="cursor-pointer font-semibold">Public card price settings</summary>
               <div className="mt-4 flex flex-col gap-3 rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4 lg:flex-row lg:items-end lg:justify-between">
                 <label className={`${adminLabelClass} min-w-0 lg:w-72`}>
                   Public card price package
@@ -422,105 +552,7 @@ export function CatalogPricingManager() {
                 </p>
               ) : null}
 
-              <div className="mt-5 grid gap-4 2xl:grid-cols-3">
-                {PACKAGE_META.map((meta) => {
-                  const source = selectedTemplate.packagePricing[meta.type]
-                  const draft = drafts[meta.type]
-                  const listPrice = Number(draft.listPriceUsd)
-                  const salePrice = draft.salePriceUsd ? Number(draft.salePriceUsd) : null
-                  const valid = Number.isFinite(listPrice) && listPrice > 0 && (salePrice === null || (Number.isFinite(salePrice) && salePrice > 0 && salePrice < listPrice))
-                  const marketingDiscount = draft.displayDiscountPercent ? Number(draft.displayDiscountPercent) : null
-                  const dirty = draft.listPriceUsd !== source.listPriceUsd.toFixed(2)
-                    || draft.salePriceUsd !== (source.salePriceUsd?.toFixed(2) ?? '')
-                    || draft.displayDiscountPercent !== (source.displayDiscountPercent?.toString() ?? '')
-                  const effective = salePrice ?? listPrice
-                  const computedDiscountPercent = salePrice && listPrice ? Math.round((1 - salePrice / listPrice) * 100) : null
-                  const discountPercent = marketingDiscount ?? computedDiscountPercent
-                  const validMarketingDiscount = marketingDiscount === null || (Number.isSafeInteger(marketingDiscount) && marketingDiscount >= 1 && marketingDiscount <= 99 && salePrice !== null)
-                  const isPending = pendingPackages[meta.type]
-                  const protectsHomeDiscount = selectedIsInDiscount && selectedTemplate.catalogDisplayPackageType === meta.type
-                  const keepsHomeDiscountValid = !protectsHomeDiscount || salePrice !== null
-
-                  return (
-                    <section key={meta.type} className="rounded-lg border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)] p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)]">{meta.type}</p>
-                          <h3 className="mt-1 font-bold text-[var(--admin-page-ink)]">{meta.name}</h3>
-                        </div>
-                        <Tag className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" />
-                      </div>
-
-                      <div className="mt-5 grid gap-4 sm:grid-cols-3 2xl:grid-cols-1">
-                        <label className={adminLabelClass}>
-                          List price (USD)
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min="0.01"
-                            max="10000"
-                            step="0.01"
-                            value={draft.listPriceUsd}
-                            onChange={(event) => updateDraft(meta.type, 'listPriceUsd', event.target.value)}
-                            className={adminFieldClass}
-                            disabled={isPending}
-                          />
-                        </label>
-                        <label className={adminLabelClass}>
-                          Marketing discount %
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min="1"
-                            max="99"
-                            step="1"
-                            value={draft.displayDiscountPercent}
-                            onChange={(event) => updateDraft(meta.type, 'displayDiscountPercent', event.target.value)}
-                            className={adminFieldClass}
-                            placeholder={computedDiscountPercent ? `Auto: ${computedDiscountPercent}%` : 'Auto'}
-                            disabled={isPending || salePrice === null}
-                          />
-                        </label>
-                        <label className={adminLabelClass}>
-                          Sale price (optional)
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min="0.01"
-                            max="10000"
-                            step="0.01"
-                            value={draft.salePriceUsd}
-                            onChange={(event) => updateDraft(meta.type, 'salePriceUsd', event.target.value)}
-                            className={adminFieldClass}
-                            placeholder="No sale"
-                            disabled={isPending}
-                          />
-                        </label>
-                      </div>
-
-                      <div className="mt-4 flex items-end justify-between gap-3 border-t border-[var(--admin-line)] pt-4">
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-page-muted)]">Customer price</p>
-                          <p className="mt-1 text-xl font-bold text-[var(--admin-page-ink)]">{valid ? formatUsd(effective) : '--'}</p>
-                          {discountPercent ? <p className="mt-0.5 text-xs font-semibold text-emerald-600">{discountPercent}% catalog discount</p> : null}
-                        </div>
-                        <AdminButton
-                          type="button"
-                          tone="primary"
-                          onClick={() => void savePackage(meta.type)}
-                          disabled={!dirty || !valid || !validMarketingDiscount || !keepsHomeDiscountValid || isPending}
-                        >
-                          {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                          Save
-                        </AdminButton>
-                      </div>
-                      {protectsHomeDiscount ? (
-                        <p className="mt-3 text-xs text-amber-700">This package powers the story&apos;s Home In Discount card, so its sale price cannot be cleared.</p>
-                      ) : null}
-                    </section>
-                  )
-                })}
-              </div>
+              </details>
             </>
           ) : (
             <AdminEmptyState>Select a story to manage package pricing.</AdminEmptyState>

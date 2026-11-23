@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import {loadUi,uiNodes as nodes,uiText as text} from './helpers/preview-uiux-harness.mjs'
+import {hookHarness,loadUi,uiNodes as nodes,uiText as text} from './helpers/preview-uiux-harness.mjs'
 const pricing = loadUi('src/lib/package-pricing.ts')
 const formatter = loadUi('src/lib/locale-pricing.ts').formatDisplayCurrency
 const price = (type, list, sale, percent) => pricing.packagePriceRowToModel({ package_type: type, list_price_usd: list, sale_price_usd: sale, display_discount_percent: percent, row_version: 1 })
@@ -68,4 +68,32 @@ test('only the approved story and version expose a selectable PDF and its actual
   nodes(label).find(n => n.type === 'input').props.onChange()
   assert.deepEqual(h.changes, ['digital'])
   assert.equal(activeCartUnitPrice({ package_type: 'digital', creations: { template_id: 'sample', templates: { package_prices: rows } } }), 12.34)
+})
+
+test('personalized PDF catalog rollouts may track later saved prices without enabling other stories or retired revisions', () => {
+  const env = {NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS:'sample@4+,pinned@2'}
+  const { personalizedPdfOfferEnabled: enabled, purchasedLineEdition: edition } = loadUi('src/lib/package-pricing.ts', {}, {process:{env}})
+  for (const [story, rev, expected] of [['sample',3,false],['sample',4,true],['sample',5,true],['pinned',2,true],['pinned',3,false],['other',4,false]]) {
+    assert.equal(enabled(story,rev),expected)
+  }
+  assert.equal(edition('ebook','digital'),'digital')
+  assert.equal(edition('physical','digital'),null)
+  assert.equal(edition('ebook','supreme'),null)
+})
+
+test('fresh personalized book features Voice and the waiting gallery keeps an explicit selection', () => {
+  const form = hookHarness('components/personalize/usePersonalizeState.ts', 'usePersonalizeState')
+  const gallery = loadUi('components/personalize/PreviewWaitingPages.tsx').PreviewWaitingPages
+  const options = { ...book().packagePricing, digital: { effectivePriceUsd: 9.9 } }
+  const render = () => {
+    const { bookType, setBookType } = form.render()
+    const tree = gallery({ name:'Mia', value:bookType, pricing:options, currency:'USD',
+      progress:{step:0, interact(){}}, onChange:setBookType })
+    const group = nodes(tree).find(n => n.props?.['aria-label'] === 'Book formats')
+    return nodes(group).filter(n => n.type === 'button')
+  }
+  assert.match(text(render().find(b => b.props['aria-pressed'])), /Hardcover \+ Voice/)
+  render().find(b => text(b).includes('PDF only')).props.onClick()
+  assert.equal(form.render().bookType,'digital')
+  assert.match(text(render().find(b => b.props['aria-pressed'])), /PDF only/)
 })

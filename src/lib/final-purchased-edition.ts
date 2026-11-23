@@ -1,4 +1,4 @@
-import { normalizeBookPackageType } from './package-pricing'
+import { purchasedLineEdition } from './package-pricing'
 
 type PurchasedLine = {
   order_id: string | null
@@ -14,9 +14,9 @@ export function finalPurchasedEdition(
   purchase: PurchasedLine | PurchasedLine[] | null,
 ) {
   const line = Array.isArray(purchase) ? (purchase.length === 1 ? purchase[0] : null) : purchase
-  return line?.product_type === 'physical' && line.status === 'ordered' &&
+  return line?.status === 'ordered' &&
     line.order_id === job.order_id && line.final_job_id === job.job_id &&
     line.creation_id && line.creation_id === job.creation_id
-    ? normalizeBookPackageType(line.package_type)
+    ? purchasedLineEdition(line.product_type, line.package_type)
     : null
 }

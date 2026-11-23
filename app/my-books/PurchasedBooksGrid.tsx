@@ -4,7 +4,7 @@ import { BookOpen, Clock3, RotateCcw } from 'lucide-react'
 import { BookCardCover } from '@/components/BookCardCover'
 import { resolvePersonalizedBookTitle } from '@/lib/personalized-book-title'
 import type { CreationItem } from './myBooksTypes'
-import { SignatureVoiceBadge } from '@/components/SignatureVoiceEditionNotice'
+import { PdfOnlyBadge, SignatureVoiceBadge } from '@/components/SignatureVoiceEditionNotice'
 import { isSignatureVoicePackage } from '@/lib/signature-voice'
 
 type PurchasedBooksGridProps = {
@@ -125,6 +125,7 @@ export function PurchasedBooksGrid({
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-gray-400 md:text-xs">
                   {item.templates?.story_type || ''}
                 </p>
+                {item.latestPackageType === 'digital' && <PdfOnlyBadge />}
                 {isSignatureVoice ? <SignatureVoiceBadge className="mb-2" /> : null}
                 <p className="text-sm leading-relaxed text-gray-600">
                   {isRefunded

@@ -1,5 +1,7 @@
 const PURCHASE_PACKAGE_TYPES = ['basic', 'supreme', 'digital'] as const
 
+export const DEFAULT_PERSONALIZED_EDITION = 'supreme' as const
+
 export type PurchasePackageType = (typeof PURCHASE_PACKAGE_TYPES)[number]
 
 function isPurchasePackageType(value: unknown): value is PurchasePackageType {

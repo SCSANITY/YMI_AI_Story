@@ -1328,7 +1328,7 @@ export function FinalReviewPanel({
               <option value="all">All jobs</option><option value="pdf_review">Needs PDF review</option><option value="print_pending">Print pending</option><option value="completed">Completed</option>
             </select>
             <select aria-label="Book type" value={editionFilter} onChange={e => { setQueuePage(1); setEditionFilter(e.target.value) }} className="admin-v2-field rounded-xl px-2 py-2 text-sm">
-              <option value="">Book type</option><option value="basic">Hardcover</option><option value="supreme">Hardcover + Voice</option>
+              <option value="">Book type</option><option value="digital">PDF only</option><option value="basic">Hardcover</option><option value="supreme">Hardcover + Voice</option>
             </select>
             <small>{queueTotal} jobs</small>
             {queuePages > 1 && <nav aria-label="Job queue pages" className="flex items-center gap-2 text-sm">

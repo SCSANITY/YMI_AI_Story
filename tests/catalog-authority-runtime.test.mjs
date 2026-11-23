@@ -176,3 +176,24 @@ test('GlobalContext exposes cart and checkout load errors,clears them on a valid
  assert.match(checkout,/const itemsResponsePromise = fetch\(`\/api\/cart\?orderId=[\s\S]*?fetch\(`\/api\/orders\/[\s\S]*?await itemsResponsePromise/)
  assert.match(checkout,/if \(orderRestoreError\) return \(\s*<div role="alert"/)
 })
+
+test('Admin saves an original sale only on the selected English offer and never changes publication or artwork',async()=>{
+ const filters=[],writes=[],targets=[],invalidations=[]
+ const chain={update(value){writes.push(value);return this},eq(k,v){filters.push([k,v]);return this},select(){return this},
+   async maybeSingle(){return {data:{list_price_usd:4.9,sale_price_usd:3.9,display_discount_percent:20,row_version:4},error:null}}}
+ const api=loadUi('app/api/admin/catalog/pricing/route.ts',{
+   'next/server':{NextResponse:{json:Response.json}},
+   '@/lib/catalog-cache':{invalidatePublicCatalogCache:()=>invalidations.push(true)},
+   '@/lib/adminAuth':{requireAdminCustomer:async()=>({customer_id:'admin'})},
+   '@/lib/supabaseAdmin':{supabaseAdmin:{from:table=>{targets.push(table);return chain}}},
+ },globals)
+ const response=await api.PATCH(new Request('https://example.test',{method:'PATCH',body:JSON.stringify({
+   templateId:'aurora',editionGroup:'original',packageType:'digital',expectedVersion:3,listPriceUsd:4.9,salePriceUsd:3.9,displayDiscountPercent:20,
+ })}))
+ assert.equal(response.status,200)
+ assert.deepEqual(targets,['original_book_offers'])
+ assert.deepEqual(filters,[['template_id','aurora'],['language','en'],['format','digital'],['price_version',3]])
+ assert.deepEqual(JSON.parse(JSON.stringify(writes)),[{list_price_usd:4.9,sale_price_usd:3.9,display_discount_percent:20,price_usd:3.9,price_version:4}])
+ assert.equal((await response.json()).packagePrice.effectivePriceUsd,3.9)
+ assert.equal(invalidations.length,1)
+})

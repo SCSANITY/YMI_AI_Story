@@ -270,7 +270,7 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
               className="admin-v2-field min-w-0 rounded-xl px-2 py-2 text-sm" onChange={event => { setFocusedOrderId(null); setDate(event.target.value) }} />
             <select aria-label="Book type" value={edition} className="admin-v2-field rounded-xl px-2 py-2 text-sm"
               onChange={event => { setFocusedOrderId(null); setEdition(event.target.value) }}>
-              <option value="">Book type</option><option value="basic">Hardcover</option><option value="supreme">Hardcover + Voice</option>
+              <option value="">Book type</option><option value="digital">PDF only</option><option value="basic">Hardcover</option><option value="supreme">Hardcover + Voice</option>
             </select>
             </div>
             <AdminIconButton

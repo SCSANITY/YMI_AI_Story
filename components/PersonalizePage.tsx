@@ -78,6 +78,7 @@ import { emitYmiTrackingEvent, resolveTrackingFormat } from '@/lib/tracking-poli
 import { normalizeStoryLanguage } from '@/lib/story-language';
 import { usePreviewController } from '@/components/personalize/usePreviewController';
 import {
+  DEFAULT_PERSONALIZED_EDITION,
   normalizePurchasePackageType,
   type PurchasePackageType,
 } from '@/lib/purchase-configuration';
@@ -1125,7 +1126,7 @@ export default function PersonalizePage({
     setName(draft?.name ?? '')
     setAge(draft?.age ?? '')
     setSelectedLang(draft?.language ?? 'English')
-    setBookType(draft?.bookType ?? 'basic')
+    setBookType(draft?.bookType ?? DEFAULT_PERSONALIZED_EDITION)
     setPhoto(null)
     setPhotoPreview(null)
     setPhotoAssetId(draft?.faceAssetId ?? null)
@@ -1225,6 +1226,8 @@ export default function PersonalizePage({
           child_name: currentName,
           child_age: Number.isNaN(parsedAge) ? currentAge : parsedAge,
           language: selectedLang,
+          // The generation RPC accepts an unvoiced photo job. Persist the selected
+          // purchase edition via the owner-scoped configuration endpoint once it has an ID.
           book_type: 'basic',
         }
 
@@ -1255,7 +1258,6 @@ export default function PersonalizePage({
           throw new Error('Preview job missing jobId')
         }
         rememberProfile(created.textProfile?.profile)
-        if (editionSelectionRevisionRef.current === 0) setBookType('basic')
         setVoiceAssetId(null)
         setVoiceStoragePath(null)
         setVoicePlaybackUrl(null)
@@ -1281,6 +1283,11 @@ export default function PersonalizePage({
         }
         if (!isActive) return
         selectedPreviewCreationIdRef.current = null
+        if (purchaseBookTypeRef.current !== 'basic' || queuedPurchaseBookTypeRef.current) {
+          editionSelectionRevisionRef.current += 1;
+          queuedPurchaseBookTypeRef.current = purchaseBookTypeRef.current;
+          confirmedPurchaseBookTypeRef.current = 'basic';
+        }
         setPreviewJobId(created.jobId)
         setGenerationJobId(created.jobId)
         selectPreviewJobId(created.jobId)

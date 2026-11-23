@@ -76,7 +76,11 @@ export function OriginalFormatSelection({ story, title, offers }: { story: strin
           return <label key={id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50">
             <input type="radio" name="format" checked={format === id} onChange={() => select(id)} className="accent-amber-600" />
             <span className="min-w-0 flex-1"><strong className="block">{label}</strong><span className="text-sm text-slate-600">{detail}</span></span>
-            <span className="font-semibold">{formatCurrencyAmount(row.priceCents / 100, displayCurrency)}</span>
+            <span className="text-right font-semibold">
+              {row.listPriceCents > row.priceCents && <s className="mr-2 text-xs text-stone-500">{formatCurrencyAmount(row.listPriceCents / 100, displayCurrency)}</s>}
+              {formatCurrencyAmount(row.priceCents / 100, displayCurrency)}
+              {row.discountPercent != null && <small className="block text-amber-800">{row.discountPercent}% off</small>}
+            </span>
           </label>
         })}
       </fieldset>

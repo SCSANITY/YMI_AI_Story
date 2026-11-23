@@ -515,7 +515,7 @@ test('Final Review derives personalized job titles and keeps queue status rows s
   assert.match(detailApi, /purchased_line:cart_items!final_jobs_cart_item_id_fkey/)
   assert.match(listApi, /purchased_line:cart_items!final_jobs_cart_item_id_fkey/)
   for (const source of [listApi, detailApi]) assert.match(source, /finalPurchasedEdition\(\w+, purchased_line\)/)
-  assert.match(await read('src/lib/final-purchased-edition.ts'), /normalizeBookPackageType\(line\.package_type\)/)
+  assert.match(await read('src/lib/final-purchased-edition.ts'), /purchasedLineEdition\(line\.product_type, line\.package_type\)/)
   assert.match(panel, /materialLine\.item === activeDetail\.finalJob\.cart_item_id/)
   assert.match(jobQueue, /\{job\.display_title\}/)
   assert.doesNotMatch(jobQueue, /\{job\.template_id\}/)

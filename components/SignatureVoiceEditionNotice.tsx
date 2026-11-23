@@ -9,6 +9,10 @@ type SignatureVoiceEditionNoticeProps = {
   className?: string
 }
 
+export function PdfOnlyBadge({ className = '' }: { className?: string }) {
+  return <span className={`inline-flex w-fit rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-900 ${className}`}>PDF only</span>
+}
+
 export function SignatureVoiceBadge({ className = '' }: { className?: string }) {
   const { t } = useI18n()
 

@@ -21,7 +21,7 @@ export const READONLY_GROUPS = READONLY_ADMIN_ORDER_VIEWS
 export type OrderBook = {
   itemId: string
   title: string
-  edition: 'basic' | 'supreme' | null
+  edition: 'digital' | 'basic' | 'supreme' | null
   quantity: number
   cover: string | null
   needsLineCheck: boolean

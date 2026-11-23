@@ -1,4 +1,5 @@
-import { normalizeBookPackageType } from '@/lib/package-pricing'
+import { normalizePurchasePackageType } from '@/lib/purchase-configuration'
+import { purchasedLineEdition } from '@/lib/package-pricing'
 import { templateStorageUrl } from '@/lib/book-catalog'
 import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
 import { normalizeShippingAddress } from '@/lib/shipping-address'
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
   const rangeStart = (page - 1) * pageSize
   const rangeEnd = rangeStart + pageSize - 1
 
-  const edition = focusedOrderId ? null : normalizeBookPackageType(url.searchParams.get('edition'))
+  const edition = focusedOrderId ? null : normalizePurchasePackageType(url.searchParams.get('edition'))
   const date = focusedOrderId ? null : url.searchParams.get('date')
   const dayStart = date ? Date.parse(`${date}T00:00:00+08:00`) : null
   if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(dayStart))) {
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
     .order('order_id', { ascending: false })
 
   if (edition) {
-    query = query.eq('edition_line.status', 'ordered').eq('edition_line.product_type', 'physical').eq('edition_line.package_type', edition)
+    query = query.eq('edition_line.status', 'ordered').eq('edition_line.product_type', edition === 'digital' ? 'ebook' : 'physical').eq('edition_line.package_type', edition)
   }
   if (dayStart !== null) {
     query = query.gte('created_at', new Date(dayStart).toISOString()).lt('created_at', new Date(dayStart + 86400000).toISOString())
@@ -169,7 +170,7 @@ export async function GET(request: Request) {
       bookByItem.set(normalizedItem.cart_item_id, {
         itemId: normalizedItem.cart_item_id,
         title: resolveFinalJobDisplayTitle({ creations: creation }),
-        edition: item.product_type === 'physical' ? normalizeBookPackageType(item.package_type) : null,
+        edition: purchasedLineEdition(item.product_type, item.package_type),
         physical: item.product_type === 'physical',
         quantity: Number.isSafeInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
         cover: templateStorageUrl(template?.cover_image_path) || null,

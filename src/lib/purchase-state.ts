@@ -2,7 +2,7 @@ import { isFinalJobReleased } from '@/lib/final-job-release'
 import { isScopedFinalPdf } from '@/lib/final-review-artifact-paths'
 import { hasSingleFinalOrderLine } from '@/lib/final-review-batch-approval'
 import { isPaidLikeOrderStatus, normalizeOrderStatus } from '@/lib/order-status'
-import { normalizeBookPackageType } from '@/lib/package-pricing'
+import { purchasedLineEdition } from '@/lib/package-pricing'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import type { BookPackageType } from '@/types'
 
@@ -22,7 +22,7 @@ export type PurchaseSummary = {
   latestOrderId: string | null
   latestOrderDisplayId: string | null
   latestOrderStatus: string | null
-  latestPackageType: BookPackageType | null
+  latestPackageType: BookPackageType | 'digital' | null
   finalJobId: string | null
   finalReady: boolean
   finalReviewStatus: string | null
@@ -39,6 +39,7 @@ type CartPurchaseRow = {
   creation_id: string | null
   order_id: string | null
   final_job_id: string | null
+  product_type: string | null
   package_type: string | null
   status: string | null
   created_at: string | null
@@ -170,7 +171,7 @@ export async function loadPurchaseSummaryByCreation(creationIds: string[]): Prom
 
   const cartItemsQuery = supabaseAdmin
     .from('cart_items')
-    .select('cart_item_id, creation_id, order_id, final_job_id, package_type, status, created_at')
+    .select('cart_item_id, creation_id, order_id, final_job_id, product_type, package_type, status, created_at')
     .in('creation_id', uniqueCreationIds)
 
   const finalJobsQuery = supabaseAdmin
@@ -254,7 +255,7 @@ export async function loadPurchaseSummaryByCreation(creationIds: string[]): Prom
       latestOrderId: latest?.order.order_id ?? null,
       latestOrderDisplayId: latest?.order.display_id ?? null,
       latestOrderStatus: latest?.order.order_status ?? null,
-      latestPackageType: normalizeBookPackageType(latest?.cartItem.package_type) ?? null,
+      latestPackageType: purchasedLineEdition(latest?.cartItem.product_type, latest?.cartItem.package_type) ?? null,
       finalJobId: finalJob?.final_job_id ?? null,
       finalReady: isFinalJobReleased(finalJob),
       finalReviewStatus: finalJob?.review_status ?? null,

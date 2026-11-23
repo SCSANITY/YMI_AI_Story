@@ -9,7 +9,7 @@ import OrderCoverImage from '@/components/OrderCoverImage';
 import type { CartItem } from '@/types';
 import { CheckoutCurrency, formatCurrencyAmount } from '@/lib/locale-pricing';
 import { resolveCartItemDisplayTitle } from '@/lib/personalized-book-title';
-import { SignatureVoiceBadge, SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
+import { PdfOnlyBadge, SignatureVoiceBadge, SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
 import { isSignatureVoicePackage } from '@/lib/signature-voice';
 import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/lib/cart-price';
 
@@ -204,6 +204,7 @@ export function CheckoutItemsSection({
                           <div className="mt-1 truncate text-xs text-slate-500">
                             {t('cart.heroLabel')}: {item.personalization?.childName || t('common.unknown')}
                           </div>
+                          {item.personalization?.bookType === 'digital' && <PdfOnlyBadge />}
                           {isSignatureVoicePackage(item.personalization?.bookType) ? (
                             <SignatureVoiceBadge className="mt-2" />
                           ) : null}
