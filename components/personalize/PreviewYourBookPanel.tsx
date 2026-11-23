@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { FileText, Mic, PenLine } from 'lucide-react'
+import { Mic, PenLine } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { BookPackagePricing, DisplayCurrency } from '@/types'
 import { EDITION_DEFINITIONS, type EditionType } from './product/edition-definitions'
@@ -21,7 +21,7 @@ export function PreviewYourBookPanel({ value, pricing, currency, childName, disa
       {pricing.digital && <label className={styles.editionOption} data-selected={value === 'digital' || undefined}>
         <span className={styles.editionRadio}>
           <input type="radio" name="preview-edition" value="digital" checked={value === 'digital'} disabled={disabled} onChange={() => onChange('digital')} />
-          <FileText size={32} aria-hidden="true" />
+          <Image src="/customize-product/v3/personalized-pdf.webp" alt="" width={60} height={60} sizes="60px" />
           <span className={styles.editionText}><strong>PDF only</strong><EditionPrice as="span" price={pricing.digital} currency={currency} className={styles.compactPrice} /></span>
           <span className={styles.radioDot} aria-hidden="true" />
         </span>
