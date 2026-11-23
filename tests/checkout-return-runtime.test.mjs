@@ -21,7 +21,7 @@ const component = type => props => ({ type, props })
 const isReadOnlyRequest = call => call.method === 'GET' ||
   (call.method === 'POST' && ['/api/checkout/quote', '/api/checkout/shipping-quote'].includes(call.path))
 
-function checkoutFixture({ originalPdf = false, delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment&source=cart#resume', draft, mergeFailed = false, healOnRetry = true, onPayment, onQuote, onQuantity, onShipping, onAddressSave } = {}) {
+function checkoutFixture({ originalPdf = false, originalEdition = originalPdf, delayed = false, status = 200, itemsStatus = 200, rejectItems = false, deferItems = false, signedIn = true, authResolved = true, withItem = true, search = '?orderId=order-1&step=payment&source=cart#resume', draft, mergeFailed = false, healOnRetry = true, onPayment, onQuote, onQuantity, onShipping, onAddressSave } = {}) {
   const runtime = customerRuntime(), calls = [], pending = deferred(), retryCalls = [], quantityCalls = []
   let currentOrder = order(), responseStatus = status
   runtime.react.Suspense = ({ children }) => children
@@ -53,7 +53,7 @@ function checkoutFixture({ originalPdf = false, delayed = false, status = 200, i
     if (path.startsWith('/api/cart?orderId=')) {
       if (rejectItems) throw Error('Cart transport unavailable')
       if (deferItems) await new Promise(() => {})
-      return Response.json({ originalPdf, items: itemsStatus === 200 ? [item] : [] }, { status: itemsStatus })
+      return Response.json({ originalEdition, originalPdf, items: itemsStatus === 200 ? [item] : [] }, { status: itemsStatus })
     }
     if (path.startsWith('/api/cart?ids=')) return Response.json({ items: [item] })
     if (path === '/api/checkout/vouchers') return Response.json({ active: [] })
@@ -651,4 +651,14 @@ test('guest and member restore a direct PDF order with email only, even with a c
     assert.equal(h.calls.some(call => call.path === '/api/checkout/shipping-quote' || call.path === '/api/user/addresses'), false)
     h.runtime.unmount()
   }
+})
+
+test('an original hardcover restores the single-book controls and keeps its shipping step', async () => {
+  const h = checkoutFixture({ originalEdition: true })
+  await settleCheckout(h)
+  assert.equal(h.node('items').props.originalEdition, true)
+  assert.equal(h.node('items').props.originalPdf, false)
+  assert.ok(h.node('address-form'))
+  assert.equal(h.node('summary').props.showShipping, true)
+  h.runtime.unmount()
 })

@@ -126,9 +126,11 @@ const parseChildAge = (value: string) => {
 export default function PersonalizePage({
   bookID,
   initialBook,
+  originalAvailable = false,
   closingBannerPromise,
 }: {
   bookID: string
+  originalAvailable?: boolean
   initialBook: CatalogBook
   closingBannerPromise?: Promise<PublishedHomepageBanner | undefined>
 }) {
@@ -2914,6 +2916,7 @@ export default function PersonalizePage({
                           : undefined}
                         discountPercent={fromPackagePrice?.discountPercent}
                         ctaLabel={t('personalize.personalizeThisBook')}
+                        originalHref={originalAvailable ? '/checkout/original/' + encodeURIComponent(bookID) : undefined}
                         floatingCtaLabel={t('product.personalize')}
                         faqHeading={t('personalize.aboutThisStory')}
                         faqItems={bookFaqItems}

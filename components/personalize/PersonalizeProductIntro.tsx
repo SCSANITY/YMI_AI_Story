@@ -24,6 +24,7 @@ type PersonalizeProductIntroProps = {
   compareAtPriceLabel?: string
   discountPercent?: number | null
   ctaLabel: string
+  originalHref?: string
   floatingCtaLabel?: string
   faqHeading: string
   faqItems: Array<{ question: string; answer: string }>
@@ -51,6 +52,7 @@ function PersonalizeProductIntroComponent({
   compareAtPriceLabel,
   discountPercent,
   ctaLabel,
+  originalHref,
   floatingCtaLabel = ctaLabel,
   faqHeading,
   faqItems,
@@ -154,16 +156,23 @@ function PersonalizeProductIntroComponent({
             ) : null}
           </div>
         </div>
-        <Button
-          ref={personalizeButtonRef}
-          id={personalizeButtonId}
-          type="button"
-          size="lg"
-          onClick={onStart}
-          className={`${PERSONALIZE_BUTTON_CLASS} mt-4 scroll-mt-24`}
-        >
-          {ctaLabel}
-        </Button>
+        <div className={originalHref ? 'mt-4 grid gap-2 sm:grid-cols-2' : 'mt-4'}>
+          <Button
+            ref={personalizeButtonRef}
+            id={personalizeButtonId}
+            type="button"
+            size="lg"
+            onClick={onStart}
+            className={`${PERSONALIZE_BUTTON_CLASS} scroll-mt-24`}
+          >
+            {ctaLabel}
+          </Button>
+          {originalHref && (
+            <a href={originalHref} className="glass-action-btn glass-action-btn--neutral inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-center text-sm font-semibold focus-visible:ring-2 focus-visible:ring-amber-500">
+              Buy the original edition
+            </a>
+          )}
+        </div>
       </div>
       {needsScrollGuide ? createPortal(
         <div ref={floatingRef} data-customize-floating-cta data-theme={night ? 'night' : 'day'}

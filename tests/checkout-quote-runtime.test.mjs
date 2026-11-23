@@ -96,3 +96,19 @@ test('a digital label or customization snapshot cannot authorize an original pur
   assert.equal((await h.checkout('USD', null, null)).status, 409)
   assert.equal(h.stripeCalls.length, 0)
 })
+
+test('both original physical formats need a verified purchase, shipping address and server shipping quote', async () => {
+  for (const format of ['basic','supreme']) {
+    const h = shippingHarness()
+    const line = h.tables.cart_items[0]
+    line.package_type = format
+    line.creations.customize_snapshot = { edition: 'original', bookType: format }
+    assert.equal((await h.paymentQuote()).status, 409)
+    h.tables.originalPdfPurchases.push({ orderId: h.order.order_id, lineId: line.cart_item_id, format })
+    assert.equal((await h.paymentQuote('USD', null, null)).status, 400)
+    const { quote } = await (await h.paymentQuote()).json()
+    assert.equal(quote.shippingAmountUsd, 10)
+    assert.equal(quote.totalMinor, 4900)
+    assert.equal((await h.checkout('USD', 'standard', address, quote.totalMinor)).status, 200)
+  }
+})

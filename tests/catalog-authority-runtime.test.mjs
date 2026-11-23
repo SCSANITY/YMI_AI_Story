@@ -37,6 +37,7 @@ test('Personalize metadata,content and static params share DB authority;missing/
  const Page=loadUi('app/personalize/[bookID]/page.tsx',{
   react:{Suspense:'suspense'},'next/navigation':{notFound},
   '@/components/PersonalizePage':{default:'personalize-page',__esModule:true},'@/components/CustomizeAccessGate':{CustomizeAccessGate:'access-gate'},
+  '@/lib/original-book-offers':{originalBookOffers:async()=>[{ format: 'basic' }]},
   '@/lib/homepage-banners':{getPublishedHomepageBanners:async()=>({})},
   '@/lib/template-catalog-server':{loadActiveTemplateDetail:async id=>{reads.push(id);if(failure)throw Error('DB unavailable');return book},loadActiveTemplateCatalog:async options=>{assert.equal(options.strict,true);if(failure)throw Error('DB unavailable');return book?[book]:[]}},
  },globals)
@@ -46,7 +47,9 @@ test('Personalize metadata,content and static params share DB authority;missing/
  assert.equal(metadata.description,'Live catalog description')
  assert.equal(metadata.openGraph.images[0].url,'https://example.test/new.webp')
  const tree=await Page.default(params)
- assert.equal(uiNodes(tree).find(node=>node.type==='personalize-page').props.initialBook,book)
+ const storyProps=uiNodes(tree).find(node=>node.type==='personalize-page').props
+ assert.equal(storyProps.initialBook,book)
+ assert.equal(storyProps.originalAvailable,true)
  assert.deepEqual(Array.from(await Page.generateStaticParams(),x=>x.bookID),['DB_only_story'])
  assert.equal(Page.dynamic,'force-static');assert.equal(Page.dynamicParams,true);assert.equal(Page.revalidate,300)
  book=null

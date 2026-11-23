@@ -16,6 +16,7 @@ import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/li
 type CoverStatus = 'ready' | 'pending' | 'unavailable';
 
 type CheckoutItemsSectionProps = {
+  originalEdition?: boolean;
   originalPdf?: boolean;
   items: CartItem[];
   remainingCartItems: CartItem[];
@@ -30,6 +31,7 @@ type CheckoutItemsSectionProps = {
 
 export function CheckoutItemsSection({
   originalPdf = false,
+  originalEdition = originalPdf,
   items,
   remainingCartItems,
   selectedCurrency,
@@ -292,7 +294,7 @@ export function CheckoutItemsSection({
                           {t(originalPdf ? 'checkout.originalPdf' : isSignatureVoicePackage(item.personalization?.bookType) ? 'product.voiceEdition' : 'product.hardcover')}
                           {' · '}{item.personalization?.language || t('language.en')}
                         </p>
-                        {!originalPdf && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {!originalEdition && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                           <div className="inline-flex w-fit items-center rounded-lg border border-amber-100">
                             <button
                               type="button"
@@ -344,7 +346,7 @@ export function CheckoutItemsSection({
             ) : null}
           </div>
         )}
-        {!originalPdf && <div className="pt-4">
+        {!originalEdition && <div className="pt-4">
           <Button
             ref={addFromCartTriggerRef}
             variant="outline"

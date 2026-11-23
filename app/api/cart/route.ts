@@ -110,7 +110,7 @@ async function getCart(request: Request) {
     status?: string | null
     order_id?: string | null
     price_at_purchase?: number | null
-    creations?: { preview_job_id?: string | null } | null
+    creations?: { preview_job_id?: string | null; customize_snapshot?: { edition?: string } } | null
     _cover_state?: string | null
     _cover_bucket?: unknown
     _cover_path?: string | null
@@ -168,11 +168,20 @@ async function getCart(request: Request) {
   })
 
   const line = cartItems[0]
-  if (orderIdParam && cartItems.length === 1 && line.package_type === 'digital' && line.cart_item_id &&
-      line.status === 'ordered' && line.order_id === orderIdParam && line.quantity === 1) {
-    const { isOriginalPdfCheckout } = await import('@/lib/original-pdf-checkout')
-    if (await isOriginalPdfCheckout(orderIdParam, line.cart_item_id)) {
-      return cartJson({ items: enriched, originalPdf: true })
+  if (orderIdParam && line && (line.package_type === 'digital' || line.creations?.customize_snapshot?.edition === 'original') &&
+      cartItems.length === 1 && line.cart_item_id && line.status === 'ordered' && line.order_id === orderIdParam && line.quantity === 1) {
+    const { readOriginalBookPurchase } = await import('@/lib/original-book-purchase')
+    const purchase = await readOriginalBookPurchase(orderIdParam, line.cart_item_id)
+    if (purchase && purchase.format === line.package_type) {
+      const { templateStorageUrl } = await import('@/lib/book-catalog')
+      return cartJson({
+        items: [{ ...enriched[0], preview_cover_url: templateStorageUrl(purchase.coverPath), preview_cover_status: 'ready' }],
+        originalEdition: true,
+        originalPdf: purchase.format === 'digital',
+      })
+    }
+    if (line.creations?.customize_snapshot?.edition === 'original') {
+      return cartJson({ error: 'Original edition purchase could not be verified' }, { status: 409 })
     }
   }
   return cartJson({ items: enriched })

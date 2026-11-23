@@ -1,6 +1,7 @@
 type ActiveCartItemRow = {
   status?: string | null
   order_id?: string | null
+  creations?: { customize_snapshot?: { edition?: string } } | null
 }
 type ActiveCartOrderRow = {
   order_id: string
@@ -15,6 +16,8 @@ export function filterActiveCartItems<T extends ActiveCartItemRow>(
   const orderById = new Map(orders.map((order) => [order.order_id, order]))
 
   return items.filter((item) => {
+    // Personalised unpaid items may return to the basket. Original books are direct orders.
+    if (item.creations?.customize_snapshot?.edition === 'original') return false
     const status = String(item.status || '').trim().toLowerCase()
     const orderId = String(item.order_id || '').trim()
     if (!orderId) return status === 'cart'

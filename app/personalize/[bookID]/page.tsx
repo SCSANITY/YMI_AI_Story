@@ -6,6 +6,7 @@ import { CustomizeAccessGate } from '@/components/CustomizeAccessGate'
 import { publicPageMetadata } from '@/lib/seo'
 import { STORY_SEARCH_DESCRIPTIONS } from '@/lib/search-copy'
 import { loadActiveTemplateCatalog, loadActiveTemplateDetail } from '@/lib/template-catalog-server'
+import { originalBookOffers } from '@/lib/original-book-offers'
 import { getPublishedHomepageBanners } from '@/lib/homepage-banners'
 
 function clampDescription(value: string) {
@@ -58,6 +59,10 @@ export default async function Page({
   const { bookID } = await params;
   const initialBook = await loadActiveTemplateDetail(bookID)
   if (!initialBook) notFound()
+  const originalOffers = await originalBookOffers(bookID).catch(() => {
+    console.warn('[original-checkout] offers unavailable')
+    return []
+  })
   // Existing public cache; resolve only inside the below-fold banner Suspense.
   const closingBannerPromise = getPublishedHomepageBanners()
     .then((banners) => banners.after_in_discount)
@@ -66,7 +71,7 @@ export default async function Page({
   return (
     <CustomizeAccessGate>
       <Suspense fallback={<main className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50" />}>
-        <PersonalizePage bookID={bookID} initialBook={initialBook} closingBannerPromise={closingBannerPromise} />
+        <PersonalizePage bookID={bookID} initialBook={initialBook} originalAvailable={originalOffers.length > 0} closingBannerPromise={closingBannerPromise} />
       </Suspense>
     </CustomizeAccessGate>
   );

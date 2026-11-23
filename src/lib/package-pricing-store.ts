@@ -63,6 +63,10 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
     throw new PackagePricingStoreError('Creation not found', 404)
   }
 
+  if (creation.customize_snapshot?.edition === 'original') {
+    throw new PackagePricingStoreError('Open the original edition from its story page', 409)
+  }
+
   const packageType = resolveBookPackageTypeFromSnapshot(creation.customize_snapshot)
   if (!packageType) {
     throw new PackagePricingStoreError('Creation uses an unsupported book package', 409)

@@ -67,9 +67,18 @@ export async function loadCheckoutPricingItems(orderId: string, filter: ReturnTy
   if (error || !cartItems?.length) {
     throw new CheckoutQuoteError('No payable items found for this order', 400)
   }
-  const originalPdf = cartItems.length === 1 && cartItems[0].product_type === 'ebook' && cartItems[0].quantity === 1 &&
-    cartItems[0].package_type === 'digital' && await (await import('@/lib/original-pdf-checkout')).isOriginalPdfCheckout(orderId, cartItems[0].cart_item_id)
-  if (!originalPdf && cartItems.some(item => item.product_type !== 'physical' || !normalizeBookPackageType(item.package_type))) {
+  const first = cartItems[0]
+  const hasOriginalMarker = cartItems.some(item => {
+    const creation = Array.isArray(item.creations) ? item.creations[0] : item.creations
+    return creation?.customize_snapshot?.edition === 'original'
+  })
+  const requiresPurchase = hasOriginalMarker || first.package_type === 'digital'
+  const purchase = requiresPurchase && cartItems.length === 1 && first.quantity === 1
+    ? await (await import('@/lib/original-book-purchase')).readOriginalBookPurchase(orderId, first.cart_item_id)
+    : null
+  const originalPdf = purchase?.format === 'digital' && first.product_type === 'ebook'
+  if ((requiresPurchase && (!purchase || purchase.format !== first.package_type)) ||
+      (!originalPdf && cartItems.some(item => item.product_type !== 'physical' || !normalizeBookPackageType(item.package_type)))) {
     throw new CheckoutQuoteError(
       'An edition in this order is no longer available. Remove it and select a hardcover edition in Preview.',
       409,

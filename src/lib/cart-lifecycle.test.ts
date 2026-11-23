@@ -7,6 +7,7 @@ test('active cart keeps unpaid checkout items and excludes paid items', () => {
     { id: 'plain-cart', status: 'cart', order_id: null },
     { id: 'unpaid-cart', status: 'cart', order_id: 'unpaid-order' },
     { id: 'unpaid-ordered', status: 'ordered', order_id: 'unpaid-order' },
+    { id: 'unpaid-original', status: 'ordered', order_id: 'unpaid-order', creations: { customize_snapshot: { edition: 'original' } } },
     { id: 'paid-cart-race', status: 'cart', order_id: 'paid-order' },
     { id: 'paid-ordered', status: 'ordered', order_id: 'paid-order' },
     { id: 'orphan-ordered', status: 'ordered', order_id: 'missing-order' },

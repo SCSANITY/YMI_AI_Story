@@ -119,7 +119,7 @@ function CheckoutPageContent() {
   );
   const isCheckoutPriceReady = items.length > 0 && !priceLoadError;
 
-  const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null; originalPdf?: boolean; closed?: 'paid' | 'closed' } | null>(null);
+  const [restoredOrder, setRestoredOrder] = useState<{ key: string; error: string | null; originalPdf?: boolean; originalEdition?: boolean; closed?: 'paid' | 'closed' } | null>(null);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
 
   // WEB-UIUX-001/34: while the customer merge is incomplete (failed or
@@ -323,6 +323,7 @@ function CheckoutPageContent() {
   const checkoutStateReady = !isOrderRestoring && !orderRestoreError && !closedOrderState;
 
   const originalPdf = Boolean(restoreKey && restoredOrder?.key === restoreKey && restoredOrder.originalPdf);
+  const originalEdition = Boolean(restoreKey && restoredOrder?.key === restoreKey && restoredOrder.originalEdition);
   const isPaymentReturn = queryStep === 'payment' && !paymentResumeDismissed;
   const { shippingQuote, selectShippingMethod, retryShippingQuote } = useCheckoutShippingQuote(
     form, !originalPdf && checkoutStateReady && isCheckoutDraftHydrated && items.length > 0, restoredShippingQuote, t,
@@ -541,7 +542,7 @@ function CheckoutPageContent() {
       };
     }
 
-    if (originalPdf) {
+    if (originalEdition) {
       return {
         href: `/personalize/${encodeURIComponent(primaryCheckoutItem.bookID)}`,
         label: t('checkout.backToStory'),
@@ -573,7 +574,7 @@ function CheckoutPageContent() {
       previewJobId,
       coverUrl: resolveCheckoutItemCoverUrl(primaryCheckoutItem),
     };
-  }, [originalPdf, isMultiOrderCheckout, primaryCheckoutItem, resolveCheckoutItemCoverUrl, t]);
+  }, [originalEdition, isMultiOrderCheckout, primaryCheckoutItem, resolveCheckoutItemCoverUrl, t]);
 
   useEffect(() => {
     if (queryOrderId && queryOrderId !== orderId) {
@@ -670,9 +671,9 @@ function CheckoutPageContent() {
         if (!itemsResponse?.ok) throw new Error('Unable to restore checkout. Please try again.');
         const cartData = await itemsResponse.json();
         if (!Array.isArray(cartData?.items) || !cartData.items.length) throw new Error('Unable to restore checkout. Please try again.');
-        return { ...restored, rows: cartData.items, originalPdf: cartData.originalPdf === true };
+        return { ...restored, rows: cartData.items, originalEdition: cartData.originalEdition === true || cartData.originalPdf === true, originalPdf: cartData.originalPdf === true };
       })
-      .then(({ form: address, quote, discounts, rows, originalPdf }) => {
+      .then(({ form: address, quote, discounts, rows, originalEdition, originalPdf }) => {
         if (cancelled) return;
         hydrateCheckoutItems(rows);
         const restoredForm = mergeRestoredFormWithDraft(address, draftSnapshot);
@@ -690,7 +691,7 @@ function CheckoutPageContent() {
         setFormError('');
         setDiscountError('');
         setPaymentResumeDismissed(false);
-        setRestoredOrder({ key: restoreKey, error: null, originalPdf });
+        setRestoredOrder({ key: restoreKey, error: null, originalEdition, originalPdf });
       })
       .catch((error) => {
         if (cancelled) return;
@@ -1386,6 +1387,7 @@ function CheckoutPageContent() {
           </div>
           <div id="checkout-books" className={booksExpanded ? '' : 'hidden min-[800px]:block'}>
             <CheckoutItemsSection
+              originalEdition={originalEdition}
               originalPdf={originalPdf}
               items={items}
               remainingCartItems={remainingCartItems}

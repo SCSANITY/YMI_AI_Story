@@ -61,9 +61,10 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
       return query
     },
     async rpc(name, params) {
-      if (name === 'is_original_pdf_checkout') {
-        return { data: tables.originalPdfPurchases.some(purchase =>
-          purchase.orderId === params.p_order && purchase.lineId === params.p_line), error: null }
+      if (name === 'read_original_book_purchase') {
+        const receipt = tables.originalPdfPurchases.find(purchase =>
+          purchase.orderId === params.p_order && purchase.lineId === params.p_line)
+        return { data: receipt ? { format: receipt.format ?? 'digital', coverPath: 'fixture/v1/cover.webp' } : null, error: null }
       }
       if (name === 'quote_checkout_discounts') {
         rpcCalls.push({ name, params })
