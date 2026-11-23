@@ -21,6 +21,7 @@ const FINAL_JOB_SELECT = `
   proof_draft_sequence, proof_revision, proof_draft_open, release_mode,
   released_at,
   email_sent_at,
+  pdf_only,
   print_status,
   print_completed_pages,
   print_released_at,
@@ -60,8 +61,8 @@ export async function GET(request: Request) {
     query = query.eq('edition_line.product_type', 'physical').eq('edition_line.package_type', edition).eq('edition_line.status', 'ordered')
   }
   if (stage === 'pdf_review') query = query.or('proof_draft_open.eq.true,review_status.is.null,review_status.neq.released')
-  if (stage === 'print_pending') query = query.eq('proof_draft_open',false).eq('review_status','released').or('print_status.is.null,print_status.neq.released')
-  if (stage === 'completed') query = query.eq('review_status','released').eq('print_status','released')
+  if (stage === 'print_pending') query = query.eq('pdf_only',false).eq('proof_draft_open',false).eq('review_status','released').or('print_status.is.null,print_status.neq.released')
+  if (stage === 'completed') query = query.eq('review_status','released').or('pdf_only.eq.true,print_status.eq.released')
   if (search) {
     const pattern = `*${search}*`
     const childFields = ['childName', 'child_name', 'name'].flatMap(key => [

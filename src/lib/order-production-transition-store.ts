@@ -53,12 +53,13 @@ const supabaseOrderProductionTransitionStore: OrderProductionTransitionStore = {
     if (jobIds.length === 0) return []
     const { data, error } = await supabaseAdmin
       .from('final_jobs')
-      .select('job_id, review_status, released_at')
+      .select('job_id, review_status, released_at, pdf_only')
       .in('job_id', jobIds)
 
     if (error) throw new Error(`Failed to load final PDF release state: ${error.message}`)
     return (data ?? []).map((row) => ({
       job_id: row.job_id ? String(row.job_id) : null,
+      pdf_only: row.pdf_only,
       review_status: row.review_status ?? null,
       released_at: row.released_at ?? null,
     }))

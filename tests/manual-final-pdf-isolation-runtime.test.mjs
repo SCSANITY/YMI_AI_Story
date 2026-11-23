@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -17,7 +18,7 @@ const adminRoute = 'app/api/admin/final-jobs/[finalJobId]/'
 function makeHarness() {
   const orderId = 'synthetic-order'
   const objects = new Map()
-  const rows = { final_proof_releases: [],
+  const rows = { final_proof_releases: [], order_reminder_schedules: [],
     final_jobs: [],
     jobs: [],
     final_job_pages: [],
@@ -117,9 +118,12 @@ function makeHarness() {
   const stubs = {
     '@/lib/supabaseAdmin': { supabaseAdmin },
     '@/lib/adminAuth': { requireAdminCustomer: async () => ({ customer_id: 'synthetic-admin' }) },
-    '@/lib/order-production-transition-store': { advanceOrdersToProductionAfterPdfRelease: async () => {} },
+    '@/lib/order-production-transition-store': { advanceOrdersToProductionAfterPdfRelease: async () => ({promotedOrderIds: []}) },
+    '@/lib/story-config-server': {},
+    '@/lib/locale-pricing': { normalizeCheckoutCurrency: v => v, convertUsdToCurrency: v => v },
     '@/lib/email': {
       FINAL_PDF_DELIVERY_LINK_TTL_SECONDS: 259200,
+      sendOrderConfirmationEmail: async () => {},
       async sendOrderDeliveryEmail(params) {
         if (failMail.delete(params.finalJobId)) throw new Error('synthetic delivery failure')
         mail.push(params)
@@ -176,7 +180,7 @@ function makeHarness() {
       { json: async () => data }, { params: Promise.resolve({ finalJobId, pageIndex }) },
     )
   }
-  return { orderId, rows, objects, signing, mail, writes, failMail, addBook, route }
+  return { orderId, rows, objects, signing, mail, writes, failMail, addBook, route, load, supabaseAdmin }
 }
 
 async function makePng(background) {
@@ -355,3 +359,78 @@ test('54 hours starts at confirmed delivery of the current proof and stops for c
   assert.match(output.proofReviewLabel({...job,proof_draft_open:true},start + 57*h), /Corrections/)
   assert.equal(output.proofReviewLabel({...job,print_status:'released'},start + 57*h),null)
 })
+
+for (const format of ['digital', 'basic', 'supreme']) {
+  test(`original ${format}: verified artwork, payment replay and manual PDF delivery`, async () => {
+    const h = makeHarness()
+    const line = randomUUID()
+    const job = randomUUID()
+    h.addBook(job, format, await makePng('#111111'))
+    h.rows.jobs[0].input_snapshot = { original_source_version: 'test-v1' }
+    const final = h.rows.final_jobs[0]
+    final.cart_item_id = line
+    Object.assign(h.rows.orders[0], { order_status: 'unpaid', payment_id: randomUUID() })
+    Object.assign(h.rows.cart_items[0], { cart_item_id: line, product_type: format === 'digital' ? 'ebook' : 'physical', status: 'ordered',
+      creations: { template_id: 'story', customize_snapshot: { edition: 'original' } } })
+    h.rows.final_job_pages.length = 0
+    const actualRelease = h.supabaseAdmin.rpc.bind(h.supabaseAdmin)
+    const red = await makePng('#ff0000')
+    const blue = await makePng('#0000ff')
+    const hash = bytes => createHash('sha256').update(bytes).digest('hex')
+    const hashes = Array.from({ length: 31 }, (_, i) => hash(i < 4 ? red : blue))
+    const source = digest => 'original-editions/' + digest + '.png'
+    h.objects.set(source(hash(red)), red)
+    let prepared = false
+    h.supabaseAdmin.rpc = async (name, args) => {
+      if (name !== 'prepare_original_book_final') return actualRelease(name, args)
+      assert.equal(args.p_line, line)
+      assert.equal(args.p_order, h.orderId)
+      if (args.p_verified_hashes) {
+        assert.deepEqual(args.p_verified_hashes, hashes)
+        for (const page of h.rows.jobs[0].output_assets.pages) {
+          const dest = 'orders/' + h.orderId + '/final/books/' + job + '/pages/manual/page_' +
+            String(page.page_index).padStart(2, '0') + '_' + line + '.png'
+          assert.equal(hash(h.objects.get(dest)), hashes[page.page_index])
+          const digital = format === 'digital'
+          h.rows.final_job_pages.push({ final_job_id: job, final_job_page_id: randomUUID(), page_index: page.page_index,
+            status: digital ? 'approved' : 'pending_review', approved_source: digital ? 'manual' : null,
+            manual_output_path: dest, approved_output_path: digital ? dest : null })
+        }
+        prepared = true
+      }
+      return { data: { prepared, finalJobId: job, hashes }, error: null }
+    }
+    const prepare = () => h.load('src/lib/orderFulfillment.ts').finalizeOrderPayment({
+      orderId: h.orderId, customerId: 'customer', email: 'customer@example.test', provider:'stripe', amount: 12,
+    })
+    await assert.rejects(prepare(), /missing at page/)
+    h.objects.set(source(hash(blue)), red)
+    await assert.rejects(prepare(), /digest mismatch/)
+    assert.equal(h.rows.final_job_pages.length, 0)
+    assert.equal(h.mail.length, 0)
+    h.objects.set(source(hash(blue)), blue)
+    assert.equal((await prepare()).status, 'paid')
+    assert.equal(h.rows.final_job_pages.length, 31)
+    assert.equal(h.mail.length, 0)
+    const writes = h.writes.filter(entry => entry.upload).length
+    assert.equal((await prepare()).status, 'paid')
+    assert.equal(h.writes.filter(entry => entry.upload).length, writes)
+    assert.equal((await h.route('release', job, undefined, { releaseMode: 'job_auto' })).status, 409)
+    assert.equal(h.writes.filter(entry => entry.upload).length, writes)
+    if (format !== 'digital') {
+      assert.notEqual((await h.route('release', job)).status, 200)
+      assert.equal(h.mail.length, 0)
+      assert.equal((await h.route('approve-all-pages', job)).status, 200)
+    }
+    const released = await h.route('release', job, undefined, { releaseMode: 'manual' })
+    assert.equal(released.status, 200, JSON.stringify(released.body))
+    const pdf = h.objects.get(released.body.pdfPath)
+    assert.equal((await PDFDocument.load(pdf)).getPageCount(), 16)
+    assert.deepEqual(await dominantPdfColors(pdf), hashes.map(digest => digest === hash(red) ? 'red' : 'blue'))
+    assert.equal(h.mail.length, 1)
+    assert.equal(h.mail[0].finalJobId, job)
+    assert.equal(h.mail[0].physicalPackageType, format === 'digital' ? null : format)
+    assert.equal((await h.route('release', job)).body.alreadyReleased, true)
+    assert.equal(h.mail.length, 1)
+  })
+}

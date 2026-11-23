@@ -35,6 +35,7 @@ export type FinalReleaseMode = 'manual' | 'job_auto' | 'story_auto' | 'global_au
 export type FinalJobSummary = {
   proof_draft_sequence?: number
   proof_revision?: number
+  pdf_only?: boolean
   proof_draft_open?: boolean
   purchased_edition?: import('@/types').BookPackageType | null
   production_mode?: FinalProductionMode
@@ -211,11 +212,14 @@ export async function releaseFinalJob(params: {
 
   const { data: linkedJob, error: linkedJobError } = await supabaseAdmin
     .from('jobs')
-    .select('output_assets')
+    .select('output_assets,input_snapshot')
     .eq('job_id', finalJob.job_id)
     .maybeSingle()
   if (linkedJobError) {
     throw new Error(linkedJobError.message || 'Failed to load linked Final job output assets')
+  }
+  if (releaseMode !== 'manual' && linkedJob?.input_snapshot?.original_source_version) {
+    throw new FinalArtifactConflict('Original books require manual PDF release.')
   }
   const linkedOutputAssets =
     linkedJob?.output_assets && typeof linkedJob.output_assets === 'object'

@@ -120,6 +120,7 @@ type OrderItemCoverLookupRow = {
 }
 
 type CustomizeSnapshot = {
+  edition?: string
   language?: unknown
   bookType?: unknown
   storagePath?: unknown
@@ -616,8 +617,8 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     throw new Error(`Failed to update cart items: ${cartUpdateError.message}`)
   }
 
-  const cartItems = await loadOrderItemsForFinal(orderId, cartItemIds)
-  const effectiveCartItemIds = cartItems.map((item) => item.cart_item_id)
+  const purchasedItems = await loadOrderItemsForFinal(orderId, cartItemIds)
+  const effectiveCartItemIds = purchasedItems.map((item) => item.cart_item_id)
 
   if (deferPostPaymentWork) {
     return {
@@ -630,7 +631,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   }
 
   try {
-    const cartItemById = new Map(cartItems.map((item) => [item.cart_item_id, item]))
+    const cartItemById = new Map(purchasedItems.map((item) => [item.cart_item_id, item]))
     const emailItems =
       receiptItems.length > 0
         ? receiptItems.map((item) => ({
@@ -643,7 +644,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
             quantity: Number(item.quantity ?? 1),
             unitPrice: convertUsdToCurrency(Number(item.priceAtPurchase ?? 0), normalizedCurrency),
           }))
-        : cartItems.map((item) => ({
+        : purchasedItems.map((item) => ({
             name: resolvePersonalizedBookTitle({
               templateId: item.creations?.template_id,
               templateName: item.creations?.templates?.name,
@@ -677,6 +678,14 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     console.error('[email] order confirmation failed', error)
   }
 
+  const cartItems = purchasedItems.filter(item => item.creations?.customize_snapshot?.edition !== 'original')
+  for (const item of purchasedItems) {
+    if (item.creations?.customize_snapshot?.edition === 'original') {
+      const { prepareOriginalBookFinal } = await import('@/lib/original-book-final')
+      await prepareOriginalBookFinal(orderId, item.cart_item_id)
+    }
+  }
+
   const jobIdByCartItem = new Map<string, string>()
   for (const item of cartItems) {
     if (item.final_job_id) {
@@ -684,8 +693,8 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     }
   }
 
-  if (effectiveCartItemIds.length > 0) {
-    const existingJobsByCartItem = await loadFinalJobIdsByCartItem(effectiveCartItemIds)
+  if (cartItems.length > 0) {
+    const existingJobsByCartItem = await loadFinalJobIdsByCartItem(cartItems.map(item => item.cart_item_id))
     for (const [cartItemId, jobId] of existingJobsByCartItem.entries()) {
       jobIdByCartItem.set(cartItemId, jobId)
     }

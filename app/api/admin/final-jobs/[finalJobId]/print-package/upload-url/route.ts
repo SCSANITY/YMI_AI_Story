@@ -36,7 +36,7 @@ export async function POST(
 
   const { data: finalJob, error: finalJobError } = await supabaseAdmin
     .from('final_jobs')
-    .select('final_job_id, order_id, released_at, proof_draft_open, proof_revision, print_status, print_released_at')
+    .select('final_job_id, order_id, pdf_only, released_at, proof_draft_open, proof_revision, print_status, print_released_at')
     .eq('final_job_id', finalJobId)
     .maybeSingle()
   if (finalJobError || !finalJob) {
@@ -45,6 +45,7 @@ export async function POST(
       { status: 404 }
     )
   }
+  if (finalJob.pdf_only) return jsonNoStore({ error: 'PDF-only books have no print package.' }, { status: 409 })
   if (!finalJob.released_at) {
     return jsonNoStore(
       { error: 'Customer PDF must be released before uploading a print PDF.' },

@@ -13,6 +13,7 @@ type OrderedCartItemRow = {
 
 type FinalJobReleaseRow = {
   job_id: string | null
+  pdf_only?: boolean
   review_status: string | null
   released_at: string | null
 }
@@ -38,7 +39,7 @@ export function areAllOrderPdfsReleased(
   const requiredJobIds = new Set(items.map((item) => String(item.final_job_id)))
   const releasedJobIds = new Set(
     finalJobs
-      .filter((finalJob) => finalJob.job_id && isFinalJobReleased(finalJob))
+      .filter((finalJob) => finalJob.job_id && !finalJob.pdf_only && isFinalJobReleased(finalJob))
       .map((finalJob) => String(finalJob.job_id))
   )
 

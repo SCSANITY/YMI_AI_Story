@@ -3,11 +3,12 @@ type ProofState = {
   email_sent_at: string | null
   print_released_at: string | null
   print_status: string
+  pdf_only?: boolean
   proof_draft_open?: boolean
 }
 
 export function proofReviewLabel(job: ProofState, now: number): string | null {
-  if (!job.released_at || job.print_released_at || job.print_status === 'released') return null
+  if (job.pdf_only || !job.released_at || job.print_released_at || job.print_status === 'released') return null
   if (job.proof_draft_open) return 'Corrections in progress'
   if (!job.email_sent_at) return 'Check PDF delivery'
   const due = Date.parse(job.email_sent_at) + 54 * 60 * 60 * 1000

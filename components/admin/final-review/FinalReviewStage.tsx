@@ -118,9 +118,9 @@ export function FinalReviewStage({
                 <FileText size={20}/><span className="grow"><strong>Published PDF · Rev {detail.finalJob.proof_revision ?? 1}</strong><small className="block text-[var(--admin-page-muted)]">Customer copy · {totalPageCount} pages</small></span><Download aria-label="Download released PDF" size={18}/>
               </a>
               {detail.finalJob.proof_draft_open && <strong>Working draft · Rev {revision}</strong>}
-              {!book?.proof_draft_open && book?.email_sent_at && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900"><b>PDF email sent</b><br/>{formatDate(book.email_sent_at)}<br/>Check replies {formatDate(new Date(Date.parse(book.email_sent_at)+54*3600000).toISOString())}</div>}
+              {!book?.pdf_only && !book?.proof_draft_open && book?.email_sent_at && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900"><b>PDF email sent</b><br/>{formatDate(book.email_sent_at)}<br/>Check replies {formatDate(new Date(Date.parse(book.email_sent_at)+54*3600000).toISOString())}</div>}
               {!printReleased && detail.shared_final && <span>Shared Final · verify the order line manually.</span>}
-              {pdfReleased && !printReleased && !detail.shared_final && (
+              {pdfReleased && !book?.pdf_only && !printReleased && !detail.shared_final && (
                 <AdminButton type="button" tone="secondary" disabled={busyAction !== null} onClick={() => setCorrection({job:detail.finalJob.final_job_id,draft:revision,opening:true})}><RotateCcw size={16}/>Return for corrections</AdminButton>
               )}
               {detail.finalJob.proof_draft_open && !detail.shared_final && <AdminButton tone="secondary" disabled={busyAction!==null || hasReviewPending || hasUploadPending} onClick={()=>setCorrection({job:detail.finalJob.final_job_id,draft:revision,opening:false})}><RotateCcw size={16}/>Cancel corrections</AdminButton>}
@@ -134,7 +134,7 @@ export function FinalReviewStage({
           </p>
         </StageCard>
 
-        <StageCard
+        {!book?.pdf_only && <StageCard
           label="Stage 2"
           title="Print version"
           icon={<PackageCheck className="h-4 w-4" />}
@@ -162,7 +162,7 @@ export function FinalReviewStage({
             {printReleased ? 'Print Released' : 'Release print version'}
           </AdminButton>
           {printReleased && detail && <PrintNotificationStatus key={detail.finalJob.final_job_id} jobId={detail.finalJob.final_job_id} />}
-        </StageCard>
+        </StageCard>}
       </aside>
       {correction && correction.job===book?.final_job_id && correction.draft===revision &&
         <CorrectionConfirmation job={correction.job} draft={revision} published={book.proof_revision ?? 1} opening={correction.opening}

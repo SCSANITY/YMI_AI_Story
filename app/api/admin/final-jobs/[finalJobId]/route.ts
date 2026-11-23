@@ -59,7 +59,7 @@ export async function GET(
         proof_draft_sequence, proof_revision, proof_draft_open, release_mode,
         released_at,
         email_sent_at,
-        print_status,
+        pdf_only, print_status,
         print_completed_pages,
         print_released_at,
         print_package_artifact_id,

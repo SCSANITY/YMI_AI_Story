@@ -37,6 +37,11 @@ test('requires every ordered item to have a released final job', () => {
   )
 })
 
+test('a released PDF-only book never advances its order into physical production', () => {
+  assert.equal(areAllOrderPdfsReleased([{ cart_item_id: 'item', final_job_id: 'job' }],
+    [{ ...released('job'), pdf_only: true }]), false)
+})
+
 test('promotes each affected paid order once and records the automatic transition', async () => {
   const promoted: string[] = []
   const events: string[] = []

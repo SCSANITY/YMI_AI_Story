@@ -100,9 +100,9 @@ function jobMatchesQueueFilter(job: FinalJobSummary, filter: FinalReviewQueueFil
   if (filter === 'all') return true
   if (filter === 'pdf_review') return !!job.proof_draft_open || job.review_status !== 'released'
   if (filter === 'print_pending') {
-    return !job.proof_draft_open && job.review_status === 'released' && job.print_status !== 'released'
+    return !job.pdf_only && !job.proof_draft_open && job.review_status === 'released' && job.print_status !== 'released'
   }
-  return job.review_status === 'released' && job.print_status === 'released'
+  return job.review_status === 'released' && (job.pdf_only === true || job.print_status === 'released')
 }
 
 function filterFinalJobs(jobs: FinalJobSummary[], filter: FinalReviewQueueFilter) {
@@ -167,7 +167,7 @@ export function FinalReviewPanel({
   const [uploadErrorByPage, setUploadErrorByPage] = useState<UploadErrorState>({})
   const [printUploadProgressByJob, setPrintUploadProgressByJob] = useState<PrintUploadProgressState>({})
   const [printUploadErrorByJob, setPrintUploadErrorByJob] = useState<PrintUploadErrorState>({})
-  const [activeVersion, setActiveVersion] = useState<ReviewVersion>(initialVersion)
+  const [requestedVersion, setActiveVersion] = useState<ReviewVersion>(initialVersion)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [editionFilter, setEditionFilter] = useState('')
@@ -1164,6 +1164,8 @@ export function FinalReviewPanel({
 
   const activeDetail =
     detail?.finalJob.final_job_id === selectedJobId ? detail : null
+  const pdfOnly = Boolean(activeDetail?.finalJob.pdf_only ?? selectedJob?.pdf_only)
+  const activeVersion = pdfOnly ? 'pdf' : requestedVersion
   const materialLine = initialFinalJobId === selectedJobId ? initialMaterialLine : undefined
   const edition = activeDetail && (!materialLine || (
     materialLine.order === activeDetail.finalJob.order_id && materialLine.item === activeDetail.finalJob.cart_item_id
@@ -1503,7 +1505,7 @@ export function FinalReviewPanel({
                   >
                     PDF
                   </button>
-                  <button
+                  {!pdfOnly && <button
                     id="final-print-tab"
                     type="button"
                     role="tab"
@@ -1517,7 +1519,7 @@ export function FinalReviewPanel({
                     }`}
                   >
                     Print
-                  </button>
+                  </button>}
                 </div>
 
                 <GlassEdgeButton
