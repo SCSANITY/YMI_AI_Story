@@ -1,3 +1,8 @@
+import * as React from 'react'
+import { render } from '@react-email/render'
+import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
+import { PrintReleasedEmail } from '@/components/emails/PrintReleasedEmail'
+import { actionBase,encodeReleaseBody,validatedReleaseNote } from '@/lib/release-mail-body'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
@@ -139,4 +144,27 @@ test('unpaid reminder previews show the three approved messages at their existin
     assert.equal(/reply to this email/i.test(html), help)
     assert.doesNotMatch(html, /reserved copy is ready for printing/)
   }
+})
+
+test('confirmed proof body renders changed paragraphs and resolves only the real book actions', async () => {
+  const body=(kind:'print'|'pdf', extra?:string)=>encodeReleaseBody({version:1,blocks:[
+    {type:'paragraph',content:[{text:'Corrected second paragraph',marks:['bold']}]},
+    {type:'paragraph',content:[{text:'Book order',href:actionBase+'order'}]},
+    ...(kind==='pdf'?[{type:'paragraph' as const,content:[{text:'Customer PDF',href:actionBase+'pdf'}]}]:[]),
+    ...(extra?[{type:'paragraph' as const,content:[{text:'Edition action',href:extra}]}]:[]),
+  ]})
+  for(const edition of ['basic','supreme']){
+    const action=edition==='basic'?'upgrade':'materials'
+    const urls={orderUrl:'https://example.test/orders/a',downloadUrl:'https://example.test/proof/a',
+      ...(edition==='basic'?{voiceUpgradeUrl:'https://example.test/upgrade'}:{voiceMaterialsUrl:'https://example.test/materials'})}
+    const html=await render(<DeliveryEmail {...urls} personalNote={validatedReleaseNote(body('pdf',actionBase+action),'pdf')}/>)
+    assert.match(html,/<strong>Corrected second paragraph<\/strong>/)
+    for(const url of Object.values(urls))assert.ok(html.includes('href="'+url+'"'))
+    assert.doesNotMatch(html,/release-action\.invalid|Thank you for choosing/)
+  }
+  const print=await render(<PrintReleasedEmail bookTitle="Fixture" orderId="order-a" personalNote={body('print')}/>)
+  assert.match(print,/href="[^"]*\/orders\/order-a"/)
+  assert.match(print,/Corrected second paragraph/)
+  assert.throws(()=>validatedReleaseNote(body('pdf','https://untrusted.example'),'pdf'),/only this book/)
+  assert.throws(()=>validatedReleaseNote(body('print'),'pdf'),/Keep the order/)
 })
