@@ -1,6 +1,7 @@
 import type { OrderMaterials } from '@/lib/order-materials'
 import type { CheckoutCurrency } from '@/lib/locale-pricing'
 import type { ShippingDetails } from '@/lib/order-shipping'
+import type { OrderProgress } from '@/lib/order-progress'
 
 export type OrderItem = {
   cart_item_id: string
@@ -19,6 +20,7 @@ export type OrderItem = {
 }
 
 export type OrderDetail = {
+  progress?: OrderProgress | null
   materials?:OrderMaterials|null
   order_id: string
   display_id?: string | null

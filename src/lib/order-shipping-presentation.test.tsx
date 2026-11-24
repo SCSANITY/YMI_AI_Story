@@ -7,6 +7,29 @@ import type { ShippingDetails } from './order-shipping'
 import { LogisticsTracker } from '../../app/orders/[orderID]/LogisticsTracker'
 import { ShippingLocationMap } from '../../app/orders/[orderID]/ShippingLocationMap'
 import { createOrderDetailReadModel } from '../../app/orders/[orderID]/orderDetailModel'
+import { getOrderProgress } from './order-progress'
+
+test('digital progress renders a completed two-step timeline and omits shipping fields', () => {
+  const progress = getOrderProgress('paid', [
+    { productType: 'ebook', packageType: 'digital', published: true, printReleased: false },
+  ])
+  const model = createOrderDetailReadModel({ order_id: 'digital-order', order_status: 'paid', progress })
+  const html = renderToStaticMarkup(<LogisticsTracker status="paid" progress={model.progress} trackingNumber="unused-tracking" />)
+  assert.match(html, /Order Confirmed/)
+  assert.match(html, /PDF Ready/)
+  assert.match(html, />Complete</)
+  assert.doesNotMatch(html, /Printing|Shipped|Delivered|unused-tracking/)
+})
+
+test('historical Printing survives without inventing proof or print counts', () => {
+  const line = { productType: 'physical', packageType: 'basic', published: false, printReleased: false }
+  const progress = getOrderProgress('production', [line, line])
+  const html = renderToStaticMarkup(<LogisticsTracker status="production" progress={progress} />)
+  assert.match(html, /PDFs ready: 0 \/ 2/)
+  assert.match(html, /Released for print: 0 \/ 2/)
+  assert.match(html, /aria-current="step"[^]*?>Printing</)
+  assert.equal(progress?.stage, 'printing')
+})
 
 test('empty shipping history is expandable with a calm fallback and support access',()=>{
   const html=renderToStaticMarkup(<ShippingDetailsPanel details={null}/>)

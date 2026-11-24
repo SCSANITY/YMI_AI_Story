@@ -1,39 +1,28 @@
 'use client'
 
 import type React from 'react'
-import { BookOpen, CircleCheck, Package, Truck } from 'lucide-react'
+import { BookOpen, CircleCheck, FileText, Package, Truck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { normalizeOrderStatus } from '@/lib/order-status'
+import { progressLabels, type OrderProgress, type ProgressStage } from '@/lib/order-progress'
 import { ShippingDetailsPanel } from './ShippingDetailsPanel'
 import type { ShippingDetails } from '@/lib/order-shipping'
 
-type StageKey = 'confirmed' | 'printing' | 'shipped' | 'delivered'
-
-const STAGES: { key: StageKey; icon: React.ElementType; label: string; desc: string }[] = [
-  { key: 'confirmed', icon: Package, label: 'Order Confirmed', desc: 'Payment received & order locked in' },
-  { key: 'printing', icon: BookOpen, label: 'Printing', desc: 'Your personalised storybook is being crafted' },
-  { key: 'shipped', icon: Truck, label: 'Shipped', desc: 'On its way to you' },
-  { key: 'delivered', icon: CircleCheck, label: 'Delivered', desc: 'Arrived at your door' },
-]
-
-const STATUS_TO_STAGE_INDEX: Record<string, number> = {
-  paid: 0,
-  production: 1,
-  processing: 1,
-  shipped: 2,
-  delivered: 3,
+const stageDetails: Record<ProgressStage, { icon: React.ElementType; desc: string }> = {
+  confirmed: { icon: Package, desc: 'Payment received' },
+  preview_ready: { icon: FileText, desc: 'Released PDFs appear with each book' },
+  pdf_ready: { icon: FileText, desc: 'Download your books below' },
+  printing: { icon: BookOpen, desc: 'Your books are being printed' },
+  shipped: { icon: Truck, desc: 'On its way to you' },
+  delivered: { icon: CircleCheck, desc: 'Arrived at your door' },
 }
-
-const LOGISTICS_LABELS: Record<string, string> = {
-  paid: 'Order Confirmed',
-  production: 'Printing',
-  processing: 'Printing',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
-}
+const physicalStages: ProgressStage[] = ['confirmed', 'preview_ready', 'printing', 'shipped', 'delivered']
+const digitalStages: ProgressStage[] = ['confirmed', 'pdf_ready']
+const legacyStages: ProgressStage[] = ['confirmed', 'printing', 'shipped', 'delivered']
 
 type LogisticsTrackerProps = {
   status: string
+  progress?: OrderProgress | null
   trackingCarrier?: string | null
   trackingNumber?: string | null
   trackingUrl?: string | null
@@ -44,6 +33,7 @@ type LogisticsTrackerProps = {
 
 export function LogisticsTracker({
   status,
+  progress,
   trackingCarrier,
   trackingNumber,
   trackingUrl,
@@ -51,16 +41,25 @@ export function LogisticsTracker({
   updatedAt,
   shippingDetails,
 }: LogisticsTrackerProps) {
-  const activeIdx = STATUS_TO_STAGE_INDEX[normalizeOrderStatus(status)] ?? 0
-  const statusLabel = LOGISTICS_LABELS[status] || LOGISTICS_LABELS[normalizeOrderStatus(status)] || status
+  const stored = normalizeOrderStatus(status)
+  const stage = progress?.stage ?? (stored === 'production' ? 'printing' :
+    stored === 'shipped' || stored === 'delivered' ? stored : 'confirmed')
+  const digital = progress?.digitalOnly && (stage === 'confirmed' || stage === 'pdf_ready')
+  const stages = digital ? digitalStages : progress ? physicalStages : legacyStages
+  const activeIdx = stages.indexOf(stage)
+  const complete = stage === 'pdf_ready' || stage === 'delivered'
 
   return (
     <div className="glass-panel rounded-3xl p-5 md:p-7 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-600/80">Logistics</p>
           <h3 className="text-base font-bold text-gray-900 mt-0.5">Order Progress</h3>
-          <p className="mt-1 text-xs text-slate-400">Current order status: {statusLabel}</p>
+          {progress && progress.books > 1 && (
+            <p className="mt-1 text-xs text-slate-600">
+              PDFs ready: {progress.readyPdfs} / {progress.books}
+              {progress.physicalBooks > 0 && <> · Released for print: {progress.releasedForPrint} / {progress.physicalBooks}</>}
+            </p>
+          )}
         </div>
       </div>
 
@@ -71,24 +70,24 @@ export function LogisticsTracker({
           className="absolute left-5 top-5 w-px bg-gradient-to-b from-amber-400 to-orange-400 origin-top md:left-0 md:top-5 md:w-auto md:h-px md:origin-left md:bg-gradient-to-r"
           initial={{ scaleY: 0, scaleX: 0 }}
           animate={{
-            scaleY: activeIdx / (STAGES.length - 1),
-            scaleX: activeIdx / (STAGES.length - 1),
+            scaleY: activeIdx / (stages.length - 1),
+            scaleX: activeIdx / (stages.length - 1),
           }}
           transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
           style={{ bottom: '1.25rem' }}
         />
 
         <div className="relative flex flex-col gap-6 md:flex-row md:justify-between md:gap-0">
-          {STAGES.map((stage, idx) => {
-            const Icon = stage.icon
+          {stages.map((key, idx) => {
+            const Icon = stageDetails[key].icon
             const isDone = idx < activeIdx
             const isActive = idx === activeIdx
             const isPending = idx > activeIdx
 
             return (
-              <div key={stage.key} className="flex items-start gap-4 md:flex-col md:items-center md:text-center md:flex-1">
+              <div key={key} aria-current={isActive ? 'step' : undefined} className="flex items-start gap-4 md:flex-col md:items-center md:text-center md:flex-1">
                 <div className="relative shrink-0 z-10">
-                  {isActive && (
+                  {isActive && !complete && (
                     <motion.div
                       className="absolute inset-0 rounded-full bg-amber-400/30"
                       animate={{ scale: [1, 1.7, 1], opacity: [0.6, 0, 0.6] }}
@@ -108,10 +107,10 @@ export function LogisticsTracker({
                   <p className={`text-sm font-semibold leading-tight ${
                     isPending ? 'text-gray-300' : isActive ? 'text-amber-700' : 'text-gray-700'
                   }`}>
-                    {stage.label}
+                    {progressLabels[key]}
                   </p>
                   <p className={`text-[11px] mt-0.5 leading-snug ${isPending ? 'text-gray-200' : 'text-slate-400'}`}>
-                    {stage.desc}
+                    {stageDetails[key].desc}
                   </p>
                   {isActive && (
                     <motion.div
@@ -119,8 +118,7 @@ export function LogisticsTracker({
                       animate={{ opacity: 1, y: 0 }}
                       className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200/60 px-2 py-0.5"
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      <span className="text-xs font-semibold text-amber-700">In progress</span>
+                      <span className="text-xs font-semibold text-amber-700">{complete ? 'Complete' : 'In progress'}</span>
                     </motion.div>
                   )}
                 </div>
@@ -130,7 +128,7 @@ export function LogisticsTracker({
         </div>
       </div>
 
-      {(trackingCarrier || trackingNumber || note || updatedAt) && (
+      {!digital && (trackingCarrier || trackingNumber || note || updatedAt) && (
         <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm text-slate-600">
           <div className="grid gap-2 md:grid-cols-2">
             {trackingCarrier ? <div><span className="font-semibold text-slate-800">Carrier:</span> {trackingCarrier}</div> : null}

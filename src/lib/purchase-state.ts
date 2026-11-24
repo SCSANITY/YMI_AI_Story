@@ -11,6 +11,7 @@ export { isFinalJobReleased }
 type PurchaseState = 'purchased' | 'refunded' | 'unpurchased'
 
 type ReleasedFinalPdfAsset = {
+  printReleased: boolean
   creationId: string | null
   orderId: string
   cartItemId: string
@@ -141,7 +142,7 @@ export async function loadReleasedFinalPdfAssetsByJobId(
 
   const { data: finalJobs, error: finalJobsError } = await supabaseAdmin
     .from('final_jobs')
-    .select('job_id, final_job_id, order_id, cart_item_id, creation_id, pdf_path, review_status, released_at')
+    .select('job_id, final_job_id, order_id, cart_item_id, creation_id, pdf_path, review_status, released_at, print_status, print_released_at')
     .in('job_id', uniqueJobIds)
 
   if (finalJobsError) {
@@ -158,7 +159,9 @@ export async function loadReleasedFinalPdfAssetsByJobId(
     // The former order-wide key is unambiguous only for its original single-line order.
     if (!scoped && !(pdfPath === `orders/${orderId}/final/pdf/final.pdf` &&
         await hasSingleFinalOrderLine(orderId, cartItemId))) continue
-    assetsByJobId.set(jobId, { orderId, cartItemId, creationId: finalJob.creation_id, pdfPath })
+    assetsByJobId.set(jobId, { orderId, cartItemId, creationId: finalJob.creation_id, pdfPath,
+      printReleased: Boolean(finalJob.print_released_at || finalJob.print_status === 'released'),
+    })
   }
 
   return assetsByJobId

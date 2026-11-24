@@ -15,10 +15,10 @@ function load(path,injections={},globals={}) {
  return mod.exports
 }
 
-function reader({fail=false, releases=[], orderStatus='paid', lineStatuses=['ordered','ordered']}={}) {
+function reader({fail=false, releases=[], orderStatus='paid', lineStatuses=['ordered','ordered'], digital=[], signingAvailable=true}={}) {
  const queries=[]
  const order={order_id:'order-a',customer_id:'owner-a',order_status:orderStatus,payment_id:'payment-a',checkout_currency:'USD',
-  cart_items:['one','two'].map((id,index)=>({cart_item_id:id,creation_id:'creation-'+id,final_job_id:'final-'+id,status:lineStatuses[index],package_type:'supreme',quantity:1,price_at_purchase:89,
+  cart_items:['one','two'].map((id,index)=>({cart_item_id:id,creation_id:'creation-'+id,final_job_id:'final-'+id,status:lineStatuses[index],product_type:digital.includes(id)?'ebook':'physical',package_type:digital.includes(id)?'digital':'supreme',quantity:1,price_at_purchase:89,
    creations:{creation_id:'creation-'+id,template_id:'story-'+id,preview_job_id:'job-'+id,templates:{name:'Book '+id}}}))}
  const supabaseAdmin={from(table){
   const q={table,filters:[]};queries.push(q)
@@ -44,11 +44,12 @@ function reader({fail=false, releases=[], orderStatus='paid', lineStatuses=['ord
   '@/lib/order-shipping-server':{readOrderShippingDetails:()=>{throw Error('Unexpected shipping read')}},
   '@/lib/storage-signing':{createSignedStorageUrlMap:async requests=>{
    signed.push(...requests)
-   return new Map(requests.map(r=>[r.key,'signed/'+r.path]))
+   return new Map(signingAvailable ? requests.map(r=>[r.key,'signed/'+r.path]) : [])
   }},
   '@/lib/order-covers':{createGeneratedPreviewCoverMap:async()=>new Map(),getGeneratedPreviewCover:(_,id)=>({url:id?'https://example.test/'+id:null,status:'ready'})},
   '@/lib/purchase-state':{loadReleasedFinalPdfAssetsByJobId:async ids=>new Map(releases.filter(([id])=>ids.includes(id)))},
   '@/lib/order-status':load('src/lib/order-status.ts'),
+  '@/lib/order-progress':load('src/lib/order-progress.ts',{'./order-status':load('src/lib/order-status.ts')}),
   '@/lib/personalized-book-title':{buildPersonalizedBookPdfFileName:()=> 'synthetic.pdf',resolveFinalJobDisplayTitle:()=> 'Synthetic',resolvePersonalizedBookTitle:x=>x.templateName},
   '@/lib/order-display':{getOrderCheckoutCurrency:()=> 'USD',getOrderDisplayCurrency:()=> 'USD',getOrderDisplayTotal:()=>178,getDisplayUnitPrice:x=>x},
  })
@@ -106,6 +107,52 @@ test('only purchased lines receive downloads even when a Final PDF already exist
   assert.deepEqual(Array.from(orders[0].items, item => item.final_pdf_url), expected)
   assert.equal(r.signed.length, expected.filter(Boolean).length)
  }
+})
+
+function released(id, overrides={}) {
+ return ['final-'+id,{creationId:'creation-'+id,orderId:'order-a',cartItemId:id,pdfPath:id+'.pdf',printReleased:false,...overrides}]
+}
+
+async function detail(options) {
+ const r=reader(options)
+ const {orders}=await r.loadCustomerOrders({reference:{column:'order_id',value:'order-a'}})
+ return orders[0]
+}
+
+test('first released PDF unlocks Preview Ready, all physical print releases unlock Printing',async()=>{
+ const releases=[released('one',{printReleased:true})]
+ const first=(await detail({releases})).progress
+ assert.equal(first.stage,'preview_ready')
+ assert.deepEqual([first.readyPdfs,first.books,first.releasedForPrint,first.physicalBooks],[1,2,1,2])
+ releases.push(released('two'))
+ assert.equal((await detail({releases})).progress.stage,'preview_ready')
+ releases[1][1].printReleased=true
+ assert.equal((await detail({releases})).progress.stage,'printing')
+})
+
+test('PDF-only completes after all books, mixed orders count only physical books for Printing',async()=>{
+ const releases=[released('one')]
+ const digital=['one','two']
+ assert.equal((await detail({releases,digital})).progress.stage,'confirmed')
+ releases.push(released('two'))
+ const ready=(await detail({releases,digital})).progress
+ assert.equal(ready.digitalOnly,true)
+ assert.equal(ready.stage,'pdf_ready')
+ releases[1][1].printReleased=true
+ const mixed=(await detail({releases,digital:['one']})).progress
+ assert.equal(mixed.stage,'printing')
+ assert.equal(mixed.physicalBooks,1)
+})
+
+test('reused PDF does not count as a print release, a missing signed URL cannot erase publication',async()=>{
+ const releases=[released('one',{orderId:'original-order',printReleased:true}),released('two',{creationId:'wrong'})]
+ const order=await detail({releases,signingAvailable:false})
+ assert.equal(order.items[0].final_pdf_url,null)
+ assert.equal(order.progress.stage,'preview_ready')
+ assert.equal(order.progress.readyPdfs,1)
+ assert.equal(order.progress.releasedForPrint,0)
+ assert.equal((await detail({releases,orderStatus:'refunded'})).progress,null)
+ assert.equal((await detail({releases,orderStatus:'production'})).progress.stage,'printing')
 })
 
 function voiceReader({missing=false,unpaid=false,fail=false,original=false,printed=[]}={}) {

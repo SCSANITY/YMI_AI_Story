@@ -7,6 +7,7 @@ export function createOrderDetailReadModel(order: OrderDetail): OrderDetail {
     materials:order.materials,
     display_id: order.display_id,
     order_status: order.order_status,
+    progress: order.progress,
     created_at: order.created_at,
     email: order.email,
     total: order.total,

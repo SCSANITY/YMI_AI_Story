@@ -18,6 +18,7 @@ import {
 } from '@/lib/personalized-book-title'
 import { loadReleasedFinalPdfAssetsByJobId } from '@/lib/purchase-state'
 import { isPaidLikeOrderStatus } from '@/lib/order-status'
+import { getOrderProgress } from '@/lib/order-progress'
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
@@ -56,6 +57,7 @@ const CUSTOMER_ORDER_SELECT = `
     status,
     creation_id,
     final_job_id,
+    product_type,
     package_type,
     quantity,
     price_at_purchase,
@@ -185,6 +187,8 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
     options: { download: string }
   }> = []
 
+  const publishedLines = new Set<string>()
+  const printedLines = new Set<string>()
   for (const { orderId, item } of downloadLines) {
     const asset = item.final_job_id && finalPdfAssetsByJobId.get(item.final_job_id)
     if (!asset) continue
@@ -193,6 +197,11 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       ? asset.creationId === item.creation_id
       : asset.orderId === orderId && asset.cartItemId === item.cart_item_id
     if (!matchesBook) continue
+    publishedLines.add(item.cart_item_id)
+    // A reusable customer PDF does not establish print release for a repeat purchase.
+    if (asset.orderId === orderId && asset.cartItemId === item.cart_item_id && asset.printReleased) {
+      printedLines.add(item.cart_item_id)
+    }
     const title = resolveFinalJobDisplayTitle({ creations: firstRelation(item.creations) })
     finalPdfRequests.push({
       key: item.cart_item_id,
@@ -262,10 +271,19 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       }
     })
 
+    const progress = options.reference ? getOrderProgress(order.order_status, items
+      .filter(item => item.status === 'ordered')
+      .map(item => ({
+        productType: item.product_type,
+        packageType: item.package_type,
+        published: publishedLines.has(item.cart_item_id),
+        printReleased: printedLines.has(item.cart_item_id),
+      }))) : null
     return {
       order_id: order.order_id,
       display_id: order.display_id ?? null,
       order_status: order.order_status,
+      progress,
       payment_id: order.payment_id ?? null,
       customer_id: order.customer_id ?? null,
       created_at: order.created_at,

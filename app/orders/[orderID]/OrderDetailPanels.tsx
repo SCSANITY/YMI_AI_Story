@@ -70,7 +70,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
       </div>
 
       <div className="glass-panel rounded-3xl p-5 md:p-6 space-y-5">
-        <div>
+        {!order.progress?.digitalOnly && <div>
           <div className="flex items-center gap-2 mb-3">
             <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{t('orderDetail.shipping')}</p>
@@ -83,9 +83,9 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
             {address.country ? <div>{address.country}</div> : null}
             {address.phone ? <div>{address.phone}</div> : null}
           </div>
-        </div>
+        </div>}
 
-        <div className="border-t border-white/60 pt-4 space-y-2">
+        <div className={order.progress?.digitalOnly ? 'space-y-2' : 'border-t border-white/60 pt-4 space-y-2'}>
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span>{t('orderDetail.items')}</span>
             <span>{order.item_count ?? items.length}</span>

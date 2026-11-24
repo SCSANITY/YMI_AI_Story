@@ -12,6 +12,7 @@ import {
   normalizeOrderStatus,
 } from '@/lib/order-status'
 import { LogisticsTracker } from './LogisticsTracker'
+import { progressLabels } from '@/lib/order-progress'
 import { OrderDetailPanels } from './OrderDetailPanels'
 import type { OrderDetail } from './orderDetailTypes'
 import { createOrderDetailReadModel } from './orderDetailModel'
@@ -272,7 +273,7 @@ export default function OrderDetailPage() {
                 orderStatus === 'production' || orderStatus === 'processing' || orderStatus === 'paid' ? 'bg-amber-500 animate-pulse' :
                 'bg-gray-400'
               }`} />
-              {t(getOrderStatusLabelKey(orderStatus))}
+              {order.progress ? progressLabels[order.progress.stage] : t(getOrderStatusLabelKey(orderStatus))}
             </span>
           </div>
         </div>
@@ -281,6 +282,7 @@ export default function OrderDetailPage() {
         {showTrackingPanel && (
           <LogisticsTracker
             status={orderStatus}
+            progress={order.progress}
             trackingCarrier={order.tracking_carrier}
             trackingNumber={order.tracking_number}
             trackingUrl={order.tracking_url}
