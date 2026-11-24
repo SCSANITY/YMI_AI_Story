@@ -1,3 +1,4 @@
+import * as cryptoModule from 'node:crypto'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import vm from 'node:vm'
@@ -39,6 +40,7 @@ function mailHarness(skip=false,voiceReady=false,names=['Alston'],originalFormat
       if (Object.hasOwn(injections,name)) return injections[name]
       if (name.startsWith('@/components/emails/')) return new Proxy({},{get:()=>()=>null})
       if (name.startsWith('@/lib/')) return {}
+      if (name === 'node:crypto') return cryptoModule
       throw new Error('Unexpected mail dependency:'+name)
     },
   })
