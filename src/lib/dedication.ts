@@ -5,6 +5,7 @@ export type DedicationChoice = {
   decision: DedicationDecision
   body: string | null
   revision: number | null
+  dedicationUnavailable?: boolean
   previouslyPurchased: boolean
 }
 

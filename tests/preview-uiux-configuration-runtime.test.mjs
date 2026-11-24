@@ -10,7 +10,7 @@ function visit(node){if(ts.isVariableDeclaration(node)&&node.initializer&&ts.isC
 function callback(context,name){context.module={exports:{}};vm.runInContext(ts.transpileModule('module.exports = '+callbacks.get(name),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,context);return context[name]=context.module.exports}
 function harness(){
  const requests=[],changes=[],errors=[],pending=[],noop=()=>{}
- const context=vm.createContext({Promise,versionSelectionAbortRef:{current:null},isSwitchingPreviewVersion:false,previewAccessState:'available',hasTerminalPreviewFailure:false,purchaseBookTypeRef:{current:'basic'},confirmedPurchaseBookTypeRef:{current:'basic'},queuedPurchaseBookTypeRef:{current:null},editionSelectionRevisionRef:{current:0},purchaseConfigurationDrainPromiseRef:{current:null},creationIdRef:{current:null},previewJobIdRef:{current:null},voiceAssetIdRef:{current:null},pendingVoiceRecordingRef:{current:null},setBookType:value=>changes.push(value),setEditionError:value=>errors.push(value),setVoiceValidationError:noop,setIsSavingEdition:noop,setVoiceAssetId:noop,setVoiceStoragePath:noop,setVoicePlaybackUrl:noop,setVoiceDurationSeconds:noop,setPendingVoiceRecording:noop,setIsVoiceDialogOpen:noop,resolveEditionError:error=>error.message,saveEditionConfiguration:(type,options)=>{requests.push({type,options});return new Promise((resolve,reject)=>pending.push({resolve:()=>resolve({packageType:type,voiceReady:false}),reject}))}})
+ const context=vm.createContext({Promise,versionSelectionAbortRef:{current:null},isSwitchingPreviewVersion:false,previewAccessState:'available',hasTerminalPreviewFailure:false,purchaseBookTypeRef:{current:'basic'},confirmedPurchaseBookTypeRef:{current:'basic'},queuedPurchaseBookTypeRef:{current:null},editionSelectionRevisionRef:{current:0},purchaseConfigurationDrainPromiseRef:{current:null},creationIdRef:{current:null},previewJobIdRef:{current:null},voiceAssetIdRef:{current:null},pendingVoiceRecordingRef:{current:null},setBookType:value=>changes.push(value),setEditionError:value=>errors.push(value),setVoiceValidationError:noop,setIsSavingEdition:noop,setVoiceAssetId:noop,setVoiceStoragePath:noop,setVoicePlaybackUrl:noop,setVoiceDurationSeconds:noop,setPendingVoiceRecording:noop,setIsVoiceDialogOpen:noop,setIsMessageEditorOpen:noop,resolveEditionError:error=>error.message,saveEditionConfiguration:(type,options)=>{requests.push({type,options});return new Promise((resolve,reject)=>pending.push({resolve:()=>resolve({packageType:type,voiceReady:false}),reject}))}})
  callback(context,'drainEditionConfigurationQueue');callback(context,'flushEditionConfiguration');callback(context,'handleEditionChange')
  return{context,requests,changes,errors,pending}
 }
@@ -70,4 +70,27 @@ test('a failed source configuration prevents the photo fork dispatch and release
  assert.equal(dispatches,0);assert.equal(ref.current,false)
  assert.ok(states.includes('Please save your book options before changing the photo.'))
  assert.equal(states.at(-2),'failed')
+})
+
+test('PDF version switches skip both message reads and writes; returning to hardcover uses the restored draft revision', async()=>{
+ const {carryPreviewVersionChoices}=loadUi('src/lib/preview-version-selection.ts')
+ const source={creationId:'a',jobId:'photo-a'},target={creationId:'b',jobId:'photo-b'}
+ const calls=[]
+ const ports={
+   readTargetLock:async()=>false,isCurrent:()=>true,
+   saveConfiguration:async(_,config)=>{calls.push(config.packageType)},
+   readMessages:async ids=>{
+     calls.push(ids.join(','))
+     return ids.length===2 ? [
+       {creationId:'a',decision:'confirmed',body:'For Mia'},
+       {creationId:'b',dedicationUnavailable:true,decision:'undecided',revision:null}
+     ] : [{creationId:'b',decision:'confirmed',body:'Earlier draft',revision:4}]
+   },
+   saveMessage:async(choice,decision,body)=>{calls.push([choice.revision,decision,body])}
+ }
+ await carryPreviewVersionChoices(source,target,{packageType:'digital',voiceAssetId:null},ports)
+ assert.deepEqual(calls,['digital'])
+ calls.length=0
+ await carryPreviewVersionChoices(source,target,{packageType:'basic',voiceAssetId:null},ports)
+ assert.deepEqual(calls,['a,b','basic','b',[4,'confirmed','For Mia']])
 })

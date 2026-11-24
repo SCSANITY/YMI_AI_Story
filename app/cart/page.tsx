@@ -85,7 +85,7 @@ export default function CartPage() {
   const [selectedIdsDraft, setSelectedIdsDraft] = useState<string[] | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingCartAction>(null);
   const [cartActionError, setCartActionError] = useState<string | null>(null);
-  const dedicationIds = useMemo(() => cart.map(item => item.creationId || item.personalization?.creationId || '').filter(Boolean), [cart]);
+  const dedicationIds = useMemo(() => cart.filter(item => item.personalization?.bookType !== 'digital').map(item => item.creationId || item.personalization?.creationId || '').filter(Boolean), [cart]);
   const { choices: dedicationChoices } = useDedicationChoices(dedicationIds);
   const selectedIds = useMemo(() => {
     if (selectedIdsDraft === null) return cart.map((item) => item.id);

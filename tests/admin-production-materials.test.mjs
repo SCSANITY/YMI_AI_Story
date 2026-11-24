@@ -438,3 +438,15 @@ test('The authorized panel delivers text and gallery before delayed PNG signatur
   h.deny()
   assert.equal((await h.get(h.a, '', headers)).status, 403)
 })
+
+test('a PDF Final exposes only its edition placeholder and a physical sibling keeps its own dedication', async () => {
+  const h = harness()
+  h.rows.cart_items.find(row => row.cart_item_id === h.a.item).package_type = 'digital'
+  const detail = await (await h.get(h.a)).json()
+  assert.equal(detail.pdfOnly, true)
+  assert.equal(detail.dedication, null)
+  assert.equal((await (await h.get(h.a, 'kind=dedication')).json()).dedication, null)
+  const sibling = await (await h.get(h.b)).json()
+  assert.equal(sibling.pdfOnly, false)
+  assert.equal(sibling.dedication.body, 'For 30\nLove')
+})

@@ -168,7 +168,7 @@ function Contents({ url }: { url: string }) {
     return dedication
   }, [endpoint])
 
-  const dedicationLoaded = data?.dedication !== undefined
+  const dedicationLoaded = !data?.pdfOnly && data?.dedication !== undefined
   useEffect(() => {
     if (!data?.lineId || !dedicationLoaded) return
     const focused = () => {
@@ -350,14 +350,14 @@ function Contents({ url }: { url: string }) {
       <section className={styles.dedication}>
         <header>
           <h4>Dedication</h4>
-          {dedication?.body && <CopyButton label="dedication" onClick={() => void copyDedication()} />}
+          {!data.pdfOnly && dedication?.body && <CopyButton label="dedication" onClick={() => void copyDedication()} />}
         </header>
-        {dedication && (
+        {!data.pdfOnly && dedication && (
           <small>
             {timestamp && 'Updated ' + timestamp + ' · '}Rev {dedication.revision}
           </small>
         )}
-        {changed && (
+        {!data.pdfOnly && changed && (
           <p className={styles.changed}>
             {dedication?.body
               ? 'Updated since your last copy. Copy the current dedication.'
@@ -369,7 +369,7 @@ function Contents({ url }: { url: string }) {
           tabIndex={dedication?.body ? 0 : undefined}
           aria-label="Dedication text"
         >
-          {dedication ? (dedication.body ?? 'No dedication submitted.') : dedication === undefined ? 'Loading dedication…' : 'Dedication unavailable.'}
+          {data.pdfOnly ? 'Dedication is not available for this edition.' : dedication ? (dedication.body ?? 'No dedication submitted.') : dedication === undefined ? 'Loading dedication…' : 'Dedication unavailable.'}
         </div>
       </section>
       <section className={styles.source}>

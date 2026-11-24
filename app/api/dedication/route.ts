@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Message must be 1–300 characters with no more than 8 line breaks' }, { status: 400 })
     }
     const owner = (await resolveCheckoutOwner(request, { allowAnon: true }))!
-    await loadOwnedDedicationChoices(owner, [creationId])
+    const [choice] = await loadOwnedDedicationChoices(owner, [creationId])
+    if (choice.dedicationUnavailable) return NextResponse.json({error:"This edition does not include a dedication."},{status:409})
 
     const ownerId = owner.ownerType === 'customer' ? owner.customerId : owner.anonSessionId
     const { data, error } = await supabaseAdmin.rpc('dedication_save_creation', {

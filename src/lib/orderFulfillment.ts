@@ -638,7 +638,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   const effectiveCartItemIds = purchasedItems.map((item) => item.cart_item_id)
 
   const hasBookMaterials = purchasedItems.some(item =>
-    item.creations?.customize_snapshot?.edition !== 'original' || item.package_type === 'supreme')
+    item.package_type !== 'digital' && (item.creations?.customize_snapshot?.edition !== 'original' || item.package_type === 'supreme'))
   if (deferPostPaymentWork) {
     return {
       orderId,

@@ -20,7 +20,7 @@ export type MaterialItem = {
 }
 export type OrderMaterials = { order_id: string; items: MaterialItem[] }
 export function hasBookMaterialFields(item: Pick<MaterialItem, 'edition' | 'package_type'>) {
-  return item.edition !== 'original' || item.package_type === 'supreme'
+  return item.package_type !== 'digital' && (item.edition !== 'original' || item.package_type === 'supreme')
 }
 export class MaterialError extends Error {
   constructor(public readonly code: string, public readonly status: number) { super(code) }
@@ -79,10 +79,13 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
       book={title:display.title,cover_url:display.cover_url as string|null,
         cover_status:display.cover_status as 'ready'|'pending'|'unavailable'}
     }
+    const dedication=parseMaterialDedication(item.dedication)
+    const pdfOnly=item.package_type==='digital'
     return { cart_item_id:materialUuid(item.cart_item_id),creation_id:materialUuid(item.creation_id),
       template_id:item.template_id,child_name:typeof item.child_name==='string'?item.child_name.trim()||null:null,package_type:item.package_type,
       ...(item.edition === 'original' || item.edition === 'personalised' ? {edition:item.edition} : {}),
-      dedication:parseMaterialDedication(item.dedication),can_edit_dedication:item.can_edit_dedication,
+      dedication:pdfOnly ? {decision:'skipped',body:null,revision:dedication.revision} : dedication,
+      can_edit_dedication:!pdfOnly && item.can_edit_dedication,
       voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice,can_replace_voice:item.can_replace_voice,
       voice_asset_id:item.voice_asset_id as string|null,voice_revision:item.voice_revision as number|null,
       voice_uploaded_at:item.voice_uploaded_at as string|null,

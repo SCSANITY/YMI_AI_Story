@@ -3,22 +3,24 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import React from 'react'
+import {loadUi} from './helpers/preview-uiux-harness.mjs'
 import { readFileSync } from 'node:fs'
 
 const helperModule={exports:{}}
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/lib/order-materials-client.ts',import.meta.url),'utf8'),{
  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
 }).outputText,{module:helperModule,exports:helperModule.exports})
-function mailHarness(skip=false,voiceReady=false,names=['Alston'],originalFormat=null) {
+function mailHarness(skip=false,voiceReady=false,names=['Alston'],originalFormat=null,edition='original') {
   const events=[],sent=[],reads=[],logs=[],fixtureModule={exports:{}}
   const model='a'.repeat(43)
   const injections={
     '@/lib/release-template-snapshot':{releaseRenderNote:async note=>note},
+    '@/lib/order-materials':loadUi('src/lib/order-materials.ts',{'@/lib/validators':{},'@/lib/dedication':{}}),
     react:React,'@/lib/order-materials-client':helperModule.exports,
     resend:{Resend:class {emails={send:async (value,options)=>{sent.push({...value,options});return {data:{id:'synthetic-message'}}}}}},
     '@/components/emails/PrintReleasedEmail':{PRINT_RELEASED_SUBJECT:'Your YMI Story Book Is Approved!',PrintReleasedEmail:()=>null},
     '@/lib/order-materials-server':{
-      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,...(originalFormat && {edition:'original'}),package_type:originalFormat ?? 'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
+      loadTrustedOrderMaterials:async id=>{reads.push(['read',id]);return {items:names.map((name,index)=>({cart_item_id:'synthetic-line-'+index,child_name:name,...(originalFormat && {edition}),package_type:originalFormat ?? 'supreme',voice_ready:voiceReady,can_submit_voice:true,can_edit_dedication:true}))}},
       issueOrderMaterialLink:async id=>{reads.push(['issue',id]);return `/orders/${id}/materials#token=${model}`},
     },
     '@/lib/locale-pricing':{normalizeCheckoutCurrency:()=> 'USD'},
@@ -128,4 +130,12 @@ test('only an original Voice confirmation gets a scoped optional recording link'
     if(format==='supreme') assert.equal(notice.voiceOnly,true)
     else assert.equal(notice,undefined)
   }
+})
+
+test('personalised PDF confirmation sends the receipt without issuing a material grant', async()=>{
+  const h=mailHarness(false,false,['Mia'],'digital','personalised')
+  await h.api.sendOrderConfirmationEmail(input)
+  assert.equal(h.sent.length,1)
+  assert.equal(h.sent[0].react.props.materialNotice,undefined)
+  assert.deepEqual(h.reads.map(([action])=>action),['read'])
 })

@@ -1925,6 +1925,7 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
       return purchaseConfigurationDrainPromiseRef.current ?? Promise.resolve();
     }
 
+    if (nextPackageType === 'digital') setIsMessageEditorOpen(false);
     purchaseBookTypeRef.current = nextPackageType;
     editionSelectionRevisionRef.current += 1;
     queuedPurchaseBookTypeRef.current = nextPackageType;
@@ -2254,9 +2255,10 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
 
   useEffect(() => {
     if (!dedicationOnArrival || !creationId || dedicationArrivalHandledRef.current) return;
+    if (purchaseBookType === 'digital') { dedicationArrivalHandledRef.current = true; return; }
     dedicationArrivalHandledRef.current = true;
     setIsMessageEditorOpen(true);
-  }, [creationId, dedicationOnArrival]);
+  }, [creationId, dedicationOnArrival, purchaseBookType]);
 
   useEffect(() => {
     if (exitPhase !== 'IDLE') return;
@@ -3001,7 +3003,7 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
           disabled={isSwitchingPreviewVersion}
           price={getBookPackagePrice(book, editionDetails)} currency={displayCurrency}
           onChoose={value => void handleEditionChange(value)} onClose={() => setEditionDetails(null)} /> : null}
-        {isMessageEditorOpen ? <PreviewMessageEditor key={bookID} creationId={creationId} bookID={bookID} childName={name}
+        {isMessageEditorOpen && purchaseBookType !== 'digital' ? <PreviewMessageEditor key={bookID} creationId={creationId} bookID={bookID} childName={name}
           onClose={() => setIsMessageEditorOpen(false)} onSaved={dedicationOnArrival ? handleArrivalDedicationChoice : undefined} /> : null}
         <PreviewShareDialog
           open={isShareDialogOpen}

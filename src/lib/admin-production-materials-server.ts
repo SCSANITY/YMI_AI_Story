@@ -26,7 +26,7 @@ export async function resolveMaterialLine(finalId: string, selector?: LineSelect
 
   let linked = db
     .from('cart_items')
-    .select('cart_item_id,order_id,creation_id,customer_id,owner_type')
+    .select('cart_item_id,order_id,creation_id,customer_id,owner_type,package_type')
     .eq('final_job_id', final.job_id)
     .eq('status', 'ordered')
   if (selector) linked = linked.eq('cart_item_id', selector.item).eq('order_id', selector.order)
@@ -80,6 +80,7 @@ export async function resolveMaterialLine(finalId: string, selector?: LineSelect
 type BoundLine = NonNullable<Awaited<ReturnType<typeof resolveMaterialLine>>>
 
 export async function readLineDedication({ line }: BoundLine) {
+  if (line.package_type === 'digital') return null
   const rows = await loadTrustedOrderLineDedications(line.order_id)
   const row = rows.find((d) => d.cartItemId === line.cart_item_id && d.creationId === line.creation_id)
   if (!row) return null

@@ -125,8 +125,8 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
       else {setChallenge(data.challengeId);setMessage('If this email matches the order, a verification code is on its way.')}
     }catch(e){setError(e instanceof Error?e.message:'Unable to recover access.')}finally{setBusy(false)}
   }
-  const items = embedded ? materials?.items.filter(hasBookMaterialFields) : materials?.items
-  if (embedded && items?.length === 0) return null
+  const items = materials?.items.filter(hasBookMaterialFields)
+  if (items?.length === 0) return embedded ? null : <main className="mx-auto max-w-3xl px-5 py-12"><h1 className="font-serif text-2xl font-bold">Your book materials</h1><p className="mt-3">There are no materials to submit for this order.</p></main>
   const Container=embedded?'section':'main'
   return <Container className={embedded ? "mt-6 space-y-4 text-left text-slate-900" : "mx-auto max-w-3xl space-y-6 px-5 py-12 text-slate-900"}>
     {/* AppShell supplies the existing site Navbar/logo/back control on this route. */}

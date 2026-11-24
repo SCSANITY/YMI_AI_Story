@@ -1,5 +1,6 @@
 /** Only this projection may cross the admin API boundary. */
 export type ProductionMaterials = {
+  pdfOnly: boolean
   lineId: string
   viewerId: string
   purchaser: string | null
@@ -13,7 +14,7 @@ export type ProductionMaterials = {
   pages: { index: number; label: string; pngAvailable: boolean }[]
 }
 
-export type MaterialHeader = Pick<ProductionMaterials, 'lineId' | 'viewerId' | 'child' | 'age' | 'language'>
+export type MaterialHeader = Pick<ProductionMaterials, 'pdfOnly' | 'lineId' | 'viewerId' | 'child' | 'age' | 'language'>
 export type MaterialPart =
   | MaterialHeader
   | Pick<ProductionMaterials, 'purchaser'>

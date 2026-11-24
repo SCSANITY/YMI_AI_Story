@@ -118,7 +118,7 @@ export function PreviewWaitingPages({name,value,pricing,currency,progress,genera
           </span>
         </button>
       })}
-    </div></>:progress.step===1?<DemoVoice interact={progress.interact} holdPlaying={progress.holdPlaying}/>:<><h3>A message for <em>{name}</em></h3><div className={styles.messageSample}><p><TypedMessage key={name} text={`For ${name} — the bravest explorer we know. Love always, Mom & Dad`} reduced={progress.reduced}/></p></div><button className={styles.writeMessage} type="button" disabled={disabled} onClick={()=>{progress.interact();onMessage()}}>Write my message</button></>}
+    </div></>:progress.step===1?<DemoVoice interact={progress.interact} holdPlaying={progress.holdPlaying}/>:<><h3>A message for <em>{name}</em></h3><div className={styles.messageSample}><p><TypedMessage key={name} text={`For ${name} — the bravest explorer we know. Love always, Mom & Dad`} reduced={progress.reduced}/></p></div><button className={styles.writeMessage} type="button" disabled={disabled || value==='digital'} onClick={()=>{progress.interact();onMessage()}}>Write my message</button><small className={styles.dedicationHint}>PDF editions do not include a dedication.</small></>}
     </div>
   </div>
 }

@@ -23,16 +23,29 @@ export async function carryPreviewVersionChoices(source: Identity, target: Ident
   const locked = await ports.readTargetLock(target)
   assertCurrent()
   if (locked) throw new PreviewVersionLockedError()
-  const [message, targetMessage] = await ports.readMessages([source.creationId, target.creationId])
+  if (choices.packageType === 'digital') {
+    await ports.saveConfiguration(target, choices)
+    assertCurrent()
+    return
+  }
+  const [message, initialTarget] = await ports.readMessages([source.creationId, target.creationId])
   assertCurrent()
-  if (!message || !targetMessage || message.creationId !== source.creationId || targetMessage.creationId !== target.creationId) throw new Error('Version message identity changed.')
-  const body = message.decision === 'confirmed' ? message.body : null
-  const decision = body ? 'confirmed' : 'skipped'
-  const targetBody = targetMessage.decision === 'confirmed' ? targetMessage.body : null
-  const messageChanged = message.decision !== 'undecided' && body !== targetBody
-  if (targetMessage.previouslyPurchased) throw new PreviewVersionLockedError()
+  if (!message || !initialTarget || message.creationId !== source.creationId || initialTarget.creationId !== target.creationId) throw new Error('Version message identity changed.')
+  if (initialTarget.previouslyPurchased) throw new PreviewVersionLockedError()
   await ports.saveConfiguration(target, choices)
   assertCurrent()
-  if (messageChanged) await ports.saveMessage(targetMessage, decision, body)
+  if (message.decision === 'undecided') return
+  let targetMessage = initialTarget
+  if (targetMessage.dedicationUnavailable) {
+    // A former PDF target exposes its physical draft revision only after the edition changes.
+    const [restored] = await ports.readMessages([target.creationId])
+    assertCurrent()
+    if (!restored || restored.creationId !== target.creationId || restored.dedicationUnavailable) throw new Error('Version message identity changed.')
+    if (restored.previouslyPurchased) throw new PreviewVersionLockedError()
+    targetMessage = restored
+  }
+  const body = message.decision === 'confirmed' ? message.body : null
+  const targetBody = targetMessage.decision === 'confirmed' ? targetMessage.body : null
+  if (body !== targetBody) await ports.saveMessage(targetMessage, body ? 'confirmed' : 'skipped', body)
   assertCurrent()
 }

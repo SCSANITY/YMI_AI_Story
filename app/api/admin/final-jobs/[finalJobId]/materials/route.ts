@@ -58,6 +58,7 @@ export async function GET(request: Request, context: { params: Promise<{ finalJo
       )
     }
     const header = {
+      pdfOnly: bound.line.package_type === 'digital',
       viewerId: admin.customer_id,
       lineId: bound.line.cart_item_id,
       ...frozenText(bound.execution.input_snapshot),

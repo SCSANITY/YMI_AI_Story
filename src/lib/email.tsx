@@ -1,4 +1,5 @@
 import { releaseRenderNote } from '@/lib/release-template-snapshot'
+import {hasBookMaterialFields} from '@/lib/order-materials'
 import {distinctMaterialNames} from '@/lib/order-materials-client'
 import { loadTrustedOrderMaterials,issueOrderMaterialLink } from '@/lib/order-materials-server'
 import React from 'react'
@@ -377,10 +378,10 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
     },
     prepareReact:async()=>{
       const materialState=await loadTrustedOrderMaterials(params.orderId)
-      const actionableItems=materialState.items.filter(item=>item.edition!=='original' || item.package_type==='supreme')
+      const actionableItems=materialState.items.filter(hasBookMaterialFields)
       const materialPath=actionableItems.length?await issueOrderMaterialLink(params.orderId,actionableItems.map(item=>item.cart_item_id)):null
       // Resolve only after send idempotency succeeds. No raw token in event context.
-      const materialNotice=materialPath?{names:distinctMaterialNames(actionableItems),
+      const materialNotice=materialPath?{names:distinctMaterialNames(actionableItems.filter(item=>item.edition!=='original')),
         voiceOnly:actionableItems.every(item=>item.edition==='original'),
         pendingVoice:materialState.items.filter(item=>item.package_type==='supreme' && !item.voice_ready).length,
         url:buildAbsoluteUrl(materialPath) ?? materialPath}:undefined

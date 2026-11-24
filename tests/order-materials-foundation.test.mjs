@@ -525,13 +525,14 @@ test('successful materials read starts order and scoped Creation reads in parall
  }finally{clearTimeout(timer)}
 })
 
-test('personalised PDF dedication survives the server projection and browser parse',()=>{
+test('even a historical personalised PDF draft is masked in the server response and browser parse',()=>{
   const m=harness().load('src/lib/order-materials.ts')
   const data=dto()
   Object.assign(data.items[0],{edition:'personalised',package_type:'digital',voice_revision:null,
-    can_submit_voice:false,can_replace_voice:false,voice_ready:false,voice_asset_id:null})
+    dedication:{decision:'confirmed',body:'Hardcover draft',revision:3},can_submit_voice:false,can_replace_voice:false,voice_ready:false,voice_asset_id:null})
   const page=m.parseOrderMaterialsPage(JSON.parse(JSON.stringify(m.parseOrderMaterials(data))))
+  assert.deepEqual(JSON.parse(JSON.stringify(page.items[0].dedication)),{decision:'skipped',body:null,revision:3})
   assert.equal(page.items[0].edition,'personalised')
-  assert.equal(page.items[0].can_edit_dedication,true)
-  assert.equal(m.hasBookMaterialFields(page.items[0]),true)
+  assert.equal(page.items[0].can_edit_dedication,false)
+  assert.equal(m.hasBookMaterialFields(page.items[0]),false)
 })

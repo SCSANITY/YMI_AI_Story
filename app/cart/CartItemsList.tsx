@@ -81,7 +81,7 @@ const CartItemCard = memo(function CartItemCard({
   const hasPendingAction = Boolean(activeAction);
   const dedicationId = item.creationId || item.personalization?.creationId || '';
   const dedicationChoice = dedicationChoices[dedicationId];
-  const dedicationUndecided = dedicationChoice?.decision === 'undecided';
+  const dedicationUndecided = item.personalization?.bookType !== 'digital' && !dedicationChoice?.dedicationUnavailable && dedicationChoice?.decision === 'undecided';
 
   return (
     <div className="glass-panel rounded-2xl p-4 md:p-6 flex gap-3 sm:gap-4">

@@ -133,7 +133,7 @@ export function MyBooksGrid({
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.04em] text-gray-400 md:mb-3 md:text-xs">
                   {item.templates?.story_type || ''}
                 </p>
-                {dedicationChoices[item.creation_id]?.decision === 'undecided' ? (
+                {!dedicationChoices[item.creation_id]?.dedicationUnavailable && dedicationChoices[item.creation_id]?.decision === 'undecided' ? (
                   <div className="my-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-200/80 bg-amber-50/75 px-3 py-2 text-xs text-amber-900">
                     <PenLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     <span className="font-semibold">{t('myBooks.optionalMessageStatus')}</span>
