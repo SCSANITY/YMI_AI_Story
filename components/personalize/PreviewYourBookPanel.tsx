@@ -8,9 +8,9 @@ import { EditionPrice } from './product/EditionPrice'
 import { getUiMessage as t } from '@/lib/i18n-messages'
 import styles from './PreviewExperience.module.css'
 
-export function PreviewYourBookPanel({ value, pricing, currency, disabled = false, notice, recovery, onChange, onDetails, actions }: {
+export function PreviewYourBookPanel({ value, pricing, currency, disabled = false, notice, recovery, guestEmail, onChange, onDetails, actions }: {
   value: EditionType | 'digital'; pricing: BookPackagePricing; currency: DisplayCurrency
-  disabled?: boolean; notice?: string | null; recovery?: ReactNode
+  disabled?: boolean; notice?: string | null; recovery?: ReactNode; guestEmail?: ReactNode
   onChange: (value: EditionType | 'digital') => void; onDetails: (value: EditionType) => void
   actions: ReactNode
 }) {
@@ -36,7 +36,9 @@ export function PreviewYourBookPanel({ value, pricing, currency, disabled = fals
         <button type="button" className={styles.detailsLink} disabled={disabled} onClick={() => onDetails(edition.type)}>See details</button>
       </div>)}
     </div>
-    {value === 'supreme' && <p className={styles.voiceNote}>You can add your voice recording after purchase.</p>}
+    {value === 'basic' && <p className={styles.voiceNote}>You can add your personal message after purchase.</p>}
+    {value === 'supreme' && <p className={styles.voiceNote}>You can add your personal message and voice narration after purchase.</p>}
+    {guestEmail}
     <div className={styles.panelNotice}><span role={notice ? 'alert' : undefined}>{notice}</span>{recovery}</div>
     {actions}
   </aside>

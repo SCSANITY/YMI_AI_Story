@@ -176,6 +176,10 @@ timing, payment, idempotent task and real SDK verification fixtures.
 
 ## Weekly shopping cart reminders
 
+Guest Preview uses a separate optional contact saved by the current anonymous session. Save replaces the prior address, performs no send, and never establishes account or order ownership. Fresh checkout may suggest it in an empty email field. PDF delivery continues to use the confirmed order contact. Apply the guest contact migration before deploying this dispatcher.
+
+The same weekly job merges member and guest candidates within one budget. Each guest send rechecks contact, cart and creation ownership, sellability, opt-outs and provider suppressions. A guest event has a week/contact idempotency key and no customer ID. The reminder opens the ordinary cart for the current browser. Guest unsubscribe stops this reminder for the mailbox across guest sessions and supports the existing short-lived undo flow.
+
 The Web job runs on Vercel Cron at nominal Wednesday 11:00 Hong Kong time
 (`0 3 * * 3` UTC). It is separate from QStash and the unpaid-order flow.
 The default-send mode starts with an indexed page of cart owners and rechecks

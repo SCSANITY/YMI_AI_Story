@@ -50,6 +50,7 @@ import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/pers
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
 import { MagicAttributesPanel } from '@/components/personalize/MagicAttributesPanel';
 import { ProductSectionBoundary } from '@/components/personalize/product/ProductSectionBoundary';
+import { GuestPreviewEmail } from '@/components/personalize/GuestPreviewEmail';
 import { PreviewYourBookPanel } from '@/components/personalize/PreviewYourBookPanel';
 import { EditionDetailsDialog } from '@/components/personalize/EditionDetailsDialog';
 import { PreviewMessageEditor } from '@/components/personalize/PreviewMessageEditor';
@@ -2975,6 +2976,7 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
                     onUpload={handlePhotoUpload} onSelect={version => void handleSelectPhotoVersion(version)} />}
                   purchase={
                     <PreviewYourBookPanel
+                      guestEmail={!user && !isPreviewUnavailable ? <GuestPreviewEmail /> : null}
                       value={purchaseBookType}
                       pricing={previewPricing!}
                       currency={displayCurrency}

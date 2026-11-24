@@ -507,16 +507,15 @@ export async function sendUnpaidReminderEmail(params: SendUnpaidReminderEmailPar
   })
 }
 
-export async function sendCartReminderEmail(params: {
+export async function sendCartReminderEmail(params: ({ customerId: string; guestContactId?: never } | { guestContactId: string; customerId?: never }) & {
   to: string
-  customerId: string
   week: string
   cartUrl: string
   unsubscribeUrl: string
 }) {
   return sendManagedEmail({
     emailKey: 'cart_reminder',
-    idempotencyKey: `cart_reminder:${params.week}:${params.customerId}`,
+    idempotencyKey: `cart_reminder:${params.week}:${params.customerId ?? 'guest-' + params.guestContactId}`,
     to: params.to,
     customerId: params.customerId,
     fromEnvName: 'EMAIL_FROM_SUPPORT',

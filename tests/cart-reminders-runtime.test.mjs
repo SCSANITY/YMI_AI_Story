@@ -60,7 +60,7 @@ test('at most 25 send attempts; expired budget starts no send', async () => {
   assert.equal(expired.capped, true)
 })
 
-function fixture(overrides = {}) {
+function fixture(overrides = {}, guestEmail = null) {
   const calls = { rpc: [], sends: [], writes: [] }
   const env = {
     VERCEL_ENV: 'production', CART_REMINDER_ENABLED: 'true',
@@ -82,6 +82,12 @@ function fixture(overrides = {}) {
       supabaseAdmin: {
         rpc(name, args) {
           calls.rpc.push([name, args])
+          if (name === 'list_guest_cart_reminder_candidates') return { data: guestEmail ? [{ contact_id: id(7) }] : [] }
+          if (name === 'get_guest_cart_reminder_recipient') return { maybeSingle: async () => ({
+            data: { contact_id: id(7), email: guestEmail },
+          }) }
+          if (name === 'stop_guest_cart_reminder') return { maybeSingle: async () => ({ data: { undo_id: id(8) } }) }
+          if (name === 'undo_guest_cart_reminder_stop') return { data: args.p_undo_id === id(8) }
           if (name === 'list_cart_reminder_candidates' || name === 'list_default_cart_reminder_candidates') {
             return { data: [{ customer_id: id(1) }, { customer_id: id(2) }] }
           }
@@ -128,11 +134,29 @@ test('default policy uses the cart-first candidates and signs the prepared grant
   assert.equal(result.sent, 1)
   assert.deepEqual(calls.rpc.map(([name]) => name), [
     'list_default_cart_reminder_candidates',
+    'list_guest_cart_reminder_candidates',
     'prepare_default_cart_reminder_recipient',
     'prepare_default_cart_reminder_recipient',
   ])
   const token = new URL(calls.sends[0].unsubscribeUrl).searchParams.get('token')
   assert.equal(server.verifyCartReminderToken(token, 'unsubscribe'), id(3))
+})
+
+test('guest and member share the weekly batch; guest link is mailbox-scoped and supports native stop and undo', async () => {
+  const { server, calls } = fixture({}, 'guest@example.test')
+  assert.equal((await server.dispatchCartReminderBatch('2026-11-18')).sent, 2)
+  const sent = calls.sends.find(mail => mail.guestContactId === id(7))
+  assert.equal(sent.to, 'guest@example.test')
+  assert.equal(sent.customerId, undefined)
+  const token = new URL(sent.unsubscribeUrl).searchParams.get('token')
+  const target = server.verifyCartReminderToken(token, 'unsubscribe')
+  assert.equal(target, 'guest-' + crypto.createHash('sha256').update(sent.to).digest('hex'))
+  assert.equal(server.verifyCartReminderToken(token,'undo'), null)
+  const stopped = await server.unsubscribeCartReminder(target, true)
+  const undo = server.verifyCartReminderToken(stopped.undoToken,'undo')
+  assert.equal(await server.undoCartReminderUnsubscribe(undo),true)
+  await server.unsubscribeCartReminder(target,false)
+  assert.deepEqual(asObject(calls.rpc.at(-1)),['stop_guest_cart_reminder',{ p_hash:target.slice(6),p_browser:false }])
 })
 
 test('cron rejects unauthenticated requests, dispatches only on Wednesday and sets no-store', async () => {

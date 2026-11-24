@@ -12,7 +12,9 @@ export function cartReminderWeek(now: Date): string | null {
   return hongKong.getUTCDay() === 3 ? hongKong.toISOString().slice(0, 10) : null
 }
 
-export type CartReminderRecipient = { customer_id: string; grant_id: string; email: string }
+export type CartReminderRecipient =
+  | { customer_id: string; grant_id: string; email: string; guest?: false }
+  | { guest: true; contactId: string; email: string }
 
 type BatchDeps = {
   page(after: string | null, limit: number): Promise<string[]>

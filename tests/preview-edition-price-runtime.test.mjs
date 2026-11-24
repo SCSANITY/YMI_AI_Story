@@ -102,7 +102,8 @@ test('only the selected Voice edition explains post-payment recording and the pu
   const Panel=loadUi('components/personalize/PreviewYourBookPanel.tsx').PreviewYourBookPanel
   for (const value of ['basic','supreme','digital']) {
     const tree=Panel({value,pricing:{...book().packagePricing,digital:pricing.catalogPriceModel({list_price_usd:9.9,row_version:1},'digital')},currency:'USD'})
-    assert.equal(text(tree).includes('You can add your voice recording after purchase.'),value==='supreme')
+    assert.equal(text(tree).includes('You can add your personal message and voice narration after purchase.'),value==='supreme')
+    assert.equal(text(tree).includes('You can add your personal message after purchase.'),value==='basic')
     assert.doesNotMatch(text(tree),/Write|A message for|Record now/)
   }
 })

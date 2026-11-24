@@ -31,7 +31,7 @@ test('S6 Preview and Checkout identify Signature Voice from their local authorit
 
   assert.match(personalize, /<PreviewYourBookPanel/)
   assert.match(purchasePanel, /value === 'supreme'/)
-  assert.match(purchasePanel, /You can add your voice recording after purchase/)
+  assert.match(purchasePanel, /You can add your personal message and voice narration after purchase/)
   assert.match(checkout, /items\.some\([^\n]*isSignatureVoicePackage\(item\.personalization\?\.bookType\)\)/)
   assert.match(checkout, /SignatureVoiceBadge/)
   assert.match(checkout, /SignatureVoiceEditionNotice variant="checkout"/)

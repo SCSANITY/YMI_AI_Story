@@ -624,6 +624,19 @@ function CheckoutPageContent() {
     if (suggestedEmail) setForm(current => current.email ? current : { ...current, email: suggestedEmail });
   }, [checkoutEmail, sessionUser?.email, checkoutStateReady, isCheckoutDraftHydrated]);
 
+  useEffect(() => {
+    if (!isAuthResolved || !checkoutStateReady || !isCheckoutDraftHydrated || queryOrderId || sessionUser || checkoutEmail || form.email || emailEditedRef.current) return;
+    const controller = new AbortController();
+    fetch('/api/guest/preview-email', { cache: 'no-store', signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        if (!controller.signal.aborted && !emailEditedRef.current && data?.guest && typeof data.email === 'string') {
+          setForm(current => current.email ? current : { ...current, email: data.email });
+        }
+      }).catch(() => {});
+    return () => controller.abort();
+  }, [isAuthResolved, checkoutStateReady, isCheckoutDraftHydrated, queryOrderId, sessionUser, checkoutEmail, form.email]);
+
   const applyDiscountSummary = useCallback((summary: OrderDiscountSummary) => {
     setQuoteRevision(revision => revision + 1);
     setDiscountAmountUsd(summary.productDiscountAmountUsd);
