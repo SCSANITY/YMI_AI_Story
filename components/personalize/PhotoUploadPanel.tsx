@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useRef } from 'react'
+import React, { memo } from 'react'
 import Image from 'next/image'
 import { Camera, Check, X } from 'lucide-react'
 
@@ -21,6 +21,7 @@ const BAD_PHOTO_EXAMPLES = [
 ]
 
 export type PhotoUploadPanelProps = {
+  photoInputRef: React.RefObject<HTMLInputElement | null>
   photoPreview: string | null
   facePrepareStatus: FacePrepareStatus
   facePrepareError: string | null
@@ -45,6 +46,7 @@ export type PhotoUploadPanelProps = {
 }
 
 function PhotoUploadPanelComponent({
+  photoInputRef: photoInput,
   photoPreview,
   facePrepareStatus,
   facePrepareError,
@@ -54,7 +56,6 @@ function PhotoUploadPanelComponent({
   onRetryPhoto,
   onCancelPhoto,
 }: PhotoUploadPanelProps) {
-  const photoInput = useRef<HTMLInputElement>(null)
   const photoActionLabel = photoPreview ? labels.clickToChangePhoto : labels.uploadChildPhoto
   const status = facePrepareStatus === 'loading' ? labels.photoLoading
     : facePrepareStatus === 'checking' ? labels.photoChecking

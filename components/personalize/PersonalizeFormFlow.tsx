@@ -183,6 +183,7 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
         {props.step === 'PHOTO' ? (
           <div className="flex flex-col gap-3">
             <PhotoUploadPanel
+              photoInputRef={props.photoInputRef}
               photoPreview={props.photoPreview}
               facePrepareStatus={props.facePrepareStatus}
               facePrepareError={props.facePrepareError}
@@ -262,6 +263,7 @@ function PersonalizeFormFlowComponent(props: PersonalizeFormFlowProps) {
                 </div>
                 <label className={`relative rounded-full p-2 text-slate-500 transition-colors focus-within:ring-2 focus-within:ring-amber-500 cursor-pointer hover:bg-slate-100 hover:text-slate-950`} aria-label={`${props.labels.edit} ${props.labels.photoSummary}`}>
                   <input
+                    ref={props.photoInputRef}
                     type="file"
                     accept="image/*"
                     onChange={props.onPhotoUpload}

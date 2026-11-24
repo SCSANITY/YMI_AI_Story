@@ -14,6 +14,7 @@ export type PersonalizeFormDraft = {
   age: string
   language: StoryLanguage
   bookType: PurchasePackageType
+  photoCheckReopened?: boolean
   faceAssetId: string | null
   faceStoragePath: string | null
 }
@@ -49,6 +50,7 @@ export function readPersonalizeFormDraft(
     // The pre-Preview form uses a physical default. PDF selection belongs to the saved Preview.
     const bookType = parsed.bookType === 'digital' ? 'basic' : normalizePurchasePackageType(parsed.bookType) ?? 'basic'
     return {
+      ...(parsed.photoCheckReopened === true && { photoCheckReopened: true }),
       version: 1,
       ownerKey,
       step: parsed.step,

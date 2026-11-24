@@ -99,3 +99,20 @@ test('retired digital unpaid drafts retain child details and the prepared photo'
     { ...draft, bookType: 'basic' }
   )
 })
+
+test('reopening a photo check belongs to one draft and saves neither a file nor consent', () => {
+  const storage = createStorage()
+  const draft = {
+    version: 1 as const, ownerKey: 'member:a', step: 'REVIEW' as const, name: 'Test', age: '5',
+    language: 'English' as const, bookType: 'basic' as const, faceAssetId: 'photo-a',
+    faceStoragePath: null, photoCheckReopened: true,
+  }
+  writePersonalizeFormDraft(storage, 'story-a', draft)
+  assert.deepEqual(readPersonalizeFormDraft(storage, 'story-a', 'member:a'), draft)
+  assert.equal(readPersonalizeFormDraft(storage, 'story-a', 'member:b'), null)
+  assert.equal(readPersonalizeFormDraft(storage, 'story-b', 'member:a'), null)
+  writePersonalizeFormDraft(storage, 'story-a', { ...draft, faceAssetId: null })
+  assert.equal(readPersonalizeFormDraft(storage, 'story-a', 'member:a')?.photoCheckReopened, true)
+  writePersonalizeFormDraft(storage, 'story-a', { ...draft, photoCheckReopened: undefined })
+  assert.equal(readPersonalizeFormDraft(storage, 'story-a', 'member:a')?.photoCheckReopened, undefined)
+})

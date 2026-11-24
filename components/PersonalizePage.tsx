@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { usePersonalizeState } from '@/components/personalize/usePersonalizeState';
 import { uploadUserAsset } from '@/services/assets';
 import { usePhotoPreparation } from '@/components/personalize/usePhotoPreparation';
-import { IDLE_PHOTO, type PhotoReceipt } from '@/lib/photo-preparation/controller';
+import { IDLE_PHOTO, type PhotoIntent, type PhotoReceipt } from '@/lib/photo-preparation/controller';
 import { loadSavedPhoto } from '@/lib/photo-preparation/saved-photo';
 import {
   cancelPreviewJob,
@@ -233,6 +233,10 @@ export default function PersonalizePage({
   const [generationJobId, setGenerationJobId] = useState<string | null>(null);
   const photoScope = bookID + ':' + personalizeDraftOwnerKey;
   const { controller: photoPreparation, state: photoInspection } = usePhotoPreparation(photoScope);
+  const formPhotoInput = useRef<HTMLInputElement>(null);
+  const [retriedIntent, setRetriedIntent] = useState<PhotoIntent | null>(null);
+  const [reopenedPhoto, setReopenedPhoto] = useState<{scope: string; assetId: string | null} | null>(null);
+  const isReopenedPhoto = reopenedPhoto?.scope === photoScope && reopenedPhoto.assetId === photoAssetId;
   const formPhotoInspection = photoInspection.status !== 'idle' && photoInspection.intent.surface === 'form'
     && (photoInspection.intent.source.kind === 'file'
       ? photoInspection.intent.source.file === photo
@@ -833,7 +837,14 @@ export default function PersonalizePage({
     setPhotoAssetId(data.assetId || null)
     setPhotoStoragePath(data.storagePath || null)
     setFaceImageUrl(data.faceImageUrl || null)
-    photoPreparation.clear()
+    const returnedFile = data.photo instanceof File ? data.photo : null
+    setPhoto(returnedFile)
+    if (returnedFile) {
+      showLocalPhotoPreview(returnedFile)
+      void photoPreparation.select({ scope: photoScope, surface: 'form', source: { kind: 'file', file: returnedFile } })
+    } else {
+      photoPreparation.clear()
+    }
     setVoiceAssetId(data.voiceAssetId || null)
     setVoiceStoragePath(data.voiceStoragePath || null)
     setVoicePlaybackUrl(null)
@@ -854,7 +865,7 @@ export default function PersonalizePage({
     initializedPersonalizeDraftKeyRef.current = `${bookID}:${personalizeDraftOwnerKey}`
     setIsPersonalizeDraftReady(true)
     resumePersonalization(null)
-  }, [resumeData, bookID, personalizeDraftOwnerKey, photoPreparation, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization, viewMode])
+  }, [resumeData, bookID, personalizeDraftOwnerKey, photoPreparation, photoScope, showLocalPhotoPreview, setPhoto, setName, setAge, setSelectedLang, setBookType, setPhotoPreview, setPhotoAssetId, setPhotoStoragePath, setFaceImageUrl, setVoiceAssetId, setVoiceStoragePath, setPreviewJobId, setCreationId, resumePersonalization, viewMode])
 
   useEffect(() => {
     if (resumeData && resumeData.bookID !== bookID) {
@@ -1123,6 +1134,7 @@ export default function PersonalizePage({
 
     setFormStep(resolvePersonalizeEntryStep(draft, productIntroEntryRef.current))
     productIntroEntryRef.current = false
+    setReopenedPhoto(draft?.photoCheckReopened ? { scope: draftKey, assetId: draft.faceAssetId } : null)
     setName(draft?.name ?? '')
     setAge(draft?.age ?? '')
     setSelectedLang(draft?.language ?? 'English')
@@ -1334,21 +1346,13 @@ export default function PersonalizePage({
     if (!viewState.showForm || formStep === 'INTRO' || !photoAssetId || photo || formPhotoInspection.status !== 'idle') return;
     if (personalizeHistoryStatus !== 'ready' && personalizeHistoryStatus !== 'error') return;
     const persistedFace = recentFaces.find(face => face.asset_id === photoAssetId);
-    if (!persistedFace?.signed_url && personalizeHistoryStatus === 'ready') {
-      setPhotoAssetId(null);
-      setPhotoStoragePath(null);
-      setPhotoPreview(null);
-      setFaceImageUrl(null);
-      setFormStep('PHOTO');
-      return;
-    }
     if (persistedFace?.signed_url) {
       setPhotoStoragePath(persistedFace.storage_path ?? null);
       setPhotoPreview(persistedFace.signed_url);
     }
     void prepareSavedPhoto(photoAssetId, persistedFace?.signed_url ?? null);
   }, [formPhotoInspection.status, formStep, personalizeHistoryStatus, photo, photoAssetId, prepareSavedPhoto,
-    recentFaces, setFaceImageUrl, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, viewState.showForm]);
+    recentFaces, setPhotoPreview, setPhotoStoragePath, viewState.showForm]);
 
   useEffect(() => {
     if (voicePlaybackUrl) return;
@@ -1441,6 +1445,7 @@ export default function PersonalizePage({
 
   const handleSelectRecentFace = useCallback((face: RecentFaceItem) => {
     if (!face.signed_url) return;
+    setReopenedPhoto(null);
     setPhoto(null);
     setPhotoPreview(face.signed_url);
     setFaceImageUrl(null);
@@ -1449,11 +1454,60 @@ export default function PersonalizePage({
     void prepareSavedPhoto(face.asset_id, face.signed_url);
   }, [prepareSavedPhoto, setFaceImageUrl, setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath]);
 
-  const retryFormPhoto = useCallback(() => {
-    if (formPhotoInspection.status === 'failed') void photoPreparation.select(formPhotoInspection.intent);
-  }, [formPhotoInspection, photoPreparation]);
+  const persistFormDraft = useCallback((photoCheckReopened: boolean) => {
+    writePersonalizeFormDraft(window.sessionStorage, bookID, {
+      version: 1, ownerKey: personalizeDraftOwnerKey, step: formStep, name, age,
+      language: selectedLang, bookType, faceAssetId: photoAssetId, faceStoragePath: photoStoragePath,
+      photoCheckReopened: photoCheckReopened || undefined,
+    });
+  }, [bookID, personalizeDraftOwnerKey, formStep, name, age, selectedLang, bookType, photoAssetId, photoStoragePath]);
+
+  const failedPhoto = formPhotoInspection.status === 'failed' ? formPhotoInspection : null;
+  const photoRecovery = failedPhoto?.reason === 'saved-photo-unavailable' ? 'chooseDevice'
+    : failedPhoto?.reason !== 'technical' ? null
+    : isReopenedPhoto ? 'library'
+    : retriedIntent === failedPhoto.intent ? 'reopen' : 'retry';
+
+  const recoverFormPhoto = () => {
+    if (!failedPhoto || photoPreparation.snapshot() !== failedPhoto) return;
+    switch (photoRecovery) {
+      case 'chooseDevice':
+        formPhotoInput.current?.click();
+        break;
+      case 'library':
+        router.push('/books');
+        break;
+      case 'reopen':
+        try {
+          persistFormDraft(true);
+          window.location.reload();
+        } catch {
+          // Keep the form on screen if this browser cannot save the draft.
+          setReopenedPhoto({ scope: photoScope, assetId: photoAssetId });
+        }
+        break;
+      case 'retry':
+        setRetriedIntent(failedPhoto.intent);
+        photoPreparation.dispose();
+        void photoPreparation.select(failedPhoto.intent);
+        break;
+    }
+  };
+  const recoveryMessage = photoRecovery === 'reopen'
+    ? t(photoAssetId ? 'personalize.photoCheck.reopenSaved' : 'personalize.photoCheck.reopenUnsaved')
+    : photoRecovery === 'library' ? t('personalize.photoCheck.browserHelp')
+    : photoRecovery === 'chooseDevice' ? t('personalize.photoCheck.deviceHelp')
+    : photoRecovery === 'retry' ? t('personalize.photoCheck.retryHelp') : facePrepareError;
+
+  useEffect(() => {
+    if (formReceipt) {
+      setRetriedIntent(null);
+      setReopenedPhoto(null);
+    }
+  }, [formReceipt]);
 
   const clearFormPhoto = useCallback(() => {
+    setReopenedPhoto(null);
     photoPreparation.clear();
     setPhoto(null);
     setPhotoPreview(null);
@@ -2597,6 +2651,10 @@ export default function PersonalizePage({
         void preparePreviewPhoto(file);
         return;
       }
+      // The first device pick after reopening an unsaved photo completes that recovery.
+      if (photo || photoAssetId) setReopenedPhoto(null);
+      if (failedPhoto?.reason === 'technical') photoPreparation.dispose();
+      setRetriedIntent(null);
       setPhoto(file);
       showLocalPhotoPreview(file);
       setPhotoAssetId(null);
@@ -2607,32 +2665,8 @@ export default function PersonalizePage({
     };
 
   useEffect(() => {
-    if (!isHydrated || !isPersonalizeDraftReady || stage !== 'FORM') return
-    writePersonalizeFormDraft(window.sessionStorage, bookID, {
-      version: 1,
-      ownerKey: personalizeDraftOwnerKey,
-      step: formStep,
-      name,
-      age,
-      language: selectedLang,
-      bookType,
-      faceAssetId: photoAssetId,
-      faceStoragePath: photoStoragePath,
-    })
-  }, [
-    age,
-    bookID,
-    bookType,
-    formStep,
-    isHydrated,
-    isPersonalizeDraftReady,
-    name,
-    personalizeDraftOwnerKey,
-    photoAssetId,
-    photoStoragePath,
-    selectedLang,
-    stage,
-  ])
+    if (isHydrated && isPersonalizeDraftReady && stage === 'FORM') persistFormDraft(isReopenedPhoto);
+  }, [isHydrated, isPersonalizeDraftReady, isReopenedPhoto, persistFormDraft, stage]);
 
 
 
@@ -2934,16 +2968,16 @@ export default function PersonalizePage({
                         photoPreview={photoPreview}
                         hasUsablePhoto={hasUsablePhoto}
                         facePrepareStatus={facePrepareStatus}
-                        facePrepareError={facePrepareError}
+                        photoInputRef={formPhotoInput}
+                        facePrepareError={recoveryMessage}
                         faceAutoCropped={hasUsablePhoto}
                         onCancelPhoto={isFacePreparing ? clearFormPhoto : undefined}
-                        onRetryPhoto={formPhotoInspection.status === 'failed' &&
-                          ['technical', 'saved-photo-unavailable'].includes(formPhotoInspection.reason) ? retryFormPhoto : undefined}
+                        onRetryPhoto={photoRecovery ? recoverFormPhoto : undefined}
                         photoLabels={{
                           uploadChildPhoto: t('personalize.uploadChildPhoto'),
                           photoChecking: t('personalize.photoChecking'),
                           photoLoading: t('personalize.photoCheck.loading'),
-                          photoRetry: t('personalize.photoCheck.retry'),
+                          photoRetry: t('personalize.photoCheck.' + (photoRecovery ?? 'retry')),
                           photoCancel: t('personalize.photoCheck.cancel'),
                           photoPreparing: t('personalize.photoPreparing'),
                           photoReady: t('personalize.photoReady'),
@@ -3008,7 +3042,7 @@ export default function PersonalizePage({
                           privacyPolicy: t('personalize.privacyPolicy'),
                           required: t('personalize.requiredLabel'),
                           photoPreparing: t('personalize.photoPreparing'),
-                          photoNeedsFix: t('personalize.photoNeedsFix'),
+                          photoNeedsFix: t(photoRecovery ? 'personalize.photoCheck.incomplete' : 'personalize.photoNeedsFix'),
                           dataConsentRequiredShort: t('personalize.dataConsentRequiredShort'),
                           generateMagicPreview: t('personalize.generateMagicPreview'),
                           completeDetails: t('personalize.completeDetails'),
