@@ -58,7 +58,7 @@ export const Footer: React.FC = () => {
   const quickAnswers = useMemo(
     () => [
       'Illustrations are inspired by your photos, not exact replicas.',
-      'Personalized products cannot be refunded once production begins.',
+      'Personalised products cannot be refunded once production begins.',
       'We never use your or your child\'s data to train AI.',
     ],
     []
@@ -71,7 +71,7 @@ export const Footer: React.FC = () => {
         accentClassName: 'bg-emerald-400',
         items: [
           {
-            question: 'What is a personalized YMI book?',
+            question: 'What is a personalised YMI book?',
             answer:
               'Each YMI book is a one-of-a-kind product created using your child\'s photos, personal details, and optional voice input. Our system generates a unique story, illustrations, and overall experience tailored specifically to your submission.',
           },
@@ -98,7 +98,7 @@ export const Footer: React.FC = () => {
         ],
       },
       {
-        title: '2. Photos, Voice & Personalization',
+        title: '2. Photos, Voice & Personalisation',
         accentClassName: 'bg-yellow-400',
         items: [
           {
@@ -108,7 +108,7 @@ export const Footer: React.FC = () => {
           },
           {
             question: 'How many photos can I upload?',
-            answer: 'You can upload multiple photos. We generally recommend 1-5 photos to improve personalization quality.',
+            answer: 'You can upload multiple photos. We generally recommend 1-5 photos to improve personalisation quality.',
           },
           {
             question: 'What happens if I upload poor-quality photos?',
@@ -118,7 +118,7 @@ export const Footer: React.FC = () => {
           {
             question: 'How does the voice feature work?',
             answer:
-              'You may upload a short audio sample to personalize the voice experience. The generated voice reflects tone and style, but is not an exact replica.',
+              'You may upload a short audio sample to personalise the voice experience. The generated voice reflects tone and style, but is not an exact replica.',
           },
           {
             question: 'Can I upload any voice recording?',
@@ -197,12 +197,12 @@ export const Footer: React.FC = () => {
           {
             question: 'Can I request a refund?',
             answer:
-              'Because each product is personalized, refunds are generally not available once production begins.',
+              'Because each product is personalised, refunds are generally not available once production begins.',
           },
           {
             question: 'What situations are eligible for replacement or refund?',
             answer: 'We may offer a replacement or resolution in limited cases.',
-            bullets: ['Defective product.', 'Incorrect personalization caused by our error.', 'Damage during shipping.'],
+            bullets: ['Defective product.', 'Incorrect personalisation caused by our error.', 'Damage during shipping.'],
           },
           {
             question: 'What is NOT considered a defect?',
@@ -221,7 +221,7 @@ export const Footer: React.FC = () => {
         items: [
           {
             question: 'How does YMI use AI?',
-            answer: 'We use AI to generate personalized stories, illustrations, and optional voice features.',
+            answer: 'We use AI to generate personalised stories, illustrations, and optional voice features.',
           },
           {
             question: 'Are the results always the same?',
@@ -234,7 +234,7 @@ export const Footer: React.FC = () => {
           {
             question: 'Do you use my data to train AI?',
             answer:
-              'No. Your photos, voice recordings, and personal data are used only to create your personalized product. We do not use your or your child\'s data to train AI models, and your content is never reused for other users.',
+              'No. Your photos, voice recordings, and personal data are used only to create your personalised product. We do not use your or your child\'s data to train AI models, and your content is never reused for other users.',
           },
         ],
       },
@@ -244,7 +244,7 @@ export const Footer: React.FC = () => {
         items: [
           {
             question: 'How is my data used?',
-            answer: 'Your data is used only to create and deliver your personalized product.',
+            answer: 'Your data is used only to create and deliver your personalised product.',
           },
           {
             question: 'Do you use my data to train AI models?',

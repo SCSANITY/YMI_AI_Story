@@ -18,7 +18,7 @@ export default async function LegalPage() {
     <LegalPageShell
       eyebrow="YMI Story Legal"
       title="Policies and terms"
-      description="Review the policies that govern how YMI Story protects your information, provides personalized products, and fulfills your orders."
+      description="Review the policies that govern how YMI Story protects your information, provides personalised products, and fulfills your orders."
     >
       <div className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         {documents.map((document) => (

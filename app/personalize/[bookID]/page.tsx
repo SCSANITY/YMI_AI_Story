@@ -34,10 +34,10 @@ export async function generateMetadata({
   const book = await loadActiveTemplateDetail(templateId)
   if (!book) notFound()
 
-  const title = String(book?.title || templateId || 'Personalized Storybook').trim()
+  const title = String(book?.title || templateId || 'Personalised Storybook').trim()
   const baseDescription =
     String(book?.description || '').trim() ||
-    `Create a personalized YMI Story picture book where your child becomes the hero.`
+    `Create a personalised YMI Story picture book where your child becomes the hero.`
   const description = clampDescription(baseDescription)
 
   return {

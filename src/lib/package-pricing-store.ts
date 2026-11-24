@@ -74,7 +74,7 @@ export async function loadAuthoritativeCreationPackagePrice(args: {
   }
 
   if (packageType === 'digital' && !creation.preview_job_id) {
-    throw new PackagePricingStoreError('A personalized Preview is required for this PDF', 409)
+    throw new PackagePricingStoreError('A personalised Preview is required for this PDF', 409)
   }
 
   if (packageType === 'supreme' && creation.voice_asset_id) {

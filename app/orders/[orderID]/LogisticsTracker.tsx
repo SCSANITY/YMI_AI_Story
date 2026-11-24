@@ -11,7 +11,7 @@ type StageKey = 'confirmed' | 'printing' | 'shipped' | 'delivered'
 
 const STAGES: { key: StageKey; icon: React.ElementType; label: string; desc: string }[] = [
   { key: 'confirmed', icon: Package, label: 'Order Confirmed', desc: 'Payment received & order locked in' },
-  { key: 'printing', icon: BookOpen, label: 'Printing', desc: 'Your personalized storybook is being crafted' },
+  { key: 'printing', icon: BookOpen, label: 'Printing', desc: 'Your personalised storybook is being crafted' },
   { key: 'shipped', icon: Truck, label: 'Shipped', desc: 'On its way to you' },
   { key: 'delivered', icon: CircleCheck, label: 'Delivered', desc: 'Arrived at your door' },
 ]

@@ -5,7 +5,7 @@ import { publicPageMetadata } from '@/lib/seo'
 
 export const metadata: Metadata = publicPageMetadata({
   title: 'Community',
-  description: 'Read YMI Story updates, family storytelling ideas, product announcements, and personalized storybook inspiration.',
+  description: 'Read YMI Story updates, family storytelling ideas, product announcements, and personalised storybook inspiration.',
   path: '/community',
 })
 

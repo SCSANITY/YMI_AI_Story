@@ -2978,7 +2978,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
                         discountPercent={fromPackagePrice?.discountPercent}
                         ctaLabel={t('personalize.personalizeThisBook')}
                         originalHref={originalAvailable ? '/checkout/original/' + encodeURIComponent(bookID) : undefined}
-                        floatingCtaLabel={t('product.personalize')}
                         faqHeading={t('personalize.aboutThisStory')}
                         faqItems={bookFaqItems}
                         onStart={handleStartFromProductIntro}

@@ -8,7 +8,7 @@ import { resolvePreviewShareDisplayTitle } from '@/lib/share-preview'
 import { CustomizeAccessButton } from '@/components/CustomizeAccessButton'
 
 const DEFAULT_PREVIEW_CAPTION =
-  'A child becomes the hero of a magical YMI Story picture book. Take a peek at this personalized preview and imagine the adventure inside.'
+  'A child becomes the hero of a magical YMI Story picture book. Take a peek at this personalised preview and imagine the adventure inside.'
 
 async function loadPreviewShare(token: string) {
   const { data } = await supabaseAdmin
@@ -127,7 +127,7 @@ export default async function PreviewSharePage(
               YMI Preview
             </div>
             <h1 className="mt-4 text-3xl font-title leading-tight text-gray-900 sm:mt-5 sm:text-4xl md:text-5xl">
-              A Personalized Storybook Worth Sharing
+              A Personalised Storybook Worth Sharing
             </h1>
             <p className="mt-3 break-words text-sm leading-6 text-gray-600 sm:mt-4 sm:text-base sm:leading-7">
               {caption}

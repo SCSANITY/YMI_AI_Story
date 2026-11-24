@@ -143,9 +143,9 @@ export function OrderMaterialsClient({orderId,voiceLineId}:{orderId:string;voice
       <button type="button" disabled={busy} className="text-sm underline" onClick={()=>{setError('');void load().catch(()=>setError('Unable to refresh the current status. Please try again.'))}}>Reload current status</button>
       {materials.items.filter(item=>!voiceLineId || (item.cart_item_id===voiceLineId && item.edition==='original' && item.package_type==='supreme')).map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
         <div className="flex items-center gap-4">
-          <OrderCoverImage src={item.book?.cover_url} status={item.book?.cover_status} alt={item.book?.title || 'Your personalized book'}
+          <OrderCoverImage src={item.book?.cover_url} status={item.book?.cover_status} alt={item.book?.title || 'Your personalised book'}
             sizes="80px" className="h-20 w-20 shrink-0 rounded-xl" imageClassName="object-contain" placeholderLabel="Book cover"/>
-          <h2 className="min-w-0 break-words font-serif text-xl">{item.book?.title || 'Your personalized book'}</h2>
+          <h2 className="min-w-0 break-words font-serif text-xl">{item.book?.title || 'Your personalised book'}</h2>
         </div>
         {item.edition!=='original' && <DedicationEditor key={`${item.cart_item_id}:${item.dedication.revision}`} item={item} save={save} busy={busy}/>}
         {item.package_type==='supreme'?<div className="mt-5 border-t pt-4"><h3 className="font-semibold">Your Signature Voice recording</h3>

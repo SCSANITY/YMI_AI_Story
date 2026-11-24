@@ -25,7 +25,6 @@ type PersonalizeProductIntroProps = {
   discountPercent?: number | null
   ctaLabel: string
   originalHref?: string
-  floatingCtaLabel?: string
   faqHeading: string
   faqItems: Array<{ question: string; answer: string }>
   onStart: () => void
@@ -40,6 +39,19 @@ const FACT_ICONS = {
 
 const PERSONALIZE_BUTTON_CLASS = 'glass-action-btn glass-action-btn--brand h-13 w-full rounded-xl text-base font-bold sm:h-14'
 
+function StandardBookLink({ href }: { href: string }) {
+  const noteId = useId()
+  return (
+    <a href={href} aria-label="Standard Version" aria-describedby={noteId}
+      className="glass-action-btn glass-action-btn--neutral flex min-h-[54px] min-w-0 flex-col items-center justify-center gap-[3px] rounded-[14px] px-4 py-[9px] text-center text-[15px] leading-[19px] font-semibold focus-visible:ring-2 focus-visible:ring-amber-500">
+      Standard Version
+      <small id={noteId} className="text-balance text-[11.5px] leading-[15px] font-normal text-[#696159]">
+        Enjoy the story with its original character.
+      </small>
+    </a>
+  )
+}
+
 function PersonalizeProductIntroComponent({
   eyebrow,
   title,
@@ -53,7 +65,6 @@ function PersonalizeProductIntroComponent({
   discountPercent,
   ctaLabel,
   originalHref,
-  floatingCtaLabel = ctaLabel,
   faqHeading,
   faqItems,
   onStart,
@@ -156,7 +167,7 @@ function PersonalizeProductIntroComponent({
             ) : null}
           </div>
         </div>
-        <div className={originalHref ? 'mt-4 grid gap-2 sm:grid-cols-2' : 'mt-4'}>
+        <div className={originalHref ? 'mt-4 grid gap-1.5 md:grid-cols-2 md:gap-2' : 'mt-4'}>
           <Button
             ref={personalizeButtonRef}
             id={personalizeButtonId}
@@ -167,16 +178,12 @@ function PersonalizeProductIntroComponent({
           >
             {ctaLabel}
           </Button>
-          {originalHref && (
-            <a href={originalHref} className="glass-action-btn glass-action-btn--neutral inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-center text-sm font-semibold focus-visible:ring-2 focus-visible:ring-amber-500">
-              Buy the original edition
-            </a>
-          )}
+          {originalHref && <StandardBookLink href={originalHref} />}
         </div>
       </div>
       {needsScrollGuide ? createPortal(
         <div ref={floatingRef} data-customize-floating-cta data-theme={night ? 'night' : 'day'}
-          className={`fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-2 rounded-2xl md:gap-5 border px-4 py-2.5 shadow-lg backdrop-blur-xl transition-colors motion-reduce:transition-none md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:rounded-full md:px-5 ${night ? 'border-white/20 bg-[rgba(26,22,48,.86)] text-[#fff4e0]' : 'border-white/80 bg-white/85 text-stone-800'}`}>
+          className={`fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-30 rounded-2xl border ${originalHref ? 'grid grid-cols-1 gap-1.5 p-1.5 md:grid-cols-[auto_auto_auto] md:items-center md:gap-2.5 md:p-2' : 'flex items-center justify-between gap-2 px-4 py-2.5'} shadow-lg backdrop-blur-xl transition-colors motion-reduce:transition-none md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-max md:max-w-[calc(100vw-1.5rem)] md:rounded-2xl ${night ? 'border-white/20 bg-[rgba(26,22,48,.86)] text-[#fff4e0]' : 'border-white/80 bg-white/85 text-stone-800'}`}>
           <span className={originalHref ? "hidden whitespace-nowrap md:inline" : "whitespace-nowrap text-[13px] md:text-sm"}>{fromLabel} <strong>{priceLabel}</strong></span>
           <Button
             type="button"
@@ -184,13 +191,11 @@ function PersonalizeProductIntroComponent({
             aria-controls={personalizeButtonId}
             aria-label={ctaLabel}
             onClick={onStart}
-            className="glass-action-btn glass-action-btn--brand min-h-11 rounded-full px-6 text-sm font-bold"
+            className={PERSONALIZE_BUTTON_CLASS}
           >
-            {floatingCtaLabel}
+            {ctaLabel}
           </Button>
-          {originalHref && <a href={originalHref} className="glass-action-btn glass-action-btn--neutral inline-flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-full px-3 text-sm font-semibold md:flex-none">
-            Buy original
-          </a>}
+          {originalHref && <StandardBookLink href={originalHref} />}
         </div>,
         document.body,
       ) : null}

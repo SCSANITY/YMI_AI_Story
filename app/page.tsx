@@ -14,9 +14,9 @@ export const revalidate = 300;
 
 export const metadata: Metadata = {
   ...publicPageMetadata({
-    title: 'Personalized Children\'s Storybooks',
+    title: 'Personalised Children\'s Storybooks',
     absoluteTitle: DEFAULT_SITE_TITLE,
-    description: 'Create magical personalized storybooks where your child becomes the hero through AI-powered illustrated previews, keepsake PDFs, and family-ready storytelling.',
+    description: 'Create magical personalised storybooks where your child becomes the hero through AI-powered illustrated previews, keepsake PDFs, and family-ready storytelling.',
     path: '/',
   }),
   title: { absolute: HOME_SEARCH_TITLE },

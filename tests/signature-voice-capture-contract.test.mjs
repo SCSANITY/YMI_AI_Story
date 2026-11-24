@@ -123,7 +123,7 @@ test('Signature Voice v3 discloses synthetic narration and retention in one auth
   assert.doesNotMatch(messages, /voiceRecorder\.(?:speakerTitle|speakerChild|speakerAdult|authorizationChild|authorizationAdult)/)
   assert.match(privacy, /you should have the permission or authority required by applicable law to provide and use that content for the requested product/)
   assert.match(privacy, /parental or guardian consent for the collection, use, or disclosure of a child's personal information/)
-  assert.match(privacy, /synthetic voice and generated narration only for the personalized physical book covered by your consent/)
+  assert.match(privacy, /synthetic voice and generated narration only for the personalised physical book covered by your consent/)
   assert.doesNotMatch(privacy, /confirms that they are the child\\'s parent or legal guardian/)
   assert.match(privacy, /same retention schedule applies whether the narrator is the child in the book or an adult/)
   assert.match(privacy, /access limited to authorized personnel/)

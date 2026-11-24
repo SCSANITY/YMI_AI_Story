@@ -24,11 +24,11 @@ test('Product Intro server markup retains the native CTA and excludes the client
   let started = false
   const html = renderToStaticMarkup(<PersonalizeProductIntro
     eyebrow="Your story" title="A little adventure" description="A printed keepsake."
-    facts={[]} fromLabel="From" priceLabel="$35.90" ctaLabel="Personalize this book"
+    facts={[]} fromLabel="From" priceLabel="$35.90" ctaLabel="Personalise this book"
     faqHeading="About this story" faqItems={[]}
     onStart={() => { started = true }}
   />)
-  assert.match(html, /Personalize this book/)
+  assert.match(html, /Personalise this book/)
   assert.match(html, /scroll-mt-24/)
   assert.doesNotMatch(html, /Scroll to |fixed inset-x-0/)
   assert.equal(started, false)

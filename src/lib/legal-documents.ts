@@ -40,7 +40,7 @@ const LEGAL_DOCUMENT_DEFINITIONS: Record<CanonicalLegalDocumentKey, LegalDocumen
     title: 'Terms and Conditions',
     shortTitle: 'Terms',
     description:
-      'Review the terms that apply when using YMI Story, uploading personalization materials, and placing an order.',
+      'Review the terms that apply when using YMI Story, uploading personalisation materials, and placing an order.',
     path: '/terms',
     effectiveDate: 'March 12, 2026',
     version: '2026-03-12',
@@ -60,7 +60,7 @@ const LEGAL_DOCUMENT_DEFINITIONS: Record<CanonicalLegalDocumentKey, LegalDocumen
     title: 'Refund Policy',
     shortTitle: 'Refunds',
     description:
-      'Review YMI Story cancellation, replacement, and refund terms for personalized products.',
+      'Review YMI Story cancellation, replacement, and refund terms for personalised products.',
     path: '/refund-policy',
     effectiveDate: 'May 11, 2026',
     version: '2026-05-11',

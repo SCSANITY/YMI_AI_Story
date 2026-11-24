@@ -4,7 +4,7 @@ import SupportPageClient from '@/components/SupportPageClient'
 
 export const metadata: Metadata = publicPageMetadata({
   title: 'Support',
-  description: 'Get help with your YMI Story order, personalization flow, delivery, or account questions.',
+  description: 'Get help with your YMI Story order, personalisation flow, delivery, or account questions.',
   path: '/support',
 })
 

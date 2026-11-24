@@ -124,11 +124,11 @@ export async function DELETE(request: Request) {
 
   if (deleteError) {
     if (deleteError.message?.includes('face_asset_bound')) {
-      return NextResponse.json({ error: 'This photo is used by a personalized book and cannot be deleted' }, { status: 409 })
+      return NextResponse.json({ error: 'This photo is used by a personalised book and cannot be deleted' }, { status: 409 })
     }
     if (deleteError.message?.includes('voice_asset_bound')) {
       return NextResponse.json(
-        { error: 'This recording is bound to a personalized book and cannot be deleted' },
+        { error: 'This recording is bound to a personalised book and cannot be deleted' },
         { status: 409 }
       )
     }

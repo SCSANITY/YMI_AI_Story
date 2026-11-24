@@ -164,10 +164,10 @@ const privacyEn: LegalSection[] = [
         text: 'We retain personal information only for as long as reasonably necessary for the purposes described in this Privacy Policy.',
       },
       {
-        text: 'We keep uploaded assets and generated content only as long as needed for personalization, fulfillment, support, and reasonable operational needs.',
+        text: 'We keep uploaded assets and generated content only as long as needed for personalisation, fulfillment, support, and reasonable operational needs.',
       },
       {
-        text: 'Signature Voice uses a short authorized child or adult voice sample to create a synthetic voice and generated narration only for the personalized physical book covered by your consent. The same retention schedule applies whether the narrator is the child in the book or an adult. Processing may be performed manually and with authorized service providers, with access limited to authorized personnel. The following operational retention periods apply unless a legal hold, active dispute, fraud review, or other binding obligation requires a limited extension.',
+        text: 'Signature Voice uses a short authorized child or adult voice sample to create a synthetic voice and generated narration only for the personalised physical book covered by your consent. The same retention schedule applies whether the narrator is the child in the book or an adult. Processing may be performed manually and with authorized service providers, with access limited to authorized personnel. The following operational retention periods apply unless a legal hold, active dispute, fraud review, or other binding obligation requires a limited extension.',
       },
       {
         text: 'Eligible deletion requests remove platform copies when legal and operational holds no longer apply. Deleting YMI Story\'s platform copies cannot remotely erase narration already loaded onto and delivered inside a physical book.',
@@ -272,7 +272,7 @@ const termsEn: LegalSection[] = [
   {
     paragraphs: [
       {
-        text: 'Welcome to YMI. By placing an order, uploading materials, or using our personalization tools, you confirm that you have read and accepted these Terms and Conditions.',
+        text: 'Welcome to YMI. By placing an order, uploading materials, or using our personalisation tools, you confirm that you have read and accepted these Terms and Conditions.',
       },
     ],
   },
@@ -281,7 +281,7 @@ const termsEn: LegalSection[] = [
     paragraphs: [
       {
         label: '1.1 Customized Product:',
-        text: 'YMI provides personalized print, audio, and preview services that are made specifically for each order.',
+        text: 'YMI provides personalised print, audio, and preview services that are made specifically for each order.',
       },
       {
         label: '1.2 Final Sale Principle:',
@@ -302,11 +302,11 @@ const termsEn: LegalSection[] = [
       },
       {
         label: '2.3 Limited License:',
-        text: 'You grant YMI a limited license to process submitted materials only for personalization, production, and support for your order.',
+        text: 'You grant YMI a limited license to process submitted materials only for personalisation, production, and support for your order.',
       },
       {
         label: '2.4 Voice and Biometric Processing:',
-        text: 'Where applicable, uploaded voice or facial materials may be processed as part of AI personalization for your order only, and not for unrelated commercial use.',
+        text: 'Where applicable, uploaded voice or facial materials may be processed as part of AI personalisation for your order only, and not for unrelated commercial use.',
       },
     ],
   },
@@ -516,7 +516,7 @@ const shippingPolicyEn: LegalSection[] = [
     paragraphs: [
       { text: 'We ship worldwide.' },
       {
-        text: 'Because each YMI story book is personalized, your order goes through a careful creation process before shipping.',
+        text: 'Because each YMI story book is personalised, your order goes through a careful creation process before shipping.',
       },
     ],
   },
@@ -524,7 +524,7 @@ const shippingPolicyEn: LegalSection[] = [
     title: 'Processing Time (Production)',
     paragraphs: [
       {
-        text: 'Orders are typically processed within 5-10 business days. This includes creating your personalized story, illustrations, and production.',
+        text: 'Orders are typically processed within 5-10 business days. This includes creating your personalised story, illustrations, and production.',
       },
     ],
   },
@@ -589,7 +589,7 @@ const refundPolicyEn: LegalSection[] = [
   {
     paragraphs: [
       {
-        text: 'Due to the personalized nature of our products, all orders are considered final once they have entered production. Production typically begins shortly after order confirmation.',
+        text: 'Due to the personalised nature of our products, all orders are considered final once they have entered production. Production typically begins shortly after order confirmation.',
       },
       {
         text: 'We offer a 30-day replacement guarantee under the following conditions:',
@@ -597,7 +597,7 @@ const refundPolicyEn: LegalSection[] = [
     ],
     bullets: [
       { text: 'Defective product' },
-      { text: 'Incorrect personalization caused by our error' },
+      { text: 'Incorrect personalisation caused by our error' },
       { text: 'Damage during shipping' },
     ],
   },

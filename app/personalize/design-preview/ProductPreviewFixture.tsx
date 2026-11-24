@@ -32,7 +32,7 @@ const PRICING = packagePriceRowsToPricing([
 const ProductSections = dynamic(() => import("@/components/personalize/product/ProductSections"));
 const BANNER: PublishedHomepageBanner = {
   slotKey: "after_in_discount",
-  displayName: "Personalize this book",
+  displayName: "Personalise this book",
   desktop: {
     src: "/banners/optimized/banner-01-desktop.webp",
     width: 2400,
@@ -143,7 +143,7 @@ export function ProductPreviewFixture({ baseline }: { baseline: boolean }) {
                     { icon: "age", label: "Recommended for Ages 4+" },
                     {
                       icon: "personalized",
-                      label: "Personalized with their name and photo",
+                      label: "Personalised with their name and photo",
                     },
                     { icon: "preview", label: "Preview before you order" },
                     {
@@ -155,8 +155,8 @@ export function ProductPreviewFixture({ baseline }: { baseline: boolean }) {
                   priceLabel={formatDisplayCurrency(PRICING.basic.effectivePriceUsd, currency)}
                   compareAtPriceLabel={formatDisplayCurrency(PRICING.basic.listPriceUsd, currency)}
                   discountPercent={PRICING.basic.discountPercent}
-                  ctaLabel="Personalize this book"
-                  floatingCtaLabel="Personalize"
+                  ctaLabel="Personalise this book"
+                  originalHref="/checkout/original/Christmasboy_story"
                   faqHeading="About this story"
                   faqItems={[
                     {
