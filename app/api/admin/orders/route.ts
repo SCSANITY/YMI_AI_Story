@@ -15,7 +15,7 @@ import {
   normalizeAdminOrderView,
   resolveAdminOrderViewForStatus,
   type AdminOrderCartItem,
-  type AdminOrderFinalJob,
+  type BookReleaseCounts,
 } from '@/lib/admin-orders'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
@@ -24,6 +24,9 @@ const ORDER_SELECT = `
   order_id,
   display_id,
   order_status,
+  book_progress,
+  book_progress_manual,
+  book_release_counts,
   payment_id,
   customer_id,
   email,
@@ -84,6 +87,8 @@ export async function GET(request: Request) {
   if (focusedOrderId) {
     query = query.eq('order_id', focusedOrderId).limit(1)
   } else {
+    if (view === 'preview_ready' || view === 'pdf_ready') query = query.eq('book_progress', view)
+    if (view === 'active') query = query.or('order_status.neq.paid,book_progress.is.null,book_progress.neq.pdf_ready')
     query = query.in('order_status', statuses).range(rangeStart, rangeEnd)
   }
 
@@ -111,7 +116,7 @@ export async function GET(request: Request) {
     return jsonNoStore({ error: error.message }, { status: 500 })
   }
 
-  type OrderResult = { order_id: string; customer_id: string | null; order_status: string; shipping_address: unknown }
+  type OrderResult = { book_release_counts: BookReleaseCounts; book_progress: string | null; order_id: string; customer_id: string | null; order_status: string; shipping_address: unknown }
   const orders = (data ?? []) as unknown as OrderResult[]
   const orderIds = orders.map((order) => String(order.order_id))
   const customerIds = Array.from(
@@ -186,11 +191,10 @@ export async function GET(request: Request) {
   }
 
   const reviewByGeneration = new Map<string, { id: string; creation: string | null; order: string; line: string | null }>()
-  const finalJobs: AdminOrderFinalJob[] = []
   if (linkedGenerationJobIds.size > 0) {
     const { data: jobRows, error: finalJobsError } = await supabaseAdmin
       .from('final_jobs')
-      .select('final_job_id, job_id, order_id, cart_item_id, creation_id, review_status, released_at, print_status, print_released_at')
+      .select('final_job_id, job_id, order_id, cart_item_id, creation_id')
       .in('job_id', Array.from(linkedGenerationJobIds))
 
     if (finalJobsError) {
@@ -198,14 +202,6 @@ export async function GET(request: Request) {
     }
     for (const job of jobRows ?? []) {
       reviewByGeneration.set(job.job_id, { id: job.final_job_id, creation: job.creation_id, order: job.order_id, line: job.cart_item_id })
-      finalJobs.push({
-        final_job_id: String(job.final_job_id),
-        job_id: String(job.job_id),
-        review_status: job.review_status ? String(job.review_status) : null,
-        released_at: job.released_at ? String(job.released_at) : null,
-        print_status: job.print_status ? String(job.print_status) : null,
-        print_released_at: job.print_released_at ? String(job.print_released_at) : null,
-      })
     }
   }
 
@@ -213,20 +209,11 @@ export async function GET(request: Request) {
     const orderId = String(order.order_id)
     const customer = order.customer_id ? customerById.get(String(order.customer_id)) : null
     const cartItems = cartItemsByOrderId.get(orderId) ?? []
-    const linkedJobIds = new Set(
-      cartItems
-        .map((item) => item.generation_job_id)
-        .filter((jobId): jobId is string => Boolean(jobId))
-    )
-
     return {
       ...order,
       customer_display_name: customer?.display_name ?? null,
       customer_account_email: customer?.email ?? null,
-      production_progress: aggregateAdminOrderProgress(
-        cartItems,
-        finalJobs.filter((job) => linkedJobIds.has(job.job_id))
-      ),
+      production_progress: aggregateAdminOrderProgress(cartItems, order.book_release_counts),
       shipping_address: normalizeShippingAddress(order.shipping_address),
       books: cartItems.map(item => {
         const review = item.generation_job_id ? reviewByGeneration.get(item.generation_job_id) : null
@@ -242,7 +229,7 @@ export async function GET(request: Request) {
   })
 
   const responseView = focusedOrderId && enrichedOrders[0]
-    ? resolveAdminOrderViewForStatus(enrichedOrders[0].order_status)
+    ? resolveAdminOrderViewForStatus(enrichedOrders[0].order_status, enrichedOrders[0].book_progress)
     : view
   const total = focusedOrderId ? enrichedOrders.length : count ?? 0
   return jsonNoStore({

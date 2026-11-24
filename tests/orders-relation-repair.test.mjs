@@ -15,9 +15,9 @@ function load(path,injections={},globals={}) {
  return mod.exports
 }
 
-function reader({fail=false, releases=[], orderStatus='paid', lineStatuses=['ordered','ordered'], digital=[], signingAvailable=true}={}) {
+function reader({fail=false, releases=[], orderStatus='paid', lineStatuses=['ordered','ordered'], digital=[], signingAvailable=true, bookProgress=null}={}) {
  const queries=[]
- const order={order_id:'order-a',customer_id:'owner-a',order_status:orderStatus,payment_id:'payment-a',checkout_currency:'USD',
+ const order={order_id:'order-a',customer_id:'owner-a',order_status:orderStatus,book_progress:bookProgress,payment_id:'payment-a',checkout_currency:'USD',
   cart_items:['one','two'].map((id,index)=>({cart_item_id:id,creation_id:'creation-'+id,final_job_id:'final-'+id,status:lineStatuses[index],product_type:digital.includes(id)?'ebook':'physical',package_type:digital.includes(id)?'digital':'supreme',quantity:1,price_at_purchase:89,
    creations:{creation_id:'creation-'+id,template_id:'story-'+id,preview_job_id:'job-'+id,templates:{name:'Book '+id}}}))}
  const supabaseAdmin={from(table){
@@ -121,13 +121,13 @@ async function detail(options) {
 
 test('first released PDF unlocks Preview Ready, all physical print releases unlock Printing',async()=>{
  const releases=[released('one',{printReleased:true})]
- const first=(await detail({releases})).progress
+ const first=(await detail({releases,bookProgress:'preview_ready'})).progress
  assert.equal(first.stage,'preview_ready')
  assert.deepEqual([first.readyPdfs,first.books,first.releasedForPrint,first.physicalBooks],[1,2,1,2])
  releases.push(released('two'))
- assert.equal((await detail({releases})).progress.stage,'preview_ready')
+ assert.equal((await detail({releases,bookProgress:'preview_ready'})).progress.stage,'preview_ready')
  releases[1][1].printReleased=true
- assert.equal((await detail({releases})).progress.stage,'printing')
+ assert.equal((await detail({releases,orderStatus:'production'})).progress.stage,'printing')
 })
 
 test('PDF-only completes after all books, mixed orders count only physical books for Printing',async()=>{
@@ -135,18 +135,18 @@ test('PDF-only completes after all books, mixed orders count only physical books
  const digital=['one','two']
  assert.equal((await detail({releases,digital})).progress.stage,'confirmed')
  releases.push(released('two'))
- const ready=(await detail({releases,digital})).progress
+ const ready=(await detail({releases,digital,bookProgress:'pdf_ready'})).progress
  assert.equal(ready.digitalOnly,true)
  assert.equal(ready.stage,'pdf_ready')
  releases[1][1].printReleased=true
- const mixed=(await detail({releases,digital:['one']})).progress
+ const mixed=(await detail({releases,digital:['one'],orderStatus:'production'})).progress
  assert.equal(mixed.stage,'printing')
  assert.equal(mixed.physicalBooks,1)
 })
 
 test('reused PDF does not count as a print release, a missing signed URL cannot erase publication',async()=>{
  const releases=[released('one',{orderId:'original-order',printReleased:true}),released('two',{creationId:'wrong'})]
- const order=await detail({releases,signingAvailable:false})
+ const order=await detail({releases,signingAvailable:false,bookProgress:'preview_ready'})
  assert.equal(order.items[0].final_pdf_url,null)
  assert.equal(order.progress.stage,'preview_ready')
  assert.equal(order.progress.readyPdfs,1)

@@ -5,7 +5,7 @@ import { loadOrderCoverUrl } from '@/lib/orderFulfillment'
 import { stampSignatureVoiceShipmentIntegrity } from '@/lib/signature-voice-fulfillment-server'
 import { shouldSendLogisticsUpdateEmail, type LogisticsPatch } from '@/lib/order-logistics'
 
-const LOGISTICS_ORDER_SELECT = 'order_id,display_id,order_status,payment_id,customer_id,email,created_at,checkout_currency,shipping_method,shipping_zone_code,tracking_number,tracking_carrier,tracking_url,logistics_note,shipped_at,delivered_at,logistics_updated_at'
+const LOGISTICS_ORDER_SELECT = 'order_id,display_id,order_status,book_progress,book_progress_manual,payment_id,customer_id,email,created_at,checkout_currency,shipping_method,shipping_zone_code,tracking_number,tracking_carrier,tracking_url,logistics_note,shipped_at,delivered_at,logistics_updated_at'
 
 export async function loadLogisticsOrder(orderId: string) {
   const { data, error } = await supabaseAdmin.from('orders').select(LOGISTICS_ORDER_SELECT).eq('order_id', orderId).maybeSingle()
@@ -16,6 +16,10 @@ export async function loadLogisticsOrder(orderId: string) {
 type LogisticsOrder = Awaited<ReturnType<typeof loadLogisticsOrder>>
 export async function saveOrderLogistics(order: LogisticsOrder, adminId: string, expectedUpdatedAt: string | null, patch: LogisticsPatch) {
   const nextStatus = patch.orderStatus || order.order_status
+  if (['paid','production'].includes(String(order.order_status)) && nextStatus !== order.order_status &&
+      ['paid','production'].includes(String(nextStatus))) {
+    throw new Error('Use the production stage control to correct this order')
+  }
   if ((nextStatus === 'shipped' || nextStatus === 'delivered') && order.order_status !== 'shipped' && order.order_status !== 'delivered') {
     await stampSignatureVoiceShipmentIntegrity({ orderId: order.order_id, adminCustomerId: adminId })
   }

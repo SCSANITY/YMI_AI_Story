@@ -91,7 +91,7 @@ export function OrdersList({
                   {formatMajorCurrencyValue(Number(order.total ?? 0), order.display_currency ?? 'USD')}
                 </div>
                 <div className="text-xs mt-1 text-amber-700 font-semibold">
-                  {t(getOrderStatusLabelKey(order.order_status))}
+                  {t(getOrderStatusLabelKey(order.order_status, order.book_progress))}
                 </div>
               </div>
             </button>

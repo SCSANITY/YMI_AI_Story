@@ -11,6 +11,10 @@ import {
 
 test('admin order views keep active production separate from delivered history', () => {
   assert.equal(normalizeAdminOrderView('active'), 'active')
+  assert.ok(adminOrderMatchesView('paid','pdf_ready','pdf_ready'))
+  assert.ok(!adminOrderMatchesView('paid','active','pdf_ready'))
+  assert.ok(adminOrderMatchesView('paid','preview_ready','preview_ready'))
+  assert.ok(!adminOrderMatchesView('shipped','preview_ready','preview_ready'))
   assert.equal(normalizeAdminOrderView('unknown'), 'active')
   assert.equal(adminOrderMatchesView('paid', 'active'), true)
   assert.equal(adminOrderMatchesView('production', 'active'), true)
@@ -27,7 +31,7 @@ test('admin order query inputs are bounded before reaching PostgREST', () => {
   assert.equal(normalizeAdminOrderPageSize('100'), 50)
 })
 
-test('production progress follows cart item job links and deduplicates reused jobs', () => {
+test('production progress follows cart item job links and shows each purchased line and counts copies only for the item total', () => {
   const progress = aggregateAdminOrderProgress(
     [
       {
@@ -55,25 +59,16 @@ test('production progress follows cart item job links and deduplicates reused jo
         quantity: 1,
       },
     ],
-    [
-      {
-        final_job_id: 'final-review-shared',
-        job_id: 'job-shared',
-        review_status: 'released',
-        released_at: null,
-        print_status: 'released',
-        print_released_at: null,
-      },
-    ]
+    { books: 3, published: 1, printed: 1, physical: 2, missing_jobs: 1 }
   )
 
   assert.deepEqual(progress, {
     itemCount: 4,
-    assetCount: 2,
+    assetCount: 3,
     missingJobCount: 1,
     pdfReleasedCount: 1,
-    pdfTotalCount: 2,
+    pdfTotalCount: 3,
     printReleasedCount: 1,
-    printTotalCount: 1,
+    printTotalCount: 2,
   })
 })

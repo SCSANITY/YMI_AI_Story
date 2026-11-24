@@ -105,7 +105,7 @@ test('desktop Admin scroll ownership stays lg-gated while mobile keeps document 
 
 test('every exported Admin API method performs its own authorization check', async () => {
   const routeFiles = await listFiles('app/api/admin', 'route.ts')
-  assert.equal(routeFiles.length, 73, 'Update the reviewed Admin API inventory when routes are added or removed')
+  assert.equal(routeFiles.length, 74, 'Update the reviewed Admin API inventory when routes are added or removed')
 
   for (const routeFile of routeFiles) {
     const source = await read(routeFile)
@@ -652,7 +652,8 @@ test('Orders keeps production linkage read-only while supporting exact Final Rev
   assert.match(ordersApi, /\.in\(['"]job_id['"],\s*Array\.from\(linkedGenerationJobIds\)\)/)
   assert.match(snapshotApi, /\.in\(['"]job_id['"],\s*linkedGenerationJobIds\)/)
   assert.match(readModel, /ADMIN_ORDER_VIEW_STATUSES/)
-  assert.match(readModel, /isFinalJobReleased/)
+  assert.match(ordersApi, /book_release_counts/)
+  assert.match(readModel, /printReleasedCount: facts.printed/)
 })
 
 test('Announcements separates list, status rows, and the editor upload workspace', async () => {

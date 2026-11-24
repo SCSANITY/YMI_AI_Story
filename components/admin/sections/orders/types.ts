@@ -32,6 +32,8 @@ export type OrderBook = {
 export type OrderRow = {
   order_id: string
   display_id: string | null
+  book_progress?: string | null
+  book_progress_manual?: boolean
   order_status: string | null
   payment_id: string | null
   customer_id: string | null
@@ -62,9 +64,16 @@ export type OrderDraft = {
   logisticsNote: string
 }
 
+export function displayedOrderStatus(order: OrderRow) {
+  if (order.order_status === 'paid' && (order.book_progress === 'preview_ready' || order.book_progress === 'pdf_ready')) {
+    return order.book_progress
+  }
+  return order.order_status || 'paid'
+}
+
 export function createOrderDraft(order: OrderRow): OrderDraft {
   return {
-    orderStatus: order.order_status || 'paid',
+    orderStatus: displayedOrderStatus(order),
     trackingNumber: order.tracking_number || '',
     trackingCarrier: order.tracking_carrier || '',
     trackingUrl: order.tracking_url || '',

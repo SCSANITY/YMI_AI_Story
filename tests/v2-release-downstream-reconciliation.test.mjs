@@ -10,9 +10,8 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8')
 }
 
-test('one released customer PDF fact drives delivery, download, and Printing status', async () => {
+test('one released customer PDF fact drives delivery, download, and the per-book release boundary', async () => {
   const finalReview = await read('src/lib/finalReview.ts')
-  const transitionStore = await read('src/lib/order-production-transition-store.ts')
   const purchaseState = await read('src/lib/purchase-state.ts')
   const ordersList = await read('app/api/orders/route.ts')
   const orderDetail = await read('app/api/orders/[orderId]/route.ts')
@@ -21,16 +20,9 @@ test('one released customer PDF fact drives delivery, download, and Printing sta
   const releaseWrite = finalReview.indexOf("rpc('publish_final_proof'")
   const signedDownload = finalReview.indexOf('.createSignedUrl(pdfPath')
   const delivery = finalReview.indexOf('sendOrderDeliveryEmail({')
-  const productionTransition = finalReview.indexOf(
-    'advanceOrdersToProductionAfterPdfRelease({',
-    delivery
-  )
-
   assert.ok(releaseWrite >= 0)
-  assert.ok(releaseWrite < signedDownload && signedDownload < delivery && delivery < productionTransition)
+  assert.ok(releaseWrite < signedDownload && signedDownload < delivery)
   assert.match(finalReview, /buildPersonalizedBookPdfFileName\(displayTitle\)/)
-  assert.match(transitionStore, /order_status:\s*['"]production['"]/)
-  assert.match(transitionStore, /\.eq\(['"]order_status['"], ['"]paid['"]\)/)
 
   assert.match(purchaseState, /loadReleasedFinalPdfAssetsByJobId[\s\S]*isFinalJobReleased\(finalJob\)/)
   assert.match(ordersList, /loadCustomerOrders/)

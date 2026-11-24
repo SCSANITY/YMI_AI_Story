@@ -592,6 +592,8 @@ const en: MessageDictionary = {
   'orders.deletePendingFailed': 'Failed to delete pending payment.',
   'orders.viewDetails': 'View Details',
   'orders.status.unpaid': 'Pending Payment',
+  'orders.status.pdfReady': 'PDF Ready',
+  'orders.status.previewReady': 'Preview Ready',
   'orders.status.paid': 'Order Confirmed',
   'orders.status.production': 'Printing',
   'orders.status.processing': 'In Production',

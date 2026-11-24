@@ -159,7 +159,7 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
     setLoading(false)
     setLoadingMore(false)
     setLoadError('')
-    if (!focusedOrderId && !adminOrderMatchesView(order.order_status, orderGroup)) {
+    if (!focusedOrderId && !adminOrderMatchesView(order.order_status, orderGroup, order.book_progress)) {
       setOrders((current) => current.filter((candidate) => candidate.order_id !== order.order_id))
       setTotal((current) => Math.max(0, current - 1))
       setExpandedOrderId((current) => current === order.order_id ? null : current)

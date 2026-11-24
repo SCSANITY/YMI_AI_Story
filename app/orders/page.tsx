@@ -20,9 +20,10 @@ type PendingOrderAction = {
   action: 'open' | 'continue' | 'delete';
 } | null;
 
-const getOrderTab = (status?: string | null): OrderTab => {
+const getOrderTab = (status?: string | null, bookProgress?: string | null): OrderTab => {
   const normalized = normalizeOrderStatus(status)
   if (normalized === 'unpaid') return 'unpaid';
+  if (normalized === 'paid' && bookProgress === 'pdf_ready') return 'finished';
   if (isFinishedOrderStatus(normalized)) return 'finished';
   return 'shipping';
 };
@@ -110,9 +111,9 @@ export default function OrdersPage() {
   }, [isAuthResolved, isHydrated, user?.customerId, reloadAttempt]);
 
   const grouped = useMemo(() => {
-    const shipping = orders.filter((order) => getOrderTab(order.order_status) === 'shipping');
-    const unpaid = orders.filter((order) => getOrderTab(order.order_status) === 'unpaid');
-    const finished = orders.filter((order) => getOrderTab(order.order_status) === 'finished');
+    const shipping = orders.filter((order) => getOrderTab(order.order_status, order.book_progress) === 'shipping');
+    const unpaid = orders.filter((order) => getOrderTab(order.order_status, order.book_progress) === 'unpaid');
+    const finished = orders.filter((order) => getOrderTab(order.order_status, order.book_progress) === 'finished');
     return { shipping, unpaid, finished };
   }, [orders]);
 

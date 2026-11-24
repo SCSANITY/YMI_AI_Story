@@ -34,6 +34,10 @@ function makeHarness() {
   const ok = (data) => ({ data, error: null })
   const supabaseAdmin = {
     async rpc(name, args) {
+      if (name === 'set_order_book_progress') {
+        assert.equal(args.p_order_id, orderId)
+        return ok('confirmed')
+      }
       assert.equal(name, 'publish_final_proof')
       const book = rows.final_jobs.find(row => row.final_job_id === args.p_job)
       if (book.released_at && !book.proof_draft_open) return { error: { code: 'PT409', message: 'already published' } }

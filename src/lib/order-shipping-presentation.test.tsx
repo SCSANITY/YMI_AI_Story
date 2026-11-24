@@ -12,7 +12,7 @@ import { getOrderProgress } from './order-progress'
 test('digital progress renders a completed two-step timeline and omits shipping fields', () => {
   const progress = getOrderProgress('paid', [
     { productType: 'ebook', packageType: 'digital', published: true, printReleased: false },
-  ])
+  ], 'pdf_ready')
   const model = createOrderDetailReadModel({ order_id: 'digital-order', order_status: 'paid', progress })
   const html = renderToStaticMarkup(<LogisticsTracker status="paid" progress={model.progress} trackingNumber="unused-tracking" />)
   assert.match(html, /Order Confirmed/)
@@ -23,7 +23,7 @@ test('digital progress renders a completed two-step timeline and omits shipping 
 
 test('historical Printing survives without inventing proof or print counts', () => {
   const line = { productType: 'physical', packageType: 'basic', published: false, printReleased: false }
-  const progress = getOrderProgress('production', [line, line])
+  const progress = getOrderProgress('production', [line, line], null)
   const html = renderToStaticMarkup(<LogisticsTracker status="production" progress={progress} />)
   assert.match(html, /PDFs ready: 0 \/ 2/)
   assert.match(html, /Released for print: 0 \/ 2/)

@@ -10,22 +10,14 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8')
 }
 
-test('PDF release advances only complete paid orders into the existing production stage', async () => {
+test('payment reconciles linked books; publishing delegates transitions to the release transaction', async () => {
   const finalReview = await read('src/lib/finalReview.ts')
   const fulfillment = await read('src/lib/orderFulfillment.ts')
-  const transition = await read('src/lib/order-production-transition.ts')
-  const transitionStore = await read('src/lib/order-production-transition-store.ts')
   const messages = await read('src/lib/i18n-messages.ts')
-
-  assert.match(finalReview, /advanceOrdersToProductionAfterPdfRelease/)
-  assert.match(fulfillment, /advanceOrdersToProductionAfterPdfRelease/)
-  assert.match(transition, /areAllOrderPdfsReleased/)
-  assert.match(transitionStore, /\.eq\(['"]order_status['"], ['"]paid['"]\)/)
-  assert.match(transitionStore, /order_status:\s*['"]production['"]/)
-  assert.match(transitionStore, /previous_status:\s*['"]paid['"]/)
-  assert.match(transitionStore, /new_status:\s*['"]production['"]/)
-  assert.doesNotMatch(transitionStore, /sendLogisticsUpdateEmail/)
-  assert.match(finalReview, /sendOrderDeliveryEmail[\s\S]*await advanceOrdersToProductionAfterPdfRelease/)
+  assert.match(finalReview, /rpc\('publish_final_proof'/)
+  assert.doesNotMatch(finalReview, /advanceOrdersToProductionAfterPdfRelease/)
+  assert.match(fulfillment, /rpc\('set_order_book_progress', \{ p_order_id: orderId \}/)
+  assert.match(fulfillment, /\.eq\('order_status', existingOrder.order_status\)/)
   assert.match(messages, /['"]orders\.status\.paid['"]:\s*['"]Order Confirmed['"]/)
   assert.match(messages, /['"]orders\.status\.production['"]:\s*['"]Printing['"]/)
   assert.match(

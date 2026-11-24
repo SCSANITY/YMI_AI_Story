@@ -1,7 +1,7 @@
-import { isFinalJobReleased } from '@/lib/final-job-release'
-
 export const ADMIN_ORDER_VIEW_OPTIONS = [
   ['active', 'Active orders'],
+  ['preview_ready', 'Preview Ready'],
+  ['pdf_ready', 'PDF Ready'],
   ['delivered', 'Delivered'],
   ['unpaid', 'Pending payment'],
   ['cancelled', 'Cancelled'],
@@ -12,6 +12,8 @@ export type AdminOrderView = (typeof ADMIN_ORDER_VIEW_OPTIONS)[number][0]
 
 export const ADMIN_ORDER_VIEW_STATUSES: Record<AdminOrderView, string[]> = {
   active: ['paid', 'production', 'shipped'],
+  preview_ready: ['paid'],
+  pdf_ready: ['paid'],
   delivered: ['delivered'],
   unpaid: ['unpaid'],
   cancelled: ['cancelled'],
@@ -33,13 +35,12 @@ export type AdminOrderCartItem = {
   quantity: number | null
 }
 
-export type AdminOrderFinalJob = {
-  final_job_id: string
-  job_id: string
-  review_status: string | null
-  released_at: string | null
-  print_status: string | null
-  print_released_at: string | null
+export type BookReleaseCounts = {
+  books: number
+  published: number
+  printed: number
+  physical: number
+  missing_jobs: number
 }
 
 export type AdminOrderProductionProgress = {
@@ -79,72 +80,28 @@ export function normalizeAdminOrderPageSize(value: unknown) {
   return Math.min(Math.max(parsed, 10), 50)
 }
 
-export function adminOrderMatchesView(status: unknown, view: AdminOrderView) {
+export function adminOrderMatchesView(status: unknown, view: AdminOrderView, bookProgress?: string | null) {
+  if (view === 'preview_ready' || view === 'pdf_ready') return status === 'paid' && bookProgress === view
+  if (view === 'active' && status === 'paid' && bookProgress === 'pdf_ready') return false
   return ADMIN_ORDER_VIEW_STATUSES[view].includes(String(status ?? '').trim().toLowerCase())
 }
 
-export function resolveAdminOrderViewForStatus(status: unknown): AdminOrderView {
+export function resolveAdminOrderViewForStatus(status: unknown, bookProgress?: string | null): AdminOrderView {
+  if (status === 'paid' && bookProgress === 'pdf_ready') return 'pdf_ready'
   const normalized = String(status ?? '').trim().toLowerCase()
   return ADMIN_ORDER_VIEW_OPTIONS.find(([view]) =>
     ADMIN_ORDER_VIEW_STATUSES[view].includes(normalized)
   )?.[0] ?? 'active'
 }
 
-function isPhysicalItem(item: AdminOrderCartItem) {
-  return (
-    item.product_type === 'physical' ||
-    item.package_type === 'basic' ||
-    item.package_type === 'supreme'
-  )
-}
-
-export function aggregateAdminOrderProgress(
-  items: AdminOrderCartItem[],
-  finalJobs: AdminOrderFinalJob[]
-): AdminOrderProductionProgress {
-  const assets = new Map<string, { finalJobId: string | null; requiresPrint: boolean }>()
-  let itemCount = 0
-
-  for (const item of items) {
+export function aggregateAdminOrderProgress(items: AdminOrderCartItem[], facts: BookReleaseCounts): AdminOrderProductionProgress {
+  const itemCount = items.reduce((total, item) => {
     const quantity = Number(item.quantity)
-    itemCount += Number.isSafeInteger(quantity) && quantity > 0 ? quantity : 1
-
-    const assetKey = item.generation_job_id
-      ? `job:${item.generation_job_id}`
-      : `item:${item.cart_item_id}`
-    const existing = assets.get(assetKey)
-    assets.set(assetKey, {
-      finalJobId: item.generation_job_id,
-      requiresPrint: Boolean(existing?.requiresPrint || isPhysicalItem(item)),
-    })
-  }
-
-  const finalJobsById = new Map(finalJobs.map((job) => [job.job_id, job]))
-  let missingJobCount = 0
-  let pdfReleasedCount = 0
-  let printReleasedCount = 0
-  let printTotalCount = 0
-
-  for (const asset of assets.values()) {
-    const finalJob = asset.finalJobId ? finalJobsById.get(asset.finalJobId) : null
-    if (!finalJob) missingJobCount += 1
-    if (isFinalJobReleased(finalJob)) pdfReleasedCount += 1
-
-    if (asset.requiresPrint) {
-      printTotalCount += 1
-      if (finalJob?.print_released_at || finalJob?.print_status === 'released') {
-        printReleasedCount += 1
-      }
-    }
-  }
-
+    return total + (Number.isSafeInteger(quantity) && quantity > 0 ? quantity : 1)
+  }, 0)
   return {
-    itemCount,
-    assetCount: assets.size,
-    missingJobCount,
-    pdfReleasedCount,
-    pdfTotalCount: assets.size,
-    printReleasedCount,
-    printTotalCount,
+    itemCount, assetCount: facts.books, missingJobCount: facts.missing_jobs,
+    pdfReleasedCount: facts.published, pdfTotalCount: facts.books,
+    printReleasedCount: facts.printed, printTotalCount: facts.physical,
   }
 }

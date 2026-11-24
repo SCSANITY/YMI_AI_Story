@@ -17,7 +17,6 @@ import {
   isScopedFinalPdf,
 } from '@/lib/final-review-artifact-paths'
 import { hasSingleFinalOrderLine } from '@/lib/final-review-batch-approval'
-import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production-transition-store'
 import {
   buildPersonalizedBookPdfFileName,
   resolveFinalJobDisplayTitle,
@@ -248,11 +247,6 @@ export async function releaseFinalJob(params: {
   if (alreadyPdfReleased && finalJob.email_sent_at) {
     const structuredProof = readStructuredFinalPdfReleaseProof(linkedOutputAssets)
     assertFinalOutputAssetsReleasable(linkedOutputAssets, structuredProof)
-    await advanceOrdersToProductionAfterPdfRelease({
-      jobId: finalJob.job_id,
-      orderIds: [finalJob.order_id],
-      changedByAdminId: approvedByCustomerId,
-    })
     return {
       finalJobId,
       pdfPath: finalJob.pdf_path,
@@ -427,12 +421,6 @@ export async function releaseFinalJob(params: {
   } catch (error) {
     console.error('[email] final delivery failed', { finalJobId, orderId: finalJob.order_id, error })
   }
-
-  await advanceOrdersToProductionAfterPdfRelease({
-    jobId: finalJob.job_id,
-    orderIds: [finalJob.order_id],
-    changedByAdminId: approvedByCustomerId,
-  })
 
   return {
     finalJobId,

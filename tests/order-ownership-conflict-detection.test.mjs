@@ -16,7 +16,7 @@ function finalizeHarness({ existingCustomerId = 'customer-B', preReadFails = fal
         : preReadFails === 'throw'
           ? { __reject: 'pre-read transport down' }
           : { data: { customer_id: existingCustomerId }, error: null },
-      { error: null }, // the ownership-preserving UPDATE still runs
+      { data: { order_id: 'order-1' }, error: null }, // the guarded UPDATE matched
     ],
     payments: [
       { data: null, error: null }, // loadExistingPaymentId by provider ref

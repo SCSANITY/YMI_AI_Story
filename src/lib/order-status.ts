@@ -42,8 +42,10 @@ export function isFinishedOrderStatus(value: unknown): boolean {
   return FINISHED_STATUSES.has(normalizeOrderStatus(value))
 }
 
-export function getOrderStatusLabelKey(value: unknown): string {
+export function getOrderStatusLabelKey(value: unknown, bookProgress?: string | null): string {
   const status = normalizeOrderStatus(value)
+  if (status === 'paid' && bookProgress === 'pdf_ready') return 'orders.status.pdfReady'
+  if (status === 'paid' && bookProgress === 'preview_ready') return 'orders.status.previewReady'
   if (status === 'unpaid') return 'orders.status.unpaid'
   if (status === 'paid') return 'orders.status.paid'
   if (status === 'production') return 'orders.status.production'

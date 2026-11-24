@@ -3,6 +3,7 @@ import type { CheckoutCurrency } from '@/lib/locale-pricing'
 export type OrderSummary = {
   order_id: string
   display_id?: string | null
+  book_progress?: string | null
   order_status?: string | null
   created_at?: string | null
   total?: number

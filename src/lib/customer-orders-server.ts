@@ -27,6 +27,7 @@ const CUSTOMER_ORDER_SELECT = `
   order_id,
   display_id,
   order_status,
+  book_progress,
   payment_id,
   checkout_currency,
   discount_amount_usd,
@@ -278,11 +279,12 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
         packageType: item.package_type,
         published: publishedLines.has(item.cart_item_id),
         printReleased: printedLines.has(item.cart_item_id),
-      }))) : null
+      })), order.book_progress) : null
     return {
       order_id: order.order_id,
       display_id: order.display_id ?? null,
       order_status: order.order_status,
+      book_progress: order.book_progress,
       progress,
       payment_id: order.payment_id ?? null,
       customer_id: order.customer_id ?? null,
@@ -340,6 +342,7 @@ export function toCustomerOrderSummary(order: CustomerOrderReadModel) {
     order_id: order.order_id,
     display_id: order.display_id,
     order_status: order.order_status,
+    book_progress: order.book_progress,
     created_at: order.created_at,
     total: order.total,
     display_currency: order.display_currency,

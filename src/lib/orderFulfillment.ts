@@ -5,7 +5,6 @@ import { sendOrderConfirmationEmail } from '@/lib/email'
 import { mapBookTypeToDisplay } from '@/lib/bookType'
 import { convertUsdToCurrency, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
 import { normalizeOrderStatus, type OrderStatus } from '@/lib/order-status'
-import { advanceOrdersToProductionAfterPdfRelease } from '@/lib/order-production-transition-store'
 import { shippingStreet } from '@/lib/shipping-address'
 import {
   resolveChildNameFromCustomization,
@@ -582,7 +581,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     })
   }
 
-  const { error: orderUpdateError } = await supabaseAdmin
+  const { data: paidOrder, error: orderUpdateError } = await supabaseAdmin
     .from('orders')
     .update({
       payment_id: paymentId,
@@ -595,10 +594,13 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       shipping_zone_code: shippingZoneCode ?? (shippingRateSnapshot?.zoneCode as string | undefined) ?? null,
       billing_address: billingAddress,
       checkout_currency: normalizedCurrency,
-      order_status: paymentOrderStatus,
+      ...(currentStatus === 'unpaid' ? { order_status: paymentOrderStatus } : {}),
     })
     .eq('order_id', orderId)
+    .eq('order_status', existingOrder.order_status)
+    .select('order_id').maybeSingle()
 
+  if (!orderUpdateError && !paidOrder) throw new Error('Order changed during payment finalisation; retry')
   if (orderUpdateError) {
     throw new Error(`Failed to update order: ${orderUpdateError.message}`)
   }
@@ -983,17 +985,10 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     }
   }
 
-  let completedOrderStatus = paymentOrderStatus
-  try {
-    const transition = await advanceOrdersToProductionAfterPdfRelease({
-      orderIds: [orderId],
-    })
-    if (transition.promotedOrderIds.includes(orderId)) {
-      completedOrderStatus = 'production'
-    }
-  } catch (error) {
-    console.error('[orders] post-payment PDF status reconciliation failed', { orderId, error })
-  }
+  // Buy Again may attach an already released Final without a new release event.
+  const { data: progress, error: progressError } = await supabaseAdmin.rpc('set_order_book_progress', { p_order_id: orderId })
+  if (progressError) throw new Error('Could not reconcile purchased book progress: ' + progressError.message)
+  const completedOrderStatus = progress === 'printing' ? 'production' : paymentOrderStatus
 
   return {
     orderId,
