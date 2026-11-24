@@ -1,3 +1,4 @@
+import { isUuid } from '@/lib/validators'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
@@ -26,6 +27,8 @@ type UserAssetRow = {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
+  const faceAssetId = url.searchParams.get('faceAssetId')
+  if (faceAssetId !== null && !isUuid(faceAssetId)) return NextResponse.json({ error: 'Invalid face asset' }, { status: 400 })
   let owner
   try {
     owner = await resolveCheckoutOwner(request, {
@@ -40,12 +43,14 @@ export async function GET(request: Request) {
   }
   const filter = ownerFilter(owner)
 
-  const { data: assets, error } = await supabaseAdmin
+  const ownedAssets = supabaseAdmin
     .from('user_assets')
     .select('asset_id, asset_type, storage_path, metadata, created_at')
     .eq('owner_type', filter.owner_type)
     .eq(filter.column, filter.value)
-    .order('created_at', { ascending: false })
+  const { data: assets, error } = faceAssetId
+    ? await ownedAssets.eq('asset_type', 'face_image').eq('asset_id', faceAssetId).limit(1)
+    : await ownedAssets.order('created_at', { ascending: false })
 
   if (error || !assets) {
     return NextResponse.json({ faces: [], profiles: [], voices: [] })

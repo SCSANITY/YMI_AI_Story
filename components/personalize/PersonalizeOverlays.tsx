@@ -39,6 +39,7 @@ type PersonalizeOverlaysProps = {
     close: string
   }
   onStay: () => void
+  waitingForReturnPhoto: boolean
   onBackToCustomize: () => void
   onCloseAgeRangeConfirm: () => void
   onContinueAgeRangeConfirm: () => void
@@ -58,6 +59,7 @@ function PersonalizeOverlaysComponent({
   exitLabels,
   ageRangeLabels,
   onStay,
+  waitingForReturnPhoto,
   onBackToCustomize,
   onCloseAgeRangeConfirm,
   onContinueAgeRangeConfirm,
@@ -135,7 +137,7 @@ function PersonalizeOverlaysComponent({
             <p className="mb-6 text-gray-600">{exitLabels.body}</p>
             <div className="flex justify-center gap-3">
               <Button variant="outline" onClick={onStay}>{exitLabels.stay}</Button>
-              <Button variant="primary" onClick={onBackToCustomize}>{exitLabels.back}</Button>
+              <Button variant="primary" disabled={waitingForReturnPhoto} aria-busy={waitingForReturnPhoto} onClick={onBackToCustomize}>{exitLabels.back}</Button>
             </div>
           </div>
         </div>

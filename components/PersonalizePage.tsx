@@ -124,18 +124,20 @@ const parseChildAge = (value: string) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export default function PersonalizePage({
-  bookID,
-  initialBook,
-  originalAvailable = false,
-  closingBannerPromise,
-}: {
+type PersonalizePageProps = {
   bookID: string
   originalAvailable?: boolean
   initialBook: CatalogBook
   closingBannerPromise?: Promise<PublishedHomepageBanner | undefined>
-}) {
+}
 
+export default function PersonalizePage(props: PersonalizePageProps) {
+  const { user } = useGlobalContext()
+  // A live account change must discard the previous family's form, File and Worker together.
+  return <PersonalizeWorkspace key={JSON.stringify([props.bookID, user?.customerId ?? null])} {...props} />
+}
+
+function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, closingBannerPromise }: PersonalizePageProps) {
   const fsm = usePersonalizeStage()
   const { t } = useI18n()
 
@@ -245,7 +247,9 @@ export default function PersonalizePage({
   const variantPhotoInspection = photoInspection.status !== 'idle' && photoInspection.intent.surface === 'variant'
     ? photoInspection : IDLE_PHOTO;
   const formReceipt = formPhotoInspection.status === 'ready' ? formPhotoInspection.receipt : null;
-  const facePrepareStatus = formPhotoInspection.status;
+  const [returnedWithoutPhoto, setReturnedWithoutPhoto] = useState(false);
+  const missingReturnSource = returnedWithoutPhoto && !photo && !photoAssetId;
+  const facePrepareStatus = missingReturnSource ? 'failed' : formPhotoInspection.status;
   const facePrepareError = formPhotoInspection.status === 'failed'
     ? t('personalize.photoCheck.' + formPhotoInspection.reason) : null;
   const localPhotoPreviewUrlRef = useRef<string | null>(null);
@@ -838,6 +842,7 @@ export default function PersonalizePage({
     setPhotoStoragePath(data.storagePath || null)
     setFaceImageUrl(data.faceImageUrl || null)
     const returnedFile = data.photo instanceof File ? data.photo : null
+    setReturnedWithoutPhoto(Boolean(data.previewJobId && !returnedFile && !data.assetId))
     setPhoto(returnedFile)
     if (returnedFile) {
       showLocalPhotoPreview(returnedFile)
@@ -944,7 +949,7 @@ export default function PersonalizePage({
     // A choice can precede the creation ids. A read started after that choice
     // must not hydrate an older server edition over the pending local value.
     const selectionRevision = editionSelectionRevisionRef.current === 0 ? 0 : -1
-    const cacheKey = `ymi_creation_${creationId}`
+    const cacheKey = `ymi_creation_${personalizeDraftOwnerKey}_${creationId}`
 
     const loadCreation = async () => {
       try {
@@ -1336,11 +1341,15 @@ export default function PersonalizePage({
     return photoPreparation.select({ scope: photoScope, surface: 'form', source: {
       kind: 'saved', assetId,
       load: signal => loadSavedPhoto(url, async refreshSignal => {
-        const data = await refreshPersonalizeHistory({ signal: refreshSignal });
+        const query = new URLSearchParams({ faceAssetId: assetId });
+        if (user?.customerId) query.set('customerId', user.customerId);
+        const response = await fetch(`/api/user-assets?${query}`, { signal: refreshSignal, credentials: 'include', cache: 'no-store' });
+        if (!response.ok) return null;
+        const data: { faces?: RecentFaceItem[] } = await response.json();
         return data.faces?.find(face => face.asset_id === assetId)?.signed_url ?? null;
       }, signal),
     } });
-  }, [photoPreparation, photoScope, refreshPersonalizeHistory]);
+  }, [photoPreparation, photoScope, user?.customerId]);
 
   useEffect(() => {
     if (!viewState.showForm || formStep === 'INTRO' || !photoAssetId || photo || formPhotoInspection.status !== 'idle') return;
@@ -1463,12 +1472,13 @@ export default function PersonalizePage({
   }, [bookID, personalizeDraftOwnerKey, formStep, name, age, selectedLang, bookType, photoAssetId, photoStoragePath]);
 
   const failedPhoto = formPhotoInspection.status === 'failed' ? formPhotoInspection : null;
-  const photoRecovery = failedPhoto?.reason === 'saved-photo-unavailable' ? 'chooseDevice'
+  const photoRecovery = missingReturnSource || failedPhoto?.reason === 'saved-photo-unavailable' ? 'chooseDevice'
     : failedPhoto?.reason !== 'technical' ? null
     : isReopenedPhoto ? 'library'
     : retriedIntent === failedPhoto.intent ? 'reopen' : 'retry';
 
   const recoverFormPhoto = () => {
+    if (missingReturnSource) { formPhotoInput.current?.click(); return; }
     if (!failedPhoto || photoPreparation.snapshot() !== failedPhoto) return;
     switch (photoRecovery) {
       case 'chooseDevice':
@@ -1507,6 +1517,7 @@ export default function PersonalizePage({
   }, [formReceipt]);
 
   const clearFormPhoto = useCallback(() => {
+    setReturnedWithoutPhoto(false);
     setReopenedPhoto(null);
     photoPreparation.clear();
     setPhoto(null);
@@ -1642,6 +1653,11 @@ export default function PersonalizePage({
   const persistDraftForCustomizeReturn = useCallback((options?: { clearPreviewRefs?: boolean }) => {
     if (!book) return;
     const clearPreviewRefs = options?.clearPreviewRefs === true
+    const selected = restoredPreviewGroup.ready ? restoredPreviewGroup.group?.versions.find(
+      version => version.creationId === creationId && version.jobId === previewJobId
+    ) : null
+    const useLocalSource = !selected?.faceAssetId || selected.faceAssetId === photoAssetId
+
 
     resumePersonalization({
       id: clearPreviewRefs ? `draft-${bookID}` : creationId ?? `draft-${bookID}`,
@@ -1654,11 +1670,11 @@ export default function PersonalizePage({
         childAge: age,
         language: selectedLang,
         bookType,
-        photo: photo ?? undefined,
-        photoUrl: photoPreview ?? undefined,
-        assetId: photoAssetId ?? undefined,
-        storagePath: photoStoragePath ?? undefined,
-        faceImageUrl: faceImageUrl ?? undefined,
+        photo: useLocalSource ? photo ?? undefined : undefined,
+        photoUrl: selected?.photoPreviewUrl ?? (useLocalSource ? photoPreview ?? undefined : undefined),
+        assetId: selected?.faceAssetId ?? photoAssetId ?? undefined,
+        storagePath: useLocalSource ? photoStoragePath ?? undefined : undefined,
+        faceImageUrl: useLocalSource ? faceImageUrl ?? undefined : undefined,
         voiceAssetId: voiceAssetId ?? undefined,
         voiceStoragePath: voiceStoragePath ?? undefined,
         previewJobId: clearPreviewRefs ? undefined : previewJobId ?? undefined,
@@ -1682,6 +1698,8 @@ export default function PersonalizePage({
     photoStoragePath,
     previewJobId,
     resolvedBook,
+    restoredPreviewGroup.ready,
+    restoredPreviewGroup.group,
     resumePersonalization,
     selectedLang,
     voiceAssetId,
@@ -2568,7 +2586,7 @@ export default function PersonalizePage({
         setGenerationJobId(created.jobId);
         replacePreviewUrl(created.creationId, created.jobId);
         try {
-          window.sessionStorage.removeItem(`ymi_creation_${created.creationId}`);
+          window.sessionStorage.removeItem(`ymi_creation_${personalizeDraftOwnerKey}_${created.creationId}`);
           window.sessionStorage.removeItem(`ymi_preview_${created.creationId}`);
         } catch {
           // The durable database identities remain authoritative without browser cache.
@@ -2655,6 +2673,7 @@ export default function PersonalizePage({
       if (photo || photoAssetId) setReopenedPhoto(null);
       if (failedPhoto?.reason === 'technical') photoPreparation.dispose();
       setRetriedIntent(null);
+      setReturnedWithoutPhoto(false);
       setPhoto(file);
       showLocalPhotoPreview(file);
       setPhotoAssetId(null);
@@ -2856,6 +2875,8 @@ export default function PersonalizePage({
           close: t('common.close'),
         }}
         onStay={dismissExitConfirm}
+        waitingForReturnPhoto={Boolean(!photo && !photoAssetId && creationId && previewJobId &&
+          !restoredPreviewGroup.group && !restoredPreviewGroup.error)}
         onBackToCustomize={() => void returnToCustomizeFromPreview()}
         onCloseAgeRangeConfirm={handleCloseAgeRangeConfirm}
         onContinueAgeRangeConfirm={handleContinueAgeRangeConfirm}

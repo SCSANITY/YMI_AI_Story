@@ -198,7 +198,8 @@ export const GlobalProvider: React.FC<{
   const [loginModalEmail, setLoginModalEmail] = useState('');
 
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
-  const [resumeData, setResumeData] = useState<CartItem | null>(null);
+  const [resumeSelection, setResumeData] = useState<{ customerId: string | null; item: CartItem } | null>(null);
+  const resumeData = resumeSelection?.customerId === (user?.customerId ?? null) ? resumeSelection.item : null;
   const [accountSwitchNotice, setAccountSwitchNotice] = useState<{
     previousEmail: string;
     nextEmail: string;
@@ -1321,8 +1322,8 @@ export const GlobalProvider: React.FC<{
   }, []);
 
   const resumePersonalization = useCallback((item: CartItem | null) => {
-    setResumeData(item);
-  }, []);
+    setResumeData(item ? { customerId: user?.customerId ?? null, item } : null);
+  }, [user?.customerId]);
 
   const value: GlobalContextType = useMemo(() => ({
     user,
