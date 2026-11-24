@@ -29,7 +29,7 @@ documentation.
   stays locked during navigation so rapid repeated clicks cannot create
   duplicate pending orders.
 - Optional dedication reads (including loading or failure) never gate Buy Now.
-  The explicit **Finish in Preview** message-editor entry remains available.
+  The **Finish in Preview** message-editor entry is available for eligible personalised hardcover drafts.
 - Delete requires confirmation and reports success or failure. The control is
   visible and labelled on both touch and pointer layouts.
 
@@ -57,7 +57,7 @@ documentation.
 - Both purchase actions use the Creation's saved edition and any draft message
   or recording. They do not copy the latest paid-line materials back into the
   Creation, open the message editor, generate a Preview, or require a recording.
-  The payment-time initializer snapshots the draft through the existing chain.
+  At payment, eligible physical lines take their own dedication snapshot. A PDF-only line retains an empty snapshot even if the Creation has a saved physical draft. See [Order materials](ORDER_MATERIALS_FOUNDATION.md) for the post-payment controls by edition.
 - The server remains authoritative for the creation's product, package, and
   price snapshot; the client supplies only the creation ID and quantity `1`.
 - A failed order start leaves the customer in place with a visible retryable

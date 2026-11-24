@@ -1,15 +1,22 @@
-# Order material foundation (WEB-UIUX-001/07-B)
+# Order materials
 
-Offline combined07-C candidate on the accepted07-B foundation. Customer forms,
-purchase entries,confirmation mail,Admin and print readers are connected here.
-Independent review and a separately authorized combined release remain required.
-Automatic Final and the Worker are outside this change.
+## Current customer and production flow
 
-Current Web materials and Admin views use server eligibility flags and do not
-display a payment-based deadline. The historical slices below explain the
-original deadline contract. The Web transition accepts both old and new
-database responses without consuming timestamp fields; see [Email Center](EMAIL_CENTER.md)
-for the customer reminder that remains in the PDF delivery email.
+The Preview purchase panel collects no materials. Selecting Hardcover + Voice shows the post-purchase recording note. The waiting-book dedication sample remains visible, with a PDF exclusion hint. A customer choosing a personalised hardcover can still save an optional draft from that sample.
+
+| Purchased format | Personalised | Original artwork |
+| --- | --- | --- |
+| PDF only | No materials | No materials |
+| Hardcover | Dedication | No materials |
+| Hardcover + Voice | Dedication and recording | Recording |
+
+Payment success displays the eligible controls for each purchased book. Order details and scoped email links lead to the same materials flow. Members use their order session and guests can use their scoped link or order-email verification. Print release locks the dedication for that book; shipment locks recordings. The PDF delivery email carries the 48-hour reply guidance.
+
+A PDF purchase stores an empty dedication snapshot. Customer and Admin reads suppress any historical PDF dedication text. Final Review displays an edition notice in the existing Dedication section. Changing photos on a PDF Preview omits the dedication copy; the source physical draft remains available for an eligible physical book.
+
+## Historical foundation (07-B and 07-C)
+
+The following sections record the earlier API, deadline and UI design. The table above describes current edition eligibility.
 
 ## Authority and API
 
