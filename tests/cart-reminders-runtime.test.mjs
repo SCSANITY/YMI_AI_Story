@@ -82,6 +82,7 @@ function fixture(overrides = {}, guestEmail = null) {
       supabaseAdmin: {
         rpc(name, args) {
           calls.rpc.push([name, args])
+          if (name === 'may_send_cart_reminder') return { data: true }
           if (name === 'list_guest_cart_reminder_candidates') return { data: guestEmail ? [{ contact_id: id(7) }] : [] }
           if (name === 'get_guest_cart_reminder_recipient') return { maybeSingle: async () => ({
             data: { contact_id: id(7), email: guestEmail },
@@ -91,7 +92,7 @@ function fixture(overrides = {}, guestEmail = null) {
           if (name === 'list_cart_reminder_candidates' || name === 'list_default_cart_reminder_candidates') {
             return { data: [{ customer_id: id(1) }, { customer_id: id(2) }] }
           }
-          if (name === 'unsubscribe_cart_reminder') return { maybeSingle: async () => {
+          if (name === 'stop_member_cart_mailbox') return { maybeSingle: async () => {
             if (args.p_grant_id !== grantId) return { data: null }
             if (unsubscribed) {
               if (!args.p_browser) undoAvailable = false
@@ -102,7 +103,7 @@ function fixture(overrides = {}, guestEmail = null) {
             undoAvailable = args.p_browser
             return { data: { undo_id: undoAvailable ? id(4) : null } }
           } }
-          if (name === 'undo_cart_reminder_unsubscribe') {
+          if (name === 'restore_member_cart_mailbox') {
             const restored = undoAvailable && args.p_undo_id === id(4)
             if (restored) { undoAvailable = false; unsubscribed = false; grantId = id(5) }
             return { data: restored }
@@ -137,6 +138,7 @@ test('default policy uses the cart-first candidates and signs the prepared grant
     'list_guest_cart_reminder_candidates',
     'prepare_default_cart_reminder_recipient',
     'prepare_default_cart_reminder_recipient',
+    'may_send_cart_reminder',
   ])
   const token = new URL(calls.sends[0].unsubscribeUrl).searchParams.get('token')
   assert.equal(server.verifyCartReminderToken(token, 'unsubscribe'), id(3))
@@ -231,14 +233,16 @@ test('member preference ignores foreign identity and cross-origin writes; only c
   const url = 'https://example.test/api/user/cart-reminder-preference'
   let user = { id: id(1), email: ' Reader@example.test ', email_confirmed_at: 'confirmed' }
   let preference = null
+  let mailboxStop = null
   const env = {}
   const writes = []
   const route = loadUi('app/api/user/cart-reminder-preference/route.ts', {
+    'node:crypto': crypto,
     '@/lib/authenticated-user': { getAuthenticatedUser: async () => user },
     '@/lib/supabaseAdmin': { supabaseAdmin: {
       from(name) {
         const query = { eq: () => query, maybeSingle: async () => ({
-          data: name === 'customers' ? { customer_id: id(2), email: 'reader@example.test' } : preference,
+          data: name === 'customers' ? { customer_id: id(2), email: 'reader@example.test' } : name === 'guest_cart_reminder_stops' ? mailboxStop : preference,
         }) }
         return { select: () => query }
       },
@@ -257,6 +261,9 @@ test('member preference ignores foreign identity and cross-origin writes; only c
   assert.equal(empty.headers.get('cache-control'), 'private, no-store')
   env.CART_REMINDER_DEFAULT_ON = 'true'
   assert.deepEqual(await (await get()).json(), { enabled: true, canEnable: true, paused: false, defaultOn: true })
+  mailboxStop = { stopped_at: 'recorded' }
+  assert.equal((await (await get()).json()).enabled, false)
+  mailboxStop = null
   preference = { email: null, opted_in_at: null, unsubscribed_at: 'recorded' }
   assert.deepEqual(await (await get()).json(), { enabled: false, canEnable: true, paused: false, defaultOn: true })
   preference = { email: 'reader@example.test', opted_in_at: null, unsubscribed_at: null }
@@ -274,9 +281,9 @@ test('member preference ignores foreign identity and cross-origin writes; only c
   assert.equal((await route.POST(request('on'))).status, 409)
   assert.deepEqual(await (await route.POST(request('off'))).json(), { enabled: false })
   assert.deepEqual(writes, [
-    ['set_cart_reminder_preference', id(1), 'reader@example.test', true],
-    ['set_cart_reminder_preference', id(1), 'reader@example.test', true],
-    ['set_cart_reminder_preference', id(1), null, false],
+    ['set_cart_mailbox_preference', id(1), 'reader@example.test', true],
+    ['set_cart_mailbox_preference', id(1), 'reader@example.test', true],
+    ['set_cart_mailbox_preference', id(1), null, false],
   ])
 })
 
@@ -291,6 +298,7 @@ test('managed sender reuses the customer/week key on replay and keeps the unsubs
     'GeneralMailLetterEmail',
   ]
   const send = loadUi('src/lib/email.tsx', {
+    'node:crypto': crypto,
     '@/lib/release-template-snapshot': { releaseRenderNote:()=>assert.fail('Unrelated email invoked proof composer') },
     ...Object.fromEntries(templates.map((name) => ['@/components/emails/' + name, component])),
     '@react-email/components': component,
@@ -322,9 +330,12 @@ test('managed sender reuses the customer/week key on replay and keeps the unsubs
   }
   await send(input)
   assert.equal((await send(input)).skipped, true)
+  for (const contact of [id(7),id(8)]) {
+    assert.equal((await send({...input, customerId: undefined, guestContactId: contact, to:' ReAdEr@example.test '})).skipped, true)
+  }
   await send({ ...input, week: '2026-11-25' })
   assert.equal(deliveries.length, 2)
-  assert.equal(deliveries[0][1].idempotencyKey, `cart_reminder:${input.week}:${input.customerId}`)
+  assert.equal(deliveries[0][1].idempotencyKey, `cart_reminder:${input.week}:mailbox-${crypto.createHash('sha256').update(input.to).digest('hex')}`)
   assert.equal(deliveries[0][0].headers['List-Unsubscribe'], `<${input.unsubscribeUrl}>`)
   assert.equal(deliveries[0][0].headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click')
   assert.match(deliveries[0][0].text, /Unsubscribe from cart reminders/)

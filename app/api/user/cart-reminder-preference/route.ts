@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { getAuthenticatedUser } from '@/lib/authenticated-user'
 import { cartRemindersDefaultOn } from '@/lib/cart-reminders'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -25,9 +26,12 @@ export async function GET(request: Request) {
     .select('email,opted_in_at,unsubscribed_at').eq('customer_id', customer.customer_id).maybeSingle()
   if (readError) return json({ error: 'Could not load the preference.' }, 503)
   const defaultOn = cartRemindersDefaultOn()
-  const enabled = entry
+  const stop = canEnable && email ? await supabaseAdmin.from('guest_cart_reminder_stops').select('stopped_at')
+    .eq('email_hash', createHash('sha256').update(email).digest('hex')).maybeSingle() : null
+  if (stop?.error) return json({ error: 'Could not load the preference.' }, 503)
+  const enabled = !stop?.data && (entry
     ? entry.unsubscribed_at === null && (defaultOn || entry.opted_in_at !== null)
-    : defaultOn
+    : defaultOn)
   return json({
     enabled,
     canEnable,
@@ -48,7 +52,7 @@ export async function POST(request: Request) {
   if (!user) return json({ error: 'Sign in to manage email preferences.' }, 401)
   const email = user.email_confirmed_at ? user.email?.trim().toLowerCase() : null
   if (choice === 'on' && !email) return json({ error: 'Confirm your account email first.' }, 409)
-  const { data, error } = await supabaseAdmin.rpc('set_cart_reminder_preference', {
+  const { data, error } = await supabaseAdmin.rpc('set_cart_mailbox_preference', {
     p_auth_user_id: user.id, p_email: email ?? null, p_enabled: choice === 'on',
   })
   if (error) return json({ error: 'Could not save the preference.' }, 503)

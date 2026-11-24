@@ -2,6 +2,7 @@ import { releaseRenderNote } from '@/lib/release-template-snapshot'
 import {hasBookMaterialFields} from '@/lib/order-materials'
 import {distinctMaterialNames} from '@/lib/order-materials-client'
 import { loadTrustedOrderMaterials,issueOrderMaterialLink } from '@/lib/order-materials-server'
+import { createHash } from 'node:crypto'
 import React from 'react'
 import { Resend } from 'resend'
 import { buildOtpEmailText, OtpEmail } from '@/components/emails/OtpEmail'
@@ -513,10 +514,12 @@ export async function sendCartReminderEmail(params: ({ customerId: string; guest
   cartUrl: string
   unsubscribeUrl: string
 }) {
+  const email = params.to.trim().toLowerCase()
+  const mailbox = createHash('sha256').update(email).digest('hex')
   return sendManagedEmail({
     emailKey: 'cart_reminder',
-    idempotencyKey: `cart_reminder:${params.week}:${params.customerId ?? 'guest-' + params.guestContactId}`,
-    to: params.to,
+    idempotencyKey: `cart_reminder:${params.week}:mailbox-${mailbox}`,
+    to: email,
     customerId: params.customerId,
     fromEnvName: 'EMAIL_FROM_SUPPORT',
     subject: CART_REMINDER_SUBJECT,

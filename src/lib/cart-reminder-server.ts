@@ -34,7 +34,7 @@ export async function unsubscribeCartReminder(grantId: string, browser: boolean)
   const guest = grantId.startsWith('guest-')
   const query = guest
     ? supabaseAdmin.rpc('stop_guest_cart_reminder', { p_hash: grantId.slice(6), p_browser: browser })
-    : supabaseAdmin.rpc('unsubscribe_cart_reminder', { p_grant_id: grantId, p_browser: browser })
+    : supabaseAdmin.rpc('stop_member_cart_mailbox', { p_grant_id: grantId, p_browser: browser })
   const { data, error } = await query.maybeSingle()
   if (error) throw new Error('Unable to unsubscribe')
   if (!data) return null
@@ -46,7 +46,7 @@ export async function unsubscribeCartReminder(grantId: string, browser: boolean)
 export async function undoCartReminderUnsubscribe(undoId: string) {
   const { data, error } = await (undoId.startsWith('guest-')
     ? supabaseAdmin.rpc('undo_guest_cart_reminder_stop', { p_undo_id: undoId.slice(6) })
-    : supabaseAdmin.rpc('undo_cart_reminder_unsubscribe', { p_undo_id: undoId }))
+    : supabaseAdmin.rpc('restore_member_cart_mailbox', { p_undo_id: undoId }))
   if (error) throw new Error('Unable to restore cart reminder')
   return data === true
 }
@@ -103,13 +103,17 @@ export async function dispatchCartReminderBatch(week: string) {
       return { customer_id: id, grant_id: row.grant_id, email: row.email }
     },
     async send(recipient, week) {
+      const email = recipient.email.trim().toLowerCase()
+      const eligibility = await supabaseAdmin.rpc('may_send_cart_reminder', { p_email: email, p_week: week })
+      if (eligibility.error || typeof eligibility.data !== 'boolean') throw new Error('Unable to check mailbox eligibility')
+      if (!eligibility.data || Date.now() >= expires) return 'skipped'
       const link = new URL(UNSUBSCRIBE_PATH, site)
       const grant = recipient.guest
-        ? 'guest-' + createHash('sha256').update(recipient.email).digest('hex')
+        ? 'guest-' + createHash('sha256').update(email).digest('hex')
         : recipient.grant_id
       link.searchParams.set('token', tokenFor(grant, secret, 'unsubscribe'))
       const result = await sendCartReminderEmail({
-        to: recipient.email, week,
+        to: email, week,
         ...(recipient.guest ? { guestContactId: recipient.contactId } : { customerId: recipient.customer_id }),
         cartUrl: new URL('/cart', site).href, unsubscribeUrl: link.href,
       })

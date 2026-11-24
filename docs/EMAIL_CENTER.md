@@ -178,7 +178,7 @@ timing, payment, idempotent task and real SDK verification fixtures.
 
 Guest Preview uses a separate optional contact saved by the current anonymous session. Save replaces the prior address, performs no send, and never establishes account or order ownership. Fresh checkout may suggest it in an empty email field. PDF delivery continues to use the confirmed order contact. Apply the guest contact migration before deploying this dispatcher.
 
-The same weekly job merges member and guest candidates within one budget. Each guest send rechecks contact, cart and creation ownership, sellability, opt-outs and provider suppressions. A guest event has a week/contact idempotency key and no customer ID. The reminder opens the ordinary cart for the current browser. Guest unsubscribe stops this reminder for the mailbox across guest sessions and supports the existing short-lived undo flow.
+The same weekly job merges member and guest candidates within one budget. Each guest send rechecks contact, cart and creation ownership, sellability, opt-outs and provider suppressions. All sources share one idempotency key per normalised address and Hong Kong reminder week. Guest events have no customer ID. The dispatcher also checks deliveries reserved by the previous member-only build during that week. The reminder opens the ordinary cart for the current browser. Unsubscribe stops weekly cart reminders to that address across memberships and guest sessions and supports the existing short-lived undo flow.
 
 The Web job runs on Vercel Cron at nominal Wednesday 11:00 Hong Kong time
 (`0 3 * * 3` UTC). It is separate from QStash and the unpaid-order flow.
@@ -207,7 +207,7 @@ The batch examines at most three pages of 25 customers (one extra candidate
 per page is used to detect more results). It attempts at most 25 sends within
 a soft 35-second budget. A capped or failed run is surfaced for operator
 attention; there is no same-week catch-up job. The Support sender uses the
-shared brand layout and Resend pipeline, with a customer/week idempotency key.
+shared brand layout and Resend pipeline, with a mailbox/week idempotency key.
 The message links to Cart and contains no book or child details.
 
 The signed footer link opens a read-only confirmation page. Submitting the form
