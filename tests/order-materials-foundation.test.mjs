@@ -524,3 +524,14 @@ test('successful materials read starts order and scoped Creation reads in parall
   assert.equal(h.calls[0].name,'materials_read')
  }finally{clearTimeout(timer)}
 })
+
+test('personalised PDF dedication survives the server projection and browser parse',()=>{
+  const m=harness().load('src/lib/order-materials.ts')
+  const data=dto()
+  Object.assign(data.items[0],{edition:'personalised',package_type:'digital',voice_revision:null,
+    can_submit_voice:false,can_replace_voice:false,voice_ready:false,voice_asset_id:null})
+  const page=m.parseOrderMaterialsPage(JSON.parse(JSON.stringify(m.parseOrderMaterials(data))))
+  assert.equal(page.items[0].edition,'personalised')
+  assert.equal(page.items[0].can_edit_dedication,true)
+  assert.equal(m.hasBookMaterialFields(page.items[0]),true)
+})

@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const readTemplateSql = (path) =>
   readFile(new URL(`./fixtures/external-contracts/sql/${path}`, import.meta.url), 'utf8')
 
-test('Signature Voice v3 is captured after Preview and bound through the owner-scoped purchase configuration', async () => {
+test('Signature Voice v3 is captured after payment and bound to the authorised order line', async () => {
   const [action, recorder, dialog, purchasePanel, page, purchaseService, purchaseRoute, uploadRoute, confirmRoute, cleanupServer, sql, consentV3Sql, ownerHotfix] = await Promise.all([
     read('components/personalize/GeneratePreviewAction.tsx'),
     read('components/personalize/VoiceRecorderPanel.tsx'),
@@ -36,11 +36,12 @@ test('Signature Voice v3 is captured after Preview and bound through the owner-s
   assert.doesNotMatch(recorder, /MIN_SECONDS|MAX_SECONDS|canSaveRecording|handleSelectRecording|useThisRecording|errorMinSeconds|errorMaxSeconds/)
   assert.doesNotMatch(recorder, /uploadUserAsset|voiceAuthorization|speakerKind|href="\/privacy"|playbackCompleted|analyzeVoiceSampleBlob|AudioContext|client_quality/)
   assert.doesNotMatch(page, /signatureVoiceGenerateConsentRef|signatureVoiceAuthorizationRef/)
-  assert.match(page, /pendingVoiceRecordingRef\.current/)
+  const materials = await read("components/orders/OrderMaterialsClient.tsx")
+  assert.doesNotMatch(page, /<SignatureVoiceDialog|handleSaveVoice/)
   assert.match(page, /book_type: 'basic'/)
   assert.match(page, /createPreviewJob\([\s\S]*pendingFaceAsset,[\s\S]*undefined/)
-  assert.match(page, /const handleSaveVoice[\s\S]*uploadUserAsset\([\s\S]*recording\.file,[\s\S]*'voice_sample',[\s\S]*saveEditionConfiguration\('supreme'/)
-  assert.match(page, /version: SIGNATURE_VOICE_CONSENT_VERSION,[\s\S]*speakerKind: 'authorized_speaker'/)
+  assert.match(materials, /uploadUserAsset\(selected\.file,'voice_sample'[\s\S]*orderMaterial:\{orderId,itemId:intent\.itemId[\s\S]*write\(\{action:'voice'/)
+  assert.match(materials, /version:SIGNATURE_VOICE_CONSENT_VERSION,speakerKind:'authorized_speaker'/)
   assert.match(purchasePanel, /selectedValue === 'supreme'/)
   assert.match(dialog, /aria-required="true"/)
   assert.match(dialog, /disabled=\{!pendingRecording \|\| !authorized \|\| isSaving\}/)

@@ -84,7 +84,7 @@ type FinalizeOrderInput = {
 }
 
 type FinalizeOrderResult = {
-  originalVoiceLineId?: string
+  hasBookMaterials: boolean
   orderId: string
   displayId: string | null
   paymentId: string | null
@@ -498,6 +498,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
       paymentId: existingOrder.payment_id ?? null,
       cartItemIds: cartItemIds ?? [],
       status: currentStatus,
+      hasBookMaterials: false,
     }
   }
 
@@ -636,15 +637,15 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
   const purchasedItems = await loadOrderItemsForFinal(orderId, cartItemIds)
   const effectiveCartItemIds = purchasedItems.map((item) => item.cart_item_id)
 
-  const originalVoiceLineId = purchasedItems.find(item => item.creations?.customize_snapshot?.edition === 'original'
-    && item.creations.customize_snapshot.bookType === 'supreme')?.cart_item_id
+  const hasBookMaterials = purchasedItems.some(item =>
+    item.creations?.customize_snapshot?.edition !== 'original' || item.package_type === 'supreme')
   if (deferPostPaymentWork) {
     return {
       orderId,
       displayId: existingOrder.display_id ?? null,
       paymentId,
       cartItemIds: effectiveCartItemIds,
-      ...(originalVoiceLineId && { originalVoiceLineId }),
+      hasBookMaterials,
       status: paymentOrderStatus,
     }
   }
@@ -999,7 +1000,7 @@ export async function finalizeOrderPayment(params: FinalizeOrderInput): Promise<
     displayId: existingOrder.display_id ?? null,
     paymentId,
     cartItemIds: effectiveCartItemIds,
-    ...(originalVoiceLineId && { originalVoiceLineId }),
+    hasBookMaterials,
     status: completedOrderStatus,
   }
 }

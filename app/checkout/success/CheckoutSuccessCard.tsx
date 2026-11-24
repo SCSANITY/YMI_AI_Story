@@ -1,9 +1,9 @@
 'use client';
-import type { OrderMaterials } from '@/lib/order-materials';
+import { hasBookMaterialFields, type OrderMaterials } from '@/lib/order-materials';
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-const OriginalVoiceMaterials = dynamic(() => import('@/components/orders/OrderMaterialsClient').then(module => module.OrderMaterialsClient));
+const PaidBookMaterials = dynamic(() => import('@/components/orders/OrderMaterialsClient').then(module => module.OrderMaterialsClient));
 
 import { OrderMaterialsSummary } from '@/components/orders/OrderMaterialsSummary';
 import { CheckCircle2, Loader2, MailCheck } from 'lucide-react';
@@ -11,12 +11,10 @@ import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/useI18n';
 import { formatMajorCurrencyValue, type CheckoutCurrency } from '@/lib/locale-pricing';
 import { getOrderStatusLabelKey } from '@/lib/order-status';
-import { SignatureVoiceEditionNotice } from '@/components/SignatureVoiceEditionNotice';
-import { isSignatureVoicePackage } from '@/lib/signature-voice';
 
 export type CheckoutSuccessOrder = {
   materials?:OrderMaterials|null;
-  originalVoiceLineId?:string;
+  hasBookMaterials?:boolean;
   order_id: string;
   display_id?: string | null;
   order_status?: string | null;
@@ -52,9 +50,9 @@ export function CheckoutSuccessCard({
   const { t } = useI18n();
   const [pendingAction, setPendingAction] = useState<'track' | 'home' | null>(null);
   const [isAccountPromptDismissed, setIsAccountPromptDismissed] = useState(false);
-  const originalVoiceLine = order?.originalVoiceLineId ??
-    order?.materials?.items.find(item => item.edition === 'original' && item.package_type === 'supreme')?.cart_item_id;
-  const hasSignatureVoice = order?.items?.some(item => isSignatureVoicePackage(item.package_type)) ?? false;
+  const showMaterials = order && !loading && !order.shipped_at
+    && ['paid', 'production'].includes(order.order_status ?? '')
+    && (order.hasBookMaterials ?? order.materials?.items.some(hasBookMaterialFields) ?? true);
 
   const handleTrackOrder = () => {
     if (pendingAction || (!orderId && !order?.order_id)) return;
@@ -116,12 +114,9 @@ export function CheckoutSuccessCard({
           </div>
         ) : null}
 
-        {originalVoiceLine && order && ['paid','production'].includes(order.order_status ?? '')
-          ? <OriginalVoiceMaterials key={order.order_id} orderId={order.order_id} voiceLineId={originalVoiceLine}/>
+        {showMaterials
+          ? <PaidBookMaterials key={order.order_id} orderId={order.order_id} embedded/>
           : <OrderMaterialsSummary materials={order?.materials} shipment={order??undefined}/>}
-        {hasSignatureVoice && !originalVoiceLine ? (
-          <SignatureVoiceEditionNotice variant="postPurchase" className="mx-auto mt-5 max-w-xl" />
-        ) : null}
 
         {accountPromptEmail && !isAccountPromptDismissed ? (
           <section className="mt-6 flex flex-col items-center gap-3 border-y border-emerald-100 bg-emerald-50/65 px-4 py-4">

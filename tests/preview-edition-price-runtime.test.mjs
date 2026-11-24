@@ -97,3 +97,12 @@ test('fresh personalized book features Voice and the waiting gallery keeps an ex
   assert.equal(form.render().bookType,'digital')
   assert.match(text(render().find(b => b.props['aria-pressed'])), /PDF only/)
 })
+
+test('only the selected Voice edition explains post-payment recording and the purchase panel has no material editor',()=>{
+  const Panel=loadUi('components/personalize/PreviewYourBookPanel.tsx').PreviewYourBookPanel
+  for (const value of ['basic','supreme','digital']) {
+    const tree=Panel({value,pricing:{...book().packagePricing,digital:pricing.catalogPriceModel({list_price_usd:9.9,row_version:1},'digital')},currency:'USD'})
+    assert.equal(text(tree).includes('You can add your voice recording after purchase.'),value==='supreme')
+    assert.doesNotMatch(text(tree),/Write|A message for|Record now/)
+  }
+})

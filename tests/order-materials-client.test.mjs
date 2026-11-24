@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import vm from 'node:vm'
+import {loadUi} from './helpers/preview-uiux-harness.mjs'
 import ts from 'typescript'
 import {readFileSync} from 'node:fs'
 const order='00000000-0000-4000-8000-000000000010',line='00000000-0000-4000-8000-000000000020'
@@ -22,7 +23,7 @@ const dto=()=>({order_id:order,items:[{
  dedication:{body:'With love',revision:1},can_edit_dedication:true,voice_ready:true,can_submit_voice:true,
  can_replace_voice:true,voice_asset_id:oldAsset,voice_revision:1,voice_uploaded_at:'2026-10-26T00:00:00Z',
 }]})
-function harness({response,upload,initial=dto(),component='page'}={}) {
+function harness({response,upload,initial=dto(),component='page',embedded=false}={}) {
  let cursor=0,tree,dirty=true,server=initial
  const slots=[],effects=[],calls=[],uploads=[],history=[]
  const changed=(a,b)=>!a||a.length!==b.length||a.some((v,i)=>!Object.is(v,b[i]))
@@ -49,7 +50,7 @@ function harness({response,upload,initial=dto(),component='page'}={}) {
   '@/components/orders/MaterialTime':{MaterialTime:'local-time'},
   '@/components/orders/MaterialMessageEditor':{MaterialMessageEditor:'message-editor'},
   '@/components/orders/MaterialShippedNotice':{MaterialShippedNotice:'shipped-notice'},
-  '@/lib/order-materials':{parseOrderMaterialsPage:x=>x},'@/lib/order-materials-client':helpers({fetch:fetchMock}),
+  '@/lib/order-materials':{parseOrderMaterialsPage:x=>x,hasBookMaterialFields:loadUi('src/lib/order-materials.ts').hasBookMaterialFields},'@/lib/order-materials-client':helpers({fetch:fetchMock}),
   '@/services/assets':{uploadUserAsset:async(...args)=>{uploads.push(args);return upload?upload(...args):{asset_id:newAsset,voice_authorization_id:'synthetic-authorization'}}},
   '@/lib/useI18n':{useI18n:()=>({t:()=> 'Explicit synthetic voice authorization'})},
   '@/lib/signature-voice':{SIGNATURE_VOICE_CONSENT_VERSION:'signature-voice-consent-v3'},
@@ -57,7 +58,7 @@ function harness({response,upload,initial=dto(),component='page'}={}) {
  },{window:{location:{hash:'#token='+grant,pathname:'/orders/'+order+'/materials'},history:{replaceState:(...args)=>history.push(args)}},
   fetch:fetchMock,URL:LocalURL,
  })
- function render(){cursor=0;dirty=false;tree=component==='page'?client.OrderMaterialsClient({orderId:order}):client.RecordingPlayback({orderId:order,itemId:line,assetId:oldAsset,token:grant,onRecovery:()=>callbacks.push('recovery'),onLatest:()=>callbacks.push('latest')});while(effects.length)effects.shift()();return tree}
+ function render(){cursor=0;dirty=false;tree=component==='page'?client.OrderMaterialsClient({orderId:order,embedded}):client.RecordingPlayback({orderId:order,itemId:line,assetId:oldAsset,token:grant,onRecovery:()=>callbacks.push('recovery'),onLatest:()=>callbacks.push('latest')});while(effects.length)effects.shift()();return tree}
  async function settle(){for(let n=0;n<8;n++){if(dirty)render();await new Promise(resolve=>setImmediate(resolve))}if(dirty)render();return tree}
  function walk(value){if(!value||typeof value!=='object')return[];if(Array.isArray(value))return value.flatMap(walk);return[value,...walk(value.props?.children)]}
  const nodes=()=>walk(tree)
@@ -231,4 +232,20 @@ test('a shipped refresh closes an open capture intent instead of leaving an uplo
  h.button('Update recording').props.onClick();await h.settle();assert.ok(h.dialog())
  shipped=true;h.button('Reload current status').props.onClick();await h.settle()
  assert.equal(h.dialog(),undefined);assert.ok(h.nodes().some(n=>n.type==='shipped-notice'));assert.equal(h.uploads.length,0);h.cleanup()
+})
+
+test('paid inline materials show the right controls for all six editions without consuming an email credential',async()=>{
+ const books=['personalised','original'].flatMap(edition=>['digital','basic','supreme'].map(package_type=>({
+   ...dto().items[0],edition,package_type,cart_item_id:edition+'-'+package_type,
+   book:{title:edition+' '+package_type},voice_ready:false,voice_asset_id:null,
+ })))
+ const h=harness({embedded:true,initial:{order_id:order,items:books}})
+ await h.settle()
+ const editors=h.nodes().filter(n=>n.type==='message-editor')
+ assert.deepEqual(editors.map(n=>n.props.item.cart_item_id),['personalised-digital','personalised-basic','personalised-supreme'])
+ assert.equal(h.nodes().filter(n=>n.type==='button'&&n.props.children==='Record or upload now').length,2)
+ assert.doesNotMatch(h.text(),/original (digital|basic)/)
+ assert.equal(h.history.length,0)
+ assert.equal(h.calls[0].init.headers.Authorization,undefined)
+ h.cleanup()
 })

@@ -1,7 +1,6 @@
 'use client'
 
 import Image from 'next/image'
-import { Mic, PenLine } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { BookPackagePricing, DisplayCurrency } from '@/types'
 import { EDITION_DEFINITIONS, type EditionType } from './product/edition-definitions'
@@ -9,11 +8,11 @@ import { EditionPrice } from './product/EditionPrice'
 import { getUiMessage as t } from '@/lib/i18n-messages'
 import styles from './PreviewExperience.module.css'
 
-export function PreviewYourBookPanel({ value, pricing, currency, childName, disabled = false, voiceDisabled = false, voiceReady, notice, recovery, onChange, onDetails, onVoice, onMessage, actions }: {
-  value: EditionType | 'digital'; pricing: BookPackagePricing; currency: DisplayCurrency; childName: string
-  disabled?: boolean; voiceDisabled?: boolean; voiceReady: boolean; notice?: string | null; recovery?: ReactNode
+export function PreviewYourBookPanel({ value, pricing, currency, disabled = false, notice, recovery, onChange, onDetails, actions }: {
+  value: EditionType | 'digital'; pricing: BookPackagePricing; currency: DisplayCurrency
+  disabled?: boolean; notice?: string | null; recovery?: ReactNode
   onChange: (value: EditionType | 'digital') => void; onDetails: (value: EditionType) => void
-  onVoice: () => void; onMessage: () => void; actions: ReactNode
+  actions: ReactNode
 }) {
   return <aside className={styles.panel} aria-label="Your book">
     <h2>Your book</h2>
@@ -37,8 +36,7 @@ export function PreviewYourBookPanel({ value, pricing, currency, childName, disa
         <button type="button" className={styles.detailsLink} disabled={disabled} onClick={() => onDetails(edition.type)}>See details</button>
       </div>)}
     </div>
-    {value === 'supreme' ? <div className={styles.voiceRow}><Mic size={18} aria-hidden="true" /><span>Your voice · now or after purchase</span><button type="button" disabled={disabled || voiceDisabled} onClick={onVoice}>{voiceReady ? 'Change' : 'Record'}</button></div> : null}
-    <div className={styles.messageRow}><PenLine size={21} aria-hidden="true" /><span><strong>A message for {childName}</strong><small>Optional · add a personal touch</small></span><button type="button" disabled={disabled} onClick={onMessage}>Write</button></div>
+    {value === 'supreme' && <p className={styles.voiceNote}>You can add your voice recording after purchase.</p>}
     <div className={styles.panelNotice}><span role={notice ? 'alert' : undefined}>{notice}</span>{recovery}</div>
     {actions}
   </aside>

@@ -63,7 +63,7 @@ test('W1 visual recovery remains intact while purchase configuration is independ
   assert.match(page, /isRetryingPreview \? t\('personalize.previewRetrying'\)/)
   assert.match(page, /isPreviewPartialFailure \? t\('personalize.previewPartialFailure'\)/)
   assert.match(page, /const canAddToCart = stageCanAddToCart && canConfigurePurchase/)
-  assert.match(page, /voiceDisabled=\{!canConfigurePurchase\}/)
+  assert.doesNotMatch(page, /onVoice=\{|<SignatureVoiceDialog/)
   assert.match(page, /purchaseReady = hasReadyPreviewCover && canAddToCart && canCheckout/)
   assert.match(page, /onMessage=\{\(\) => setIsMessageEditorOpen\(true\)\}/)
   assert.match(messages, /Your cover is saved, but this Preview could not finish\. Return to Customize to generate again\./)

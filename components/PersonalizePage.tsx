@@ -45,7 +45,6 @@ import { PreviewBookPageContent } from '@/components/personalize/PreviewBookPage
 import { StoryShowcaseCard } from '@/components/personalize/StoryShowcaseCard';
 import { CustomizeFormLayout } from '@/components/personalize/CustomizeFormLayout';
 import { getBookPackagePrice } from '@/lib/package-pricing';
-import { SIGNATURE_VOICE_CONSENT_VERSION } from '@/lib/signature-voice';
 import { PreviewStepLayout } from '@/components/personalize/PreviewStepLayout';
 import { PersonalizeFormFlow, type PersonalizeFormStep } from '@/components/personalize/PersonalizeFormFlow';
 import { PersonalizeProductIntro } from '@/components/personalize/PersonalizeProductIntro';
@@ -58,8 +57,6 @@ import { PreviewPhotoVersions } from '@/components/personalize/PreviewPhotoVersi
 import { carryPreviewVersionChoices, PreviewVersionLockedError } from '@/lib/preview-version-selection';
 import { readPreviewVersionLock } from '@/services/preview-version-lock';
 import { readPreviewDedications, savePreviewDedication } from '@/services/preview-dedication';
-import { SignatureVoiceDialog } from '@/components/personalize/SignatureVoiceDialog';
-import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel';
 import { templateStorageUrl, type CatalogBook } from '@/lib/book-catalog';
 import type { CartItem } from '@/types';
 import type { PublishedHomepageBanner } from '@/lib/homepage-banners-core';
@@ -196,7 +193,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
   const {
     recentFaces,
     recentProfiles,
-    recentVoices,
     status: personalizeHistoryStatus,
     refresh: refreshPersonalizeHistory,
     rememberProfile,
@@ -354,11 +350,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
   const pendingGenerateConsentRef = useRef<{ consent: GeneratePreviewConsent; receipt: PhotoReceipt } | null>(null);
   const [voiceAssetId, setVoiceAssetId] = useState<string | null>(null);
   const [voiceStoragePath, setVoiceStoragePath] = useState<string | null>(null);
-  const [voiceDurationSeconds, setVoiceDurationSeconds] = useState<number | null>(null);
-  const [pendingVoiceRecording, setPendingVoiceRecording] = useState<PendingVoiceRecording | null>(null);
-  const pendingVoiceRecordingRef = useRef<PendingVoiceRecording | null>(null);
-  const [isVoiceDialogOpen, setIsVoiceDialogOpen] = useState(false);
-  const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [isSavingEdition, setIsSavingEdition] = useState(false);
   const [editionError, setEditionError] = useState<string | null>(null);
   const [editionDetails, setEditionDetails] = useState<'basic' | 'supreme' | null>(null);
@@ -439,8 +430,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
   const [templateTitle, setTemplateTitle] = useState<string | null>(initialBook?.title || null);
   const [templateDescription, setTemplateDescription] = useState<string | null>(initialBook?.description || null);
   const [templateInnerDescription, setTemplateInnerDescription] = useState<string | null>(initialBook?.innerDescription || null);
-  const [voicePlaybackUrl, setVoicePlaybackUrl] = useState<string | null>(null);
-  const [voiceValidationError, setVoiceValidationError] = useState<string | null>(null);
   useEffect(() => {
     if (!creationId || !previewJobId) {
       if (!creationId) {
@@ -597,7 +586,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
   } : null, [book]);
   const currentPackagePrice = previewPricing?.[purchaseBookType] ?? null;
   const currentPrice = currentPackagePrice?.effectivePriceUsd ?? 0;
-  const requiresVoiceSample = purchaseBookType === 'supreme';
   const isMobile = windowWidth < 768;
   const previewShareImageUrl = previewPublicShareImageUrl || previewUrl || previewPages[0] || resolvedBook?.coverUrl || null;
 
@@ -627,14 +615,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
     TOTAL_SPREADS,
     getPreviewMaxSpreadIndex(previewDisplayState),
   );
-  const currentVoiceSample = useMemo(() => {
-    if (!voiceAssetId) return null;
-    return recentVoices.find((voice) => voice.asset_id === voiceAssetId) ?? null;
-  }, [recentVoices, voiceAssetId]);
-
-  const resolvedVoicePlaybackUrl = voicePlaybackUrl || currentVoiceSample?.playback_url || null;
-  const resolvedVoiceDurationSeconds = voiceDurationSeconds
-    ?? (Number(currentVoiceSample?.metadata?.duration_seconds) || null);
   const markPreviewImageError = useCallback((image: string) => {
     if (!image) return;
     setPreviewImageErrors((prev) => {
@@ -852,10 +832,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
     }
     setVoiceAssetId(data.voiceAssetId || null)
     setVoiceStoragePath(data.voiceStoragePath || null)
-    setVoicePlaybackUrl(null)
-    setVoiceDurationSeconds(null)
-    pendingVoiceRecordingRef.current = null
-    setPendingVoiceRecording(null)
     setPreviewJobId(isUuid(data.previewJobId) ? data.previewJobId : null)
     setCreationId(data.creationId ?? null)
     if (viewMode !== 'preview') {
@@ -980,14 +956,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
                     ? creation.voice_asset_id
                     : null
                   setVoiceAssetId(cachedVoiceAssetId)
-                  setVoiceDurationSeconds(
-                    Number.isFinite(Number(creation.voice_sample_duration_seconds))
-                      ? Number(creation.voice_sample_duration_seconds)
-                      : null
-                  )
-                  setVoicePlaybackUrl(cachedVoiceAssetId
-                    ? `/api/user-assets/${encodeURIComponent(cachedVoiceAssetId)}/download`
-                    : null)
                 }
 
                 if (!templateTitle && creation.templates?.name) {
@@ -1073,14 +1041,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
             ? creation.voice_asset_id
             : null
           setVoiceAssetId(nextVoiceAssetId)
-          setVoiceDurationSeconds(
-            Number.isFinite(Number(creation.voice_sample_duration_seconds))
-              ? Number(creation.voice_sample_duration_seconds)
-              : null
-          )
-          setVoicePlaybackUrl(nextVoiceAssetId
-            ? `/api/user-assets/${encodeURIComponent(nextVoiceAssetId)}/download`
-            : null)
         }
 
         if (!templateTitle && creation.templates?.name) {
@@ -1156,11 +1116,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
     setTemplateInnerDescription(initialBook?.innerDescription || null)
     setVoiceAssetId(null)
     setVoiceStoragePath(null)
-    setVoicePlaybackUrl(null)
-    setVoiceDurationSeconds(null)
-    pendingVoiceRecordingRef.current = null
-    setPendingVoiceRecording(null)
-    setVoiceValidationError(null)
     setPreviewJobId(null)
     setCreationId(null)
     setPreviewUrl(null)
@@ -1277,10 +1232,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
         rememberProfile(created.textProfile?.profile)
         setVoiceAssetId(null)
         setVoiceStoragePath(null)
-        setVoicePlaybackUrl(null)
-        setVoiceDurationSeconds(null)
-        pendingVoiceRecordingRef.current = null
-        setPendingVoiceRecording(null)
         if (pendingFaceAsset) {
           setFaceImageUrl(null)
           setPhotoAssetId(pendingFaceAsset.asset_id)
@@ -1363,17 +1314,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
   }, [formPhotoInspection.status, formStep, personalizeHistoryStatus, photo, photoAssetId, prepareSavedPhoto,
     recentFaces, setPhotoPreview, setPhotoStoragePath, viewState.showForm]);
 
-  useEffect(() => {
-    if (voicePlaybackUrl) return;
-    if (!currentVoiceSample?.playback_url) return;
-    setVoicePlaybackUrl(currentVoiceSample.playback_url);
-  }, [currentVoiceSample?.playback_url, voicePlaybackUrl]);
-
-  useEffect(() => {
-    if (!requiresVoiceSample || voiceAssetId || pendingVoiceRecording) {
-      setVoiceValidationError(null);
-    }
-  }, [pendingVoiceRecording, requiresVoiceSample, voiceAssetId]);
 
   const preloadPreviewImage = useCallback((url?: string | null) => {
     if (!url || typeof window === 'undefined') return;
@@ -1814,15 +1754,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
     logout();
   }, [logout, requestPreviewCancellation, stage]);
 
-  const handleVoiceRecordingSelected = useCallback(
-    (recording: PendingVoiceRecording | null) => {
-      pendingVoiceRecordingRef.current = recording;
-      setPendingVoiceRecording(recording);
-      if (!recording) return;
-      setVoiceValidationError(null);
-    },
-    []
-  );
 
   const resolvePurchaseConfigurationContext = useCallback(async () => {
     const locationParams = typeof window !== 'undefined'
@@ -1948,11 +1879,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
             voiceAssetIdRef.current = null;
             setVoiceAssetId(null);
             setVoiceStoragePath(null);
-            setVoicePlaybackUrl(null);
-            setVoiceDurationSeconds(null);
-            pendingVoiceRecordingRef.current = null;
-            setPendingVoiceRecording(null);
-            setIsVoiceDialogOpen(false);
           } else if (result.voiceReady && result.voiceAssetId) {
             voiceAssetIdRef.current = result.voiceAssetId;
             setVoiceAssetId(result.voiceAssetId);
@@ -2004,7 +1930,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
     queuedPurchaseBookTypeRef.current = nextPackageType;
     setBookType(nextPackageType);
     setEditionError(null);
-    setVoiceValidationError(null);
 
     // Before identity arrival, keep the latest choice locally. The identity
     // effect drains this same queue once; no provisional request is sent.
@@ -2013,7 +1938,7 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
   }, [flushEditionConfiguration, hasTerminalPreviewFailure, isSwitchingPreviewVersion, previewAccessState, setBookType]);
 
   const handleSelectPhotoVersion = useCallback(async (version: PreviewVariantView) => {
-    if (versionSelectionAbortRef.current || isPreviewVariantBusy || isSavingVoice
+    if (versionSelectionAbortRef.current || isPreviewVariantBusy
       || !restoredPreviewGroup.ready || version.status !== 'ready'
       || !previewVariants.some(item => item.jobId === version.jobId && item.creationId === version.creationId)
       || version.jobId === displayedPreviewJobId) return;
@@ -2077,86 +2002,11 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
         setIsSwitchingPreviewVersion(false);
       }
     }
-  }, [cancelPreviewWatch, displayedPreviewJobId, isPreviewVariantBusy, isSavingVoice, photoPreparation, previewVariants,
+  }, [cancelPreviewWatch, displayedPreviewJobId, isPreviewVariantBusy, photoPreparation, previewVariants,
     replacePreviewUrl, resetBookNavigation, restoredPreviewGroup.ready, selectPreviewJobId, setCreationId, setFaceImageUrl,
     setPhoto, setPhotoAssetId, setPhotoPreview, setPhotoStoragePath, setPreviewBookPresentation,
     setPreviewJobId, setPreviewPages, setPreviewUrl, user?.customerId]);
 
-  const handleSaveVoice = useCallback(async (recording: PendingVoiceRecording) => {
-    if (isSavingVoice) return;
-    setIsSavingVoice(true);
-    editionSelectionRevisionRef.current += 1;
-    setVoiceValidationError(null);
-    setEditionError(null);
-
-    try {
-      await purchaseConfigurationDrainPromiseRef.current;
-      const voiceAsset = await uploadUserAsset(
-        recording.file,
-        'voice_sample',
-        'voice',
-        user?.customerId ?? undefined,
-        {
-          metadata: { duration_seconds: recording.durationSeconds },
-          voiceAuthorization: {
-            accepted: true,
-            version: SIGNATURE_VOICE_CONSENT_VERSION,
-            speakerKind: 'authorized_speaker',
-          },
-        }
-      );
-      const result = await saveEditionConfiguration('supreme', {
-        voiceAssetId: voiceAsset.asset_id,
-      });
-      if (!result.voiceReady || !result.voiceAssetId) {
-        throw new Error(t('personalize.voiceSaveFailed'));
-      }
-
-      purchaseBookTypeRef.current = 'supreme';
-      confirmedPurchaseBookTypeRef.current = 'supreme';
-      setBookType('supreme');
-      voiceAssetIdRef.current = result.voiceAssetId;
-      setVoiceAssetId(result.voiceAssetId);
-      setVoiceStoragePath(voiceAsset.storage_path);
-      setVoicePlaybackUrl(
-        voiceAsset.playback_url
-          ?? `/api/user-assets/${encodeURIComponent(result.voiceAssetId)}/download`
-      );
-      setVoiceDurationSeconds(
-        Number(voiceAsset.metadata?.duration_seconds) || recording.durationSeconds
-      );
-      pendingVoiceRecordingRef.current = null;
-      setPendingVoiceRecording(null);
-      setIsVoiceDialogOpen(false);
-      void refreshPersonalizeHistory().catch(() => {});
-    } catch (error) {
-      setVoiceValidationError(resolveEditionError(error));
-    } finally {
-      setIsSavingVoice(false);
-    }
-  }, [isSavingVoice, refreshPersonalizeHistory, resolveEditionError, saveEditionConfiguration, setBookType, t, user?.customerId]);
-
-  const handleRemoveVoice = useCallback(async () => {
-    if (isSavingVoice) return;
-    editionSelectionRevisionRef.current += 1;
-    setIsSavingVoice(true);
-    setVoiceValidationError(null);
-    try {
-      await purchaseConfigurationDrainPromiseRef.current;
-      await saveEditionConfiguration('supreme', { clearVoice: true });
-      voiceAssetIdRef.current = null;
-      setVoiceAssetId(null);
-      setVoiceStoragePath(null);
-      setVoicePlaybackUrl(null);
-      setVoiceDurationSeconds(null);
-      pendingVoiceRecordingRef.current = null;
-      setPendingVoiceRecording(null);
-    } catch (error) {
-      setVoiceValidationError(resolveEditionError(error));
-    } finally {
-      setIsSavingVoice(false);
-    }
-  }, [isSavingVoice, resolveEditionError, saveEditionConfiguration]);
 
   const ensureCurrentPurchaseConfiguration = useCallback(async () => {
     setEditionError(null);
@@ -2651,7 +2501,7 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
       if (previewError || isPreviewCoverPending || isPreviewVariantBusy || isPreviewVariantLimitReached
         || (current.status !== 'idle' && current.intent.surface === 'variant'
           && ['loading', 'checking', 'preparing'].includes(current.status))
-        || versionSelectionAbortRef.current || previewVariantGenerationRef.current || isSavingVoice || isSavingEdition
+        || versionSelectionAbortRef.current || previewVariantGenerationRef.current || isSavingEdition
         || isSwitchingPreviewVersion || !restoredPreviewGroup.ready) return;
       const sourceCreationId = creationIdRef.current;
       const sourceJobId = previewJobIdRef.current;
@@ -2825,7 +2675,7 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
     || (isPreviewVariantCapacityWaiting ? t('personalize.capacityPhotoBody') : null)
     || (isGeneratingPreviewCapacityWaiting ? t('personalize.capacityLoadingBody') : null);
   const purchaseReady = hasReadyPreviewCover && canAddToCart && canCheckout;
-  const purchaseBusy = isSavingEdition || isSavingVoice || isSwitchingPreviewVersion || previewActionPending === 'CHECKOUT';
+  const purchaseBusy = isSavingEdition || isSwitchingPreviewVersion || previewActionPending === 'CHECKOUT';
   const purchasePrice = currentPackagePrice ? formatDisplayCurrency(currentPackagePrice.effectivePriceUsd, displayCurrency) : 'Unavailable';
   const acknowledgeAction = (action: () => void) => {
     if (!purchaseReady || purchaseBusy) return;
@@ -3109,7 +2959,7 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
                     cap={restoredPreviewGroup.group?.changeCap ?? PREVIEW_VARIANT_SESSION_CAP}
                     changeCount={Math.max(previewVariantSessionCount, restoredPreviewGroup.group?.changeCount ?? 0)}
                     waiting={isPreviewCoverPending} changing={isSwitchingPreviewVersion || isPreviewVariantBusy}
-                    disabled={Boolean(previewError) || isPreviewCoverPending || isPreviewVariantBusy || isSavingVoice || isSavingEdition || isSwitchingPreviewVersion || !restoredPreviewGroup.ready}
+                    disabled={Boolean(previewError) || isPreviewCoverPending || isPreviewVariantBusy || isSavingEdition || isSwitchingPreviewVersion || !restoredPreviewGroup.ready}
                     error={previewVariantError ?? (variantPhotoInspection.status === 'failed'
                       ? t('personalize.photoCheck.' + variantPhotoInspection.reason) : restoredPreviewGroup.error)}
                     onRetry={variantPhotoInspection.status === 'failed' && variantPhotoInspection.reason === 'technical'
@@ -3126,19 +2976,14 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
                       value={purchaseBookType}
                       pricing={previewPricing!}
                       currency={displayCurrency}
-                      childName={name}
-                      disabled={isSavingVoice || isSwitchingPreviewVersion || hasTerminalPreviewFailure || previewAccessState === 'unavailable'}
-                      voiceDisabled={!canConfigurePurchase}
+                      disabled={isSwitchingPreviewVersion || hasTerminalPreviewFailure || previewAccessState === 'unavailable'}
                       notice={panelNotice}
                       recovery={isPreviewUnavailable ? <button type="button" onClick={leaveUnavailablePreview}>Customize</button>
                         : previewError || isRetryingPreview ? <button type="button" disabled={isRetryingPreview} aria-busy={isRetryingPreview} onClick={canRetryPreview
                           ? () => void retryPreview(creationId) : () => void requestPreviewCancellation({ showToast: false })}>
                           {isRetryingPreview ? 'Retrying...' : canRetryPreview ? 'Retry remaining' : 'Customize'}</button> : null}
-                      voiceReady={Boolean(voiceAssetId)}
                       onChange={handleEditionChange}
                       onDetails={value => { if (!versionSelectionAbortRef.current && !isSwitchingPreviewVersion) setEditionDetails(value); }}
-                      onVoice={() => setIsVoiceDialogOpen(true)}
-                      onMessage={() => setIsMessageEditorOpen(true)}
                       actions={
                         <PreviewPurchaseActions
                           acknowledged={checkoutAcknowledged} onAcknowledged={value => { setCheckoutAcknowledged(value); if (value) setAcknowledgementError(null); }}
@@ -3169,32 +3014,6 @@ function PersonalizeWorkspace({ bookID, initialBook, originalAvailable = false, 
             shareText: t('share.previewTemplate'),
             note: t('share.previewNote'),
           }}
-        />
-        <SignatureVoiceDialog
-          open={isVoiceDialogOpen}
-          existingAssetId={voiceAssetId}
-          existingSignedUrl={resolvedVoicePlaybackUrl}
-          existingDurationSeconds={resolvedVoiceDurationSeconds}
-          pendingRecording={pendingVoiceRecording}
-          validationError={voiceValidationError}
-          isSaving={isSavingVoice}
-          labels={{
-            title: t('personalize.signatureVoiceDialogTitle'),
-            description: t('personalize.signatureVoiceDialogBody'),
-            authorization: t('personalize.signatureVoiceAuthorization'),
-            required: t('personalize.requiredLabel'),
-            save: t('personalize.saveVoice'),
-            saving: t('personalize.savingVoice'),
-            remove: t('personalize.removeVoice'),
-            close: t('common.close'),
-          }}
-          onClose={() => {
-            if (!isSavingVoice) setIsVoiceDialogOpen(false)
-          }}
-          onRecordingSelected={handleVoiceRecordingSelected}
-          onClearValidation={() => setVoiceValidationError(null)}
-          onSave={(recording) => void handleSaveVoice(recording)}
-          onRemove={() => void handleRemoveVoice()}
         />
 
       </main>

@@ -6,7 +6,7 @@ export type MaterialItem = {
   creation_id: string
   template_id: string
   child_name?:string|null
-  edition?: 'original'
+  edition?: 'original' | 'personalised'
   package_type: 'basic' | 'supreme' | 'digital'
   dedication: { decision: 'skipped' | 'confirmed'; body: string | null; revision: number }
   can_edit_dedication: boolean
@@ -19,6 +19,9 @@ export type MaterialItem = {
   book?: { title: string; cover_url: string | null; cover_status: 'ready' | 'pending' | 'unavailable' }
 }
 export type OrderMaterials = { order_id: string; items: MaterialItem[] }
+export function hasBookMaterialFields(item: Pick<MaterialItem, 'edition' | 'package_type'>) {
+  return item.edition !== 'original' || item.package_type === 'supreme'
+}
 export class MaterialError extends Error {
   constructor(public readonly code: string, public readonly status: number) { super(code) }
 }
@@ -78,7 +81,7 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
     }
     return { cart_item_id:materialUuid(item.cart_item_id),creation_id:materialUuid(item.creation_id),
       template_id:item.template_id,child_name:typeof item.child_name==='string'?item.child_name.trim()||null:null,package_type:item.package_type,
-      ...(original?{edition:'original' as const}:{}),
+      ...(item.edition === 'original' || item.edition === 'personalised' ? {edition:item.edition} : {}),
       dedication:parseMaterialDedication(item.dedication),can_edit_dedication:item.can_edit_dedication,
       voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice,can_replace_voice:item.can_replace_voice,
       voice_asset_id:item.voice_asset_id as string|null,voice_revision:item.voice_revision as number|null,

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { SignatureVoiceDialog } from '@/components/personalize/SignatureVoiceDialog'
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel'
 import type { MaterialItem, OrderMaterials } from '@/lib/order-materials'
-import { parseOrderMaterialsPage } from '@/lib/order-materials'
+import { hasBookMaterialFields, parseOrderMaterialsPage } from '@/lib/order-materials'
 import { fetchMaterialRecording, RecordingPlaybackError, playbackMediaReason, type PlaybackFailureReason, materialWriteError, recordingIntent } from '@/lib/order-materials-client'
 import { uploadUserAsset } from '@/services/assets'
 import { useI18n } from '@/lib/useI18n'
@@ -49,7 +49,7 @@ export function RecordingPlayback({orderId,itemId,assetId,token,onRecovery,onLat
   </div>
 }
 
-export function OrderMaterialsClient({orderId,voiceLineId}:{orderId:string;voiceLineId?:string}) {
+export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;embedded?:boolean}) {
   const {t}=useI18n()
   const [token,setToken]=useState<string|null|undefined>(undefined)
   const [materials,setMaterials]=useState<OrderMaterials|null>(null)
@@ -60,12 +60,12 @@ export function OrderMaterialsClient({orderId,voiceLineId}:{orderId:string;voice
   const writeInFlight=useRef(false)
   const base=`/api/orders/${orderId}/materials`
   useEffect(()=>{
-    if (voiceLineId) {setToken(null);return}
+    if (embedded) {setToken(null);return}
     const fragment=new URLSearchParams(window.location.hash.slice(1)).get('token')
     // Remove the bearer from navigation/history while retaining it only in memory.
     if (window.location.hash) window.history.replaceState(null,'',window.location.pathname)
     if (fragment && !/^[A-Za-z0-9_-]{43}$/.test(fragment)) {setRecovery(true);setToken(null)} else setToken(fragment)
-  },[voiceLineId])
+  },[embedded])
   const headers=useCallback(()=>({'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}),[token])
   const load=useCallback(async(signal?:AbortSignal)=>{
     const response=await fetch(base,{headers:headers(),credentials:'include',cache:'no-store',signal})
@@ -87,7 +87,7 @@ export function OrderMaterialsClient({orderId,voiceLineId}:{orderId:string;voice
   const save=async(item:MaterialItem,body:string)=>{
     if(writeInFlight.current)return
     writeInFlight.current=true;setBusy(true);setError('');setMessage('')
-    try {await write({action:'dedication',itemId:item.cart_item_id,expectedRevision:item.dedication.revision,body});await load();setMessage('Your message has been saved. You can update it again before the deadline.')}
+    try {await write({action:'dedication',itemId:item.cart_item_id,expectedRevision:item.dedication.revision,body});await load();setMessage('Your message has been saved.')}
     catch(e){setError(e instanceof Error?e.message:'Unable to save.')}finally{writeInFlight.current=false;setBusy(false)}
   }
   const saveVoice=async(selected:PendingVoiceRecording)=>{
@@ -125,11 +125,13 @@ export function OrderMaterialsClient({orderId,voiceLineId}:{orderId:string;voice
       else {setChallenge(data.challengeId);setMessage('If this email matches the order, a verification code is on its way.')}
     }catch(e){setError(e instanceof Error?e.message:'Unable to recover access.')}finally{setBusy(false)}
   }
-  const Container=voiceLineId?'section':'main'
-  return <Container className="mx-auto max-w-3xl space-y-6 px-5 py-12 text-slate-900">
+  const items = embedded ? materials?.items.filter(hasBookMaterialFields) : materials?.items
+  if (embedded && items?.length === 0) return null
+  const Container=embedded?'section':'main'
+  return <Container className={embedded ? "mt-6 space-y-4 text-left text-slate-900" : "mx-auto max-w-3xl space-y-6 px-5 py-12 text-slate-900"}>
     {/* AppShell supplies the existing site Navbar/logo/back control on this route. */}
-    {!voiceLineId && <Link href="/orders" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 underline">← Back to orders</Link>}
-    {voiceLineId?<h2 className="font-serif text-xl font-bold">Your optional voice recording</h2>:<h1 className="font-serif text-3xl font-bold">Your book materials</h1>}
+    {!embedded && <Link href="/orders" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 underline">← Back to orders</Link>}
+    {embedded?<h2 className="font-serif text-xl font-bold">Your book materials</h2>:<h1 className="font-serif text-3xl font-bold">Your book materials</h1>}
     {error?<p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{error}</p>:null}
     {message?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-900">{message}</p>:null}
     {shipped?<MaterialShippedNotice/>:recovery ? <section className="rounded-2xl border border-amber-200 bg-white p-6">
@@ -141,7 +143,7 @@ export function OrderMaterialsClient({orderId,voiceLineId}:{orderId:string;voice
         {challenge?<button type="button" className="ml-3 text-sm underline" onClick={()=>setChallenge('')}>Use another email</button>:null}
       </form></section> : materials ? <>
       <button type="button" disabled={busy} className="text-sm underline" onClick={()=>{setError('');void load().catch(()=>setError('Unable to refresh the current status. Please try again.'))}}>Reload current status</button>
-      {materials.items.filter(item=>!voiceLineId || (item.cart_item_id===voiceLineId && item.edition==='original' && item.package_type==='supreme')).map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
+      {items?.map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
         <div className="flex items-center gap-4">
           <OrderCoverImage src={item.book?.cover_url} status={item.book?.cover_status} alt={item.book?.title || 'Your personalised book'}
             sizes="80px" className="h-20 w-20 shrink-0 rounded-xl" imageClassName="object-contain" placeholderLabel="Book cover"/>

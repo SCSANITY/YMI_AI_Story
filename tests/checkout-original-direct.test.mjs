@@ -130,10 +130,10 @@ test('the basket excludes the unpaid original and an authorized order restore us
   assert.equal(restored.items[0].preview_cover_url,'/catalog/story/v1/cover.webp')
 })
 
-test('paid original Voice opens its own recording panel on both fast confirmation and restored Checkout success',()=>{
+test('eligible paid books open order-scoped materials on both fast confirmation and restored Checkout success',()=>{
   const fixture=hookHarness('app/checkout/success/CheckoutSuccessCard.tsx','CheckoutSuccessCard',{
     stubs:{
-      'next/dynamic':{default:()=>props=>({type:'voice-panel',props})},
+      'next/dynamic':{default:()=>props=>({type:'materials-panel',props})},
       '@/lib/useI18n':{useI18n:()=>({t:key=>key})},
       '@/components/orders/OrderMaterialsSummary':{OrderMaterialsSummary:()=>null},
       '@/components/SignatureVoiceEditionNotice':{SignatureVoiceEditionNotice:()=>null},
@@ -141,9 +141,19 @@ test('paid original Voice opens its own recording panel on both fast confirmatio
       'lucide-react':{CheckCircle2:()=>null,Loader2:()=>null,MailCheck:()=>null},
     },
   })
-  for(const evidence of [{originalVoiceLineId:'line'},{materials:{items:[{cart_item_id:'line',edition:'original',package_type:'supreme'}]}}]){
-    const render=status=>fixture.render({loading:false,orderId:'order',order:{order_id:'order',order_status:status,...evidence}})
-    assert.equal(uiNodes(render('paid')).find(n=>n.type==='voice-panel')?.props.voiceLineId,'line')
-    assert.equal(uiNodes(render('unpaid')).some(n=>n.type==='voice-panel'),false)
+  const show = (status, evidence, loading=false) => uiNodes(fixture.render({
+    loading,orderId:'order',order:{order_id:'order',order_status:status,...evidence},
+  })).find(node=>node.type==='materials-panel')
+  for (const evidence of [
+    {hasBookMaterials:true},
+    {materials:{items:[{edition:'original',package_type:'supreme'}]}},
+    {materials:{items:[{package_type:'digital'},{package_type:'basic'}]}},
+  ]) {
+    assert.equal(show('paid',evidence)?.props.orderId,'order')
+    assert.equal(show('production',evidence)?.props.embedded,true)
+    for (const status of ['unpaid','cancelled','refunded','shipped']) assert.equal(show(status,evidence),undefined)
+    assert.equal(show('paid',evidence,true),undefined)
   }
+  assert.equal(show('paid',{hasBookMaterials:false}),undefined)
+  assert.equal(show('paid',{materials:{items:[{edition:'original',package_type:'basic'}]}}),undefined)
 })
