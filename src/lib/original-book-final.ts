@@ -16,7 +16,8 @@ export async function prepareOriginalBookFinal(orderId: string, lineId: string) 
   }
 
   const plan = await reserveOrConfirm(null)
-  if (plan.prepared === true) return plan.finalJobId as string
+  // Manual pages are initialized transactionally and stay editable in Final Review.
+  if (plan.prepared === true || plan.manual === true) return plan.finalJobId as string
   const hashes: unknown = plan.hashes
   if (!Array.isArray(hashes) || hashes.length !== 31 ||
       !hashes.every(hash => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash))) {

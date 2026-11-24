@@ -14,7 +14,7 @@ const formats = [
   { id: 'supreme', label: 'Hardcover + Voice', detail: 'Printed book and digital PDF. Add your voice for narration after payment.' },
 ] as const
 
-export function OriginalFormatSelection({ story, title, offers }: { story: string; title: string; offers: OriginalOffer[] }) {
+export function OriginalFormatSelection({ story, title, offers, catalogCover }: { story: string; title: string; offers: OriginalOffer[]; catalogCover: string }) {
   const { displayCurrency } = useGlobalContext()
   const [format, select] = useState<OriginalFormat | null>(null)
   const [busy, setBusy] = useState(false)
@@ -23,7 +23,7 @@ export function OriginalFormatSelection({ story, title, offers }: { story: strin
   const submitting = useRef(false)
   const attempts = useRef(new Map<string, string>())
   const offer = offers.find(row => row.format === format)
-  const cover = templateStorageUrl((offer ?? offers[0]).coverPath)
+  const cover = templateStorageUrl((offer ?? offers[0]).coverPath) || catalogCover
 
   async function start() {
     if (!offer || submitting.current || changed) return

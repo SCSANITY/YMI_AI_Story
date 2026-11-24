@@ -9,7 +9,7 @@ const offers = ['digital', 'basic', 'supreme'].map((format, index) => ({
   sourceVersion: 'sample-v1', coverPath: 'sample/v1/cover.webp',
 }))
 
-function fixture() {
+function fixture(availableOffers = offers) {
   const orders = [], redirects = [], requests = [], storage = new Map()
   let conflict = false, offline = false, enabled = true
   const orderId = randomUUID()
@@ -27,7 +27,7 @@ function fixture() {
   const chooser = hookHarness('app/checkout/original/[story]/OriginalFormatSelection.tsx', 'OriginalFormatSelection', {
     stubs: { 'next/link': { __esModule: true, default: 'a' },
       '@/contexts/GlobalContext': { useGlobalContext: () => ({ displayCurrency: 'USD' }) },
-      '@/lib/book-catalog': { templateStorageUrl: key => '/catalog/' + key } },
+      '@/lib/book-catalog': { templateStorageUrl: key => key ? '/catalog/' + key : '' } },
     globals: { crypto: { randomUUID }, sessionStorage: { getItem: k => storage.get(k), setItem: (k,v) => storage.set(k,v), removeItem: k => storage.delete(k) },
       window: { location: { replace: url => redirects.push(url) } },
       fetch: async (url, init) => {
@@ -37,7 +37,7 @@ function fixture() {
         return res
       } },
   })
-  const draw = () => chooser.render({ story, title: 'Sample story', offers })
+  const draw = () => chooser.render({ story, title: 'Sample story', catalogCover: '/catalog/story-cover.png', offers: availableOffers })
   return { draw, post, orders, redirects, requests, storage, orderId,
     conflict: () => { conflict = true }, enabled: value => { enabled = value }, offline: value => { offline = value } }
 }
@@ -61,6 +61,20 @@ test('each original format opens the same protected single-order checkout throug
     assert.equal(rpc.p_story, story)
     assert.equal(rpc.p_price_cents, offer.priceCents)
     assert.equal(rpc.p_source_version, offer.sourceVersion)
+    assert.deepEqual(h.redirects, ['/checkout?orderId=' + h.orderId])
+  }
+})
+
+test('each manual original enters direct checkout with the catalog cover and no bound source', async () => {
+  const manual = offers.map(offer => ({ ...offer, coverPath: null, sourceVersion: null }))
+  for (const [index, offer] of manual.entries()) {
+    const h = fixture(manual)
+    const tree = h.draw()
+    assert.equal(uiNodes(tree).find(n => n.type === 'img').props.src, '/catalog/story-cover.png')
+    radios(tree)[index].props.onChange()
+    await button(h.draw()).props.onClick()
+    assert.equal(h.orders[0].p_source_version, '')
+    assert.equal(h.orders[0].p_format, offer.format)
     assert.deepEqual(h.redirects, ['/checkout?orderId=' + h.orderId])
   }
 })

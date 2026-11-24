@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       !['digital', 'basic', 'supreme'].includes(body.format) ||
       !Number.isSafeInteger(body.priceCents) || body.priceCents <= 0 ||
       !Number.isSafeInteger(body.priceVersion) || body.priceVersion <= 0 ||
-      typeof body.sourceVersion !== 'string' || !body.sourceVersion || body.sourceVersion.length > 128) {
+      (body.sourceVersion !== null && (typeof body.sourceVersion !== 'string' || !body.sourceVersion || body.sourceVersion.length > 128))) {
     return NextResponse.json({ error: 'Invalid purchase selection' }, { status: 400 })
   }
   try {
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const { data: orderId, error } = await supabaseAdmin.rpc('start_original_book_order', {
       p_attempt: body.attemptId, p_owner_type: owner.ownerType, p_owner: owner.customerId ?? owner.anonSessionId,
       p_story: body.story, p_language: 'en', p_format: body.format,
-      p_price_version: body.priceVersion, p_price_cents: body.priceCents, p_source_version: body.sourceVersion,
+      p_price_version: body.priceVersion, p_price_cents: body.priceCents, p_source_version: body.sourceVersion ?? '',
     })
     if (error?.code === 'PT409') return NextResponse.json({ error: 'Please review the current offer.' }, { status: 409 })
     if (error || !isUuid(orderId)) throw new Error('Order could not be created')

@@ -10,5 +10,5 @@ export default async function OriginalCheckout({ params }: { params: Promise<{ s
   const { story } = await params
   const [book, offers] = await Promise.all([loadActiveTemplateDetail(story), originalBookOffers(story)])
   if (!book || !offers.length) notFound()
-  return <OriginalFormatSelection key={story} story={story} title={book.title} offers={offers} />
+  return <OriginalFormatSelection key={story} story={story} title={book.title} catalogCover={book.coverUrl} offers={offers} />
 }
