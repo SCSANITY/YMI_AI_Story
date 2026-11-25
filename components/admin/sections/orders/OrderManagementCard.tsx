@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Clock3, Save, Undo2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Clock3, Copy, Info, Save, Undo2 } from 'lucide-react'
 import {
   AdminButton,
   AdminNotice,
@@ -26,6 +26,31 @@ import { AdminFloatingDialog } from '@/components/admin/AdminFloatingDialog'
 import { BookAndShippingDetails, EditionChips, orderTime } from './OrderBookDetails'
 import { OrderEmailActivity } from './OrderEmailActivity'
 import { OrderShippingWorkspace } from '@/components/admin/sections/orders/OrderShippingWorkspace'
+
+import styles from './OrderDetails.module.css'
+
+function CopyOrderNumber({ number }: { number: string }) {
+  const [message, setMessage] = useState('')
+  useEffect(() => {
+    if (!message) return
+    const timer = setTimeout(() => setMessage(''), 2200)
+    return () => clearTimeout(timer)
+  }, [message])
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(number)
+      setMessage('Copied')
+    } catch {
+      setMessage('Select the order number to copy it.')
+    }
+  }
+  return <>
+    <button type="button" className={styles.copy} aria-label="Copy order number" title="Copy order number" onClick={copy}>
+      {message === 'Copied' ? <Check size={15}/> : <Copy size={15}/>}
+    </button>
+    <span role="status" className={message && message !== 'Copied' ? styles.muted : 'sr-only'}>{message}</span>
+  </>
+}
 
 function mergeOrder(current: OrderRow, persisted: OrderRow) {
   return {
@@ -66,6 +91,26 @@ function OrderSummary({
   onShowBooks: () => void
 }) {
   const progress = order.production_progress
+  const counts = <div className={onToggle ? `border-l border-[var(--admin-card-line)] pl-3 text-[11px] font-semibold text-[var(--admin-page-muted)] tabular-nums [&_b]:text-sm [&_b]:text-[var(--admin-page-ink)] mt-5 w-[clamp(4.5rem,9vw,7rem)] space-y-0.5` : styles.counts}>
+      <div className="flex items-center justify-between gap-2">{onToggle ? 'ITEMS' : 'Items'} <b>{progress.itemCount}</b></div>
+      <button className="flex w-full items-center justify-between gap-2 hover:underline" aria-label="Open PDF production snapshot" onClick={() => onOpenProduction('pdf')}>PDF <b>{progress.pdfReleasedCount}/{progress.pdfTotalCount}</b>{!onToggle && <ChevronRight size={13} aria-hidden/>}</button>
+      <button className="flex w-full items-center justify-between gap-2 hover:underline" disabled={!progress.printTotalCount} aria-label="Open Print production snapshot" onClick={() => onOpenProduction('print')}>{onToggle ? 'PRINT' : 'Print'} <b>{progress.printReleasedCount}/{progress.printTotalCount}</b>{!onToggle && <ChevronRight size={13} aria-hidden/>}</button>
+    </div>
+  if (!onToggle) {
+    const number = order.display_id || order.order_id
+    return <header className={styles.summary}>
+      <div><div className={styles.number}><strong>{number}</strong><CopyOrderNumber number={number}/></div>
+        <p className={styles.muted}>Placed {orderTime(order.created_at)}</p>
+      </div>
+      <div className={styles.customer}><strong>{customerName}</strong><p className={styles.muted}>{customerEmail}</p></div>
+      {counts}
+      <div className={styles.tags}><AdminStatusBadge tone={getStatusTone(order.order_status)}>{statusLabel}</AdminStatusBadge>
+        {!isReadOnly && isDirty && <AdminStatusBadge tone="warning">Unsaved</AdminStatusBadge>}
+        <EditionChips insideDialog books={order.books ?? []} onShowBooks={onShowBooks}/>
+        {progress.missingJobCount > 0 && <small>{progress.missingJobCount} job pending</small>}
+      </div>
+    </header>
+  }
   const identity = <>
     <div className="flex flex-wrap items-center gap-2"><strong className="break-all">{order.display_id || order.order_id}</strong>
       <AdminStatusBadge tone={getStatusTone(order.order_status)}>{statusLabel}</AdminStatusBadge>
@@ -77,12 +122,8 @@ function OrderSummary({
     <p className="break-all text-xs text-[var(--admin-page-muted)]">{customerEmail}</p>
   </>
   return <div className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 p-4">
-    {onToggle ? <button type="button" className="min-w-0 text-left" onClick={onToggle} aria-expanded={expanded}>{identity}<ChevronDown size={14} aria-hidden className="absolute right-4 top-4 text-[var(--admin-page-muted)]" /></button> : <div>{identity}</div>}
-    <div className={`border-l border-[var(--admin-card-line)] pl-3 text-[11px] font-semibold text-[var(--admin-page-muted)] tabular-nums [&_b]:text-sm [&_b]:text-[var(--admin-page-ink)] ${onToggle ? 'mt-5 w-[clamp(4.5rem,9vw,7rem)] space-y-0.5' : 'min-w-16 sm:flex sm:gap-6'}`}>
-      <div className="flex items-center justify-between gap-2">ITEMS <b>{progress.itemCount}</b></div>
-      <button className="flex w-full items-center justify-between gap-2 hover:underline" aria-label="Open PDF production snapshot" onClick={() => onOpenProduction('pdf')}>PDF <b>{progress.pdfReleasedCount}/{progress.pdfTotalCount}</b></button>
-      <button className="flex w-full items-center justify-between gap-2 hover:underline" disabled={!progress.printTotalCount} aria-label="Open Print production snapshot" onClick={() => onOpenProduction('print')}>PRINT <b>{progress.printReleasedCount}/{progress.printTotalCount}</b></button>
-    </div>
+    <button type="button" className="min-w-0 text-left" onClick={onToggle} aria-expanded={expanded}>{identity}<ChevronDown size={14} aria-hidden className="absolute right-4 top-4 text-[var(--admin-page-muted)]" /></button>
+    {counts}
     <div className="col-span-2 border-t border-[var(--admin-card-line)] pt-2"><EditionChips books={order.books ?? []} onShowBooks={onShowBooks} /></div>
     {progress.missingJobCount > 0 && <small className="col-span-2 text-[var(--admin-page-muted)]">{progress.missingJobCount} job pending</small>}
   </div>
@@ -122,7 +163,9 @@ export function OrderManagementCard({
       }).catch(() => { /* The purchased story's catalog cover is already visible. */ })
     return () => controller.abort()
   }, [needCovers, order.order_id])
-  const [showShipping, setShowShipping] = useState(false)
+  const [showShipping, setShowShipping] = useState(order.order_status === 'shipped')
+  const [shippingVisited, setShippingVisited] = useState(false)
+  const [shippingEditing, setShippingEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [productionSnapshotMode, setProductionSnapshotMode] = useState<'pdf' | 'print' | null>(null)
   const [notice, setNotice] = useState<{
@@ -176,7 +219,7 @@ export function OrderManagementCard({
 
   const saveLogistics = async (action: 'save' | 'resume' = 'save') => {
     const resume = action === 'resume'
-    if (saving || (resume ? !manualProduction || isDirty : !isDirty)) return
+    if (saving || shippingEditing || (resume ? !manualProduction || isDirty : !isDirty)) return
     const requestIntent = ++requestIntentRef.current
     setSaving(true)
     setNotice(null)
@@ -252,10 +295,27 @@ export function OrderManagementCard({
     '-'
   const customerName = [savedOrder.shipping_address?.firstName, savedOrder.shipping_address?.lastName].filter(Boolean).join(' ') || savedOrder.customer_display_name || 'Guest customer'
   const customerEmail = savedOrder.email || savedOrder.customer_account_email || '-'
+  const snapshotTrigger = useRef<HTMLElement | null>(null)
   const openProductionSnapshot = (mode: 'pdf' | 'print') => {
-    if (expanded) onToggle()
+    snapshotTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setProductionSnapshotMode(mode)
   }
+  const closeSnapshot = () => {
+    setProductionSnapshotMode(null)
+    requestAnimationFrame(() => snapshotTrigger.current?.focus())
+  }
+  const saveButtons = (
+    <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-[var(--admin-card-line)] pt-3">
+      <AdminButton type="button" onClick={discardDraft} disabled={saving || !isDirty} title="Discard unsaved changes" tone="quiet">
+        <Undo2 className="h-4 w-4" /> Discard
+      </AdminButton>
+      <AdminButton type="button" onClick={() => void saveLogistics()}
+        disabled={saving || shippingEditing || !isDirty || (progressAction && (!progressReason.trim() || trackingDirty))}
+        tone="primary">
+        <Save className="h-4 w-4" /> {saving ? 'Saving...' : 'Save changes'}
+      </AdminButton>
+    </div>
+  )
   const displayedOrder = { ...savedOrder, books: savedOrder.books?.map(book => {
     const cover = covers[book.itemId]
     return cover && cover.job === book.finalJobId ? { ...book, cover: cover.url } : book
@@ -279,15 +339,15 @@ export function OrderManagementCard({
 
       {expanded ? (
         <AdminFloatingDialog
-          onClose={onToggle}
-          eyebrow={savedOrder.display_id || savedOrder.order_id}
-          title="Order details"
-          maxWidthClassName="max-w-4xl"
+          onClose={productionSnapshotMode ? closeSnapshot : onToggle}
+          title={productionSnapshotMode ? (productionSnapshotMode === 'pdf' ? 'PDF progress' : 'Print progress') : 'Order details'}
+          maxWidthClassName={styles.dialog}
+          bodyClassName={styles.body}
           placement="center"
           backdrop="blur"
         >
-        <div>
-          <div className="admin-v2-order-bubble mb-5">
+        {productionSnapshotMode && <OrderProductionSnapshot embedded orderId={savedOrder.order_id} mode={productionSnapshotMode} onClose={closeSnapshot}/>}
+        <div hidden={Boolean(productionSnapshotMode)}>
             <OrderSummary
               order={displayedOrder}
               statusLabel={statusLabel}
@@ -298,12 +358,8 @@ export function OrderManagementCard({
               onShowBooks={() => setCoversRequested(true)}
               onOpenProduction={openProductionSnapshot}
             />
-          </div>
-          <div className="grid items-start gap-4 md:grid-cols-2">
-          <BookAndShippingDetails order={displayedOrder} />
-          <div className="space-y-3">
-          <section className="rounded-xl border border-[var(--admin-card-line)] p-4">
-          <h3 className="mb-2 font-bold md:float-left md:mt-2">Order status</h3>
+          <section className={styles.status}>
+          {isReadOnly && <h3>Order status · {statusLabel}</h3>}
           {isReadOnly ? (
             <div className="rounded-xl border border-[color-mix(in_srgb,var(--admin-card-line)_72%,transparent)] bg-[color-mix(in_srgb,var(--admin-card)_48%,transparent)] p-4 text-sm text-[var(--admin-page-ink)]">
               <div className="grid gap-2 md:grid-cols-2">
@@ -339,14 +395,18 @@ export function OrderManagementCard({
           ) : (
             <div>
               <fieldset
-                disabled={saving}
-                className="flex min-w-0 flex-col items-stretch gap-3 disabled:cursor-wait disabled:opacity-70"
+                disabled={saving || shippingEditing}
+                className={styles.statusLine}
               >
-                <label className="self-start md:self-end">
+                <h3>Order status</h3>
+                <label className={styles.picker}>
                   <span className="sr-only">Current status</span>
                   <select
                     value={draft.orderStatus}
-                    onChange={(event) => updateDraft({ orderStatus: event.target.value })}
+                    onChange={event => {
+                      updateDraft({ orderStatus: event.target.value })
+                      if (event.target.value === 'shipped') setShowShipping(true)
+                    }}
                     className={adminFieldClass}
                   >
                     {ORDER_STATUS_OPTIONS.filter(([value]) => {
@@ -362,14 +422,15 @@ export function OrderManagementCard({
                       </option>
                     ))}
                   </select>
+                  <ChevronDown size={14} aria-hidden/>
                 </label>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-[var(--admin-page-muted)]">
+                <div className={styles.progressMode}>
+                  <span className={manualProduction ? styles.manual : styles.auto}><Info size={14} aria-hidden/>
                     {!inProduction ? 'Production tracking ends at shipment.' : manualProduction
                       ? isDirty ? 'Save or discard your edits before resuming.' : 'Production progress is paused.'
                       : 'Production progress is automatic.'}
                   </span>
-                  <AdminButton type="button" tone="quiet" disabled={!manualProduction || isDirty || saving}
+                  <AdminButton type="button" tone="quiet" disabled={!manualProduction || isDirty || saving || shippingEditing}
                     onClick={() => void saveLogistics('resume')}>
                     Resume automatic progress
                   </AdminButton>
@@ -379,84 +440,69 @@ export function OrderManagementCard({
                   <input className={adminFieldClass} value={progressReason} maxLength={500} required
                     onChange={event => setProgressReason(event.target.value)} />
                 </label>}
-                <details key={draft.orderStatus === 'shipped' ? 'shipment' : 'logistics'} open={draft.orderStatus === 'shipped'} className="md:col-span-2">
-                  <summary className="cursor-pointer text-sm font-semibold">Shipping and tracking</summary>
-                  <div className="mt-2 grid gap-2">
-                <label className={adminLabelClass}>
-                  Carrier
-                  <input
-                    value={draft.trackingCarrier}
-                    onChange={(event) => updateDraft({ trackingCarrier: event.target.value })}
-                    className={adminFieldClass}
-                    placeholder="DHL, FedEx, SF Express..."
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  Tracking number
-                  <input
-                    value={draft.trackingNumber}
-                    onChange={(event) => updateDraft({ trackingNumber: event.target.value })}
-                    className={adminFieldClass}
-                    placeholder="Tracking number"
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  Tracking URL
-                  <input
-                    value={draft.trackingUrl}
-                    onChange={(event) => updateDraft({ trackingUrl: event.target.value })}
-                    className={adminFieldClass}
-                    placeholder="https://..."
-                  />
-                </label>
-                <label className={`${adminLabelClass} md:col-span-2`}>
-                  Note
-                  <textarea
-                    value={draft.logisticsNote}
-                    onChange={(event) => updateDraft({ logisticsNote: event.target.value })}
-                    className={`${adminFieldClass} min-h-20 py-2`}
-                    placeholder="Customer-facing logistics note"
-                  />
-                </label>
-                  </div>
-                </details>
+
               </fieldset>
 
-              {isDirty && <div className="mt-4 flex flex-col-reverse gap-2 border-t border-[var(--admin-card-line)] pt-4 sm:flex-row sm:justify-end">
-                <AdminButton
-                  type="button"
-                  onClick={discardDraft}
-                  disabled={saving || !isDirty}
-                  title="Discard unsaved changes"
-                  tone="quiet"
-                  className="sm:min-w-28"
-                >
-                  <Undo2 className="h-4 w-4" />
-                  Discard
-                </AdminButton>
-                <AdminButton
-                  type="button"
-                  onClick={() => void saveLogistics()}
-                  disabled={saving || !isDirty}
-                  tone="primary"
-                  className="sm:min-w-28"
-                >
-                  <Save className="h-4 w-4" />
-                  {saving ? 'Saving...' : 'Save changes'}
-                </AdminButton>
-              </div>}
+              {isDirty && (draft.orderStatus !== current || !showShipping) && saveButtons}
             </div>
           )}
 
           </section>
+          <BookAndShippingDetails order={displayedOrder} />
           {!READONLY_GROUPS.has(orderGroup) && (
-            <details className="rounded-xl border border-[var(--admin-card-line)] p-4" onToggle={event => setShowShipping(event.currentTarget.open)}>
-              <summary className="cursor-pointer font-bold">Shipping operations</summary>
-              {showShipping && <OrderShippingWorkspace order={savedOrder} blocked={isDirty||saving} onCommitted={applyPersistedOrder}/>}
+            <details className={styles.fold} open={showShipping} onToggle={event => {
+              setShowShipping(event.currentTarget.open)
+              if (event.currentTarget.open) setShippingVisited(true)
+            }}>
+              <summary><ChevronRight size={16}/>Shipping operations <small>{[savedOrder.tracking_carrier,savedOrder.tracking_number].filter(Boolean).join(' · ')}</small></summary>
+              {(showShipping || shippingVisited) && <div className={styles.shipping}>
+                {!isReadOnly && <fieldset disabled={saving || shippingEditing} className="min-w-0">
+                  <h3>Shipping and tracking</h3>
+                  <div className={styles.fields}>
+                    <label className={adminLabelClass}>
+                      Carrier
+                      <input
+                        value={draft.trackingCarrier}
+                        onChange={(event) => updateDraft({ trackingCarrier: event.target.value })}
+                        className={adminFieldClass}
+                        placeholder="DHL, FedEx, SF Express..."
+                      />
+                    </label>
+                    <label className={adminLabelClass}>
+                      Tracking number
+                      <input
+                        value={draft.trackingNumber}
+                        onChange={(event) => updateDraft({ trackingNumber: event.target.value })}
+                        className={adminFieldClass}
+                        placeholder="Tracking number"
+                      />
+                    </label>
+                    <label className={adminLabelClass}>
+                      Tracking URL
+                      <input
+                        value={draft.trackingUrl}
+                        onChange={(event) => updateDraft({ trackingUrl: event.target.value })}
+                        className={adminFieldClass}
+                        placeholder="https://..."
+                      />
+                    </label>
+                    <label className={`${adminLabelClass} md:col-span-2`}>
+                      Note
+                      <textarea
+                        value={draft.logisticsNote}
+                        onChange={(event) => updateDraft({ logisticsNote: event.target.value })}
+                        className={`${adminFieldClass} min-h-20 py-2`}
+                        placeholder="Customer-facing logistics note"
+                      />
+                    </label>
+                  </div>
+                  {trackingDirty && draft.orderStatus === current && saveButtons}
+                </fieldset>}
+                <OrderShippingWorkspace order={savedOrder} blocked={isDirty||saving} onEditingChange={setShippingEditing} onCommitted={applyPersistedOrder}/>
+              </div>}
             </details>
           )}
           <OrderEmailActivity key={savedOrder.order_id + (savedOrder.logistics_updated_at ?? '')} order={savedOrder} />
-          </div></div>
           {notice ? (
             <AdminNotice
               tone={notice.tone === 'error' ? 'danger' : notice.tone}
@@ -469,11 +515,11 @@ export function OrderManagementCard({
         </div>
         </AdminFloatingDialog>
       ) : null}
-      {productionSnapshotMode ? (
+      {!expanded && productionSnapshotMode ? (
         <OrderProductionSnapshot
           orderId={savedOrder.order_id}
           mode={productionSnapshotMode}
-          onClose={() => setProductionSnapshotMode(null)}
+          onClose={closeSnapshot}
         />
       ) : null}
     </>

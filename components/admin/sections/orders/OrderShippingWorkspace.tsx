@@ -6,7 +6,7 @@ import { AdminButton, AdminNotice, adminFieldClass, adminLabelClass } from '@/co
 import { isOrderRow, type OrderRow } from './types'
 import type { AdminShippingDetails } from '@/lib/order-shipping'
 
-export function OrderShippingWorkspace({order,blocked,onCommitted}:{order:OrderRow;blocked:boolean;onCommitted:(order:OrderRow)=>void}) {
+export function OrderShippingWorkspace({order,blocked,onEditingChange,onCommitted}:{order:OrderRow;blocked:boolean;onEditingChange:(editing:boolean)=>void;onCommitted:(order:OrderRow)=>void}) {
   const [data,setData]=useState<AdminShippingDetails|null>(null)
   const [provider,setProvider]=useState(false)
   const [autoDelivery,setAutoDelivery]=useState(false)
@@ -17,6 +17,19 @@ export function OrderShippingWorkspace({order,blocked,onCommitted}:{order:OrderR
   const manualKey=useRef<string|null>(null)
   const endpoint=`/api/admin/orders/${order.order_id}/shipping`
   const shippingDraftDirty=Boolean(data&&(provider!==(data.provider==='dealer_send')||autoDelivery!==data.autoDelivery||description.trim()))
+
+  useEffect(() => {
+    onEditingChange(busy || shippingDraftDirty)
+  }, [busy, shippingDraftDirty, onEditingChange])
+  useEffect(() => () => onEditingChange(false), [onEditingChange])
+
+  function discardEdits() {
+    if (!data) return
+    setProvider(data.provider === 'dealer_send')
+    setAutoDelivery(data.autoDelivery)
+    setDescription('')
+    manualKey.current = null
+  }
 
   const load=useCallback(async()=>{
     const current=++intent.current
@@ -70,9 +83,9 @@ export function OrderShippingWorkspace({order,blocked,onCommitted}:{order:OrderR
   }
 
   return (
-    <section aria-label="Shipping details administration" className="mt-5 border-t border-[var(--admin-card-line)] pt-4">
-      <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Shipping Details</h3>
-        <AdminButton type="button" tone="quiet" disabled={busy} onClick={()=>void load()}><RefreshCw className="h-4 w-4"/>Reload</AdminButton>
+    <section aria-label="Shipping details administration" className="min-w-0">
+      <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Shipping updates</h3>
+        <AdminButton type="button" tone="quiet" disabled={busy || shippingDraftDirty} onClick={()=>void load()}><RefreshCw className="h-4 w-4"/>Reload</AdminButton>
       </div>
       {data?(
         <fieldset disabled={busy||blocked} className="mt-3 space-y-3">
@@ -89,6 +102,7 @@ export function OrderShippingWorkspace({order,blocked,onCommitted}:{order:OrderR
           </label>
           <div className="flex flex-wrap gap-2">
             <AdminButton type="button" tone="primary" onClick={()=>void action('save')}>Save shipping settings / update</AdminButton>
+            {shippingDraftDirty && <AdminButton type="button" tone="quiet" onClick={discardEdits}>Discard</AdminButton>}
             <AdminButton type="button" tone="quiet" disabled={shippingDraftDirty||!data.provider||!data.configurationReady} onClick={()=>void action('sync')}>Sync now</AdminButton>
             <AdminButton type="button" tone="quiet" disabled={shippingDraftDirty||!data.notificationPending} onClick={()=>void action('retry_email')}>Retry delivery email</AdminButton>
           </div>

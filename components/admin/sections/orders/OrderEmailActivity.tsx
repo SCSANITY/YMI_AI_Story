@@ -3,6 +3,8 @@
 import { releaseBodyPrefix,readReleaseBody } from '@/lib/release-mail-body'
 
 import { useEffect, useState } from 'react'
+import { ChevronRight } from 'lucide-react'
+import styles from './OrderDetails.module.css'
 import { orderTime } from './OrderBookDetails'
 import type { OrderRow } from './types'
 
@@ -50,22 +52,28 @@ export function OrderEmailActivity({ order }: { order: OrderRow }) {
       .finally(() => { if (!controller.signal.aborted) setBusy(false) })
     return () => controller.abort()
   }, [order.order_id, page, retry])
-  return <details className="rounded-xl border border-[var(--admin-card-line)] p-4">
-    <summary className="cursor-pointer font-bold">Email activity {total !== null && <span>· {total}</span>}
-      <span className="mt-1 block text-xs font-normal text-[var(--admin-muted)]">
+  return <details open className={styles.fold}>
+    <summary><ChevronRight size={16}/>Email activity {total !== null && <span>· {total}</span>}
+      <small className={styles.emailSummary}>
         {events[0] ? `${title(events[0])} · ${evidence(events[0])} · ${orderTime(events[0].created_at)}` : error ? 'Could not load activity' : busy ? 'Loading…' : 'No recorded messages'}
-      </span>
+      </small>
     </summary>
     <div className="mt-2 max-h-52 overflow-y-auto [scrollbar-gutter:stable]" tabIndex={0} aria-label="Order email history">
-      {events.map(event => {
+      {events.length > 0 && <table className={styles.history}>
+        <thead><tr><th>Email</th><th>Applies to</th><th>Delivery</th><th>Time (HKT)</th></tr></thead>
+        <tbody>{events.map(event => {
         const books = order.books?.filter(book => book.finalJobId === event.final_job_id) ?? []
         const scope = event.final_job_id ? event.book_title || (books.length === 1 ? books[0].title : 'Book notification') : 'Entire order'
-        return <div key={event.email_event_id} className="border-t border-[var(--admin-card-line)] py-2 text-sm">
-          <strong className="capitalize">{title(event)}{event.proof_revision && ` · Rev ${event.proof_revision}`}</strong><p>{scope} · {orderTime(event.sent_at ?? event.observed_at ?? event.created_at)}</p>
-          {event.delivery_note && <details><summary>{event.delivery_note.startsWith(releaseBodyPrefix) ? 'Email body' : 'Opening message'}</summary><p className="whitespace-pre-line">{mailText(event.delivery_note,event.email_key)}</p></details>}
-          <small className="capitalize">{evidence(event)}</small>
-        </div>
-      })}
+        return <tr key={event.email_event_id}>
+          <td><strong className="capitalize">{title(event)}{event.proof_revision && ` · Rev ${event.proof_revision}`}</strong>
+            {event.delivery_note && <details><summary>{event.delivery_note.startsWith(releaseBodyPrefix) ? 'Email body' : 'Opening message'}</summary><p className="whitespace-pre-line">{mailText(event.delivery_note,event.email_key)}</p></details>}
+          </td>
+          <td>{scope}</td>
+          <td><span className={styles.delivery} data-delivery={event.provider_delivery_status || event.status}>{evidence(event)}</span></td>
+          <td>{orderTime(event.sent_at ?? event.observed_at ?? event.created_at)}</td>
+        </tr>
+      })}</tbody></table>}
+      {!events.length && <p className={styles.muted}>{error ? 'Could not load activity' : busy ? 'Loading…' : 'No recorded messages'}</p>}
       {error ? <button onClick={() => { setBusy(true); setError(false); setRetry(retry + 1) }}>Retry</button> :
         total !== null && events.length < total && <button disabled={busy} onClick={() => { setBusy(true); setPage(page + 1) }}>Load more</button>}
     </div>

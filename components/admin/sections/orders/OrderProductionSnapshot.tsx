@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, FileCheck2, Loader2, Package, Printer } from 'lucide-react'
+import styles from './OrderDetails.module.css'
+import { ArrowLeft, ArrowUpRight, FileCheck2, Loader2, Package, Printer } from 'lucide-react'
 import { AdminButton, AdminNotice, AdminStatusBadge } from '@/components/admin/AdminUi'
 import { AdminFloatingDialog } from '@/components/admin/AdminFloatingDialog'
 import type { AdminOrderProductionSnapshot } from '@/lib/admin-order-production'
@@ -18,9 +19,11 @@ export function OrderProductionSnapshot({
   orderId,
   mode,
   onClose,
+  embedded = false,
 }: {
   orderId: string
   mode: 'pdf' | 'print'
+  embedded?: boolean
   onClose: () => void
 }) {
   const [snapshot, setSnapshot] = useState<AdminOrderProductionSnapshot | null>(null)
@@ -62,14 +65,7 @@ export function OrderProductionSnapshot({
   const visibleJobs = snapshot?.jobs.filter((job) => mode === 'pdf' || job.requiresPrint) ?? []
   const isPdf = mode === 'pdf'
 
-  return (
-    <AdminFloatingDialog
-      onClose={onClose}
-      eyebrow={isPdf ? 'Customer PDF' : 'Print handoff'}
-      title={snapshot?.order.displayId || orderId}
-      maxWidthClassName="max-w-2xl"
-      placement="center"
-    >
+  const content = <>
           {loading && !snapshot ? (
             <div className="grid min-h-56 place-items-center text-[var(--admin-page-muted)]">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -77,11 +73,11 @@ export function OrderProductionSnapshot({
           ) : error ? (
             <AdminNotice tone="danger">{error}</AdminNotice>
           ) : visibleJobs.length ? (
-            <div className="space-y-3">
+            <div className={styles.jobList}>
               {visibleJobs.map((job) => (
-                <article key={job.key} className="admin-v2-job-bubble p-4">
+                <article key={job.key} className={styles.job}>
                   <div className="flex gap-3">
-                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)]">
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-[var(--admin-card-line)] bg-[var(--admin-panel-2)]">
                       {job.thumbnailUrl ? (
                         // Dynamic signed Storage images intentionally bypass the Vercel image optimizer.
                         // eslint-disable-next-line @next/next/no-img-element
@@ -116,7 +112,7 @@ export function OrderProductionSnapshot({
                     </div>
                   </div>
 
-                  <div className="mt-4 text-xs text-[var(--admin-page-muted)]">
+                  <div className="text-xs text-[var(--admin-page-muted)]">
                     {isPdf ? (
                       <div className="rounded-xl bg-[var(--admin-panel-2)] p-3">
                       <span className="flex items-center gap-1.5 font-semibold text-[var(--admin-page-ink)]">
@@ -145,8 +141,8 @@ export function OrderProductionSnapshot({
 
                   {job.finalJobId ? (
                     <a
-href={`/admin/finals?job=${encodeURIComponent(job.finalJobId)}&version=${mode}&order=${encodeURIComponent(orderId)}&item=${encodeURIComponent(job.cartItemId ?? '')}`}
-                      className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--admin-accent)] px-4 text-sm font-bold text-[var(--admin-accent-ink)] transition hover:brightness-95"
+                      href={`/admin/finals?job=${encodeURIComponent(job.finalJobId)}&version=${mode}&order=${encodeURIComponent(orderId)}&item=${encodeURIComponent(job.cartItemId ?? '')}`}
+                      className={styles.reviewLink}
                     >
                       {isPdf ? 'Open PDF Review' : 'Open Print Review'}
                       <ArrowUpRight className="h-4 w-4" />
@@ -164,6 +160,21 @@ href={`/admin/finals?job=${encodeURIComponent(job.finalJobId)}&version=${mode}&o
               {isPdf ? 'This order has no PDF production items.' : 'This order has no Print production items.'}
             </p>
           )}
+  </>
+  if (embedded) return <section className={styles.snapshot}>
+    <button type="button" className={styles.back} onClick={onClose} autoFocus><ArrowLeft size={16}/> Back to order</button>
+    <p className={styles.muted}>{snapshot?.order.displayId || orderId}</p>
+    {content}
+  </section>
+  return (
+    <AdminFloatingDialog
+      onClose={onClose}
+      eyebrow={isPdf ? 'Customer PDF' : 'Print handoff'}
+      title={snapshot?.order.displayId || orderId}
+      maxWidthClassName="max-w-2xl"
+      placement="center"
+    >
+    {content}
     </AdminFloatingDialog>
   )
 }

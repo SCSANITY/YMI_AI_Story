@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AdminAnchoredPopover } from '@/components/admin/AdminAnchoredPopover'
-import { BookOpen, ChevronDown } from 'lucide-react'
+import { ArrowUpRight, BookOpen, ChevronDown, ChevronRight, Mail, Phone } from 'lucide-react'
+import styles from './OrderDetails.module.css'
 import type { OrderBook, OrderRow } from './types'
 
 export const editionName = { digital: 'PDF only', basic: 'Hardcover', supreme: 'Hardcover + Voice' } as const
@@ -25,17 +26,41 @@ function BookLine({ book, orderId }: { book: OrderBook; orderId?: string }) {
       <img src={book.cover} loading="lazy" alt="" className="h-10 w-10 rounded-lg object-cover" />
     ) : <BookOpen aria-hidden className="h-10 w-10 rounded-lg bg-[var(--admin-panel-2)] p-2" />}
     <div className="min-w-24 flex-1 text-sm"><strong>{book.title}</strong><div className="text-xs text-[var(--admin-muted)]">{book.edition ? editionName[book.edition] : 'Book'} × {book.quantity}</div></div>
-    {orderId && (book.finalJobId ? <div className="flex gap-1.5 text-xs font-bold [&_a]:rounded-md [&_a]:border [&_a]:border-[var(--admin-card-line)] [&_a]:px-2 [&_a]:py-1 [&_a:hover]:bg-[var(--admin-panel-2)]">
-      <a href={href('pdf')} aria-label={`Open PDF for ${book.title}`}>PDF ↗</a>
-      {book.physical && <a href={href('print')} aria-label={`Open Print for ${book.title}`}>Print ↗</a>}
+    {orderId && (book.finalJobId ? <div className={styles.bookActions}>
+      <a href={href('pdf')} aria-label={`Open PDF for ${book.title}`}>PDF <ArrowUpRight size={13}/></a>
+      {book.physical && <a href={href('print')} aria-label={`Open Print for ${book.title}`}>Print <ArrowUpRight size={13}/></a>}
     </div> : <span className="text-xs">{book.needsLineCheck ? 'Verify order line' : 'Final pending'}</span>)}
   </li>
 }
 
-export function EditionChips({ books, onShowBooks }: { books: OrderBook[]; onShowBooks: () => void }) {
+export function EditionChips({ books, onShowBooks, insideDialog = false }: { books: OrderBook[]; onShowBooks: () => void; insideDialog?: boolean }) {
   const [open, setOpen] = useState<OrderBook['edition']>(null)
   const anchor = useRef<HTMLButtonElement>(null)
-  return <div className="flex flex-wrap gap-1.5">
+  const group = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!insideDialog || !open) return
+    function dismiss(event: PointerEvent) {
+      if (!group.current?.contains(event.target as Node)) setOpen(null)
+    }
+    function escape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      setOpen(null)
+      anchor.current?.focus()
+    }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', escape, true)
+    return () => {
+      document.removeEventListener('pointerdown', dismiss)
+      document.removeEventListener('keydown', escape, true)
+    }
+  }, [insideDialog, open])
+  const list = open && <>
+    <strong className="px-2 text-sm">{editionName[open]}</strong>
+    <ul className="px-2">{books.filter(b => b.edition === open).map(book => <BookLine key={book.itemId} book={book}/>)}</ul>
+  </>
+  return <div ref={group} className="flex flex-wrap gap-1.5">
     {(['digital','basic','supreme'] as const).map(type => {
       const rows = books.filter(book => book.edition === type)
       if (!rows.length) return null
@@ -44,25 +69,33 @@ export function EditionChips({ books, onShowBooks }: { books: OrderBook[]; onSho
         {editionName[type]} × {rows.reduce((n,b) => n+b.quantity,0)} <ChevronDown size={12} />
       </button>
     })}
-    {open && <AdminAnchoredPopover anchorRef={anchor} onClose={() => setOpen(null)} ariaLabel={editionName[open]} zIndexClassName="z-[250]">
-      <strong className="px-2 text-sm">{editionName[open]}</strong><ul className="px-2">
-      {books.filter(b => b.edition === open).map(book => <BookLine key={book.itemId} book={book} />)}
-    </ul></AdminAnchoredPopover>}
+    {open && (insideDialog
+      ? <div role="region" aria-label={editionName[open]} className={styles.editionPopover}>{list}</div>
+      : <AdminAnchoredPopover anchorRef={anchor} onClose={() => setOpen(null)} ariaLabel={editionName[open]} zIndexClassName="z-[250]">{list}</AdminAnchoredPopover>)}
   </div>
 }
 
 export function BookAndShippingDetails({ order }: { order: OrderRow }) {
   const a = order.shipping_address ?? {}
-  const lines = [[a.firstName, a.lastName].filter(Boolean).join(' '), a.company, a.addressLine1, a.addressLine2, a.addressLine3,
-    [a.city, a.region, a.zip].filter(Boolean).join(', '), a.country, a.phone, a.recipientEmail].filter(Boolean)
-  return <div className="space-y-3">
-    <section className="rounded-xl border border-[var(--admin-card-line)] p-4">
-      <h3 className="mb-2 font-bold">Shipping details</h3>
-      <address className="break-words text-sm leading-6 not-italic">{lines.length ? lines.map((line,i) => <div key={i}>{line}</div>) : 'Shipping address unavailable'}</address>
-    </section>
-    <details open className="rounded-xl border border-[var(--admin-card-line)] p-4">
-      <summary className="cursor-pointer font-bold">Items · {order.production_progress.itemCount}</summary>
-      <ul>{order.books?.map(book => <BookLine key={book.itemId} book={book} orderId={order.order_id} />)}</ul>
+  const recipient = [a.firstName, a.lastName].filter(Boolean).join(' ')
+  const lines = [a.company, a.addressLine1, a.addressLine2, a.addressLine3,
+    [a.city, a.region, a.zip].filter(Boolean).join(', '), a.country].filter(Boolean)
+  return <div className={styles.spread}>
+    <details open className={styles.books}>
+      <summary><ChevronRight size={16}/>Books <span>· {order.production_progress.itemCount}</span></summary>
+      <ul>{order.books?.map(book => <BookLine key={book.itemId} book={book} orderId={order.order_id}/>)}</ul>
     </details>
+    <section className={styles.recipient}>
+      <h3>Shipping details</h3>
+      <address>
+        {recipient && <strong>{recipient}</strong>}
+        {lines.map((line,i) => <div key={i}>{line}</div>)}
+        {!recipient && !lines.length && 'Shipping address unavailable'}
+      </address>
+      {(a.phone || a.recipientEmail) && <div className={styles.contacts}>
+        {a.phone && <p><Phone size={14}/>{a.phone}</p>}
+        {a.recipientEmail && <p><Mail size={14}/>{a.recipientEmail}</p>}
+      </div>}
+    </section>
   </div>
 }
