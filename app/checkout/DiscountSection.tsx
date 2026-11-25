@@ -17,6 +17,7 @@ type DiscountSectionProps = {
   isSignedIn: boolean;
   orderId: string | null;
   canApply: boolean;
+  onVoucherSignIn?: () => void;
   allowAutoApply: boolean;
   incomingDiscountCode: string;
   appliedDiscountCode: string | null;
@@ -75,6 +76,7 @@ function DiscountSectionComponent({
   isSignedIn,
   orderId,
   canApply,
+  onVoucherSignIn,
   allowAutoApply,
   incomingDiscountCode,
   appliedDiscountCode,
@@ -199,6 +201,7 @@ function DiscountSectionComponent({
                 type="text"
                 value={discountCodeInput}
                 onChange={(event) => {
+                  autoDiscountAttemptedRef.current = true;
                   setDiscountError('');
                   setDiscountCodeInput(event.target.value.toUpperCase());
                 }}
@@ -209,7 +212,7 @@ function DiscountSectionComponent({
                 type="button"
                 variant="outline"
                 className="glass-action-btn glass-action-btn--amber h-10 shrink-0 rounded-xl px-3 text-sm font-bold text-amber-700 sm:px-5"
-                disabled={!canApply || isApplyingDiscount || !orderId || !discountCodeInput.trim()}
+                disabled={isApplyingDiscount || !discountCodeInput.trim()}
                 onClick={() => void handleApplyCode()}
               >
                 {isApplyingDiscount ? t('common.loading') : t('checkout.applyCode')}
@@ -290,9 +293,14 @@ function DiscountSectionComponent({
                 </div>
               )}
             </div>
+          ) : onVoucherSignIn ? (
+            <button type="button" onClick={onVoucherSignIn}
+              className="text-xs font-medium text-amber-800 underline underline-offset-2">
+              {t('checkout.signInForVouchers')}
+            </button>
           ) : null}
 
-          {discountError ? <p className="text-xs font-medium text-red-500">{discountError}</p> : null}
+          {discountError ? <p role="alert" className="text-xs font-medium text-red-500">{discountError}</p> : null}
         </div>
       ) : null}
     </div>

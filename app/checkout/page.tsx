@@ -91,6 +91,7 @@ function CheckoutPageContent() {
     cart,
     checkoutItems,
     checkoutLoadError,
+    openLoginModal,
     prepareCheckout,
     addToCheckout,
     hydrateCheckoutItems,
@@ -381,6 +382,17 @@ function CheckoutPageContent() {
   const contactIssue = EMAIL_FORMAT_PATTERN.test(checkoutContactEmail) ? null : 'email';
   const invalidField = contactIssue ?? addressIssue;
   const canUseShippingQuote = digitalOnly || (shippingQuote.status === 'available' && Boolean(selectedShippingOption));
+
+  const paymentBusy = isPlacingOrder || isApplyingDiscount || isUpdatingItems || isUpdatingQuantity;
+  let discountBlockMessage = '';
+  if (!orderId || !checkoutStateReady || paymentBusy) discountBlockMessage = t('checkout.orderNotReadyError');
+  else if (contactIssue) discountBlockMessage = t('checkout.emailInvalidError');
+  else if (!canUseShippingQuote) {
+    if (shippingQuote.status === 'loading') discountBlockMessage = t('checkout.discountShippingLoading');
+    else if (shippingQuote.status === 'error' || shippingQuote.status === 'unavailable') {
+      discountBlockMessage = shippingQuote.message || t('checkout.shippingUnavailable');
+    } else discountBlockMessage = t('checkout.discountShippingNeeded');
+  }
 
   const quoteRequest = useMemo(() => {
     if (!checkoutStateReady || !isCheckoutDraftHydrated || !isCheckoutPriceReady || !orderId ||
@@ -861,8 +873,8 @@ function CheckoutPageContent() {
 
   const applyDiscountCode = useCallback(async (rawCode: string) => {
     if (!guardMergeHealthy()) return false;
-    if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
-      setDiscountError(t('checkout.orderNotReadyError'));
+    if (!orderId || discountBlockMessage) {
+      setDiscountError(discountBlockMessage || t('checkout.orderNotReadyError'));
       return false;
     }
 
@@ -907,12 +919,12 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, digitalOnly, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, digitalOnly, discountBlockMessage, checkoutContactEmail, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const applyRewardVoucher = useCallback(async (instrumentId?: string) => {
     if (!guardMergeHealthy()) return false;
-    if (!checkoutStateReady || isApplyingDiscount || !canUseShippingQuote || !orderId) {
-      setDiscountError(t('checkout.orderNotReadyError'));
+    if (!orderId || discountBlockMessage) {
+      setDiscountError(discountBlockMessage || t('checkout.orderNotReadyError'));
       return false;
     }
     if (!sessionUser?.customerId) {
@@ -957,7 +969,7 @@ function CheckoutPageContent() {
     } finally {
       setIsApplyingDiscount(false);
     }
-  }, [applyDiscountSummary, digitalOnly, checkoutStateReady, isApplyingDiscount, canUseShippingQuote, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
+  }, [applyDiscountSummary, digitalOnly, discountBlockMessage, checkoutShippingContext, orderId, shippingAmountUsd, t, sessionUser?.customerId, guardMergeHealthy]);
 
   const clearAppliedDiscount = useCallback(async (stackingGroup?: 'product_discount' | 'shipping_discount') => {
     if (!guardMergeHealthy()) return false;
@@ -1295,7 +1307,6 @@ function CheckoutPageContent() {
 
   const canPay = Boolean(paymentQuote) || customerMergeFailed;
   const summaryPriceReady = isCheckoutPriceReady && Boolean(paymentQuote);
-  const paymentBusy = isPlacingOrder || isApplyingDiscount || isUpdatingItems || isUpdatingQuantity;
   const policyModalTitle =
     openPolicyModal === 'shipping'
       ? t('footer.legalTitleShipping')
@@ -1471,7 +1482,9 @@ function CheckoutPageContent() {
             t={t}
             isSignedIn={Boolean(sessionUser?.customerId)}
             orderId={orderId}
-            canApply={checkoutStateReady && canUseShippingQuote && !invalidField && !paymentBusy}
+            canApply={!discountBlockMessage}
+            onVoucherSignIn={isAuthResolved && !sessionUser?.customerId
+              ? () => openLoginModal('login', checkoutContactEmail.trim() || undefined) : undefined}
             allowAutoApply={!queryOrderId}
             incomingDiscountCode={incomingDiscountCode}
             appliedDiscountCode={appliedDiscountCode}
