@@ -1,3 +1,4 @@
+import { giftUnitPriceUsd, type BookGiftPrice } from '@/lib/book-gift-price'
 import { buildCheckoutLineItems } from '@/lib/checkout-line-items'
 import type { CheckoutCurrency } from '@/lib/locale-pricing'
 import {
@@ -12,6 +13,7 @@ type CheckoutPricingItem = {
   name: string
   quantity: number
   unitPriceUsd: number
+  bookFormat?: string | null
   metadata?: Record<string, string>
 }
 
@@ -65,6 +67,7 @@ export function calculateCheckoutPricing({
   items,
   currency,
   multiBookRule,
+  gift,
   productDiscountUsd,
   shippingDiscountUsd,
   shipping,
@@ -72,16 +75,32 @@ export function calculateCheckoutPricing({
   items: CheckoutPricingItem[]
   currency: CheckoutCurrency
   multiBookRule: MultiBookOfferRule | null
+  gift?: BookGiftPrice
   productDiscountUsd: number
   shippingDiscountUsd: number
   shipping: { amountUsd: number; metadata: Record<string, string> }
 }) {
+  const orderedItems = [...items].sort((left, right) => left.id.localeCompare(right.id))
+  // Keep the quoted unit price on its book and defer currency rounding to Stripe line allocation.
+  if (gift) {
+    const charges = orderedItems.map(item => {
+      const unit = giftUnitPriceUsd(item.bookFormat, item.unitPriceUsd, gift)
+      return { name: item.name, amountUsd: unit * item.quantity, metadata: item.metadata }
+    })
+    const subtotal = computeMultiBookSubtotalUsd(items)
+    const productSavingsUsd = subtotal - charges.reduce((sum, line) => sum + line.amountUsd, 0)
+    if (Math.round(productSavingsUsd * 100) !== Math.round(productDiscountUsd * 100)) {
+      throw new Error('Gift card reservation does not match book prices.')
+    }
+    const shippingUsd = Math.max(0, shipping.amountUsd - shippingDiscountUsd)
+    if (shippingUsd > 0) charges.push({ name: 'Shipping', amountUsd: shippingUsd, metadata: shipping.metadata })
+    return { ...buildCheckoutLineItems(charges, currency), multiBookDiscountUsd: 0, productSavingsUsd }
+  }
   const multiBookDiscountUsd = capMultiBookOfferToHeadroom(
     computeMultiBookDiscountUsd(items, multiBookRule),
     computeMultiBookSubtotalUsd(items),
     productDiscountUsd,
   )
-  const orderedItems = [...items].sort((left, right) => left.id.localeCompare(right.id))
   const discountedItems = allocateProductDiscountToLineItems(
     orderedItems,
     productDiscountUsd + multiBookDiscountUsd,
@@ -96,5 +115,5 @@ export function calculateCheckoutPricing({
     charges.push({ name: 'Shipping', amountUsd: chargeableShippingUsd, metadata: shipping.metadata })
   }
 
-  return { ...buildCheckoutLineItems(charges, currency), multiBookDiscountUsd }
+  return { ...buildCheckoutLineItems(charges, currency), multiBookDiscountUsd, productSavingsUsd: productDiscountUsd }
 }

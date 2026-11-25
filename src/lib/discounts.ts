@@ -1,7 +1,8 @@
+import type { BookGiftPrice } from '@/lib/book-gift-price'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export type DiscountStackingGroup = 'product_discount' | 'shipping_discount'
-export type DiscountEffectType = 'free_shipping' | 'fixed_amount' | 'percentage'
+export type DiscountEffectType = 'free_shipping' | 'fixed_amount' | 'percentage' | 'book_format_price'
 type DiscountInstrumentType = 'promo_code' | 'voucher'
 
 type DiscountRpcResult = {
@@ -38,6 +39,8 @@ type OrderDiscountSlot = {
   instrumentType: DiscountInstrumentType
   code: string | null
   label: string
+  bookPrice?: BookGiftPrice
+  exclusive?: boolean
 }
 
 // Called only after order access is established. Return display fields only for
@@ -46,7 +49,7 @@ export async function loadOrderDiscountSlots(productId: string | null, shippingI
   const ids = [...new Set([productId, shippingId].filter((id): id is string => Boolean(id)))]
   if (!ids.length) return { productDiscount: null, shippingDiscount: null }
   const { data, error } = await supabaseAdmin.from('discount_instruments')
-    .select('instrument_id, instrument_type, code, discount_offers:discount_offers(name)')
+    .select('instrument_id, instrument_type, code, discount_offers:discount_offers(name, effect_type, effect_config)')
     .in('instrument_id', ids)
   if (error) throw new Error('Failed to restore order discount labels.')
   const rows = new Map((data ?? []).map(row => [row.instrument_id, row]))
@@ -58,7 +61,15 @@ export async function loadOrderDiscountSlots(productId: string | null, shippingI
     const code = row.instrument_type === 'promo_code' ? normalizeDiscountCode(row.code) : null
     const label = code || offer?.name
     if (!label) throw new Error('Order discount label is unavailable.')
-    return { instrumentId: id, instrumentType: row.instrument_type as DiscountInstrumentType, code, label }
+    const slot: OrderDiscountSlot = { instrumentId: id, instrumentType: row.instrument_type as DiscountInstrumentType, code, label }
+    if (offer?.effect_type === 'book_format_price') {
+      const voiceHkd = Number(offer.effect_config?.voice_hkd)
+      const hkdPerUsd = Number(offer.effect_config?.hkd_per_usd)
+      if (!(voiceHkd > 0 && hkdPerUsd > 0 && Number.isFinite(voiceHkd / hkdPerUsd))) throw new Error('Gift card pricing is unavailable.')
+      slot.bookPrice = { voiceHkd, hkdPerUsd }
+    }
+    if (offer?.effect_config?.exclusive === true) slot.exclusive = true
+    return slot
   }
   return { productDiscount: slot(productId), shippingDiscount: slot(shippingId) }
 }
@@ -333,6 +344,7 @@ export async function getOrderDiscountSummary(orderId: string): Promise<OrderDis
 }
 
 export function getDiscountLabel(voucher: CheckoutVoucher): string {
+  if (voucher.effectType === 'book_format_price') return 'Hardcover free ? Voice HK$' + voucher.effectConfig.voice_hkd
   if (voucher.effectType === 'free_shipping') return 'Free shipping'
   if (voucher.effectType === 'percentage') {
     const percent = toNumber(voucher.effectConfig.percent)

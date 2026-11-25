@@ -1,6 +1,6 @@
 type DiscountOffer = {
   name?: string | null
-  effect_type?: 'free_shipping' | 'fixed_amount' | 'percentage'
+  effect_type?: 'free_shipping' | 'fixed_amount' | 'percentage' | 'book_format_price'
   effect_config?: Record<string, unknown> | null
   stacking_group?: 'product_discount' | 'shipping_discount'
   is_active?: boolean

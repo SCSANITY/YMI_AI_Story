@@ -20,10 +20,15 @@ function normalizeEffectConfig(effectType: string, body: Record<string, unknown>
   return {}
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const admin = await requireAdminCustomer()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const offset = Number(new URL(request.url).searchParams.get('offset') ?? 0)
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 2147483500) {
+    return jsonNoStore({ error: 'Invalid list offset' }, { status: 400 })
+  }
+  const pageSize = 100
   const { data, error } = await supabaseAdmin
     .from('discount_instruments')
     .select(
@@ -60,13 +65,14 @@ export async function GET() {
     )
     .neq('source', 'collaboration')
     .order('created_at', { ascending: false })
-    .limit(100)
+    .order('instrument_id', { ascending: true })
+    .range(offset, offset + pageSize)
 
   if (error) {
     return jsonNoStore({ error: error.message }, { status: 500 })
   }
 
-  return jsonNoStore({ ok: true, instruments: data ?? [] })
+  return jsonNoStore({ ok: true, instruments: (data ?? []).slice(0, pageSize), nextOffset: (data?.length ?? 0) > pageSize ? offset + pageSize : null })
 }
 
 export async function POST(request: Request) {

@@ -39,6 +39,7 @@ import {
 } from '@/lib/cart-cover';
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
 import type { CheckoutQuote } from '@/lib/checkout-quote';
+import { giftUnitPriceUsd, type BookGiftPrice } from '@/lib/book-gift-price';
 import type { OrderDiscountSummary } from '@/lib/discounts';
 import {
   capMultiBookOfferToHeadroom,
@@ -202,6 +203,7 @@ function CheckoutPageContent() {
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
   const [selectedRewardVoucherId, setSelectedRewardVoucherId] = useState<string | null>(null);
   const [selectedRewardVoucherName, setSelectedRewardVoucherName] = useState<string | null>(null);
+  const [bookGift, setBookGift] = useState<BookGiftPrice | null>(null);
   const [discountAmountUsd, setDiscountAmountUsd] = useState(0);
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [shippingDiscountAmountUsd, setShippingDiscountAmountUsd] = useState(0);
@@ -450,15 +452,19 @@ function CheckoutPageContent() {
           : option),
       }
     : shippingQuote;
-  const discountTotalUsd = paymentQuote?.productDiscountUsd ?? Math.min(total, Math.max(0, discountAmountUsd));
+  const giftSavings = bookGift && items.reduce((sum, item) => {
+    const price = cartItemUnitPrice(item);
+    return sum + (price - giftUnitPriceUsd(item.personalization?.bookType, price, bookGift)) * (item.quantity ?? 1);
+  }, 0);
+  const discountTotalUsd = paymentQuote?.productDiscountUsd ?? giftSavings ?? Math.min(total, Math.max(0, discountAmountUsd));
 
   const multiBookDiscountUsd = useMemo(
-    () => paymentQuote?.multiBookDiscountUsd ?? capMultiBookOfferToHeadroom(
+    () => paymentQuote?.multiBookDiscountUsd ?? (bookGift ? 0 : capMultiBookOfferToHeadroom(
       computeMultiBookDiscountUsd(multiBookItems, multiBookRule),
       multiBookSubtotalUsd,
       discountTotalUsd
-    ),
-    [multiBookItems, multiBookRule, multiBookSubtotalUsd, discountTotalUsd, paymentQuote]
+    )),
+    [multiBookItems, multiBookRule, multiBookSubtotalUsd, discountTotalUsd, paymentQuote, bookGift]
   );
   const multiBookBadgeLabel = useMemo(() => getMultiBookOfferBadgeLabel(multiBookRule), [multiBookRule]);
   const formattedMultiBookDiscount = useMemo(
@@ -643,6 +649,7 @@ function CheckoutPageContent() {
     setShippingDiscountAmountUsd(summary.shippingDiscountAmountUsd);
     setAppliedProductDiscountInstrumentId(summary.productDiscountInstrumentId);
     setAppliedShippingDiscountInstrumentId(summary.shippingDiscountInstrumentId);
+    setBookGift(summary.productDiscount?.bookPrice ?? null);
     setAppliedProductCode(summary.productDiscount?.label ?? null);
     setAppliedShippingCode(summary.shippingDiscount?.label ?? null);
     setAppliedDiscountCode(summary.productDiscount?.code ?? summary.shippingDiscount?.code ?? null);
@@ -1197,6 +1204,7 @@ function CheckoutPageContent() {
       setShippingDiscountAmountUsd(0);
       setAppliedProductDiscountInstrumentId(null);
       setAppliedShippingDiscountInstrumentId(null);
+      setBookGift(null);
       setAppliedProductCode(null);
       setAppliedShippingCode(null);
       setDiscountError('');

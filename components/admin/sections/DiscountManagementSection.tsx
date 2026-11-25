@@ -18,17 +18,19 @@ import {
 export function DiscountManagementSection() {
   const [discounts, setDiscounts] = useState<DiscountInstrumentRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [nextOffset, setNextOffset] = useState<number | null>(null)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
   const listRequestIntentRef = useRef(0)
 
-  const reloadDiscounts = useCallback(async () => {
+  const reloadDiscounts = useCallback(async (offset = 0) => {
     const requestIntent = ++listRequestIntentRef.current
     setLoading(true)
     setLoadError('')
 
     try {
-      const response = await fetch('/api/admin/discounts', {
+      const url = offset ? '/api/admin/discounts?offset=' + offset : '/api/admin/discounts'
+      const response = await fetch(url, {
         credentials: 'include',
         cache: 'no-store',
       })
@@ -41,7 +43,10 @@ export function DiscountManagementSection() {
       const instruments = Array.isArray(data?.instruments)
         ? data.instruments.filter(isDiscountInstrumentRow)
         : []
-      setDiscounts(instruments)
+      setDiscounts(current => offset ? Array.from(
+        new Map([...current, ...instruments].map(row => [row.instrument_id, row])).values()
+      ) : instruments)
+      setNextOffset(data.nextOffset ?? null)
       setHasLoaded(true)
     } catch (error) {
       if (listRequestIntentRef.current !== requestIntent) return
@@ -143,6 +148,11 @@ export function DiscountManagementSection() {
             ))
           )}
         </div>
+        {nextOffset !== null && (
+          <AdminButton type="button" tone="secondary" disabled={loading} onClick={() => void reloadDiscounts(nextOffset)}>
+            Load more codes
+          </AdminButton>
+        )}
       </AdminPanel>
     </div>
   )

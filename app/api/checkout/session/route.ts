@@ -108,12 +108,17 @@ export async function POST(request: Request) {
       loadCheckoutPricingItems(orderId, filter),
       getOrderDiscountSummary(orderId),
     ])
+    if ((discountSummary.productDiscountInstrumentId ?? null) !== (order.applied_product_discount_instrument_id ?? null) ||
+        (discountSummary.shippingDiscountInstrumentId ?? null) !== (order.applied_shipping_discount_instrument_id ?? null)) {
+      return NextResponse.json({ error: 'Offers changed. Please review your order.' }, { status: 409 })
+    }
     if (items.every(item => item.digital) !== (option === null)) {
       return NextResponse.json({ error: 'Checkout edition changed. Please review your order.' }, { status: 409 })
     }
     const { lineItems, multiBookDiscountUsd, quote: payableQuote } = priceCheckout({
       items, currency, multiBookRule, shipping,
       productDiscountUsd: discountSummary.productDiscountAmountUsd,
+      productSlot: discountSummary.productDiscount,
       shippingDiscountUsd: discountSummary.shippingDiscountAmountUsd,
     })
     if (payableQuote.totalMinor !== expectedTotal || multiBookDiscountUsd !== quote.multiBookDiscountUsd) {

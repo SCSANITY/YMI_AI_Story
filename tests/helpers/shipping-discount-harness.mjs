@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const address = { firstName: 'Test', lastName: 'Reader', email: 'reader@example.test', country: 'HK', region: 'Hong Kong', city: 'Hong Kong', zip: '000000', addressLine1: '1 Example Street', phone: '+85212345678' }
-export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRules = false, failWrite = false, freeShipping = false, paid = false, pdfOffers = '' } = {}) {
+export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRules = false, failWrite = false, freeShipping = false, paid = false, pdfOffers = '', guest = false, discountRpc } = {}) {
   const rules = noRules ? [] : ['standard', 'speedy'].map((method, index) => ({
     rule_id: `rule-${index}`, rule_name: `${method} global`, method_code: method, zone_code: null,
     fuel_surcharge_percent: 0, handling_fee_hkd: 0, margin_percent: 0, discount_percent: percent,
@@ -19,7 +19,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     applied_shipping_discount_instrument_id: freeShipping ? 'free-shipping' : null }
   const items = [{ cart_item_id: 'item-1', creation_id: 'creation-1', quantity: 1, price_at_purchase: 39,
     product_type: 'physical', package_type: 'supreme', package_price_version: 1,
-    order_id: 'test-order', status: 'ordered', owner_type: 'customer', customer_id: 'test-customer',
+    order_id: 'test-order', status: 'ordered', owner_type: guest ? 'anon' : 'customer', customer_id: guest ? null : 'test-customer', anon_session_id: guest ? 'test-guest' : null,
     creations: { template_id: 'Birthdayboy_story', customize_snapshot: { childName: 'Alston' }, templates: { name: 'Birthday Story' } } }]
   const tables = {
     shipping_pricing_rules: rules,
@@ -75,6 +75,9 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
           purchase.orderId === params.p_order && purchase.lineId === params.p_line)
         return { data: receipt ? { format: receipt.format ?? 'digital', coverPath: 'fixture/v1/cover.webp' } : null, error: null }
       }
+      if (discountRpc && ['apply_discount_instrument', 'quote_checkout_discounts'].includes(name)) {
+        return discountRpc(name, params, order)
+      }
       if (name === 'quote_checkout_discounts') {
         rpcCalls.push({ name, params })
         return { data: [{ product_discount_amount_usd: order.discount_amount_usd,
@@ -121,8 +124,8 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     '@/lib/adminAuth': { requireAdminCustomer: async () => admin ? { customer_id: 'test-admin' } : null },
     '@/lib/stripe': { isStripeEnabled: () => true, getStripeServer: () => stripe },
     '@/lib/checkout-owner': {
-      resolveCheckoutOwner: async () => ({ ownerType: 'customer', customerId: 'test-customer', email: 'reader@example.test' }),
-      ownerFilter: () => ({ owner_type: 'customer', column: 'customer_id', value: 'test-customer' }),
+      resolveCheckoutOwner: async () => guest ? { ownerType: 'anon', anonSessionId: 'test-guest' } : { ownerType: 'customer', customerId: 'test-customer', email: 'reader@example.test' },
+      ownerFilter: () => guest ? { owner_type: 'anon', column: 'anon_session_id', value: 'test-guest' } : { owner_type: 'customer', column: 'customer_id', value: 'test-customer' },
       requireCheckoutOrderAccess: async orderId => ({ order_id: orderId }), checkoutOwnerErrorResponse: () => null,
     },
     '@/lib/emailEvents': { recordExternalEmailObserved: async () => {} },

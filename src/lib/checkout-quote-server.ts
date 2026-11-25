@@ -2,7 +2,9 @@ import 'server-only'
 
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getStripeServer } from '@/lib/stripe'
-import { normalizeCheckoutCurrency, type CheckoutCurrency } from '@/lib/locale-pricing'
+import { convertUsdToCurrency, normalizeCheckoutCurrency, type CheckoutCurrency } from '@/lib/locale-pricing'
+import { giftUnitPriceUsd } from '@/lib/book-gift-price'
+import { loadOrderDiscountSlots, type OrderDiscountSummary } from '@/lib/discounts'
 import { getMultiBookOfferRule } from '@/lib/multi-book-offer'
 import { type MultiBookOfferRule } from '@/lib/multi-book-offer-core'
 import { ownerFilter, requireCheckoutOrderAccess, resolveCheckoutOwner } from '@/lib/checkout-owner'
@@ -106,6 +108,7 @@ export async function loadCheckoutPricingItems(orderId: string, filter: ReturnTy
       customizeSnapshot: creation?.customize_snapshot,
     })
     return {
+      bookFormat: item.product_type === 'physical' ? normalizeBookPackageType(item.package_type) : 'digital',
       digital: item.product_type === 'ebook',
       id: item.cart_item_id,
       name: quantity > 1 ? `${title} x${quantity}` : title,
@@ -129,22 +132,29 @@ function itemSubtotal(items: PricingItems) {
 }
 
 export function priceCheckout({
-  items, currency, multiBookRule, productDiscountUsd, shippingDiscountUsd, shipping,
+  items, currency, multiBookRule, productDiscountUsd, shippingDiscountUsd, shipping, productSlot,
 }: {
   items: PricingItems
   currency: CheckoutCurrency
+  productSlot?: OrderDiscountSummary['productDiscount']
   multiBookRule: MultiBookOfferRule | null
   productDiscountUsd: number
   shippingDiscountUsd: number
   shipping: { amountUsd: number; metadata: Record<string, string>; snapshot: Record<string, unknown> | null }
 }) {
-  const pricing = calculateCheckoutPricing({ items, currency, multiBookRule, productDiscountUsd, shippingDiscountUsd, shipping })
+  const gift = productSlot?.bookPrice
+  if (gift && gift.hkdPerUsd !== convertUsdToCurrency(1, 'HKD')) {
+    throw new CheckoutQuoteError('Gift card exchange rate changed. Please contact support.', 409)
+  }
+  const pricing = calculateCheckoutPricing({ items, currency, multiBookRule, productDiscountUsd, shippingDiscountUsd, shipping,
+    gift })
+
   const subtotalUsd = itemSubtotal(items)
   const quote: CheckoutQuote = {
     currency,
     totalMinor: pricing.totalMinor,
     subtotalUsd,
-    productDiscountUsd: Math.min(subtotalUsd, productDiscountUsd),
+    productDiscountUsd: Math.min(subtotalUsd, pricing.productSavingsUsd),
     shippingDiscountUsd: Math.min(shipping.amountUsd, shippingDiscountUsd),
     multiBookDiscountUsd: pricing.multiBookDiscountUsd,
     shippingAmountUsd: shipping.amountUsd,
@@ -198,6 +208,8 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
   if (addressIssue) throw new CheckoutQuoteError('Invalid recipient address', 400, { field: addressIssue })
 
   const context = { order, orderId, email, discountEmail, customerId, shippingAddress, currency, filter, baseUrl, existingSession }
+  const productSlot = order.applied_product_discount_instrument_id
+    ? (await loadOrderDiscountSlots(order.applied_product_discount_instrument_id, null)).productDiscount : null
   const frozenTotal = existingSession?.amount_total
   if (
     existingSession?.status === 'open' && existingSession.url &&
@@ -214,11 +226,17 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
       ? await createOrderCheckoutFingerprint(orderId).catch(() => null)
       : null
     if (savedFingerprint && savedFingerprint === currentFingerprint) {
+      if (productSlot?.bookPrice || productSlot?.exclusive) {
+        await quoteOrderDiscounts(orderId, Number(order.shipping_amount_usd ?? 0), customerId, discountEmail)
+      }
+      const gift = productSlot?.bookPrice
       const quote: CheckoutQuote = {
         currency,
         totalMinor: frozenTotal,
         subtotalUsd: itemSubtotal(items),
-        productDiscountUsd: Number(order.discount_amount_usd ?? 0),
+        productDiscountUsd: gift
+          ? items.reduce((sum, item) => sum + item.quantity * (item.unitPriceUsd - giftUnitPriceUsd(item.bookFormat, item.unitPriceUsd, gift)), 0)
+          : Number(order.discount_amount_usd ?? 0),
         shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
         multiBookDiscountUsd: Number(order.multi_book_discount_amount_usd ?? 0),
         shippingAmountUsd: Number(order.shipping_amount_usd ?? 0),
@@ -237,7 +255,7 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
       ? quoteOrderDiscounts(orderId, shipping.amountUsd, customerId, discountEmail)
       : { productDiscountUsd: 0, shippingDiscountUsd: 0 },
   ])
-  const { quote } = priceCheckout({ items, currency, multiBookRule, shipping, ...discount })
+  const { quote } = priceCheckout({ items, currency, multiBookRule, shipping, productSlot, ...discount })
   return { ...context, quote, reuse: null, fresh: { option, shippingZoneCode, shipping, multiBookRule } }
 }
 

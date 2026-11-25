@@ -200,3 +200,71 @@ test('Preview selection, cart and Buy Now use the stored PDF sale price through 
     assert.equal(h.stripeSessions.get((await paid.json()).sessionId).amount_total, 1234)
   }
 })
+
+// A synthetic instrument exercises the real quote and Stripe session routes without exposing distribution codes.
+test('physical-book card preserves each purchased format and the checkout currency through payment and resume', async () => {
+  for (const [currency, voiceMinor, pdfMinor, shippingMinor] of [
+    ['HKD', 40000, 7800, 3120], ['USD', 5128, 1000, 400], ['JPY', 7641, 1490, 596],
+  ]) {
+    const h = shippingHarness({ percent: 60, pdfOffers: 'Birthdayboy_story@17' })
+    const voice = h.tables.cart_items[0]
+    Object.assign(voice, { quantity: 2, price_at_purchase: 70 })
+    h.tables.cart_items.push({ ...voice, cart_item_id: 'item-2', package_type: 'basic', quantity: 2, price_at_purchase: 38 },
+      { ...personalizedDigitalLine(voice), cart_item_id: 'item-3', quantity: 1, price_at_purchase: 10 })
+    h.order.applied_product_discount_instrument_id = 'gift'
+    h.order.discount_amount_usd = 164.72
+    h.tables.discount_instruments.push({ instrument_id: 'gift', code: 'TEST-GIFT', instrument_type: 'promo_code',
+      discount_offers: { name: 'Test card', effect_type: 'book_format_price', effect_config: { voice_hkd: 200, hkd_per_usd: 7.8 } } })
+    const expected = voiceMinor + pdfMinor + shippingMinor
+    const read = await h.paymentQuote(currency)
+    assert.equal(read.status, 200)
+    const { quote } = await read.json()
+    assert.equal(quote.totalMinor, expected)
+    assert.equal(quote.multiBookDiscountUsd, 0)
+    assert.equal((await h.checkout(currency, 'standard', address, expected + 1)).status, 409)
+    const pay = await h.checkout(currency, 'standard', address, expected)
+    assert.equal(pay.status, 200)
+    assert.deepEqual(Array.from(h.stripeCalls[0].line_items, row => row.price_data.unit_amount), [voiceMinor, pdfMinor, shippingMinor])
+    const restored = await (await h.paymentQuote(currency)).json()
+    assert.equal(restored.quote.totalMinor, expected)
+    assert.equal(restored.quote.productDiscountUsd, quote.productDiscountUsd)
+    assert.equal(h.stripeCalls.length, 1)
+  }
+})
+
+test('guest original physical gift cards use the same format price and leave promotional shipping payable', async () => {
+  for (const format of ['basic','supreme']) {
+    const h = shippingHarness({ percent: 60, guest: true })
+    const line = h.tables.cart_items[0]
+    line.package_type = format
+    line.price_at_purchase = format === 'basic' ? 38 : 70
+    line.creations.customize_snapshot = { edition: 'original', bookType: format }
+    h.tables.originalPdfPurchases.push({ orderId: h.order.order_id, lineId: line.cart_item_id, format })
+    h.order.applied_product_discount_instrument_id = 'gift'
+    h.order.discount_amount_usd = format === 'basic' ? 38 : 44.36
+    h.tables.discount_instruments.push({ instrument_id: 'gift', code: 'TEST-GIFT', instrument_type: 'promo_code',
+      discount_offers: { name: 'Test card', effect_type: 'book_format_price', effect_config: { voice_hkd: 200, hkd_per_usd: 7.8 } } })
+    const expected = format === 'basic' ? [3120] : [20000,3120]
+    const submitted = await h.checkout('HKD', 'standard', address, expected.reduce((a,b) => a+b))
+    assert.equal(submitted.status, 200)
+    assert.deepEqual(Array.from(h.stripeCalls[0].line_items, row => row.price_data.unit_amount), expected)
+    assert.equal(h.rpcCalls[0].params.p_customer_id, null)
+  }
+})
+
+test('exclusive percentage code discounts the book subtotal and preserves the shipping tariff', async () => {
+  const h = shippingHarness({ percent: 60 })
+  h.tables.cart_items[0].price_at_purchase = 100
+  h.order.applied_product_discount_instrument_id = 'public-offer'
+  h.order.discount_amount_usd = 30
+  h.tables.discount_instruments.push({
+    instrument_id: 'public-offer', code: 'TEST-PERCENT', instrument_type: 'promo_code',
+    discount_offers: { name: 'Test percentage', effect_type: 'percentage', effect_config: { percent: 30, exclusive: true } },
+  })
+  const response = await h.paymentQuote('USD')
+  assert.equal(response.status, 200)
+  const { quote } = await response.json()
+  assert.equal(quote.totalMinor, 7400)
+  assert.equal((await h.checkout('USD', 'standard', address, quote.totalMinor)).status, 200)
+  assert.deepEqual(Array.from(h.stripeCalls[0].line_items, row => row.price_data.unit_amount), [7000, 400])
+})
