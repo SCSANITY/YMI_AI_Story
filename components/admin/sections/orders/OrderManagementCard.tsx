@@ -134,7 +134,8 @@ export function OrderManagementCard({
   const current = displayedOrderStatus(savedOrder)
   const inProduction = savedOrder.order_status === 'paid' || savedOrder.order_status === 'production'
   const progressAction = inProduction && draft.orderStatus !== current &&
-    ['preview_ready','production','resume'].includes(draft.orderStatus)
+    ['preview_ready','production'].includes(draft.orderStatus)
+  const manualProduction = inProduction && savedOrder.book_progress_manual === true
   const trackingDirty = !areOrderDraftsEqual({ ...draft, orderStatus: current }, createOrderDraft(savedOrder))
   const isDirty = !areOrderDraftsEqual(draft, createOrderDraft(savedOrder))
   const isDirtyRef = useRef(isDirty)
@@ -173,20 +174,21 @@ export function OrderManagementCard({
     onCommitted(nextOrder)
   }
 
-  const saveLogistics = async () => {
-    if (saving || !isDirty) return
+  const saveLogistics = async (action: 'save' | 'resume' = 'save') => {
+    const resume = action === 'resume'
+    if (saving || (resume ? !manualProduction || isDirty : !isDirty)) return
     const requestIntent = ++requestIntentRef.current
     setSaving(true)
     setNotice(null)
 
     try {
       if (progressAction && trackingDirty) throw new Error('Save tracking edits separately from a production correction')
-      if (progressAction && draft.orderStatus !== 'resume' && !progressReason.trim()) throw new Error('Enter a reason for the manual stage')
-      const response = await fetch(`/api/admin/orders/${savedOrder.order_id}/${progressAction ? 'progress' : 'logistics'}`, {
+      if (progressAction && !progressReason.trim()) throw new Error('Enter a reason for the manual stage')
+      const response = await fetch(`/api/admin/orders/${savedOrder.order_id}/${resume || progressAction ? 'progress' : 'logistics'}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(progressAction ? {
+        body: JSON.stringify(resume ? { action: 'resume', expectedUpdatedAt: savedOrder.logistics_updated_at } : progressAction ? {
           action: draft.orderStatus === 'production' ? 'printing' : draft.orderStatus,
           reason: progressReason, expectedUpdatedAt: savedOrder.logistics_updated_at,
         } : {
@@ -223,7 +225,7 @@ export function OrderManagementCard({
             }
           : {
               tone: 'success',
-              text:
+              text: resume ? 'Automatic production progress resumed.' :
                 data.emailStatus === 'sent'
                   ? 'Order changes saved and email sent.'
                   : 'Order changes saved.',
@@ -245,8 +247,7 @@ export function OrderManagementCard({
   const isReadOnly =
     READONLY_GROUPS.has(orderGroup) ||
     !ORDER_STATUS_OPTIONS.some(([value]) => value === savedOrder.order_status)
-  const statusLabel = current === 'preview_ready' ? 'Preview Ready' : current === 'pdf_ready' ? 'PDF Ready' :
-    ORDER_STATUS_OPTIONS.find(([value]) => value === savedOrder.order_status)?.[1] ||
+  const statusLabel = ORDER_STATUS_OPTIONS.find(([value]) => value === current)?.[1] ||
     savedOrder.order_status ||
     '-'
   const customerName = [savedOrder.shipping_address?.firstName, savedOrder.shipping_address?.lastName].filter(Boolean).join(' ') || savedOrder.customer_display_name || 'Guest customer'
@@ -348,11 +349,9 @@ export function OrderManagementCard({
                     onChange={(event) => updateDraft({ orderStatus: event.target.value })}
                     className={adminFieldClass}
                   >
-                    {current === 'pdf_ready' && <option value="pdf_ready">PDF Ready</option>}
-                    {inProduction && (current === 'preview_ready' || savedOrder.books?.some(book => book.physical)) &&
-                      <option value="preview_ready">Preview Ready</option>}
-                    {inProduction && savedOrder.book_progress_manual && <option value="resume">Resume automatic progress</option>}
                     {ORDER_STATUS_OPTIONS.filter(([value]) => {
+                      if (value === 'pdf_ready') return current === 'pdf_ready'
+                      if (value === 'preview_ready') return inProduction && (current === value || savedOrder.books?.some(book => book.physical))
                       if (!inProduction) return true
                       if (value === 'paid') return current === 'paid'
                       if (value === 'production') return current === 'production' || savedOrder.books?.some(book => book.physical)
@@ -364,10 +363,18 @@ export function OrderManagementCard({
                     ))}
                   </select>
                 </label>
-                {inProduction && savedOrder.book_progress_manual && (
-                  <p className="text-xs">Manual stage / automatic progress paused</p>
-                )}
-                {progressAction && draft.orderStatus !== 'resume' && <label className={adminLabelClass}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-[var(--admin-page-muted)]">
+                    {!inProduction ? 'Production tracking ends at shipment.' : manualProduction
+                      ? isDirty ? 'Save or discard your edits before resuming.' : 'Production progress is paused.'
+                      : 'Production progress is automatic.'}
+                  </span>
+                  <AdminButton type="button" tone="quiet" disabled={!manualProduction || isDirty || saving}
+                    onClick={() => void saveLogistics('resume')}>
+                    Resume automatic progress
+                  </AdminButton>
+                </div>
+                {progressAction && <label className={adminLabelClass}>
                   Reason for this change
                   <input className={adminFieldClass} value={progressReason} maxLength={500} required
                     onChange={event => setProgressReason(event.target.value)} />

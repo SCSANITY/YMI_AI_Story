@@ -7,6 +7,8 @@ import {
 
 export const ORDER_STATUS_OPTIONS = [
   ['paid', 'Order Confirmed'],
+  ['preview_ready', 'Preview Ready'],
+  ['pdf_ready', 'PDF Ready'],
   ['production', 'Printing'],
   ['shipped', 'Shipped'],
   ['delivered', 'Delivered'],
