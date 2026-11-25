@@ -146,8 +146,10 @@ export function priceCheckout({
   if (gift && gift.hkdPerUsd !== convertUsdToCurrency(1, 'HKD')) {
     throw new CheckoutQuoteError('Gift card exchange rate changed. Please contact support.', 409)
   }
-  const pricing = calculateCheckoutPricing({ items, currency, multiBookRule, productDiscountUsd, shippingDiscountUsd, shipping,
-    gift })
+  const pricing = calculateCheckoutPricing({
+    items, currency, gift, productDiscountUsd, shippingDiscountUsd, shipping,
+    multiBookRule: productSlot?.exclusive ? null : multiBookRule,
+  })
 
   const subtotalUsd = itemSubtotal(items)
   const quote: CheckoutQuote = {

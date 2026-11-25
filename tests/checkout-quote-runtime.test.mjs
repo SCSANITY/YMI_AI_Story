@@ -207,6 +207,7 @@ test('physical-book card preserves each purchased format and the checkout curren
     ['HKD', 40000, 7800, 3120], ['USD', 5128, 1000, 400], ['JPY', 7641, 1490, 596],
   ]) {
     const h = shippingHarness({ percent: 60, pdfOffers: 'Birthdayboy_story@17' })
+    h.tables.multi_book_offer_rule.push({ singleton_key: 'global', enabled: true, effect_type: 'percentage', value: 20, min_items: 2 })
     const voice = h.tables.cart_items[0]
     Object.assign(voice, { quantity: 2, price_at_purchase: 70 })
     h.tables.cart_items.push({ ...voice, cart_item_id: 'item-2', package_type: 'basic', quantity: 2, price_at_purchase: 38 },
@@ -254,7 +255,11 @@ test('guest original physical gift cards use the same format price and leave pro
 
 test('exclusive percentage code discounts the book subtotal and preserves the shipping tariff', async () => {
   const h = shippingHarness({ percent: 60 })
-  h.tables.cart_items[0].price_at_purchase = 100
+  Object.assign(h.tables.cart_items[0], { quantity: 2, price_at_purchase: 50 })
+  h.tables.multi_book_offer_rule.push({ singleton_key: 'global', enabled: true, effect_type: 'percentage', value: 20, min_items: 2 })
+  const withoutCode = (await (await h.paymentQuote('USD')).json()).quote
+  assert.equal(withoutCode.totalMinor, 8400)
+  assert.equal(withoutCode.multiBookDiscountUsd, 20)
   h.order.applied_product_discount_instrument_id = 'public-offer'
   h.order.discount_amount_usd = 30
   h.tables.discount_instruments.push({
@@ -265,6 +270,15 @@ test('exclusive percentage code discounts the book subtotal and preserves the sh
   assert.equal(response.status, 200)
   const { quote } = await response.json()
   assert.equal(quote.totalMinor, 7400)
+  assert.equal(quote.multiBookDiscountUsd, 0)
+  assert.equal((await h.checkout('USD', 'standard', address, 5400)).status, 409)
   assert.equal((await h.checkout('USD', 'standard', address, quote.totalMinor)).status, 200)
   assert.deepEqual(Array.from(h.stripeCalls[0].line_items, row => row.price_data.unit_amount), [7000, 400])
+  const restored = (await (await h.paymentQuote('USD')).json()).quote
+  assert.equal(restored.totalMinor, 7400)
+  h.order.applied_product_discount_instrument_id = null
+  h.order.discount_amount_usd = 0
+  const removed = (await (await h.paymentQuote('USD')).json()).quote
+  assert.equal(removed.multiBookDiscountUsd, 20)
+  assert.equal(removed.totalMinor, 8400)
 })

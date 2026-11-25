@@ -39,7 +39,7 @@ import {
 } from '@/lib/cart-cover';
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
 import type { CheckoutQuote } from '@/lib/checkout-quote';
-import { giftUnitPriceUsd, type BookGiftPrice } from '@/lib/book-gift-price';
+import { giftUnitPriceUsd } from '@/lib/book-gift-price';
 import type { OrderDiscountSummary } from '@/lib/discounts';
 import {
   capMultiBookOfferToHeadroom,
@@ -203,7 +203,9 @@ function CheckoutPageContent() {
   const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(null);
   const [selectedRewardVoucherId, setSelectedRewardVoucherId] = useState<string | null>(null);
   const [selectedRewardVoucherName, setSelectedRewardVoucherName] = useState<string | null>(null);
-  const [bookGift, setBookGift] = useState<BookGiftPrice | null>(null);
+  const [productDiscount, setProductDiscount] = useState<OrderDiscountSummary['productDiscount']>(null);
+  const bookGift = productDiscount?.bookPrice;
+  const excludesMultiBook = Boolean(bookGift || productDiscount?.exclusive);
   const [discountAmountUsd, setDiscountAmountUsd] = useState(0);
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [shippingDiscountAmountUsd, setShippingDiscountAmountUsd] = useState(0);
@@ -459,12 +461,12 @@ function CheckoutPageContent() {
   const discountTotalUsd = paymentQuote?.productDiscountUsd ?? giftSavings ?? Math.min(total, Math.max(0, discountAmountUsd));
 
   const multiBookDiscountUsd = useMemo(
-    () => paymentQuote?.multiBookDiscountUsd ?? (bookGift ? 0 : capMultiBookOfferToHeadroom(
+    () => paymentQuote?.multiBookDiscountUsd ?? (excludesMultiBook ? 0 : capMultiBookOfferToHeadroom(
       computeMultiBookDiscountUsd(multiBookItems, multiBookRule),
       multiBookSubtotalUsd,
       discountTotalUsd
     )),
-    [multiBookItems, multiBookRule, multiBookSubtotalUsd, discountTotalUsd, paymentQuote, bookGift]
+    [multiBookItems, multiBookRule, multiBookSubtotalUsd, discountTotalUsd, paymentQuote, excludesMultiBook]
   );
   const multiBookBadgeLabel = useMemo(() => getMultiBookOfferBadgeLabel(multiBookRule), [multiBookRule]);
   const formattedMultiBookDiscount = useMemo(
@@ -649,7 +651,7 @@ function CheckoutPageContent() {
     setShippingDiscountAmountUsd(summary.shippingDiscountAmountUsd);
     setAppliedProductDiscountInstrumentId(summary.productDiscountInstrumentId);
     setAppliedShippingDiscountInstrumentId(summary.shippingDiscountInstrumentId);
-    setBookGift(summary.productDiscount?.bookPrice ?? null);
+    setProductDiscount(summary.productDiscount);
     setAppliedProductCode(summary.productDiscount?.label ?? null);
     setAppliedShippingCode(summary.shippingDiscount?.label ?? null);
     setAppliedDiscountCode(summary.productDiscount?.code ?? summary.shippingDiscount?.code ?? null);
@@ -1204,7 +1206,7 @@ function CheckoutPageContent() {
       setShippingDiscountAmountUsd(0);
       setAppliedProductDiscountInstrumentId(null);
       setAppliedShippingDiscountInstrumentId(null);
-      setBookGift(null);
+      setProductDiscount(null);
       setAppliedProductCode(null);
       setAppliedShippingCode(null);
       setDiscountError('');
