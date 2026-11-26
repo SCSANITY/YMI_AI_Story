@@ -60,6 +60,9 @@ test('shared customer order reader disambiguates direct lines and keeps both boo
  for(const input of [{customerId:'owner-a',limit:10},{reference:{column:'order_id',value:'order-a'}}]){
   const r=reader();const result=await r.loadCustomerOrders(input)
   assert.equal(result.count,1);assert.equal(result.orders[0].items.length,2)
+  const summary=r.toCustomerOrderSummary(result.orders[0])
+  assert.deepEqual(Array.from(summary.more_covers,x=>[x.cart_item_id,x.cover_url]),[['two','https://example.test/job-two']])
+  assert.equal(summary.item_count,2)
   assert.deepEqual(Array.from(result.orders[0].items,x=>x.cart_item_id),['one','two'])
   assert.deepEqual(Array.from(result.orders[0].items,x=>x.template_name),['Book one','Book two'])
   assert.match(r.queries[0].select,/cart_items:cart_items!orders_checkout_id_fkey/)
@@ -225,7 +228,7 @@ function pageHarness(responses) {
   '@/lib/order-status':{isFinishedOrderStatus:s=>['delivered','cancelled','refunded'].includes(s),normalizeOrderStatus:s=>s},
   '@/lib/orders-page-state':load('src/lib/orders-page-state.ts'),
   './OrderTabs':{OrderTabs:'order-tabs'},'./OrdersList':{OrdersList:'orders-list'},
- },{fetch:async(url,init)=>{calls.push({url,init});assert.ok(responses.length,'no automatic retry');const next=responses.shift();if(next instanceof Error)throw next;return next}}).default
+ },{window:new EventTarget(),fetch:async(url,init)=>{calls.push({url,init});assert.ok(responses.length,'no automatic retry');const next=responses.shift();if(next instanceof Error)throw next;return next}}).default
  function render(){cursor=0;dirty=false;tree=Page();while(effects.length)effects.shift()()}
  async function settle(){for(let n=0;n<12;n++){if(dirty)render();await new Promise(resolve=>setImmediate(resolve))}if(dirty)render()}
  function walk(node){if(!node||typeof node!=='object')return[];if(Array.isArray(node))return node.flatMap(walk);return[node,...walk(node.props?.children)]}
@@ -239,7 +242,7 @@ test('My Orders shows an error for HTTP,network and malformed responses,never fa
   const h=pageHarness([response]);await h.settle()
   assert.match(h.text(),/We couldn't load your orders/);assert.doesNotMatch(h.text(),/No orders yet|private backend detail/)
   assert.ok(h.nodes().some(n=>n.props?.role==='alert'));assert.equal(h.calls.length,1)
-  assert.equal(h.calls[0].url,'/api/orders');assert.equal(h.calls[0].init.credentials,'include');assert.equal(h.calls[0].init.cache,'no-store')
+  assert.equal(h.calls[0].url,'/api/orders?materials=1');assert.equal(h.calls[0].init.credentials,'include');assert.equal(h.calls[0].init.cache,'no-store')
  }
 })
 

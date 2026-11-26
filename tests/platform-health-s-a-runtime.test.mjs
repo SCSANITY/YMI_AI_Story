@@ -32,7 +32,7 @@ test('notice-counts reads one RPC, keeps signed-out zeros and failures', async (
     async rpc(name, args) {
       calls.push({ name, args })
       if (failRpc) return { data: null, error: new Error('read failed') }
-      return { data: { favorites: 4, rewards: 1, orders: 3, books: 2 }, error: null }
+      return { data: { favorites: 4, rewards: 1, orders: 3, books: 2, materialsPending: true }, error: null }
     },
   }
   const route = loadUi('app/api/user/notice-counts/route.ts', {
@@ -47,9 +47,9 @@ test('notice-counts reads one RPC, keeps signed-out zeros and failures', async (
 
   let response = await route(new Request('https://fixture.test/api/user/notice-counts'))
   assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), { favorites: 4, rewards: 1, orders: 3, books: 2 })
+  assert.deepEqual(await response.json(), { favorites: 4, rewards: 1, orders: 3, books: 2, materialsPending: true })
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].name, 'get_nav_notice_counts')
+  assert.equal(calls[0].name, 'get_nav_notice_counts_with_materials')
   assert.equal(JSON.stringify(calls[0].args), JSON.stringify({ p_auth_user_id: 'auth-1', p_email: 'mia@example.test' }))
 
   owner = null

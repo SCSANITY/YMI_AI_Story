@@ -14,8 +14,9 @@ const EMPTY_NOTICE_COUNTS: NavNoticeCounts = {
 }
 
 const NOTICE_COUNTS_TTL_MS = 60_000
-const noticeCountsCache = new Map<string, { counts: NavNoticeCounts; loadedAt: number }>()
-const noticeCountsRequests = new Map<string, Promise<NavNoticeCounts>>()
+type FetchedCounts = NavNoticeCounts & { materialsPending: boolean }
+const noticeCountsCache = new Map<string, { counts: FetchedCounts; loadedAt: number }>()
+const noticeCountsRequests = new Map<string, Promise<FetchedCounts>>()
 
 function clampCount(value: unknown): number {
   const numeric = Number(value ?? 0)
@@ -26,28 +27,29 @@ function noticeStorageKey(customerId: string) {
   return `ymi_nav_seen_counts:${customerId}`
 }
 
-async function fetchNoticeCounts(customerId: string): Promise<NavNoticeCounts> {
+async function fetchNoticeCounts(customerId: string): Promise<FetchedCounts> {
   const existingRequest = noticeCountsRequests.get(customerId)
   if (existingRequest) return existingRequest
 
-  const request = (async () => {
+  const request: Promise<FetchedCounts> = Promise.resolve().then(async () => {
     const response = await fetch('/api/user/notice-counts', {
       credentials: 'include',
       cache: 'no-store',
     })
     if (!response.ok) throw new Error(`Notice counts failed with ${response.status}`)
-    const data = await response.json() as Partial<NavNoticeCounts>
-    const counts: NavNoticeCounts = {
+    const data = await response.json() as Partial<FetchedCounts>
+    const counts: FetchedCounts = {
+      materialsPending: data.materialsPending === true,
       favorites: clampCount(data.favorites),
       rewards: clampCount(data.rewards),
       orders: clampCount(data.orders),
       books: clampCount(data.books),
     }
 
-    noticeCountsCache.set(customerId, { counts, loadedAt: Date.now() })
+    if (noticeCountsRequests.get(customerId) === request) noticeCountsCache.set(customerId, { counts, loadedAt: Date.now() })
     return counts
-  })().finally(() => {
-    noticeCountsRequests.delete(customerId)
+  }).finally(() => {
+    if (noticeCountsRequests.get(customerId) === request) noticeCountsRequests.delete(customerId)
   })
 
   noticeCountsRequests.set(customerId, request)
@@ -75,6 +77,29 @@ type UseNavNoticeCountsParams = {
 }
 
 export function useNavNoticeCounts({ customerId, pathname }: UseNavNoticeCountsParams) {
+  const [attention, setAttention] = useState<{customerId: string; pending: boolean} | null>(null)
+  const [refresh, setRefresh] = useState(0)
+  useEffect(() => {
+    if (!customerId) return
+    const invalidate = () => {
+      noticeCountsCache.delete(customerId)
+      noticeCountsRequests.delete(customerId)
+      setRefresh(n => n + 1)
+    }
+    const focus = () => {
+      const last = noticeCountsCache.get(customerId)
+      if (!last || Date.now() - last.loadedAt >= NOTICE_COUNTS_TTL_MS) invalidate()
+    }
+    const storage = (event: StorageEvent) => { if (event.key === 'ymi_materials_changed') invalidate() }
+    window.addEventListener('ymi-materials-changed', invalidate)
+    window.addEventListener('focus', focus)
+    window.addEventListener('storage', storage)
+    return () => {
+      window.removeEventListener('ymi-materials-changed', invalidate)
+      window.removeEventListener('focus', focus)
+      window.removeEventListener('storage', storage)
+    }
+  }, [customerId])
   const [moduleCounts, setModuleCounts] = useState<NavNoticeCounts>(EMPTY_NOTICE_COUNTS)
   const [seenCounts, setSeenCounts] = useState<NavNoticeCounts>(EMPTY_NOTICE_COUNTS)
   const seenCountsInitializedRef = useRef(false)
@@ -125,7 +150,8 @@ export function useNavNoticeCounts({ customerId, pathname }: UseNavNoticeCountsP
 
     let cancelled = false
 
-    const applyCounts = (nextCounts: NavNoticeCounts) => {
+    const applyCounts = (nextCounts: FetchedCounts) => {
+      setAttention({customerId, pending: nextCounts.materialsPending})
       setModuleCounts(nextCounts)
       setSeenCounts((prev) => {
         if (!seenCountsInitializedRef.current) {
@@ -175,7 +201,7 @@ export function useNavNoticeCounts({ customerId, pathname }: UseNavNoticeCountsP
       cancelled = true
       cancelIdleTask()
     }
-  }, [customerId, persistSeenCounts])
+  }, [customerId, persistSeenCounts, refresh, pathname])
 
   useEffect(() => {
     if (pathname === '/favorites') markModuleSeen('favorites')
@@ -186,6 +212,7 @@ export function useNavNoticeCounts({ customerId, pathname }: UseNavNoticeCountsP
   return {
     newCounts,
     totalNewCount,
+    materialsPending: Boolean(customerId && customerId === attention?.customerId && attention.pending),
     markModuleSeen,
   }
 }

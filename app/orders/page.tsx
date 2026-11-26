@@ -73,6 +73,19 @@ export default function OrdersPage() {
   const [pendingAction, setPendingAction] = useState<PendingOrderAction>(null);
 
   useEffect(() => {
+    const refresh = () => setReloadAttempt(n => n + 1);
+    const changed = (event: StorageEvent) => { if (event.key === 'ymi_materials_changed') refresh(); };
+    const restored = (event: PageTransitionEvent) => { if (event.persisted) refresh(); };
+    window.addEventListener('storage', changed);
+    window.addEventListener('pageshow', restored);
+    window.addEventListener('ymi-materials-changed', refresh);
+    return () => {
+      window.removeEventListener('storage', changed);
+      window.removeEventListener('pageshow', restored);
+      window.removeEventListener('ymi-materials-changed', refresh);
+    };
+  }, []);
+  useEffect(() => {
     const customerId = user?.customerId;
     if (!isHydrated || !isAuthResolved || !customerId) return;
 
@@ -80,7 +93,7 @@ export default function OrdersPage() {
     setLoading(true);
     setHasLoadError(false);
 
-    fetch('/api/orders', {
+    fetch('/api/orders?materials=1', {
       credentials: 'include',
       cache: 'no-store',
     })

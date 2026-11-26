@@ -61,7 +61,7 @@ function PersonalizeHeaderComponent({
   const [isCartOpen, setCartOpen] = useState(false)
   const [isRewardsOpen, setRewardsOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
-  const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
+  const { newCounts, totalNewCount, materialsPending, markModuleSeen } = useNavNoticeCounts({
     customerId: user?.customerId,
     pathname,
   })
@@ -160,6 +160,7 @@ function PersonalizeHeaderComponent({
                 user={user}
                 isOpen={isUserMenuOpen}
                 totalNewCount={totalNewCount}
+                materialsPending={materialsPending}
                 newCounts={newCounts}
                 t={t}
                 onToggle={() => {

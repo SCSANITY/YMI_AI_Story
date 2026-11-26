@@ -127,6 +127,9 @@ export function MaterialMessageEditor({
         {busy ? "Saving message…" : "Save message"}
         <ArrowRight />
       </button>
+      {item.dedication_prompt_pending && !dirty && !stored &&
+        <button type="button" className={styles.outline} disabled={busy}
+          onClick={() => void save(item, '').catch(() => {})}>Skip dedication</button>}
     </form>
   );
 }

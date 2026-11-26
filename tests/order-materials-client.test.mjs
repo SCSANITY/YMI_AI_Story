@@ -56,7 +56,7 @@ function harness({response,upload,initial=dto(),component='page',embedded=false}
   '@/lib/useI18n':{useI18n:()=>({t:()=> 'Explicit synthetic voice authorization'})},
   '@/lib/signature-voice':{SIGNATURE_VOICE_CONSENT_VERSION:'signature-voice-consent-v3'},
   '@/components/OrderCoverImage':{default:'cover'},'next/link':{default:'a'},
- },{window:{location:{hash:'#token='+grant,pathname:'/orders/'+order+'/materials'},history:{replaceState:(...args)=>history.push(args)}},
+ },{Event,window:{dispatchEvent(){},location:{hash:'#token='+grant,pathname:'/orders/'+order+'/materials'},history:{replaceState:(...args)=>history.push(args)}},
   fetch:fetchMock,URL:LocalURL,setTimeout,clearTimeout,
  })
  function render(){cursor=0;dirty=false;tree=component==='page'?client.OrderMaterialsClient({orderId:order,embedded}):client.RecordingPlayback({orderId:order,itemId:line,assetId:oldAsset,token:grant,onRecovery:()=>callbacks.push('recovery'),onLatest:()=>callbacks.push('latest')});while(effects.length)effects.shift()();return tree}

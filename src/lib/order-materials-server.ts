@@ -59,8 +59,10 @@ export async function loadOrderMaterialsPage(orderId:string,access:MaterialAcces
       return {order_id:orderId,disposition:'shipped' as const}
     throw error
   }
-  const [shipment,names]=await Promise.allSettled([
+  const [shipment,names,prompts]=await Promise.allSettled([
     shippedMaterialDisposition(orderId,access,true),namedMaterialCreations(result),
+    supabaseAdmin.from('order_open_dedication_prompts').select('cart_item_id')
+      .in('cart_item_id',result.items.map(item=>item.cart_item_id)),
   ])
   if(shipment.status==='rejected')throw shipment.reason
   if(shipment.value){
@@ -68,13 +70,16 @@ export async function loadOrderMaterialsPage(orderId:string,access:MaterialAcces
     return {order_id:orderId,disposition:'shipped' as const}
   }
   if(names.status==='rejected')throw names.reason
+  const promptRows=prompts.status==='fulfilled' && !prompts.value.error ? prompts.value.data : null
+  if(!promptRows) console.error('[materials] Could not load dedication prompt state')
+  const pendingMessages=new Set((promptRows ?? []).map(row=>row.cart_item_id))
   const named=names.value
   const covers=await createGeneratedPreviewCoverMap(named.data.map(row=>row.preview_job_id).filter((id):id is string=>typeof id==='string'))
   return {...named.result,items:named.result.items.map(item=>{
     const creation=named.creations.get(item.creation_id)!
     const template=Array.isArray(creation.templates)?creation.templates[0]:creation.templates
     const cover=getGeneratedPreviewCover(covers,creation.preview_job_id)
-    return {...item,book:{title:resolvePersonalizedBookTitle({templateId:creation.template_id,
+    return {...item,dedication_prompt_pending:item.can_edit_dedication && item.dedication.revision===1 && !item.dedication.body && pendingMessages.has(item.cart_item_id),book:{title:resolvePersonalizedBookTitle({templateId:creation.template_id,
       templateName:template?.name,customizeSnapshot:creation.customize_snapshot}),cover_url:cover.url,cover_status:cover.status}}
   })}
 }
@@ -108,7 +113,7 @@ export async function assertOrderLineVoiceDownload(request:Request,orderId:strin
 }
 export async function saveOrderDedication(orderId: string,access: MaterialAccess,value: unknown) {
   const input=parseDedicationWrite(value)
-  return parseMaterialDedication(await rpc('materials_save_dedication',{
+  return parseMaterialDedication(await rpc('materials_save_dedication_and_ack',{
     ...accessArgs(orderId,access),p_item:input.itemId,p_expected:input.expectedRevision,p_body:input.body,
   }))
 }

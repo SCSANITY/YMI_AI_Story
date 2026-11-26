@@ -28,6 +28,7 @@ function ModuleBadge({ count }: { count: number }) {
 type NavbarUserMenuProps = {
   user: User
   isOpen: boolean
+  materialsPending: boolean
   totalNewCount: number
   newCounts: NavNoticeCounts
   t: (key: string, params?: Record<string, string | number>) => string
@@ -43,6 +44,7 @@ export function NavbarUserMenu({
   user,
   isOpen,
   totalNewCount,
+  materialsPending,
   newCounts,
   t,
   onToggle,
@@ -58,7 +60,7 @@ export function NavbarUserMenu({
         type="button"
         onClick={onToggle}
         className="relative flex items-center gap-2 transition-transform hover:scale-105 focus:outline-none"
-        aria-label={t('navbar.myAccount')}
+        aria-label={t('navbar.myAccount') + (materialsPending ? ' — Book materials to add' : '')}
         aria-expanded={isOpen}
         aria-haspopup="true"
         aria-controls="navbar-user-menu"
@@ -70,6 +72,7 @@ export function NavbarUserMenu({
           alt={user.name}
           className="h-8 w-8 rounded-full border border-gray-200 object-cover shadow-sm"
         />
+        {materialsPending && <span aria-hidden="true" className={`absolute right-0 size-2 rounded-full bg-red-600 ring-2 ring-white ${totalNewCount ? "-bottom-0.5" : "-top-0.5"}`}/>}
         {totalNewCount > 0 ? (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
             {formatBadgeCount(totalNewCount)}
@@ -133,6 +136,7 @@ export function NavbarUserMenu({
           >
             <Package className="h-4 w-4" />
             <span>{t('navbar.myOrders')}</span>
+            {materialsPending && <span role="img" aria-label="Book materials to add" className="ml-auto size-2 rounded-full bg-red-600"/>}
             <ModuleBadge count={newCounts.orders} />
           </button>
 

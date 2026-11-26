@@ -74,7 +74,7 @@ export const Navbar: React.FC = () => {
   const isHomePage = pathname === '/'
   const showBackButton = !isPrimaryNavigationRoute(pathname) && !isCheckoutRoute
   const isCartOpen = cartOpenPath === pathname
-  const { newCounts, totalNewCount, markModuleSeen } = useNavNoticeCounts({
+  const { newCounts, totalNewCount, materialsPending, markModuleSeen } = useNavNoticeCounts({
     customerId: user?.customerId,
     pathname,
   })
@@ -493,6 +493,7 @@ export const Navbar: React.FC = () => {
                 user={user}
                 isOpen={isUserMenuOpen}
                 totalNewCount={totalNewCount}
+                materialsPending={materialsPending}
                 newCounts={newCounts}
                 t={t}
                 onToggle={() => {
@@ -543,7 +544,7 @@ export const Navbar: React.FC = () => {
           <Link href="/my-books" onClick={(event) => { handlePlainLinkClick(event, '/my-books'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/my-books' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myBooks')}</Link>
           <Link href="/collaboration" onClick={(event) => { handlePlainLinkClick(event, '/collaboration'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/collaboration' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.collaboration')}</Link>
           <Link href="/support" onClick={(event) => { handlePlainLinkClick(event, '/support'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/support' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.support')}</Link>
-          <Link href="/orders" onClick={(event) => { handlePlainLinkClick(event, '/orders'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/orders' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myOrders')}</Link>
+          <Link href="/orders" onClick={(event) => { handlePlainLinkClick(event, '/orders'); setMobileMenuOpen(false) }} className="block w-full py-3 text-left text-sm font-medium text-gray-600 hover:text-gray-900 border-b border-white/40 last:border-0">{pendingRoute === '/orders' ? <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin text-amber-600" /> : null}{t('navbar.myOrders')}{materialsPending && <span className="ml-2 inline-block size-2 rounded-full bg-red-600" role="img" aria-label="Book materials to add"/>}</Link>
         </div>
       )}
     </nav>

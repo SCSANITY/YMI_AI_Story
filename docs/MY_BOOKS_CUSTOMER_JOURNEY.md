@@ -95,3 +95,9 @@ never overwrites a paid line. Commercial Checkout locks are unchanged.
 - Manual history deletion and eight-photo pruning use the same face-reference
   protection. The visible history stays bounded; an old referenced source is
   retained even if it falls outside the latest eight history entries.
+
+## Orders list and materials
+
+A single order line keeps its original cover and title. Multi-line orders show the first book foremost, up to two more covers, and the remaining line count. Opening the order shows every line. The list reuses its existing cover batch.
+
+Each eligible book links directly to its materials tab. The account and My Orders indicators reflect outstanding actions independently of seen counts. For new personalised physical books a customer may write or explicitly skip a dedication. Existing empty dedications are not retroactively prompted. A missing Voice sample is actionable until submission closes or the original edition's standard narration choice is settled. Viewing the order does not dismiss these reminders. Completing materials leaves View materials available under order details, subject to existing shipment and print gates.

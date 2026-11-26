@@ -64,7 +64,7 @@ test('customer orders use one read model and one list and detail API contract', 
   assert.match(readModel, /CUSTOMER_ORDER_SELECT/)
   assert.match(nav, /fetch\('\/api\/user\/notice-counts'/)
   assert.doesNotMatch(nav, /\/api\/orders\?limit=10|\/api\/favourites\?customerId|\/api\/my-books\?customerId/)
-  assert.match(ordersPage, /fetch\('\/api\/orders'/)
+  assert.match(ordersPage, /fetch\('\/api\/orders\?materials=1'/)
 
   for (const source of [nav, ordersPage, checkout, success]) {
     assert.doesNotMatch(source, /\/api\/orders\/list|\/api\/orders\?orderId|\/api\/orders\?customerId/)
@@ -113,7 +113,7 @@ test('S-A quick wins keep one identity-owned badge read and bounded gates', asyn
   ])
 
   assert.match(noticeRoute, /resolveCheckoutOwner/)
-  assert.match(noticeRoute, /rpc\('get_nav_notice_counts'/)
+  assert.match(noticeRoute, /rpc\('get_nav_notice_counts_with_materials'/)
   assert.match(noticeRoute, /p_auth_user_id: owner\.authUserId/)
   assert.match(noticeRoute, /p_email: owner\.email/)
   assert.match(rewards, /\.is\('owner_customer_id', null\)/)

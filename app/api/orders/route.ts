@@ -5,6 +5,7 @@ import {
   loadCustomerOrders,
   toCustomerOrderSummary,
 } from '@/lib/customer-orders-server'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { noStoreJson } from '@/lib/http-response'
 
 const MAX_LIMIT = 100
@@ -39,8 +40,23 @@ export async function GET(request: Request) {
       customerId: owner.customerId,
       limit: parseLimit(new URL(request.url).searchParams.get('limit')),
     })
+    const orderIds = result.orders.map(order => order.order_id)
+    const tasks = new Map<string, {voice: boolean; dedication: boolean}>()
+    if (orderIds.length && new URL(request.url).searchParams.get('materials') === '1') {
+      const {data, error} = await supabaseAdmin.rpc('customer_book_material_tasks', {
+        p_customer: owner.customerId, p_orders: orderIds,
+      })
+      if (error) console.error('[orders] Could not load material reminders', error.code)
+      for (const row of (error ? [] : data ?? [])) tasks.set(row.cart_item_id, {voice: row.voice, dedication: row.dedication})
+    }
     return noStoreJson({
-      orders: result.orders.map(toCustomerOrderSummary),
+      orders: result.orders.map(order => ({
+        ...toCustomerOrderSummary(order),
+        material_tasks: order.items.flatMap(item => {
+          const task = tasks.get(item.cart_item_id)
+          return task ? [{...task, cart_item_id: item.cart_item_id, title: item.template_name}] : []
+        }),
+      })),
       count: result.count,
     })
   } catch (error) {

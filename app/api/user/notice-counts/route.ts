@@ -35,7 +35,7 @@ async function getNoticeCounts(request: Request) {
   try {
     // S-C1: the four counters (favorites/orders/visible books/active vouchers)
     // run inside one read-only RPC instead of four serial query rounds.
-    const { data, error } = await supabaseAdmin.rpc('get_nav_notice_counts', {
+    const { data, error } = await supabaseAdmin.rpc('get_nav_notice_counts_with_materials', {
       p_auth_user_id: owner.authUserId,
       p_email: owner.email,
     })
@@ -46,6 +46,7 @@ async function getNoticeCounts(request: Request) {
       rewards: Number(counts.rewards ?? 0),
       orders: Number(counts.orders ?? 0),
       books: Number(counts.books ?? 0),
+      ...(data?.materialsPending === true ? {materialsPending:true} : {}),
     }
     return noStoreJson(response)
   } catch (error) {

@@ -8,7 +8,7 @@ export function OrderMaterialsSummary({materials,shipment}:{materials?:OrderMate
   const dedicationItems=materials.items.filter(item=>item.package_type!=='digital' && item.edition!=='original')
   if(!dedicationItems.length) {
     if(!materials.items.some(item=>item.package_type==='supreme')) return null
-    return <Link className="text-sm font-semibold underline" href={`/orders/${materials.order_id}/materials`}>Manage your optional recording</Link>
+    return <Link className="text-sm font-semibold underline" href={`/orders/${materials.order_id}/materials`}>View materials</Link>
   }
   const names=distinctMaterialNames(dedicationItems)
   return <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 text-left" aria-label="Book materials">
@@ -17,6 +17,6 @@ export function OrderMaterialsSummary({materials,shipment}:{materials?:OrderMate
     {materials.items.filter(item=>item.package_type==='supreme'&&!item.voice_ready).map(item=><p key={item.cart_item_id} className="mt-2 text-sm font-semibold text-amber-900">
       <bdi>{item.child_name||'This book'}</bdi>: Please submit your recording so we can finish your Hardcover + Voice book.
     </p>)}
-    <Link className="mt-3 inline-block rounded-full bg-amber-800 px-5 py-3 text-sm font-bold text-white" href={`/orders/${materials.order_id}/materials`}>Review or update your materials</Link>
+    <Link className="mt-3 inline-block rounded-full bg-amber-800 px-5 py-3 text-sm font-bold text-white" href={`/orders/${materials.order_id}/materials`}>View materials</Link>
   </section>
 }

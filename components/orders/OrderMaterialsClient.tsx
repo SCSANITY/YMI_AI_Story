@@ -98,6 +98,7 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
     if(initialized.current)return
     initialized.current=true
     if (embedded) {setToken(null);return}
+    setSelected(new URLSearchParams(window.location.search).get('book') || '')
     const fragment=new URLSearchParams(window.location.hash.slice(1)).get('token')
     // Remove the bearer from navigation/history while retaining it only in memory.
     if (window.location.hash) window.history.replaceState(null,'',window.location.pathname)
@@ -134,6 +135,10 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
     }
     return response.json()
   }
+  function notifyMaterialChange(){
+    window.dispatchEvent(new Event('ymi-materials-changed'))
+    try { window.localStorage.setItem('ymi_materials_changed', String(Date.now())) } catch { /* Current tab already refreshed. */ }
+  }
   async function refresh(){
     setRefreshing(true);setError('')
     try{await load()}catch{setError('Unable to refresh the current status. Please try again.')}finally{setRefreshing(false)}
@@ -145,6 +150,7 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
     try {
       const result=await write({action:'dedication',itemId:item.cart_item_id,expectedRevision:item.dedication.revision,body})
       if(epoch!==accessEpoch.current)return
+      notifyMaterialChange()
       if(result.dedication){
         setMaterials(current=>current && ({...current,items:current.items.map(row=>
           row.cart_item_id===item.cart_item_id && row.dedication.revision<=result.dedication.revision?{...row,dedication:result.dedication}:row)}))
@@ -188,6 +194,7 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
       finish(key);return
     }
     if(epoch!==accessEpoch.current){finish(key);return}
+    notifyMaterialChange()
     notify(key,'Your recording has been received.')
     try {await load()}catch{notify(key,'Your recording was saved. Refresh status to see the latest details.')}finally{finish(key)}
   }

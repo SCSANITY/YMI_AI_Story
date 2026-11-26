@@ -351,5 +351,8 @@ export function toCustomerOrderSummary(order: CustomerOrderReadModel) {
     cover_status: order.cover_status,
     cover_cart_item_id: order.cover_cart_item_id,
     first_item_name: order.first_item_name,
+    more_covers: order.items.slice(1, 3).map(({cart_item_id, cover_url, cover_status}) => ({
+      cart_item_id, cover_url, cover_status,
+    })),
   }
 }

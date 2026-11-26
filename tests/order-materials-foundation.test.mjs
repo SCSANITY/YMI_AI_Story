@@ -493,9 +493,10 @@ test('authorized Web name enrichment uses the existing Creation name resolver pe
  const h=harness({rpcResult:()=>({data:value,error:null}),queryResult:table=>({error:null,data:table==='orders'?{
   order_id:order,customer_id:customer,order_status:'paid',shipped_at:null}:table==='creations'?[
    {creation_id:creation,template_id:'Synthetic_story',customize_snapshot:{textOverrides:{child_name:'Alston'}}},
-   {creation_id:customer,template_id:'Synthetic_story',customize_snapshot:{child_name:'Sonia'}}]:null})})
+   {creation_id:customer,template_id:'Synthetic_story',customize_snapshot:{child_name:'Sonia'}}]:table==='order_open_dedication_prompts'?[{cart_item_id:challenge}]:null})})
  const result=await h.load('src/lib/order-materials-server.ts').loadOrderMaterialsPage(order,{customerId:customer,tokenHash:null})
  assert.deepEqual(Array.from(result.items,x=>x.child_name),['Alston','Sonia'])
+ assert.equal(result.items[0].dedication_prompt_pending,false)
  assert.ok(!JSON.stringify(result).includes('customize_snapshot'))
 })
 
@@ -515,7 +516,7 @@ test('an authorized guest shipment read returns no materials or signed cover des
 test('successful materials read starts order and scoped Creation reads in parallel,without waiting to sign covers',async()=>{
  let release,creationStarted=false
  const h=harness({queryResult:table=>table==='orders'?new Promise(resolve=>{release=resolve}):
-  table==='creations'?(()=>{creationStarted=true;release({data:{order_id:order,customer_id:customer,order_status:'paid',shipped_at:null},error:null});return {data:[{creation_id:creation,template_id:'Synthetic_story',customize_snapshot:{childName:'Alston'}}],error:null}})():{data:null,error:null}})
+  table==='creations'?(()=>{creationStarted=true;release({data:{order_id:order,customer_id:customer,order_status:'paid',shipped_at:null},error:null});return {data:[{creation_id:creation,template_id:'Synthetic_story',customize_snapshot:{childName:'Alston'}}],error:null}})():{data:[],error:null}})
  let timer
  try {
   const result=await Promise.race([h.load('src/lib/order-materials-server.ts').loadOrderMaterialsPage(order,{customerId:customer,tokenHash:null}),

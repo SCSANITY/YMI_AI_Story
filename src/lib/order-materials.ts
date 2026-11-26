@@ -9,6 +9,7 @@ export type MaterialItem = {
   edition?: 'original' | 'personalised'
   package_type: 'basic' | 'supreme' | 'digital'
   dedication: { decision: 'skipped' | 'confirmed'; body: string | null; revision: number }
+  dedication_prompt_pending?: boolean
   can_edit_dedication: boolean
   voice_ready: boolean
   can_submit_voice: boolean
@@ -85,6 +86,7 @@ export function parseOrderMaterials(value: unknown): OrderMaterials {
       template_id:item.template_id,child_name:typeof item.child_name==='string'?item.child_name.trim()||null:null,package_type:item.package_type,
       ...(item.edition === 'original' || item.edition === 'personalised' ? {edition:item.edition} : {}),
       dedication:pdfOnly ? {decision:'skipped',body:null,revision:dedication.revision} : dedication,
+      ...(item.dedication_prompt_pending === true && !pdfOnly && !original ? {dedication_prompt_pending:true} : {}),
       can_edit_dedication:!pdfOnly && item.can_edit_dedication,
       voice_ready:item.voice_ready,can_submit_voice:item.can_submit_voice,can_replace_voice:item.can_replace_voice,
       voice_asset_id:item.voice_asset_id as string|null,voice_revision:item.voice_revision as number|null,

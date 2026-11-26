@@ -12,6 +12,8 @@ export type OrderSummary = {
   cover_url?: string | null
   cover_status?: 'ready' | 'pending' | 'unavailable'
   cover_cart_item_id?: string | null
+  more_covers?: { cart_item_id: string; cover_url: string | null; cover_status: 'ready' | 'pending' | 'unavailable' }[]
+  material_tasks?: { cart_item_id: string; title: string; voice: boolean; dedication: boolean }[]
   first_item_name?: string | null
 }
 
