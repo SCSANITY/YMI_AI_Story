@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { proofReviewLabel } from '@/lib/proof-review-clock'
+import { proofReplyDueAt, proofReviewLabel } from '@/lib/proof-review-clock'
 import { FinalBookBadges } from './FinalBookBadges'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import type { FinalJobSummary } from '@/lib/finalReview'
@@ -74,7 +74,7 @@ export function JobQueue({
                     <p className="mt-1 line-clamp-2 break-words text-[15px] font-bold leading-5 text-[var(--admin-page-ink)]">
                       {job.display_title}
                     </p>
-                    {reviewLabel && <p className="mt-1 text-xs font-medium text-[var(--admin-page-muted)]">{reviewLabel}</p>}
+                    {reviewLabel && <p className="mt-1 text-xs font-medium text-[var(--admin-page-muted)]">{(proofReplyDueAt(job) ?? Infinity) <= now ? <span className="inline-block rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-900">{reviewLabel}</span> : reviewLabel}</p>}
                     <FinalBookBadges mode={job.production_mode} edition={job.purchased_edition} />
                   </div>
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${

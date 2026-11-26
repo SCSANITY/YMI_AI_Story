@@ -68,6 +68,7 @@ function getStatusTone(status: string | null): AdminStatusTone {
 }
 
 function OrderSummary({
+  now,
   order,
   statusLabel,
   customerName,
@@ -79,6 +80,7 @@ function OrderSummary({
   onOpenProduction,
   onShowBooks,
 }: {
+  now: number
   order: OrderRow
   statusLabel: string
   customerName: string
@@ -90,6 +92,8 @@ function OrderSummary({
   onOpenProduction: (mode: 'pdf' | 'print') => void
   onShowBooks: () => void
 }) {
+  const dueCount = order.books?.filter(book => (book.replyDueAt ?? Infinity) <= now).length ?? 0
+  const replyFlag = dueCount > 0 && <span className="inline-block rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">{dueCount} {dueCount===1?'book needs':'books need'} reply check</span>
   const progress = order.production_progress
   const counts = <div className={onToggle ? `border-l border-[var(--admin-card-line)] pl-3 text-[11px] font-semibold text-[var(--admin-page-muted)] tabular-nums [&_b]:text-sm [&_b]:text-[var(--admin-page-ink)] mt-5 w-[clamp(4.5rem,9vw,7rem)] space-y-0.5` : styles.counts}>
       <div className="flex items-center justify-between gap-2">{onToggle ? 'ITEMS' : 'Items'} <b>{progress.itemCount}</b></div>
@@ -104,7 +108,7 @@ function OrderSummary({
       </div>
       <div className={styles.customer}><strong>{customerName}</strong><p className={styles.muted}>{customerEmail}</p></div>
       {counts}
-      <div className={styles.tags}><AdminStatusBadge tone={getStatusTone(order.order_status)}>{statusLabel}</AdminStatusBadge>
+      <div className={styles.tags}>{replyFlag}<AdminStatusBadge tone={getStatusTone(order.order_status)}>{statusLabel}</AdminStatusBadge>
         {!isReadOnly && isDirty && <AdminStatusBadge tone="warning">Unsaved</AdminStatusBadge>}
         <EditionChips insideDialog books={order.books ?? []} onShowBooks={onShowBooks}/>
         {progress.missingJobCount > 0 && <small>{progress.missingJobCount} job pending</small>}
@@ -117,6 +121,7 @@ function OrderSummary({
       {!isReadOnly && isDirty && <AdminStatusBadge tone="warning">Unsaved</AdminStatusBadge>}
 
     </div>
+    {replyFlag}
     <p className="my-1.5 flex items-start gap-1.5 text-xs text-[var(--admin-page-muted)]"><Clock3 aria-hidden size={14} className="mt-px shrink-0" /><span>Placed {orderTime(order.created_at)}</span></p>
     <h2 className="break-words font-bold">{customerName}</h2>
     <p className="break-all text-xs text-[var(--admin-page-muted)]">{customerEmail}</p>
@@ -130,12 +135,14 @@ function OrderSummary({
 }
 
 export function OrderManagementCard({
+  now,
   order,
   orderGroup,
   expanded,
   onToggle,
   onCommitted,
 }: {
+  now: number
   order: OrderRow
   orderGroup: OrderGroup
   expanded: boolean
@@ -323,7 +330,7 @@ export function OrderManagementCard({
   return (
     <>
     <article className="admin-v2-order-bubble admin-v2-order-bubble--interactive min-w-0 !rounded-[13px] !border-[var(--admin-card-line)] !bg-[var(--admin-card)] !bg-none !shadow-sm before:hidden">
-      <OrderSummary
+      <OrderSummary now={now}
         order={displayedOrder}
         statusLabel={statusLabel}
         customerName={customerName}
@@ -348,7 +355,7 @@ export function OrderManagementCard({
         >
         {productionSnapshotMode && <OrderProductionSnapshot embedded orderId={savedOrder.order_id} mode={productionSnapshotMode} onClose={closeSnapshot}/>}
         <div hidden={Boolean(productionSnapshotMode)}>
-            <OrderSummary
+            <OrderSummary now={now}
               order={displayedOrder}
               statusLabel={statusLabel}
               customerName={customerName}
@@ -448,7 +455,7 @@ export function OrderManagementCard({
           )}
 
           </section>
-          <BookAndShippingDetails order={displayedOrder} />
+          <BookAndShippingDetails now={now} order={displayedOrder} />
           {!READONLY_GROUPS.has(orderGroup) && (
             <details className={styles.fold} open={showShipping} onToggle={event => {
               setShowShipping(event.currentTarget.open)

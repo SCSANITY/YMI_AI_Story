@@ -542,6 +542,7 @@ export async function createGeneralMailReplyDraft(params: {
   adminCustomerId: string
   content: NormalizedGeneralMailContent
   replyAll: boolean
+  expectedDeliveryRecipient?: string
 }) {
   const context = await loadGeneralMailReplyContext(params.threadId)
   if (!context) throw new Error('general_mail_reply_source_not_found')
@@ -556,6 +557,10 @@ export async function createGeneralMailReplyDraft(params: {
     mailboxKey: context.thread.mailbox_key,
     replyAll: params.replyAll,
   })
+  if (params.expectedDeliveryRecipient && (context.thread.mailbox_key !== 'delivery'
+    || envelope.to[0] !== params.expectedDeliveryRecipient || params.replyAll)) {
+    throw new Error('general_mail_reply_recipient_conflict')
+  }
   const subject = /^re\s*:/i.test(context.thread.subject)
     ? context.thread.subject
     : `Re: ${context.thread.subject}`
@@ -599,6 +604,7 @@ export async function createGeneralMailReply(params: {
   adminCustomerId: string
   content: NormalizedGeneralMailContent
   replyAll: boolean
+  expectedDeliveryRecipient?: string
 }) {
   const message = await createGeneralMailReplyDraft(params)
   return sendGeneralMailDraft({

@@ -24,6 +24,11 @@ function getOrderGroupLabel(group: OrderGroup) {
 }
 
 export function OrdersManagementSection({ initialOrderId = null }: { initialOrderId?: string | null }) {
+  const [now,setNow] = useState(()=>Date.now())
+  useEffect(()=>{
+    const timer = window.setInterval(()=>setNow(Date.now()),60000)
+    return ()=>window.clearInterval(timer)
+  },[])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [orderGroup, setOrderGroup] = useState<OrderGroup>('active')
   const [edition, setEdition] = useState('')
@@ -323,7 +328,7 @@ export function OrdersManagementSection({ initialOrderId = null }: { initialOrde
       ) : (
         <div className="grid items-start gap-3 min-[900px]:grid-cols-2">
           {orders.map((order) => (
-            <OrderManagementCard
+            <OrderManagementCard now={now}
               key={order.order_id}
               order={order}
               orderGroup={orderGroup}

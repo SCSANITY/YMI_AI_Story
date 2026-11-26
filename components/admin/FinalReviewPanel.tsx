@@ -11,6 +11,8 @@ import { ProductionMaterialsPanel } from '@/components/admin/final-review/Produc
 import { StandardNarrationControl } from '@/components/admin/final-review/StandardNarrationControl'
 import { SignatureVoiceWorkspace } from '@/components/admin/sections/orders/SignatureVoiceWorkspace'
 import { PrintVersionReview } from '@/components/admin/final-review/PrintVersionReview'
+import { ProofReplies } from './final-review/ProofReplies'
+import { proofReplyDueAt } from '@/lib/proof-review-clock'
 import { pagePreviewUrl } from '@/components/admin/final-review/reviewUi'
 import type {
   FinalReviewQueueFilter,
@@ -98,6 +100,7 @@ function pickDefaultJob(jobs: FinalJobSummary[]) {
 }
 
 function jobMatchesQueueFilter(job: FinalJobSummary, filter: FinalReviewQueueFilter) {
+  if (filter === 'reply_check') return (proofReplyDueAt(job) ?? Infinity) <= Date.now()
   if (filter === 'all') return true
   if (filter === 'pdf_review') return !!job.proof_draft_open || job.review_status !== 'released'
   if (filter === 'print_pending') {
@@ -1325,7 +1328,7 @@ export function FinalReviewPanel({
             onChange={e => setSearchInput(e.target.value)} className="admin-v2-field min-w-0 flex-1 rounded-xl px-3 py-2 text-sm" />
           <div className="flex flex-wrap items-center gap-2 pr-10 lg:pr-0">
             <select aria-label="Production stage" value={queueFilter} onChange={e => handleQueueFilterChange(e.target.value as FinalReviewQueueFilter)} className="admin-v2-field rounded-xl px-2 py-2 text-sm">
-              <option value="all">All jobs</option><option value="pdf_review">Needs PDF review</option><option value="print_pending">Print pending</option><option value="completed">Completed</option>
+              <option value="all">All jobs</option><option value="reply_check">Needs reply check</option><option value="pdf_review">Needs PDF review</option><option value="print_pending">Print pending</option><option value="completed">Completed</option>
             </select>
             <select aria-label="Book type" value={editionFilter} onChange={e => { setQueuePage(1); setEditionFilter(e.target.value) }} className="admin-v2-field rounded-xl px-2 py-2 text-sm">
               <option value="">Book type</option><option value="digital">PDF only</option><option value="basic">Hardcover</option><option value="supreme">Hardcover + Voice</option>
@@ -1533,6 +1536,11 @@ export function FinalReviewPanel({
             </div>
           </div>
 
+          {activeDetail && selectedJob && (!materialLine || (
+            materialLine.order === activeDetail.finalJob.order_id && materialLine.item === activeDetail.finalJob.cart_item_id
+          )) && <ProofReplies key={[selectedJobId,activeDetail.finalJob.proof_revision,activeDetail.finalJob.email_sent_at].join(':')}
+            job={{...selectedJob,...activeDetail.finalJob,display_title:selectedJob.display_title,orders:selectedJob.orders}}
+            cover={pages.find(page=>page.role==='final_front_cover')?.approved_url}/>}
           <div
             id="final-review-version-panel"
             role="tabpanel"

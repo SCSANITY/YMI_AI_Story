@@ -26,6 +26,7 @@ export type OrderBook = {
   edition: 'digital' | 'basic' | 'supreme' | null
   quantity: number
   cover: string | null
+  replyDueAt?: number | null
   needsLineCheck: boolean
   finalJobId: string | null
   physical: boolean

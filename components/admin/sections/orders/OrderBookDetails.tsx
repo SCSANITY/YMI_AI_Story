@@ -16,7 +16,7 @@ export function orderTime(value: string) {
   }).format(date) + ' HKT'
 }
 
-function BookLine({ book, orderId }: { book: OrderBook; orderId?: string }) {
+function BookLine({ book, orderId, now }: { book: OrderBook; orderId?: string; now?: number }) {
   const href = (version: string) => '/admin/finals?' + new URLSearchParams({
     job: book.finalJobId!, version, order: orderId!, item: book.itemId,
   })
@@ -25,7 +25,7 @@ function BookLine({ book, orderId }: { book: OrderBook; orderId?: string }) {
       // eslint-disable-next-line @next/next/no-img-element
       <img src={book.cover} loading="lazy" alt="" className="h-10 w-10 rounded-lg object-cover" />
     ) : <BookOpen aria-hidden className="h-10 w-10 rounded-lg bg-[var(--admin-panel-2)] p-2" />}
-    <div className="min-w-24 flex-1 text-sm"><strong>{book.title}</strong><div className="text-xs text-[var(--admin-muted)]">{book.edition ? editionName[book.edition] : 'Book'} × {book.quantity}</div></div>
+    <div className="min-w-24 flex-1 text-sm"><strong>{book.title}</strong>{now !== undefined && (book.replyDueAt ?? Infinity) <= now && <small className="block text-xs font-semibold text-amber-800">Reply check due</small>}<div className="text-xs text-[var(--admin-muted)]">{book.edition ? editionName[book.edition] : 'Book'} × {book.quantity}</div></div>
     {orderId && (book.finalJobId ? <div className={styles.bookActions}>
       <a href={href('pdf')} aria-label={`Open PDF for ${book.title}`}>PDF <ArrowUpRight size={13}/></a>
       {book.physical && <a href={href('print')} aria-label={`Open Print for ${book.title}`}>Print <ArrowUpRight size={13}/></a>}
@@ -75,7 +75,7 @@ export function EditionChips({ books, onShowBooks, insideDialog = false }: { boo
   </div>
 }
 
-export function BookAndShippingDetails({ order }: { order: OrderRow }) {
+export function BookAndShippingDetails({ order, now }: { order: OrderRow; now: number }) {
   const a = order.shipping_address ?? {}
   const recipient = [a.firstName, a.lastName].filter(Boolean).join(' ')
   const lines = [a.company, a.addressLine1, a.addressLine2, a.addressLine3,
@@ -83,7 +83,7 @@ export function BookAndShippingDetails({ order }: { order: OrderRow }) {
   return <div className={styles.spread}>
     <details open className={styles.books}>
       <summary><ChevronRight size={16}/>Books <span>· {order.production_progress.itemCount}</span></summary>
-      <ul>{order.books?.map(book => <BookLine key={book.itemId} book={book} orderId={order.order_id}/>)}</ul>
+      <ul>{order.books?.map(book => <BookLine key={book.itemId} book={book} orderId={order.order_id} now={now}/>)}</ul>
     </details>
     <section className={styles.recipient}>
       <h3>Shipping details</h3>

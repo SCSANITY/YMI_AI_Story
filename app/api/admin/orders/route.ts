@@ -20,6 +20,8 @@ import {
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
 
+import { proofReplyDueAt } from '@/lib/proof-review-clock'
+
 const ORDER_SELECT = `
   order_id,
   display_id,
@@ -190,18 +192,18 @@ export async function GET(request: Request) {
     }
   }
 
-  const reviewByGeneration = new Map<string, { id: string; creation: string | null; order: string; line: string | null }>()
+  const reviewByGeneration = new Map<string, { id: string; creation: string | null; order: string; line: string | null; dueAt: number | null }>()
   if (linkedGenerationJobIds.size > 0) {
     const { data: jobRows, error: finalJobsError } = await supabaseAdmin
       .from('final_jobs')
-      .select('final_job_id, job_id, order_id, cart_item_id, creation_id')
+      .select('final_job_id, job_id, order_id, cart_item_id, creation_id, released_at,email_sent_at,proof_draft_open,pdf_only,print_released_at,print_status')
       .in('job_id', Array.from(linkedGenerationJobIds))
 
     if (finalJobsError) {
       return jsonNoStore({ error: finalJobsError.message }, { status: 500 })
     }
     for (const job of jobRows ?? []) {
-      reviewByGeneration.set(job.job_id, { id: job.final_job_id, creation: job.creation_id, order: job.order_id, line: job.cart_item_id })
+      reviewByGeneration.set(job.job_id, { id: job.final_job_id, creation: job.creation_id, order: job.order_id, line: job.cart_item_id, dueAt: proofReplyDueAt(job) })
     }
   }
 
@@ -222,6 +224,7 @@ export async function GET(request: Request) {
         return {
           ...bookByItem.get(item.cart_item_id)!,
           finalJobId: matchesLine && review ? review.id : null,
+          replyDueAt: matchesLine && item.product_type === 'physical' ? review?.dueAt : null,
           needsLineCheck: Boolean(review) && !matchesLine,
         }
       }),

@@ -220,6 +220,12 @@ not show its own button in the test mailbox; the client controls that display.
 For a scheduled run, check sent, skipped, failed and capped counts, then
 reconcile send and delivery evidence in Delivery Events.
 
+## Checking customer replies in Final Review
+
+On a physical book, **Check replies** opens Delivery correspondence for the recipient recorded on the current revision's confirmed PDF Delivery event. Threads are grouped by whether that address wrote after the PDF email was sent. A new subject can appear alongside a direct reply. Staff read the messages to decide which book needs a correction. Reading or replying has no effect on the review clock or release status. Replies use the General Inbox's normal send path and appear in its existing thread.
+
+Orders shows how many books need a reply check and identifies them in the book list. Its Email Activity remains scoped to the order.
+
 ## Per-book proof revisions
 
 Final Review opens the full PDF delivery or print approval email for editing before release. The recipient, subject and book action destinations come from the server. The editor changes only this send. An unchanged message keeps the branded catalog layout when its fingerprint matches. Order Email Activity shows the confirmed body and provider evidence. A confirmed failure retries the saved wording for the same proof. Check provider evidence for an uncertain result. Cancelling a correction draft restores the published PDF without a notification and retains the original review clock.

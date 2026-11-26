@@ -7,6 +7,8 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/validators'
 import { getFrozenFinalProductionMode } from '@/lib/final-production'
 
+import { PROOF_REVIEW_WAIT_MS } from '@/lib/proof-review-clock'
+
 const FINAL_JOB_SELECT = `
   final_job_id,
   job_id,
@@ -60,6 +62,9 @@ export async function GET(request: Request) {
     if (!['digital', 'basic', 'supreme'].includes(edition)) return jsonNoStore({ error: 'Invalid book type' }, { status: 400 })
     query = query.eq('edition_line.product_type', edition === 'digital' ? 'ebook' : 'physical').eq('edition_line.package_type', edition).eq('edition_line.status', 'ordered')
   }
+  if (stage === 'reply_check') query = query.eq('pdf_only',false).eq('proof_draft_open',false)
+    .not('released_at','is',null).is('print_released_at',null).or('print_status.is.null,print_status.neq.released')
+    .lte('email_sent_at',new Date(Date.now()-PROOF_REVIEW_WAIT_MS).toISOString())
   if (stage === 'pdf_review') query = query.or('proof_draft_open.eq.true,review_status.is.null,review_status.neq.released')
   if (stage === 'print_pending') query = query.eq('pdf_only',false).eq('proof_draft_open',false).eq('review_status','released').or('print_status.is.null,print_status.neq.released')
   if (stage === 'completed') query = query.eq('review_status','released').or('pdf_only.eq.true,print_status.eq.released')
