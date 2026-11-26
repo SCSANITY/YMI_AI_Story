@@ -31,12 +31,17 @@ export function RecordingPlayback({orderId,itemId,assetId,token,onRecovery,onLat
   useEffect(()=>{
     const controller=new AbortController();let objectUrl:string|undefined
     const release=()=>{controller.abort();if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=undefined}}
-    const timeout=setTimeout(()=>{
-      controller.abort()
-      setState({status:'failed',attempt,reason:'network'})
-    },30_000)
+    let timeout: ReturnType<typeof setTimeout>
+    const resetIdleTimer=()=>{
+      clearTimeout(timeout)
+      timeout=setTimeout(()=>{
+        controller.abort()
+        setState({status:'failed',attempt,reason:'network'})
+      },30_000)
+    }
+    resetIdleTimer()
     releaseRef.current=release
-    void fetchMaterialRecording(orderId,itemId,assetId,token,controller.signal).then(blob=>{
+    void fetchMaterialRecording(orderId,itemId,assetId,token,controller.signal,resetIdleTimer).then(blob=>{
       if(controller.signal.aborted)return
       objectUrl=URL.createObjectURL(blob);setState({status:'ready',attempt,url:objectUrl})
     }).catch(error=>{if(!controller.signal.aborted)setState({status:'failed',attempt,reason:error instanceof RecordingPlaybackError?error.reason:'network'})}).finally(()=>clearTimeout(timeout))

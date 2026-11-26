@@ -13,7 +13,7 @@ const dto=()=>({order_id:order,items:[{
   dedication:{decision:'skipped',body:null,revision:1},can_edit_dedication:true,voice_ready:false,can_submit_voice:true,
   can_replace_voice:false,voice_asset_id:null,voice_revision:1,voice_uploaded_at:null,
 }]})
-function harness({owner=null,rpcResult,queryResult,storage,dependencies={}}={}) {
+function harness({owner=null,rpcResult,queryResult,storage,fetchImpl,dependencies={}}={}) {
   const calls=[],sent=[],cache=new Map()
   const supabaseAdmin={
     storage,
@@ -28,7 +28,7 @@ function harness({owner=null,rpcResult,queryResult,storage,dependencies={}}={}) 
     },
   }
   const injections={
-    'server-only':{},'node:crypto':crypto,
+    'server-only':{},'node:crypto':crypto,'@/lib/a9-diagnostics':{},
     'next/server':{NextResponse:Response},
     '@/lib/supabaseAdmin':{supabaseAdmin},
     '@/lib/order-covers':{
@@ -46,8 +46,8 @@ function harness({owner=null,rpcResult,queryResult,storage,dependencies={}}={}) 
     const source=readFileSync(new URL('../'+path,import.meta.url),'utf8')
     const fixtureModule={exports:{}};cache.set(path,fixtureModule.exports)
     vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
-      module:fixtureModule,exports:fixtureModule.exports,Buffer,URL,Request,Response,console,
-      process:{env:{OTP_RATE_LIMIT_SECRET:'synthetic-test-key'}},
+      module:fixtureModule,exports:fixtureModule.exports,Buffer,URL,Request,Response,console,fetch:fetchImpl,
+      process:{env:{SUPABASE_URL:'https://storage.example.test',SUPABASE_SECRET_KEY:'sb_secret_test',OTP_RATE_LIMIT_SECRET:'synthetic-test-key'}},
       require(name) {
         if (Object.hasOwn(injections,name)) return injections[name]
         if (name.startsWith('@/lib/')) return load('src/lib/'+name.slice(6)+'.ts')
@@ -342,12 +342,25 @@ test('a cross-device grant plays the current inherited anonymous recording throu
   const h=harness({queryResult:table=>({data:table==='order_line_voice'?[
     {cart_item_id:item,creation_id:creation,voice_asset_id:challenge}]:
     {owner_type:'anon',anon_session_id:'old-anonymous-custody',storage_path:'synthetic/current.wav',metadata:{content_type:'audio/wav'}},error:null}),
-    storage:{from:()=>({download:async()=>({data:new Blob(['synthetic audio']),error:null})})}})
+    fetchImpl:async(url,init)=>{
+      assert.equal(url.href,'https://storage.example.test/storage/v1/object/raw-private/synthetic/current.wav')
+      assert.equal(init.headers.apikey,'sb_secret_test');assert.equal(init.headers.Authorization,undefined)
+      assert.equal(init.redirect,'error');assert.equal(init.cache,'no-store')
+      if(init.headers.Range){
+        assert.equal(init.headers.Range,'bytes=0-7')
+        return new Response('syntheti',{status:206,headers:{'content-range':'bytes 0-7/15728640','content-length':'8'}})
+      }
+      return new Response('synthetic audio')
+    }})
   const route=h.load('app/api/user-assets/[assetId]/download/route.ts')
   const response=await route.GET(new Request(`https://example.test/api/user-assets/${challenge}/download?orderId=${order}&itemId=${item}`,
     {headers:{authorization:'Bearer '+'a'.repeat(43)}}),{params:Promise.resolve({assetId:challenge})})
   assert.equal(response.status,200);assert.equal(await response.text(),'synthetic audio')
   assert.match(response.headers.get('cache-control'),/private, no-store/)
+  const ranged=await route.GET(new Request(`https://example.test/api/user-assets/${challenge}/download?orderId=${order}&itemId=${item}`,
+    {headers:{authorization:'Bearer '+'a'.repeat(43),range:'bytes=0-7'}}),{params:Promise.resolve({assetId:challenge})})
+  assert.equal(ranged.status,206);assert.equal(ranged.headers.get('content-range'),'bytes 0-7/15728640')
+  assert.equal(await ranged.text(),'syntheti')
   assert.equal(h.calls.find(c=>c.name==='materials_read').args.p_customer,null)
   assert.ok(!h.calls.some(c=>c.auth || c.table==='creations'))
 })

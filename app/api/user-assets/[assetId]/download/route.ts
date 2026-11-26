@@ -1,5 +1,6 @@
 import { noStoreJson as jsonNoStore } from '@/lib/http-response'
 import { NextResponse } from 'next/server'
+import { resolveSupabaseServiceCredential, supabaseServiceRequestHeaders } from '@/lib/supabase-service-credential'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
   checkoutOwnerErrorResponse,
@@ -64,12 +65,6 @@ export async function GET(
     }
   }
 
-  const { data: voice, error: downloadError } = await supabaseAdmin.storage
-    .from('raw-private')
-    .download(asset.storage_path)
-  if (downloadError || !voice) return jsonNoStore({ error: 'Recording is unavailable' }, 404)
-
-  const bytes = new Uint8Array(await voice.arrayBuffer())
   const metadata = asset.metadata && typeof asset.metadata === 'object' && !Array.isArray(asset.metadata)
     ? asset.metadata as Record<string, unknown>
     : {}
@@ -85,31 +80,53 @@ export async function GET(
     'Cross-Origin-Resource-Policy': 'same-origin',
   }
 
-  if (range) {
-    const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
-    if (!match) return new NextResponse(null, { status: 416, headers: commonHeaders })
-    const start = match[1] ? Number(match[1]) : 0
-    const end = match[2] ? Number(match[2]) : bytes.byteLength - 1
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || start >= bytes.byteLength) {
-      return new NextResponse(null, {
-        status: 416,
-        headers: { ...commonHeaders, 'Content-Range': `bytes */${bytes.byteLength}` },
-      })
-    }
-    const boundedEnd = Math.min(end, bytes.byteLength - 1)
-    const part = bytes.slice(start, boundedEnd + 1)
-    return new NextResponse(part, {
-      status: 206,
-      headers: {
-        ...commonHeaders,
-        'Content-Length': String(part.byteLength),
-        'Content-Range': `bytes ${start}-${boundedEnd}/${bytes.byteLength}`,
-      },
-    })
+  if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) {
+    return new NextResponse(null, { status: 416, headers: commonHeaders })
   }
 
-  return new NextResponse(bytes, {
-    status: 200,
-    headers: { ...commonHeaders, 'Content-Length': String(bytes.byteLength) },
+  // Use the same private Storage endpoint as download(), keeping the response stream intact.
+  const segments: string[] = asset.storage_path.split('/')
+  if (segments.some(segment => !segment || segment === '.' || segment === '..')) {
+    return jsonNoStore({ error: 'Recording is unavailable' }, 404)
+  }
+  const origin = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const path = segments.map(encodeURIComponent).join('/')
+  let upstream: Response
+  try {
+    upstream = await fetch(new URL(`/storage/v1/object/raw-private/${path}`, origin), {
+      headers: {
+        ...supabaseServiceRequestHeaders(resolveSupabaseServiceCredential()),
+        'Accept-Encoding': 'identity',
+        ...(range ? { Range: range } : {}),
+      },
+      signal: request.signal,
+      cache: 'no-store',
+      redirect: 'error',
+    })
+  } catch {
+    return jsonNoStore({ error: 'Recording storage is unavailable' }, 502)
+  }
+
+  const contentRange = upstream.headers.get('content-range')
+  if (upstream.status === 416) {
+    await upstream.body?.cancel()
+    return new NextResponse(null, { status: 416, headers: {
+      ...commonHeaders,
+      ...(contentRange && /^bytes \*\/\d+$/.test(contentRange) ? { 'Content-Range': contentRange } : {}),
+    } })
+  }
+  if (!upstream.body || upstream.status !== (range ? 206 : 200)
+      || (range && !/^bytes \d+-\d+\/\d+$/.test(contentRange ?? ''))) {
+    await upstream.body?.cancel()
+    return jsonNoStore({ error: 'Recording is unavailable' }, upstream.status === 404 ? 404 : 502)
+  }
+  const length = upstream.headers.get('content-length')
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: {
+      ...commonHeaders,
+      ...(range && contentRange ? { 'Content-Range': contentRange } : {}),
+      ...(length ? { 'Content-Length': length } : {}),
+    },
   })
 }

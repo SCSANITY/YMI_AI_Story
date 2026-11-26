@@ -7,17 +7,14 @@ import React from 'react'
 import {loadUi} from './helpers/preview-uiux-harness.mjs'
 import { readFileSync } from 'node:fs'
 
-const helperModule={exports:{}}
-vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/lib/order-materials-client.ts',import.meta.url),'utf8'),{
- compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
-}).outputText,{module:helperModule,exports:helperModule.exports})
+const materialHelpers=loadUi('src/lib/order-materials-client.ts',{'@/lib/userAssetsStorage':loadUi('src/lib/userAssetsStorage.ts')})
 function mailHarness(skip=false,voiceReady=false,names=['Alston'],originalFormat=null,edition='original') {
   const events=[],sent=[],reads=[],logs=[],fixtureModule={exports:{}}
   const model='a'.repeat(43)
   const injections={
     '@/lib/release-template-snapshot':{releaseRenderNote:async note=>note},
     '@/lib/order-materials':loadUi('src/lib/order-materials.ts',{'@/lib/validators':{},'@/lib/dedication':{}}),
-    react:React,'@/lib/order-materials-client':helperModule.exports,
+    react:React,'@/lib/order-materials-client':materialHelpers,
     resend:{Resend:class {emails={send:async (value,options)=>{sent.push({...value,options});return {data:{id:'synthetic-message'}}}}}},
     '@/components/emails/PrintReleasedEmail':{PRINT_RELEASED_SUBJECT:'Your YMI Story Book Is Approved!',PrintReleasedEmail:()=>null},
     '@/lib/order-materials-server':{

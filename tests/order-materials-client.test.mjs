@@ -17,13 +17,17 @@ function loadModule(path,injections={},globals={}) {
  },{filename:path})
  return mod.exports
 }
-const helpers=globals=>loadModule('src/lib/order-materials-client.ts',{},globals)
+const helpers=globals=>loadModule('src/lib/order-materials-client.ts',{'@/lib/userAssetsStorage':loadModule('src/lib/userAssetsStorage.ts')},{Blob,...globals})
+function partial(text) {
+ const length=Buffer.byteLength(text)
+ return new Response(text,{status:206,headers:{'content-range':`bytes 0-${length-1}/${length}`,'content-type':'audio/wav'}})
+}
 const dto=()=>({order_id:order,items:[{
  cart_item_id:line,creation_id:oldAsset,package_type:'supreme',book:{title:'Synthetic book'},
  dedication:{body:'With love',revision:1},can_edit_dedication:true,voice_ready:true,can_submit_voice:true,
  can_replace_voice:true,voice_asset_id:oldAsset,voice_revision:1,voice_uploaded_at:'2026-10-26T00:00:00Z',
 }]})
-function harness({response,upload,initial=dto(),component='page',embedded=false}={}) {
+function harness({response,upload,initial=dto(),component='page',embedded=false,timers={setTimeout,clearTimeout}}={}) {
  let cursor=0,tree,dirty=true,server=initial
  const slots=[],effects=[],calls=[],uploads=[],history=[]
  const changed=(a,b)=>!a||a.length!==b.length||a.some((v,i)=>!Object.is(v,b[i]))
@@ -57,7 +61,7 @@ function harness({response,upload,initial=dto(),component='page',embedded=false}
   '@/lib/signature-voice':{SIGNATURE_VOICE_CONSENT_VERSION:'signature-voice-consent-v3'},
   '@/components/OrderCoverImage':{default:'cover'},'next/link':{default:'a'},
  },{Event,window:{dispatchEvent(){},location:{hash:'#token='+grant,pathname:'/orders/'+order+'/materials'},history:{replaceState:(...args)=>history.push(args)}},
-  fetch:fetchMock,URL:LocalURL,setTimeout,clearTimeout,
+  fetch:fetchMock,URL:LocalURL,...timers,
  })
  function render(){cursor=0;dirty=false;tree=component==='page'?client.OrderMaterialsClient({orderId:order,embedded}):client.RecordingPlayback({orderId:order,itemId:line,assetId:oldAsset,token:grant,onRecovery:()=>callbacks.push('recovery'),onLatest:()=>callbacks.push('latest')});while(effects.length)effects.shift()();return tree}
  async function settle(){for(let n=0;n<8;n++){if(dirty)render();await new Promise(resolve=>setImmediate(resolve))}if(dirty)render();return tree}
@@ -153,7 +157,7 @@ test('two paid lines sharing one Creation keep independent recording edit target
 })
 
 test('scoped guest playback fetches to a Blob using Bearer only in headers and a cancellable no-store request',async()=>{
- const calls=[],controller=new AbortController(),api=helpers({fetch:async(...args)=>{calls.push(args);return new Response('synthetic audio')}})
+ const calls=[],controller=new AbortController(),api=helpers({fetch:async(...args)=>{calls.push(args);return partial('synthetic audio')}})
  const blob=await api.fetchMaterialRecording(order,line,oldAsset,grant,controller.signal)
  assert.equal(await blob.text(),'synthetic audio');assert.equal(calls.length,1)
  const [url,init]=calls[0];assert.ok(url.includes('orderId='+order)&&url.includes('itemId='+line));assert.ok(!url.includes(grant))
@@ -184,14 +188,14 @@ test('the inline controls stay visible while loading, and a late response after 
  assert.equal(h.calls.length,1)
  h.cleanup()
  assert.equal(h.calls[0].init.signal.aborted,true)
- resolve(new Response('late audio'))
+ resolve(partial('late audio'))
  await h.settle()
  assert.equal(h.created.length,0)
 })
 
 test('manual network retry re-fetches once,with new controller and cleanup of prior audio URL',async()=>{
  let failures=0
- const h=harness({component:'playback',response:()=>++failures===1?Response.json({error:'busy'},{status:503}):new Response('audio')})
+ const h=harness({component:'playback',response:()=>++failures===1?Response.json({error:'busy'},{status:503}):partial('audio')})
  await h.settle()
  assert.equal(h.calls.length,1);h.button('Try again').props.onClick();await h.settle()
  assert.equal(h.calls.length,2);assert.notEqual(h.calls[0].init.signal,h.calls[1].init.signal)
@@ -212,7 +216,7 @@ test('access and stale recording failures expose only recovery or latest-materia
 
 test('MediaError format/decode failure reassures and suggests another device,without retry',async()=>{
  for(const code of [3,4]){
-  const h=harness({component:'playback',response:()=>new Response('audio')});await h.settle()
+  const h=harness({component:'playback',response:()=>partial('audio')});await h.settle()
   h.nodes().find(n=>n.type==='audio').props.onError({currentTarget:{error:{code}}});await h.settle()
   assert.match(h.text(),/does not affect your submitted recording/);assert.match(h.text(),/another browser or device/)
   assert.ok(!h.nodes().some(n=>n.type==='button'&&n.props.children==='Try again'));assert.equal(h.revoked.length,1);h.cleanup()
@@ -300,4 +304,51 @@ test('a pending recording upload frees the editor and keeps the message save ind
  await h.settle();assert.equal(h.button('Replace recording').props.disabled,false)
  assert.deepEqual(h.calls.filter(c=>c.init.method==='POST').map(c=>JSON.parse(c.init.body).action),['dedication','voice'])
  h.cleanup()
+})
+
+test('maximum saved recording reassembles exact bytes from bounded range requests',async()=>{
+ const size=15*1024*1024, source=Buffer.alloc(size)
+ for(let i=0;i<size;i++)source[i]=(i*7)%251
+ source.write('RIFF');source.writeUInt32LE(size-8,4);source.write('WAVEfmt ',8);source.writeUInt32LE(16,16)
+ source.writeUInt16LE(1,20);source.writeUInt16LE(1,22);source.writeUInt32LE(16000,24);source.writeUInt32LE(32000,28)
+ source.writeUInt16LE(2,32);source.writeUInt16LE(16,34);source.write('data',36);source.writeUInt32LE(size-44,40)
+ let offset=0,requests=0
+ const api=helpers({fetch:async(url,init)=>{
+   assert.equal(init.credentials,'include');assert.equal(init.headers.Authorization,undefined)
+   const [,a,b]=/^bytes=(\d+)-(\d+)$/.exec(init.headers.Range)
+   const start=Number(a),end=Number(b)
+   assert.equal(start,offset);assert.ok(end-start+1<=2*1024*1024);offset=end+1;requests++
+   return new Response(source.subarray(start,end+1),{status:206,headers:{'content-range':`bytes ${start}-${end}/${size}`,'content-type':'audio/wav'}})
+ }})
+ const result=await api.fetchMaterialRecording(order,line,oldAsset,null,new AbortController().signal)
+ assert.equal(requests,8);assert.equal(offset,size);assert.equal(result.type,'audio/wav')
+ assert.deepEqual(Buffer.from(await result.arrayBuffer()),source)
+})
+
+test('bytes arriving for 60s keep playback alive, 30s of silence aborts and allows retry',async()=>{
+ let now=0,deadline=null,callback,stream
+ const timers={setTimeout(fn,ms){deadline=now+ms;callback=fn;return 1},clearTimeout(){deadline=null}}
+ const h=harness({component:'playback',timers,response:()=>new Response(new ReadableStream({start(c){stream=c}}),
+   {status:206,headers:{'content-range':'bytes 0-3/4'}})})
+ await h.settle()
+ for(let i=0;i<3;i++){now+=20000;assert.ok(deadline>now);stream.enqueue(Uint8Array.of(i));await h.settle();assert.equal(deadline,now+30000)}
+ now=deadline;callback();await h.settle();assert.equal(h.calls[0].init.signal.aborted,true)
+ stream.close();await h.settle();assert.equal(h.created.length,0)
+ h.button('Try again').props.onClick();await h.settle()
+ stream.enqueue(Uint8Array.of(0,1,2,3));stream.close();await h.settle()
+ assert.equal(h.created.length,1);assert.equal(deadline,null);h.cleanup()
+})
+
+test('truncated segment and replaced recording mid-download never become playable',async()=>{
+ const segment=2*1024*1024
+ for(const reason of ['network','not-current']){
+   let calls=0
+   const api=helpers({fetch:async()=>{
+     calls++
+     if(calls===2)return new Response(null,{status:409})
+     return new Response(new Uint8Array(reason==='network'?1:segment),{status:206,headers:{'content-range':`bytes 0-${segment-1}/${segment+1}`}})
+   }})
+   await assert.rejects(api.fetchMaterialRecording(order,line,oldAsset,grant,new AbortController().signal),e=>e.reason===reason)
+   assert.equal(calls,reason==='network'?1:2)
+ }
 })

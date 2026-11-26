@@ -2,6 +2,8 @@ type UserAssetOwnerType = 'customer' | 'anon'
 export type UploadableUserAssetType = 'face_image' | 'voice_sample' | 'profile_avatar'
 export const USER_ASSET_SIGN_TTL_SECONDS = 60 * 60
 
+export const MAX_VOICE_SAMPLE_BYTES = 15 * 1024 * 1024
+
 const USER_ASSET_UPLOAD_POLICY: Record<
   UploadableUserAssetType,
   { maxBytes: number; contentTypes: ReadonlySet<string> }
@@ -15,7 +17,7 @@ const USER_ASSET_UPLOAD_POLICY: Record<
     contentTypes: new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']),
   },
   voice_sample: {
-    maxBytes: 15 * 1024 * 1024,
+    maxBytes: MAX_VOICE_SAMPLE_BYTES,
     contentTypes: new Set([
       'audio/webm',
       'audio/mp4',

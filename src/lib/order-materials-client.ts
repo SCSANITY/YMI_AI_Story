@@ -1,3 +1,4 @@
+import { MAX_VOICE_SAMPLE_BYTES } from '@/lib/userAssetsStorage'
 import type { MaterialItem } from '@/lib/order-materials'
 
 // SD-036: date language follows the English UI,never navigator.language.
@@ -45,17 +46,64 @@ export function playbackMediaReason(code:number|undefined):PlaybackFailureReason
   return code===3||code===4?'format':'unavailable'
 }
 // Audio elements cannot attach the scoped grant. Keep it in a header, never a URL.
-export async function fetchMaterialRecording(orderId: string, itemId: string, assetId: string, token: string | null | undefined, signal: AbortSignal) {
+const PLAYBACK_RANGE_BYTES = 2 * 1024 * 1024
+
+export async function fetchMaterialRecording(
+  orderId: string, itemId: string, assetId: string, token: string | null | undefined,
+  signal: AbortSignal, onProgress?: () => void,
+) {
   const params = new URLSearchParams({ orderId, itemId })
-  let response:Response
+  const url = `/api/user-assets/${encodeURIComponent(assetId)}/download?${params}`
+  const parts: BlobPart[] = []
+  let offset = 0
+  let total: number | undefined
+  let type = ''
   try {
-    response=await fetch(`/api/user-assets/${encodeURIComponent(assetId)}/download?${params}`, {
-      credentials:'include',cache:'no-store',redirect:'error',signal,
-      headers:token?{Authorization:`Bearer ${token}`}:{},
-    })
-  } catch {throw new RecordingPlaybackError('network')}
-  if(!response.ok)throw new RecordingPlaybackError(playbackHttpReason(response.status))
-  try {return await response.blob()}catch {throw new RecordingPlaybackError('network')}
+    do {
+      if (signal.aborted) throw new RecordingPlaybackError('network')
+      const end = Math.min(offset + PLAYBACK_RANGE_BYTES, total ?? MAX_VOICE_SAMPLE_BYTES) - 1
+      const response = await fetch(url, {
+        credentials: 'include', cache: 'no-store', redirect: 'error', signal,
+        headers: { Range: `bytes=${offset}-${end}`, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      if (!response.ok) {
+        await response.body?.cancel()
+        throw new RecordingPlaybackError(playbackHttpReason(response.status))
+      }
+      const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get('content-range') ?? '')
+      const size = Number(match?.[3])
+      const last = Math.min(end, size - 1)
+      if (!response.body || response.status !== 206 || !match || size <= offset || size > MAX_VOICE_SAMPLE_BYTES
+          || (total !== undefined && size !== total) || Number(match[1]) !== offset || Number(match[2]) !== last) {
+        await response.body?.cancel()
+        throw new RecordingPlaybackError('network')
+      }
+      total = size
+      type ||= response.headers.get('content-type') ?? ''
+      const reader = response.body.getReader()
+      try {
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+          if (!value.byteLength) continue
+          offset += value.byteLength
+          if (signal.aborted || offset > last + 1) {
+            await reader.cancel()
+            throw new RecordingPlaybackError('network')
+          }
+          parts.push(value)
+          onProgress?.()
+        }
+      } finally {
+        reader.releaseLock()
+      }
+      if (offset !== last + 1) throw new RecordingPlaybackError('network')
+    } while (offset < total)
+    return new Blob(parts, { type })
+  } catch (error) {
+    if (error instanceof RecordingPlaybackError) throw error
+    throw new RecordingPlaybackError('network')
+  }
 }
 
 export type MaterialShipment={shipped_at?:string|null;order_status?:string|null}
