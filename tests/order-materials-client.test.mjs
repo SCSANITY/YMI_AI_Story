@@ -57,7 +57,7 @@ function harness({response,upload,initial=dto(),component='page',embedded=false}
   '@/lib/signature-voice':{SIGNATURE_VOICE_CONSENT_VERSION:'signature-voice-consent-v3'},
   '@/components/OrderCoverImage':{default:'cover'},'next/link':{default:'a'},
  },{window:{location:{hash:'#token='+grant,pathname:'/orders/'+order+'/materials'},history:{replaceState:(...args)=>history.push(args)}},
-  fetch:fetchMock,URL:LocalURL,
+  fetch:fetchMock,URL:LocalURL,setTimeout,clearTimeout,
  })
  function render(){cursor=0;dirty=false;tree=component==='page'?client.OrderMaterialsClient({orderId:order,embedded}):client.RecordingPlayback({orderId:order,itemId:line,assetId:oldAsset,token:grant,onRecovery:()=>callbacks.push('recovery'),onLatest:()=>callbacks.push('latest')});while(effects.length)effects.shift()();return tree}
  async function settle(){for(let n=0;n<8;n++){if(dirty)render();await new Promise(resolve=>setImmediate(resolve))}if(dirty)render();return tree}
@@ -173,10 +173,26 @@ test('page keys and Admin displays remain per paid line,with fresh authorization
 })
 
 
+test('the inline controls stay visible while loading, and a late response after leaving is discarded',async()=>{
+ let resolve
+ const pending=new Promise(done=>{resolve=done})
+ const h=harness({component:'playback',response:()=>pending})
+ const audio=h.nodes().find(node=>node.type==='audio')
+ assert.equal(audio.props.controls,true)
+ assert.equal(audio.props.src,undefined)
+ assert.match(h.text(),/Loading your recording/)
+ assert.equal(h.calls.length,1)
+ h.cleanup()
+ assert.equal(h.calls[0].init.signal.aborted,true)
+ resolve(new Response('late audio'))
+ await h.settle()
+ assert.equal(h.created.length,0)
+})
+
 test('manual network retry re-fetches once,with new controller and cleanup of prior audio URL',async()=>{
  let failures=0
  const h=harness({component:'playback',response:()=>++failures===1?Response.json({error:'busy'},{status:503}):new Response('audio')})
- await h.settle();assert.equal(h.calls.length,0);h.button('Listen to current recording').props.onClick();await h.settle()
+ await h.settle()
  assert.equal(h.calls.length,1);h.button('Try again').props.onClick();await h.settle()
  assert.equal(h.calls.length,2);assert.notEqual(h.calls[0].init.signal,h.calls[1].init.signal)
  assert.equal(h.calls[0].init.signal.aborted,true)
@@ -188,7 +204,7 @@ test('manual network retry re-fetches once,with new controller and cleanup of pr
 test('access and stale recording failures expose only recovery or latest-material actions',async()=>{
  for(const [status,label,callback] of [[403,'Request a new link','recovery'],[409,'Load latest recording','latest']]){
   const h=harness({component:'playback',response:()=>new Response(null,{status})});await h.settle()
-  h.button('Listen to current recording').props.onClick();await h.settle();h.button(label).props.onClick()
+  h.button(label).props.onClick()
   assert.deepEqual(h.callbacks,[callback]);assert.equal(h.calls.length,1)
   assert.ok(!h.nodes().some(n=>n.type==='button'&&n.props.children==='Try again'));h.cleanup()
  }
@@ -197,7 +213,6 @@ test('access and stale recording failures expose only recovery or latest-materia
 test('MediaError format/decode failure reassures and suggests another device,without retry',async()=>{
  for(const code of [3,4]){
   const h=harness({component:'playback',response:()=>new Response('audio')});await h.settle()
-  h.button('Listen to current recording').props.onClick();await h.settle()
   h.nodes().find(n=>n.type==='audio').props.onError({currentTarget:{error:{code}}});await h.settle()
   assert.match(h.text(),/does not affect your submitted recording/);assert.match(h.text(),/another browser or device/)
   assert.ok(!h.nodes().some(n=>n.type==='button'&&n.props.children==='Try again'));assert.equal(h.revoked.length,1);h.cleanup()
@@ -206,7 +221,7 @@ test('MediaError format/decode failure reassures and suggests another device,wit
 
 test('404 unavailable maps to support,not expired access or obsolete source',async()=>{
  const h=harness({component:'playback',response:()=>new Response(null,{status:404})});await h.settle()
- h.button('Listen to current recording').props.onClick();await h.settle();assert.match(h.text(),/Contact our team/)
+ assert.match(h.text(),/Contact our team/)
  assert.equal(h.nodes().find(n=>n.props?.href==='/support').props.children,'Contact our team');h.cleanup()
 })
 

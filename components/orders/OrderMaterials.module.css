@@ -293,10 +293,19 @@
 .voiceWell small {
   margin-top: 2px;
 }
-.voice audio {
+.playback {
   width: 100%;
-  max-height: 40px;
-  margin: 0 0 12px;
+  min-width: 0;
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+}
+.playback p {
+  margin: 5px 0 0;
+}
+.voice audio {
+  display: block;
+  width: 100%;
+  height: 40px;
 }
 .skeleton {
   display: grid;

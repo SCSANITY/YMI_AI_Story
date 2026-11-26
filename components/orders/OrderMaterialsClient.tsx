@@ -23,29 +23,36 @@ const SignatureVoiceDialog = dynamic(() =>
 class MaterialWriteFailure extends Error {}
 
 const button='rounded-full bg-amber-800 px-5 py-3 text-sm font-bold text-white disabled:opacity-50'
-type PlaybackState={status:'idle';attempt:number}|{status:'loading';attempt:number}|{status:'ready';attempt:number;url:string}|{status:'failed';attempt:number;reason:PlaybackFailureReason}
+type PlaybackState={status:'loading';attempt:number}|{status:'ready';attempt:number;url:string}|{status:'failed';attempt:number;reason:PlaybackFailureReason}
 export function RecordingPlayback({orderId,itemId,assetId,token,onRecovery,onLatest}:{orderId:string;itemId:string;assetId:string;token:string|null|undefined;onRecovery:()=>void;onLatest:()=>void}) {
-  const [state,setState]=useState<PlaybackState>({status:'idle',attempt:0})
+  const [state,setState]=useState<PlaybackState>({status:'loading',attempt:0})
   const releaseRef=useRef<(()=>void)|null>(null)
   const attempt=state.attempt
   useEffect(()=>{
-    if(attempt===0)return
     const controller=new AbortController();let objectUrl:string|undefined
     const release=()=>{controller.abort();if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=undefined}}
+    const timeout=setTimeout(()=>{
+      controller.abort()
+      setState({status:'failed',attempt,reason:'network'})
+    },30_000)
     releaseRef.current=release
     void fetchMaterialRecording(orderId,itemId,assetId,token,controller.signal).then(blob=>{
       if(controller.signal.aborted)return
       objectUrl=URL.createObjectURL(blob);setState({status:'ready',attempt,url:objectUrl})
-    }).catch(error=>{if(!controller.signal.aborted)setState({status:'failed',attempt,reason:error instanceof RecordingPlaybackError?error.reason:'network'})})
-    return()=>{release();if(releaseRef.current===release)releaseRef.current=null}
+    }).catch(error=>{if(!controller.signal.aborted)setState({status:'failed',attempt,reason:error instanceof RecordingPlaybackError?error.reason:'network'})}).finally(()=>clearTimeout(timeout))
+    return()=>{clearTimeout(timeout);release();if(releaseRef.current===release)releaseRef.current=null}
   },[attempt,orderId,itemId,assetId,token])
   const start=()=>setState({status:'loading',attempt:attempt+1})
-  return <div className="mt-3 text-sm">
-    {state.status==='idle'?<button type="button" className="font-semibold underline" onClick={start}>Listen to current recording</button>
-      :state.status==='loading'?<p role="status">Loading recording...</p>
-      :state.status==='ready'?<audio controls preload="metadata" src={state.url} className="w-full" aria-label="Current recording"
-        onError={event=>{const reason=playbackMediaReason(event.currentTarget.error?.code);releaseRef.current?.();setState({status:'failed',attempt,reason})}}/>
-      :<div role="alert" className="space-y-2 text-rose-800">
+  return <div className={styles.playback}>
+    <audio controls preload="metadata" src={state.status==='ready'?state.url:undefined} aria-label="Current recording"
+      onError={event=>{
+        if(state.status!=='ready')return
+        const reason=playbackMediaReason(event.currentTarget.error?.code)
+        releaseRef.current?.()
+        setState({status:'failed',attempt,reason})
+      }}/>
+    {state.status==='loading' && <p role="status">Loading your recording…</p>}
+    {state.status==='failed' && <div role="alert" className="space-y-2 text-rose-800">
         {state.reason==='network'?<><p>We could not load the recording. Check your connection and try again.</p><button type="button" className="font-semibold underline" onClick={start}>Try again</button></>
           :state.reason==='access'?<><p>This link no longer has access to the recording.</p><button type="button" className="font-semibold underline" onClick={onRecovery}>Request a new link</button></>
           :state.reason==='not-current'?<><p>This recording has been replaced.</p><button type="button" className="font-semibold underline" onClick={onLatest}>Load latest recording</button></>
@@ -238,7 +245,7 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
               <strong>{busyKeys.includes(voiceKey)?'Uploading recording\u2026':item.voice_ready?'Recording received':'No recording yet'}</strong>
               <small>{item.voice_uploaded_at?<>Uploaded <MaterialTime value={item.voice_uploaded_at}/></>:'Record here or choose an audio file.'}</small>
             </div></div>
-            {item.voice_ready && <RecordingPlayback key={item.voice_asset_id} orderId={orderId} itemId={item.cart_item_id} assetId={item.voice_asset_id!}
+            {item.cart_item_id===selectedId && item.voice_ready && item.voice_asset_id && <RecordingPlayback key={item.voice_asset_id} orderId={orderId} itemId={item.cart_item_id} assetId={item.voice_asset_id}
               token={token} onRecovery={()=>{clearPrivateState();setRecovery(true)}} onLatest={refresh}/>}
             {(item.voice_ready?item.can_replace_voice:item.can_submit_voice) ? <button type="button" className={styles.outline} disabled={busyKeys.includes(voiceKey)} onClick={()=>{
               setVoiceItem({...item});setRecording(retryClips.current.get(item.cart_item_id)?.recording ?? null);notify(voiceKey,'')
