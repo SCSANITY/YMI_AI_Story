@@ -90,12 +90,14 @@ export function useNavNoticeCounts({ customerId, pathname }: UseNavNoticeCountsP
       const last = noticeCountsCache.get(customerId)
       if (!last || Date.now() - last.loadedAt >= NOTICE_COUNTS_TTL_MS) invalidate()
     }
-    const storage = (event: StorageEvent) => { if (event.key === 'ymi_materials_changed') invalidate() }
+    const storage = (event: StorageEvent) => { if (event.key === 'ymi_materials_changed' || event.key === 'ymi_material_notices_read') invalidate() }
     window.addEventListener('ymi-materials-changed', invalidate)
+    window.addEventListener('ymi-material-notices-read', invalidate)
     window.addEventListener('focus', focus)
     window.addEventListener('storage', storage)
     return () => {
       window.removeEventListener('ymi-materials-changed', invalidate)
+      window.removeEventListener('ymi-material-notices-read', invalidate)
       window.removeEventListener('focus', focus)
       window.removeEventListener('storage', storage)
     }

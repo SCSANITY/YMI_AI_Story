@@ -12,6 +12,7 @@ import {
 } from '@/lib/order-status';
 import { resolveOrdersPageState } from '@/lib/orders-page-state';
 import { OrderTabs } from './OrderTabs';
+import { acknowledgeOrderMaterialNotices } from './material-notice-reads';
 import { OrdersList } from './OrdersList';
 import type { OrderSummary, OrderTab } from './ordersTypes';
 
@@ -122,6 +123,16 @@ export default function OrdersPage() {
       cancelled = true;
     };
   }, [isAuthResolved, isHydrated, user?.customerId, reloadAttempt]);
+
+  useEffect(() => {
+    const customerId = user?.customerId;
+    if (!customerId || customerId !== loadedCustomerId || loading || hasLoadError) return;
+    const controller = new AbortController();
+    void acknowledgeOrderMaterialNotices(customerId, orders, controller.signal).catch(() => {
+      if (!controller.signal.aborted) console.warn('[orders] Material notice acknowledgement unavailable');
+    });
+    return () => controller.abort();
+  }, [user?.customerId, loadedCustomerId, orders, loading, hasLoadError]);
 
   const grouped = useMemo(() => {
     const shipping = orders.filter((order) => getOrderTab(order.order_status, order.book_progress) === 'shipping');

@@ -30,9 +30,9 @@ export async function resolveMaterialAccess(request: Request): Promise<MaterialA
   if (owner?.ownerType!=='customer') throw new MaterialError('material_access_required',401)
   return { customerId:materialUuid(owner.customerId),tokenHash:null }
 }
-export async function readMaterialWrite(request: Request) {
+export async function readMaterialWrite(request: Request, expectedOrigin = new URL(request.url).origin) {
   const origin=request.headers.get('origin')
-  if (origin && origin!==new URL(request.url).origin) throw new MaterialError('material_origin_denied',403)
+  if (origin && origin!==expectedOrigin) throw new MaterialError('material_origin_denied',403)
   if (request.headers.get('content-type')?.split(';')[0].trim()!=='application/json') {
     throw new MaterialError('invalid_material',400)
   }
