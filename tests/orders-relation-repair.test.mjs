@@ -227,8 +227,9 @@ function pageHarness(responses) {
   '@/components/Button':{Button:'button'},'@/lib/useI18n':{useI18n:()=>({t})},
   '@/lib/order-status':{isFinishedOrderStatus:s=>['delivered','cancelled','refunded'].includes(s),normalizeOrderStatus:s=>s},
   '@/lib/orders-page-state':load('src/lib/orders-page-state.ts'),
+  './material-notice-reads':load('app/orders/material-notice-reads.ts'),
   './OrderTabs':{OrderTabs:'order-tabs'},'./OrdersList':{OrdersList:'orders-list'},
- },{window:new EventTarget(),fetch:async(url,init)=>{calls.push({url,init});assert.ok(responses.length,'no automatic retry');const next=responses.shift();if(next instanceof Error)throw next;return next}}).default
+ },{AbortController,window:new EventTarget(),fetch:async(url,init)=>{calls.push({url,init});assert.ok(responses.length,'no automatic retry');const next=responses.shift();if(next instanceof Error)throw next;return next}}).default
  function render(){cursor=0;dirty=false;tree=Page();while(effects.length)effects.shift()()}
  async function settle(){for(let n=0;n<12;n++){if(dirty)render();await new Promise(resolve=>setImmediate(resolve))}if(dirty)render()}
  function walk(node){if(!node||typeof node!=='object')return[];if(Array.isArray(node))return node.flatMap(walk);return[node,...walk(node.props?.children)]}
