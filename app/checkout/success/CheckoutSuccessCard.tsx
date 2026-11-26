@@ -1,7 +1,7 @@
 'use client';
 import { hasBookMaterialFields, type OrderMaterials } from '@/lib/order-materials';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 const PaidBookMaterials = dynamic(() => import('@/components/orders/OrderMaterialsClient').then(module => module.OrderMaterialsClient));
 
@@ -54,20 +54,26 @@ export function CheckoutSuccessCard({
     && ['paid', 'production'].includes(order.order_status ?? '')
     && (order.hasBookMaterials ?? order.materials?.items.some(hasBookMaterialFields) ?? true);
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  function canLeaveMaterials() {
+    const unsaved = cardRef.current?.querySelector('[data-unsaved="true"], [data-materials-pending="true"]');
+    return !unsaved || window.confirm('Leave this page with unsaved changes?');
+  }
+
   const handleTrackOrder = () => {
-    if (pendingAction || (!orderId && !order?.order_id)) return;
+    if (pendingAction || (!orderId && !order?.order_id) || !canLeaveMaterials()) return;
     setPendingAction('track');
     onTrackOrder();
   };
 
   const handleBackHome = () => {
-    if (pendingAction) return;
+    if (pendingAction || !canLeaveMaterials()) return;
     setPendingAction('home');
     onBackHome();
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-8 py-14">
+    <div ref={cardRef} className="max-w-3xl mx-auto px-4 md:px-8 py-14">
       <div className="rounded-3xl glass-panel p-8 md:p-10 text-center">
         <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
           <CheckCircle2 className="h-8 w-8 text-emerald-600" />
@@ -127,7 +133,7 @@ export function CheckoutSuccessCard({
               <Button
                 size="sm"
                 className="w-full rounded-full sm:w-auto"
-                onClick={onCreateAccount}
+                onClick={()=>{if(canLeaveMaterials())onCreateAccount()}}
               >
                 {t('checkout.createAccount')}
               </Button>

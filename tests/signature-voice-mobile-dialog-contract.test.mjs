@@ -42,7 +42,7 @@ test('voice authorization and upload/save callbacks remain explicit', async () =
   assert.match(dialog, /const \[authorized, setAuthorized\] = useState\(false\)/)
   assert.match(dialog, /aria-required="true"/)
   assert.match(dialog, /disabled=\{!pendingRecording \|\| !authorized \|\| isSaving\}/)
-  assert.match(dialog, /pendingRecording && onSave\(pendingRecording\)/)
+  assert.match(dialog, /pendingRecording && onSave\(pendingRecording,method\)/)
 })
 
 test('customer copy accepts a completed capture without a voice-quality review step', async () => {

@@ -4,6 +4,8 @@ import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, Trash2, X } from 'lucide-react'
+import methodStyles from './VoiceMethods.module.css'
+import { VoiceMethods, type VoiceMethod } from './VoiceMethods'
 import { Button } from '@/components/Button'
 import { validateUserAssetUpload } from '@/lib/userAssetsStorage'
 import { PrivacyReassurance } from '@/components/personalize/PrivacyReassurance'
@@ -16,6 +18,7 @@ const VoiceRecorderPanel = dynamic(
 
 type SignatureVoiceDialogProps = {
   open: boolean
+  initialMethod?:VoiceMethod
   allowFileUpload?:boolean
   existingAssetId: string | null
   existingSignedUrl: string | null
@@ -36,13 +39,13 @@ type SignatureVoiceDialogProps = {
   onClose: () => void
   onRecordingSelected: (recording: PendingVoiceRecording | null) => void
   onClearValidation: () => void
-  onSave: (recording: PendingVoiceRecording) => void
+  onSave: (recording: PendingVoiceRecording,method?:VoiceMethod) => void
   onRemove: () => void
 }
 
 export function SignatureVoiceDialog({
   open,
-  allowFileUpload=false,
+  allowFileUpload=false,initialMethod='record',
   existingAssetId,
   existingSignedUrl,
   existingDurationSeconds,
@@ -64,6 +67,16 @@ export function SignatureVoiceDialog({
   const [authorized, setAuthorized] = useState(false)
   const [fileError,setFileError]=useState('')
 
+  const [method,setMethod]=useState<VoiceMethod>(initialMethod)
+  const [capturing,setCapturing]=useState(false)
+  const clips=useRef<Record<VoiceMethod,PendingVoiceRecording|null>>({record:null,upload:null})
+  const [previewUrl,setPreviewUrl]=useState('')
+  useEffect(()=>{
+    if(method!=='upload' || !pendingRecording){setPreviewUrl('');return}
+    const url=URL.createObjectURL(pendingRecording.file)
+    setPreviewUrl(url)
+    return ()=>URL.revokeObjectURL(url)
+  },[method,pendingRecording])
   useEffect(() => {
     isSavingRef.current = isSaving
   }, [isSaving])
@@ -166,12 +179,13 @@ export function SignatureVoiceDialog({
     >
       <div
         ref={panelRef}
+        data-materials-dialog={allowFileUpload || undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby="signature-voice-dialog-title"
         data-signature-voice-dialog="true"
         data-mobile-presentation="bottom-sheet"
-        className="flex max-h-[min(88dvh,760px)] w-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-white/70 bg-[#fffdf9] text-slate-900 shadow-[0_28px_80px_rgba(15,23,42,0.3)] sm:max-h-[calc(100dvh-2rem)] sm:max-w-2xl sm:rounded-[1.5rem]"
+        className={(allowFileUpload?methodStyles.dialog+" ":"")+"flex max-h-[min(88dvh,760px)] w-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-white/70 bg-[#fffdf9] text-slate-900 shadow-[0_28px_80px_rgba(15,23,42,0.3)] sm:max-h-[calc(100dvh-2rem)] sm:max-w-2xl sm:rounded-[1.5rem]"}
       >
         <div className="relative flex shrink-0 items-start justify-between gap-3 border-b border-amber-100/80 bg-white/95 px-4 pb-3 pt-6 backdrop-blur-xl sm:gap-4 sm:px-6 sm:py-4">
           <span className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
@@ -192,7 +206,12 @@ export function SignatureVoiceDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6 sm:py-5">
-          <VoiceRecorderPanel
+          {allowFileUpload && <VoiceMethods mode={method} locked={isSaving || capturing} onChoose={next=>{
+            clips.current[method]=pendingRecording
+            setMethod(next);setAuthorized(false);setFileError('');onClearValidation()
+            onRecordingSelected(clips.current[next])
+          }}/>}
+          {method==='record' && <VoiceRecorderPanel disabled={isSaving} compact={allowFileUpload} onCaptureChange={setCapturing}
             existingAssetId={existingAssetId}
             existingSignedUrl={existingSignedUrl}
             existingDurationSeconds={existingDurationSeconds}
@@ -203,10 +222,10 @@ export function SignatureVoiceDialog({
               onRecordingSelected(recording)
             }}
             onClearValidation={onClearValidation}
-          />
+          />}
 
-          {allowFileUpload?<div className="mt-4 rounded-2xl border border-stone-200 p-4">
-            <label htmlFor="material-voice-file" className="text-sm font-semibold">Or choose an existing recording</label>
+          {allowFileUpload && method==='upload'?<div className="mt-4 rounded-2xl border border-stone-200 p-4">
+            <label htmlFor="material-voice-file" className="text-sm font-semibold">Choose an audio file</label>
             <input id="material-voice-file" type="file" accept="audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/ogg,.m4a,.mp3,.wav,.webm,.ogg,.mp4"
               disabled={isSaving} className="mt-3 block w-full text-sm" onChange={event=>{
                 const file=event.target.files?.[0];if(!file)return
@@ -221,10 +240,11 @@ export function SignatureVoiceDialog({
                 }catch(error){onRecordingSelected(null);setFileError(error instanceof Error?error.message:'Please choose a supported audio file.')}
               }}/>
             <p className="mt-2 text-xs text-slate-600">Your file stays on this device until you consent and choose Upload recording.</p>
-            {fileError?<p role="alert" className="mt-2 text-xs text-rose-700">{fileError}</p>:null}
+            {previewUrl && <audio controls src={previewUrl} className="mt-3 w-full" aria-label="Preview selected recording"/>}
+            {(fileError || validationError)?<p role="alert" className="mt-2 text-xs text-rose-700">{fileError || validationError}</p>:null}
           </div>:null}
           <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/55 p-3.5 text-sm leading-5 text-slate-700 sm:mt-5 sm:p-4 sm:leading-6">
-            <input type="checkbox" checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} aria-required="true" className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-amber-600 focus:ring-amber-500 sm:h-4 sm:w-4" />
+            <input type="checkbox" disabled={isSaving} checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} aria-required="true" className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-amber-600 focus:ring-amber-500 sm:h-4 sm:w-4" />
             <span>
               <span className="mb-1 block text-xs font-extrabold uppercase tracking-[0.12em] text-amber-700">{labels.required}</span>
               <span className="font-semibold text-slate-900">{labels.authorization}</span>
@@ -239,8 +259,8 @@ export function SignatureVoiceDialog({
               <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
               {labels.remove}
             </Button>
-          ) : <span />}
-          <Button type="button" onClick={() => pendingRecording && onSave(pendingRecording)} disabled={!pendingRecording || !authorized || isSaving} className="glass-action-btn glass-action-btn--brand min-h-12 w-full rounded-2xl px-7 sm:w-auto">
+          ) : <button type="button" disabled={isSaving} onClick={onClose} className="px-4 text-sm text-stone-700">Cancel</button>}
+          <Button type="button" onClick={() => pendingRecording && onSave(pendingRecording,method)} disabled={!pendingRecording || !authorized || isSaving} className="glass-action-btn glass-action-btn--brand min-h-12 w-full rounded-2xl px-7 sm:w-auto">
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
             {isSaving ? labels.saving : labels.save}
           </Button>

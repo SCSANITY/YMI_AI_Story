@@ -1,0 +1,181 @@
+.methodPicker {
+  border: 0;
+  padding: 0;
+  margin: 20px 0 12px;
+  min-width: 0;
+}
+.methodPicker legend {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #51453a;
+}
+.methodRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+.methodChoice {
+  display: flex;
+  align-items: center;
+  border: 1px solid #dbd6d0;
+  background: white;
+  border-radius: 12px;
+  min-width: 0;
+}
+.methodChoice.selected {
+  border-color: #d48b39;
+  background: #fff5e6;
+  box-shadow: 0 0 0 1px #e8b16c inset;
+}
+.methodChoice label {
+  position: relative;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.methodChoice input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.methodChoice:has(input:focus-visible) {
+  outline: 3px solid #d18732;
+  outline-offset: 2px;
+}
+.methodTitle {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  font-size: 14px;
+  color: #35291e;
+}
+.methodTitle svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  color: #97561c;
+}
+.methodTitle strong {
+  font-weight: 620;
+}
+.methodOr {
+  color: #756855;
+  font:
+    italic 15px Georgia,
+    serif;
+}
+.methodHelp {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #765f49;
+}
+.methodHelp:hover,
+.methodHelp[aria-expanded="true"] {
+  color: #823800;
+  background: #f7e6ce;
+}
+.methodHelp svg {
+  width: 16px;
+  height: 16px;
+}
+.methodTip {
+  position: absolute;
+  z-index: 2;
+  top: 100%;
+  width: min(275px, 100%);
+  padding: 11px 14px;
+  border: 1px solid #deceb7;
+  border-radius: 11px;
+  box-shadow: 0 4px 16px #41280919;
+  background: #fffaf2;
+  color: #43382e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.methodTip.record {
+  left: 0;
+}
+.methodTip.upload {
+  right: 0;
+}
+@media (max-width: 480px) {
+  .methodRow {
+    gap: 4px;
+  }
+  .methodTitle {
+    font-size: 13px;
+    gap: 5px;
+    padding-left: 8px;
+  }
+  .methodTitle svg {
+    width: 15px;
+    height: 15px;
+  }
+  .methodPicker {
+    margin-top: 15px;
+  }
+  .methodTip {
+    max-width: 100%;
+  }
+}
+@media (max-width: 365px) {
+  .methodTitle svg {
+    display: none;
+  }
+  .methodTip {
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .methodTitle,
+  .methodTip,
+  .methodPicker legend {
+    font-size: 12.5px;
+  }
+  .methodTitle,
+  .methodHelp {
+    min-height: 42px;
+  }
+  .methodHelp {
+    flex-basis: 38px;
+  }
+}
+
+.dialog[data-materials-dialog] {
+  max-width: 480px;
+  margin: auto;
+  font-family: var(--font-inter), Arial, sans-serif;
+  border-radius: 20px;
+}
+.dialog[data-materials-dialog] h1 {
+  font:
+    600 28px/1.1 var(--font-playfair),
+    Georgia,
+    serif;
+  letter-spacing: -0.037em;
+}
+@media (max-width: 700px) {
+  .dialog[data-materials-dialog] {
+    width: calc(100% - 22px);
+    border-radius: 17px;
+  }
+  .dialog[data-materials-dialog] h1 {
+    font-size: 20px;
+  }
+  .dialog[data-materials-dialog] p,
+  .dialog[data-materials-dialog] label {
+    font-size: 13px;
+  }
+}

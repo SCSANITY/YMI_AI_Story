@@ -16,6 +16,8 @@ function loader(intl=Intl) {
   vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{
    module:mod,exports:mod.exports,console,Intl:intl,navigator:{language:'zh-CN'},
    require(name){
+    if(name==='lucide-react') return {Feather:wrap,ArrowRight:wrap}
+    if(name==='./OrderMaterials.module.css')return {}
     if(name==='react')return React
     if(name==='react/jsx-runtime')return runtime
     if(name==='next/link')return function FixtureLink(props){return React.createElement('a',props)}

@@ -12,7 +12,7 @@ function loadModule(path,injections={},globals={}) {
  const mod={exports:{}}
  vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../'+path,import.meta.url),'utf8'),{
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX},
- }).outputText,{module:mod,exports:mod.exports,console,URL,URLSearchParams,AbortController,...globals,
+ }).outputText,{module:mod,exports:mod.exports,console,Error,URL,URLSearchParams,AbortController,...globals,
   require(name){if(Object.hasOwn(injections,name))return injections[name];throw new Error('Unexpected dependency '+name)},
  },{filename:path})
  return mod.exports
@@ -45,6 +45,7 @@ function harness({response,upload,initial=dto(),component='page',embedded=false}
    return Response.json(server)
   }
  const client=loadModule('components/orders/OrderMaterialsClient.tsx',{
+  'next/dynamic':{default:()=> 'voice-dialog'},'lucide-react':{},'./OrderMaterials.module.css':{default:{}},
   react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
   '@/components/personalize/SignatureVoiceDialog':{SignatureVoiceDialog:'voice-dialog'},
   '@/components/orders/MaterialTime':{MaterialTime:'local-time'},
@@ -78,7 +79,7 @@ test('local time is explicit and server eligibility distinguishes replacement,su
 
 test('actual client keeps edit intent,uploads only on consented Save,and suppresses a double Save',async()=>{
  const h=harness();await h.settle();assert.equal(h.uploads.length,0)
- h.button('Update recording').props.onClick();await h.settle()
+ h.button('Replace recording').props.onClick();await h.settle()
  h.dialog().props.onRecordingSelected(recording);await h.settle();assert.equal(h.uploads.length,0)
  const save=h.dialog().props.onSave;save(recording);save(recording);await h.settle()
  assert.equal(h.uploads.length,1)
@@ -89,62 +90,63 @@ test('actual client keeps edit intent,uploads only on consented Save,and suppres
  assert.equal(h.uploads[0][4].voiceAuthorization.accepted,true)
  assert.equal(h.uploads[0][4].voiceAuthorization.version,'signature-voice-consent-v3')
  assert.equal(h.dialog(),undefined);assert.match(h.text(),/recording has been received/)
- h.button('Update recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
+ h.button('Replace recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
  const bodies=h.calls.filter(c=>c.init.method==='POST').map(c=>JSON.parse(c.init.body))
  assert.deepEqual([bodies[1].expectedAssetId,bodies[1].expectedRevision],[newAsset,2])
  h.cleanup()
 })
 
 test('a refreshed DTO never silently rebases an already-open recording intent',async()=>{
- const h=harness();await h.settle();h.button('Update recording').props.onClick();await h.settle()
+ const h=harness();await h.settle();h.button('Replace recording').props.onClick();await h.settle()
  const next=dto();Object.assign(next.items[0],{voice_asset_id:newAsset,voice_revision:8});h.setServer(next)
- h.button('Reload current status').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
+ h.button('Refresh status').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
  const body=JSON.parse(h.calls.find(c=>c.init.method==='POST').init.body)
  assert.deepEqual([body.expectedAssetId,body.expectedRevision],[oldAsset,1]);h.cleanup()
 })
 
-test('Done for now preserves the grant,materials and later update controls',async()=>{
- const h=harness();await h.settle();h.button('Done for now').props.onClick();await h.settle()
- assert.match(h.text(),/Keep this link/);assert.doesNotMatch(h.text(),/Send me a new link/)
- h.button('Update recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
+test('email materials have no final submission and individual writes keep the scoped grant',async()=>{
+ const h=harness();await h.settle();assert.doesNotMatch(h.text(),/Done for now/i);assert.equal(h.calls.filter(c=>c.init.method==='POST').length,0)
+ assert.doesNotMatch(h.text(),/Send me a new link/)
+ h.button('Replace recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
  assert.equal(h.calls.find(c=>JSON.parse(c.init.body??'{}').action==='voice').init.headers.Authorization,'Bearer '+grant)
  assert.ok(h.history.length);assert.ok(!JSON.stringify(h.history).includes(grant));h.cleanup()
 })
 
 test('unknown network result closes the old intent and only GET-reconciles without another upload or POST',async()=>{
  const h=harness({response:(_url,init)=>{if(init.method==='POST')throw new TypeError('synthetic network drop')}})
- await h.settle();h.button('Update recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
+ await h.settle();h.button('Replace recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
  assert.equal(h.uploads.length,1);assert.equal(h.calls.filter(c=>c.init.method==='POST').length,1)
  assert.ok(!h.calls.at(-1).init.method);assert.equal(h.dialog(),undefined);assert.match(h.text(),/have not retried/)
- assert.match(h.text(),/Recording submitted/);h.cleanup()
+ assert.match(h.text(),/Recording received/);h.cleanup()
 })
 
 test('stale/window/shipment errors refresh status without resubmitting',async()=>{
  for(const code of ['voice_revision_conflict','voice_window_closed','voice_shipped']){
   const h=harness({response:(_url,init)=>init.method==='POST'?Response.json({error:code},{status:409}):null})
-  await h.settle();h.button('Update recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
+  await h.settle();h.button('Replace recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
   assert.equal(h.calls.filter(c=>c.init.method==='POST').length,1);assert.equal(h.dialog(),undefined)
   assert.match(h.text(),/current recording|recording changed|book has shipped/);h.cleanup()
  }
 })
 
-test('failed upload leaves the current source and pending dialog,with no binding write',async()=>{
+test('failed upload leaves the current source and a recoverable draft,with no binding write',async()=>{
  const h=harness({upload:()=>{throw new Error('Synthetic upload rejected')}});await h.settle()
- h.button('Update recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
- assert.equal(h.calls.filter(c=>c.init.method==='POST').length,0);assert.ok(h.dialog());assert.match(h.text(),/Recording submitted/);h.cleanup()
+ h.button('Replace recording').props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
+ assert.equal(h.calls.filter(c=>c.init.method==='POST').length,0);assert.equal(h.dialog(),undefined);assert.match(h.text(),/Synthetic upload rejected/);assert.match(h.text(),/Recording received/)
+ h.button('Replace recording').props.onClick();await h.settle();assert.equal(h.dialog().props.pendingRecording,recording);h.cleanup()
 })
 
 test('closed or missing states use server booleans,not an optimistic client deadline gate',async()=>{
  const value=dto();Object.assign(value.items[0],{voice_ready:false,voice_asset_id:null,can_replace_voice:false,can_edit_dedication:false})
- const h=harness({initial:value});await h.settle();h.button('Record or upload now');assert.match(h.text(),/Please submit your recording/);h.cleanup()
+ const h=harness({initial:value});await h.settle();h.button('Record or upload');assert.match(h.text(),/No recording yet/);h.cleanup()
  const closed=dto();closed.items[0].can_replace_voice=false;const c=harness({initial:closed});await c.settle()
- assert.ok(!c.nodes().some(n=>n.type==='button'&&String(n.props.children)==='Update recording'));assert.ok(!c.text().includes('before this deadline'));c.cleanup()
+ assert.ok(!c.nodes().some(n=>n.type==='button'&&n.props.children?.includes?.('Replace recording')));assert.ok(!c.text().includes('before this deadline'));c.cleanup()
 })
 
 test('two paid lines sharing one Creation keep independent recording edit targets',async()=>{
  const value=dto();value.items.push({...value.items[0],cart_item_id:'00000000-0000-4000-8000-000000000021',voice_asset_id:newAsset,voice_revision:4})
  const h=harness({initial:value,response:(_url,init)=>init.method==='POST'?Response.json({saved:true}):null});await h.settle()
- const buttons=h.nodes().filter(n=>n.type==='button'&&n.props.children==='Update recording')
+ const buttons=h.nodes().filter(n=>n.type==='button'&&n.props.children?.includes?.('Replace recording'))
  assert.equal(buttons.length,2);buttons[1].props.onClick();await h.settle();h.dialog().props.onSave(recording);await h.settle()
  const body=JSON.parse(h.calls.find(c=>c.init.method==='POST').init.body)
  assert.deepEqual([body.itemId,body.expectedAssetId,body.expectedRevision],[value.items[1].cart_item_id,newAsset,4]);h.cleanup()
@@ -229,8 +231,8 @@ test('dates ignore a zh-CN navigator,have one English zone label,and keep UTC ex
 test('a shipped refresh closes an open capture intent instead of leaving an upload dialog over the notice',async()=>{
  let shipped=false
  const h=harness({response:()=>shipped?Response.json({order_id:order,disposition:'shipped'}):null});await h.settle()
- h.button('Update recording').props.onClick();await h.settle();assert.ok(h.dialog())
- shipped=true;h.button('Reload current status').props.onClick();await h.settle()
+ h.button('Replace recording').props.onClick();await h.settle();assert.ok(h.dialog())
+ shipped=true;h.button('Refresh status').props.onClick();await h.settle()
  assert.equal(h.dialog(),undefined);assert.ok(h.nodes().some(n=>n.type==='shipped-notice'));assert.equal(h.uploads.length,0);h.cleanup()
 })
 
@@ -243,9 +245,44 @@ test('paid inline materials show the right controls for all six editions without
  await h.settle()
  const editors=h.nodes().filter(n=>n.type==='message-editor')
  assert.deepEqual(editors.map(n=>n.props.item.cart_item_id),['personalised-basic','personalised-supreme'])
- assert.equal(h.nodes().filter(n=>n.type==='button'&&n.props.children==='Record or upload now').length,2)
+ assert.equal(h.nodes().filter(n=>n.type==='button'&&n.props.children?.includes?.('Record or upload')).length,2)
  assert.doesNotMatch(h.text(),/original (digital|basic)|personalised digital/)
  assert.equal(h.history.length,0)
  assert.equal(h.calls[0].init.headers.Authorization,undefined)
+ h.cleanup()
+})
+
+test('saving a message leaves the voice action available and deduplicates the same submission',async()=>{
+ let release
+ const held=new Promise(resolve=>{release=resolve})
+ const h=harness({response:async(_url,init)=>{if(init.method==='POST'){await held;return Response.json({saved:true})}}})
+ await h.settle()
+ const editor=()=>h.nodes().find(n=>n.type==='message-editor').props
+ const saving=editor().save(editor().item,'A new message')
+ await h.settle()
+ assert.equal(editor().busy,true)
+ assert.equal(h.button('Replace recording').props.disabled,false)
+ await assert.rejects(editor().save(editor().item,'A duplicate'))
+ assert.equal(h.calls.filter(c=>c.init.method==='POST').length,1)
+ release();await saving;await h.settle()
+ assert.equal(editor().busy,false);assert.equal(editor().feedback,'Saved')
+ h.cleanup()
+})
+
+test('a pending recording upload frees the editor and keeps the message save independent',async()=>{
+ let finishUpload
+ const h=harness({upload:()=>new Promise(resolve=>{finishUpload=resolve})})
+ await h.settle()
+ h.button('Replace recording').props.onClick();await h.settle()
+ h.dialog().props.onSave(recording,'upload');await h.settle()
+ assert.equal(h.dialog(),undefined)
+ assert.equal(h.button('Replace recording').props.disabled,true)
+ const editor=h.nodes().find(n=>n.type==='message-editor').props
+ assert.equal(editor.busy,false)
+ await editor.save(editor.item,'Message while uploading')
+ assert.equal(h.calls.filter(c=>c.init.method==='POST').length,1)
+ finishUpload({asset_id:newAsset,voice_authorization_id:'synthetic-authorization'})
+ await h.settle();assert.equal(h.button('Replace recording').props.disabled,false)
+ assert.deepEqual(h.calls.filter(c=>c.init.method==='POST').map(c=>JSON.parse(c.init.body).action),['dedication','voice'])
  h.cleanup()
 })

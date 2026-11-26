@@ -1,0 +1,554 @@
+.materials {
+  --ink: #292333;
+  --muted: #655f67;
+  --edge: #e8e1da;
+  --hot: #a74005;
+  max-width: 1036px;
+  margin: 0 auto;
+  padding: 36px 36px 48px;
+  color: var(--ink);
+  font-family: var(--font-inter), Arial, sans-serif;
+}
+.materials button {
+  font-family: inherit;
+  cursor: pointer;
+}
+.materials button:focus-visible,
+.materials textarea:focus-visible {
+  outline: 3px solid #ed912d;
+  outline-offset: 3px;
+}
+.materials button:disabled {
+  cursor: default;
+}
+.toolbar,
+.sectionHead,
+.fieldInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.navBtn,
+.outline,
+.brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+  min-height: 42px;
+}
+.navBtn svg,
+.outline svg,
+.brand svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+}
+.navBtn {
+  background: #fff7e9;
+  color: #874306;
+  border: 1px solid #f1dcc2;
+  border-radius: 40px;
+  padding: 8px 15px;
+  transition: background 0.15s;
+}
+.navBtn:hover,
+.outline:hover {
+  background: #ffedd8;
+}
+.navBtn svg,
+.brand svg {
+  transition: transform 0.16s ease-out;
+}
+.navBtn:hover svg {
+  transform: translateX(-2px);
+}
+.reload {
+  background: white;
+  color: #534a42;
+  border-color: #e3dcd2;
+}
+.reload:hover svg {
+  transform: rotate(18deg);
+}
+.intro {
+  margin: 24px 0 21px;
+}
+.intro :is(h1, h2),
+.panel h2 {
+  font-family: var(--font-playfair), Georgia, serif;
+  letter-spacing: -0.037em;
+  font-weight: 600;
+  line-height: 1.1;
+  margin: 0;
+}
+.intro :is(h1, h2) {
+  font-size: clamp(32px, 3.4vw, 46px);
+}
+.bookNav {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 20px;
+  flex-wrap: wrap;
+}
+.bookNav button {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 10px;
+  border-radius: 13px;
+  border: 1px solid #dedad3;
+  background: white;
+  padding: 8px 12px;
+  color: #574f49;
+}
+.bookNav .chosen {
+  background: #fff4df;
+  border-color: #e7ac59;
+  color: #312820;
+  box-shadow: inset 0 0 0 1px #efc88d;
+}
+.bookNav img {
+  width: 38px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+.bookNav strong,
+.bookNav small,
+.voiceWell strong,
+.voiceWell small {
+  display: block;
+}
+.bookNav strong {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.bookNav small,
+.optional,
+.fieldInfo,
+.voiceWell small {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.bookNav svg {
+  width: 14px;
+  color: #99540b;
+}
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.single {
+  grid-template-columns: minmax(0, 650px);
+}
+.panel {
+  padding: 25px;
+  border: 1px solid var(--edge);
+  border-radius: 20px;
+  min-width: 0;
+  background: #fff;
+  box-shadow: 0 3px 12px #59350b06;
+}
+.panel {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+}
+.panel.voice {
+  background: linear-gradient(145deg, #fff9ed, #fffcf8 68%, #fff);
+  border-color: #eddfc7;
+}
+.sectionHead {
+  width: 100%;
+  margin-bottom: 13px;
+}
+.icon,
+.voiceIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  background: #f8f2e9;
+  border-radius: 11px;
+  color: #87522d;
+}
+.voice .icon {
+  background: #ffead1;
+  color: #ac570a;
+}
+.icon svg,
+.voiceIcon svg {
+  width: 19px;
+  height: 19px;
+}
+.optional {
+  background: #f5f3ee;
+  padding: 2px 9px;
+  border-radius: 20px;
+  color: #615b55;
+}
+.panel h2 {
+  font-size: 28px;
+}
+.panel > p,
+.panel > label {
+  margin: 7px 0 15px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.panel textarea {
+  display: block;
+  width: 100%;
+  height: 92px;
+  min-height: 80px;
+  resize: vertical;
+  border: 1px solid #d9d1c6;
+  border-radius: 11px;
+  padding: 12px;
+  background: #fffefd;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+.panel textarea::placeholder {
+  color: #8d8278;
+}
+.fieldInfo {
+  width: 100%;
+  margin: 5px 0 14px;
+  min-height: 18px;
+}
+.fieldInfo > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.fieldInfo svg {
+  width: 14px;
+  height: 14px;
+}
+.brand,
+.outline {
+  min-height: 41px;
+  border-radius: 12px;
+  padding: 9px 15px;
+}
+.brand {
+  background: linear-gradient(115deg, #ffc166, #ff9933);
+  border: 1px solid #e89327;
+  color: #462405;
+  box-shadow: 0 2px 4px #b66e1c12;
+}
+.brand:hover:not(:disabled) svg {
+  transform: translateX(2px);
+}
+.brand:disabled {
+  background: #f7f3ed;
+  color: #797168;
+  border-color: #e8e2d9;
+  box-shadow: none;
+}
+.outline {
+  background: #fffdf7;
+  color: #864205;
+  border: 1px solid #e1b57d;
+  transition: background 0.16s;
+}
+.panel > .brand,
+.panel > .outline {
+  margin-top: auto;
+}
+.voiceWell {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 1px 0 15px;
+  padding: 15px 0 17px;
+  border-block: 1px solid #ebdfcb;
+}
+.voiceIcon {
+  background: white;
+  border: 1px solid #eddfcd;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+}
+.voiceWell strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.voiceWell small {
+  margin-top: 2px;
+}
+.voice audio {
+  width: 100%;
+  max-height: 40px;
+  margin: 0 0 12px;
+}
+.skeleton {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.skeleton div {
+  height: 275px;
+  border-radius: 18px;
+  background: linear-gradient(115deg, #f3efe8, #f9f7f2);
+}
+.skeleton div:first-child {
+  grid-column: 1/-1;
+  width: 58%;
+  height: 60px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .materials * {
+    transition: none !important;
+    animation: none !important;
+  }
+  .materials button:hover svg {
+    transform: none !important;
+  }
+}
+@media (min-width: 701px) {
+  .materials .panels:not(.single) {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+}
+@media (max-width: 700px) {
+  .materials {
+    max-width: 510px;
+    padding: 14px clamp(16px, 5.5vw, 26px) 28px;
+  }
+  .intro {
+    margin: 15px 0 14px;
+  }
+  .intro :is(h1, h2) {
+    font-size: 24px;
+    line-height: 1.22;
+    letter-spacing: -0.037em;
+  }
+  .toolbar .navBtn,
+  .panel > .brand,
+  .panel > .outline {
+    position: relative;
+    min-height: 34px;
+    padding: 7px 11px;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .toolbar .navBtn:after,
+  .panel > .brand:after,
+  .panel > .outline:after {
+    content: "";
+    position: absolute;
+    inset: -5px 0;
+  }
+  .navBtn svg,
+  .panel > .brand svg,
+  .panel > .outline svg {
+    width: 14px;
+    height: 14px;
+  }
+  .bookNav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(135px, 100%), 1fr));
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .bookNav button {
+    gap: 6px;
+  }
+  .bookNav small {
+    font-size: 11px;
+  }
+  .bookNav svg {
+    display: none;
+  }
+  .skeleton div {
+    height: 196px;
+  }
+  .skeleton div:first-child {
+    width: 100%;
+    height: 52px;
+  }
+  .bookNav strong {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .panels,
+  .skeleton {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .bookNav button {
+    min-height: 46px;
+    padding: 6px 8px;
+  }
+  .panel {
+    position: relative;
+    padding: 14px 15px;
+    border-radius: 14px;
+  }
+  .panel .sectionHead {
+    position: absolute;
+    left: 15px;
+    top: 14px;
+    width: calc(100% - 30px);
+    margin: 0;
+    pointer-events: none;
+  }
+  .panel .icon {
+    width: 23px;
+    height: 23px;
+    border-radius: 7px;
+  }
+  .panel .icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  .panel h2 {
+    padding-left: 31px;
+    font-size: 18px;
+    line-height: 24px;
+    letter-spacing: -0.037em;
+  }
+  .dedication h2 {
+    padding-right: 60px;
+  }
+  .optional {
+    font-size: 10.5px;
+    padding: 1px 7px;
+  }
+  .panel > p,
+  .panel > label {
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.52;
+    margin: 7px 0 10px;
+  }
+  .panel .voiceWell {
+    padding: 1px 0 0;
+    margin: 0 0 13px;
+    gap: 7px;
+    border: 0;
+  }
+  .voiceIcon {
+    width: 22px;
+    height: 22px;
+    background: transparent;
+    border: 0;
+  }
+  .voiceIcon svg {
+    width: 15px;
+    height: 15px;
+  }
+  .voiceWell strong {
+    font-size: 12px;
+    color: #645a4f;
+  }
+  .voiceWell small:empty {
+    display: none;
+  }
+  .voiceWell small {
+    font-size: 11px;
+  }
+  .panel textarea {
+    font-size: 13px;
+    height: 63px;
+    min-height: 63px;
+    padding: 9px 11px;
+    line-height: 1.4;
+  }
+  .panel textarea::placeholder {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+  .fieldInfo {
+    font-size: 11px;
+    margin: 3px 0 7px;
+  }
+}
+@media (max-width: 379px) {
+  .materials .bookNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.materials.embedded {
+  padding: 0;
+  margin: 24px 0 0;
+  text-align: left;
+  max-width: none;
+}
+.embedded .toolbar {
+  justify-content: flex-end;
+}
+.bookNav .cover {
+  width: 38px;
+  height: 42px;
+  border-radius: 5px;
+  flex: none;
+}
+.bookNav .cover img {
+  width: 100%;
+  height: 100%;
+}
+.bookNav .cover span {
+  display: none;
+}
+.bookNav button {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.panels[hidden] {
+  display: none;
+}
+.panel audio {
+  max-width: 100%;
+}
+.panel .feedback {
+  font-size: 13px;
+  margin: 8px 0;
+  color: #595352;
+}
+.panel .problem {
+  color: #a33129;
+}
+@media (max-width: 700px) {
+  .bookNav .cover {
+    width: 27px;
+    height: 32px;
+  }
+  .embedded .intro h2 {
+    font-size: 24px;
+  }
+}
+
+@media (min-width: 701px) {
+  .embedded .intro h2 {
+    font-size: 24px;
+    line-height: 1.25;
+  }
+  .embedded .panel h2 {
+    font-size: 20px;
+    line-height: 1.3;
+  }
+  .embedded .intro {
+    margin: 12px 0 16px;
+  }
+}

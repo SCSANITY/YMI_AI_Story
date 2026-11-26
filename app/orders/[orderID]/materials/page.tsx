@@ -6,5 +6,5 @@ export const metadata={title:'Your book materials | YMI Story',referrer:'no-refe
 export default async function MaterialsPage({params}:{params:Promise<{orderID:string}>}) {
   const {orderID}=await params
   if (!isUuid(orderID)) notFound()
-  return <OrderMaterialsClient orderId={orderID}/>
+  return <OrderMaterialsClient key={orderID} orderId={orderID}/>
 }

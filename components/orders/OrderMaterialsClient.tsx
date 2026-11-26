@@ -1,11 +1,11 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { SignatureVoiceDialog } from '@/components/personalize/SignatureVoiceDialog'
+import dynamic from 'next/dynamic'
+import type { VoiceMethod } from '@/components/personalize/VoiceMethods'
 import type { PendingVoiceRecording } from '@/components/personalize/VoiceRecorderPanel'
 import type { MaterialItem, OrderMaterials } from '@/lib/order-materials'
 import { hasBookMaterialFields, parseOrderMaterialsPage } from '@/lib/order-materials'
 import { fetchMaterialRecording, RecordingPlaybackError, playbackMediaReason, type PlaybackFailureReason, materialWriteError, recordingIntent } from '@/lib/order-materials-client'
-import { uploadUserAsset } from '@/services/assets'
 import { useI18n } from '@/lib/useI18n'
 import { SIGNATURE_VOICE_CONSENT_VERSION } from '@/lib/signature-voice'
 import {MaterialMessageEditor as DedicationEditor} from '@/components/orders/MaterialMessageEditor'
@@ -13,7 +13,13 @@ import {MaterialShippedNotice} from '@/components/orders/MaterialShippedNotice'
 import {MaterialTime} from '@/components/orders/MaterialTime'
 import OrderCoverImage from '@/components/OrderCoverImage'
 import Link from 'next/link'
+import { ArrowLeft, AudioLines, Check, Headphones, Mic, RefreshCw } from 'lucide-react'
+import styles from './OrderMaterials.module.css'
 
+const SignatureVoiceDialog = dynamic(() =>
+  import('@/components/personalize/SignatureVoiceDialog').then(module=>module.SignatureVoiceDialog),
+  {loading:()=> <p role="status">Opening recording options...</p>}
+)
 class MaterialWriteFailure extends Error {}
 
 const button='rounded-full bg-amber-800 px-5 py-3 text-sm font-bold text-white disabled:opacity-50'
@@ -57,63 +63,126 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
   const [recovery,setRecovery]=useState(false),[email,setEmail]=useState(''),[code,setCode]=useState(''),[challenge,setChallenge]=useState('')
   const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
   const [voiceItem,setVoiceItem]=useState<MaterialItem|null>(null),[recording,setRecording]=useState<PendingVoiceRecording|null>(null)
-  const writeInFlight=useRef(false)
+  const [selected,setSelected]=useState('')
+  const [refreshing,setRefreshing]=useState(false)
+  const [notes,setNotes]=useState<Record<string,{text:string;failed?:boolean}>>({})
+  const [busyKeys,setBusyKeys]=useState<string[]>([])
+  const retryClips=useRef(new Map<string,{recording:PendingVoiceRecording;method:VoiceMethod}>())
+  const pending=useRef(new Set<string>())
+  const readSequence=useRef(0)
+  const accessEpoch=useRef(0)
+  const clearPrivateState=useCallback(()=>{
+    ++accessEpoch.current
+    ++readSequence.current
+    retryClips.current.clear()
+    setMaterials(null);setVoiceItem(null);setRecording(null);setNotes({});setSelected('')
+  },[])
+  function begin(key:string){
+    if(pending.current.has(key))return false
+    pending.current.add(key);setBusyKeys(Array.from(pending.current))
+    setNotes(prev=>({...prev,[key]:{text:''}}))
+    return true
+  }
+  function finish(key:string){pending.current.delete(key);setBusyKeys(Array.from(pending.current))}
+  function notify(key:string,text:string,failed=false){setNotes(prev=>({...prev,[key]:{text,failed}}))}
+  const initialized=useRef(false)
   const base=`/api/orders/${orderId}/materials`
   useEffect(()=>{
+    if(initialized.current)return
+    initialized.current=true
     if (embedded) {setToken(null);return}
     const fragment=new URLSearchParams(window.location.hash.slice(1)).get('token')
     // Remove the bearer from navigation/history while retaining it only in memory.
     if (window.location.hash) window.history.replaceState(null,'',window.location.pathname)
     if (fragment && !/^[A-Za-z0-9_-]{43}$/.test(fragment)) {setRecovery(true);setToken(null)} else setToken(fragment)
   },[embedded])
+  useEffect(()=>{
+    function warn(event:BeforeUnloadEvent){
+      if(!pending.current.size && !document.querySelector('[data-unsaved="true"]'))return
+      event.preventDefault();event.returnValue=''
+    }
+    if(!window.addEventListener)return
+    window.addEventListener('beforeunload',warn)
+    return ()=>window.removeEventListener('beforeunload',warn)
+  },[])
   const headers=useCallback(()=>({'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}),[token])
   const load=useCallback(async(signal?:AbortSignal)=>{
+    const seq=++readSequence.current
     const response=await fetch(base,{headers:headers(),credentials:'include',cache:'no-store',signal})
-    if ([401,403].includes(response.status)) {setMaterials(null);setShipped(false);setVoiceItem(null);setRecording(null);setRecovery(true);return}
+    if(seq!==readSequence.current || signal?.aborted)return
+    if ([401,403].includes(response.status)) {clearPrivateState();setShipped(false);setRecovery(true);return}
     if (!response.ok) throw new Error('Your materials could not be loaded. Please try again.')
     const page=parseOrderMaterialsPage(await response.json())
-    if('disposition' in page){setMaterials(null);setVoiceItem(null);setRecording(null);setShipped(true)}else{setMaterials(page);setShipped(false)}
+    if(seq!==readSequence.current || signal?.aborted)return
+    if('disposition' in page){clearPrivateState();setShipped(true)}else{setMaterials(page);setShipped(false)}
     setRecovery(false)
-  },[base,headers])
+  },[base,headers,clearPrivateState])
   useEffect(()=>{if (token===undefined || recovery) return;const controller=new AbortController();void load(controller.signal).catch(()=>{if (!controller.signal.aborted)setError('Your materials could not be loaded. Please try again.')});return()=>controller.abort()},[load,token,recovery])
   const write=async(body:Record<string,unknown>)=>{
     const response=await fetch(base,{method:'POST',credentials:'include',cache:'no-store',headers:headers(),body:JSON.stringify(body)})
-    if ([401,403].includes(response.status)) {setRecovery(true);setMaterials(null);throw new MaterialWriteFailure('Please request a new link below.')}
+    if ([401,403].includes(response.status)) {clearPrivateState();setRecovery(true);throw new MaterialWriteFailure('Please request a new link below.')}
     if (!response.ok) {
       const data=await response.json().catch(()=>null)
       throw new MaterialWriteFailure(materialWriteError(response.status>=500 && body.action==='voice'?'voice_update_unknown':data?.error))
     }
+    return response.json()
+  }
+  async function refresh(){
+    setRefreshing(true);setError('')
+    try{await load()}catch{setError('Unable to refresh the current status. Please try again.')}finally{setRefreshing(false)}
   }
   const save=async(item:MaterialItem,body:string)=>{
-    if(writeInFlight.current)return
-    writeInFlight.current=true;setBusy(true);setError('');setMessage('')
-    try {await write({action:'dedication',itemId:item.cart_item_id,expectedRevision:item.dedication.revision,body});await load();setMessage('Your message has been saved.')}
-    catch(e){setError(e instanceof Error?e.message:'Unable to save.')}finally{writeInFlight.current=false;setBusy(false)}
+    const key='message-'+item.cart_item_id
+    if(!begin(key))throw new Error('Message save in progress.')
+    const epoch=accessEpoch.current
+    try {
+      const result=await write({action:'dedication',itemId:item.cart_item_id,expectedRevision:item.dedication.revision,body})
+      if(epoch!==accessEpoch.current)return
+      if(result.dedication){
+        setMaterials(current=>current && ({...current,items:current.items.map(row=>
+          row.cart_item_id===item.cart_item_id && row.dedication.revision<=result.dedication.revision?{...row,dedication:result.dedication}:row)}))
+      }
+      await load().catch(()=>setError('Your message was saved. Refresh status to see the latest details.'))
+      if(epoch===accessEpoch.current)notify(key,'Saved')
+    }catch(e){
+      if(epoch!==accessEpoch.current)throw e
+      notify(key,e instanceof Error?e.message:'Unable to save your message.',true)
+      if(e instanceof MaterialWriteFailure) await load().catch(()=>{})
+      throw e
+    }finally{finish(key)}
   }
-  const saveVoice=async(selected:PendingVoiceRecording)=>{
-    if (!voiceItem || writeInFlight.current) return
+  const saveVoice=async(selected:PendingVoiceRecording,method:VoiceMethod='record')=>{
+    if(!voiceItem)return
     const intent=recordingIntent(voiceItem)
     if(!intent)return
-    writeInFlight.current=true;setBusy(true);setError('');setMessage('')
+    const key='voice-'+intent.itemId
+    if(!begin(key))return
+    retryClips.current.delete(intent.itemId)
+    setVoiceItem(null);setRecording(null)
+    const epoch=accessEpoch.current
     let bindingStarted=false
     try {
+      const {uploadUserAsset}=await import('@/services/assets')
       const asset=await uploadUserAsset(selected.file,'voice_sample','voice',undefined,{
         voiceAuthorization:{accepted:true,version:SIGNATURE_VOICE_CONSENT_VERSION,speakerKind:'authorized_speaker'},
         metadata:{duration_seconds:selected.durationSeconds},orderMaterial:{orderId,itemId:intent.itemId,...(token?{token}:{})},
       })
+      if(epoch!==accessEpoch.current){finish(key);return}
       bindingStarted=true
       await write({action:'voice',...intent,assetId:asset.asset_id,authorizationId:asset.voice_authorization_id})
     }catch(e){
-      setError(bindingStarted?(e instanceof MaterialWriteFailure?e.message:materialWriteError('voice_update_unknown'))
-        :e instanceof Error?e.message:'Unable to upload. Your current recording has not changed.')
+      if(epoch!==accessEpoch.current){finish(key);return}
+      notify(key,bindingStarted?(e instanceof MaterialWriteFailure?e.message:materialWriteError('voice_update_unknown'))
+        :e instanceof Error?e.message:'Unable to upload. Your current recording has not changed.',true)
       // Never resubmit an unknown binding with an old edit intent. A fresh GET is
       // safe; keep possibly-bound bytes and the grant, and require a new user action.
-      if(bindingStarted){setVoiceItem(null);setRecording(null);await load().catch(()=>{})}
-      return
-    }finally{writeInFlight.current=false;setBusy(false)}
-    setVoiceItem(null);setRecording(null)
-    setMessage('Your recording has been received. Your book now uses this recording.')
-    await load().catch(()=>setError('Your recording was saved, but its status could not refresh. Please reload the status below.'))
+      if(bindingStarted){await load().catch(()=>{})}
+      else{retryClips.current.set(intent.itemId,{recording:selected,method})}
+      finish(key);return
+    }
+    if(epoch!==accessEpoch.current){finish(key);return}
+    notify(key,'Your recording has been received.')
+    try {await load()}catch{notify(key,'Your recording was saved. Refresh status to see the latest details.')}finally{finish(key)}
   }
   const recover=async()=>{
     setBusy(true);setError('')
@@ -126,12 +195,20 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
     }catch(e){setError(e instanceof Error?e.message:'Unable to recover access.')}finally{setBusy(false)}
   }
   const items = materials?.items.filter(hasBookMaterialFields)
-  if (items?.length === 0) return embedded ? null : <main className="mx-auto max-w-3xl px-5 py-12"><h1 className="font-serif text-2xl font-bold">Your book materials</h1><p className="mt-3">There are no materials to submit for this order.</p></main>
+  const selectedId=items?.find(item=>item.cart_item_id===selected)?.cart_item_id ?? items?.[0]?.cart_item_id
+  if(embedded && items?.length===0)return null
   const Container=embedded?'section':'main'
-  return <Container className={embedded ? "mt-6 space-y-4 text-left text-slate-900" : "mx-auto max-w-3xl space-y-6 px-5 py-12 text-slate-900"}>
-    {/* AppShell supplies the existing site Navbar/logo/back control on this route. */}
-    {!embedded && <Link href="/orders" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900 underline">← Back to orders</Link>}
-    {embedded?<h2 className="font-serif text-xl font-bold">Your book materials</h2>:<h1 className="font-serif text-3xl font-bold">Your book materials</h1>}
+  const Title=embedded?'h2':'h1'
+  return <Container data-materials-pending={busyKeys.length>0} className={styles.materials+' '+(embedded?styles.embedded:'')}>
+    <div className={styles.toolbar}>
+      {!embedded && <Link href="/orders" className={styles.navBtn} onClick={event=>{
+        const root=event.currentTarget.closest('main')
+        if((pending.current.size || root?.querySelector('[data-unsaved="true"]')) && !window.confirm('Leave this page with unsaved changes?'))event.preventDefault()
+      }}><ArrowLeft/>Back to orders</Link>}
+      {!recovery && !shipped && <button type="button" className={styles.navBtn+' '+styles.reload}
+        disabled={refreshing || (!materials && !error)} onClick={refresh}><RefreshCw/>{refreshing?'Refreshing\u2026':'Refresh status'}</button>}
+    </div>
+    <header className={styles.intro}><Title>Your book materials</Title></header>
     {error?<p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">{error}</p>:null}
     {message?<p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-900">{message}</p>:null}
     {shipped?<MaterialShippedNotice/>:recovery ? <section className="rounded-2xl border border-amber-200 bg-white p-6">
@@ -142,36 +219,39 @@ export function OrderMaterialsClient({orderId,embedded=false}:{orderId:string;em
         <button disabled={busy} className={button}>{challenge?'Verify and open materials':'Send verification code'}</button>
         {challenge?<button type="button" className="ml-3 text-sm underline" onClick={()=>setChallenge('')}>Use another email</button>:null}
       </form></section> : materials ? <>
-      <button type="button" disabled={busy} className="text-sm underline" onClick={()=>{setError('');void load().catch(()=>setError('Unable to refresh the current status. Please try again.'))}}>Reload current status</button>
-      {items?.map(item=><section key={item.cart_item_id} className="rounded-2xl border border-stone-200 bg-white p-6">
-        <div className="flex items-center gap-4">
-          <OrderCoverImage src={item.book?.cover_url} status={item.book?.cover_status} alt={item.book?.title || 'Your personalised book'}
-            sizes="80px" className="h-20 w-20 shrink-0 rounded-xl" imageClassName="object-contain" placeholderLabel="Book cover"/>
-          <h2 className="min-w-0 break-words font-serif text-xl">{item.book?.title || 'Your personalised book'}</h2>
+      {items?.length===0 && <p>There are no materials to submit for this order.</p>}
+      <div className={styles.bookNav} role="group" aria-label="Choose a book">{items?.map(item=><button type="button" key={item.cart_item_id}
+        aria-pressed={item.cart_item_id===selectedId} className={item.cart_item_id===selectedId?styles.chosen:''} onClick={()=>setSelected(item.cart_item_id)}>
+        <OrderCoverImage src={item.book?.cover_url} status={item.book?.cover_status} alt="" sizes="38px" className={styles.cover} placeholderLabel=""/>
+        <span><strong>{item.book?.title || 'Your book'}</strong><small>{item.package_type==='supreme'?'Hardcover + Voice':'Hardcover'}</small></span>
+        {item.cart_item_id===selectedId && <Check/>}
+      </button>)}</div>
+      {items?.map(item=>{
+        const hasVoice=item.package_type==='supreme'
+        const voiceKey='voice-'+item.cart_item_id, messageKey='message-'+item.cart_item_id
+        const voiceNote=notes[voiceKey]
+        return <div key={item.cart_item_id} hidden={item.cart_item_id!==selectedId} className={styles.panels+' '+(!hasVoice || item.edition==='original'?styles.single:'')}>
+          {hasVoice && <section className={styles.panel+' '+styles.voice}>
+            <div className={styles.sectionHead}><span className={styles.icon}><AudioLines/></span></div>
+            <h2>Voice recording</h2><p>Add a voice sample for your book's narration.</p>
+            <div className={styles.voiceWell}><span className={styles.voiceIcon}><Headphones/></span><div>
+              <strong>{busyKeys.includes(voiceKey)?'Uploading recording\u2026':item.voice_ready?'Recording received':'No recording yet'}</strong>
+              <small>{item.voice_uploaded_at?<>Uploaded <MaterialTime value={item.voice_uploaded_at}/></>:'Record here or choose an audio file.'}</small>
+            </div></div>
+            {item.voice_ready && <RecordingPlayback key={item.voice_asset_id} orderId={orderId} itemId={item.cart_item_id} assetId={item.voice_asset_id!}
+              token={token} onRecovery={()=>{clearPrivateState();setRecovery(true)}} onLatest={refresh}/>}
+            {(item.voice_ready?item.can_replace_voice:item.can_submit_voice) ? <button type="button" className={styles.outline} disabled={busyKeys.includes(voiceKey)} onClick={()=>{
+              setVoiceItem({...item});setRecording(retryClips.current.get(item.cart_item_id)?.recording ?? null);notify(voiceKey,'')
+            }}><Mic/>{item.voice_ready?'Replace recording':'Record or upload'}</button> : !item.voice_ready && <p>Online submission is unavailable. Please contact our team.</p>}
+            {voiceNote?.text && <p role={voiceNote.failed?'alert':'status'} className={voiceNote.failed?styles.problem:styles.feedback}>{voiceNote.text}</p>}
+          </section>}
+          {item.edition!=='original' && <DedicationEditor item={item} save={save} busy={busyKeys.includes(messageKey)}
+            feedback={notes[messageKey]?.text} failed={notes[messageKey]?.failed}/>}
         </div>
-        {item.edition!=='original' && <DedicationEditor key={`${item.cart_item_id}:${item.dedication.revision}`} item={item} save={save} busy={busy}/>}
-        {item.package_type==='supreme'?<div className="mt-5 border-t pt-4"><h3 className="font-semibold">Your Signature Voice recording</h3>
-          {item.voice_ready?<>
-            <p className="mt-2 text-sm font-semibold">Recording submitted.{item.voice_uploaded_at?<> Uploaded <MaterialTime value={item.voice_uploaded_at}/>.</>:null}</p>
-            <RecordingPlayback key={`${item.cart_item_id}:${item.voice_asset_id}`} orderId={orderId} itemId={item.cart_item_id} assetId={item.voice_asset_id!} token={token} onRecovery={()=>{setRecovery(true);setMaterials(null)}} onLatest={()=>{setError('');void load().catch(()=>setError('Unable to load the latest recording status. Please try again.'))}}/>
-            {item.can_replace_voice?<button type="button" className={`${button} mt-3`} disabled={busy} onClick={()=>{setVoiceItem({...item});setRecording(null);setError('')}}>Update recording</button>
-              :null}
-          </>:<>
-            <p className="my-3 text-sm">{item.edition==='original'?'You can add a recording for the narration in your book.':'Please submit your recording so we can finish your Hardcover + Voice book.'}</p>
-            {item.can_submit_voice?<button type="button" className={button} disabled={busy} onClick={()=>{setVoiceItem({...item});setRecording(null);setError('')}}>Record or upload now</button>
-              :<p className="text-sm">Online submission is unavailable. Please contact our team.</p>}
-          </>}
-        </div>:null}
-      </section>)}
-      {token?<button disabled={busy} className="text-sm underline" onClick={()=>{
-        if(writeInFlight.current)return
-        writeInFlight.current=true;setBusy(true);setError('')
-        void write({action:'complete'}).then(()=>setMessage("All set. Keep this link to check your book's materials."))
-          .catch(e=>setError(e.message)).finally(()=>{writeInFlight.current=false;setBusy(false)})
-      }}>Done for now</button>:null}
-    </> : <p role="status">Loading your materials?</p>}
-    {voiceItem?<SignatureVoiceDialog open allowFileUpload existingAssetId={null} existingSignedUrl={null} existingDurationSeconds={null} pendingRecording={recording} validationError={error||null} isSaving={busy}
-      labels={{title:'Your Signature Voice',description:voiceItem.voice_ready?'Upload a new recording to replace the current one. Your current recording stays in use until the new upload is saved.':voiceItem.edition==='original'?'Record or upload your voice for this story.':'Record or upload your voice to complete your book.',authorization:t('personalize.signatureVoiceAuthorization'),required:'Consent required',save:'Upload recording',saving:'Uploading...',remove:'Remove',close:'Close'}}
-      onClose={()=>{if(!busy)setVoiceItem(null)}} onRecordingSelected={setRecording} onClearValidation={()=>setError('')} onSave={value=>{void saveVoice(value)}} onRemove={()=>setRecording(null)} />:null}
+      })}
+    </> : !error && <div className={styles.skeleton} role="status" aria-busy="true" aria-label="Opening your book materials"><div/><div/><div/></div>}
+    {voiceItem?<SignatureVoiceDialog open allowFileUpload initialMethod={retryClips.current.get(voiceItem.cart_item_id)?.method} existingAssetId={null} existingSignedUrl={null} existingDurationSeconds={null} pendingRecording={recording} validationError={notes['voice-'+voiceItem.cart_item_id]?.text||null} isSaving={busyKeys.includes('voice-'+voiceItem.cart_item_id)}
+      labels={{title:voiceItem.voice_ready?'Replace recording':'Add your recording',description:voiceItem.voice_ready?'Upload a new recording to replace the current one. Your current recording stays in use until the new upload is saved.':voiceItem.edition==='original'?'Record or upload your voice for this story.':'Record or upload your voice to complete your book.',authorization:t('personalize.signatureVoiceAuthorization'),required:'Consent required',save:'Upload recording',saving:'Uploading...',remove:'Remove',close:'Close'}}
+      onClose={()=>{if(!pending.current.has('voice-'+voiceItem.cart_item_id))setVoiceItem(null)}} onRecordingSelected={setRecording} onClearValidation={()=>notify('voice-'+voiceItem.cart_item_id,'')} onSave={(value,method)=>{void saveVoice(value,method)}} onRemove={()=>setRecording(null)} />:null}
   </Container>
 }

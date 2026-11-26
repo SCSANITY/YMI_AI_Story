@@ -13,6 +13,9 @@ export type PendingVoiceRecording = {
 }
 
 type VoiceRecorderPanelProps = {
+  disabled?:boolean
+  compact?: boolean
+  onCaptureChange?: (active:boolean)=>void
   existingAssetId?: string | null
   existingSignedUrl?: string | null
   existingDurationSeconds?: number | null
@@ -46,6 +49,7 @@ function formatTimer(seconds: number) {
 }
 
 export function VoiceRecorderPanel({
+  disabled=false, compact=false, onCaptureChange,
   existingAssetId,
   existingSignedUrl,
   existingDurationSeconds,
@@ -62,6 +66,10 @@ export function VoiceRecorderPanel({
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
 
+  const active=useRef(false)
+  const starting=useRef(false)
+  const [opening,setOpening]=useState(false)
+  useEffect(()=>{active.current=true;return()=>{active.current=false}},[])
   const recordedBlobRef = useRef<Blob | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -144,12 +152,15 @@ export function VoiceRecorderPanel({
       return
     }
 
+    if(starting.current)return
+    starting.current=true;setOpening(true);onCaptureChange?.(true)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if(!active.current){stream.getTracks().forEach(track=>track.stop());return}
+      streamRef.current=stream
       const mimeType = getPreferredMimeType()
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
 
-      streamRef.current = stream
       mediaRecorderRef.current = recorder
       chunksRef.current = []
       startAtRef.current = Date.now()
@@ -163,6 +174,8 @@ export function VoiceRecorderPanel({
       }
 
       recorder.onstop = () => {
+        if(!active.current)return
+        onCaptureChange?.(false)
         clearTimer()
         stopTracks()
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' })
@@ -199,10 +212,11 @@ export function VoiceRecorderPanel({
       }, 250)
     } catch {
       setPhase('error')
+      onCaptureChange?.(false)
       setLocalError(t('voiceRecorder.errorPermission'))
       stopTracks()
-    }
-  }, [clearTimer, onClearValidation, onRecordingSelected, resetLocalRecording, stopTracks, t])
+    } finally { starting.current=false;if(active.current)setOpening(false) }
+  }, [clearTimer, onCaptureChange, onClearValidation, onRecordingSelected, resetLocalRecording, stopTracks, t])
 
   const handleTogglePlayback = useCallback(() => {
     if (!audioRef.current || !playbackUrl) return
@@ -267,6 +281,18 @@ export function VoiceRecorderPanel({
       }
     }
   }, [clearTimer, recordedUrl, stopTracks])
+
+  if(compact)return <div className="rounded-xl bg-amber-50/70 p-3.5 text-stone-800">
+    <p className="text-[10px] font-bold tracking-wider">READ ALOUD</p>
+    <p className="my-2 text-[13px] leading-relaxed sm:text-sm">{PROMPT_TEXT}</p>
+    <button type="button" disabled={opening || disabled} onClick={phase==='recording'?stopRecording:handleStartRecording}
+      className="inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900 sm:text-sm">
+      {phase==='recording'?<Square size={16}/>:<Mic size={16}/>}
+      {phase==='recording'?'Stop recording - '+formatTimer(seconds):opening?'Opening microphone\u2026':recordedBlob?'Record again':'Start recording'}
+    </button>
+    {playbackUrl && <audio controls ref={audioRef} src={playbackUrl} className="mt-3 w-full"/>}
+    {combinedError && <p role="alert" className="mt-2 text-sm text-rose-800">{combinedError}</p>}
+  </div>
 
   return (
     <div className="overflow-hidden rounded-2xl border border-orange-100/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.92),rgba(255,246,235,0.78))] shadow-[0_18px_42px_rgba(154,95,38,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] sm:rounded-3xl">
