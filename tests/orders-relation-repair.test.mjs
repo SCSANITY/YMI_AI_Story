@@ -147,6 +147,20 @@ test('PDF-only completes after all books, mixed orders count only physical books
  assert.equal(mixed.physicalBooks,1)
 })
 
+test('legacy digital orders use the same two stages on list and detail without signing list PDFs', async () => {
+ for (const orderStatus of ['production','shipped','delivered']) {
+  for (const [releases,expected] of [[[released('one')],'confirmed'],[[released('one'),released('two')],'pdf_ready']]) {
+   const r=reader({releases,digital:['one','two'],orderStatus})
+   const [order]=(await r.loadCustomerOrders({customerId:'owner-a'})).orders
+   assert.equal(r.toCustomerOrderSummary(order).pdf_order_stage,expected)
+   assert.equal(order.order_status,orderStatus)
+   assert.equal(r.signed.length,0)
+   const [opened]=(await r.loadCustomerOrders({reference:{column:'order_id',value:'order-a'}})).orders
+   assert.equal(opened.progress.stage,expected)
+  }
+ }
+})
+
 test('reused PDF does not count as a print release, a missing signed URL cannot erase publication',async()=>{
  const releases=[released('one',{orderId:'original-order',printReleased:true}),released('two',{creationId:'wrong'})]
  const order=await detail({releases,signingAvailable:false,bookProgress:'preview_ready'})

@@ -28,6 +28,15 @@ export type OrderProgress = {
   releasedForPrint: number
 }
 
+// Normal paid orders use the same persisted milestone in every list and detail.
+// Older digital purchases incorrectly marked as physical fulfilment need the
+// per-book evidence to project a digital stage without rewriting the audit row.
+export function digitalOrderStage(status: string | null | undefined, bookProgress: string | null | undefined, allPublished: boolean): 'confirmed' | 'pdf_ready' | null {
+  if (!isPaidLikeOrderStatus(status)) return null
+  const ready = bookProgress === 'pdf_ready' || (normalizeOrderStatus(status) !== 'paid' && allPublished)
+  return ready ? 'pdf_ready' : 'confirmed'
+}
+
 /** One input per purchased line. Copies on a line share the same proof. */
 export function getOrderProgress(status: string, lines: BookLine[], bookProgress: string | null): OrderProgress | null {
   const stored = normalizeOrderStatus(status)
@@ -40,7 +49,7 @@ export function getOrderProgress(status: string, lines: BookLine[], bookProgress
 
   let stage: ProgressStage = 'confirmed'
   if (digitalOnly) {
-    stage = bookProgress === 'pdf_ready' || readyPdfs === lines.length ? 'pdf_ready' : 'confirmed'
+    stage = digitalOrderStage(stored, bookProgress, readyPdfs === lines.length) ?? 'confirmed'
   } else if (stored === 'shipped' || stored === 'delivered') stage = stored
   else if (stored === 'production') stage = 'printing'
   else if (bookProgress === 'pdf_ready' || bookProgress === 'preview_ready') stage = bookProgress

@@ -73,7 +73,7 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
             </div>
           ))}
         </div>
-        <OrderMaterialsSummary materials={order.materials} shipment={order??undefined}/>
+        {!order.progress?.digitalOnly && <OrderMaterialsSummary materials={order.materials} shipment={order??undefined}/>}
         {hasSignatureVoice ? <SignatureVoiceEditionNotice variant="postPurchase" compact /> : null}
       </div>
 

@@ -18,7 +18,7 @@ import {
 } from '@/lib/personalized-book-title'
 import { loadReleasedFinalPdfAssetsByJobId } from '@/lib/purchase-state'
 import { isPaidLikeOrderStatus } from '@/lib/order-status'
-import { getOrderProgress } from '@/lib/order-progress'
+import { digitalOrderStage, getOrderProgress } from '@/lib/order-progress'
 
 const STORAGE_BUCKET = 'raw-private'
 const FINAL_PDF_SIGN_TTL_SECONDS = 60 * 60
@@ -130,10 +130,18 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
   }
 
   const orderRows = data ?? []
+  const digitalOrderIds = new Set(orderRows.filter(order => {
+    const lines = (order.cart_items ?? []).filter(item => item.status === 'ordered')
+    return lines.length > 0 && lines.every(item => item.product_type === 'ebook' && item.package_type === 'digital')
+  }).map(order => order.order_id))
+  // Only these anomalous list rows need release evidence. Normal lists still
+  // perform no Final read or PDF signing.
+  const legacyDigital = new Set(orderRows.filter(order => digitalOrderIds.has(order.order_id)
+    && ['production','shipped','delivered'].includes(order.order_status)).map(order => order.order_id))
   // Detail only: list/Home reads never gain per-order logistics queries or provider calls.
   const shippingByOrderId = new Map<string,ShippingDetails>()
   const shippingReads = options.reference
-    ? Promise.all(orderRows.filter((order)=>['shipped','delivered'].includes(order.order_status)).map(async(order)=>{
+    ? Promise.all(orderRows.filter((order)=>!digitalOrderIds.has(order.order_id) && ['shipped','delivered'].includes(order.order_status)).map(async(order)=>{
       shippingByOrderId.set(order.order_id,await readOrderShippingDetails(order.order_id,order.tracking_number))
     }))
     : Promise.resolve([])
@@ -166,13 +174,12 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       )
     )
   )
-  const downloadLines = options.reference
-    ? orderRows.filter(order => isPaidLikeOrderStatus(order.order_status)).flatMap(order =>
+  const downloadLines = orderRows.filter(order => isPaidLikeOrderStatus(order.order_status)
+    && (options.reference || legacyDigital.has(order.order_id))).flatMap(order =>
         (order.cart_items ?? [])
           .filter(item => item.status === 'ordered' && item.final_job_id)
           .map(item => ({ orderId: order.order_id, item }))
       )
-    : []
   const finalJobIds = uniqueStrings(downloadLines.map(({ item }) => item.final_job_id))
 
   const [previewCoverMap, finalPdfAssetsByJobId] = await Promise.all([
@@ -203,6 +210,7 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
     if (asset.orderId === orderId && asset.cartItemId === item.cart_item_id && asset.printReleased) {
       printedLines.add(item.cart_item_id)
     }
+    if (!options.reference) continue
     const title = resolveFinalJobDisplayTitle({ creations: firstRelation(item.creations) })
     finalPdfRequests.push({
       key: item.cart_item_id,
@@ -275,8 +283,11 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       }
     })
 
-    const progress = options.reference ? getOrderProgress(order.order_status, items
-      .filter(item => item.status === 'ordered')
+    const purchasedItems = items.filter(item => item.status === 'ordered')
+    const pdfOrderStage = digitalOrderIds.has(order.order_id)
+      ? digitalOrderStage(order.order_status, order.book_progress, purchasedItems.every(item => publishedLines.has(item.cart_item_id)))
+      : null
+    const progress = options.reference ? getOrderProgress(order.order_status, purchasedItems
       .map(item => ({
         productType: item.product_type,
         packageType: item.package_type,
@@ -289,6 +300,7 @@ export async function loadCustomerOrders(options: LoadCustomerOrdersOptions) {
       order_status: order.order_status,
       book_progress: order.book_progress,
       progress,
+      pdf_order_stage: pdfOrderStage,
       payment_id: order.payment_id ?? null,
       customer_id: order.customer_id ?? null,
       created_at: order.created_at,
@@ -346,6 +358,7 @@ export function toCustomerOrderSummary(order: CustomerOrderReadModel) {
     display_id: order.display_id,
     order_status: order.order_status,
     book_progress: order.book_progress,
+    pdf_order_stage: order.pdf_order_stage,
     created_at: order.created_at,
     total: order.total,
     display_currency: order.display_currency,

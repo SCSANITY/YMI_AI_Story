@@ -5,6 +5,8 @@ import {
   type AdminOrderView,
 } from '@/lib/admin-orders'
 
+import { digitalOrderStage } from '@/lib/order-progress'
+
 export const ORDER_STATUS_OPTIONS = [
   ['paid', 'Order Confirmed'],
   ['preview_ready', 'Preview Ready'],
@@ -72,6 +74,12 @@ export function isPdfOnlyOrder(order: OrderRow) {
 }
 
 export function displayedOrderStatus(order: OrderRow) {
+  if (isPdfOnlyOrder(order)) {
+    const counts = order.production_progress
+    const stage = digitalOrderStage(order.order_status, order.book_progress,
+      counts.pdfTotalCount > 0 && counts.pdfReleasedCount === counts.pdfTotalCount)
+    if (stage) return stage === 'confirmed' ? 'paid' : stage
+  }
   if (order.order_status === 'paid' && (order.book_progress === 'preview_ready' || order.book_progress === 'pdf_ready')) {
     return order.book_progress
   }

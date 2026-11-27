@@ -372,7 +372,7 @@ export function OrderManagementCard({
           {digitalOnly ? (
             <>
               <h3>Order status</h3>
-              {inProduction ? (
+              {current === 'paid' || current === 'pdf_ready' ? (
                 <>
                   <ol aria-label="PDF order progress" className="my-2 flex flex-wrap items-center gap-2 text-sm [&_[aria-current=step]]:font-semibold">
                     <li aria-current={current === 'paid' ? 'step' : undefined}>Order Confirmed</li>

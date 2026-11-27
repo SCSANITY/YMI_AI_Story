@@ -137,6 +137,11 @@ export async function verifyOrderDetails(root, check, click, waitFor) {
   const pendingDialog = document.querySelector('[role=dialog]')
   check(pendingDialog.querySelector('[aria-current=step]').textContent === 'Order Confirmed' && pendingDialog.textContent.includes('PDF Ready'), 'Pending digital order hid its future stage')
   check(pendingDialog.querySelector('a[aria-label^="Open PDF"]').href.includes('item=line-0'), 'Lost per-book release entry')
+  for (const [count,stage] of [[0,'Order Confirmed'],[1,'PDF Ready']]) {
+    const legacy = {...pending, order_status:'production', production_progress:{...pending.production_progress,pdfReleasedCount:count}}
+    await act(async () => root.render(<OrderManagementCard key={'legacy'+count} order={legacy} orderGroup="active" expanded onToggle={()=>{}} onCommitted={()=>{}}/>))
+    check(document.querySelector('[role=dialog] [aria-current=step]').textContent === stage, 'Legacy digital row showed physical production')
+  }
   const mixed = {...order, order_status:'paid', book_progress_manual:false, books:[digital.books[0], books[1]]}
   await act(async () => root.render(<OrderManagementCard key="mixed" order={mixed} orderGroup="active" expanded onToggle={()=>{}} onCommitted={()=>{}}/>))
   const mixedDialog = document.querySelector('[role=dialog]')
