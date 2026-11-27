@@ -16,6 +16,7 @@ import { cartItemUnitPrice, hasCartItemPrice, CART_PRICE_LOAD_ERROR } from '@/li
 type CoverStatus = 'ready' | 'pending' | 'unavailable';
 
 type CheckoutItemsSectionProps = {
+  giftItemId?: string;
   originalEdition?: boolean;
   originalPdf?: boolean;
   items: CartItem[];
@@ -30,6 +31,7 @@ type CheckoutItemsSectionProps = {
 };
 
 export function CheckoutItemsSection({
+  giftItemId,
   originalPdf = false,
   originalEdition = originalPdf,
   items,
@@ -295,6 +297,7 @@ export function CheckoutItemsSection({
                           {t(originalPdf ? 'checkout.originalPdf' : item.personalization?.bookType === 'digital' ? 'checkout.personalizedPdf' : isSignatureVoicePackage(item.personalization?.bookType) ? 'product.voiceEdition' : 'product.hardcover')}
                           {' · '}{item.personalization?.language || t('language.en')}
                         </p>
+                        {item.id === giftItemId && <p className="mt-1 text-xs font-medium text-amber-800">Gift card applied to one copy</p>}
                         {!originalEdition && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                           <div className="inline-flex w-fit items-center rounded-lg border border-amber-100">
                             <button

@@ -10,6 +10,9 @@ function describeEffect(row: DiscountInstrumentRow) {
   const offer = getDiscountOffer(row)
   const config = offer?.effect_config ?? {}
   if (offer?.effect_type === 'free_shipping') return 'Free shipping'
+  if (offer?.effect_type === 'book_format_price' && config.scope === 'one_book') {
+    return `One copy: lowest-priced Voice for HK$${config.voice_hkd}, otherwise lowest-priced Hardcover free`
+  }
   if (offer?.effect_type === 'book_format_price') return 'Hardcover free / Voice HK$' + config.voice_hkd + ' each'
   if (offer?.effect_type === 'percentage') return `${Number(config.percent ?? 0)}% off` + (config.exclusive ? ' / Cannot be combined' : '')
   if (offer?.effect_type === 'fixed_amount') {

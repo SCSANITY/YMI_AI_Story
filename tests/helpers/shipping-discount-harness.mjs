@@ -116,7 +116,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     },
   } } }
   const mocks = {
-    'server-only': {}, 'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
+    'server-only': {}, 'next/server': { NextResponse: { redirect: target => Response.redirect(target), json: (body, init) => Response.json(body, init) } },
     '@/lib/supabaseAdmin': { supabaseAdmin },
     '@/lib/storage-signing': {}, '@/lib/a9-diagnostics': {},
     '@/lib/unpaid-reminder-server': { registerUnpaidReminder: async () => null },
@@ -126,7 +126,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     '@/lib/checkout-owner': {
       resolveCheckoutOwner: async () => guest ? { ownerType: 'anon', anonSessionId: 'test-guest' } : { ownerType: 'customer', customerId: 'test-customer', email: 'reader@example.test' },
       ownerFilter: () => guest ? { owner_type: 'anon', column: 'anon_session_id', value: 'test-guest' } : { owner_type: 'customer', column: 'customer_id', value: 'test-customer' },
-      requireCheckoutOrderAccess: async orderId => ({ order_id: orderId }), checkoutOwnerErrorResponse: () => null,
+      requireCheckoutOrderAccess: async orderId => ({ order_id: orderId, checkout_session_id: order.checkout_session_id }), checkoutOwnerErrorResponse: () => null,
     },
     '@/lib/emailEvents': { recordExternalEmailObserved: async () => {} },
     '@/lib/site-url': { getSiteUrl: () => 'https://example.test' },
@@ -137,7 +137,7 @@ export function shippingHarness({ admin = true, percent = 0, minimum = 0, noRule
     const fixtureModule = { exports: {} }
     cache.set(file, fixtureModule.exports)
     const context = {
-      module: fixtureModule, exports: fixtureModule.exports, Response, Request, URL, Date, console, process: { env: { NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS: pdfOffers } },
+      module: fixtureModule, exports: fixtureModule.exports, Response, Request, URL, Date, console, crypto: cryptoModule.webcrypto, process: { env: { NEXT_PUBLIC_PERSONALIZED_PDF_OFFERS: pdfOffers } },
       require(name) {
         if (Object.hasOwn(mocks, name)) return mocks[name]
         if (name.startsWith('node:')) {

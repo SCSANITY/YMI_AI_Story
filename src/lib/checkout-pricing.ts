@@ -1,4 +1,4 @@
-import { giftUnitPriceUsd, type BookGiftPrice } from '@/lib/book-gift-price'
+import { allocateBookGift, type BookGiftPrice } from '@/lib/book-gift-price'
 import { buildCheckoutLineItems } from '@/lib/checkout-line-items'
 import type { CheckoutCurrency } from '@/lib/locale-pricing'
 import {
@@ -83,12 +83,11 @@ export function calculateCheckoutPricing({
   const orderedItems = [...items].sort((left, right) => left.id.localeCompare(right.id))
   // Keep the quoted unit price on its book and defer currency rounding to Stripe line allocation.
   if (gift) {
-    const charges = orderedItems.map(item => {
-      const unit = giftUnitPriceUsd(item.bookFormat, item.unitPriceUsd, gift)
-      return { name: item.name, amountUsd: unit * item.quantity, metadata: item.metadata }
-    })
-    const subtotal = computeMultiBookSubtotalUsd(items)
-    const productSavingsUsd = subtotal - charges.reduce((sum, line) => sum + line.amountUsd, 0)
+    const allocation = allocateBookGift(orderedItems, gift)
+    const charges = orderedItems.map(item => ({
+      name: item.name, amountUsd: allocation.charges.get(item.id)!, metadata: item.metadata,
+    }))
+    const productSavingsUsd = allocation.savingsUsd
     if (Math.round(productSavingsUsd * 100) !== Math.round(productDiscountUsd * 100)) {
       throw new Error('Gift card reservation does not match book prices.')
     }

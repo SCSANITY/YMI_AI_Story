@@ -6,7 +6,7 @@ export type DiscountEffectType = 'free_shipping' | 'fixed_amount' | 'percentage'
 type DiscountInstrumentType = 'promo_code' | 'voucher'
 
 type DiscountRpcResult = {
-  redemption_id: string
+  redemption_id: string | null
   product_discount_amount_usd: number | string | null
   shipping_discount_amount_usd: number | string | null
   replaced_instrument_id?: string | null
@@ -67,6 +67,7 @@ export async function loadOrderDiscountSlots(productId: string | null, shippingI
       const hkdPerUsd = Number(offer.effect_config?.hkd_per_usd)
       if (!(voiceHkd > 0 && hkdPerUsd > 0 && Number.isFinite(voiceHkd / hkdPerUsd))) throw new Error('Gift card pricing is unavailable.')
       slot.bookPrice = { voiceHkd, hkdPerUsd }
+      if (offer.effect_config?.scope === 'one_book') slot.bookPrice.singleBook = true
     }
     if (offer?.effect_config?.exclusive === true) slot.exclusive = true
     return slot
@@ -211,6 +212,31 @@ export async function listCheckoutVouchersForCustomer(params: {
     .filter(Boolean) as CheckoutVoucher[]
 }
 
+// Recover an abandoned payment if Stripe's expiry notification has not arrived.
+// Inspect only the active holder of the exact submitted card.
+async function releaseExpiredGiftHold(code: string) {
+  const { data: card, error } = await supabaseAdmin.from('discount_instruments')
+    .select('instrument_id, discount_offers!inner(effect_type,effect_config)')
+    .eq('code', code).eq('instrument_type', 'promo_code').eq('reserved_count', 1).maybeSingle()
+  if (error || !card) return false
+  const offer = Array.isArray(card.discount_offers) ? card.discount_offers[0] : card.discount_offers
+  if (offer?.effect_type !== 'book_format_price' || offer.effect_config?.scope !== 'one_book') return false
+  const { data: hold } = await supabaseAdmin.from('discount_redemptions')
+    .select('order_id').eq('instrument_id', card.instrument_id).eq('status','applied').maybeSingle()
+  if (!hold) return false
+  const { data: order } = await supabaseAdmin.from('orders')
+    .select('checkout_session_id').eq('order_id', hold.order_id).eq('order_status','unpaid')
+    .eq('applied_product_discount_instrument_id', card.instrument_id).is('payment_id', null).maybeSingle()
+  if (!order?.checkout_session_id) return false
+  const { getStripeServer } = await import('@/lib/stripe')
+  const session = await getStripeServer().checkout.sessions.retrieve(order.checkout_session_id)
+  if (session.status !== 'expired' || session.payment_status !== 'unpaid' ||
+      session.metadata?.order_id !== hold.order_id || session.metadata?.single_book_gift !== '1') return false
+  const { clearOrderCheckoutSessionLock } = await import('@/lib/checkout-session-lock')
+  await clearOrderCheckoutSessionLock(hold.order_id, session.id)
+  return true
+}
+
 export async function applyPromoCodeToOrder(params: {
   orderId: string
   code: string
@@ -222,12 +248,19 @@ export async function applyPromoCodeToOrder(params: {
     throw new Error('Please enter a valid discount code.')
   }
 
-  const { data, error } = await supabaseAdmin.rpc('apply_discount_instrument', {
+  const apply = () => supabaseAdmin.rpc('apply_discount_instrument', {
     p_order_id: params.orderId,
     p_code: code,
     p_customer_id: params.customerId ?? null,
     p_email: normalizeEmail(params.email),
   })
+
+  let { data, error } = await apply()
+  if (error?.message === 'This discount has reached its usage limit.' && await releaseExpiredGiftHold(code)) {
+    const retry = await apply()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) {
     throw new Error(error.message || 'Failed to apply promo code.')

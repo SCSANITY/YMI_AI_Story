@@ -125,6 +125,9 @@ export async function POST(request: Request) {
       return changedQuote(payableQuote)
     }
 
+    const giftAttempt = discountSummary.productDiscount?.bookPrice?.singleBook ? crypto.randomUUID() : null
+    const cancelUrl = `${baseUrl}/api/checkout/session/cancel?orderId=${encodeURIComponent(orderId)}` +
+      (giftAttempt ? `&attempt=${giftAttempt}` : '')
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       adaptive_pricing: { enabled: false },
@@ -132,7 +135,7 @@ export async function POST(request: Request) {
       customer_email: email,
       line_items: lineItems,
       success_url: `${baseUrl}/checkout/success?orderId=${encodeURIComponent(orderId)}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/api/checkout/session/cancel?orderId=${encodeURIComponent(orderId)}`,
+      cancel_url: cancelUrl,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
       metadata: {
         order_id: orderId,
@@ -147,6 +150,7 @@ export async function POST(request: Request) {
         multi_book_discount_amount_usd: String(multiBookDiscountUsd || 0),
         shipping_amount_usd: String(shippingAmountUsd || 0),
         checkout_fingerprint: checkoutFingerprint,
+        ...(giftAttempt ? { single_book_gift: '1', gift_attempt: giftAttempt } : {}),
       },
       payment_intent_data: {
         metadata: {

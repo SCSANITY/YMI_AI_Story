@@ -29,6 +29,11 @@ export async function GET(request: Request) {
 
     const stripe = getStripeServer()
     const session = await stripe.checkout.sessions.retrieve(sessionId)
+    const attempt = new URL(request.url).searchParams.get('attempt')
+    if ((attempt || session.metadata?.single_book_gift === '1') &&
+        (!attempt || attempt !== session.metadata?.gift_attempt)) {
+      return checkoutRedirect(request, orderId)
+    }
     if (session.status === 'open') {
       await stripe.checkout.sessions.expire(sessionId)
     }

@@ -3,7 +3,7 @@ import 'server-only'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getStripeServer } from '@/lib/stripe'
 import { convertUsdToCurrency, normalizeCheckoutCurrency, type CheckoutCurrency } from '@/lib/locale-pricing'
-import { giftUnitPriceUsd } from '@/lib/book-gift-price'
+import { allocateBookGift } from '@/lib/book-gift-price'
 import { loadOrderDiscountSlots, type OrderDiscountSummary } from '@/lib/discounts'
 import { getMultiBookOfferRule } from '@/lib/multi-book-offer'
 import { type MultiBookOfferRule } from '@/lib/multi-book-offer-core'
@@ -237,7 +237,7 @@ export async function prepareCheckoutQuote(request: Request, body: CheckoutInput
         totalMinor: frozenTotal,
         subtotalUsd: itemSubtotal(items),
         productDiscountUsd: gift
-          ? items.reduce((sum, item) => sum + item.quantity * (item.unitPriceUsd - giftUnitPriceUsd(item.bookFormat, item.unitPriceUsd, gift)), 0)
+          ? allocateBookGift(items, gift).savingsUsd
           : Number(order.discount_amount_usd ?? 0),
         shippingDiscountUsd: Number(order.shipping_discount_amount_usd ?? 0),
         multiBookDiscountUsd: Number(order.multi_book_discount_amount_usd ?? 0),

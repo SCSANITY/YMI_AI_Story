@@ -282,3 +282,74 @@ test('exclusive percentage code discounts the book subtotal and preserves the sh
   assert.equal(removed.multiBookDiscountUsd, 20)
   assert.equal(removed.totalMinor, 8400)
 })
+
+test('one-book card selects one cheapest Voice copy ahead of Hardcover and preserves mixed checkout on resume', async () => {
+  const h = shippingHarness({ percent: 60, pdfOffers: 'Birthdayboy_story@17' })
+  const voice = h.tables.cart_items[0]
+  Object.assign(voice, { price_at_purchase: 70, quantity: 2 })
+  h.tables.cart_items.push(
+    { ...voice, cart_item_id: 'item-2', price_at_purchase: 80, quantity: 1 },
+    { ...voice, cart_item_id: 'item-3', price_at_purchase: 38, quantity: 3, package_type: 'basic' },
+    { ...personalizedDigitalLine(voice), cart_item_id: 'item-4', price_at_purchase: 10, quantity: 1 },
+  )
+  h.order.applied_product_discount_instrument_id = 'gift'
+  h.order.discount_amount_usd = 44.36
+  h.tables.discount_instruments.push({ instrument_id: 'gift', code: 'TEST-GIFT', instrument_type: 'promo_code',
+    discount_offers: { name: 'Test card', effect_type: 'book_format_price', effect_config: { scope: 'one_book', voice_hkd: 200, hkd_per_usd: 7.8 } } })
+  const expected = [74600,62400,88920,7800,3120] // HK$200 + HK$546 on the two-copy line
+  const total = expected.reduce((a,b) => a+b)
+  const quoted = await (await h.paymentQuote('HKD')).json()
+  assert.equal(quoted.quote.totalMinor,total)
+  const session = await h.checkout('HKD','standard',address,total)
+  assert.equal(session.status,200)
+  assert.deepEqual(Array.from(h.stripeCalls[0].line_items, line => line.price_data.unit_amount),expected)
+  assert.equal(h.stripeCalls[0].metadata.single_book_gift,'1')
+  const resumed = await (await h.paymentQuote('HKD')).json()
+  assert.equal(resumed.quote.totalMinor,total)
+  assert.equal(resumed.quote.productDiscountUsd,quoted.quote.productDiscountUsd)
+})
+
+test('old gift cancellation cannot cancel a replacement session on the same order', async () => {
+  const h = shippingHarness({ percent: 60 })
+  h.order.checkout_session_id = 'current'
+  const session = { id: 'current', status: 'open', metadata: { single_book_gift: '1', gift_attempt: 'new' } }
+  h.stripeSessions.set('current', session)
+  const cancel = h.load('app/api/checkout/session/cancel/route.ts').GET
+  const url = 'https://example.test/api/checkout/session/cancel?orderId=' + h.order.order_id
+  for (const old of ['', '&attempt=old']) {
+    await cancel(new Request(url + old))
+    assert.equal(session.status, 'open')
+    assert.equal(h.order.checkout_session_id, 'current')
+  }
+  await cancel(new Request(url + '&attempt=new'))
+  assert.equal(session.status,'expired')
+  assert.equal(h.order.checkout_session_id,null)
+})
+
+test('reapply can recover an unpaid expired hold but preserves open or processing payments', async () => {
+  for (const state of ['open','complete','expired']) {
+    let attempts = 0
+    const h = shippingHarness({ discountRpc() {
+      attempts++
+      return attempts === 1 ? { error: { message: 'This discount has reached its usage limit.' } } :
+        { data: [{ product_discount_amount_usd: 38 }], error: null }
+    } })
+    h.tables.discount_instruments.push({ instrument_id: 'gift', instrument_type:'promo_code', code:'TEST-GIFT',
+      reserved_count: 1, discount_offers: { effect_type:'book_format_price', effect_config:{scope:'one_book'} } })
+    h.tables.discount_redemptions = [{ instrument_id:'gift',status:'applied',order_id:'old-order' }]
+    const old = { order_id:'old-order', order_status:'unpaid', payment_id:null, applied_product_discount_instrument_id:'gift', checkout_session_id:'old-session' }
+    h.tables.orders.push(old)
+    h.stripeSessions.set('old-session',{id:'old-session',status:state,payment_status:'unpaid',
+      metadata:{order_id:'old-order',single_book_gift:'1'}})
+    const apply = h.load('src/lib/discounts.ts').applyPromoCodeToOrder({orderId:h.order.order_id,code:'TEST-GIFT'})
+    if (state === 'expired') {
+      assert.equal((await apply).productDiscountAmountUsd,38)
+      assert.equal(attempts,2)
+      assert.equal(old.checkout_session_id,null)
+    } else {
+      await assert.rejects(apply,/usage limit/)
+      assert.equal(attempts,1)
+      assert.equal(old.checkout_session_id,'old-session')
+    }
+  }
+})

@@ -39,7 +39,7 @@ import {
 } from '@/lib/cart-cover';
 import { CheckoutLoadingShell } from './CheckoutLoadingShell';
 import type { CheckoutQuote } from '@/lib/checkout-quote';
-import { giftUnitPriceUsd } from '@/lib/book-gift-price';
+import { allocateBookGift } from '@/lib/book-gift-price';
 import type { OrderDiscountSummary } from '@/lib/discounts';
 import {
   capMultiBookOfferToHeadroom,
@@ -466,11 +466,11 @@ function CheckoutPageContent() {
           : option),
       }
     : shippingQuote;
-  const giftSavings = bookGift && items.reduce((sum, item) => {
-    const price = cartItemUnitPrice(item);
-    return sum + (price - giftUnitPriceUsd(item.personalization?.bookType, price, bookGift)) * (item.quantity ?? 1);
-  }, 0);
-  const discountTotalUsd = paymentQuote?.productDiscountUsd ?? giftSavings ?? Math.min(total, Math.max(0, discountAmountUsd));
+  const giftAllocation = bookGift && allocateBookGift(items.map(item => ({
+    id: item.id, quantity: item.quantity ?? 1, unitPriceUsd: cartItemUnitPrice(item),
+    bookFormat: item.personalization?.bookType,
+  })), bookGift);
+  const discountTotalUsd = paymentQuote?.productDiscountUsd ?? giftAllocation?.savingsUsd ?? Math.min(total, Math.max(0, discountAmountUsd));
 
   const multiBookDiscountUsd = useMemo(
     () => paymentQuote?.multiBookDiscountUsd ?? (excludesMultiBook ? 0 : capMultiBookOfferToHeadroom(
@@ -1422,6 +1422,7 @@ function CheckoutPageContent() {
           </div>
           <div id="checkout-books" className={booksExpanded ? '' : 'hidden min-[800px]:block'}>
             <CheckoutItemsSection
+              giftItemId={giftAllocation?.selectedItemId}
               originalEdition={originalEdition}
               originalPdf={originalPdf}
               items={items}

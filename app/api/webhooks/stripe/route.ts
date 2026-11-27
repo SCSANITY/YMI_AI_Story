@@ -6,7 +6,7 @@ import { finalizeOrderPayment, resolveOrCreateCustomerByEmail } from '@/lib/orde
 import { markOrderDiscountsPaid } from '@/lib/discounts'
 import { resolveShippingAddress } from '@/lib/shipping-address'
 import { fromMinorUnit, normalizeCheckoutCurrency } from '@/lib/locale-pricing'
-import { requireMatchingCheckoutSession } from '@/lib/checkout-session-lock'
+import { clearOrderCheckoutSessionLock, requireMatchingCheckoutSession } from '@/lib/checkout-session-lock'
 
 export const runtime = 'nodejs'
 
@@ -26,6 +26,15 @@ export async function POST(request: Request) {
     event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
   } catch (error: any) {
     return NextResponse.json({ error: `Invalid signature: ${error?.message || 'unknown'}` }, { status: 400 })
+  }
+
+  if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
+    const session = event.data.object
+    const orderId = session.metadata?.order_id
+    if (orderId && session.metadata?.single_book_gift === '1' && session.payment_status === 'unpaid') {
+      await clearOrderCheckoutSessionLock(orderId, session.id)
+    }
+    return NextResponse.json({ received: true })
   }
 
   if (
