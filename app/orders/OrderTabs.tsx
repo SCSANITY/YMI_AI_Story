@@ -1,6 +1,6 @@
 'use client'
 
-import { CircleCheck, Hourglass, Truck } from 'lucide-react'
+import { CircleCheck, Hourglass, PackageOpen } from 'lucide-react'
 import type { OrderTab } from './ordersTypes'
 
 type OrderTabsProps = {
@@ -12,7 +12,7 @@ type OrderTabsProps = {
 
 export function OrderTabs({ activeTab, counts, t, onChange }: OrderTabsProps) {
   const tabs = [
-    { key: 'shipping', icon: Truck, label: t('orders.inTransit'), count: counts.shipping },
+    { key: 'shipping', icon: PackageOpen, label: t('orders.inProgress'), count: counts.shipping },
     { key: 'unpaid', icon: Hourglass, label: t('orders.pendingPayment'), count: counts.unpaid },
     { key: 'finished', icon: CircleCheck, label: t('orders.completed'), count: counts.finished },
   ] as const

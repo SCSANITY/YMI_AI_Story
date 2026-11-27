@@ -171,3 +171,33 @@ test('geography is lazy, local, static and not coupled to customer addresses or 
   assert.match(region,/event\.source === 'dealer_send'/)
   assert.match(map,/not live GPS or a delivery estimate/)
 })
+
+test('digital-only pending deliveries cannot reach the mail sender or occupy a carrier batch',async()=>{
+  const { build } = createRequire(import.meta.url)('esbuild')
+  const compiled = await build({entryPoints:[fileURLToPath(new URL('../src/lib/order-shipping-server.ts',import.meta.url))],
+    bundle:true,write:false,platform:'node',format:'cjs',external:['server-only','@/lib/*']})
+  const queries=[]
+  let mailed=0
+  const db={from(){const filters=new Map();const q={
+    select(fields){assert.match(fields,/orders!inner/);return q},
+    eq(key,value){filters.set(key,value);return q},order(){return q},lte(){return q},
+    limit(n){assert.equal(filters.get('orders.order_is_pdf_only'),false);queries.push(n);return {data:[]}},
+    maybeSingle(){assert.equal(filters.get('orders.order_is_pdf_only'),false)
+      return {data:filters.get('order_id')==='digital'?null:{delivery_notification_pending:true,delivery_status_event_id:'event'}}}
+  };return q}}
+  const mod={exports:{}}
+  runInNewContext(compiled.outputFiles[0].text,{module:mod,exports:mod.exports,process:{env:{DEALER_SEND_SYNC_ENABLED:'true'}},
+    require(name){
+      if(name==='@/lib/supabaseAdmin')return {supabaseAdmin:db}
+      if(name==='@/lib/dealer-send')return {readDealerSendConfig:()=>({})}
+      if(name==='@/lib/order-logistics-server')return {loadLogisticsOrder:async()=>({order_status:'delivered'}),
+        notifyLogisticsUpdate:async()=>{mailed++;return {emailStatus:'failed'}}}
+      assert.ok(['server-only','@/lib/order-shipping-sync'].includes(name));return {}
+    }})
+  assert.equal(await mod.exports.retryDeliveryNotification('digital'),null)
+  assert.equal(mailed,0)
+  await mod.exports.retryDeliveryNotification('physical')
+  assert.equal(mailed,1)
+  await mod.exports.runShippingSyncBatch()
+  assert.deepEqual(queries,[5,10])
+})

@@ -42,6 +42,7 @@ export async function readAdminShippingDetails(orderId: string): Promise<AdminSh
 const store: ShippingSyncStore = {
   async claim(orderId,force) {
     const { data,error } = await supabaseAdmin.rpc('lg_001_claim_shipping_sync',{p_order_id:orderId,p_force:force})
+    if (error?.code === 'PT422') return null
     if (error) throw new Error('Shipping claim failed')
     return data
   },
@@ -50,6 +51,7 @@ const store: ShippingSyncStore = {
       p_order_id:orderId,p_token:lease.token,p_revision:lease.revision,p_events:events,
       p_error_code:errorCode,p_delivered_key:delivery?.key ?? null,p_mapping_reference:delivery?.reference ?? null,
     })
+    if (error?.code === 'PT422') return {stale:true}
     if (error) throw new Error('Shipping sync commit failed')
     return data
   },
@@ -57,7 +59,8 @@ const store: ShippingSyncStore = {
 
 export async function retryDeliveryNotification(orderId: string) {
   const { data: state,error } = await supabaseAdmin.from('order_shipping_details')
-    .select('delivery_status_event_id,delivery_notification_pending').eq('order_id',orderId).maybeSingle()
+    .select('delivery_status_event_id,delivery_notification_pending,orders!inner(order_id)')
+    .eq('order_id',orderId).eq('orders.order_is_pdf_only',false).maybeSingle()
   if (error || !state?.delivery_notification_pending || !state.delivery_status_event_id) return null
   const order = await loadLogisticsOrder(orderId)
   if (order.order_status !== 'delivered') return null
@@ -80,7 +83,8 @@ export async function runShippingSyncBatch() {
   if (process.env.DEALER_SEND_SYNC_ENABLED !== 'true') return { skipped:true,reason:'disabled' }
   const started = Date.now()
   const { data: pending,error: pendingError } = await supabaseAdmin.from('order_shipping_details')
-    .select('order_id').eq('delivery_notification_pending',true).order('next_sync_at').limit(5)
+    .select('order_id,orders!inner(order_id)').eq('delivery_notification_pending',true)
+    .eq('orders.order_is_pdf_only',false).order('next_sync_at').limit(5)
   if (pendingError) throw new Error('Shipping database is not ready')
   let failures=0
   let notificationsProcessed=0
@@ -93,7 +97,7 @@ export async function runShippingSyncBatch() {
   if (!dealerSendConfig()) return { skipped:true,reason:'not_configured',notificationsProcessed,failures }
   const { data: due,error } = await supabaseAdmin.from('order_shipping_details')
     .select('order_id,orders!inner(order_status)').eq('provider','dealer_send').eq('orders.order_status','shipped')
-    .lte('next_sync_at',new Date().toISOString()).order('next_sync_at').limit(10)
+    .eq('orders.order_is_pdf_only',false).lte('next_sync_at',new Date().toISOString()).order('next_sync_at').limit(10)
   if (error) throw new Error('Shipping candidates unavailable')
   let processed=0
   for (const row of due ?? []) {
