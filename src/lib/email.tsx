@@ -247,14 +247,14 @@ async function sendEmail({
 
 // This event was reserved by the release transaction and claimed by the dispatcher.
 export async function sendClaimedPrintNotice(params: {
-  to: string; firstName: string | null; bookTitle: string; orderId: string; personalNote?: string; idempotencyKey: string
+  standardPhysical?: boolean; to: string; firstName: string | null; bookTitle: string; orderId: string; personalNote?: string; idempotencyKey: string
 }) {
   const sender = resolveSender('EMAIL_FROM_DELIVERY')
   if (!sender.isValid) throw new EmailNotAcceptedError('Delivery mailbox is not configured')
   const response = await sendEmail({
     to: params.to, from: sender.normalizedValue, idempotencyKey: params.idempotencyKey,
     subject: PRINT_RELEASED_SUBJECT,
-    react: <PrintReleasedEmail personalNote={await releaseRenderNote(params.personalNote,{...params,kind:'print'})} firstName={params.firstName} bookTitle={params.bookTitle} orderId={params.orderId} />,
+    react: <PrintReleasedEmail standardPhysical={params.standardPhysical} personalNote={await releaseRenderNote(params.personalNote,{...params,kind:'print'})} firstName={params.firstName} bookTitle={params.bookTitle} orderId={params.orderId} />,
   })
   const id = response.data?.id || (response as { id?: string }).id
   if (!id) throw new Error('Unable to confirm print email receipt')
@@ -411,6 +411,7 @@ export const FINAL_PDF_DELIVERY_LINK_TTL_SECONDS = 72 * 60 * 60
 type SendOrderDeliveryEmailParams = {
   to: string
   firstName?: string | null
+  standardPhysical: boolean
   bookFormat: ReturnType<typeof purchasedLineEdition>
   orderId: string
   displayId?: string | null
@@ -449,6 +450,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
     react: (
       <DeliveryEmail
         pdfOnly={edition === 'digital'}
+        standardPhysical={params.standardPhysical}
         orderId={params.orderId}
         displayId={params.displayId}
         orderUrl={orderUrl}

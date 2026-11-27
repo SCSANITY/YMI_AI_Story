@@ -115,6 +115,16 @@ export function resolveCartItemDisplayTitle(input: {
   })
 }
 
+export function isStandardPhysicalBook(format: string | null, creations: unknown) {
+  const snapshot = asRecord(asRelationRecord(creations)?.customize_snapshot)
+  return (format === 'basic' || format === 'supreme') && snapshot?.edition === 'original'
+}
+
+export function standardStoryTitle(creations: unknown) {
+  const name = asRelationRecord(asRelationRecord(creations)?.templates)?.name
+  return typeof name === 'string' ? name.trim() : ''
+}
+
 export function resolveFinalJobDisplayTitle(input: {
   template_id?: unknown
   creations?: unknown

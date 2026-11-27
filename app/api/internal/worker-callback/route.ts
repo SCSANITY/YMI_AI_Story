@@ -1,3 +1,4 @@
+import { isStandardPhysicalBook } from '@/lib/personalized-book-title'
 import { purchasedLineEdition } from '@/lib/package-pricing'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
 
   const { data: cartItem } = await supabaseAdmin
     .from('cart_items')
-    .select('cart_item_id, order_id, product_type, package_type')
+    .select('cart_item_id, order_id, product_type, package_type, creations:creations(customize_snapshot)')
     .eq('cart_item_id', job.cart_item_id)
     .maybeSingle()
 
@@ -150,10 +151,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to sign PDF url' }, { status: 500 })
   }
 
+  const bookFormat = purchasedLineEdition(cartItem.product_type, cartItem.package_type)
   await sendOrderDeliveryEmail({
     to: order.email,
     firstName: order.first_name,
-    bookFormat: purchasedLineEdition(cartItem.product_type, cartItem.package_type),
+    bookFormat,
+    standardPhysical: isStandardPhysicalBook(bookFormat, cartItem.creations),
     orderId: order.order_id,
     displayId: order.display_id ?? null,
     downloadUrl: signedPdf.signedUrl,

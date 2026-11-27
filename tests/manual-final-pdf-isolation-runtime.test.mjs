@@ -454,6 +454,7 @@ for (const format of ['digital', 'basic', 'supreme']) {
     assert.equal(h.mail.length, 1)
     assert.equal(h.mail[0].finalJobId, job)
     assert.equal(h.mail[0].bookFormat, format)
+    assert.equal(h.mail[0].standardPhysical, format !== 'digital')
     assert.equal((await h.route('release', job)).body.alreadyReleased, true)
     assert.equal(h.mail.length, 1)
   })

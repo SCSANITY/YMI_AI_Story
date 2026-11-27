@@ -52,6 +52,10 @@ rollback, test-send, raw HTML, sender, or link-target control.
   available for authorized re-download. In the order's Items section, each
   released book has its own PDF link alongside its title. Releasing another
   book adds a link and preserves the earlier book's download. The order identifier is plain text.
+  Standard Hardcover and Hardcover + Voice explain 72-hour PDF access and order-page
+  re-download in Before We Print. Standard Voice links to the recording-only materials
+  page. Standard print approval names the released story by its full catalogue title.
+  Final Review and the library render the same defaults used for sending.
   The Hardcover + Voice variant links to the existing protected materials page.
   Both editions ask customers to review the PDF and reply within 48 hours of the
   delivery email. This is a reminder, not a system timer. The order and materials

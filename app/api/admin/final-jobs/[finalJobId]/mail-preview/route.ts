@@ -7,7 +7,7 @@ import { noStoreJson } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
 import { purchasedLineEdition } from '@/lib/package-pricing'
 import { isScopedFinalApprovedPage, isLegacyFinalManualPage } from '@/lib/final-review-artifact-paths'
-import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
+import { isStandardPhysicalBook, resolveFinalJobDisplayTitle, standardStoryTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function POST(request: Request, context: { params: Promise<{ finalJobId: string }> }) {
@@ -42,9 +42,13 @@ export async function POST(request: Request, context: { params: Promise<{ finalJ
       coverImageUrl = image?.signedUrl
     }
   }
-  const title=resolveFinalJobDisplayTitle(book)
+  const standardPhysical = isStandardPhysicalBook(edition, book.creations)
+  const title = standardPhysical ? standardStoryTitle(book.creations) : resolveFinalJobDisplayTitle(book)
+  if (standardPhysical && body.kind === 'print' && !title) {
+    return noStoreJson({ error: 'The story title is missing for this book.' }, { status: 409 })
+  }
   const {html,fingerprint}=await releaseTemplateSnapshot({kind:body.kind,orderId:book.order_id,displayId:order.display_id,
-    bookTitle:title,firstName:order.first_name,edition,coverImageUrl})
+    standardPhysical,bookTitle:title,firstName:order.first_name,edition,coverImageUrl})
   return noStoreJson({ html, fingerprint, cover:coverImageUrl || emailAsset('cover-placeholder.png'),seal:emailAsset('seal.png'), title, recipient:order.email,
     subject:body.kind === 'print' ? PRINT_RELEASED_SUBJECT : pdfDeliverySubject(edition === 'basic' || edition === 'supreme', order.display_id || book.order_id) })
 }

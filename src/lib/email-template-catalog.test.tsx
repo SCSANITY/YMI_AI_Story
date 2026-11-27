@@ -124,6 +124,39 @@ test('Final PDF Delivery previews show the right actions for each delivered edit
   }
 })
 
+test('Standard physical defaults agree in Template Library and the Final Review editor', async () => {
+  for (const format of ['basic', 'supreme']) {
+    const variant = 'original-' + format
+    const bookTitle = format === 'basic' ? 'Secret Journey Through Eight Plants' : 'Space Mission'
+    const ctx = { standardPhysical: true, edition: format, bookTitle, orderId: 'sample-order' }
+    const catalog = (await renderEmailTemplatePreview('final-delivery', variant))!
+    const editor = await releaseTemplateSnapshot({ ...ctx, kind: 'pdf' })
+    for (const html of [catalog, editor.html]) {
+      assert.match(html, /BEFORE WE PRINT/)
+      assert.match(html, /reply to this email within 48 hours/)
+      assert.equal((html.match(/72 hours/g) ?? []).length, 1)
+      assert.match(html, /sign in using your order email address/)
+      assert.doesNotMatch(html, /personalised|dedication|message to be printed/i)
+      assert.equal(html.includes('Manage Your Voice Recording'), format === 'supreme')
+      if (format === 'supreme') {
+        assert.match(html, /short voice sample within 48 hours/)
+        assert.match(html, /Privacy Policy/)
+        assert.doesNotMatch(html, /special message|submitted both/i)
+      } else {
+        assert.match(html, /Upgrade to Signature Voice/)
+      }
+    }
+    assert.match(catalog, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order"[^>]*>Open Your Order Page/)
+    if (format === 'supreme') assert.match(catalog, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order\/materials"[^>]*>Manage Your Voice Recording/)
+    const print = (await renderEmailTemplatePreview('print-released', variant))!
+    for (const html of [print, (await releaseTemplateSnapshot({ ...ctx, kind: 'print' })).html]) {
+      assert.doesNotMatch(html, /one-of-a-kind/)
+      assert.match(html, /Thank you once again for choosing YMI Story as a special gift/)
+      assert.ok(html.includes('<strong>' + bookTitle + '</strong>'))
+    }
+  }
+})
+
 test('receipt and delivery previews follow real edition and recording eligibility', async () => {
   const receipt = EMAIL_TEMPLATE_CATALOG.find(template => template.id === 'order-confirmation')!
   for (const variant of receipt.variants) {

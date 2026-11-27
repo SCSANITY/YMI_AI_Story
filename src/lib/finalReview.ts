@@ -20,6 +20,7 @@ import {
 import { hasSingleFinalOrderLine } from '@/lib/final-review-batch-approval'
 import {
   buildPersonalizedBookPdfFileName,
+  isStandardPhysicalBook,
   resolveFinalJobDisplayTitle,
 } from '@/lib/personalized-book-title'
 import { isFinalJobReleased } from '@/lib/purchase-state'
@@ -380,14 +381,16 @@ export async function releaseFinalJob(params: {
     // Edition-specific copy belongs to the delivered book, not any other item in the order.
     const { data: deliveryItem, error: deliveryItemError } = await supabaseAdmin
       .from('cart_items')
-      .select('product_type, package_type')
+      .select('product_type, package_type, creations:creations(customize_snapshot)')
       .eq('cart_item_id', finalJob.cart_item_id)
       .eq('order_id', finalJob.order_id)
       .maybeSingle()
     if (deliveryItemError) throw new Error('Could not read the delivered book format for this email')
+    const bookFormat = purchasedLineEdition(deliveryItem?.product_type, deliveryItem?.package_type)
     const emailResult = await sendOrderDeliveryEmail({
       firstName: order.first_name,
-      bookFormat: purchasedLineEdition(deliveryItem?.product_type, deliveryItem?.package_type),
+      bookFormat,
+      standardPhysical: isStandardPhysicalBook(bookFormat, deliveryItem?.creations),
       to: orderEmail,
       orderId: finalJob.order_id,
       displayId: order.display_id ?? null,

@@ -3,7 +3,7 @@ import { PRINT_RELEASED_SUBJECT } from '@/components/emails/PrintReleasedEmail'
 import { EmailNotAcceptedError, sendClaimedPrintNotice } from '@/lib/email'
 import { markEmailEventFailed, markEmailEventSent } from '@/lib/emailEvents'
 import { finalPurchasedEdition } from '@/lib/final-purchased-edition'
-import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
+import { isStandardPhysicalBook, resolveFinalJobDisplayTitle, standardStoryTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 async function readNotice(jobId: string) {
@@ -33,14 +33,19 @@ export async function dispatchPrintNotice(jobId: string) {
   const { data: job, error } = await supabaseAdmin.from('final_jobs')
     .select('job_id,order_id,creation_id,template_id,print_released_at,creations:creations(customize_snapshot,templates:templates(name)),purchased_line:cart_items!final_jobs_cart_item_id_fkey(order_id,creation_id,final_job_id,status,product_type,package_type)')
     .eq('final_job_id',jobId).eq('order_id',row.order_id).maybeSingle()
-  if (error || !job?.print_released_at || !finalPurchasedEdition(job,job.purchased_line)) {
+  const format = job && finalPurchasedEdition(job, job.purchased_line)
+  if (error || !job?.print_released_at || !format) {
     throw new Error('Cannot verify the released order line for this notification')
   }
-  const bookTitle = row.context?.bookTitle || resolveFinalJobDisplayTitle(job)
+  const standardPhysical = isStandardPhysicalBook(format, job.creations)
+  const bookTitle = standardPhysical
+    ? (row.context?.standardPhysical && row.context.bookTitle) || standardStoryTitle(job.creations)
+    : row.context?.bookTitle || resolveFinalJobDisplayTitle(job)
+  if (!bookTitle) throw new Error('The story title is missing for this book.')
   const now = new Date().toISOString()
   const { data: claim, error: claimError } = await supabaseAdmin.from('email_events')
     .update({ status: 'pending', subject: PRINT_RELEASED_SUBJECT, error_message: null, failed_at: null,
-      updated_at: now, context: { ...row.context, bookTitle, dispatch: 'attempted' } })
+      updated_at: now, context: { ...row.context, standardPhysical, bookTitle, dispatch: 'attempted' } })
     .eq('email_event_id',row.email_event_id).eq('status',row.status).eq('updated_at',row.updated_at)
     .eq('context->>dispatch',row.context.dispatch)
     .select('email_event_id').maybeSingle()
@@ -51,7 +56,7 @@ export async function dispatchPrintNotice(jobId: string) {
   try {
     if (!row.to_email) throw new EmailNotAcceptedError('No recipient email recorded on the order')
     messageId = await sendClaimedPrintNotice({ to: row.to_email, firstName: row.context?.firstName,
-      orderId: row.order_id, bookTitle, personalNote: row.context?.deliveryNote, idempotencyKey: row.idempotency_key })
+      orderId: row.order_id, standardPhysical, bookTitle, personalNote: row.context?.deliveryNote, idempotencyKey: row.idempotency_key })
   } catch (error) {
     if (!(error instanceof EmailNotAcceptedError)) return 'awaiting_confirmation'
     await markEmailEventFailed(row.email_event_id, error.message)

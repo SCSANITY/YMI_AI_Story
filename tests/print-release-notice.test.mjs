@@ -80,7 +80,7 @@ function fixture() {
   const retryRoute=loadUi(routes+'print-notification/route.ts',stubs)
   const activityRoute=loadUi('app/api/admin/orders/[orderId]/email-activity/route.ts',stubs,{ URL })
   const ctx=id=>({ params: Promise.resolve({ finalJobId:id }) })
-  return { events, sends, order, controls, sender,
+  return { events, jobs, sends, order, controls, sender,
     release: (id, artifact='verified')=>releaseRoute.POST({ json:async()=>({ expectedArtifactId:artifact }) },ctx(id)),
     activity: orderId=>activityRoute.GET(new Request('https://example.invalid/activity'), {params:Promise.resolve({orderId})}),
     retry: id=>retryRoute.POST({},ctx(id)), read: id=>retryRoute.GET({},ctx(id)) }
@@ -129,4 +129,19 @@ test('missing provider receipt stays unconfirmed; old jobs without a notice stay
   assert.equal((await (await f.release('book-a')).json()).noticeStatus,'check_status')
   assert.equal((await (await f.retry('book-a')).json()).status,'awaiting_confirmation')
   assert.equal(f.sends.length,1)
+})
+
+test('Standard print mail keeps the full released title and reuses it on retry', async () => {
+  const f = fixture()
+  const job = f.jobs.get('book-b')
+  const title = 'Moon & Sea: the Long Way Home – Volume II'
+  job.creations = { customize_snapshot: { edition: 'original', childName: 'Other' }, templates: { name: title } }
+  f.controls.reject = true
+  assert.equal((await (await f.release('book-b')).json()).noticeStatus, 'failed')
+  assert.equal(f.events.get('book-b').context.bookTitle, title)
+  job.creations.templates.name = 'Renamed after release'
+  f.controls.reject = false
+  await f.retry('book-b')
+  await f.release('book-a')
+  assert.deepEqual(f.sends.map(s => [s.standardPhysical, s.bookTitle]), [[true, title], [false, 'Book A']])
 })

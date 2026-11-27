@@ -8,6 +8,7 @@ import { absoluteUrl } from '@/lib/seo'
 export const PRINT_RELEASED_SUBJECT = 'Your YMI Story Book Is Approved!'
 
 type PrintReleasedEmailProps = {
+  standardPhysical?: boolean
   editorSource?: boolean
   personalNote?: string
   firstName?: string | null
@@ -23,7 +24,7 @@ const paragraph: React.CSSProperties = {
   lineHeight: 1.6,
 }
 
-export function PrintReleasedEmail({ editorSource, personalNote, firstName, bookTitle, orderId }: PrintReleasedEmailProps) {
+export function PrintReleasedEmail({ standardPhysical, editorSource, personalNote, firstName, bookTitle, orderId }: PrintReleasedEmailProps) {
   const orderUrl = editorSource ? "#order" : absoluteUrl(`/orders/${encodeURIComponent(orderId)}`)
   const editedBody = readReleaseBody(personalNote,'print')
   return (
@@ -33,7 +34,7 @@ export function PrintReleasedEmail({ editorSource, personalNote, firstName, book
       <Section style={{ maxWidth: '560px', margin: '0 auto' }}>
         <Text style={paragraph}>Hi {firstName?.trim() || 'there'},</Text>
         <Text style={{ ...paragraph, whiteSpace: 'pre-line' }}>
-          {personalNote || 'Thank you once again for choosing YMI Story to create a one-of-a-kind book as a special gift for your little one.'}
+          {personalNote || (standardPhysical ? 'Thank you once again for choosing YMI Story as a special gift for your little one.' : 'Thank you once again for choosing YMI Story to create a one-of-a-kind book as a special gift for your little one.')}
         </Text>
         <Text style={paragraph}>
           Your book, <strong>{bookTitle}</strong>, has been approved and is now going into production.

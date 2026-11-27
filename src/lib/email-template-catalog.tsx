@@ -361,10 +361,12 @@ export async function renderEmailTemplatePreview(
       node = <CartReminderEmail cartUrl="https://www.ymistory.com/cart" unsubscribeUrl="https://example.test/cart-reminders/unsubscribe" />
       break
     case 'final-delivery': {
-      const format = (deliverySamples.find(sample => sample.id === variantId) ?? deliverySamples[0]).formats[0]
+      const sample = deliverySamples.find(sample => sample.id === variantId) ?? deliverySamples[0]
+      const format = sample.formats[0]
       node = (
         <DeliveryEmail
           pdfOnly={format === 'digital'}
+          standardPhysical={sample.edition === 'original' && format !== 'digital'}
           orderUrl={orderUrl}
           displayId={sampleOrderLabel}
           downloadUrl="https://www.ymistory.com/api/orders/sample-order/download"
@@ -379,7 +381,7 @@ export async function renderEmailTemplatePreview(
     }
     case 'print-released': {
       const sample = printSamples.find(sample => sample.id === variantId) ?? printSamples[0]
-      node = <PrintReleasedEmail firstName="Sophie" bookTitle={sampleBooks(sample)[0].name} orderId="sample-order" />
+      node = <PrintReleasedEmail standardPhysical={sample.edition === 'original'} firstName="Sophie" bookTitle={sampleBooks(sample)[0].name} orderId="sample-order" />
       break
     }
     case 'logistics-update': {
