@@ -46,6 +46,14 @@ export function OrderDetailPanels({ items, order, stripeSessionId, t }: OrderDet
                 <div className="text-xs text-slate-400 mt-0.5">{t('orderDetail.qty')} {item.quantity}</div>
                 {item.package_type === 'digital' && <PdfOnlyBadge />}
                 {isSignatureVoicePackage(item.package_type) ? <SignatureVoiceBadge className="mt-2" /> : null}
+                {order.progress && !item.final_pdf_url && (
+                  <p className="mt-1 text-xs text-slate-600">{t(item.pdf_published
+                    ? 'orderDetail.pdfDownloadUnavailable' : 'orderDetail.pdfInPreparation')}</p>
+                )}
+                {order.progress && item.product_type === 'physical' && item.pdf_published && (
+                  <p className="mt-1 text-xs text-slate-600">{t(item.print_released
+                    ? 'orderDetail.releasedForPrint' : 'orderDetail.proofReady')}</p>
+                )}
                 {item.final_pdf_url && (
                   <div className="mt-2">
                     <a href={item.final_pdf_url}

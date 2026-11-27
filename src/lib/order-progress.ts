@@ -21,6 +21,7 @@ type BookLine = {
 export type OrderProgress = {
   stage: ProgressStage
   digitalOnly: boolean
+  mixedFormats: boolean
   books: number
   readyPdfs: number
   physicalBooks: number
@@ -31,15 +32,18 @@ export type OrderProgress = {
 export function getOrderProgress(status: string, lines: BookLine[], bookProgress: string | null): OrderProgress | null {
   const stored = normalizeOrderStatus(status)
   if (!isPaidLikeOrderStatus(stored) || !lines.length) return null
-  const digitalOnly = lines.every(line => line.productType === 'ebook' && line.packageType === 'digital')
+  const digitalBooks = lines.filter(line => line.productType === 'ebook' && line.packageType === 'digital').length
+  const digitalOnly = digitalBooks === lines.length
   const physical = lines.filter(line => line.productType === 'physical')
   const readyPdfs = lines.filter(line => line.published).length
   const releasedForPrint = physical.filter(line => line.printReleased).length
 
   let stage: ProgressStage = 'confirmed'
-  if (stored === 'shipped' || stored === 'delivered') stage = stored
+  if (digitalOnly) {
+    stage = bookProgress === 'pdf_ready' || readyPdfs === lines.length ? 'pdf_ready' : 'confirmed'
+  } else if (stored === 'shipped' || stored === 'delivered') stage = stored
   else if (stored === 'production') stage = 'printing'
   else if (bookProgress === 'pdf_ready' || bookProgress === 'preview_ready') stage = bookProgress
 
-  return { stage, digitalOnly, books: lines.length, readyPdfs, physicalBooks: physical.length, releasedForPrint }
+  return { stage, digitalOnly, mixedFormats: digitalBooks > 0 && physical.length > 0, books: lines.length, readyPdfs, physicalBooks: physical.length, releasedForPrint }
 }

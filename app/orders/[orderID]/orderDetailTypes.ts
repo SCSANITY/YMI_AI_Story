@@ -6,6 +6,9 @@ import type { OrderProgress } from '@/lib/order-progress'
 export type OrderItem = {
   cart_item_id: string
   final_pdf_url?: string | null
+  product_type?: string | null
+  pdf_published?: boolean
+  print_released?: boolean
   creation_id: string
   package_type?: string | null
   quantity: number

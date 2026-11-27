@@ -7,6 +7,8 @@ import type { ShippingDetails } from './order-shipping'
 import { LogisticsTracker } from '../../app/orders/[orderID]/LogisticsTracker'
 import { ShippingLocationMap } from '../../app/orders/[orderID]/ShippingLocationMap'
 import { createOrderDetailReadModel } from '../../app/orders/[orderID]/orderDetailModel'
+import { OrderDetailPanels } from '../../app/orders/[orderID]/OrderDetailPanels'
+import { getUiMessage } from './i18n-messages'
 import { getOrderProgress } from './order-progress'
 
 test('digital progress renders a completed two-step timeline and omits shipping fields', () => {
@@ -19,6 +21,37 @@ test('digital progress renders a completed two-step timeline and omits shipping 
   assert.match(html, /PDF Ready/)
   assert.match(html, />Complete</)
   assert.doesNotMatch(html, /Printing|Shipped|Delivered|unused-tracking/)
+})
+
+test('mixed shipment progress keeps pending digital delivery independent', () => {
+  const lines = [
+    { productType: 'ebook', packageType: 'digital', published: false, printReleased: false },
+    { productType: 'physical', packageType: 'supreme', published: true, printReleased: true },
+  ]
+  for (const published of [false, true]) {
+    lines[0].published = published
+    const progress = getOrderProgress('shipped', lines, 'preview_ready')
+    const html = renderToStaticMarkup(<LogisticsTracker status="shipped" progress={progress} />)
+    assert.equal(progress?.stage, 'shipped')
+    assert.equal(progress.readyPdfs, published ? 2 : 1)
+    assert.match(html, /Printing and shipping apply to physical books only/)
+    assert.match(html, /Released for print: 1 \/ 1/)
+  }
+})
+
+test('mixed order items expose only their own release and download', () => {
+  const physical = { cart_item_id:'B', creation_id:'b', quantity:1, template_name:'Physical book', package_type:'basic',
+    product_type:'physical', pdf_published:true, print_released:true, final_pdf_url:'/books/B/pdf' }
+  const digital = { cart_item_id:'A', creation_id:'a', quantity:1, template_name:'Digital book', package_type:'digital',
+    product_type:'ebook', pdf_published:false, print_released:false, final_pdf_url:null }
+  const progress = getOrderProgress('shipped', [physical, digital].map(item => ({ productType:item.product_type,
+    packageType:item.package_type, published:item.pdf_published, printReleased:item.print_released })),null)
+  const html = renderToStaticMarkup(<OrderDetailPanels items={[digital,physical]} order={{order_id:'mixed',progress}} t={getUiMessage}/>)
+  const [digitalRow,physicalRow] = html.split('>Physical book<')
+  assert.match(digitalRow,/PDF in preparation/)
+  assert.doesNotMatch(digitalRow,/Released for print|href="\/books\/B\/pdf"/)
+  assert.match(physicalRow,/Released for print/)
+  assert.match(physicalRow,/href="\/books\/B\/pdf"/)
 })
 
 test('historical Printing survives without inventing proof or print counts', () => {

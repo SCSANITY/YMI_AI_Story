@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AdminAnchoredPopover } from '@/components/admin/AdminAnchoredPopover'
 import { ArrowUpRight, BookOpen, ChevronDown, ChevronRight, Mail, Phone } from 'lucide-react'
 import styles from './OrderDetails.module.css'
-import type { OrderBook, OrderRow } from './types'
+import { isPdfOnlyOrder, type OrderBook, type OrderRow } from './types'
 
 export const editionName = { digital: 'PDF only', basic: 'Hardcover', supreme: 'Hardcover + Voice' } as const
 
@@ -85,7 +85,7 @@ export function BookAndShippingDetails({ order, now }: { order: OrderRow; now: n
       <summary><ChevronRight size={16}/>Books <span>· {order.production_progress.itemCount}</span></summary>
       <ul>{order.books?.map(book => <BookLine key={book.itemId} book={book} orderId={order.order_id} now={now}/>)}</ul>
     </details>
-    <section className={styles.recipient}>
+    {!isPdfOnlyOrder(order) && <section className={styles.recipient}>
       <h3>Shipping details</h3>
       <address>
         {recipient && <strong>{recipient}</strong>}
@@ -96,6 +96,6 @@ export function BookAndShippingDetails({ order, now }: { order: OrderRow; now: n
         {a.phone && <p><Phone size={14}/>{a.phone}</p>}
         {a.recipientEmail && <p><Mail size={14}/>{a.recipientEmail}</p>}
       </div>}
-    </section>
+    </section>}
   </div>
 }

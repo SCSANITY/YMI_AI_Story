@@ -631,6 +631,10 @@ const en: MessageDictionary = {
   'orderDetail.items': 'Items',
   'orderDetail.qty': 'Qty',
   'orderDetail.downloadPdf': 'Download PDF',
+  'orderDetail.pdfInPreparation': 'PDF in preparation',
+  'orderDetail.pdfDownloadUnavailable': 'PDF released · Refresh to retry the download',
+  'orderDetail.releasedForPrint': 'Released for print',
+  'orderDetail.proofReady': 'Preview ready · Awaiting print release',
   'orderDetail.shipping': 'Shipping',
 
 

@@ -26,6 +26,7 @@
 .counts button:disabled {opacity:.5;}
 .status {padding:.85rem 1rem;border:1px solid var(--hairline);border-radius:.75rem;background:linear-gradient(105deg,var(--wash),color-mix(in srgb,var(--admin-card) 85%,var(--admin-panel-2)));}
 .status h3,.spread h3,.books > summary,.fold > summary {font-size:1.17rem;line-height:1.3;font-weight:650;letter-spacing:-.026em;}
+.spread > .books:only-child {grid-column:1 / -1;}
 .statusLine {display:flex;flex-wrap:wrap;align-items:center;gap:.65rem .9rem;min-width:0;}
 .statusLine > label:last-child:not(.picker) {width:100%;}
 .picker {position:relative;}

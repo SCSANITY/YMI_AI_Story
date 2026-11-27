@@ -129,8 +129,19 @@ export async function verifyOrderDetails(root, check, click, waitFor) {
   }
   await act(async () => root.render(<OrderManagementCard key="pdf" order={digital} orderGroup="pdf_ready" expanded onToggle={()=>{}} onCommitted={()=>{}}/>))
   const digitalDialog = document.querySelector('[role=dialog]')
-  check(digitalDialog.querySelector('[aria-label="Open Print production snapshot"]').disabled && !digitalDialog.querySelector('a[aria-label^="Open Print"]'), 'Digital order offered Print')
-  check(digitalDialog.querySelector('select').value === 'pdf_ready', 'Digital status lost')
+  check(!digitalDialog.querySelector('[aria-label="Open Print production snapshot"],a[aria-label^="Open Print"],select'), 'Digital order offered physical or manual stages')
+  check(digitalDialog.querySelector('[aria-current=step]').textContent === 'PDF Ready', 'Digital release stage lost')
+  check(!digitalDialog.textContent.includes('Shipping operations') && !digitalDialog.textContent.includes('Shipping details'), 'Digital order offered logistics')
+  const pending = {...digital, book_progress:null, production_progress:{...digital.production_progress, pdfReleasedCount:0, pdfTotalCount:1}}
+  await act(async () => root.render(<OrderManagementCard key="pending" order={pending} orderGroup="active" expanded onToggle={()=>{}} onCommitted={()=>{}}/>))
+  const pendingDialog = document.querySelector('[role=dialog]')
+  check(pendingDialog.querySelector('[aria-current=step]').textContent === 'Order Confirmed' && pendingDialog.textContent.includes('PDF Ready'), 'Pending digital order hid its future stage')
+  check(pendingDialog.querySelector('a[aria-label^="Open PDF"]').href.includes('item=line-0'), 'Lost per-book release entry')
+  const mixed = {...order, order_status:'paid', book_progress_manual:false, books:[digital.books[0], books[1]]}
+  await act(async () => root.render(<OrderManagementCard key="mixed" order={mixed} orderGroup="active" expanded onToggle={()=>{}} onCommitted={()=>{}}/>))
+  const mixedDialog = document.querySelector('[role=dialog]')
+  check(mixedDialog.textContent.includes('apply to physical books only') && [...mixedDialog.querySelector('select').options].some(o => o.value === 'shipped'), 'Mixed order lost shipment context')
+  check(mixedDialog.querySelectorAll('a[aria-label^="Open Print"]').length === 1 && mixedDialog.querySelectorAll('a[aria-label^="Open PDF"]').length === 2, 'Mixed order linked to the wrong book stages')
   await act(async () => root.render(<OrderManagementCard key="refunded" order={{...digital,order_status:'refunded'}} orderGroup="refunded" expanded onToggle={()=>{}} onCommitted={()=>{}}/>))
   const readonly = document.querySelector('[role=dialog]')
   check(!readonly.querySelector('select') && !readonly.textContent.includes('Shipping operations'), 'Read-only order exposed editing controls')

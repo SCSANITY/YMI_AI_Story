@@ -44,7 +44,7 @@ export function LogisticsTracker({
   const stored = normalizeOrderStatus(status)
   const stage = progress?.stage ?? (stored === 'production' ? 'printing' :
     stored === 'shipped' || stored === 'delivered' ? stored : 'confirmed')
-  const digital = progress?.digitalOnly && (stage === 'confirmed' || stage === 'pdf_ready')
+  const digital = progress?.digitalOnly
   const stages = digital ? digitalStages : progress ? physicalStages : legacyStages
   const activeIdx = stages.indexOf(stage)
   const complete = stage === 'pdf_ready' || stage === 'delivered'
@@ -54,6 +54,9 @@ export function LogisticsTracker({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-bold text-gray-900 mt-0.5">Order Progress</h3>
+          {progress?.mixedFormats && (
+            <p className="mt-1 text-xs text-slate-600">Printing and shipping apply to physical books only.</p>
+          )}
           {progress && progress.books > 1 && (
             <p className="mt-1 text-xs text-slate-600">
               PDFs ready: {progress.readyPdfs} / {progress.books}
@@ -138,7 +141,7 @@ export function LogisticsTracker({
           </div>
         </div>
       )}
-      {['shipped','delivered'].includes(normalizeOrderStatus(status)) ? (
+      {!digital && ['shipped','delivered'].includes(normalizeOrderStatus(status)) ? (
         <ShippingDetailsPanel details={shippingDetails} trackingUrl={trackingUrl} trackingNumber={trackingNumber} trackingCarrier={trackingCarrier} />
       ) : null}
     </div>

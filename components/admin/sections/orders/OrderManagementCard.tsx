@@ -14,6 +14,7 @@ import {
   areOrderDraftsEqual,
   createOrderDraft,
   displayedOrderStatus,
+  isPdfOnlyOrder,
   isOrderRow,
   ORDER_STATUS_OPTIONS,
   READONLY_GROUPS,
@@ -98,7 +99,7 @@ function OrderSummary({
   const counts = <div className={onToggle ? `border-l border-[var(--admin-card-line)] pl-3 text-[11px] font-semibold text-[var(--admin-page-muted)] tabular-nums [&_b]:text-sm [&_b]:text-[var(--admin-page-ink)] mt-5 w-[clamp(4.5rem,9vw,7rem)] space-y-0.5` : styles.counts}>
       <div className="flex items-center justify-between gap-2">{onToggle ? 'ITEMS' : 'Items'} <b>{progress.itemCount}</b></div>
       <button className="flex w-full items-center justify-between gap-2 hover:underline" aria-label="Open PDF production snapshot" onClick={() => onOpenProduction('pdf')}>PDF <b>{progress.pdfReleasedCount}/{progress.pdfTotalCount}</b>{!onToggle && <ChevronRight size={13} aria-hidden/>}</button>
-      <button className="flex w-full items-center justify-between gap-2 hover:underline" disabled={!progress.printTotalCount} aria-label="Open Print production snapshot" onClick={() => onOpenProduction('print')}>{onToggle ? 'PRINT' : 'Print'} <b>{progress.printReleasedCount}/{progress.printTotalCount}</b>{!onToggle && <ChevronRight size={13} aria-hidden/>}</button>
+      {!isPdfOnlyOrder(order) && <button className="flex w-full items-center justify-between gap-2 hover:underline" disabled={!progress.printTotalCount} aria-label="Open Print production snapshot" onClick={() => onOpenProduction('print')}>{onToggle ? 'PRINT' : 'Print'} <b>{progress.printReleasedCount}/{progress.printTotalCount}</b>{!onToggle && <ChevronRight size={13} aria-hidden/>}</button>}
     </div>
   if (!onToggle) {
     const number = order.display_id || order.order_id
@@ -182,6 +183,7 @@ export function OrderManagementCard({
   const requestIntentRef = useRef(0)
   const [progressReason, setProgressReason] = useState('')
   const current = displayedOrderStatus(savedOrder)
+  const digitalOnly = isPdfOnlyOrder(savedOrder)
   const inProduction = savedOrder.order_status === 'paid' || savedOrder.order_status === 'production'
   const progressAction = inProduction && draft.orderStatus !== current &&
     ['preview_ready','production'].includes(draft.orderStatus)
@@ -366,8 +368,23 @@ export function OrderManagementCard({
               onOpenProduction={openProductionSnapshot}
             />
           <section className={styles.status}>
-          {isReadOnly && <h3>Order status · {statusLabel}</h3>}
-          {isReadOnly ? (
+          {isReadOnly && !digitalOnly && <h3>Order status · {statusLabel}</h3>}
+          {digitalOnly ? (
+            <>
+              <h3>Order status</h3>
+              {inProduction ? (
+                <>
+                  <ol aria-label="PDF order progress" className="my-2 flex flex-wrap items-center gap-2 text-sm [&_[aria-current=step]]:font-semibold">
+                    <li aria-current={current === 'paid' ? 'step' : undefined}>Order Confirmed</li>
+                    <li aria-hidden="true"><ChevronRight size={14}/></li>
+                    <li aria-current={current === 'pdf_ready' ? 'step' : undefined}
+                      className={current === 'pdf_ready' ? 'font-semibold' : styles.muted}>PDF Ready</li>
+                  </ol>
+                  <p className={styles.muted}>Updates automatically when every book’s PDF is released in Final Review.</p>
+                </>
+              ) : <p>{statusLabel}</p>}
+            </>
+          ) : isReadOnly ? (
             <div className="rounded-xl border border-[color-mix(in_srgb,var(--admin-card-line)_72%,transparent)] bg-[color-mix(in_srgb,var(--admin-card)_48%,transparent)] p-4 text-sm text-[var(--admin-page-ink)]">
               <div className="grid gap-2 md:grid-cols-2">
                 <p>
@@ -450,13 +467,16 @@ export function OrderManagementCard({
 
               </fieldset>
 
+              {savedOrder.books?.some(book => book.physical) && savedOrder.books.some(book => book.edition === 'digital') && (
+                <p className={styles.muted}>Preview Ready follows the first physical book’s PDF release. Printing and shipping apply to physical books only.</p>
+              )}
               {isDirty && (draft.orderStatus !== current || !showShipping) && saveButtons}
             </div>
           )}
 
           </section>
           <BookAndShippingDetails now={now} order={displayedOrder} />
-          {!READONLY_GROUPS.has(orderGroup) && (
+          {!digitalOnly && !READONLY_GROUPS.has(orderGroup) && (
             <details className={styles.fold} open={showShipping} onToggle={event => {
               setShowShipping(event.currentTarget.open)
               if (event.currentTarget.open) setShippingVisited(true)

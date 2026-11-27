@@ -67,6 +67,10 @@ export type OrderDraft = {
   logisticsNote: string
 }
 
+export function isPdfOnlyOrder(order: OrderRow) {
+  return Boolean(order.books?.length && order.books.every(book => book.edition === 'digital'))
+}
+
 export function displayedOrderStatus(order: OrderRow) {
   if (order.order_status === 'paid' && (order.book_progress === 'preview_ready' || order.book_progress === 'pdf_ready')) {
     return order.book_progress
