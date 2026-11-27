@@ -1,3 +1,5 @@
+import { buildSupportThreadSubject, buildSupportReplySubject } from '@/lib/support-ticket'
+import { buildKolPartnershipThreadSubject, buildKolPartnershipReplySubject } from '@/lib/kol-partnership-email'
 import * as React from 'react'
 import { render } from '@react-email/render'
 import { confirmationSamples, deliverySamples, printSamples, sampleBooks, type SampleControls } from '@/lib/email-book-samples'
@@ -49,6 +51,8 @@ export type EmailTemplateDefinition = {
 
 const DEFAULT_VARIANT = [{ id: 'default', label: 'Default' }] as const
 
+const replyVariants = [{ id: 'default', label: 'First reply' }, { id: 'follow-up', label: 'Follow-up' }]
+const sampleReplyAlias = '2345abcdefgh'
 const sampleOrderLabel = 'YMI-2026-0903'
 
 export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
@@ -214,7 +218,7 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     subject: 'Built from the support conversation reference',
     sender: 'Support mailbox',
     description: 'Branded response wrapper around an admin-authored support message.',
-    variants: DEFAULT_VARIANT,
+    variants: replyVariants,
   },
   {
     id: 'partnership-reply',
@@ -227,7 +231,7 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     subject: 'Built from the partnership conversation reference',
     sender: 'Collaboration mailbox',
     description: 'Branded response wrapper around an admin-authored partnership message.',
-    variants: DEFAULT_VARIANT,
+    variants: replyVariants,
   },
   {
     id: 'general-mail',
@@ -283,6 +287,10 @@ export function previewSubject(template: EmailTemplateDefinition, id: string) {
   if (template.id === 'unpaid-reminder') {
     return buildAbandonmentEmailCopy(reminderStage(id), [{ name: 'The Secret Journey Through Eight Plants', childName: 'Mia', quantity: 1 }], 'Sophie').subject
   }
+  if (template.id === 'support-reply') return id === 'follow-up'
+    ? buildSupportReplySubject(sampleReplyAlias) : buildSupportThreadSubject(sampleReplyAlias)
+  if (template.id === 'partnership-reply') return id === 'follow-up'
+    ? buildKolPartnershipReplySubject(sampleReplyAlias) : buildKolPartnershipThreadSubject(sampleReplyAlias)
   return template.subject
 }
 
@@ -410,7 +418,7 @@ export async function renderEmailTemplatePreview(
           customerName="Sophie"
           replyBody={'Thank you for writing to us. We reviewed your order and everything is progressing normally.'}
           ticketCode="A1B2C3D4E5"
-          originalQuestion="When will my personalized book be ready?"
+          originalQuestion={variantId === 'follow-up' ? null : 'When will my personalized book be ready?'}
         />
       )
       break

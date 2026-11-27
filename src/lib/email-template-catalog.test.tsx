@@ -149,6 +149,16 @@ test('receipt and delivery previews follow real edition and recording eligibilit
   }
 })
 
+test('conversation samples use the real thread subject and only quote the initial support request', async () => {
+  for (const family of ['support-reply', 'partnership-reply']) {
+    const template = EMAIL_TEMPLATE_CATALOG.find(sample => sample.id === family)!
+    assert.match(previewSubject(template, 'default'), /2345-ABCD-EFGH/)
+    assert.equal(previewSubject(template, 'follow-up'), 'Re: ' + previewSubject(template, 'default'))
+  }
+  assert.match((await renderEmailTemplatePreview('support-reply', 'default'))!, /When will my personalized book be ready/)
+  assert.doesNotMatch((await renderEmailTemplatePreview('support-reply', 'follow-up'))!, /When will my personalized book be ready/)
+})
+
 test('unpaid reminder previews show the three approved messages at their existing stage offsets', async () => {
   const template = EMAIL_TEMPLATE_CATALOG.find((entry) => entry.id === 'unpaid-reminder')
   assert.deepEqual(template?.variants.map((variant) => variant.label), ['30 minutes', '24 hours', '6 days'])
