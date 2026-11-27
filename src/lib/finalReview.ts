@@ -1,3 +1,4 @@
+import { purchasedLineEdition } from '@/lib/package-pricing'
 import { proofEditRevision } from '@/lib/proof-edit-revision'
 import { FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, sendOrderDeliveryEmail } from '@/lib/email'
 import {
@@ -383,11 +384,10 @@ export async function releaseFinalJob(params: {
       .eq('cart_item_id', finalJob.cart_item_id)
       .eq('order_id', finalJob.order_id)
       .maybeSingle()
+    if (deliveryItemError) throw new Error('Could not read the delivered book format for this email')
     const emailResult = await sendOrderDeliveryEmail({
       firstName: order.first_name,
-      physicalPackageType: !deliveryItemError && deliveryItem?.product_type === 'physical'
-        ? deliveryItem.package_type
-        : null,
+      bookFormat: purchasedLineEdition(deliveryItem?.product_type, deliveryItem?.package_type),
       to: orderEmail,
       orderId: finalJob.order_id,
       displayId: order.display_id ?? null,

@@ -13,7 +13,7 @@ export async function releaseTemplateSnapshot(c:Context) {
   // Signed links (and their expiry) are generated separately for the actual send.
   const coverMarker='https://release-action.invalid/cover.png'
   const original=await render(c.kind==='pdf' ? createElement(DeliveryEmail,{
-    editorSource:true,firstName:c.firstName,displayId:c.displayId,orderId:c.orderId,
+    editorSource:true,pdfOnly:c.edition==='digital',firstName:c.firstName,displayId:c.displayId,orderId:c.orderId,
     coverImageUrl:coverMarker,orderUrl:'#order',downloadUrl:'#pdf',voiceUpgradeUrl:c.edition==='basic'?'#upgrade':undefined,
     voiceMaterialsUrl:c.edition==='supreme'?'#materials':undefined,privacyUrl:c.edition==='supreme'?'#privacy':undefined,
   }) : createElement(PrintReleasedEmail,{editorSource:true,firstName:c.firstName,orderId:c.orderId,bookTitle:c.bookTitle ?? ''}))

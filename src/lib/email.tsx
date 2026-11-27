@@ -20,7 +20,7 @@ import {
   buildAbandonmentEmailCopy,
 } from '@/components/emails/AbandonmentEmail'
 import type { ReminderStage } from '@/lib/unpaid-reminders'
-import { normalizeBookPackageType } from '@/lib/package-pricing'
+import type { purchasedLineEdition } from '@/lib/package-pricing'
 import { SITE_URL } from '@/lib/seo'
 import { LogisticsUpdateEmail } from '@/components/emails/LogisticsUpdateEmail'
 import { PrintReleasedEmail, PRINT_RELEASED_SUBJECT } from '@/components/emails/PrintReleasedEmail'
@@ -398,6 +398,7 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
         coverImageUrl={params.coverImageUrl}
         coverTitle={params.coverTitle}
         trackUrl={buildAbsoluteUrl(`/orders/${params.orderId}`)}
+        pdfOnly={materialState.items.every(item => item.package_type === 'digital')}
         materialNotice={materialNotice}
       />
       )
@@ -410,7 +411,7 @@ export const FINAL_PDF_DELIVERY_LINK_TTL_SECONDS = 72 * 60 * 60
 type SendOrderDeliveryEmailParams = {
   to: string
   firstName?: string | null
-  physicalPackageType?: string | null
+  bookFormat: ReturnType<typeof purchasedLineEdition>
   orderId: string
   displayId?: string | null
   finalJobId?: string | null
@@ -425,7 +426,7 @@ type SendOrderDeliveryEmailParams = {
 export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParams) {
   const orderPath = `/orders/${params.orderId}`
   const orderUrl = params.orderUrl || buildAbsoluteUrl(orderPath) || SITE_URL + orderPath
-  const edition = normalizeBookPackageType(params.physicalPackageType)
+  const edition = params.bookFormat
   const materialsPath = orderPath + '/materials'
   const voiceMaterialsUrl = edition === 'supreme' ? buildAbsoluteUrl(materialsPath) || SITE_URL + materialsPath : undefined
 
@@ -434,7 +435,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
     idempotencyKey: `final_delivery:${params.finalJobId || params.orderId}` + ((params.proofRevision ?? 1) > 1 ? `:rev:${params.proofRevision}` : ''),
     to: params.to,
     fromEnvName: 'EMAIL_FROM_DELIVERY',
-    subject: pdfDeliverySubject(Boolean(edition), params.displayId || params.orderId),
+    subject: pdfDeliverySubject(edition === 'basic' || edition === 'supreme', params.displayId || params.orderId),
     orderId: params.orderId,
     finalJobId: params.finalJobId ?? null,
     retryFailed: params.retryFailed,
@@ -447,6 +448,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
     },
     react: (
       <DeliveryEmail
+        pdfOnly={edition === 'digital'}
         orderId={params.orderId}
         displayId={params.displayId}
         orderUrl={orderUrl}

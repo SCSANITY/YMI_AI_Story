@@ -42,8 +42,10 @@ rollback, test-send, raw HTML, sender, or link-target control.
   with recording state for voice books. Print approval covers physical editions.
   Each sample has a shareable URL and uses the default customer template.
   The Subject follows the sample. Send details holds the trigger, sender, ownership and event key.
-  The current PDF Delivery defaults include the
-  48-hour corrections message. The offer appears only for an identified physical
+  Orders containing only digital books use the single PDF delivery answer in
+  the receipt. Physical and mixed orders retain the full next-steps section.
+  Digital PDF Delivery includes the 72-hour download, the order link and the
+  YMI Story homepage. The physical delivery defaults include the 48-hour corrections message. The offer appears only for an identified physical
   Hardcover item, never for another line in the order or an unknown edition.
   The Admin preview button is inert; live email uses the approved Payment Link.
   The private PDF link expires 72 hours after signing. The order page remains

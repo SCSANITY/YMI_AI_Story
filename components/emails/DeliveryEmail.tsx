@@ -8,6 +8,7 @@ import { OrderAccessNotice } from './OrderAccessNotice'
 export { PDF_DELIVERY_PREVIEW_SUBJECT } from '@/lib/order-email-subjects'
 
 type DeliveryEmailProps = {
+  pdfOnly?: boolean
   editorSource?: boolean
   personalNote?: string
   orderUrl: string
@@ -22,19 +23,20 @@ type DeliveryEmailProps = {
 }
 
 export function DeliveryEmail({
-  editorSource, personalNote, orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl, voiceMaterialsUrl, privacyUrl,
+  pdfOnly, editorSource, personalNote, orderUrl, displayId, orderId, downloadUrl, coverImageUrl, firstName, voiceUpgradeUrl, voiceMaterialsUrl, privacyUrl,
 }: DeliveryEmailProps) {
+  const homeUrl = editorSource ? '#home' : 'https://www.ymistory.com/'
   const label = displayId || orderId
   const name = firstName?.trim()
   const editedBody = readReleaseBody(personalNote,'pdf')
   return (
     <EmailLayout
-      previewText="Your personalised PDF is ready. Please check the details before printing."
+      previewText={pdfOnly ? 'Your Storybook is ready to download.' : 'Your personalised PDF is ready. Please check the details before printing.'}
       title={voiceUpgradeUrl || voiceMaterialsUrl ? 'Your YMI Story Preview Is Ready' : 'Your Book Is Ready'}
-      subtitle="Your personalised storybook is ready for a final look before printing."
+      subtitle={pdfOnly ? 'Your Storybook is ready to download.' : 'Your personalised storybook is ready for a final look before printing.'}
     >
       <div data-release-body={editorSource ? "source" : undefined}>
-      {editedBody ? <EditedReleaseBody document={editedBody} pdf cover={coverImageUrl} links={{pdf:downloadUrl,order:orderUrl,materials:voiceMaterialsUrl,privacy:privacyUrl,upgrade:voiceUpgradeUrl}} /> : <>
+      {editedBody ? <EditedReleaseBody document={editedBody} pdf cover={coverImageUrl} links={{home:pdfOnly ? homeUrl : undefined,pdf:downloadUrl,order:orderUrl,materials:voiceMaterialsUrl,privacy:privacyUrl,upgrade:voiceUpgradeUrl}} /> : <>
       {label ? (
         <Text style={styles.orderLine}>
           Order&nbsp;{label}
@@ -43,6 +45,8 @@ export function DeliveryEmail({
       <Text style={styles.paragraph}>{name ? `Dear ${name},` : 'Hello,'}</Text>
       {personalNote && !(voiceMaterialsUrl && personalNote === 'Thank you for choosing our Signature Voice Version. The digital preview of your order is ready!') ? (
         <Text style={{ ...styles.paragraph, whiteSpace: 'pre-line' }}>{personalNote}</Text>
+      ) : pdfOnly ? (
+        <Text style={styles.paragraph}>Thank you for choosing YMI Story. Your digital Storybook is ready!</Text>
       ) : voiceMaterialsUrl ? (
         <Text style={styles.paragraph}>
           Thank you for choosing our <strong>Signature Voice Version</strong>. The digital preview of your order is ready!
@@ -56,7 +60,7 @@ export function DeliveryEmail({
       <Section style={styles.cover}>
         <Img
           src={coverImageUrl || emailAsset('cover-placeholder.png')}
-          alt={coverImageUrl ? 'Your personalised book cover' : 'Your book cover will appear here'}
+          alt={coverImageUrl ? (pdfOnly ? 'Your Storybook cover' : 'Your personalised book cover') : 'Your book cover will appear here'}
           width="150"
           style={styles.coverImage}
         />
@@ -65,10 +69,18 @@ export function DeliveryEmail({
 
       {downloadUrl ? (
         <Section style={styles.ctaWrap}>
-          <Link href={downloadUrl} style={emailButtons.primary}>View Your Preview (PDF)</Link>
-          <Text style={{ ...styles.coverCaption, margin: '10px 0 0' }}>This download link is valid for 72 hours.</Text>
+          <Link href={downloadUrl} style={emailButtons.primary}>{pdfOnly ? 'Download Your Storybook (PDF)' : 'View Your Preview (PDF)'}</Link>
+          {!pdfOnly && <Text style={{ ...styles.coverCaption, margin: '10px 0 0' }}>This download link is valid for 72 hours.</Text>}
         </Section>
       ) : null}
+      {pdfOnly ? <>
+        <Text style={{ ...bodyText, lineHeight: 1.55, margin: '14px 0 22px' }}>
+          This download link is valid for <strong>72 hours</strong>. To download your PDF again anytime, create an account and sign in using your order email address, then follow the <Link href={orderUrl} style={styles.orderLink}>Open Your Order Page</Link> link.
+        </Text>
+        <Text style={styles.digitalClosing}>Love the story? <Link href={homeUrl} style={styles.orderLink}>Visit our website</Link> to explore the Hardcover and Signature Voice Versions for a richer reading experience.</Text>
+        <Text style={styles.digitalClosing}>We hope you enjoy sharing this story. More adventures await at YMI Story, bringing reading joy and discovery as your little one grows.</Text>
+        <SignoffStamp simple />
+      </> : <>
       <Section style={styles.reviewBox}>
         <Text style={styles.eyebrow}>BEFORE WE PRINT</Text>
         <Text style={styles.sectionParagraph}>
@@ -143,6 +155,7 @@ export function DeliveryEmail({
         {downloadUrl ? ' This download link is unique to your order — please keep it private.' : ''}
       </Text>
       </>}
+      </>}
       </div>
     </EmailLayout>
   )
@@ -168,6 +181,7 @@ const styles: Record<string, React.CSSProperties> = {
   orderLine: { ...bodyText, fontSize: '13px', margin: '0 0 14px' },
   orderLink: { color: '#93500b', textDecoration: 'underline' },
   paragraph: { ...bodyText, fontSize: '17px', margin: '0 0 12px' },
+  digitalClosing: { ...bodyText, fontSize: '17px', margin: '0 0 14px' },
   cover: { ...insetBox, margin: '18px auto', maxWidth: '250px', textAlign: 'center' },
   coverImage: { margin: '0 auto 8px', maxWidth: '100%', height: 'auto', borderRadius: '6px' },
   coverCaption: { ...bodyText, fontSize: '14px', fontStyle: 'italic' },

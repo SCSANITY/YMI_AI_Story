@@ -1,3 +1,4 @@
+import { purchasedLineEdition } from '@/lib/package-pricing'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { FINAL_PDF_DELIVERY_LINK_TTL_SECONDS, sendOrderDeliveryEmail } from '@/lib/email'
@@ -152,7 +153,7 @@ export async function POST(request: Request) {
   await sendOrderDeliveryEmail({
     to: order.email,
     firstName: order.first_name,
-    physicalPackageType: cartItem.product_type === 'physical' ? cartItem.package_type : null,
+    bookFormat: purchasedLineEdition(cartItem.product_type, cartItem.package_type),
     orderId: order.order_id,
     displayId: order.display_id ?? null,
     downloadUrl: signedPdf.signedUrl,

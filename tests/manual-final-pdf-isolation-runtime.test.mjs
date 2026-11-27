@@ -259,7 +259,7 @@ test('interleaved Admin approvals of two books release independent, readable PDF
   assert.equal((await h.route('release', 'book-a')).status, 200)
   assert.equal((await h.route('approve-all-release', 'book-a')).status, 409)
   assert.equal(h.writes.filter((entry) => entry.upload || entry.copy).length, writesBeforeRetry)
-  assert.deepEqual(h.mail.map(({ finalJobId, physicalPackageType }) => [finalJobId, physicalPackageType]), [['book-a', 'basic'], ['book-b', 'supreme']])
+  assert.deepEqual(h.mail.map(({ finalJobId, bookFormat }) => [finalJobId, bookFormat]), [['book-a', 'basic'], ['book-b', 'supreme']])
 
   for (const message of h.mail) {
     const sign = h.signing.find(({ signedUrl }) => signedUrl === message.downloadUrl)
@@ -453,7 +453,7 @@ for (const format of ['digital', 'basic', 'supreme']) {
     assert.deepEqual(await dominantPdfColors(pdf), hashes.map(digest => digest === hash(red) ? 'red' : 'blue'))
     assert.equal(h.mail.length, 1)
     assert.equal(h.mail[0].finalJobId, job)
-    assert.equal(h.mail[0].physicalPackageType, format === 'digital' ? null : format)
+    assert.equal(h.mail[0].bookFormat, format)
     assert.equal((await h.route('release', job)).body.alreadyReleased, true)
     assert.equal(h.mail.length, 1)
   })
@@ -521,5 +521,5 @@ test('paid personalised PDF and physical lines sharing a Creation get format-cor
   assert.equal(result.status,200,JSON.stringify(result.body))
   assert.equal((await PDFDocument.load(h.objects.get(result.body.pdfPath))).getPageCount(),16)
   assert.equal((await h.route('release',id)).body.alreadyReleased,true)
-  assert.deepEqual(h.mail.map(m=>[m.finalJobId,m.physicalPackageType]),[[id,null]])
+  assert.deepEqual(h.mail.map(m=>[m.finalJobId,m.bookFormat]),[[id,'digital']])
 })

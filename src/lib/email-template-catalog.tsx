@@ -314,6 +314,7 @@ export async function renderEmailTemplatePreview(
       const physical = items.some(item => item.package_type !== 'digital')
       node = (
         <OrderReceiptEmail
+          pdfOnly={!physical}
           orderId="sample-order"
           displayId={sampleOrderLabel}
           items={items}
@@ -363,6 +364,7 @@ export async function renderEmailTemplatePreview(
       const format = (deliverySamples.find(sample => sample.id === variantId) ?? deliverySamples[0]).formats[0]
       node = (
         <DeliveryEmail
+          pdfOnly={format === 'digital'}
           orderUrl={orderUrl}
           displayId={sampleOrderLabel}
           downloadUrl="https://www.ymistory.com/api/orders/sample-order/download"

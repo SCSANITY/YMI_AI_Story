@@ -124,6 +124,7 @@ test('only an original Voice confirmation gets a scoped optional recording link'
   for(const format of ['digital','basic','supreme']) {
     const h=mailHarness(false,false,[''],format)
     await h.api.sendOrderConfirmationEmail(input)
+    assert.equal(h.sent[0].react.props.pdfOnly, format === 'digital')
     const notice=h.sent[0].react.props.materialNotice
     assert.equal(h.reads.filter(([action])=>action==='issue').length,format==='supreme'?1:0)
     if(format==='supreme') assert.equal(notice.voiceOnly,true)
@@ -135,6 +136,7 @@ test('personalised PDF confirmation sends the receipt without issuing a material
   const h=mailHarness(false,false,['Mia'],'digital','personalised')
   await h.api.sendOrderConfirmationEmail(input)
   assert.equal(h.sent.length,1)
+  assert.equal(h.sent[0].react.props.pdfOnly,true)
   assert.equal(h.sent[0].react.props.materialNotice,undefined)
   assert.deepEqual(h.reads.map(([action])=>action),['read'])
 })

@@ -2,9 +2,9 @@ import { normalizeGeneralMailDocument, type GeneralMailDocument } from '@/lib/ge
 
 export const releaseBodyPrefix = 'YMI-RELEASE-BODY/1\n'
 export const actionBase = 'https://release-action.invalid/'
-export type ReleaseAction = 'pdf' | 'order' | 'upgrade' | 'materials' | 'privacy'
+export type ReleaseAction = 'pdf' | 'order' | 'upgrade' | 'materials' | 'privacy' | 'home'
 export type ReleaseLinks = Partial<Record<ReleaseAction,string | undefined>>
-const actions: ReleaseAction[] = ['pdf','order','upgrade','materials','privacy']
+const actions: ReleaseAction[] = ['pdf','order','upgrade','materials','privacy','home']
 
 export function originalBodyFingerprint(note:string|undefined) {
   return note?.startsWith(releaseBodyPrefix) ? /^default:([a-f0-9]{64})\n/.exec(note.slice(releaseBodyPrefix.length))?.[1] : undefined

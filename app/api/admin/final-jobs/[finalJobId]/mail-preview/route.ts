@@ -1,11 +1,11 @@
 import { emailAsset } from '@/components/emails/EmailLayout'
 import { proofEditRevision } from '@/lib/proof-edit-revision'
 import { releaseTemplateSnapshot } from '@/lib/release-template-snapshot'
-import { PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
+import { pdfDeliverySubject } from '@/lib/order-email-subjects'
 import { PRINT_RELEASED_SUBJECT } from '@/components/emails/PrintReleasedEmail'
 import { noStoreJson } from '@/lib/http-response'
 import { requireAdminCustomer } from '@/lib/adminAuth'
-import { normalizeBookPackageType } from '@/lib/package-pricing'
+import { purchasedLineEdition } from '@/lib/package-pricing'
 import { isScopedFinalApprovedPage, isLegacyFinalManualPage } from '@/lib/final-review-artifact-paths'
 import { resolveFinalJobDisplayTitle } from '@/lib/personalized-book-title'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
@@ -28,8 +28,8 @@ export async function POST(request: Request, context: { params: Promise<{ finalJ
     .eq('order_id',book.order_id).maybeSingle()
   if (!order?.email) return noStoreJson({ error: 'Order recipient unavailable' }, { status: 409 })
   const purchase = Array.isArray(book.purchased_line) ? book.purchased_line[0] : book.purchased_line
-  const edition = purchase?.order_id === book.order_id && purchase.cart_item_id === book.cart_item_id &&
-    purchase.product_type === 'physical' ? normalizeBookPackageType(purchase.package_type) : null
+  const edition = purchase?.order_id === book.order_id && purchase.cart_item_id === book.cart_item_id
+    ? purchasedLineEdition(purchase.product_type, purchase.package_type) : null
   let coverImageUrl: string | undefined
   if (body.kind === 'pdf') {
     const { data: cover } = await supabaseAdmin.from('final_job_pages')
@@ -46,5 +46,5 @@ export async function POST(request: Request, context: { params: Promise<{ finalJ
   const {html,fingerprint}=await releaseTemplateSnapshot({kind:body.kind,orderId:book.order_id,displayId:order.display_id,
     bookTitle:title,firstName:order.first_name,edition,coverImageUrl})
   return noStoreJson({ html, fingerprint, cover:coverImageUrl || emailAsset('cover-placeholder.png'),seal:emailAsset('seal.png'), title, recipient:order.email,
-    subject:body.kind === 'print' ? PRINT_RELEASED_SUBJECT : edition ? PDF_DELIVERY_PREVIEW_SUBJECT : 'Your book is ready - '+(order.display_id || book.order_id) })
+    subject:body.kind === 'print' ? PRINT_RELEASED_SUBJECT : pdfDeliverySubject(edition === 'basic' || edition === 'supreme', order.display_id || book.order_id) })
 }

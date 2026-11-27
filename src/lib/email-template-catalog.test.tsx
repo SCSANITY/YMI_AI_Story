@@ -135,12 +135,24 @@ test('receipt and delivery previews follow real edition and recording eligibilit
     assert.equal(html.includes('Review your book materials'), materialLink, variant.id)
     assert.equal(html.includes('your optional voice recording'), original && materialLink, variant.id)
     assert.equal(html.includes('Please submit your voice recording'), !original && !!controls.Recording && controls.Recording !== 'Received', variant.id)
+    const digitalOnly = single && controls.Format === 'PDF Only'
+    assert.equal(html.includes('What happens next?'), digitalOnly, variant.id)
+    assert.equal(html.includes('Your complete storybooks will arrive <strong>in your inbox</strong> soon as a beautiful PDF.'), digitalOnly, variant.id)
+    assert.equal(html.includes('Crafting ('), !digitalOnly, variant.id)
     if (!single) assert.equal(controls.Edition, undefined)
   }
   const delivery = EMAIL_TEMPLATE_CATALOG.find(template => template.id === 'final-delivery')!
   for (const variant of delivery.variants) {
     const format = variant.controls!.Format
     const html = (await renderEmailTemplatePreview(delivery.id, variant.id))!
+    if (format === 'PDF Only') {
+      assert.match(html, /href="https:\/\/www\.ymistory\.com\/api\/orders\/sample-order\/download"[^>]*>Download Your Storybook \(PDF\)/)
+      assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order"[^>]*>Open Your Order Page/)
+      assert.match(html, /href="https:\/\/www\.ymistory\.com\/"[^>]*>Visit our website/)
+      assert.match(html, /72 hours/)
+      assert.doesNotMatch(html, /BEFORE WE PRINT|before printing|48 hours|personalised storybook/i)
+      assert.equal(html.split('Love the story?').length, 2)
+    }
     assert.equal(html.includes('#signature-voice-upgrade'), format === 'Hardcover', variant.id)
     assert.equal(html.includes('/sample-order/materials'), format === 'Hardcover + Voice', variant.id)
     assert.equal(previewSubject(delivery, variant.id), format === 'PDF Only'
@@ -216,4 +228,19 @@ test('unmodified proof keeps branded sections; a changed template uses the froze
   assert.equal(await releaseRenderNote(note,{...ctx,edition:'supreme'}),note)
   assert.equal(await releaseRenderNote(note,{...ctx,firstName:'Alex'}),note)
   assert.match(first.html,/BEFORE WE PRINT/)
+})
+
+test('digital release editor preserves the home action when staff change the body', async () => {
+  const ctx = {kind:'pdf' as const, edition:'digital', orderId:'order-123'}
+  const snapshot = await releaseTemplateSnapshot(ctx)
+  assert.match(snapshot.html, /href="#home"[^>]*>Visit our website/)
+  const blocks = ['pdf','order','home'].map(action => ({
+    type:'paragraph' as const, content:[{text:action, href:actionBase + action}],
+  }))
+  const note = validatedReleaseNote(encodeReleaseBody({version:1, blocks}), 'pdf')
+  const html = await render(<DeliveryEmail pdfOnly personalNote={note} downloadUrl="https://example.test/book.pdf" orderUrl="https://example.test/orders/123" />)
+  for (const href of ['https://example.test/book.pdf','https://example.test/orders/123','https://www.ymistory.com/']) {
+    assert.ok(html.includes('href="' + href + '"'))
+  }
+  assert.doesNotMatch(html, /release-action\.invalid|before printing/i)
 })

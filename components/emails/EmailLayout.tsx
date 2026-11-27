@@ -173,7 +173,7 @@ const dividerStyles: Record<string, React.CSSProperties> = {
  * (background-position right). Gmail/Apple Mail render the stamp; Outlook
  * ignores background-image and shows a clean text-only sign-off.
  */
-export function SignoffStamp() {
+export function SignoffStamp({ simple = false }: { simple?: boolean } = {}) {
   return (
     <Section style={signoffStyles.wrap}>
       <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%' }}>
@@ -181,8 +181,8 @@ export function SignoffStamp() {
           <tr>
             {/* Left: signature, standard English-letter format */}
             <td style={signoffStyles.textCell}>
-              <Text style={signoffStyles.line}>With warmth and starlight,</Text>
-              <Text style={signoffStyles.team}>YMI&nbsp;STORY&nbsp;TEAM</Text>
+              <Text style={signoffStyles.line}>{simple ? 'With warmth,' : 'With warmth and starlight,'}</Text>
+              <Text style={simple ? { ...signoffStyles.team, letterSpacing: 0 } : signoffStyles.team}>{simple ? 'The YMI Story Team' : <>YMI&nbsp;STORY&nbsp;TEAM</>}</Text>
             </td>
             {/* Right: team seal, level with the signature */}
             <td style={signoffStyles.sealCell}>

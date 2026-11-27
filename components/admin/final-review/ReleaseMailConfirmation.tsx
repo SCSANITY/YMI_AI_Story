@@ -69,7 +69,7 @@ export function ReleaseMailConfirmation({ job,kind,revision,onCancel,onConfirm }
               doc?.addEventListener('click',event=>event.preventDefault())}}
             className="h-[57dvh] w-full rounded-lg border bg-white"/>
           {target && !pristine && createPortal(<EditedReleaseBody document={body} pdf={kind==='pdf'} cover={preview.cover} seal={preview.seal}
-            links={{pdf:'#pdf',order:'#order',materials:'#materials',privacy:'#privacy',upgrade:'#upgrade'}}/>,target)}
+            links={{pdf:'#pdf',order:'#order',materials:'#materials',privacy:'#privacy',upgrade:'#upgrade',home:'#home'}}/>,target)}
         </section>
       </div>
     </>}

@@ -20,6 +20,7 @@ export type ReceiptAddress = {
 }
 
 type OrderReceiptEmailProps = {
+  pdfOnly?: boolean
   materialNotice?:{voiceOnly?:boolean;pendingVoice:number;url:string;names:string[]}
   orderId: string
   displayId?: string | null
@@ -77,6 +78,7 @@ function StepCard({ index }: { index: number }) {
 }
 
 export function OrderReceiptEmail({
+  pdfOnly,
   materialNotice,
   orderId,
   displayId,
@@ -116,7 +118,7 @@ export function OrderReceiptEmail({
         </tbody>
       </table>
 
-      {materialNotice && (
+      {!pdfOnly && materialNotice && (
         <Section style={styles.summaryWrap}>
           {materialNotice.voiceOnly?<Text style={styles.paragraph}>You can add or review your optional voice recording for this book.</Text>:<Text style={styles.paragraph}>
             You can review your optional dedication message
@@ -201,6 +203,10 @@ export function OrderReceiptEmail({
 
       {/* What happens next — 2×2 grid on desktop, stacked on mobile */}
       <EmailDivider width="40%" mt={6} mb={14} />
+      {pdfOnly ? <>
+        <Text style={{ ...styles.paragraph, margin: '0 0 2px', color: emailTheme.heading, fontWeight: 600 }}>What happens next?</Text>
+        <Text style={{ ...styles.paragraph, margin: '0 0 14px' }}>Your complete storybooks will arrive <strong>in your inbox</strong> soon as a beautiful PDF.</Text>
+      </> : <>
       <Text style={styles.sectionTitle}>What Happens Next?</Text>
 
       <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%' }}>
@@ -220,7 +226,9 @@ export function OrderReceiptEmail({
         </tbody>
       </table>
 
-      <Text style={{ ...styles.paragraph, marginTop: '22px' }}>
+      </>}
+
+      <Text style={{ ...styles.paragraph, marginTop: pdfOnly ? '0' : '22px' }}>
         We want this journey to be absolutely magical for you and your little one. If you have
         any questions along the way, our team is always here to help.
       </Text>
