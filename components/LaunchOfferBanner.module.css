@@ -55,3 +55,22 @@
 @media (prefers-reduced-motion: reduce) {
   .track { animation: none; }
 }
+.shippingSticker {
+  position: fixed;
+  z-index: 21;
+  top: 39.4vh;
+  right: 3.4%;
+  width: clamp(150px, 14.5vw, 245px);
+  height: auto;
+  transform: translateY(-50%) rotate(-8deg);
+  filter: drop-shadow(1px 4px 4px #32220d47);
+  pointer-events: none;
+  user-select: none;
+}
+@media (max-width: 767px) {
+  .shippingSticker {
+    top: 23.5svh;
+    right: 3.7%;
+    width: clamp(78px, 22.5vw, 106px);
+  }
+}

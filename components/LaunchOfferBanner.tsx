@@ -1,3 +1,5 @@
+import Image from 'next/image'
+import shippingSticker from '../public/home-shipping-sticker.webp'
 import styles from './LaunchOfferBanner.module.css'
 import { getMultiBookOfferBadgeLabel, type MultiBookOfferRule } from '@/lib/multi-book-offer-core'
 
@@ -30,6 +32,7 @@ export function LaunchOfferBanner({ rule }: { rule: MultiBookOfferRule | null })
   return (
     <>
       <style>{':root{--launch-banner-h:36px}@media (max-width:767px){:root{--launch-banner-h:32px}}'}</style>
+      <Image className={styles.shippingSticker} src={shippingSticker} alt="" draggable={false} unoptimized />
       <div className={styles.bar} role="note">
         <div className={`${styles.track} hidden md:flex`}>
           <MarqueeGroup copy={desktopCopy} />
