@@ -20,7 +20,7 @@
   background: linear-gradient(90deg, transparent, #fff3da55 20%, #fff3da99 50%, #fff3da55 80%, transparent);
 }
 .track {
-  display: flex;
+  flex: none;
   width: max-content;
   animation: launch-banner-slide 60s linear infinite;
 }
@@ -29,6 +29,8 @@
 }
 .group {
   display: flex;
+  min-width: 100vw;
+  justify-content: space-around;
   align-items: center;
   white-space: nowrap;
 }

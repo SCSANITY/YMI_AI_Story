@@ -3,16 +3,18 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-function load(file) {
+function load(file, dependencies = {}) {
   const fixtureModule = { exports: {} }
   vm.runInNewContext(ts.transpileModule(read(file), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, {
     module: fixtureModule, exports: fixtureModule.exports,
-    require() { return new Proxy({}, { get: (_, key) => key }) },
+    require(name) { return dependencies[name] ?? new Proxy({}, { get: (_, key) => key }) },
   })
   return fixtureModule.exports
 }
@@ -152,7 +154,22 @@ test('home banner renders server-side with first-paint geometry', () => {
   assert.match(home, /<LaunchOfferBanner rule=\{multiBookRule\} \/>/)
 
   const banner = read('components/LaunchOfferBanner.tsx')
-  assert.match(banner, /if \(!rule\?\.enabled\) return null/)
+  const { LaunchOfferBanner } = load('components/LaunchOfferBanner.tsx', {
+    'react/jsx-runtime': { jsx, jsxs, Fragment },
+    '@/lib/multi-book-offer-core': core,
+    './LaunchOfferBanner.module.css': { default: {} },
+  })
+  for (const [rule, offers] of [
+    [null, '60% OFF Shipping!'],
+    [{ ...PERCENT_20, enabled: false }, '60% OFF Shipping!'],
+    [PERCENT_20, '60% OFF Shipping, 20% OFF 2+ Books!'],
+    [{ ...FIXED_5, minItems: 3 }, '60% OFF Shipping, US$5.00 OFF 3+ Books!'],
+  ]) {
+    const html = renderToStaticMarkup(jsx(LaunchOfferBanner, { rule }))
+    assert.ok(html.includes(`<b>🎉 Celebrate Our New Launch! Enjoy ${offers}</b>`))
+    assert.ok(html.includes(`<b>🎉 ${offers}</b>`))
+    assert.doesNotMatch(html, /Christmas/)
+  }
   assert.match(banner, /--launch-banner-h:36px/)
   assert.match(banner, /--launch-banner-h:32px/)
 

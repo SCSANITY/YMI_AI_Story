@@ -119,8 +119,8 @@ export function MultiBookOfferControl() {
       <h2 className="text-xl font-semibold text-[var(--admin-page-ink)]">Multi-book offer</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--admin-page-muted)]">
         Automatic order-level offer on the book subtotal when one order holds enough books.
-        No code needed; customers see it live in Checkout, and the home-page launch banner
-        is shown only while this offer is enabled. Orders already in payment keep their
+        When enabled, this offer appears in the home-page banner and applies automatically
+        at checkout. The shipping promotion is separate. Orders already in payment keep their
         frozen amount.
       </p>
       {error ? <AdminNotice tone="danger" className="mt-3">{error}</AdminNotice> : null}

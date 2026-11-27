@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export default async function HomePage() {
   const [banners, multiBookRule] = await Promise.all([
     getPublishedHomepageBanners(),
-    // Fail-closed: a rule read error simply renders no banner this paint.
+    // If the rule is unavailable, the banner still shows the shipping offer.
     getMultiBookOfferRule().catch(() => null),
   ]);
 

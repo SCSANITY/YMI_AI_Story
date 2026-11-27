@@ -1,13 +1,9 @@
 import styles from './LaunchOfferBanner.module.css'
-import type { MultiBookOfferRule } from '@/lib/multi-book-offer-core'
+import { getMultiBookOfferBadgeLabel, type MultiBookOfferRule } from '@/lib/multi-book-offer-core'
 
 // Home-only launch banner. Rendered by the server home page with the rule
 // already read server-side; emits the --launch-banner-h geometry variable in
 // the initial HTML so the navbar/hero offsets are stable from first paint.
-// Nothing renders when the offer is disabled or the rule read failed.
-
-const DESKTOP_COPY = '🎉 Celebrate Our New Launch! Enjoy 60% OFF Shipping, 20% OFF 2+ Books This Christmas! 🎄'
-const MOBILE_COPY = '🎉 60% OFF Shipping, 20% OFF 2+ Books This Christmas! 🎄'
 
 function MarqueeGroup({ copy, ariaHidden }: { copy: string; ariaHidden?: boolean }) {
   // Enough repeats that one group is wider than any realistic viewport, so the
@@ -25,18 +21,23 @@ function MarqueeGroup({ copy, ariaHidden }: { copy: string; ariaHidden?: boolean
 }
 
 export function LaunchOfferBanner({ rule }: { rule: MultiBookOfferRule | null }) {
-  if (!rule?.enabled) return null
+  const bookOffer = rule?.enabled
+    ? `, ${rule.effectType === 'fixed_amount' ? 'US' : ''}${getMultiBookOfferBadgeLabel(rule)} ${rule.minItems}+ Books`
+    : ''
+  const offers = `60% OFF Shipping${bookOffer}!`
+  const desktopCopy = `🎉 Celebrate Our New Launch! Enjoy ${offers}`
+  const mobileCopy = `🎉 ${offers}`
   return (
     <>
       <style>{':root{--launch-banner-h:36px}@media (max-width:767px){:root{--launch-banner-h:32px}}'}</style>
       <div className={styles.bar} role="note">
         <div className={`${styles.track} hidden md:flex`}>
-          <MarqueeGroup copy={DESKTOP_COPY} />
-          <MarqueeGroup copy={DESKTOP_COPY} ariaHidden />
+          <MarqueeGroup copy={desktopCopy} />
+          <MarqueeGroup copy={desktopCopy} ariaHidden />
         </div>
-        <div className={`${styles.track} ${styles.trackMobile} md:hidden`}>
-          <MarqueeGroup copy={MOBILE_COPY} />
-          <MarqueeGroup copy={MOBILE_COPY} ariaHidden />
+        <div className={`${styles.track} ${styles.trackMobile} flex md:hidden`}>
+          <MarqueeGroup copy={mobileCopy} />
+          <MarqueeGroup copy={mobileCopy} ariaHidden />
         </div>
       </div>
     </>
