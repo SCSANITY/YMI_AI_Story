@@ -4,13 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   BookOpenText,
+  Link2,
   ExternalLink,
   Monitor,
   PenLine,
   ShieldCheck,
   Smartphone,
 } from 'lucide-react'
-import { AdminStatusBadge } from '@/components/admin/AdminUi'
+import { TemplateScenarioSelector, templateHref } from './TemplateScenarioSelector'
 import type {
   EmailTemplateCategory,
   EmailTemplateDefinition,
@@ -43,13 +44,28 @@ export function EmailTemplateLibrary({
   selectedTemplate,
   selectedVariantId,
   previewHtml,
+  category,
+  subject,
 }: {
   templates: readonly EmailTemplateDefinition[]
   selectedTemplate: EmailTemplateDefinition
   selectedVariantId: string | null
+  category: EmailTemplateCategory | 'all'
+  subject: string
   previewHtml: string | null
 }) {
-  const [category, setCategory] = useState<EmailTemplateCategory | 'all'>('all')
+  const variant = selectedTemplate.variants.find(item => item.id === selectedVariantId)
+  const [copyStatus, setCopyStatus] = useState<{ url: string; message: string }>()
+  const sampleHref = (id?: string) => templateHref(selectedTemplate.id, id, category)
+  const currentHref = sampleHref(selectedVariantId ?? undefined)
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(new URL(currentHref, window.location.origin).href)
+      setCopyStatus({ url: currentHref, message: 'Link copied' })
+    } catch {
+      setCopyStatus({ url: currentHref, message: 'Copy the address from your browser' })
+    }
+  }
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const visibleTemplates =
     category === 'all' ? templates : templates.filter((template) => template.category === category)
@@ -58,40 +74,39 @@ export function EmailTemplateLibrary({
     <div className="space-y-4">
       <div className="admin-v2-panel flex gap-1 overflow-x-auto p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="toolbar" aria-label="Template categories">
         {(['all', 'security', 'orders', 'delivery', 'subscriptions', 'human'] as const).map((item) => (
-          <button
+          <Link
             key={item}
-            type="button"
-            aria-pressed={category === item}
-            onClick={() => setCategory(item)}
-            className={`min-h-9 shrink-0 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)] ${
+            scroll={false} prefetch={false}
+            aria-current={category === item ? 'true' : undefined}
+            href={item === 'all' || item === selectedTemplate.category ? templateHref(selectedTemplate.id, selectedVariantId ?? undefined, item)
+              : templateHref(templates.find(template => template.category === item)!.id, undefined, item)}
+            className={`inline-flex items-center min-h-9 shrink-0 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)] ${
               category === item
                 ? 'bg-[var(--admin-accent)] text-white shadow-sm'
                 : 'text-[var(--admin-page-muted)] hover:bg-black/[0.04]'
             }`}
           >
             {CATEGORY_LABELS[item]}
-          </button>
+          </Link>
         ))}
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(210px,24%)_minmax(0,1fr)]">
         <section className="admin-v2-panel overflow-hidden" aria-label="Email template list">
           <div className="border-b border-black/[0.06] px-4 py-3">
             <p className="text-xs text-[var(--admin-page-muted)]">
-              {visibleTemplates.length} template {visibleTemplates.length === 1 ? 'family' : 'families'}
+              Templates
             </p>
           </div>
-          <div className="max-h-[720px] space-y-1 overflow-y-auto p-2">
+          <div className="max-h-44 lg:max-h-[720px] space-y-1 overflow-y-auto p-2">
             {visibleTemplates.map((template) => {
               const selected = template.id === selectedTemplate.id
               const defaultVariant = template.variants[0]?.id
-              const href = defaultVariant
-                ? `/admin/emails?view=templates&template=${encodeURIComponent(template.id)}&variant=${encodeURIComponent(defaultVariant)}`
-                : `/admin/emails?view=templates&template=${encodeURIComponent(template.id)}`
+              const href = templateHref(template.id, defaultVariant, category)
               return (
                 <Link
                   key={template.id}
-                  href={href}
+                  scroll={false} prefetch={false} href={href}
                   aria-current={selected ? 'true' : undefined}
                   className={`block rounded-xl border p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)] ${
                     selected
@@ -102,19 +117,13 @@ export function EmailTemplateLibrary({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-[var(--admin-page-ink)]">{template.name}</p>
-                      <p className="mt-1 text-xs text-[var(--admin-page-muted)]">{CATEGORY_LABELS[template.category]}</p>
+                      {template.ownership !== 'web' && <p className="mt-1 text-xs text-[var(--admin-page-muted)]">{OWNERSHIP_LABELS[template.ownership]}</p>}
                     </div>
                     {template.variants.length > 0 ? (
                       <BookOpenText className="h-4 w-4 shrink-0 text-[var(--admin-accent-dp)]" aria-label="Preview available" />
                     ) : (
                       <ExternalLink className="h-4 w-4 shrink-0 text-[var(--admin-page-muted)]" aria-label="External or freeform template" />
                     )}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <AdminStatusBadge tone={template.triggerMode === 'automatic' ? 'success' : template.triggerMode === 'workflow' ? 'info' : 'neutral'}>
-                      {MODE_LABELS[template.triggerMode]}
-                    </AdminStatusBadge>
-                    <AdminStatusBadge tone="neutral">{OWNERSHIP_LABELS[template.ownership]}</AdminStatusBadge>
                   </div>
                 </Link>
               )
@@ -124,51 +133,32 @@ export function EmailTemplateLibrary({
 
         <section className="admin-v2-panel min-w-0 overflow-hidden" aria-labelledby="selected-email-template">
           <div className="border-b border-black/[0.06] p-4 sm:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 id="selected-email-template" className="text-xl font-bold text-[var(--admin-page-ink)]">
-                    {selectedTemplate.name}
-                  </h2>
-                  <AdminStatusBadge tone="neutral">Read only</AdminStatusBadge>
-                </div>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--admin-page-muted)]">
-                  {selectedTemplate.description}
-                </p>
-              </div>
-              {previewHtml ? (
-                <div className="flex w-fit rounded-lg bg-black/[0.05] p-1" aria-label="Preview width">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="selected-email-template" className="text-xl font-bold">{selectedTemplate.name}</h2>
+              <div className="flex items-center gap-2">
+                <span role="status" className="text-xs">{copyStatus?.url === currentHref && copyStatus.message}</span>
+                <button type="button" aria-label="Copy sample link" title="Copy sample link" onClick={copyLink}
+                  className="rounded-lg border p-2 hover:bg-[#fff8e9]"><Link2 size={16} /></button>
+                {previewHtml && <div className="flex rounded-lg bg-black/[0.05] p-1" aria-label="Preview width">
                   <DeviceButton label="Desktop" selected={device === 'desktop'} onClick={() => setDevice('desktop')} icon={Monitor} />
                   <DeviceButton label="Mobile" selected={device === 'mobile'} onClick={() => setDevice('mobile')} icon={Smartphone} />
-                </div>
-              ) : null}
-            </div>
-
-            <dl className="mt-5 grid gap-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
-              <TemplateDetail label="Trigger" value={selectedTemplate.trigger} />
-              <TemplateDetail label="Subject" value={selectedTemplate.subject} />
-              <TemplateDetail label="Sender" value={selectedTemplate.sender} />
-              <TemplateDetail label="Event key" value={selectedTemplate.emailKey} mono />
-            </dl>
-
-            {selectedTemplate.variants.length > 1 ? (
-              <div className="mt-4 flex flex-wrap gap-2" aria-label="Template variants">
-                {selectedTemplate.variants.map((variant) => (
-                  <Link
-                    key={variant.id}
-                    href={`/admin/emails?view=templates&template=${encodeURIComponent(selectedTemplate.id)}&variant=${encodeURIComponent(variant.id)}`}
-                    aria-current={selectedVariantId === variant.id ? 'true' : undefined}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-accent)] ${
-                      selectedVariantId === variant.id
-                        ? 'bg-[var(--admin-page-ink)] text-white'
-                        : 'bg-black/[0.05] text-[var(--admin-page-muted)] hover:bg-black/[0.08]'
-                    }`}
-                  >
-                    {variant.label}
-                  </Link>
-                ))}
+                </div>}
               </div>
-            ) : null}
+            </div>
+            {variant && <TemplateScenarioSelector template={selectedTemplate} variant={variant} href={sampleHref} />}
+            <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t pt-3">
+              <span className="text-xs text-[var(--admin-page-muted)]">Subject</span>
+              <strong className="min-w-0 flex-1 basis-52 break-words text-sm">{subject}</strong>
+              <details key={selectedTemplate.id} className="group contents">
+                <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-page-muted)]">Send details</summary>
+                <dl className="mt-1 grid w-full gap-2 sm:grid-cols-2">
+                  <TemplateDetail label="Trigger" value={selectedTemplate.trigger} />
+                  <TemplateDetail label="Sender" value={selectedTemplate.sender} />
+                  <TemplateDetail label="Event key" value={selectedTemplate.emailKey} mono />
+                  <TemplateDetail label="Template" value={[OWNERSHIP_LABELS[selectedTemplate.ownership], MODE_LABELS[selectedTemplate.triggerMode], 'Read only'].join(' · ')} />
+                </dl>
+              </details>
+            </div>
           </div>
 
           {previewHtml ? (

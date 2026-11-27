@@ -16,6 +16,7 @@ import {
   getEmailTemplateDefinition,
   normalizeEmailTemplateVariant,
   renderEmailTemplatePreview,
+  previewSubject,
 } from '@/lib/email-template-catalog'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
@@ -152,6 +153,8 @@ export default async function AdminEmailsPage({
         <EmailTemplateLibrary
           templates={EMAIL_TEMPLATE_CATALOG}
           selectedTemplate={selectedTemplate}
+          category={firstParam(params.category) === selectedTemplate.category ? selectedTemplate.category : 'all'}
+          subject={previewSubject(selectedTemplate, selectedVariant?.id ?? 'default')}
           selectedVariantId={selectedVariant?.id ?? null}
           previewHtml={previewHtml}
         />

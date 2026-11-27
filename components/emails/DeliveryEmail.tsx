@@ -5,7 +5,7 @@ import { Heading, Img, Link, Section, Text } from '@react-email/components'
 import { EmailLayout, SignoffStamp, emailAsset, emailTheme, emailButtons } from './EmailLayout'
 import { OrderAccessNotice } from './OrderAccessNotice'
 
-export const PDF_DELIVERY_PREVIEW_SUBJECT = 'Important Order Update: Your YMI Story Preview Is Ready'
+export { PDF_DELIVERY_PREVIEW_SUBJECT } from '@/lib/order-email-subjects'
 
 type DeliveryEmailProps = {
   editorSource?: boolean

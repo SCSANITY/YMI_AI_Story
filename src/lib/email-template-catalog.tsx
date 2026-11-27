@@ -1,6 +1,10 @@
 import * as React from 'react'
 import { render } from '@react-email/render'
-import { AbandonmentEmail } from '@/components/emails/AbandonmentEmail'
+import { confirmationSamples, deliverySamples, printSamples, sampleBooks, type SampleControls } from '@/lib/email-book-samples'
+import { hasBookMaterialFields } from '@/lib/order-materials'
+import { distinctMaterialNames } from '@/lib/order-materials-client'
+import { ORDER_CONFIRMATION_SUBJECT, pdfDeliverySubject, logisticsSubject } from '@/lib/order-email-subjects'
+import { AbandonmentEmail, buildAbandonmentEmailCopy } from '@/components/emails/AbandonmentEmail'
 import { CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import { DeliveryEmail, PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
 import { PrintReleasedEmail, PRINT_RELEASED_SUBJECT } from '@/components/emails/PrintReleasedEmail'
@@ -23,9 +27,10 @@ export type EmailTemplateCategory = (typeof EMAIL_TEMPLATE_CATEGORIES)[number]
 type EmailTemplateOwnership = 'web' | 'supabase' | 'stripe' | 'admin_composer'
 type EmailTemplateTriggerMode = 'automatic' | 'workflow' | 'human'
 
-type EmailTemplatePreviewVariant = {
+export type EmailTemplatePreviewVariant = {
   id: string
   label: string
+  controls?: SampleControls
 }
 
 export type EmailTemplateDefinition = {
@@ -44,12 +49,7 @@ export type EmailTemplateDefinition = {
 
 const DEFAULT_VARIANT = [{ id: 'default', label: 'Default' }] as const
 
-const ORDER_CONFIRMATION_VARIANTS = [
-  { id: 'default', label: 'Hardcover', edition: 'hardcover', pendingVoice: 0 },
-  { id: 'voice-pending', label: 'Voice: recording needed', edition: 'voice', pendingVoice: 1 },
-  { id: 'voice-ready', label: 'Voice: recording received', edition: 'voice', pendingVoice: 0 },
-  { id: 'mixed-voice-pending', label: 'Mixed: recording needed', edition: 'mixed', pendingVoice: 1 },
-] as const
+const sampleOrderLabel = 'YMI-2026-0903'
 
 export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
   {
@@ -99,10 +99,10 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     ownership: 'web',
     triggerMode: 'automatic',
     trigger: 'Payment succeeds and the order payment is finalized.',
-    subject: 'Order Confirmed: A Starlight Journey is Being Crafted with Love!',
+    subject: ORDER_CONFIRMATION_SUBJECT,
     sender: 'Orders mailbox',
     description: 'Confirms the purchase, order contents, total, delivery address, and next steps.',
-    variants: ORDER_CONFIRMATION_VARIANTS,
+    variants: confirmationSamples,
   },
   {
     id: 'stripe-receipt',
@@ -157,11 +157,8 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     trigger: 'An admin releases an approved customer PDF.',
     subject: PDF_DELIVERY_PREVIEW_SUBJECT,
     sender: 'Delivery mailbox',
-    description: 'Provides PDF and order links and a 48-hour reply reminder. Hardcover shows the optional Signature Voice offer. Hardcover + Voice links to book materials.',
-    variants: [
-      { id: 'default', label: 'Hardcover: upgrade offer' },
-      { id: 'voice', label: 'Hardcover + Voice: recording and message' },
-    ],
+    description: 'Customer PDF release for the selected book.',
+    variants: deliverySamples,
   },
   {
     id: 'print-released',
@@ -174,7 +171,7 @@ export const EMAIL_TEMPLATE_CATALOG: readonly EmailTemplateDefinition[] = [
     subject: PRINT_RELEASED_SUBJECT,
     sender: 'Delivery mailbox',
     description: 'Names the book entering print and links to the customer’s order and digital PDF.',
-    variants: DEFAULT_VARIANT,
+    variants: printSamples,
   },
   {
     id: 'logistics-update',
@@ -275,6 +272,20 @@ export function getEmailTemplateCatalogSummary() {
   }
 }
 
+const reminderStage = (id: string) => id === 'stage-2' ? 2 : id === 'stage-3' ? 3 : 1
+
+export function previewSubject(template: EmailTemplateDefinition, id: string) {
+  if (template.id === 'final-delivery') {
+    const sample = deliverySamples.find(sample => sample.id === id) ?? deliverySamples[0]
+    return pdfDeliverySubject(sample.formats[0] !== 'digital', sampleOrderLabel)
+  }
+  if (template.id === 'logistics-update') return logisticsSubject(id, id === 'tracking-update', sampleOrderLabel)
+  if (template.id === 'unpaid-reminder') {
+    return buildAbandonmentEmailCopy(reminderStage(id), [{ name: 'The Secret Journey Through Eight Plants', childName: 'Mia', quantity: 1 }], 'Sophie').subject
+  }
+  return template.subject
+}
+
 export async function renderEmailTemplatePreview(
   templateId: string,
   variantId = 'default',
@@ -289,33 +300,31 @@ export async function renderEmailTemplatePreview(
       node = <OtpEmail code="482916" expiresInMinutes={10} />
       break
     case 'order-confirmation': {
-      const variant = ORDER_CONFIRMATION_VARIANTS.find(({ id }) => id === variantId)
-        ?? ORDER_CONFIRMATION_VARIANTS[0]
-      const hardcoverBook = { name: "Sophie's Secret Journey Through Eight Plants", quantity: 1, unitPrice: 36 }
-      const voiceBook = { name: "Mia's Space Mission", quantity: 1, unitPrice: 59 }
-      const items = variant.edition === 'mixed'
-        ? [hardcoverBook, voiceBook]
-        : [variant.edition === 'voice' ? voiceBook : hardcoverBook]
+      const sample = confirmationSamples.find(sample => sample.id === variantId) ?? confirmationSamples[0]
+      const items = sampleBooks(sample)
+      const actionable = items.filter(hasBookMaterialFields)
+      const physical = items.some(item => item.package_type !== 'digital')
       node = (
         <OrderReceiptEmail
           orderId="sample-order"
-          displayId="YMI-2026-0903"
+          displayId={sampleOrderLabel}
           items={items}
           total={items.reduce((total, item) => total + item.quantity * item.unitPrice, 0)}
           currency="USD"
-          address={{
+          address={physical ? {
             firstName: 'Sophie',
             lastName: 'Walker',
             address: '12 Bookbinder Lane',
             city: 'London',
             zip: 'N1 9GU',
-          }}
+          } : {}}
           trackUrl={orderUrl}
-          materialNotice={{
+          materialNotice={actionable.length ? {
             url: orderUrl + '/materials',
-            names: variant.edition === 'mixed' ? ['Sophie', 'Mia'] : [variant.edition === 'voice' ? 'Mia' : 'Sophie'],
-            pendingVoice: variant.pendingVoice,
-          }}
+            names: distinctMaterialNames(actionable.filter(item => item.edition !== 'original')),
+            voiceOnly: actionable.every(item => item.edition === 'original'),
+            pendingVoice: sample.missing,
+          } : undefined}
           coverImageUrl={coverImageUrl}
           coverTitle={items[0].name}
         />
@@ -326,7 +335,7 @@ export async function renderEmailTemplatePreview(
       node = (
         <AbandonmentEmail
           resumeUrl="https://www.ymistory.com/checkout?orderId=sample-order"
-          stage={variantId === 'stage-2' ? 2 : variantId === 'stage-3' ? 3 : 1}
+          stage={reminderStage(variantId)}
           firstName="Sophie"
           items={[
             {
@@ -342,23 +351,27 @@ export async function renderEmailTemplatePreview(
     case 'cart-reminder':
       node = <CartReminderEmail cartUrl="https://www.ymistory.com/cart" unsubscribeUrl="https://example.test/cart-reminders/unsubscribe" />
       break
-    case 'final-delivery':
+    case 'final-delivery': {
+      const format = (deliverySamples.find(sample => sample.id === variantId) ?? deliverySamples[0]).formats[0]
       node = (
         <DeliveryEmail
           orderUrl={orderUrl}
-          displayId="YMI-2026-0903"
+          displayId={sampleOrderLabel}
           downloadUrl="https://www.ymistory.com/api/orders/sample-order/download"
           coverImageUrl={coverImageUrl}
           firstName="Sophie"
-          voiceUpgradeUrl={variantId === 'default' ? '#signature-voice-upgrade' : undefined}
-          voiceMaterialsUrl={variantId === 'voice' ? orderUrl + '/materials' : undefined}
+          voiceUpgradeUrl={format === 'basic' ? '#signature-voice-upgrade' : undefined}
+          voiceMaterialsUrl={format === 'supreme' ? orderUrl + '/materials' : undefined}
           privacyUrl="https://www.ymistory.com/privacy"
         />
       )
       break
-    case 'print-released':
-      node = <PrintReleasedEmail firstName="Sophie" bookTitle="Mia’s Space Mission" orderId="sample-order" />
+    }
+    case 'print-released': {
+      const sample = printSamples.find(sample => sample.id === variantId) ?? printSamples[0]
+      node = <PrintReleasedEmail firstName="Sophie" bookTitle={sampleBooks(sample)[0].name} orderId="sample-order" />
       break
+    }
     case 'logistics-update': {
       const isTrackingUpdate = variantId === 'tracking-update'
       const status = isTrackingUpdate ? 'shipped' : variantId
@@ -375,7 +388,7 @@ export async function renderEmailTemplatePreview(
           orderUrl={orderUrl}
           status={status}
           statusLabel={statusLabel}
-          displayId="YMI-2026-0903"
+          displayId={sampleOrderLabel}
           trackingCarrier={status === 'shipped' ? 'DHL Express' : undefined}
           trackingNumber={status === 'shipped' ? 'JD014600003756123456' : undefined}
           trackingUrl={status === 'shipped' ? 'https://www.dhl.com/track' : undefined}

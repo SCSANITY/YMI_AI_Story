@@ -10,6 +10,7 @@ import {
   EMAIL_TEMPLATE_CATALOG,
   getEmailTemplateCatalogSummary,
   renderEmailTemplatePreview,
+  previewSubject,
 } from './email-template-catalog'
 
 test('email catalog has one unique entry for every active outbound family', () => {
@@ -35,7 +36,7 @@ test('print approval names the released book and opens its order page', async ()
   const html = (await renderEmailTemplatePreview('print-released') ?? '').replaceAll('<!-- -->', '')
   assert.match(html, /Your YMI Story Book Is Approved!/)
   assert.match(html, /Hi Sophie,/)
-  assert.match(html, /<strong>Mia’s Space Mission<\/strong>/)
+  assert.match(html, /<strong>Sophie(?:'|&#x27;)s Secret Journey Through Eight Plants<\/strong>/)
   assert.match(html, /href="https:\/\/www\.ymistory\.com\/orders\/sample-order"[^>]*>View Your Order &amp; Download PDF<\/a>/)
 })
 
@@ -65,7 +66,7 @@ test('order confirmation preview demonstrates the personalized title below the c
   assert.doesNotMatch(cover, /Personalized Book Cover/)
 })
 
-test('order confirmation variants show a dedication deadline and only prompt for a missing Voice recording', async () => {
+test('order confirmation variants show eligible materials and only prompt for a missing Voice recording', async () => {
   const orderConfirmation = EMAIL_TEMPLATE_CATALOG.find((entry) => entry.id === 'order-confirmation')
   const cases = [
     ['default', false],
@@ -73,7 +74,7 @@ test('order confirmation variants show a dedication deadline and only prompt for
     ['voice-ready', false],
     ['mixed-voice-pending', true],
   ] as const
-  assert.deepEqual(orderConfirmation?.variants.map(({ id }) => id), cases.map(([id]) => id))
+  assert.ok(cases.every(([id]) => orderConfirmation?.variants.some(variant => variant.id === id)))
   for (const [id, pendingVoice] of cases) {
     const html = await renderEmailTemplatePreview('order-confirmation', id) ?? ''
     const textHtml = html.replaceAll('<!-- -->', '')
@@ -92,7 +93,7 @@ test('order confirmation variants show a dedication deadline and only prompt for
 
 test('Final PDF Delivery previews show the right actions for each delivered edition', async () => {
   const delivery = EMAIL_TEMPLATE_CATALOG.find(({ id }) => id === 'final-delivery')
-  assert.deepEqual(delivery?.variants.map(({ id }) => id), ['default', 'voice'])
+  assert.equal(delivery?.variants.length, 6)
   assert.equal(delivery?.subject, 'Important Order Update: Your YMI Story Preview Is Ready')
 
   for (const [id, showsOffer] of [['default', true], ['voice', false]] as const) {
@@ -120,6 +121,31 @@ test('Final PDF Delivery previews show the right actions for each delivered edit
       assert.match(html, /href="https:\/\/www\.ymistory\.com\/privacy"[^>]*>Privacy Policy<\/a>/)
       assert.doesNotMatch(html, /EXCLUSIVE LAUNCH OFFER|default voice|within 30 days of collection/i)
     }
+  }
+})
+
+test('receipt and delivery previews follow real edition and recording eligibility', async () => {
+  const receipt = EMAIL_TEMPLATE_CATALOG.find(template => template.id === 'order-confirmation')!
+  for (const variant of receipt.variants) {
+    const html = (await renderEmailTemplatePreview(receipt.id, variant.id))!.replaceAll('<!-- -->', '')
+    const controls = variant.controls!
+    const single = controls.Order === 'Single book'
+    const original = controls.Edition === 'Standard'
+    const materialLink = !single || controls.Format !== 'PDF Only' && (!original || controls.Format === 'Hardcover + Voice')
+    assert.equal(html.includes('Review your book materials'), materialLink, variant.id)
+    assert.equal(html.includes('your optional voice recording'), original && materialLink, variant.id)
+    assert.equal(html.includes('Please submit your voice recording'), !original && !!controls.Recording && controls.Recording !== 'Received', variant.id)
+    if (!single) assert.equal(controls.Edition, undefined)
+  }
+  const delivery = EMAIL_TEMPLATE_CATALOG.find(template => template.id === 'final-delivery')!
+  for (const variant of delivery.variants) {
+    const format = variant.controls!.Format
+    const html = (await renderEmailTemplatePreview(delivery.id, variant.id))!
+    assert.equal(html.includes('#signature-voice-upgrade'), format === 'Hardcover', variant.id)
+    assert.equal(html.includes('/sample-order/materials'), format === 'Hardcover + Voice', variant.id)
+    assert.equal(previewSubject(delivery, variant.id), format === 'PDF Only'
+      ? 'Your book is ready - YMI-2026-0903' : delivery.subject)
+    assert.doesNotMatch(html, /buy\.stripe\.com/)
   }
 })
 

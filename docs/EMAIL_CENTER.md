@@ -37,7 +37,12 @@ rollback, test-send, raw HTML, sender, or link-target control.
   The order activity view groups it with the exact book. A rejected email can
   be retried from Final Review. A send with an unknown provider outcome needs
   receipt reconciliation before any resend. The order status is independent.
-  PDF Delivery has Hardcover and Hardcover + Voice previews. Both display the
+  Final PDF Delivery offers Personalised and Standard previews in all three formats.
+  Confirmation previews cover single-book and supported Personalised mixed orders,
+  with recording state for voice books. Print approval covers physical editions.
+  Each sample has a shareable URL and uses the default customer template.
+  The Subject follows the sample. Send details holds the trigger, sender, ownership and event key.
+  The current PDF Delivery defaults include the
   48-hour corrections message. The offer appears only for an identified physical
   Hardcover item, never for another line in the order or an unknown edition.
   The Admin preview button is inert; live email uses the approved Payment Link.

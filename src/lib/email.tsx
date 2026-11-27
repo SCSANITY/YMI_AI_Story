@@ -1,3 +1,4 @@
+import { ORDER_CONFIRMATION_SUBJECT, pdfDeliverySubject, logisticsSubject } from '@/lib/order-email-subjects'
 import { releaseRenderNote } from '@/lib/release-template-snapshot'
 import {hasBookMaterialFields} from '@/lib/order-materials'
 import {distinctMaterialNames} from '@/lib/order-materials-client'
@@ -11,7 +12,7 @@ import {
   type ReceiptAddress,
   type ReceiptItem,
 } from '@/components/emails/OrderReceiptEmail'
-import { DeliveryEmail, PDF_DELIVERY_PREVIEW_SUBJECT } from '@/components/emails/DeliveryEmail'
+import { DeliveryEmail } from '@/components/emails/DeliveryEmail'
 import { buildPdfDeliveryLink } from '@/lib/pdf-delivery-link'
 import { buildCartReminderText, CartReminderEmail, CART_REMINDER_SUBJECT } from '@/components/emails/CartReminderEmail'
 import {
@@ -368,7 +369,7 @@ export async function sendOrderConfirmationEmail(params: SendOrderConfirmationEm
     idempotencyKey: `order_confirmation:${params.orderId}`,
     to: params.to,
     fromEnvName: 'EMAIL_FROM_ORDERS',
-    subject: 'Order Confirmed: A Starlight Journey is Being Crafted with Love! ✦',
+    subject: ORDER_CONFIRMATION_SUBJECT,
     orderId: params.orderId,
     customerId: params.customerId ?? null,
     context: {
@@ -433,9 +434,7 @@ export async function sendOrderDeliveryEmail(params: SendOrderDeliveryEmailParam
     idempotencyKey: `final_delivery:${params.finalJobId || params.orderId}` + ((params.proofRevision ?? 1) > 1 ? `:rev:${params.proofRevision}` : ''),
     to: params.to,
     fromEnvName: 'EMAIL_FROM_DELIVERY',
-    subject: edition
-      ? PDF_DELIVERY_PREVIEW_SUBJECT
-      : `Your book is ready - ${params.displayId || params.orderId}`,
+    subject: pdfDeliverySubject(Boolean(edition), params.displayId || params.orderId),
     orderId: params.orderId,
     finalJobId: params.finalJobId ?? null,
     retryFailed: params.retryFailed,
@@ -552,14 +551,7 @@ type SendLogisticsUpdateEmailParams = {
 
 export async function sendLogisticsUpdateEmail(params: SendLogisticsUpdateEmailParams) {
   const orderUrl = params.orderUrl || buildAbsoluteUrl(`/orders/${params.orderId}`) || ''
-  const subject =
-    params.isTrackingUpdate
-      ? `Updated tracking information - ${params.displayId || params.orderId}`
-      : params.status === 'production'
-      ? `Your YMI Story book is being printed - ${params.displayId || params.orderId}`
-      : params.status === 'delivered'
-        ? `Your YMI Story order has been delivered - ${params.displayId || params.orderId}`
-        : `Your YMI Story order has shipped - ${params.displayId || params.orderId}`
+  const subject = logisticsSubject(params.status, Boolean(params.isTrackingUpdate), params.displayId || params.orderId)
 
   return sendManagedEmail({
     emailKey: 'logistics_update',
